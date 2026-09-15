@@ -1,0 +1,70 @@
+use /lib
+from ./chat-input import ChatInputScope
+from ./message-list import MessageList
+
+export scope PromptEditor:
+    concept: {PromptEditorConcept}
+
+concept PromptEditorConcept:
+    pitch:
+        A chat-style interface for prompting a local coding harness like Claude
+        Code directly with compiled-on-depand Piton.
+
+    shape: {PromptEditorShape}
+
+shape PromptEditorShape:
+    description:
+        Typical AI-style chat interface.
+
+    basicDesignAndLayout:
+        Chat history fills that all available space except for a
+        @{ChatInputScope} along the bottom.
+
+    chatHistory: @{MessageList}
+
+    pinnedHeader:
+        While the harness is working, the prompt it is working on is pinned as
+        a header along the top of the chat history, and the conversation
+        scrolls beneath it. It shows up to three lines of the prompt beside a
+        spinner, and clicking it scrolls the conversation to that prompt.
+
+        The queue sits in the same header as an expanding list: a row saying
+        how many prompts are queued, with a chevron, expands to list each
+        queued prompt in order, a line or two of each, with a button to cancel
+        it. The header also holds the auto-send switch and the "Send next"
+        button. The queue row, with its switch and button, is shown only while
+        the queue has anything in it. The header is shown whenever the harness
+        is working or the queue has anything in it.
+
+    queue:
+        overview:
+            Prompts can still be sent while the harness is working: they wait
+            in a queue, in the order they were sent, and are sent one at a
+            time. While the harness is working, the chat input's send button
+            reads "Queue".
+
+        cancel:
+            A queued prompt that has not been sent yet can be cancelled, which
+            removes it from the queue for good. A prompt already sent is no
+            longer in the queue.
+
+        autoSend:
+            A "Send next automatically" switch picks between sending the next
+            queued prompt as soon as the harness is free, and waiting. It starts
+            switched on. Switching it on while the harness is free sends the
+            next queued prompt straight away. Whenever the harness is free and
+            the queue is not empty, a "Send next" button sends the first queued
+            prompt. A prompt that fails to compile or run does not stop the
+            queue.
+
+        persistence:
+            Queued prompts are saved in the project's `.piton-repl/queue`
+            directory, each as its hidden anchor's source, imports included,
+            the way prompt history is, and named so they list in the order they
+            were queued. The queue is restored whenever the project is opened;
+            a restored queue waits for "Send next" rather than sending on its
+            own. A queued prompt's file is removed when it is cancelled, or
+            when it is sent, at which point it is saved to the prompt history
+            like any other prompt.
+
+    chatInput: @{ChatInputScope}

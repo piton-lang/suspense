@@ -1,0 +1,40 @@
+use /lib
+
+export scope MessageList:
+    concept: {MessageListConcept}
+
+concept MessageListConcept:
+    pitch:
+        The chat history of prompt mode: the prompts sent to the harness and
+        its responses, as a conversation.
+
+    shape: {MessageListShape}
+
+shape MessageListShape:
+    description:
+        Conversation-style, shows send prompts on the right, received input on
+        the left.
+
+    sentPrompt:
+        A sent prompt shows the compiled markdown that was actually sent to the
+        harness, rendered as markdown, once it has compiled. Its message
+        header shows the name of the hidden anchor it was compiled from.
+
+    response:
+        A response from the harness is grouped by general type, in the order it
+        happened. The harness's own text is shown as markdown. Tool calls in a
+        row that share a general type (reading and searching files, editing
+        files, running commands, the web, agents, and anything else) are
+        gathered into one group, headed by that type and how many calls it
+        holds. Each call in a group lists the tool's name, its most telling
+        argument, and whether it is running, done, or failed, spelled out
+        rather than only coloured.
+
+    queueBackground:
+        The header along the top of the message list, holding the pinned prompt
+        and the queue, has the same background colour as the tab bar.
+
+    legibility:
+        The output from a realtime agent should be readable and
+        meaningful.  Make sure the font size is large enough, that the colours
+        are legible.

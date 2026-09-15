@@ -1,0 +1,20 @@
+use /lib
+from ../project-directory import ProjectDirectoryScope
+
+export scope HarnessIntegrationScope:
+    concept: {HarnessIntegrationConcept}
+
+concept HarnessIntegrationConcept:
+    pitch:
+        Uses the one-off version for a coding harness for the selected
+        ${ProjectDirectoryScope}. For example, `claude -p`
+
+    shape: {HarnessIntegrationShape}
+
+shape HarnessIntegrationShape:
+    description:
+        Should always run in auto mode.
+
+        The compiled systemPrompt of a prompt's hidden anchor is appended to
+        the harness's own system prompt, for example with
+        `--append-system-prompt`.

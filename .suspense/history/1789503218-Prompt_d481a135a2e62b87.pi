@@ -1,0 +1,12 @@
+from /scope/palette import PaletteScope
+
+anchor Prompt_d481a135a2e62b87:
+    userPrompt:
+        I'd like a new feature added to the @{PaletteScope} where, if we're on the Files tab, I can hit ctrl/cmd-enter to sent my search query to a separate claude request that will return the file or files I'm looking for.  If it's a single file, open it.  If it's a bunch of files, for now just show an alert "multiple results were found"  The system prompt for this should be such that we're really trying to find one file.
+        
+        Additionally, if I'm typing and nothing is found, now a simple Enter will perform the search, and ctrl-enter is not needed.
+        
+        If we're doing an agentic search, the results table of that task should display in what would normally be the results section of the @{PaletteScope}
+
+    systemPrompt:
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.

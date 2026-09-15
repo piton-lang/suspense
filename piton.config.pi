@@ -1,0 +1,18 @@
+use @piton/config
+use @piton/belay
+
+from @piton/belay import ClaudeAdapter
+
+export piton-config Project:
+    root: ./spec
+    entry: ./spec/index.pi
+
+    frameworks:
+        - {BelayConfiguration}
+
+belay-config BelayConfiguration:
+    codeRoot: ./src
+    shapeRoot: ./spec/shape
+
+    adapters:
+        - {ClaudeAdapter}

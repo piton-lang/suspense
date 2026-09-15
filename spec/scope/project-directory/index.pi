@@ -1,0 +1,17 @@
+use /lib
+
+export scope ProjectDirectoryScope:
+    concept: {ProjectDirectoryConcept}
+
+concept ProjectDirectoryConcept:
+    pitch:
+        Allows user to pick a directory containing a piton.config.pi file as the
+        root directory of the project.
+
+    shape: {ProjectDirectoryShape}
+
+shape ProjectDirectoryShape:
+    description:
+        Opens a file picker modal that allows the user to select the
+        piton.config.pi file, then the application will store during that
+        session the location of that file's directory as the project directory.

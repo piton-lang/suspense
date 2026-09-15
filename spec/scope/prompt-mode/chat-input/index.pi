@@ -1,0 +1,133 @@
+use /lib
+from /scope/harness-integration import HarnessIntegrationScope
+from /scope/project-directory import ProjectDirectoryScope
+from /scope/lsp import LSP
+
+export scope ChatInputScope:
+    concept: {ChatInputConcept}
+
+concept ChatInputConcept:
+    pitch:
+        A multi-line, syntax-highlighted textbox that accepts plain text as well
+        as snippets of Piton.
+
+    shape: {ChatInputShape}
+
+shape ChatInputShape:
+    description:
+        Input on the left, send button on the right.
+
+        <Enter> allows for creating new lines, like Ctrl/Cmd+Enter sends it to
+        the ${HarnessIntegrationScope}
+
+        Sending is never blocked by the harness working: while it is, the send
+        button reads "Queue" and sending adds the prompt to prompt mode's
+        queue. The button is only disabled while the input is empty.
+
+    tabs:
+        overview:
+            The input and send button live inside the body of a tab bar, using
+            gpui-kit's default tab styling. The two tabs are Code and Spec,
+            with a chain button between them that selects both, reading
+            "Code and Spec" as its tooltip.
+
+            Pressing <Tab> while in the chat input cycles from Code to the
+            chain to Spec and back to Code, <Shift+Tab> the other way, and
+            focus remains in the chat input.
+
+        chain:
+            A small square button, half the height of the tabs and vertically
+            centred on them, with no focus border.
+
+            Inactive, it shows a broken chain dimmed to 50% opacity, and
+            Code and Spec sit apart with a gap between them wide enough that
+            the chain sits in the gap without overlapping either tab.
+
+            Active, it shows a joined chain at full opacity, both tabs are
+            selected, and Code and Spec animate closer together until they
+            meet beneath the chain, which overlaps both and covers the seam
+            so they read as one locked tab. Deactivating it animates them
+            apart again.
+
+            The chain never moves: it stays at the same place in both states,
+            and only the tabs slide toward or away from it.
+
+    systemPrompt:
+        The selected tab is the mode a prompt is sent in, and each mode gives
+        the hidden anchor a systemPrompt property alongside its userPrompt.
+        The code location is `codeRoot` and the spec location is `root`, as
+        set in the project's piton.config.pi.
+
+        code:
+            We're working on the code located in <code location>. Don't edit
+            the spec located in <spec location>.
+
+        spec:
+            We're working on the spec located in <spec location>. Don't edit
+            the code located in <code location>.
+
+        both:
+            We're working on both the code located in <code location> and the
+            spec located in <spec location>. Edit both of them.
+
+        A prompt keeps the mode it was sent in while it waits in the queue.
+
+    escape:
+        Pressing <Escape> while in the chat input takes focus out of the chat
+        input.
+
+    growToFit:
+        The text input will grow to fit the text inside of it, one row per
+        visual line: both lines broken with <Enter> and long lines that soft
+        wrap. It shrinks again as text is removed, and re-fits when the window
+        is resized. It starts at a single row, lined up with the send button,
+        and stops growing at 12 rows, after which it scrolls.
+
+    autoFocus:
+        The chat input should be auto-focused.
+
+    syntaxHighlighting:
+        Syntax highlighting will be supported via the [Tree Sitter
+        Grammar](https://github.com/piton-lang/tree-sitter-piton)
+
+    lsp: @{LSP}
+
+    harnessMentions:
+        overview:
+            Typing `/` offers the harness's skills and commands, and typing `@`
+            offers its agents, the way they are offered in the harness itself.
+            The placeholder mentions both.
+
+        trigger:
+            A mention starts at `/` or `@` at the start of the input or after
+            whitespace, so paths and email addresses never open it, and an at sign
+            followed by an opening curly brace is still a Piton reference. Completions are
+            requested after typing the `/` or `@`, and after each letter,
+            digit, hyphen, underscore, or colon of the name that follows. Only
+            inside a mention are a slash or a hyphen a trigger; outside of one
+            they never reach the @{LSP}.
+
+        offered:
+            Skills and commands are those of the selected
+            ${ProjectDirectoryScope}, of the user, and of the user's enabled
+            plugins, a plugin's own being named `plugin:name`. Agents come from
+            the same places, plus the harness's built-in agents. Each shows
+            whether it is a skill, command, or agent, and its description as
+            documentation when it has one. Every harness run reports the skills
+            and agents it has, built-in ones included; the last report is saved
+            with the project and offered too. Results are narrowed and ordered
+            like Piton completions: matches at the start of a name before
+            matches anywhere in it, then by name.
+
+        accepting:
+            Accepting a skill or command inserts `/name `, and accepting an
+            agent inserts `@agent-name `, which the harness understands as a
+            request to use that agent. They pass through the hidden anchor and
+            its compilation unchanged, so a prompt starting with `/name` runs
+            that skill or command. Mentions work without the @{LSP}.
+
+    hiddenAnchor:
+        While the user will be able to type plain text, behind the scenes,
+        they'll be typing into a randomly-named piton anchor with a userPrompt
+        property.  It's this compiled anchor that will be send to the
+        @{HarnessIntegrationScope}

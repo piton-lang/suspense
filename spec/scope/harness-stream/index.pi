@@ -1,0 +1,29 @@
+use /lib
+
+export scope HarnessStream:
+    concept: {HarnessStreamConcept}
+
+concept HarnessStreamConcept:
+    pitch:
+        realtime streaming view of output from the @{HarnessStreamConcept}
+
+    shape: {HarnessStreamShape}
+
+shape HarnessStreamShape:
+    description:
+        monospace, syntax highlighted if applicable, automatically scrolls to
+        most recent output.
+
+    formatting:
+        Output is pretty formatted: each JSON event is indented across lines,
+        with a blank line between events. Lines that are not JSON are shown as
+        they arrived.
+
+    design:
+        Just the raw text.  There's no border or decoration around the streaming
+        component itself.
+
+    autoScroll:
+        It will autosroll when we're already scrolled to the bottom of the
+        output.  However, if we're not already scrolled, auto scroll will be
+        suspended until we've scrolled back to the bottom.

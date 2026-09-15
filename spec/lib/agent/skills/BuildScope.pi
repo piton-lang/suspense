@@ -1,0 +1,36 @@
+use @piton/belay
+
+from @piton/belay import __BELAY_SHAPE__
+
+from ../../Scope import Scope
+
+export abstract skill BuildScope as build-scope:
+    description: build or change the ${self.scope} scope
+    useWhen: you need to ${self.description}
+    prompt:
+        Read all necessary skills and specs, then ${this.description} according
+        to what already exists in the codebase.
+
+        If nothing has been built, start from scratch.
+
+        If you're not starting from scratch, analyze the existing codebase
+        against the spec and determine what needs to be changed and/or
+        refactored. It might be small changes or additions, or it might be a
+        large refactor.  No matter the scale, make sure the spec acts as the
+        source of truth and the code is reworked to match the spec.
+
+    refactoring:
+        Always build from the latest spec, checking what's already build in
+        @{self.scope} against the spec.  Spec is the source of truth, and the
+        code should be refactored to match the spec.
+
+    belayShape:
+        Use the directory structure of ${__BELAY_SHAPE__} to guide how to
+        structure and organize the code.  If the shape changes, refactor the
+        code to match.
+
+        Do not use the structure of the spec to fundamentally guide the layout
+        of the application.  The only guidance you should look at for
+        structure/organization is ${__BELAY_SHAPE__}.
+
+    scope:: extends Scope

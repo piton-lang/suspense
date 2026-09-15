@@ -1,0 +1,28 @@
+use /lib
+from ./MainWindow import MainWindowScope
+
+export scope ApplicationScope:
+    concept: {ApplicationConcept}
+
+concept ApplicationConcept:
+    pitch:
+        A REPL and sort of notebook for [Piton](https://piton-lang.org/spec.md)
+        that allows you write prompts that references the spec and also allows
+        you to build up a history of prompts saved as files.
+
+    shape: {ApplicationShape}
+
+shape ApplicationShape:
+    description: desktop application
+
+    stack:
+        language: rust
+        gui: gpui
+        components: [gpui-kit](https://gpui-kit.com/)
+
+    platforms:
+        - windows
+        - mac
+        - linux
+
+    mainWindow: @{MainWindowScope}

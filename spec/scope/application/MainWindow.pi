@@ -1,0 +1,75 @@
+use /lib
+from ../project-directory import ProjectDirectoryScope
+from ../prompt-mode import PromptEditor
+from ../prompt-mode/chat-input import ChatInputScope
+from ../harness-stream import HarnessStream
+from ../editor import EditorScope
+from ../palette import PaletteScope
+
+export scope MainWindowScope:
+    concept: {MainWindowConcept}
+
+concept MainWindowConcept:
+    pitch:
+        The main window of the application allowing you interact with all main
+        functionality.
+
+    shape: {MainWindowShape}
+
+shape MainWindowShape:
+    description:
+        Maximized window.
+
+    darkMode:
+        The whole window, including popups and notifications, supports a light
+        and a dark theme.
+
+        A "Dark mode" switch at the far right of the toolbar toggles between the
+        two.
+
+        The choice is persistent: it is saved for the user, across all
+        projects, and restored on the next launch. Until a choice has been
+        made, the window follows the operating system's light or dark
+        appearance.
+
+    escape:
+        Pressing Esc anywhere in the window, including in an @{EditorScope}, moves
+        focus to the @{ChatInputScope}. Esc first closes whatever it would
+        otherwise dismiss, such as a completion menu or a popup.
+
+    palette:
+        Ctrl+P (Cmd+P on macOS) opens the @{PaletteScope} over the window, for
+        fuzzy searching the project's files, the application's own commands,
+        and the harness's commands, skills, and agents.
+
+    header:
+        toolbar:
+            Toolbar on top that contains a button for @{ProjectDirectoryScope}
+            As well as a Build button that will run `piton build`
+
+            In the middle of the toolbar, a toggle button shows or hides a
+            @{HarnessStream} split view beside prompt mode. It reads
+            "View Raw Output" while the split is hidden and "Hide Raw Output"
+            while it is shown.
+
+    body:
+        sidebar:
+            A sidebar along the left of the body displays a tree view of the
+            current @{ProjectDirectoryScope}. Folders are listed before files,
+            both by name, and a folder's contents are shown when it is
+            expanded. The tree refreshes by itself when files or folders are
+            added, removed, or renamed on disk, keeping expanded folders open
+            and the selection in place. The sidebar is resized by dragging its
+            edge. Until a project is picked it reads "No project open".
+
+        openFile:
+            Clicking a file in the tree opens it in an @{EditorScope}, in a
+            split beside the chat history: the file on the left taking 50% of
+            the width, the chat history on the right taking the rest. The split
+            can be resized by dragging its edge. Closing the file closes the
+            split. The @{ChatInputScope} is never split: it stays along the
+            bottom, across the full width of prompt mode.
+
+        promptMode:
+            The body displays the @{PromptEditor} and any splits, to the
+            right of the sidebar.

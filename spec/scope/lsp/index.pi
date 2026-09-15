@@ -1,0 +1,63 @@
+use /lib
+from /scope/project-directory import ProjectDirectoryScope
+
+export scope LSP:
+    concept: {LSPConcept}
+
+concept LSPConcept:
+    pitch:
+        LSP-based autocompleting for the chat input, and language support for
+        the editor, will be provided via the `piton lsp`
+
+    shape: {LSPShape}
+
+shape LSPShape:
+    description:
+        Completions and auto-imports for the Piton typed into the chat input,
+        and the server the editor's Piton files are edited with.
+
+    server:
+        One `piton lsp` is started as a child process in the selected
+        ${ProjectDirectoryScope}, speaking JSON-RPC over stdio, shared by the
+        chat input and the editor, and restarted whenever the project
+        directory changes. The client sends `initialize` and `initialized`,
+        answers any request from the server with an empty result, and gives up
+        on a request after 5 seconds. Diagnostics the server publishes are
+        kept per file and passed on to whatever shows that file. If the server
+        cannot be started, the input and the editor still work, without
+        language support.
+
+    document:
+        The server never sees the input's text directly. It sees the hidden
+        anchor, as an in-memory document at `.piton-repl-draft.pi` in the
+        project's spec root, kept current with `textDocument/didOpen` and
+        full-text `textDocument/didChange`. Positions are translated between
+        the input and the hidden anchor's `userPrompt` lines, in UTF-16
+        columns.
+
+    completion:
+        `textDocument/completion` is requested after typing a letter, a
+        digit, an opening curly brace, a period, a dollar sign, an at sign,
+        a colon, or an underscore. Results are narrowed to what has been
+        typed of the current word, matches at the start of a name before
+        matches anywhere in it, then ordered by the server's sort text. The
+        hidden anchor's own name is never offered. Accepting a completion
+        inserts it into the input, and the import the server attaches to it
+        (`additionalTextEdits`) is added to the hidden anchor instead of the
+        input.
+
+    autoImport:
+        Names typed by hand are imported with the server's
+        `textDocument/codeAction` quick fixes, repeated up to three times
+        since one import can bring more names into reach. This runs before
+        each completion request and before a prompt is sent.
+
+    completionPopup:
+        The completion popup opens at the cursor and is location-aware: it
+        always stays fully inside the window. It opens below the cursor when
+        there is room and above it otherwise, which is the usual case since
+        the input sits at the bottom of the window. It shifts left rather
+        than running past the right edge. Any documentation for the selected
+        completion sits beside the list when both fit across the window, and
+        is otherwise stacked with the list, on the side away from the
+        cursor.

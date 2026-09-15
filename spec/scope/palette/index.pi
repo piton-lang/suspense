@@ -1,0 +1,90 @@
+use /lib
+from /scope/project-directory import ProjectDirectoryScope
+from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/editor import EditorScope
+
+export scope PaletteScope:
+    concept: {PaletteConcept}
+
+concept PaletteConcept:
+    pitch:
+        A popover for finding anything in the application by fuzzy searching
+        for it: the project's files, the application's own commands, and the
+        harness's commands, skills, and agents.
+
+    shape: {PaletteShape}
+
+shape PaletteShape:
+    description:
+        A popover near the top of the window, over a dimmed backdrop: a tab bar
+        using gpui-kit's default tab styling, a search field beneath it, and the
+        results beneath that.
+
+    opening:
+        Ctrl+P (Cmd+P on macOS) anywhere in the window opens the palette on the
+        Files tab with an empty search and focus in the search field. Pressing
+        it again while the palette is open closes it.
+
+    closing:
+        Picking a result closes the palette. Esc clears the search, and closes
+        the palette once the search is empty. Clicking outside the palette
+        closes it. Closing it without picking anything puts focus back where it
+        was.
+
+    tabs:
+        overview:
+            The tabs are Files, System, Commands, Skills, and Agents, in that
+            order. Each lists its own results. The search is kept when switching
+            tabs, and applies to the tab switched to.
+
+        switching:
+            Clicking a tab switches to it. <Tab> moves to the next tab and
+            <Shift+Tab> to the previous one, wrapping around, and focus stays in
+            the search field.
+
+        files:
+            Every file in the selected @{ProjectDirectoryScope}, at any depth,
+            listed by its path in the project. `.git`, and whatever the
+            project's `.gitignore` files ignore, are left out. Picking a file
+            opens it in the @{EditorScope}, as clicking it in the project tree
+            does. Until a project is picked the tab reads "No project open".
+
+        system:
+            The application's own commands, each doing what its toolbar control
+            or shortcut does: "Open Project…", "Build", "View Raw Output" or
+            "Hide Raw Output", "Dark mode" or "Light mode" (whichever is not
+            the current one), and "Quit". Build is unavailable while there is
+            no project or a build is running.
+
+        commands:
+            The harness's commands, the same ones the @{ChatInputScope} offers
+            after `/`.
+
+        skills:
+            The harness's skills, the same ones the @{ChatInputScope} offers
+            after `/`.
+
+        agents:
+            The harness's agents, the same ones the @{ChatInputScope} offers
+            after `@`.
+
+        mentions:
+            A command, skill, or agent shows its description when it has one.
+            Picking one inserts it into the @{ChatInputScope} at the cursor the
+            way accepting it as a mention does, `/name ` for a command or skill
+            and `@agent-name ` for an agent, with a space before it when the
+            cursor follows other text. Focus then moves to the chat input.
+
+    fuzzySearch:
+        A result matches when the search's characters all appear in it in
+        order, ignoring case, though not necessarily next to each other. The
+        best matches come first: runs of consecutive characters, and characters
+        at the start of a word or of a file's name, rank higher, then shorter
+        results. The matched characters are highlighted. With an empty search,
+        files are listed by path, the application's commands in the order
+        above, and the harness's by name. At most the 100 best results are
+        listed.
+
+    keyboard:
+        Up and Down move the highlight, which starts on the first result, and
+        Enter picks the highlighted result. Clicking a result picks it.

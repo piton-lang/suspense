@@ -1,0 +1,15 @@
+from /scope/application import ApplicationScope
+from /scope/prompt-mode/message-list import MessageList
+
+anchor Prompt_efc6aacb054af00a:
+    userPrompt:
+        I'd like to revamp the way the @{MessageList} looks.  Forget the idea of a chat.  The point becomes more that I'm sending a task to be completing, queuing tasks, and there's output for that task until it's finished.
+        
+        So let's get rid of the user-sent "message bubble" entirely and instead just put it in the header like we already have (which still doesn't seem to be displaying the compiled output of the piton prompt anchor)
+        
+        results from the agent should be displayed in a @{ApplicationScope.concept.shape.stack.components} table component, where what was previously a grouping is now a badge in a column, etc.
+        
+        The header should display the prompt, but also display the status in a sort of colour label corresponding to status.  There's a small row above the header that expands the header into a sort of scrollable accordion list of previous prompt headers that when clicks will expand into the output of that task.
+
+    systemPrompt:
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.

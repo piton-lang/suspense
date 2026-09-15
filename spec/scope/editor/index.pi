@@ -1,0 +1,67 @@
+use /lib
+from /scope/lsp import LSP
+
+export scope EditorScope:
+    concept: {EditorConcept}
+
+concept EditorConcept:
+    pitch:
+        An editor for a file opened from the project tree, with language
+        support for Piton files.
+
+    shape: {EditorShape}
+
+shape EditorShape:
+    description:
+        Editable and syntax highlighted, under a header with the file's path
+        in the project, a dot while it has unsaved changes, a save button, and
+        a close button.
+
+    saving:
+        Ctrl+S (Cmd+S on macOS) or the save button writes the file to disk.
+        A file that cannot be saved keeps its changes and says why beneath
+        the header.
+
+    languageSupport:
+        overview:
+            A Piton file (`.pi`) is edited with the project's @{LSP} server,
+            shared with the chat input, which sees the editor's unsaved text:
+            the file is opened with `textDocument/didOpen`, kept current with
+            full-text `textDocument/didChange`, reported with
+            `textDocument/didSave` when saved, and closed with
+            `textDocument/didClose` when the editor closes or shows another
+            file. Other files are edited without language support, as is a
+            Piton file while the server is not running.
+
+        completions:
+            `textDocument/completion` is requested after typing a letter, a
+            digit, an opening curly brace, a period, a dollar sign, an at
+            sign, a colon, or an underscore, and narrowed and ordered as in
+            the chat input. Accepting a completion also applies the import the
+            server attaches to it.
+
+        hover:
+            Hovering a name shows the server's `textDocument/hover`.
+
+        definitions:
+            Ctrl-clicking (Cmd-clicking on macOS) a name goes to its
+            `textDocument/definition`. A definition in another file opens that
+            file in the editor, at the definition.
+
+        diagnostics:
+            What the server publishes for the file is underlined, with the
+            message shown on hover, and kept while the text is edited until
+            the server publishes again.
+
+        quickFixes:
+            Ctrl+. (Cmd+. on macOS) lists the server's
+            `textDocument/codeAction` fixes at the cursor, and picking one
+            applies its edits to the file.
+
+    replacing:
+        Opening another file shows that file in its place. While there are
+        unsaved changes, it first asks whether to discard them.
+
+    closing:
+        A close button above the file closes it. While there are unsaved
+        changes, it first asks whether to discard them.
