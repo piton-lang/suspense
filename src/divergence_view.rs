@@ -30,7 +30,16 @@ use crate::harness::{self, HarnessEvent};
 use crate::prompt_mode::{Reply, output_table};
 use crate::scrollbar::{self, SetLock};
 
-actions!(suspense, [AnalyzeDivergence]);
+actions!(suspense, [AnalyzeDivergence, ViewDivergenceReports]);
+
+/// What the panel is opened to do.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Opening {
+    /// Start a fresh analysis.
+    Analyze,
+    /// Show the latest saved report, starting nothing.
+    ViewReports,
+}
 
 /// Emitted when the panel is closed.
 pub struct CloseDivergence;
@@ -93,6 +102,8 @@ pub struct DivergenceView {
     build: Build,
     agent: RunAgent,
     steps: [StepState; 3],
+    /// Whether an analysis has been started in this panel.
+    analyzed: bool,
     /// Whether the build failed, so the compiled spec may be out of date.
     build_failed: bool,
     /// Why the files couldn't be listed, if they couldn't.
@@ -136,15 +147,16 @@ impl Drop for DivergenceView {
 }
 
 impl DivergenceView {
-    /// A panel for the project in `project_dir`, showing its latest saved
-    /// report, or analyzing it straight away when there is none.
-    pub fn new(project_dir: PathBuf, cx: &mut Context<Self>) -> Self {
+    /// A panel for the project in `project_dir`, opened to analyze it or to
+    /// view its saved reports.
+    pub fn new(project_dir: PathBuf, opening: Opening, cx: &mut Context<Self>) -> Self {
         let reports_dir = divergence::reports_dir(&project_dir);
         Self::with_runners(
             project_dir,
             reports_dir,
             crate::piton_build::build,
             divergence::run_agent,
+            opening,
             cx,
         )
     }
@@ -156,6 +168,7 @@ impl DivergenceView {
         reports_dir: PathBuf,
         build: Build,
         agent: RunAgent,
+        opening: Opening,
         cx: &mut Context<Self>,
     ) -> Self {
         let reports = divergence::load_reports(&reports_dir);
@@ -164,7 +177,9 @@ impl DivergenceView {
             reports_dir,
             build,
             agent,
-            steps: Step::ALL.map(|_| StepState::Pending),
+            // Nothing runs until an analysis starts.
+            steps: Step::ALL.map(|_| StepState::Done),
+            analyzed: false,
             build_failed: false,
             error: None,
             files: None,
@@ -183,13 +198,31 @@ impl DivergenceView {
             cancel: Arc::default(),
             _run: Task::ready(()),
         };
-        if this.reports.is_empty() {
-            this.analyze(cx);
-        } else {
-            this.steps = Step::ALL.map(|_| StepState::Done);
-            this.show_saved(0, cx);
-        }
+        this.open_to(opening, cx);
         this
+    }
+
+    /// Does what the panel was opened, or brought back, to do: starts an
+    /// analysis unless one is running, or shows the latest report unless one
+    /// is running.
+    pub fn open_to(&mut self, opening: Opening, cx: &mut Context<Self>) {
+        if self.running() {
+            return;
+        }
+        match opening {
+            Opening::Analyze => self.analyze(cx),
+            Opening::ViewReports => {
+                if !self.reports.is_empty() {
+                    self.show_saved(0, cx);
+                }
+            }
+        }
+    }
+
+    /// Whether there's nothing to show: no analysis started, and no report
+    /// saved.
+    fn empty(&self) -> bool {
+        !self.analyzed && self.saved().is_none()
     }
 
     /// The report showing.
@@ -320,6 +353,7 @@ impl DivergenceView {
     /// Starts a fresh analysis: builds the spec, then runs both agents at
     /// once, and merges what they found.
     pub fn analyze(&mut self, cx: &mut Context<Self>) {
+        self.analyzed = true;
         self.cancel.cancel();
         self.cancel = Arc::default();
         self.steps = Step::ALL.map(|_| StepState::Pending);
@@ -578,10 +612,7 @@ impl DivergenceView {
                 header.child(gpui_kit::TestSupportExt::test_support(
                     h_flex()
                         .id("divergence-score")
-                        .tooltip(explain(
-                            "Aligned",
-                            figure_meaning("divergence-figure-aligned"),
-                        ))
+                        .tooltip(explain("Aligned", meaning("divergence-figure-aligned")))
                         .h_full()
                         .gap_3()
                         .pl_3()
@@ -597,6 +628,8 @@ impl DivergenceView {
                         )
                         .children(made.map(|made| {
                             div()
+                                .id("divergence-made")
+                                .tooltip(explain("Made", meaning("made")))
                                 .text_sm()
                                 .text_color(theme.muted_foreground)
                                 .child(divergence::ago(made, divergence::now()))
@@ -610,6 +643,7 @@ impl DivergenceView {
                     .small()
                     .icon(IconName::RefreshCw)
                     .label("Analyze again")
+                    .tooltip("Run a fresh analysis; this report stays among the saved reports")
                     .disabled(self.running())
                     .on_click(cx.listener(|this, _, _, cx| this.analyze(cx))),
             )
@@ -629,6 +663,47 @@ impl DivergenceView {
                     .tooltip("Close, stopping any analysis still running")
                     .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
             )
+    }
+
+    /// Viewing the reports with none saved yet: says so, with a button to
+    /// analyze.
+    fn render_empty(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let empty = v_flex()
+            .id("divergence-empty")
+            .size_full()
+            .items_center()
+            .justify_center()
+            .gap_2()
+            .child(
+                Icon::new(IconName::FileText)
+                    .large()
+                    .text_color(theme.muted_foreground),
+            )
+            .child(
+                div()
+                    .text_lg()
+                    .font_semibold()
+                    .child("No divergence reports yet"),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(theme.muted_foreground)
+                    .child("An analysis is saved as a report once it's over."),
+            )
+            .child(
+                div().pt_2().child(
+                    Button::new("divergence-empty-analyze")
+                        .primary()
+                        .small()
+                        .icon(IconName::GitCompareArrows)
+                        .label("Analyze")
+                        .on_click(cx.listener(|this, _, _, cx| this.analyze(cx))),
+                ),
+            );
+        // Lets UI tests find the message; inert in normal builds.
+        gpui_kit::TestSupportExt::test_support(empty)
     }
 
     /// A step's icon: a spinner while it runs, a tick once done, or a cross if
@@ -654,16 +729,28 @@ impl DivergenceView {
     fn step_heading(&self, step: Step, cx: &App) -> Div {
         let theme = cx.theme();
         let state = &self.steps[step as usize];
+        let key = match step {
+            Step::Build => "step-build",
+            Step::Code => "step-code",
+            Step::Spec => "step-spec",
+        };
         v_flex()
             .gap_0p5()
             .child(
-                h_flex().gap_2().child(Self::step_icon(state, cx)).child(
-                    div()
-                        .when(*state == StepState::Pending, |label| {
-                            label.text_color(theme.muted_foreground)
-                        })
-                        .child(step.label()),
-                ),
+                h_flex()
+                    .id(("divergence-step", step as usize))
+                    .tooltip(explain(step.label(), meaning(key)))
+                    // Lets UI tests find the step; inert in normal builds.
+                    .map(gpui_kit::TestSupportExt::test_support)
+                    .gap_2()
+                    .child(Self::step_icon(state, cx))
+                    .child(
+                        div()
+                            .when(*state == StepState::Pending, |label| {
+                                label.text_color(theme.muted_foreground)
+                            })
+                            .child(step.label()),
+                    ),
             )
             .when_some(
                 match state {
@@ -809,18 +896,23 @@ impl DivergenceView {
                     .child(row.name)
                     .into_any_element();
             };
-            let divergence = files
-                .iter()
-                .find(|file| file.path == path)
-                .and_then(|file| file.divergence);
+            let file = files.iter().find(|file| file.path == path);
             let selected = self.selected.as_deref() == Some(path.as_str());
-            let meter = match divergence {
+            let (value, title, key) = tree_measure(self.side, file);
+            let meter = match value {
                 Some(value) => {
                     let percent = (value * 100.).round() as u32;
-                    let color = Self::verdict_color(percent, cx);
+                    let color = match self.side {
+                        Side::Source => Self::verdict_color(percent, cx),
+                        Side::Spec => Self::definition_color(percent, cx),
+                    };
                     h_flex()
+                        .id(("divergence-meter", ix))
+                        .tooltip(explain(title, meaning(key)))
                         .flex_none()
                         .gap_2()
+                        // Lets UI tests find the meter; inert in normal builds.
+                        .map(gpui_kit::TestSupportExt::test_support)
                         .child(
                             div()
                                 .w(px(48.))
@@ -840,10 +932,13 @@ impl DivergenceView {
                         .into_any_element()
                 }
                 None => div()
+                    .id(("divergence-meter", ix))
+                    .tooltip(explain(title, meaning(key)))
+                    .map(gpui_kit::TestSupportExt::test_support)
                     .flex_none()
                     .text_xs()
                     .text_color(theme.muted_foreground)
-                    .child("Not analyzed")
+                    .child(title)
                     .into_any_element(),
             };
             let target = path.clone();
@@ -896,8 +991,10 @@ impl DivergenceView {
 
         // A measure: its name, a bar, and its percentage, or "Not analyzed".
         let measure = |id: &'static str, name: &str, value: Option<f32>, color: Hsla| {
+            let key = id.trim_start_matches("divergence-");
             let row = h_flex()
                 .id(id)
+                .tooltip(explain(name, sided(key, self.side)))
                 .gap_3()
                 .child(
                     div()
@@ -962,7 +1059,16 @@ impl DivergenceView {
         let gaps = v_flex()
             .id("divergence-gaps")
             .gap_1()
-            .child(div().pt_2().font_medium().child(gaps_title))
+            .child(
+                div()
+                    .id("divergence-gaps-title")
+                    .tooltip(explain(gaps_title, sided("gaps", self.side)))
+                    // Lets UI tests find the title; inert in normal builds.
+                    .map(gpui_kit::TestSupportExt::test_support)
+                    .pt_2()
+                    .font_medium()
+                    .child(gaps_title),
+            )
             .when(gaps.is_empty() && analyzed, |list| {
                 list.child(
                     div()
@@ -1012,6 +1118,10 @@ impl DivergenceView {
                         )
                         .child(
                             div()
+                                .id(("divergence-connection-influence", ix))
+                                .tooltip(explain(influence_label, sided("connection", self.side)))
+                                // Lets UI tests find it; inert in normal builds.
+                                .map(gpui_kit::TestSupportExt::test_support)
                                 .flex_none()
                                 .text_sm()
                                 .text_color(theme.muted_foreground)
@@ -1019,6 +1129,8 @@ impl DivergenceView {
                         )
                         .children(connection.divergence.map(|value| {
                             div()
+                                .id(("divergence-connection-divergence", ix))
+                                .tooltip(explain("Diverges", meaning("connection-divergence")))
                                 .flex_none()
                                 .text_sm()
                                 .text_color(Self::verdict_color(percent(value), cx))
@@ -1091,9 +1203,27 @@ impl DivergenceView {
         let theme = cx.theme().clone();
         let report = &saved.report;
         // A section, and a part of one.
-        let heading = |text: &str| div().text_lg().font_semibold().child(text.to_string());
-        let subheading = |text: &str| {
+        let heading = |text: &'static str, key: &'static str| {
             div()
+                .id(SharedString::from(format!("divergence-heading-{key}")))
+                .tooltip(explain(text, meaning(key)))
+                // Lets UI tests find the heading; inert in normal builds.
+                .map(gpui_kit::TestSupportExt::test_support)
+                .text_lg()
+                .font_semibold()
+                .child(text)
+        };
+        let subheading = |text: &'static str| {
+            div()
+                .id(SharedString::from(format!("divergence-subheading-{text}")))
+                .when_some(
+                    match text {
+                        "Best defined files" => Some("best-defined"),
+                        "Least defined files" => Some("least-defined"),
+                        _ => None,
+                    },
+                    |label, key| label.tooltip(explain(text, meaning(key))),
+                )
                 .text_sm()
                 .font_medium()
                 .text_color(theme.muted_foreground)
@@ -1118,7 +1248,7 @@ impl DivergenceView {
         let figure = |id: &'static str, label: &str, value: Option<u32>, color: Option<Hsla>| {
             let card = v_flex()
                 .id(id)
-                .tooltip(explain(label, figure_meaning(id)))
+                .tooltip(explain(label, meaning(id)))
                 .min_w(px(110.))
                 .gap_0p5()
                 .px_3()
@@ -1179,7 +1309,7 @@ impl DivergenceView {
                     .id("divergence-figure-verdicts")
                     .tooltip(explain(
                         "Aligned · Drifting · Diverged",
-                        figure_meaning("divergence-figure-verdicts"),
+                        meaning("divergence-figure-verdicts"),
                     ))
                     .gap_0p5()
                     .px_3()
@@ -1220,6 +1350,7 @@ impl DivergenceView {
         // Files, each a row that opens it in its tree.
         let files = |id: &'static str,
                      files: Vec<(Side, &FileResult)>,
+                     measure: &'static str,
                      value: fn(&FileResult) -> f32,
                      color: fn(u32, &App) -> Hsla,
                      cx: &mut Context<Self>| {
@@ -1250,6 +1381,17 @@ impl DivergenceView {
                     )
                     .child(
                         div()
+                            .id(SharedString::from(format!("{id}-value-{ix}")))
+                            // Lets UI tests find the value; inert in normal builds.
+                            .map(gpui_kit::TestSupportExt::test_support)
+                            .tooltip(explain(
+                                if measure == "definition" {
+                                    "Definition"
+                                } else {
+                                    "Divergence"
+                                },
+                                sided(measure, side),
+                            ))
                             .flex_none()
                             .text_sm()
                             .text_color(color(amount, cx))
@@ -1265,6 +1407,7 @@ impl DivergenceView {
         let best = files(
             "divergence-best",
             report.by_definition(true, LISTED_FILES),
+            "definition",
             definition_of,
             definition_color,
             cx,
@@ -1272,6 +1415,7 @@ impl DivergenceView {
         let least = files(
             "divergence-least",
             report.by_definition(false, LISTED_FILES),
+            "definition",
             definition_of,
             definition_color,
             cx,
@@ -1279,6 +1423,7 @@ impl DivergenceView {
         let most = files(
             "divergence-most",
             report.most_diverged(LISTED_FILES),
+            "diverges",
             divergence_of,
             verdict_color,
             cx,
@@ -1290,6 +1435,7 @@ impl DivergenceView {
             let score = other.report.score();
             let row = h_flex()
                 .id(("divergence-saved", ix))
+                .tooltip(explain("Saved report", meaning("saved-reports")))
                 .gap_3()
                 .mx_neg_2()
                 .px_2()
@@ -1326,7 +1472,7 @@ impl DivergenceView {
                 v_flex()
                     .gap_2()
                     .pt_4()
-                    .child(heading("Assessment"))
+                    .child(heading("Assessment", "assessment"))
                     .child(columns(
                         assessment(Side::Source, &report.code_assessment).into_any_element(),
                         assessment(Side::Spec, &report.spec_assessment).into_any_element(),
@@ -1339,7 +1485,7 @@ impl DivergenceView {
                     .child(columns(
                         v_flex()
                             .gap_2()
-                            .child(heading("Well defined"))
+                            .child(heading("Well defined", "well-defined"))
                             .when(report.well_defined.is_empty(), |column| {
                                 column.child(muted("No areas named"))
                             })
@@ -1347,7 +1493,7 @@ impl DivergenceView {
                             .into_any_element(),
                         v_flex()
                             .gap_2()
-                            .child(heading("Less well defined"))
+                            .child(heading("Less well defined", "less-defined"))
                             .when(report.less_defined.is_empty(), |column| {
                                 column.child(muted("No areas named"))
                             })
@@ -1371,24 +1517,28 @@ impl DivergenceView {
                 div().pt_4().child(columns(
                     v_flex()
                         .gap_2()
-                        .child(heading("Most diverged"))
+                        .child(heading("Most diverged", "most-diverged"))
                         .child(most)
                         .into_any_element(),
                     v_flex()
                         .gap_2()
-                        .child(heading("Saved reports"))
+                        .child(heading("Saved reports", "saved-reports"))
                         .child(v_flex().children(saved_rows))
                         .into_any_element(),
                 )),
             )
             .when(!saved.notes.is_empty(), |body| {
-                body.child(div().pt_4().child(heading("Notes")))
-                    .children(saved.notes.iter().map(|note| {
-                        div()
-                            .text_sm()
-                            .text_color(theme.warning)
-                            .child(note.clone())
-                    }))
+                body.child(
+                    div()
+                        .pt_4()
+                        .child(div().text_lg().font_semibold().child("Notes")),
+                )
+                .children(saved.notes.iter().map(|note| {
+                    div()
+                        .text_sm()
+                        .text_color(theme.warning)
+                        .child(note.clone())
+                }))
             });
         // Lets UI tests find the report; inert in normal builds.
         let body = gpui_kit::TestSupportExt::test_support(body);
@@ -1407,8 +1557,14 @@ impl DivergenceView {
         let report = &saved.report;
         // A tab: its label, underlined while selected.
         let tab = |id: &'static str, label: &'static str, selected: bool| {
+            let key = match id {
+                "divergence-tab-report" => "tab-report",
+                "divergence-side-source" => "tab-source",
+                _ => "tab-spec",
+            };
             let tab = div()
                 .id(id)
+                .tooltip(explain(label, meaning(key)))
                 .h_full()
                 .flex()
                 .items_center()
@@ -1487,9 +1643,9 @@ impl DivergenceView {
     }
 }
 
-/// What the report's figure with `id` means, for its tooltip.
-fn figure_meaning(id: &str) -> &'static str {
-    match id {
+/// What the thing with tooltip `key` represents, for its tooltip.
+fn meaning(key: &str) -> &'static str {
+    match key {
         "divergence-figure-aligned" => {
             "How closely the code and the spec agree: 100% less the average divergence of \
              every file analyzed, source and spec alike. Green above 80%, amber above 50%, and \
@@ -1515,11 +1671,188 @@ fn figure_meaning(id: &str) -> &'static str {
             "How many files analyzed, source and spec alike, are aligned, diverging less than \
              20%; drifting, from 20% up to 50%; and diverged, 50% or more."
         }
+        "made" => {
+            "When the analysis behind this report finished and it was saved. Reports are kept \
+             with the project, so they survive a restart."
+        }
+        "tab-report" => {
+            "An overall assessment of the whole project: its figures, what the agents made of \
+             each side, the well and less well defined areas, and the saved reports."
+        }
+        "tab-source" => {
+            "Every source file as a tree, each with how far it diverges from the spec. Select \
+             one to see its measures and the spec files connected to it."
+        }
+        "tab-spec" => {
+            "Every spec file as a tree, each with how well defined it is. Select one to see its \
+             measures and the source files connected to it."
+        }
+        "not-analyzed" => {
+            "Its agent left this file out, so it has no measures and counts towards none of \
+             the report's figures."
+        }
+        "no-definition" => {
+            "Its agent didn't say how well defined this file is, as in reports made before \
+             definition was measured."
+        }
+        "influence-source" => {
+            "How strongly this source file is connected to the spec: 1 less the product of 1 \
+             less each connection's strength, so one strong connection or several weaker ones \
+             both count for a lot."
+        }
+        "influence-spec" => {
+            "How strongly this spec file is connected to the code: 1 less the product of 1 less \
+             each connection's strength, so one strong connection or several weaker ones both \
+             count for a lot."
+        }
+        "diverges-source" => {
+            "How far this source file diverges from the spec: 0% does just what the spec \
+             describes; 100% means nothing in the spec accounts for it, or the spec says \
+             otherwise."
+        }
+        "diverges-spec" => {
+            "How far the code diverges from what this spec file describes: 0% means all of it \
+             is built as described; 100% means none of it is, or the code does otherwise."
+        }
+        "definition-source" => {
+            "How much of this source file the spec defines: 0% means the implementation filled \
+             in all of it with nothing in the spec saying how; 100% means the spec defines all \
+             of it."
+        }
+        "definition-spec" => {
+            "How well this spec file defines what to build: 0% is too vague to build from; 100% \
+             leaves nothing for an implementation to guess."
+        }
+        "gaps-source" => {
+            "What the implementation decided for itself that the spec never says, as the code \
+             agent found it."
+        }
+        "gaps-spec" => {
+            "What this spec file leaves out or leaves vague, so an implementation has to guess, \
+             as the spec agent found it."
+        }
+        "connection-source" => {
+            "How much this spec file drove the source file, the average of what both agents \
+             said: 0% is barely any influence; 100% means it was written straight from it."
+        }
+        "connection-spec" => {
+            "How much this source file is built from the spec file, the average of what both \
+             agents said: 0% is barely at all; 100% means it was written straight from it."
+        }
+        "connection-divergence" => {
+            "How far the source file diverges from this particular spec file, the average of \
+             what the agents said."
+        }
+        "assessment" => {
+            "What each agent made of its side as a whole: how well the code follows the spec, \
+             and how complete and precise the spec is."
+        }
+        "well-defined" => {
+            "Areas of the project the agents found the spec defines well, each with why."
+        }
+        "less-defined" => {
+            "Areas where the spec is vague or silent, or the code filled in a lot, each with \
+             why."
+        }
+        "best-defined" => {
+            "The five analyzed files, source and spec alike, with the highest definition. Click \
+             one to open it in its tree."
+        }
+        "least-defined" => {
+            "The five analyzed files, source and spec alike, with the lowest definition. Click \
+             one to open it in its tree."
+        }
+        "most-diverged" => {
+            "The five analyzed files, source and spec alike, that diverge most. Click one to \
+             open it in its tree."
+        }
+        "saved-reports" => {
+            "Every report saved for this project, newest first, with how aligned it was. Click \
+             one to show it."
+        }
+        "step-build" => {
+            "Runs piton build, so the compiled spec the agents can read is up to date. A build \
+             that fails doesn't stop the analysis."
+        }
+        "step-code" => {
+            "An agent reads every source file and says which spec files drove it, how far it \
+             diverges, and how well defined it is."
+        }
+        "step-spec" => {
+            "An agent reads every spec file and says which source files implement it, how far \
+             the code diverges from it, and how well defined it is."
+        }
         _ => "",
     }
 }
 
-/// A tooltip naming a figure and explaining what it means, wrapped to a
+/// What a file's row in `side`'s tree measures: source files how far they
+/// diverge, spec files how well defined they are. The value, if there is one,
+/// with its name and the key of its meaning, or what's shown in its place.
+fn tree_measure(
+    side: Side,
+    file: Option<&FileResult>,
+) -> (Option<f32>, &'static str, &'static str) {
+    match (file.and_then(|file| file.divergence), side) {
+        (None, _) => (None, "Not analyzed", "not-analyzed"),
+        (Some(divergence), Side::Source) => (Some(divergence), "Divergence", "diverges-source"),
+        (Some(_), Side::Spec) => match file.and_then(|file| file.definition) {
+            Some(definition) => (Some(definition), "Definition", "definition-spec"),
+            None => (None, "No definition", "no-definition"),
+        },
+    }
+}
+
+/// Every key [`meaning`] explains.
+#[cfg(test)]
+const MEANINGS: &[&str] = &[
+    "divergence-figure-aligned",
+    "divergence-figure-source-definition",
+    "divergence-figure-spec-definition",
+    "divergence-figure-source-coverage",
+    "divergence-figure-spec-coverage",
+    "divergence-figure-verdicts",
+    "made",
+    "tab-report",
+    "tab-source",
+    "tab-spec",
+    "not-analyzed",
+    "no-definition",
+    "influence-source",
+    "influence-spec",
+    "diverges-source",
+    "diverges-spec",
+    "definition-source",
+    "definition-spec",
+    "gaps-source",
+    "gaps-spec",
+    "connection-source",
+    "connection-spec",
+    "connection-divergence",
+    "assessment",
+    "well-defined",
+    "less-defined",
+    "best-defined",
+    "least-defined",
+    "most-diverged",
+    "saved-reports",
+    "step-build",
+    "step-code",
+    "step-spec",
+];
+
+/// `key`'s own side's version, as `{key}-source` or `{key}-spec`.
+fn sided(key: &str, side: Side) -> &'static str {
+    meaning(&format!(
+        "{key}-{}",
+        match side {
+            Side::Source => "source",
+            Side::Spec => "spec",
+        }
+    ))
+}
+
+/// A tooltip naming something and explaining what it represents, wrapped to a
 /// readable width.
 fn explain(
     title: &str,
@@ -1546,6 +1879,7 @@ fn explain(
 impl Render for DivergenceView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let body = match (self.saved(), self.running()) {
+            _ if self.empty() => self.render_empty(cx).into_any_element(),
             (Some(saved), false) => self.render_results(&saved.clone(), cx).into_any_element(),
             _ => self.render_steps(cx).into_any_element(),
         };
@@ -1571,7 +1905,7 @@ mod tests {
     use gpui_kit::test::{TestAppContextExt as _, TestWindowExt as _};
     use gpui_kit::{AppContext as _, TestAppContext};
 
-    use super::{DivergenceView, Step, StepState};
+    use super::{DivergenceView, Opening, Step, StepState};
     use crate::divergence::{Cancel, Side};
     use crate::piton_build::BuildOutcome;
 
@@ -1643,6 +1977,7 @@ mod tests {
         cx: &mut TestAppContext,
         reports: &Path,
         run: crate::divergence::RunAgent,
+        opening: Opening,
     ) -> (gpui_kit::Entity<DivergenceView>, gpui_kit::AnyWindowHandle) {
         cx.update(|cx| {
             gpui_kit::init(cx);
@@ -1656,6 +1991,7 @@ mod tests {
                     reports.to_path_buf(),
                     built,
                     run,
+                    opening,
                     cx,
                 )
             });
@@ -1671,7 +2007,7 @@ mod tests {
     #[gpui_kit::test]
     async fn shows_the_score_trees_and_connections(cx: &mut TestAppContext) {
         let reports = reports_dir("score");
-        let (view, handle) = open(cx, &reports, agent);
+        let (view, handle) = open(cx, &reports, agent, Opening::Analyze);
         cx.wait_for(handle, Duration::from_secs(10), |window, _| {
             window.try_find("divergence-score").is_some()
         })
@@ -1732,6 +2068,14 @@ mod tests {
             }
         })
         .unwrap();
+        // Each step explains what it does.
+        shows_tooltip(
+            cx,
+            handle,
+            ("divergence-step", Step::Spec as usize).into(),
+            ("divergence-output", 0usize).into(),
+        )
+        .await;
         view.update(cx, |view, cx| view.hold_running_for_test(false, cx));
 
         // The Report tab shows first; the source tree keeps the selection.
@@ -1764,6 +2108,27 @@ mod tests {
                 Some("spec/ui/components/scrollbar/index.pi")
             );
         });
+
+        // Things all over the panel explain themselves when hovered: here a
+        // tab, a spec file's definition in the tree, a measure, a connection's
+        // influence and divergence.
+        let tree_row = view.read_with(cx, |view, _| {
+            super::tree_rows(&view.tree_paths())
+                .iter()
+                .position(|row| {
+                    row.file.as_deref() == Some("spec/ui/components/scrollbar/index.pi")
+                })
+                .unwrap()
+        });
+        for target in [
+            gpui_kit::ElementId::from("divergence-side-spec"),
+            ("divergence-meter", tree_row).into(),
+            "divergence-definition".into(),
+            "divergence-gaps-title".into(),
+            ("divergence-connection-influence", 0usize).into(),
+        ] {
+            shows_tooltip(cx, handle, target, ("divergence-file", tree_row).into()).await;
+        }
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             window.click("divergence-side-source", cx);
@@ -1790,13 +2155,13 @@ mod tests {
         agent(project_dir, prompt, cancel, on_line)
     }
 
-    /// A report is saved once the analysis is over, and a panel opened again
-    /// shows it on the Report tab without analyzing; its lists open files in
+    /// A report is saved once the analysis is over, and a panel opened to view
+    /// the reports shows it on the Report tab without analyzing; its lists open files in
     /// their trees, and analyzing again saves another.
     #[gpui_kit::test]
     async fn reports_are_saved_and_shown_again(cx: &mut TestAppContext) {
         let reports = reports_dir("saved");
-        let (first, handle) = open(cx, &reports, agent);
+        let (first, handle) = open(cx, &reports, agent, Opening::Analyze);
         cx.wait_for(handle, Duration::from_secs(10), |window, _| {
             window.try_find("divergence-score").is_some()
         })
@@ -1808,7 +2173,7 @@ mod tests {
             .unwrap();
 
         RUNS.store(0, std::sync::atomic::Ordering::SeqCst);
-        let (view, handle) = open(cx, &reports, counting_agent);
+        let (view, handle) = open(cx, &reports, counting_agent, Opening::ViewReports);
         cx.run_until_parked();
         view.read_with(cx, |view, _| {
             assert_eq!(RUNS.load(std::sync::atomic::Ordering::SeqCst), 0);
@@ -1843,9 +2208,25 @@ mod tests {
                 "divergence-figure-spec-coverage",
                 "divergence-figure-verdicts",
             ] {
-                assert!(!super::figure_meaning(id).is_empty(), "{id}");
+                assert!(!super::meaning(id).is_empty(), "{id}");
             }
             assert!(window.try_find(("divergence-most", 0usize)).is_some());
+            // Somewhere without a tooltip: a file's path in a list.
+            window.hover(("divergence-most", 0usize), cx);
+        })
+        .unwrap();
+        cx.executor().advance_clock(Duration::from_millis(600));
+        cx.run_until_parked();
+        // Its sections and the percentages in its lists explain themselves.
+        for target in [
+            gpui_kit::ElementId::from("divergence-heading-assessment"),
+            "divergence-heading-less-defined".into(),
+            "divergence-least-value-0".into(),
+        ] {
+            shows_tooltip(cx, handle, target, ("divergence-most", 0usize).into()).await;
+        }
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
             // The least well defined file is src/main.rs.
             window.click(("divergence-least", 0usize), cx);
         })
@@ -1870,11 +2251,149 @@ mod tests {
         std::fs::remove_dir_all(&reports).ok();
     }
 
+    static VIEW_RUNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+    fn view_counting_agent(
+        project_dir: &Path,
+        prompt: &str,
+        cancel: &Cancel,
+        on_line: &dyn Fn(String),
+    ) -> Result<String> {
+        VIEW_RUNS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        agent(project_dir, prompt, cancel, on_line)
+    }
+
+    /// Viewing the reports with none saved starts nothing and says there are
+    /// none yet, with a button that analyzes; a panel brought back to view
+    /// the reports shows the latest, and brought back to analyze, starts one.
+    #[gpui_kit::test]
+    async fn viewing_reports_starts_nothing(cx: &mut TestAppContext) {
+        let reports = reports_dir("view");
+        VIEW_RUNS.store(0, std::sync::atomic::Ordering::SeqCst);
+        let (view, handle) = open(cx, &reports, view_counting_agent, Opening::ViewReports);
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("divergence-empty").is_some());
+            assert!(window.try_find("divergence-steps").is_none());
+            assert!(window.try_find("divergence-score").is_none());
+        })
+        .unwrap();
+        view.read_with(cx, |view, _| {
+            assert!(!view.is_running());
+            assert_eq!(VIEW_RUNS.load(std::sync::atomic::Ordering::SeqCst), 0);
+        });
+
+        cx.update_window(handle, |_, window, cx| {
+            window.click("divergence-empty-analyze", cx)
+        })
+        .unwrap();
+        cx.wait_for(handle, Duration::from_secs(10), |window, _| {
+            window.try_find("divergence-score").is_some()
+        })
+        .await;
+        view.read_with(cx, |view, _| {
+            assert_eq!(VIEW_RUNS.load(std::sync::atomic::Ordering::SeqCst), 2);
+            assert_eq!(view.reports().len(), 1);
+        });
+
+        // Brought back to view the reports, from a tree, it shows the latest
+        // report, starting nothing.
+        view.update(cx, |view, cx| {
+            view.set_side(Side::Spec, cx);
+            view.open_to(Opening::ViewReports, cx);
+        });
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| {
+            assert!(view.report_tab());
+            assert!(!view.is_running());
+            assert_eq!(VIEW_RUNS.load(std::sync::atomic::Ordering::SeqCst), 2);
+        });
+        // Brought back to analyze, it starts another.
+        view.update(cx, |view, cx| view.open_to(Opening::Analyze, cx));
+        cx.wait_for(handle, Duration::from_secs(10), |window, _| {
+            window.try_find("divergence-score").is_some()
+        })
+        .await;
+        view.read_with(cx, |view, _| {
+            assert_eq!(VIEW_RUNS.load(std::sync::atomic::Ordering::SeqCst), 4);
+            assert_eq!(view.reports().len(), 2);
+        });
+        std::fs::remove_dir_all(&reports).ok();
+    }
+
+    /// Hovers `target` a moment, and checks its tooltip shows, then moves
+    /// `away`, to something with none, so it goes.
+    async fn shows_tooltip(
+        cx: &mut TestAppContext,
+        handle: gpui_kit::AnyWindowHandle,
+        target: gpui_kit::ElementId,
+        away: gpui_kit::ElementId,
+    ) {
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(
+                window.try_find("divergence-tooltip").is_none(),
+                "a tooltip is already showing before {target:?}"
+            );
+            window.hover(target.clone(), cx);
+        })
+        .unwrap();
+        cx.executor().advance_clock(Duration::from_millis(600));
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(
+                window.try_find("divergence-tooltip").is_some(),
+                "no tooltip for {target:?}"
+            );
+            // Somewhere without a tooltip of its own.
+            window.hover(away, cx);
+        })
+        .unwrap();
+        cx.executor().advance_clock(Duration::from_millis(600));
+        cx.run_until_parked();
+    }
+
+    /// Source files in the tree show how far they diverge, and spec files how
+    /// well defined they are; and every explanation says something.
+    #[test]
+    fn trees_measure_by_side_and_everything_is_explained() {
+        use crate::divergence::FileResult;
+        let file = FileResult {
+            path: "spec/a.pi".into(),
+            divergence: Some(0.3),
+            definition: Some(0.8),
+            ..FileResult::default()
+        };
+        assert_eq!(
+            super::tree_measure(Side::Source, Some(&file)),
+            (Some(0.3), "Divergence", "diverges-source")
+        );
+        assert_eq!(
+            super::tree_measure(Side::Spec, Some(&file)),
+            (Some(0.8), "Definition", "definition-spec")
+        );
+        let undefined = FileResult {
+            definition: None,
+            ..file.clone()
+        };
+        assert_eq!(super::tree_measure(Side::Spec, Some(&undefined)).0, None);
+        let left_out = FileResult::default();
+        assert_eq!(
+            super::tree_measure(Side::Spec, Some(&left_out)),
+            (None, "Not analyzed", "not-analyzed")
+        );
+        for key in super::MEANINGS {
+            assert!(!super::meaning(key).is_empty(), "{key}");
+        }
+    }
+
     /// An agent that fails is marked so, and what the other found still shows.
     #[gpui_kit::test]
     async fn one_failed_agent_still_shows_the_other(cx: &mut TestAppContext) {
         let reports = reports_dir("failed");
-        let (view, handle) = open(cx, &reports, failing_spec_agent);
+        let (view, handle) = open(cx, &reports, failing_spec_agent, Opening::Analyze);
         cx.wait_for(handle, Duration::from_secs(10), |window, _| {
             window.try_find("divergence-score").is_some()
         })

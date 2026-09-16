@@ -67,25 +67,14 @@ fn search_system_prompt(project_dir: &Path) -> String {
     .collect::<Vec<_>>()
     .join("\n");
 
+    // Written in system-prompts/file-search.pi.
+    use crate::baked_prompts::file_search;
     format!(
-        "\
-You are finding a file in this project for someone who could not find it by \
-its name. They describe what they are looking for; it may be a partial or \
-misremembered name, what the file does, or something it contains.
-
-Your goal is to identify the one file they mean. Search with tools that only \
-read, such as Glob, Grep and Read, and never change anything. Stop searching as \
-soon as you are confident. Only when several files are all genuinely and \
-equally what was asked for, give each of them; otherwise give the single best \
-file.
-
-Look in these places in this order of priority, preferring a match from an \
-earlier one over an equally good match from a later one:
-{order}
-
-End with a reply of nothing but JSON, with no prose and no code fence, listing \
-paths relative to the project directory: {{\"files\": [\"path/to/file\"]}}. If \
-nothing matches, reply {{\"files\": []}}."
+        "{}\n\n{}\n\n{}\n{order}\n\n{}",
+        file_search::ROLE,
+        file_search::GOAL,
+        file_search::PLACES,
+        file_search::REPLY
     )
 }
 

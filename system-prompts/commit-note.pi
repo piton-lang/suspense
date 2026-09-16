@@ -1,0 +1,14 @@
+// The prompt for a task's commit note: the request, then the task under its
+// heading, then the agent's summary of what it did under its own. <noNote> is
+// filled in with what to reply when the agent changed nothing.
+
+export anchor CommitNote:
+    request:
+        Below is a task given to a coding agent, and the agent's own summary of
+        what it did. Write a one-line summary of the change it made, for a list
+        of changes in a commit message: in the imperative mood, at most 72
+        characters, with no trailing period, quotes, or leading dash. If the
+        agent changed no files, reply with exactly <noNote>. Reply with only the
+        line.
+    task: Task
+    result: What the agent did

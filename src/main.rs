@@ -3,6 +3,7 @@
 
 mod activity;
 mod app;
+mod baked_prompts;
 mod chat_input;
 mod checkbox;
 mod commit_notes;

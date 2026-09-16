@@ -1,4 +1,5 @@
 use /lib
+from /scope/harness-integration import HarnessIntegrationScope
 from /ui/components/inset-panel import InsetPanelScope
 from /ui/components/scrollbar import ScrollbarScope
 
@@ -19,20 +20,27 @@ concept DivergenceConcept:
 shape DivergenceShape:
     description:
         An analysis of the open project, shown in an @{InsetPanelScope} titled
-        "Divergence", with a close button. Opening it shows the project's
-        latest saved report, or starts a fresh analysis straight away when
-        there is none. Closing the panel while it runs stops it. Whenever no
-        analysis is running, an "Analyze again" button in the panel's header
-        starts another.
+        "Divergence", with a close button. It opens in one of two ways: to
+        analyze, which starts a fresh analysis straight away, or to view the
+        reports, which starts nothing and shows the project's latest saved
+        report on the Report tab, from which its earlier reports can be opened.
+        Viewing the reports of a project with none saved yet shows, in place of
+        the results, "No divergence reports yet", with a line saying an
+        analysis is saved once it's over, and an "Analyze" button that starts
+        one. Closing the panel while it runs stops it. Whenever no analysis is
+        running, an "Analyze again" button in the panel's header starts
+        another.
 
     minimizing:
         Beside the close button, a minimize button, whose tooltip says the
         analysis keeps running, hides the panel without stopping anything: the
         analysis carries on out of sight, and the window beneath can be used
         again. The panel comes back just as it was left, steps or results, from
-        the ribbon's activity list while it runs, or from the Analyze Divergence
-        command, which brings back a minimized panel rather than opening
-        another. Opening another inset panel, such as a file's diff, while the
+        the ribbon's activity list while it runs, or from either command, which
+        brings back a minimized panel rather than opening another: to analyze,
+        it then starts an analysis unless one is already running; to view the
+        reports, it shows the Report tab of the latest report unless an
+        analysis is running, which carries on. Opening another inset panel, such as a file's diff, while the
         divergence panel is showing minimizes it rather than closing it. Only
         closing it stops it.
 
@@ -81,20 +89,16 @@ shape DivergenceShape:
             the agent directory's reference folder, and replies with nothing but
             JSON.
 
-            The code agent goes through every source file, and for each says:
-            - which spec files drove it or had influence on it, with how strong each influence is, from 0 for barely any to 1 for the file being written straight from it, how far the file diverges from that spec file in particular, from 0 to 1, and a short note on what it took from it
-            - how far the file diverges from the spec, from 0 for doing just what the spec describes to 1 for nothing in the spec accounting for it or the spec saying otherwise
-            - how well defined it is, from 0 for the implementation having filled in all of it with nothing in the spec saying how to 1 for the spec defining all of it
-            - the blanks the implementation filled in, each in a short phrase
-            - a sentence summing up how it diverges, or that it doesn't
-
+            Their prompts are system-prompts/divergence.pi, built into the
+            application (see @{HarnessIntegrationScope}). The code agent goes
+            through every source file, and for each says which spec files drove
+            it, how strongly, and how far it diverges from each; how far it
+            diverges from the spec as a whole; how well defined it is; the
+            blanks the implementation filled in; and a sentence summing it up.
             The spec agent goes through every spec file the same way from the
-            other side:
-            - which source files implement it, how strongly, and how far each diverges from what the file describes
-            - how far the code diverges from what the file describes, from 0 for all of it being built as described to 1 for none of it being built or the code doing otherwise
-            - how well defined it is, from 0 for the file being too vague to build from to 1 for leaving nothing an implementation has to guess
-            - the gaps in it, each in a short phrase
-            - a sentence summing it up
+            other side: which source files implement it, how far the code
+            diverges from it, how well defined it is, its gaps, and a sentence
+            summing it up. Every figure is from 0 to 1.
 
             Each agent also replies with an assessment of its side as a whole,
             a few sentences long, and the areas of the project it found well
@@ -155,17 +159,14 @@ shape DivergenceShape:
             - "Most diverged" on the left: the five files that diverge most, source and spec alike; and "Saved reports" on the right: each report saved for the project, newest first, with how long ago it was made and how aligned it was, the one showing marked; clicking another shows it
             - "Notes", when there are any notes about the analysis
 
-            Hovering a figure, or the header's alignment, shows a tooltip naming
-            it and explaining what it means:
+            Hovering a figure, or the header's alignment, shows a tooltip, as
+            described under tooltips, explaining what it means:
             - Aligned: how closely the code and the spec agree, 100% less the average divergence of every file analyzed, source and spec alike, green above 80%, amber above 50%, and red otherwise
             - Source definition: how much of the code the spec defines, averaged over the source files, low meaning the implementation filled in a lot the spec never says
             - Spec definition: how precisely the spec describes what to build, averaged over the spec files, low meaning gaps an implementation has to guess at
             - Source coverage: the share of source files connected to at least one spec file, a source file with no connection not being driven by the spec at all
             - Spec coverage: the share of spec files at least one source file implements, a spec file with no connection not being built, or not traceable to the code
             - Aligned, drifting, and diverged: how many files analyzed are aligned, diverging less than 20%; drifting, from 20% up to 50%; and diverged, 50% or more
-
-            Each tooltip is its name, then its explanation, muted, wrapped to a
-            readable width.
 
             A file in any of these lists is a row of its path and its
             percentage at the column's right, and opens that file in its tree
@@ -175,9 +176,14 @@ shape DivergenceShape:
         trees:
             "Source" and "Spec" show that side's files as a tree: a row per
             folder and file, indented by depth, folders before files, each
-            sorted by name. A file's row shows its name, a small bar for its
-            divergence, coloured as the score is, and its divergence as a
-            percentage, or "Not analyzed". The tree scrolls with a
+            sorted by name. A file's row shows its name, a small bar, and a
+            percentage. In the Source tree, they are the file's divergence,
+            coloured as the score is; in the Spec tree, the file's definition,
+            coloured green when well defined, amber, or red, as the report's
+            definition figures are. A file its agent left out reads
+            "Not analyzed" in their place, and a spec file whose definition its
+            agent didn't give, as in reports made before definition was
+            measured, reads "No definition". The tree scrolls with a
             @{ScrollbarScope}.
 
             Clicking a file selects it. Beside the tree, the selected file's
@@ -207,3 +213,21 @@ shape DivergenceShape:
         report shows: its files and their measures, the connections, the
         assessments and areas, and its notes. So they survive a restart of the
         application. A saved report that can't be read is left out.
+
+    tooltips:
+        Everything in the panel that stands for something explains itself with
+        a tooltip when hovered a moment: what it's called, then, muted and
+        wrapped to a readable width, what it represents. Besides the report's
+        figures and the header's alignment:
+        - the header's age: when the analysis behind the report finished and it was saved, kept with the project so it survives a restart
+        - "Analyze again": that it runs a fresh analysis, the report shown staying among the saved reports
+        - each tab: Report, an overall assessment of the project; Source, every source file with how far it diverges from the spec; Spec, every spec file with how well defined it is; each tree's saying a file can be selected for its measures and connections
+        - a tree row's bar and percentage: a source file's divergence, from doing just what the spec describes to nothing in the spec accounting for it; a spec file's definition, from too vague to build from to leaving nothing to guess
+        - "Not analyzed": that its agent left the file out, so it has no measures and counts towards no figure; "No definition", that its agent didn't say how well defined the file is
+        - each measure in a file's details: its influence, how strongly it's connected to the other side, one strong connection or several weaker ones both counting for a lot; its divergence and definition, as for the trees, from its own side
+        - the gaps' title: for a source file, what the implementation decided that the spec never says; for a spec file, what it leaves out or vague, so an implementation has to guess
+        - a connection's influence: how much the spec file drove the source file, or the source file is built from the spec file, from barely any to written straight from it; and its divergence, how far the source file diverges from that spec file in particular
+        - the report's headings: the assessment, what each agent made of its side; the well and less well defined areas, each with why; the best and least well defined files, and those that diverge most, source and spec alike, each opening in its tree when clicked; and the saved reports, newest first, each shown when clicked
+        - the percentage beside a file in the report's lists, as for its tree
+        - each step while an analysis runs: building the spec, so the compiled spec the agents can read is up to date, a failed build not stopping the analysis; and each agent, what it reads and what it says of each file
+

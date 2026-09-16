@@ -27,8 +27,11 @@ shape HistoryListShape:
         to go back; clicking it again closes the list.
 
     list:
-        A scrollable accordion of every item, oldest first, scrolled to the
-        latest when expanded, with a @{ScrollbarScope}. Each is headed by its
+        A scrollable accordion of every item, oldest first, with a
+        @{ScrollbarScope}. Each time it is expanded, it opens scrolled to the
+        bottom, with the most recent items in view, however it was scrolled
+        when last closed, the first time as much as any other, and whether it
+        takes the place of the latest task or slides up as a drawer. Each is headed by its
         status and the first line of its prompt, and opens onto the compiled
         prompt it was sent as and its task table, as in the @{MessageList}. One
         item is open at a time. A use can say its tables collapse the steps

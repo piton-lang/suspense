@@ -1,5 +1,6 @@
 //! The ribbon's Spec tab, for working on the spec: Build Spec, which runs
-//! `piton build` in the project and says how it went.
+//! `piton build` in the project and says how it went, and the divergence
+//! commands, which analyze the project or show its saved reports.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::Button;
@@ -8,7 +9,7 @@ use gpui_kit::component::{Disableable as _, WindowExt as _};
 use gpui_kit::*;
 
 use super::{Command, CommandPlace, Ribbon};
-use crate::divergence_view::AnalyzeDivergence;
+use crate::divergence_view::{AnalyzeDivergence, ViewDivergenceReports};
 use crate::piton_build;
 use crate::project_directory::ProjectDirectory;
 
@@ -23,10 +24,15 @@ pub(super) const COMMANDS: &[CommandPlace] = &[
         group: "Analysis",
         primary: true,
     },
+    CommandPlace {
+        command: Command::ViewDivergenceReports,
+        group: "Analysis",
+        primary: false,
+    },
 ];
 
-/// Analyze Divergence: opens the divergence panel, which shows the latest saved
-/// report of how the code and the spec have diverged, or starts analyzing.
+/// Analyze Divergence: opens the divergence panel and starts analyzing how the
+/// code and the spec have diverged.
 pub(super) fn analyze_divergence(
     button: impl Fn(&'static str, IconName, SharedString) -> Button,
     cx: &mut Context<Ribbon>,
@@ -44,6 +50,28 @@ pub(super) fn analyze_divergence(
     })
     .disabled(project.is_none())
     .on_click(|_, window, cx| window.dispatch_action(Box::new(AnalyzeDivergence), cx))
+    .into_any_element()
+}
+
+/// View Divergence Reports: opens the divergence panel on the latest saved
+/// report, starting nothing.
+pub(super) fn view_divergence_reports(
+    button: impl Fn(&'static str, IconName, SharedString) -> Button,
+    cx: &mut Context<Ribbon>,
+) -> AnyElement {
+    let project = ProjectDirectory::get(cx);
+    button(
+        "view-divergence-reports",
+        IconName::FileText,
+        "View Divergence Reports".into(),
+    )
+    .tooltip(if project.is_none() {
+        "Open a project to view its reports"
+    } else {
+        "Show the reports of earlier divergence analyses"
+    })
+    .disabled(project.is_none())
+    .on_click(|_, window, cx| window.dispatch_action(Box::new(ViewDivergenceReports), cx))
     .into_any_element()
 }
 

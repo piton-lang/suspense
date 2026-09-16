@@ -1,0 +1,19 @@
+from /scope/divergence import DivergenceScope
+from /ui/components/ribbon/spec-tab import RibbonSpecTabScope
+
+anchor Prompt_c0b74f8764f6a5a4:
+    userPrompt:
+        Let's add to @{RibbonSpecTabScope} ${RibbonSpecTabScope.concept.shape.groups.analysis} a "View Divergence Reports" button that just upens up the @{DivergenceScope} without running analysis and let's us view the latest and previous reports.
+
+    mode: combined
+
+    systemPrompt:
+        We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec.
+        
+        You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec.
+        
+        Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other.
+        
+        Then build the spec and execute the prompt directly on the code using a unified plan.
+        
+        Make sure that you write both code and spec.

@@ -41,7 +41,8 @@ shape GitPanelShape:
         without error adds a note, a one-line summary of what the task changed,
         once the harness has written it, quickly, in the same way as a written
         message: from what the task asked and the harness's own summary of what
-        it did, at most 72 characters in the imperative mood. A task that
+        it did, at most 72 characters in the imperative mood, as
+        system-prompts/commit-note.pi asks. A task that
         changed no files adds none, and neither does a question from the Ask
         tab. Notes are saved with the project, in its
         `.suspense/commit-notes.json`, as they are added, edited, and removed,
@@ -58,7 +59,8 @@ shape GitPanelShape:
         low effort, with no tools, handed only the list of changed files and
         as much of the diff as fits in a small, fixed amount. The message is a
         summary line of at most 72 characters in the imperative mood,
-        followed, only if it helps, by a few short bullet points. The button
+        followed, only if it helps, by a few short bullet points, as
+        system-prompts/commit-message.pi asks. The button
         is disabled while there are no changes.
 
     committing:

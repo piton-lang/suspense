@@ -644,6 +644,8 @@ struct HistoryList {
     laid_out: Cell<(usize, Option<usize>)>,
     /// Counts the times it was expanded.
     opened: usize,
+    /// Just expanded, so its next layout scrolls it to the latest items.
+    scroll_to_latest: Cell<bool>,
     /// Its tables collapse the steps leading up to the answer.
     collapse_steps: bool,
 }
@@ -653,8 +655,9 @@ impl HistoryList {
         self.expanded = !self.expanded;
         if self.expanded {
             self.opened += 1;
-            // The latest are the likeliest to be looked for.
-            self.scroll.scroll_to_end();
+            // The latest are the likeliest to be looked for. Scrolled once the
+            // list knows every item, which it may not have been told yet.
+            self.scroll_to_latest.set(true);
         }
     }
 
@@ -726,6 +729,9 @@ impl HistoryList {
             }
         }
         self.laid_out.set((count, self.open));
+        if self.scroll_to_latest.take() {
+            self.scroll.scroll_to_end();
+        }
 
         let theme = cx.theme();
         let (border, hover, muted) = (theme.border, theme.list_hover, theme.muted_foreground);
@@ -1078,6 +1084,7 @@ impl PromptMode {
                 scroll: scrollbar::measured_list(ListAlignment::Top, OUTPUT_OVERDRAW),
                 laid_out: Cell::new((0, None)),
                 opened: 0,
+                scroll_to_latest: Cell::new(false),
             },
             queue: Vec::new(),
             next_queue_id: 0,
@@ -1118,6 +1125,7 @@ impl PromptMode {
                 scroll: scrollbar::measured_list(ListAlignment::Top, OUTPUT_OVERDRAW),
                 laid_out: Cell::new((0, None)),
                 opened: 0,
+                scroll_to_latest: Cell::new(false),
             },
             _ask_history_load: Task::ready(()),
             on_ask_tab: false,
@@ -2606,6 +2614,10 @@ impl PromptMode {
                         .label(format!("{count} queued"))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.queue_expanded = !this.queue_expanded;
+                            // It opens on the prompts queued last.
+                            if this.queue_expanded {
+                                this.queue_scroll.scroll_to_bottom();
+                            }
                             cx.notify();
                         })),
                 )
@@ -2687,7 +2699,8 @@ impl PromptMode {
                     scrollbar::with_scrollbar(
                         "queue-list",
                         &self.queue_scroll,
-                        list,
+                        // Lets UI tests find the list; inert in normal builds.
+                        gpui_kit::TestSupportExt::test_support(list),
                         false,
                         None,
                         cx,
@@ -4262,6 +4275,150 @@ mod tests {
             prompt_mode.read_with(cx, |this, _| this.task_history.open),
             Some(0)
         );
+    }
+
+    /// Each list that expands opens scrolled to its most recent items: the
+    /// previous tasks, the previous answers as their drawer slides up, and
+    /// the queue, each time it is opened, however it was scrolled before.
+    #[gpui_kit::test]
+    async fn expanded_lists_open_on_their_latest_items(cx: &mut TestAppContext) {
+        const COUNT: usize = 40;
+        let dir = std::env::temp_dir().join(format!("suspense-latest-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for n in 0..12 {
+            prompt_queue::add(HiddenAnchor::random(), format!("queued {n}"), &dir).unwrap();
+        }
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        // The project's saved history loads first, so it doesn't replace
+        // what's added here.
+        for _ in 0..20 {
+            cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                for n in 0..COUNT {
+                    let ix = this.push_task(format!("task {n}").into(), cx);
+                    this.show_compiled(ix, format!("Prompt_{ix}"), format!("task {n}").into(), cx);
+                    this.apply_event(ix, HarnessEvent::TextDelta(format!("Output {n}")), cx);
+                    this.apply_event(
+                        ix,
+                        HarnessEvent::Finished {
+                            is_error: false,
+                            result: String::new(),
+                        },
+                        cx,
+                    );
+                }
+                this.working = true;
+                this.on_ask_tab = true;
+                for n in 0..COUNT {
+                    let id = this.push_ask(format!("question {n}").into(), cx);
+                    this.update_ask(
+                        id,
+                        |ask| {
+                            ask.apply(HarnessEvent::TextStarted);
+                            ask.apply(HarnessEvent::TextDelta(format!("Answer {n}")));
+                            ask.apply(HarnessEvent::Finished {
+                                is_error: false,
+                                result: String::new(),
+                            });
+                        },
+                        cx,
+                    );
+                    this.close_ask(id, cx);
+                }
+                this.on_ask_tab = false;
+                assert_eq!(this.queue.len(), 12);
+            });
+        })
+        .unwrap();
+
+        // Renders until whatever slides has settled.
+        let settle = |cx: &mut TestAppContext| {
+            for _ in 0..8 {
+                cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                    .unwrap();
+                cx.run_until_parked();
+                std::thread::sleep(Duration::from_millis(40));
+            }
+        };
+        // Whether the row `id` is shown, and in view within `list`.
+        let in_view = |cx: &mut TestAppContext, list: &'static str, id: gpui_kit::ElementId| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let list = window.find(list).bounds();
+                window.try_find(id).is_some_and(|row| {
+                    let row = row.bounds();
+                    row.top() >= list.top() - gpui_kit::px(1.)
+                        && row.bottom() <= list.bottom() + gpui_kit::px(1.)
+                })
+            })
+            .unwrap()
+        };
+
+        for (toggle, list, item) in [
+            ("history-toggle", "task-list-scroll", "history-task"),
+            ("ask-history-toggle", "ask-list-scroll", "ask-history-task"),
+        ] {
+            if toggle == "ask-history-toggle" {
+                prompt_mode.update(cx, |this, cx| {
+                    this.on_ask_tab = true;
+                    cx.notify();
+                });
+            }
+            for opening in 0..2 {
+                settle(cx);
+                cx.update_window(handle, |_, window, cx| window.click(toggle, cx))
+                    .unwrap();
+                settle(cx);
+                assert!(
+                    in_view(cx, list, (item, COUNT - 1).into()),
+                    "{list} didn't open on its latest item, opening {opening}"
+                );
+                assert!(!in_view(cx, list, (item, 0usize).into()));
+                // Scrolled away to the top before it is closed.
+                prompt_mode.update(cx, |this, _| {
+                    let history = if toggle == "history-toggle" {
+                        &this.task_history
+                    } else {
+                        &this.ask_history
+                    };
+                    history.scroll.scroll_to(gpui_kit::ListOffset {
+                        item_ix: 0,
+                        offset_in_item: gpui_kit::px(0.),
+                    });
+                });
+                settle(cx);
+                assert!(in_view(cx, list, (item, 0usize).into()));
+                cx.update_window(handle, |_, window, cx| window.click(toggle, cx))
+                    .unwrap();
+            }
+            prompt_mode.update(cx, |this, cx| {
+                this.on_ask_tab = false;
+                cx.notify();
+            });
+        }
+
+        for opening in 0..2 {
+            settle(cx);
+            cx.update_window(handle, |_, window, cx| window.click("queue-toggle", cx))
+                .unwrap();
+            settle(cx);
+            assert!(
+                in_view(cx, "queue-list", ("queued-prompt", 11usize).into()),
+                "the queue didn't open on its latest prompt, opening {opening}"
+            );
+            prompt_mode.update(cx, |this, _| {
+                this.queue_scroll
+                    .set_offset(gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(0.)))
+            });
+            settle(cx);
+            cx.update_window(handle, |_, window, cx| window.click("queue-toggle", cx))
+                .unwrap();
+        }
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// On the Ask tab, a row of previous answers, the same as the row of

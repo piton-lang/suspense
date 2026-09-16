@@ -20,18 +20,27 @@ shape RibbonSpecTabShape:
 
         analysis:
             An "Analysis" group, after Build, holds the Analyze Divergence
-            command.
+            command, then the View Divergence Reports command.
 
     commands:
         analyzeDivergence:
             An "Analyze Divergence" button with a compare-arrows icon. Clicking
-            it opens the @{DivergenceScope}, showing the latest saved report or
-            starting an analysis when there is none, and its tooltip says it
-            analyzes how the code and the spec have diverged. It
+            it opens the @{DivergenceScope} and starts a fresh analysis, and its
+            tooltip says it analyzes how the code and the spec have diverged. It
             is disabled until a project is open, with a tooltip saying to open a
             project to analyze it.
 
             It is primary.
+
+        viewDivergenceReports:
+            A "View Divergence Reports" button with a document icon. Clicking
+            it opens the @{DivergenceScope} without starting an analysis,
+            showing the latest saved report, from which the earlier ones can be
+            opened, and its tooltip says it shows the reports of earlier
+            analyses. It is disabled until a project is open, with a tooltip
+            saying to open a project to view its reports.
+
+            It isn't primary.
 
         buildSpec:
             A "Build Spec" button with a hammer icon. Clicking it runs

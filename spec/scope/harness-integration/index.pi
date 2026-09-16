@@ -1,5 +1,6 @@
 use /lib
 from ../project-directory import ProjectDirectoryScope
+from ../settings-window import SettingsWindowScope
 
 export scope HarnessIntegrationScope:
     concept: {HarnessIntegrationConcept}
@@ -36,3 +37,28 @@ shape HarnessIntegrationShape:
         run applies its own prompt's systemPrompt, even when it carries on a
         conversation begun in a different mode. The palette's file search
         always starts fresh.
+
+    bakedPrompts:
+        The prompts the application gives the harness for its own work, rather
+        than a prompt someone writes, are Piton files in the repository's
+        system-prompts folder, one for each:
+        - divergence.pi, for the two agents of a divergence analysis
+        - commit-note.pi, for a finished task's commit note
+        - commit-message.pi, for writing a commit message
+        - file-search.pi, for the palette's search for a file by description
+
+        Each is an exported anchor, its text written as prose, one property for
+        each paragraph or piece the application puts together, such as a
+        heading above a list of files. What the application fills in is a
+        name in angle brackets, such as <codeRoot>, so it isn't taken as Piton.
+
+        They are compiled with `piton compile` when the application is built,
+        and built into it: changing one changes what the next build sends, and
+        a prompt that doesn't compile fails the build, with piton's error. Each
+        build keeps what it compiled in system-prompts/compiled.json, with the
+        source, so the application still builds where `piton` isn't installed,
+        such as on CI, from the prompts as last compiled, saying so.
+
+        The per-mode system prompt templates are separate: they are saved with
+        each project, in its .suspense/system-prompts, and edited in the
+        @{SettingsWindowScope}.

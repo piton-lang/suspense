@@ -573,64 +573,38 @@ fn is_binary(path: &Path) -> bool {
     head[..read].contains(&0)
 }
 
-/// What an agent is asked to reply with.
-const REPLY_FORMAT: &str = r#"Reply with nothing but JSON, in this form, with paths relative to the project and every number from 0 to 1:
-{"assessment": "...", "wellDefined": [{"name": "...", "why": "..."}], "lessDefined": [{"name": "...", "why": "..."}], "files": [{"path": "...", "divergence": 0.0, "definition": 0.0, "summary": "...", "gaps": ["..."], "links": [{"path": "...", "strength": 0.0, "divergence": 0.0, "note": "..."}]}]}"#;
-
-/// The prompt for the agent analyzing `side`.
+/// The prompt for the agent analyzing `side`: its paragraphs from
+/// `system-prompts/divergence.pi`, then the files it analyzes and the other
+/// side's.
 pub fn prompt(side: Side, files: &Files) -> String {
+    use crate::baked_prompts::{divergence, fill};
     let list = |paths: &[String]| paths.join("\n");
-    let intro = format!(
-        "We're analyzing how far the code located in {code} and the spec located in {spec} \
-         have diverged. The spec is written in Piton; its compiled Markdown is in the agent \
-         directory's reference folder, such as .claude/reference, if that helps. Only read \
-         files: don't change anything.",
-        code = files.code_root,
-        spec = files.spec_root,
+    let intro = fill(
+        divergence::INTRO,
+        &[
+            ("codeRoot", &files.code_root),
+            ("specRoot", &files.spec_root),
+        ],
     );
-    let task = match side {
-        Side::Source => {
-            "Go through every source file listed below. For each one, say which spec files \
-             drove it or had influence on it, with how strong each influence is, from 0 for \
-             barely any to 1 for the file being written straight from it, how far the file \
-             diverges from that spec file in particular, and a short note on what it took from \
-             it. Say how far the file diverges from the spec, from 0 for doing just what the spec \
-             describes to 1 for nothing in the spec accounting for it or the spec saying \
-             otherwise. Say how well defined it is (definition), from 0 for the implementation \
-             having filled in all of it with nothing in the spec saying how to 1 for the spec \
-             defining all of it, and list the blanks the implementation filled in as gaps, each \
-             in a short phrase. Sum up in one sentence how it diverges, or that it doesn't. \
-             Links are to spec files from the spec list. Then, for the code as a whole, write \
-             an assessment a few sentences long of how well it follows the spec, and name the \
-             areas of the project that are well defined and less well defined, each with a \
-             sentence on why."
-        }
-        Side::Spec => {
-            "Go through every spec file listed below. For each one, say which source files \
-             implement it, with how strongly each does, from 0 for barely at all to 1 for being \
-             written straight from it, how far that source file diverges from what the file \
-             describes, and a short note on what it implements. Say how far the code diverges \
-             from what the file describes, from 0 for all of it being built as described to 1 \
-             for none of it being built or the code doing otherwise. Say how well defined it is \
-             (definition), from 0 for the file being too vague to build from to 1 for leaving \
-             nothing an implementation has to guess, and list its gaps, each in a short phrase. \
-             Sum up in one sentence how it diverges, or that it doesn't. Links are to source \
-             files from the source list. Then, for the spec as a whole, write an assessment a \
-             few sentences long of how complete and precise it is and how well the code follows \
-             it, and name the areas of the project that are well defined and less well \
-             defined, each with a sentence on why."
-        }
-    };
-    let (analyzed, other) = match side {
-        Side::Source => ("Source files to analyze", "Spec files"),
-        Side::Spec => ("Spec files to analyze", "Source files"),
-    };
-    let (analyzed_files, other_files) = match side {
-        Side::Source => (&files.sources, &files.specs),
-        Side::Spec => (&files.specs, &files.sources),
+    let (task, analyzed, other, analyzed_files, other_files) = match side {
+        Side::Source => (
+            divergence::code::TASK,
+            divergence::code::ANALYZED,
+            divergence::code::OTHER,
+            &files.sources,
+            &files.specs,
+        ),
+        Side::Spec => (
+            divergence::spec::TASK,
+            divergence::spec::ANALYZED,
+            divergence::spec::OTHER,
+            &files.specs,
+            &files.sources,
+        ),
     };
     format!(
-        "{intro}\n\n{task}\n\n{REPLY_FORMAT}\n\n{analyzed}:\n{}\n\n{other}:\n{}\n",
+        "{intro}\n\n{task}\n\n{}\n\n{analyzed}:\n{}\n\n{other}:\n{}\n",
+        divergence::REPLY_FORMAT,
         list(analyzed_files),
         list(other_files)
     )
@@ -1054,6 +1028,30 @@ mod tests {
         assert_eq!(ago(0, 60), "1 minute ago");
         assert_eq!(ago(0, 7_200), "2 hours ago");
         assert_eq!(ago(0, 86_400 * 3), "3 days ago");
+    }
+
+    /// Each agent's prompt is its baked-in paragraphs with the project's
+    /// locations filled in, then its files and the other side's.
+    #[test]
+    fn prompts_come_from_system_prompts() {
+        use super::{Files, prompt};
+        use crate::baked_prompts::divergence;
+        let files = Files {
+            code_root: "src".into(),
+            spec_root: "spec".into(),
+            sources: vec!["src/a.rs".into()],
+            specs: vec!["spec/a.pi".into()],
+            ..Files::default()
+        };
+        let code = prompt(Side::Source, &files);
+        assert!(code.contains("the code located in src and the spec located in spec"));
+        assert!(!code.contains('<'), "a placeholder is left in:\n{code}");
+        assert!(code.contains(divergence::code::TASK));
+        assert!(code.contains(divergence::REPLY_FORMAT));
+        assert!(code.ends_with("Source files to analyze:\nsrc/a.rs\n\nSpec files:\nspec/a.pi\n"));
+        let spec = prompt(Side::Spec, &files);
+        assert!(spec.contains(divergence::spec::TASK));
+        assert!(spec.ends_with("Spec files to analyze:\nspec/a.pi\n\nSource files:\nsrc/a.rs\n"));
     }
 
     /// Folders come before files, each sorted, indented by depth.

@@ -129,14 +129,14 @@ pub fn message(typed: &str, notes: &[Note]) -> String {
 /// low effort, and no tools.
 pub fn summarize(project_dir: &Path, prompt: &str, result: &str) -> Result<Option<String>> {
     let cut = |text: &str| text.chars().take(MAX_CHARS).collect::<String>();
+    // Written in system-prompts/commit-note.pi.
+    use crate::baked_prompts::{commit_note, fill};
     let request = format!(
-        "Below is a task given to a coding agent, and the agent's own summary of what it \
-         did. Write a one-line summary of the change it made, for a list of changes in a \
-         commit message: in the imperative mood, at most 72 characters, with no trailing \
-         period, quotes, or leading dash. If the agent changed no files, reply with \
-         exactly {NO_NOTE}. Reply with only the line.\n\nTask:\n{}\n\nWhat the agent \
-         did:\n{}",
+        "{}\n\n{}:\n{}\n\n{}:\n{}",
+        fill(commit_note::REQUEST, &[("noNote", NO_NOTE)]),
+        commit_note::TASK,
         cut(prompt),
+        commit_note::RESULT,
         cut(result)
     );
     let mut child = Command::new("claude")

@@ -1,0 +1,68 @@
+// The prompts for the two agents of a divergence analysis. Each is its
+// paragraphs in order: the intro, its side's task, and the reply format,
+// then the files it analyzes and the other side's, each under its heading.
+// <codeRoot> and <specRoot> are filled in with the project's code and spec
+// locations.
+
+export anchor Divergence:
+    intro:
+        We're analyzing how far the code located in <codeRoot> and the spec
+        located in <specRoot> have diverged. The spec is written in Piton; its
+        compiled Markdown is in the agent directory's reference folder, such as
+        .claude/reference, if that helps. Only read files, and don't change
+        anything.
+
+    replyFormat:
+        Reply with nothing but JSON, in this form, with paths relative to the
+        project and every number from 0 to 1:
+
+        \{ \  "assessment": "...", \  "wellDefined": [ \  \{ \  "name": "...",
+        \  "why": "..." \  } \  ], \  "lessDefined": [ \  \{ \  "name":
+        "...", \  "why": "..." \  } \  ], \  "files": [ \  \{ \  "path":
+        "...", \  "divergence": 0.0, \  "definition": 0.0, \  "summary":
+        "...", \  "gaps": [ \  "..." \  ], \  "links": [ \  \{ \  "path":
+        "...", \  "strength": 0.0, \  "divergence": 0.0, \  "note": "..." \  }
+        \  ] \  } \  ] \}
+
+    code:
+        task:
+            Go through every source file listed below. For each one, say which
+            spec files drove it or had influence on it, with how strong each
+            influence is, from 0 for barely any to 1 for the file being written
+            straight from it, how far the file diverges from that spec file in
+            particular, and a short note on what it took from it. Say how far
+            the file diverges from the spec, from 0 for doing just what the spec
+            describes to 1 for nothing in the spec accounting for it or the spec
+            saying otherwise. Say how well defined it is (definition), from 0
+            for the implementation having filled in all of it with nothing in
+            the spec saying how to 1 for the spec defining all of it, and list
+            the blanks the implementation filled in as gaps, each in a short
+            phrase. Sum up in one sentence how it diverges, or that it doesn't.
+            Links are to spec files from the spec list. Then, for the code as a
+            whole, write an assessment a few sentences long of how well it
+            follows the spec, and name the areas of the project that are well
+            defined and less well defined, each with a sentence on why.
+        analyzed: Source files to analyze
+        other: Spec files
+
+    spec:
+        task:
+            Go through every spec file listed below. For each one, say which
+            source files implement it, with how strongly each does, from 0 for
+            barely at all to 1 for being written straight from it, how far that
+            source file diverges from what the file describes, and a short note
+            on what it implements. Say how far the code diverges from what the
+            file describes, from 0 for all of it being built as described to 1
+            for none of it being built or the code doing otherwise. Say how well
+            defined it is (definition), from 0 for the file being too vague to
+            build from to 1 for leaving nothing an implementation has to guess,
+            and list its gaps, each in a short phrase. Sum up in one sentence
+            how it diverges, or that it doesn't. Links are to source files from
+            the source list. Then, for the spec as a whole, write an assessment
+            a few sentences long of how complete and precise it is and how well
+            the code follows it, and name the areas of the project that are well
+            defined and less well defined, each with a sentence on why.
+
+        analyzed: Spec files to analyze
+
+        other: Source files

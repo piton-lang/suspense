@@ -101,6 +101,7 @@ enum Command {
     OpenProject,
     BuildSpec,
     AnalyzeDivergence,
+    ViewDivergenceReports,
     DarkMode,
     Settings,
 }
@@ -341,6 +342,7 @@ impl Ribbon {
             Command::OpenProject => project_tab::open_project(button, cx),
             Command::BuildSpec => spec_tab::build_spec(self, button, cx),
             Command::AnalyzeDivergence => spec_tab::analyze_divergence(button, cx),
+            Command::ViewDivergenceReports => spec_tab::view_divergence_reports(button, cx),
             Command::DarkMode => application_tab::dark_mode(small, cx),
             Command::Settings => application_tab::settings(button),
         }

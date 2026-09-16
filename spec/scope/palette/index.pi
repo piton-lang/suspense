@@ -1,4 +1,5 @@
 use /lib
+from /scope/harness-integration import HarnessIntegrationScope
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/prompt-mode/chat-input import ChatInputScope
 from /scope/editor import EditorScope
@@ -69,8 +70,9 @@ shape PaletteShape:
             opens.
 
         fileSearchSystemPrompt:
-            The search's system prompt is appended to the harness's own. It
-            tells the harness we're really trying to find the one file being
+            The search's system prompt, system-prompts/file-search.pi, built
+            into the application (see @{HarnessIntegrationScope}), is appended
+            to the harness's own. It tells the harness we're really trying to find the one file being
             asked for, giving several only when they are all equally what was
             asked for; to only read and never change anything; and to stop as
             soon as it is confident. It lists where to look, in this order of

@@ -323,11 +323,10 @@ fn describe_changes(dir: &Path) -> Result<String> {
 /// is handed alone.
 pub fn generate_message(dir: &Path) -> Result<String> {
     let changes = describe_changes(dir)?;
+    // Written in system-prompts/commit-message.pi.
     let prompt = format!(
-        "Write a git commit message for these changes. Start with a summary line of \
-         at most 72 characters in the imperative mood. Only if it helps, add a blank \
-         line and a few short bullet points. Reply with only the message, with no \
-         code fence.\n\n{changes}"
+        "{}\n\n{changes}",
+        crate::baked_prompts::commit_message::REQUEST
     );
     let mut child = Command::new("claude")
         .args([

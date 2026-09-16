@@ -14,7 +14,8 @@ use crate::activity::{Job, JobKind, RevealJob};
 use crate::app::{APP_TITLE, Quit};
 use crate::diff_view::{CloseDiff, DiffView, OpenInEditor};
 use crate::divergence_view::{
-    AnalyzeDivergence, CloseDivergence, DivergenceView, MinimizeDivergence,
+    AnalyzeDivergence, CloseDivergence, DivergenceView, MinimizeDivergence, Opening,
+    ViewDivergenceReports,
 };
 use crate::git_panel::GitPanel;
 use crate::inset_panel::inset_panel;
@@ -216,11 +217,17 @@ impl MainWindow {
     }
 
     /// Opens the new project form in the panel, fresh, in place of any diff.
-    /// Opens the divergence panel, fresh, analyzing the open project, in place
-    /// of anything else in the panel.
-    pub fn open_divergence(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // A minimized panel comes back, rather than another starting.
+    /// Opens the divergence panel for the open project, to analyze it or to
+    /// view its reports, in place of anything else in the panel.
+    pub fn open_divergence(
+        &mut self,
+        opening: Opening,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // A minimized panel comes back, rather than another opening.
         if let Some(view) = self.divergence.clone() {
+            view.update(cx, |view, cx| view.open_to(opening, cx));
             self.restore_divergence(&view, window, cx);
             return;
         }
@@ -228,7 +235,7 @@ impl MainWindow {
             return;
         };
         self.show_divergence(
-            cx.new(|cx| DivergenceView::new(project_dir, cx)),
+            cx.new(|cx| DivergenceView::new(project_dir, opening, cx)),
             window,
             cx,
         );
@@ -333,7 +340,11 @@ impl MainWindow {
     pub fn reveal_job(&mut self, kind: JobKind, window: &mut Window, cx: &mut Context<Self>) {
         match kind {
             JobKind::Build => {}
-            JobKind::Divergence => self.open_divergence(window, cx),
+            JobKind::Divergence => {
+                if let Some(view) = self.divergence.clone() {
+                    self.restore_divergence(&view, window, cx);
+                }
+            }
             JobKind::Task | JobKind::Question(_) => {
                 if self.showing_divergence() {
                     self.minimize_divergence(window, cx);
@@ -609,7 +620,10 @@ impl Render for MainWindow {
                 cx.listener(|this, _: &NewProject, window, cx| this.open_new_project(window, cx)),
             )
             .on_action(cx.listener(|this, _: &AnalyzeDivergence, window, cx| {
-                this.open_divergence(window, cx)
+                this.open_divergence(Opening::Analyze, window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &ViewDivergenceReports, window, cx| {
+                this.open_divergence(Opening::ViewReports, window, cx)
             }))
             .on_action(cx.listener(|this, _: &ribbon::ToggleRibbon, _, cx| {
                 // The ribbon is beneath the inset panel while it is open.
@@ -1288,6 +1302,7 @@ mod tests {
                             .join(format!("suspense-jobs-divergence-{}", std::process::id())),
                         built,
                         answered,
+                        crate::divergence_view::Opening::Analyze,
                         cx,
                     )
                 });
@@ -1499,6 +1514,14 @@ mod tests {
                         expected,
                         "{control} under {tab:?}"
                     );
+                }
+                // Analysis follows Build: Analyze Divergence, then View
+                // Divergence Reports.
+                if tab == RibbonTab::Spec {
+                    let build = window.find("build").bounds();
+                    let analyze = window.find("analyze-divergence").bounds();
+                    let view = window.find("view-divergence-reports").bounds();
+                    assert!(build.right() <= analyze.left() && analyze.right() <= view.left());
                 }
             })
             .unwrap();

@@ -66,8 +66,10 @@ shape PromptEditorShape:
             or two of each, with a button to cancel it. Each prompt in the list
             is numbered, with its number, text, and cancel button vertically
             centred in its row, and the list scrolls once it gets tall, with a
-            @{ScrollbarScope}. The
-            same area holds the auto-send switch and the "Send next" button.
+            @{ScrollbarScope}. Each time it is expanded, it opens scrolled to
+            the bottom, on the prompts queued most recently, however it was
+            scrolled when last closed. The same area holds the auto-send switch
+            and the "Send next" button.
             The queue is shown only while it has anything in it.
 
         cancel:

@@ -1,0 +1,30 @@
+{
+  "CommitMessage": {
+    "request": "Write a git commit message for these changes. Start with a summary line of at most 72 characters in the imperative mood. Only if it helps, add a blank line and a few short bullet points. Reply with only the message, with no code fence."
+  },
+  "CommitNote": {
+    "request": "Below is a task given to a coding agent, and the agent's own summary of what it did. Write a one-line summary of the change it made, for a list of changes in a commit message: in the imperative mood, at most 72 characters, with no trailing period, quotes, or leading dash. If the agent changed no files, reply with exactly <noNote>. Reply with only the line.",
+    "task": "Task",
+    "result": "What the agent did"
+  },
+  "Divergence": {
+    "intro": "We're analyzing how far the code located in <codeRoot> and the spec located in <specRoot> have diverged. The spec is written in Piton; its compiled Markdown is in the agent directory's reference folder, such as .claude/reference, if that helps. Only read files, and don't change anything.",
+    "replyFormat": "Reply with nothing but JSON, in this form, with paths relative to the project and every number from 0 to 1:\n{   \"assessment\": \"...\",   \"wellDefined\": [   {   \"name\": \"...\", \"why\": \"...\"   }   ],   \"lessDefined\": [   {   \"name\": \"...\",   \"why\": \"...\"   }   ],   \"files\": [   {   \"path\": \"...\",   \"divergence\": 0.0,   \"definition\": 0.0,   \"summary\": \"...\",   \"gaps\": [   \"...\"   ],   \"links\": [   {   \"path\": \"...\",   \"strength\": 0.0,   \"divergence\": 0.0,   \"note\": \"...\"   } ]   }   ] }",
+    "code": {
+      "task": "Go through every source file listed below. For each one, say which spec files drove it or had influence on it, with how strong each influence is, from 0 for barely any to 1 for the file being written straight from it, how far the file diverges from that spec file in particular, and a short note on what it took from it. Say how far the file diverges from the spec, from 0 for doing just what the spec describes to 1 for nothing in the spec accounting for it or the spec saying otherwise. Say how well defined it is (definition), from 0 for the implementation having filled in all of it with nothing in the spec saying how to 1 for the spec defining all of it, and list the blanks the implementation filled in as gaps, each in a short phrase. Sum up in one sentence how it diverges, or that it doesn't. Links are to spec files from the spec list. Then, for the code as a whole, write an assessment a few sentences long of how well it follows the spec, and name the areas of the project that are well defined and less well defined, each with a sentence on why.",
+      "analyzed": "Source files to analyze",
+      "other": "Spec files"
+    },
+    "spec": {
+      "task": "Go through every spec file listed below. For each one, say which source files implement it, with how strongly each does, from 0 for barely at all to 1 for being written straight from it, how far that source file diverges from what the file describes, and a short note on what it implements. Say how far the code diverges from what the file describes, from 0 for all of it being built as described to 1 for none of it being built or the code doing otherwise. Say how well defined it is (definition), from 0 for the file being too vague to build from to 1 for leaving nothing an implementation has to guess, and list its gaps, each in a short phrase. Sum up in one sentence how it diverges, or that it doesn't. Links are to source files from the source list. Then, for the spec as a whole, write an assessment a few sentences long of how complete and precise it is and how well the code follows it, and name the areas of the project that are well defined and less well defined, each with a sentence on why.",
+      "analyzed": "Spec files to analyze",
+      "other": "Source files"
+    }
+  },
+  "FileSearch": {
+    "role": "You are finding a file in this project for someone who could not find it by its name. They describe what they are looking for; it may be a partial or misremembered name, what the file does, or something it contains.",
+    "goal": "Your goal is to identify the one file they mean. Search with tools that only read, such as Glob, Grep and Read, and never change anything. Stop searching as soon as you are confident. Only when several files are all genuinely and equally what was asked for, give each of them; otherwise give the single best file.",
+    "places": "Look in these places in this order of priority, preferring a match from an earlier one over an equally good match from a later one:",
+    "reply": "End with a reply of nothing but JSON, with no prose and no code fence, listing paths relative to the project directory: {\"files\": [\"path/to/file\"]}. If nothing matches, reply {\"files\": []}."
+  }
+}
