@@ -44,6 +44,17 @@ shape ScrollbarShape:
         as one that measures only what is in view; only a change of width
         measures every row again.
 
+        A row's height is the same measured out of view as drawn in it. Text in
+        a row, such as a reply's markdown, is parsed once and kept for as long
+        as the app runs, not only while its row is drawn, so a row scrolled
+        away and back is never parsed again, nor shorter for a moment while it
+        is. Long text is parsed in the background, so a row holding it may
+        first measure short: while it parses, its row is measured again every
+        fraction of a second, for a few seconds at most, so the height is right
+        as soon as the parse lands, whether or not the row is in view. Dragging
+        the thumb, it stays under the pointer the whole way, rows coming into
+        view or not.
+
     lockToBottom:
         A list that keeps receiving output, like a task's, adds one more square
         button below the others that locks the scroll to the bottom. While it is

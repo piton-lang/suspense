@@ -14,8 +14,8 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::dialog::DialogButtonProps;
 use gpui_kit::component::input::{
-    CodeActionProvider, CompletionProvider, DefinitionProvider, Editor, EditorState, Enter,
-    HoverProvider, InputEvent, Rope, ShowDocumentHandler,
+    CodeActionProvider, CompletionProvider, Copy, Cut, DefinitionProvider, Editor, EditorState,
+    Enter, HoverProvider, InputEvent, Paste, Rope, ShowDocumentHandler,
 };
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
@@ -34,6 +34,7 @@ use crate::piton_lsp::{self, LspClient};
 use crate::piton_syntax;
 use crate::project_directory::ProjectDirectory;
 use crate::project_lsp::ProjectLsp;
+use crate::selection_popover::{SelectionAction, selection_popover};
 
 actions!(file_view, [SaveFile]);
 
@@ -58,6 +59,9 @@ pub fn bind_keys(cx: &mut App) {
 
 /// Emitted when the file is to be closed.
 pub struct CloseFile;
+
+/// Emitted to attach text selected in the editor to the prompt.
+pub struct SendToPrompt(pub String);
 
 /// Emitted to open the file holding a definition, at the definition.
 pub struct OpenDefinition {
@@ -89,6 +93,9 @@ pub struct FileView {
     document: Option<Arc<Document>>,
     /// What the server last published for the file.
     diagnostics: Vec<lsp_types::Diagnostic>,
+    /// Where the popover for selected text shows, while it does: where the
+    /// drag that selected the text ended.
+    selection_popover: Option<Point<Pixels>>,
     _load: Task<()>,
     _save: Task<()>,
     _watch_diagnostics: Task<()>,
@@ -96,6 +103,7 @@ pub struct FileView {
 }
 
 impl EventEmitter<CloseFile> for FileView {}
+impl EventEmitter<SendToPrompt> for FileView {}
 impl EventEmitter<OpenDefinition> for FileView {}
 
 impl FileView {
@@ -128,6 +136,8 @@ impl FileView {
                 window,
                 |this, _, event: &InputEvent, window, cx| {
                     if matches!(event, InputEvent::Change) {
+                        // What was selected has changed under the popover.
+                        this.selection_popover = None;
                         this.on_edit(window, cx);
                     }
                 },
@@ -173,6 +183,7 @@ impl FileView {
             dirty: false,
             document: None,
             diagnostics: Vec::new(),
+            selection_popover: None,
             _load: load,
             _save: Task::ready(()),
             _watch_diagnostics: Task::ready(()),
@@ -300,6 +311,87 @@ impl FileView {
             })
             .ok();
         });
+    }
+
+    /// Whether the popover for selected text is showing.
+    #[cfg(test)]
+    pub fn selection_popover_shown(&self) -> bool {
+        self.selection_popover.is_some()
+    }
+
+    /// Does what `action` does in the editor, Cut, Copy, or Paste, with the
+    /// editor focused, closing the popover.
+    fn edit_selection(
+        &mut self,
+        action: Box<dyn Action>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.selection_popover = None;
+        let focus = self.editor.read(cx).focus_handle(cx);
+        focus.focus(window, cx);
+        // Straight to the editor, as its own shortcut would be.
+        focus.dispatch_action(action.as_ref(), window, cx);
+        cx.notify();
+    }
+
+    /// Attaches the selected text to the prompt, closing the popover.
+    fn send_selection_to_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.selection_popover = None;
+        let text = self.editor.read(cx).selected_text().to_string();
+        if !text.is_empty() {
+            cx.emit(SendToPrompt(text));
+        }
+        self.editor.read(cx).focus_handle(cx).focus(window, cx);
+        cx.notify();
+    }
+
+    /// The popover by text selected in the editor: Cut, Copy, Paste, and Send
+    /// to Prompt. Pressing the mouse anywhere else closes it.
+    fn render_selection_popover(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let position = self.selection_popover?;
+        // Cut and Paste change the file, which can't be edited until it's in.
+        let editable = self.saved.is_some();
+        let this = cx.entity().downgrade();
+        let edit = |action: fn() -> Box<dyn Action>| {
+            let this = this.clone();
+            move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
+                this.update(cx, |this, cx| this.edit_selection(action(), window, cx))
+                    .ok();
+            }
+        };
+        let actions = vec![
+            SelectionAction::new("cut", IconName::Scissors, "Cut", edit(|| Box::new(Cut)))
+                .disabled(!editable),
+            SelectionAction::new("copy", IconName::Copy, "Copy", edit(|| Box::new(Copy))),
+            SelectionAction::new(
+                "paste",
+                IconName::ClipboardPaste,
+                "Paste",
+                edit(|| Box::new(Paste)),
+            )
+            .disabled(!editable),
+            SelectionAction::new("send", IconName::Paperclip, "Send to Prompt", {
+                let this = this.clone();
+                move |_, window, cx| {
+                    this.update(cx, |this, cx| this.send_selection_to_prompt(window, cx))
+                        .ok();
+                }
+            }),
+        ];
+        Some(selection_popover(
+            "editor-selection",
+            position,
+            actions,
+            move |_, cx| {
+                this.update(cx, |this, cx| {
+                    this.selection_popover = None;
+                    cx.notify();
+                })
+                .ok();
+            },
+            cx,
+        ))
     }
 
     fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -508,15 +600,34 @@ impl Render for FileView {
                     Some(error) => body.p_3().text_color(muted).child(error.clone()),
                     // Read-only until the file's text is in, so nothing typed
                     // before is lost.
-                    None => body.child(
-                        Editor::new(&self.editor)
-                            .readonly(self.saved.is_none())
-                            .bordered(false)
-                            .rounded_none()
-                            .size_full(),
-                    ),
+                    None => body
+                        // A drag that selects some of the text offers to cut,
+                        // copy, paste over, or send it to the prompt, once the
+                        // selection has settled.
+                        .on_mouse_up(
+                            MouseButton::Left,
+                            cx.listener(|_, event: &MouseUpEvent, window, cx| {
+                                let position = event.position;
+                                cx.defer_in(window, move |this, _, cx| {
+                                    let selected =
+                                        !this.editor.read(cx).selected_range().is_empty();
+                                    if selected {
+                                        this.selection_popover = Some(position);
+                                        cx.notify();
+                                    }
+                                });
+                            }),
+                        )
+                        .child(
+                            Editor::new(&self.editor)
+                                .readonly(self.saved.is_none())
+                                .bordered(false)
+                                .rounded_none()
+                                .size_full(),
+                        ),
                 }
-            }));
+            }))
+            .children(self.render_selection_popover(cx));
         // Lets UI tests find the file; inert in normal builds.
         gpui_kit::TestSupportExt::test_support(view)
     }
@@ -1096,6 +1207,111 @@ mod tests {
         cx.wait_for(handle, TIMEOUT, |_, cx| !view.read(cx).is_dirty())
             .await;
         assert_eq!(std::fs::read_to_string(&file).unwrap(), "Hi # Notes\n");
+
+        std::fs::remove_file(&file).ok();
+    }
+
+    /// Dragging across text in the editor shows a popover by it: Copy puts
+    /// the text on the clipboard, Cut takes it out of the file too, Paste
+    /// puts the clipboard in its place, and Send to Prompt hands it on to be
+    /// attached. Each closes the popover.
+    #[gpui_kit::test]
+    async fn selected_text_can_be_cut_copied_pasted_or_sent(cx: &mut TestAppContext) {
+        const TEXT: &str = "alpha beta gamma delta\nsecond line\n";
+        let file = temp_file("file-view-selection", TEXT);
+        init(cx, None);
+        let (view, handle) = open(cx, &file, None);
+        cx.wait_for(handle, TIMEOUT, |_, cx| {
+            view.read(cx).editor.read(cx).value().as_ref() == TEXT
+        })
+        .await;
+        let sent = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+        let _subscription = cx.update(|cx| {
+            let sent = sent.clone();
+            cx.subscribe(
+                &view,
+                move |_, super::SendToPrompt(text): &super::SendToPrompt, _| {
+                    sent.borrow_mut().push(text.clone())
+                },
+            )
+        });
+
+        // Drags across the first line, and says whether the popover showed.
+        let select_first_line = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let editor = window.find("file-view").bounds();
+                let header = window.find("save-file").bounds();
+                let y = header.bottom() + gpui_kit::px(14.);
+                window.drag(
+                    gpui_kit::point(editor.left() + gpui_kit::px(60.), y),
+                    gpui_kit::point(editor.right() - gpui_kit::px(20.), y),
+                    cx,
+                );
+            })
+            .unwrap();
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.try_find("editor-selection-popover").is_some()
+            })
+            .unwrap()
+        };
+        let selected = |cx: &mut TestAppContext| {
+            view.read_with(cx, |view, cx| {
+                view.editor.read(cx).selected_text().to_string()
+            })
+        };
+        let click = |cx: &mut TestAppContext, id: &'static str| {
+            cx.update_window(handle, |_, window, cx| window.click(id, cx))
+                .unwrap();
+            cx.run_until_parked();
+            assert!(
+                view.read_with(cx, |view, _| !view.selection_popover_shown()),
+                "{id}"
+            );
+        };
+
+        assert!(select_first_line(cx), "no popover for the selection");
+        let first = selected(cx);
+        assert!(
+            first.starts_with("lpha") || first.starts_with("alpha"),
+            "{first:?}"
+        );
+        click(cx, "editor-selection-copy");
+        assert_eq!(
+            cx.read_from_clipboard().and_then(|item| item.text()),
+            Some(first.clone())
+        );
+
+        assert!(select_first_line(cx));
+        click(cx, "editor-selection-send");
+        assert_eq!(*sent.borrow(), [first.clone()]);
+
+        assert!(select_first_line(cx));
+        click(cx, "editor-selection-cut");
+        let value = view.read_with(cx, |view, cx| view.editor.read(cx).value().to_string());
+        assert!(!value.contains(&first), "{value:?}");
+        assert!(view.read_with(cx, |view, _| view.is_dirty()));
+
+        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string("PASTED".into()));
+        cx.update_window(handle, |_, window, cx| {
+            let editor = view.read(cx).editor.clone();
+            editor.update(cx, |editor, cx| editor.set_value(TEXT, window, cx));
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(select_first_line(cx));
+        click(cx, "editor-selection-paste");
+        let value = view.read_with(cx, |view, cx| view.editor.read(cx).value().to_string());
+        assert_eq!(value, TEXT.replacen(&first, "PASTED", 1));
+
+        // Pressing elsewhere closes it, doing nothing.
+        assert!(select_first_line(cx));
+        cx.update_window(handle, |_, window, cx| window.click("save-file", cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert!(view.read_with(cx, |view, _| !view.selection_popover_shown()));
 
         std::fs::remove_file(&file).ok();
     }

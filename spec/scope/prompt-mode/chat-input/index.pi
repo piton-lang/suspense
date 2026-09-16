@@ -1,4 +1,6 @@
 use /lib
+from /ui/components/growing-text-input import GrowingTextInputScope
+from /ui/components/selection-popover import SelectionPopoverScope
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/lsp import LSP
@@ -38,6 +40,10 @@ shape ChatInputShape:
             is also a tab, just a small one, because it only shows an icon. All
             four sit flush against each other with no extra gaps, and no tab has
             more padding than a normal tab.
+
+            The chat input starts in the combined mode: Chain is selected, so
+            Code and Spec are selected together, and a prompt sent before
+            switching tabs changes the code and the spec together.
 
             Pressing <Ctrl+Tab> while in the chat input cycles from Code to
             Chain to Spec to Ask and back to Code, <Ctrl+Shift+Tab> the other
@@ -209,17 +215,13 @@ shape ChatInputShape:
     selectingAnswerText:
         The text of an answer being viewed, in the answer drawer, whether an
         open question or a previous answer, can be selected by dragging across
-        it, as any text can. When a drag that selects text ends within the
-        drawer, a small popover appears just below and to the right of where the
-        pointer was let go, floating above everything, with two small buttons
-        side by side: "Copy", with a copy icon, and "Attach to prompt", with a
-        paperclip icon.
+        it, as any text can. A drag that selects text ending within the drawer
+        shows a @{SelectionPopoverScope} with two buttons: "Copy", with a copy
+        icon, and "Attach to prompt", with a paperclip icon.
 
         Copy puts the selected text on the clipboard. Attach to prompt adds it
-        to the prompt as an attachment. Either one closes the popover and clears
-        the selection. The popover also closes without doing anything when the
-        mouse is pressed anywhere outside it, including to start selecting
-        something else, or when the drawer closes.
+        to the prompt as an attachment. Either one clears the selection. The
+        popover also closes when the drawer closes.
 
     attachments:
         What is attached to the prompt is listed above the text input, between
@@ -241,11 +243,8 @@ shape ChatInputShape:
         input.
 
     growToFit:
-        The text input will grow to fit the text inside of it, one row per
-        visual line: both lines broken with <Enter> and long lines that soft
-        wrap. It shrinks again as text is removed, and re-fits when the window
-        is resized. It starts at a single row, lined up with the send button,
-        and stops growing at 12 rows, after which it scrolls.
+        The text input is a @{GrowingTextInputScope} growing to 12 rows at
+        most. Its single row lines up with the send button.
 
     autoFocus:
         The chat input should be auto-focused.
@@ -295,6 +294,36 @@ shape ChatInputShape:
         they'll be typing into a randomly-named piton anchor with a userPrompt
         property.  It's this compiled anchor that will be send to the
         @{HarnessIntegrationScope}
+
+        escaping:
+            A prompt may hold anything, text pasted into it included, so it
+            isn't written into the anchor as Piton prose, where braces, quotes,
+            colons, leading dashes, code fences, comments, indentation, and
+            backslashes all mean something. Its userPrompt is a list with an
+            item per line of the prompt, in order, and each line a list of its
+            pieces: the text between references as a quoted string, with
+            quotes, backslashes, and each dollar-brace escaped, so nothing in it
+            is interpolated or evaluated; and each at-brace or dollar-brace
+            around a dotted path of identifiers whose first name is imported as
+            a reference of its own. A reference to a name that isn't imported,
+            such as a pasted shell variable, is only text. An empty line is a
+            single empty string. The compiled userPrompt is the pieces of each
+            line joined together, and the lines joined by line breaks, so what
+            the harness receives is exactly what was typed or pasted, line for
+            line, with each reference resolved. The systemPrompt is written the
+            same way. A prompt saved as prose by an earlier version still reads
+            back.
+
+        autoImports:
+            The names a prompt uses are imported however the prompt got there,
+            typed, completed, or pasted. What `piton lsp` is shown while the
+            prompt is typed is the prompt as prose, line for line and position
+            for position as typed, but with anything outside a reference other
+            than letters, digits, and spaces between words blanked out,
+            character for character. Pasted text with an unclosed quote or
+            brace, a code fence, deeper indentation, or what would be a comment
+            then never stops the server finding the names that need importing,
+            both as completions are offered and when the prompt is sent.
 
         attachedText:
             A prompt with attached text gives the hidden anchor an attachedText

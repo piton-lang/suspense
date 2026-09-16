@@ -1,4 +1,5 @@
 use /lib
+from /ui/components/growing-text-input import GrowingTextInputScope
 from /ui/components/file-tree import FileTreeScope
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/git import GitScope
@@ -49,8 +50,9 @@ shape GitPanelShape:
         so they survive a restart; that file is never itself committed.
 
     message:
-        A multi-line commit message box, a few lines tall, reading
-        "Commit message" while empty.
+        A commit message box, a @{GrowingTextInputScope} growing to 10 rows at
+        most, so it starts at a single row. It reads "Commit message" while
+        empty.
 
     writingAMessage:
         A "Write message" button, with a sparkles icon, has the harness write

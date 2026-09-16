@@ -1,0 +1,48 @@
+from /scope/harness-integration import HarnessIntegrationScope
+from /scope/prompt-mode import PromptEditor
+from /scope/prompt-mode/message-list import MessageList
+
+anchor Prompt_f91105d00c082fd5:
+    userPrompt:
+        The prompt history in @{PromptEditor} saves each task's whole harness output
+        ("each line the harness printed"), which makes the history far larger than
+        anything the application reads back. Change what a run's `.json` record holds
+        to only what is needed to bring the task back as it was.
+        
+        A record keeps, in the order they happened:
+        - the compiled userPrompt the harness received
+        - the conversation the run belonged to, so @{HarnessIntegrationScope} can
+          carry on the latest conversation when the project is opened
+        - each piece of reply text, whole rather than as it streamed in
+        - each tool call: its name, the short summary of its input shown in the
+          @{MessageList}, and whether it finished or failed
+        - the harness's final result, and whether it ended in error
+        - any error from outside the harness
+        
+        It leaves out everything else the harness streams: partial text as it
+        arrives, tool results and file contents, full assistant messages, and
+        anything from subagents. The harness keeps its own full transcript of each
+        conversation, so none of that is lost to it.
+        
+        A task or question brought back from its record looks and behaves exactly as
+        it did when it finished: the same output table rows, the same collapsed
+        answer steps for questions, the same status, and "Not recorded" when there is
+        no record. Questions in `.suspense/asks` are recorded the same way, including
+        a question closed or replaced while it runs.
+        
+        Records already saved in the old form are rewritten in the new form the first
+        time the project is opened, keeping what they show, and are read correctly in
+        either form until then.
+
+    mode: combined
+
+    systemPrompt:
+        We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec.
+        
+        You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec.
+        
+        Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other.
+        
+        Then build the spec and execute the prompt directly on the code using a unified plan.
+        
+        Make sure that you write both code and spec.

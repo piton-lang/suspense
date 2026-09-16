@@ -1,0 +1,33 @@
+use /lib
+
+export scope GrowingTextInputScope:
+    concept: {GrowingTextInputConcept}
+
+concept GrowingTextInputConcept:
+    pitch:
+        A multi-line text input that is only as tall as its text, so it takes
+        a single row until there is more to show.
+
+    shape: {GrowingTextInputShape}
+
+shape GrowingTextInputShape:
+    description:
+        A multi-line text input whose long lines soft wrap, starting at a
+        single row.
+
+    growToFit:
+        It grows to fit its text, one row per visual line: both lines broken
+        with <Enter> and long lines that soft wrap, wrapped where it wraps them.
+        It shrinks again as text is removed, and fits again when its width
+        changes, as when the window is resized. Its height is what its rows and
+        their padding and border take, and nothing more: there is no empty row
+        beneath the last line.
+
+    mostRows:
+        Whatever uses it says how many rows it grows to at most. Once its text
+        takes more, it stays that tall and scrolls.
+
+    steadiness:
+        It grows or shrinks in the very frame its text changes, and at any
+        display scale its height is rounded up to a whole device pixel, so the
+        text never flickers a row up and back as a line is added.

@@ -507,7 +507,7 @@ impl PitonSession {
             .imports
             .extend(&self.completion_imports.lock().unwrap().accepted);
         draft.version += 1;
-        let text = draft.anchor.source(prompt);
+        let text = draft.anchor.draft_source(prompt);
         if draft.opened {
             self.client.notify(
                 "textDocument/didChange",
@@ -750,6 +750,32 @@ mod tests {
             accepted.contains("\"/scope/application\": {\"ApplicationScope\"}"),
             "{accepted}"
         );
+    }
+
+    /// Names used in pasted text full of what Piton would read as syntax are
+    /// imported all the same: after an unclosed quote or brace, a code fence,
+    /// deeper indentation, or what would be a comment.
+    #[test]
+    fn auto_imports_names_in_pasted_text() {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        let session = session();
+        for pasted in [
+            "a \"b @{ApplicationScope}",
+            "```\n@{ApplicationScope}",
+            "    deep indent\n@{ApplicationScope}",
+            "see // @{ApplicationScope}",
+            "Fix { \"a\": [1, 2 } @{ApplicationScope}",
+            "key: value ${HOME}\n  - @{ApplicationScope}",
+        ] {
+            let anchor = session.anchor_for(pasted).unwrap();
+            let source = anchor.source("");
+            assert!(
+                source.contains("from /scope/application import ApplicationScope\n"),
+                "{pasted:?}:\n{source}"
+            );
+        }
     }
 
     /// Lets the real `piton lsp` import the names a prompt uses.

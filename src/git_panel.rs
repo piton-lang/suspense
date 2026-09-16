@@ -22,13 +22,14 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::commit_notes::{self, Note, NotesVersion};
+use crate::growing_input::GrowToFit;
 use crate::project_directory::ProjectDirectory;
 
 /// How often the summary is read again.
 const REFRESH_INTERVAL: Duration = Duration::from_secs(2);
 
-/// How tall the commit message is.
-const MESSAGE_HEIGHT: Pixels = px(76.);
+/// The most rows the commit message grows to before it scrolls.
+const MESSAGE_MAX_ROWS: usize = 10;
 
 /// The most of the diff handed to the harness for a message, so writing one
 /// stays quick however much has changed.
@@ -383,6 +384,8 @@ pub struct GitPanel {
     /// `None` outside a git repository, where the panel isn't shown.
     summary: Option<Summary>,
     message: Entity<EditorState>,
+    /// How the message grows to fit its text.
+    message_fit: GrowToFit,
     /// The commit notes, as rows that can be edited, in order.
     notes: Vec<NoteRow>,
     busy: Option<Busy>,
@@ -397,6 +400,9 @@ impl GitPanel {
                 .line_number(false)
                 .folding(false)
                 .soft_wrap(true)
+                // No empty rows below the last line: the box is sized to its
+                // text.
+                .scroll_beyond_last_line(Some(0))
                 .placeholder("Commit message")
         });
         let subscriptions = vec![
@@ -408,13 +414,15 @@ impl GitPanel {
             cx.observe_global_in::<NotesVersion>(window, |this, window, cx| {
                 this.load_notes(window, cx)
             }),
-            // The commit button follows whether there is a message.
+            // The commit button follows whether there is a message, and the
+            // box grows to fit it.
             cx.subscribe(&message, |_, _, _: &InputEvent, cx| cx.notify()),
         ];
         let mut this = Self {
             root: None,
             summary: None,
             message,
+            message_fit: GrowToFit::new(MESSAGE_MAX_ROWS),
             notes: Vec::new(),
             busy: None,
             _refresh: Task::ready(()),
@@ -672,7 +680,7 @@ impl GitPanel {
 }
 
 impl Render for GitPanel {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let Some(summary) = self.summary.clone() else {
             return div().id("git-panel").into_any_element();
         };
@@ -812,7 +820,20 @@ impl Render for GitPanel {
                             .on_click(cx.listener(move |this, _, _, cx| this.remove_note(id, cx))),
                     )
             }))
-            .child(Editor::new(&self.message).h(MESSAGE_HEIGHT))
+            .child({
+                let (height, _) = self.message_fit.heights(&self.message, window, cx);
+                let message = div()
+                    .id("git-commit-message")
+                    .relative()
+                    .child(Editor::new(&self.message).h(height))
+                    .child(GrowToFit::tracker(
+                        &self.message,
+                        cx.entity().downgrade(),
+                        |this: &mut Self| &mut this.message_fit,
+                    ));
+                // Lets UI tests find the message; inert in normal builds.
+                gpui_kit::TestSupportExt::test_support(message)
+            })
             .child(
                 h_flex()
                     .gap_2()
@@ -897,6 +918,38 @@ mod tests {
             assert_eq!((summary.modified, summary.untracked), (1, 1));
             assert_eq!((summary.insertions, summary.deletions), (1, 1));
         });
+
+        // The message starts at a single row, grows a row a line, and stops
+        // growing at its most rows.
+        let message_height = |text: String, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                panel.update(cx, |panel, cx| panel.set_message(&text, window, cx));
+                for _ in 0..3 {
+                    window.render_frame(cx);
+                }
+                let line_height = panel.read(cx).message.read(cx).line_height().unwrap();
+                let height = window.find("git-commit-message").bounds().size.height;
+                (height, line_height)
+            })
+            .unwrap()
+        };
+        let (one_row, line_height) = message_height(String::new(), cx);
+        let (two_lines, _) = message_height("Summary\n\n- detail".into(), cx);
+        assert!(
+            (two_lines - one_row - line_height * 2.).abs() <= gpui_kit::px(1.),
+            "{two_lines:?} for three lines, {one_row:?} for one"
+        );
+        let many: Vec<String> = (0..30).map(|n| format!("line {n}")).collect();
+        let (most, _) = message_height(many.join("\n"), cx);
+        let rows = super::MESSAGE_MAX_ROWS as f32 - 1.;
+        assert!(
+            (most - one_row - line_height * rows).abs() <= gpui_kit::px(1.),
+            "{most:?} for thirty lines"
+        );
+        assert!(
+            one_row < line_height * 2.5,
+            "{one_row:?} is more than a row"
+        );
 
         cx.update_window(handle, |_, window, cx| {
             panel.update(cx, |panel, cx| {

@@ -1,0 +1,30 @@
+use /lib
+
+export scope SelectionPopoverScope:
+    concept: {SelectionPopoverConcept}
+
+concept SelectionPopoverConcept:
+    pitch:
+        A small popover of things to do with text just selected, offered
+        wherever text can be selected by dragging across it.
+
+    shape: {SelectionPopoverShape}
+
+shape SelectionPopoverShape:
+    description:
+        When a drag that selects text ends, a small popover appears just below
+        and to the right of where the pointer was let go, floating above
+        everything and kept within the window. It has a border, rounded corners,
+        and a shadow, and holds a row of small buttons side by side, each with
+        an icon and a label. Which buttons it holds, and what each does, is up
+        to whatever shows it. It only appears when the drag selected some text.
+
+    pressing:
+        Pressing a button in the popover is taken by the popover alone, never
+        by the text beneath, so the selection is still there when the button
+        acts on it. Any of its buttons closes the popover.
+
+    closing:
+        The popover closes without doing anything when the mouse is pressed
+        anywhere outside it, including to start selecting something else. Where
+        it is shown can close it too, such as when what holds the text closes.

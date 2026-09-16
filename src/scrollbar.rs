@@ -515,6 +515,13 @@ impl Geometry {
     }
 }
 
+/// Where the thumb is drawn in a track at `track`, as its top and height.
+#[cfg(test)]
+pub fn thumb_for_test(handle: &Scroll, track: Bounds<Pixels>) -> (Pixels, Pixels) {
+    let geometry = Geometry::of(handle, track);
+    (geometry.thumb_top, geometry.thumb_height)
+}
+
 #[cfg(test)]
 mod tests {
     use gpui_kit::component::{Root, v_flex};

@@ -1,0 +1,43 @@
+from /scope/harness-integration import HarnessIntegrationScope
+from /scope/prompt-mode import PromptEditor
+from /scope/prompt-mode/message-list import MessageList
+
+anchor Prompt_1be0a1d96a7c2856:
+    userPrompt:
+        What's wrong with this, why won't it send ?
+        
+        
+        The prompt history in @{PromptEditor} saves each task's whole harness output
+        ("each line the harness printed"), which makes the history far larger than
+        anything the application reads back. Change what a run's `.json` record holds
+        to only what is needed to bring the task back as it was.
+        
+        A record keeps, in the order they happened:
+        - the compiled userPrompt the harness received
+        - the conversation the run belonged to, so @{HarnessIntegrationScope} can
+          carry on the latest conversation when the project is opened
+        - each piece of reply text, whole rather than as it streamed in
+        - each tool call: its name, the short summary of its input shown in the
+          @{MessageList}, and whether it finished or failed
+        - the harness's final result, and whether it ended in error
+        - any error from outside the harness
+        
+        It leaves out everything else the harness streams: partial text as it
+        arrives, tool results and file contents, full assistant messages, and
+        anything from subagents. The harness keeps its own full transcript of each
+        conversation, so none of that is lost to it.
+        
+        A task or question brought back from its record looks and behaves exactly as
+        it did when it finished: the same output table rows, the same collapsed
+        answer steps for questions, the same status, and "Not recorded" when there is
+        no record. Questions in `.suspense/asks` are recorded the same way, including
+        a question closed or replaced while it runs.
+        
+        Records already saved in the old form are rewritten in the new form the first
+        time the project is opened, keeping what they show, and are read correctly in
+        either form until then.
+
+    mode: ask
+
+    systemPrompt:
+        We're only asking a question about the code located in ./src and the spec located in ./spec. Don't edit either of them.

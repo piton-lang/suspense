@@ -1,0 +1,19 @@
+from /scope/prompt-mode/chat-input import ChatInputScope
+from /ui/components/git-panel import GitPanelScope
+
+anchor Prompt_2097c19999c6c1e6:
+    userPrompt:
+        @{GitPanelScope} the commit message input should be a growing text box just like @{ChatInputScope} and starts at a single line.  And while we're at it, let's refactor that growing text input into a ui/components spec
+
+    mode: combined
+
+    systemPrompt:
+        We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec.
+        
+        You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec.
+        
+        Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other.
+        
+        Then build the spec and execute the prompt directly on the code using a unified plan.
+        
+        Make sure that you write both code and spec.

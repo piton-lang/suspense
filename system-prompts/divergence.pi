@@ -16,13 +16,42 @@ export anchor Divergence:
         Reply with nothing but JSON, in this form, with paths relative to the
         project and every number from 0 to 1:
 
-        \{ \  "assessment": "...", \  "wellDefined": [ \  \{ \  "name": "...",
-        \  "why": "..." \  } \  ], \  "lessDefined": [ \  \{ \  "name":
-        "...", \  "why": "..." \  } \  ], \  "files": [ \  \{ \  "path":
-        "...", \  "divergence": 0.0, \  "definition": 0.0, \  "summary":
-        "...", \  "gaps": [ \  "..." \  ], \  "links": [ \  \{ \  "path":
-        "...", \  "strength": 0.0, \  "divergence": 0.0, \  "note": "..." \  }
-        \  ] \  } \  ] \}
+        ```
+        { 
+          "assessment": "...", 
+          "wellDefined": [ 
+            {  
+              "name": "...",
+              "why": "..."   
+            }  
+          ],   
+          "lessDefined": [ 
+            {   
+              "name": "...",  
+              "why": "..."  
+            }   
+          ],   
+          "files": [ 
+            {  
+              "path": "...",  
+              "divergence": 0.0, 
+              "definition": 0.0, 
+              "summary": "...",  
+              "gaps": [ 
+                "..." 
+              ], 
+              "links": [ 
+                { 
+                  "path": "...",  
+                  "strength": 0.0, 
+                  "divergence": 0.0, 
+                  "note": "..." 
+                }
+              ]
+            }
+          ]
+        }
+        ```
 
     code:
         task:

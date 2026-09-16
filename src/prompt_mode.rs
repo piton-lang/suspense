@@ -61,16 +61,18 @@ use crate::activity::{Job, JobKind};
 use crate::chat_input::{self, ChatInput, SendMode, Submit, TabChanged};
 use crate::commit_notes;
 use crate::file_link::{self, OpenFile};
-use crate::file_view::{CloseFile, FileView, OpenDefinition};
+use crate::file_view::{CloseFile, FileView, OpenDefinition, SendToPrompt};
 use crate::harness::{self, HarnessEvent};
 use crate::hidden_anchor::{self, HiddenAnchor};
 use crate::markdown;
+use crate::markdown::{MarkdownKey, MarkdownKind, MarkdownStates};
 use crate::piton_build;
 use crate::piton_lsp::PitonSession;
 use crate::project_directory::ProjectDirectory;
 use crate::prompt_history::{self, RunRecord, SavedPrompt};
 use crate::prompt_queue::{self, QueuedPrompt};
 use crate::scrollbar::{self, Scroll, SetLock};
+use crate::selection_popover::{SelectionAction, selection_popover};
 use crate::shell_format;
 use crate::system_prompts;
 
@@ -1053,6 +1055,8 @@ impl PromptMode {
                 this.on_ask_tab = input.read(cx).mode() == SendMode::Ask;
                 cx.notify();
             }),
+            // A row whose markdown finished parsing is measured again.
+            cx.observe_global::<MarkdownStates>(|_, cx| cx.notify()),
             cx.observe_global::<ProjectDirectory>(|this, cx| {
                 this.load_queue(cx);
                 this.load_history(cx);
@@ -1286,6 +1290,12 @@ impl PromptMode {
         }
         let file = cx.new(|cx| FileView::new(path, position, window, cx));
         self._file_subscriptions = vec![
+            // Text selected in the file and sent to the prompt is attached to it.
+            cx.subscribe(&file, |this, _, SendToPrompt(text): &SendToPrompt, cx| {
+                let text = text.clone();
+                this.chat_input
+                    .update(cx, |input, cx| input.attach_text(text, cx));
+            }),
             cx.subscribe(&file, |this, _, _: &CloseFile, cx| {
                 // It slides back into the sidebar from the width it had.
                 if let Some(file) = this.file.take() {
@@ -2333,48 +2343,36 @@ impl PromptMode {
     /// Pressing the mouse anywhere else closes it.
     fn render_selection_popover(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let (position, _) = self.selection_popover.as_ref()?;
-        let theme = cx.theme();
-        let popover = h_flex()
-            .id("selection-popover")
-            .gap_1()
-            .p_1()
-            .rounded(theme.radius)
-            .border_1()
-            .border_color(theme.border)
-            .bg(theme.popover)
-            .shadow_md()
-            .on_mouse_down_out(cx.listener(|this, _, _, cx| {
-                this.selection_popover = None;
-                cx.notify();
-            }))
-            .child(
-                Button::new("selection-copy")
-                    .ghost()
-                    .small()
-                    .icon(IconName::Copy)
-                    .label("Copy")
-                    .on_click(cx.listener(|this, _, window, cx| this.copy_selection(window, cx))),
-            )
-            .child(
-                Button::new("selection-attach")
-                    .ghost()
-                    .small()
-                    .icon(IconName::Paperclip)
-                    .label("Attach to prompt")
-                    .on_click(cx.listener(|this, _, window, cx| this.attach_selection(window, cx))),
-            );
-        // Lets UI tests find the popover; inert in normal builds.
-        let popover = gpui_kit::TestSupportExt::test_support(popover);
-        Some(
-            deferred(
-                anchored()
-                    .position(*position + point(px(6.), px(10.)))
-                    .snap_to_window()
-                    .child(popover),
-            )
-            .with_priority(1)
-            .into_any_element(),
-        )
+        let this = cx.entity().downgrade();
+        let actions = vec![
+            SelectionAction::new("copy", IconName::Copy, "Copy", {
+                let this = this.clone();
+                move |_, window, cx| {
+                    this.update(cx, |this, cx| this.copy_selection(window, cx))
+                        .ok();
+                }
+            }),
+            SelectionAction::new("attach", IconName::Paperclip, "Attach to prompt", {
+                let this = this.clone();
+                move |_, window, cx| {
+                    this.update(cx, |this, cx| this.attach_selection(window, cx))
+                        .ok();
+                }
+            }),
+        ];
+        Some(selection_popover(
+            "selection",
+            *position,
+            actions,
+            move |_, cx| {
+                this.update(cx, |this, cx| {
+                    this.selection_popover = None;
+                    cx.notify();
+                })
+                .ok();
+            },
+            cx,
+        ))
     }
 
     fn render_ask_card(&self, ask: &Ask, expanded: bool, cx: &mut Context<Self>) -> AnyElement {
@@ -2751,6 +2749,20 @@ impl PromptMode {
             scrollbar::measure_new_rows(&self.output_list);
         }
         self.output_list_for.set((task.uid, count, streaming));
+        // Its markdown's states are kept, so rows measure as tall out of view
+        // as in it: all of them when the task or its rows change, and the last
+        // rows as they stream.
+        let changed_rows = if laid_out_task != task.uid || laid_out_count != count {
+            Some(0..count)
+        } else {
+            (streaming != laid_out_streaming).then(|| count.saturating_sub(2)..count)
+        };
+        if let Some(rows) = changed_rows {
+            let project_dir = ProjectDirectory::get(cx);
+            for (key, text) in task_markdown(task_ix, task, rows, false, project_dir.as_deref()) {
+                MarkdownStates::prepare(key, &text, cx);
+            }
+        }
         if count > 0 && streaming != laid_out_streaming {
             self.output_list
                 .remeasure_items(count.saturating_sub(2)..count);
@@ -2831,8 +2843,55 @@ impl PromptMode {
     }
 }
 
+impl PromptMode {
+    /// Keeps the markdown states of the open previous task and answer, and
+    /// has each list measure again a row whose markdown finished parsing
+    /// since it was last measured (see [`MarkdownStates`]).
+    fn keep_markdown(&self, cx: &mut Context<Self>) {
+        let project_dir = ProjectDirectory::get(cx);
+        let lists = [
+            (&self.task_history, &self.tasks),
+            (&self.ask_history, &self.answers),
+        ];
+        for (history, tasks) in lists {
+            let Some(open) = history.open.filter(|_| history.expanded) else {
+                continue;
+            };
+            if let Some(task) = tasks.get(open) {
+                let rows = 0..task.reply.rows().len();
+                let pieces = task_markdown(
+                    history.id_base + open,
+                    task,
+                    rows,
+                    true,
+                    project_dir.as_deref(),
+                );
+                for (key, text) in pieces {
+                    MarkdownStates::prepare(key, &text, cx);
+                }
+            }
+        }
+        let latest = self.tasks.len().checked_sub(1);
+        for key in MarkdownStates::take_changed(cx) {
+            if Some(key.table) == latest && key.kind != MarkdownKind::Prompt {
+                self.output_list.remeasure_items(key.row..key.row + 1);
+                scrollbar::measure_new_rows(&self.output_list);
+            }
+            for history in [&self.task_history, &self.ask_history] {
+                if let Some(open) = history.open
+                    && key.table == history.id_base + open
+                {
+                    history.scroll.remeasure_items(open..open + 1);
+                    scrollbar::measure_new_rows(&history.scroll);
+                }
+            }
+        }
+    }
+}
+
 impl Render for PromptMode {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.keep_markdown(cx);
         // The popover for text selected in an answer goes with the drawer.
         if !self.drawer_open() {
             self.selection_popover = None;
@@ -3066,13 +3125,9 @@ impl Render for PromptMode {
 /// Markdown whose headings are sized from the window's base font size; left
 /// to its default, the smaller headings come out below the body text. With
 /// `open`, a link to a file opens it in the editor.
-fn markdown_view(
-    id: impl Into<ElementId>,
-    text: &str,
-    open: Option<&OpenFile>,
-    cx: &App,
-) -> TextView {
-    let view = TextView::markdown(id, markdown::without_inline_code(text)).style(TextViewStyle {
+fn markdown_view(key: MarkdownKey, text: &str, open: Option<&OpenFile>, cx: &App) -> TextView {
+    let text = markdown::without_inline_code(text);
+    let view = cached_text_view(key, text, cx).style(TextViewStyle {
         heading_base_font_size: cx.theme().font_size,
         ..TextViewStyle::default()
     });
@@ -3085,6 +3140,79 @@ fn markdown_view(
         }
         None => view,
     }
+}
+
+/// A command, laid out across lines and highlighted as a code block.
+fn command_markdown(command: &str) -> String {
+    code_block("bash", &shell_format::format_command(command))
+}
+
+/// `markdown` shown at `key`: with the state kept for it once one is (see
+/// [`MarkdownStates`]), or one of the element's own until then.
+fn cached_text_view(key: MarkdownKey, markdown: String, cx: &App) -> TextView {
+    match MarkdownStates::cached(key, &markdown, cx) {
+        Some(state) => TextView::new(&state),
+        None => TextView::markdown(
+            ElementId::NamedInteger(
+                format!("{:?}-{}", key.kind, key.table).into(),
+                key.row as u64,
+            ),
+            markdown,
+        ),
+    }
+}
+
+/// Where each piece of markdown in a task's table is shown, and what it
+/// shows, as [`output_row`] and [`task_prompt`] show them, for keeping their
+/// states (see [`MarkdownStates`]). Only `rows` of the output, and the prompt
+/// if `prompt`.
+fn task_markdown(
+    task_ix: usize,
+    task: &PromptTask,
+    rows: std::ops::Range<usize>,
+    prompt: bool,
+    project_dir: Option<&Path>,
+) -> Vec<(MarkdownKey, String)> {
+    let mut pieces = Vec::new();
+    if prompt && let Some(compiled) = &task.compiled {
+        pieces.push((
+            MarkdownKey {
+                kind: MarkdownKind::Prompt,
+                table: task_ix,
+                row: 0,
+            },
+            markdown::without_inline_code(&compiled.markdown),
+        ));
+    }
+    let output = task.reply.rows();
+    let rows = rows.start.min(output.len())..rows.end.min(output.len());
+    for (row_ix, row) in output[rows.clone()].iter().enumerate() {
+        let row_ix = rows.start + row_ix;
+        match row {
+            OutputRow::Text(text) if !text.trim().is_empty() => pieces.push((
+                MarkdownKey {
+                    kind: MarkdownKind::Output,
+                    table: task_ix,
+                    row: row_ix,
+                },
+                markdown::without_inline_code(text),
+            )),
+            OutputRow::Tool(call) if ToolKind::of(&call.name) == ToolKind::Command => {
+                if let Some(summary) = &call.summary {
+                    pieces.push((
+                        MarkdownKey {
+                            kind: MarkdownKind::Command,
+                            table: task_ix,
+                            row: row_ix,
+                        },
+                        command_markdown(&relative_to_project(summary, project_dir)),
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+    pieces
 }
 
 /// The hidden anchor `text` is sent as in `mode`: importing what `piton lsp`
@@ -3216,7 +3344,11 @@ fn task_prompt(ix: usize, task: &PromptTask, open: &OpenFile, cx: &App) -> AnyEl
                 .id(("compiled-prompt", ix))
                 .min_w_0()
                 .child(markdown_view(
-                    ("prompt", ix),
+                    MarkdownKey {
+                        kind: MarkdownKind::Prompt,
+                        table: ix,
+                        row: 0,
+                    },
                     &compiled.markdown,
                     Some(open),
                     cx,
@@ -3280,7 +3412,11 @@ fn output_row(
             .w_full()
             .min_w_0()
             .child(markdown_view(
-                ElementId::NamedInteger(format!("output-text-{task_ix}").into(), row_ix as u64),
+                MarkdownKey {
+                    kind: MarkdownKind::Output,
+                    table: task_ix,
+                    row: row_ix,
+                },
                 text,
                 open,
                 cx,
@@ -3297,12 +3433,14 @@ fn output_row(
                 Some(command) if ToolKind::of(&call.name) == ToolKind::Command => div()
                     .w_full()
                     .min_w_0()
-                    .child(TextView::markdown(
-                        ElementId::NamedInteger(
-                            format!("output-command-{task_ix}").into(),
-                            row_ix as u64,
-                        ),
-                        code_block("bash", &shell_format::format_command(&command)),
+                    .child(cached_text_view(
+                        MarkdownKey {
+                            kind: MarkdownKind::Command,
+                            table: task_ix,
+                            row: row_ix,
+                        },
+                        command_markdown(&command),
+                        cx,
                     ))
                     .into_any_element(),
                 // A known tool whose input is on its way shows only a
@@ -4178,6 +4316,22 @@ mod tests {
         .unwrap();
         cx.run_until_parked();
         assert!(prompt_mode.read_with(cx, |this, _| this.file.is_some()));
+
+        // Text the file sends to the prompt is attached to it.
+        let file_view = prompt_mode.read_with(cx, |this, _| this.file.clone().unwrap());
+        file_view.update(cx, |_, cx| {
+            cx.emit(crate::file_view::SendToPrompt("selected text".into()))
+        });
+        cx.run_until_parked();
+        let attached = prompt_mode.read_with(cx, |this, cx| {
+            this.chat_input
+                .read(cx)
+                .attachments()
+                .iter()
+                .map(|attachment| attachment.text.clone())
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(attached, ["selected text"]);
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -5253,6 +5407,75 @@ mod tests {
         assert!(notified.get() > 0, "a raw line in view didn't redraw");
     }
 
+    /// The previous tasks, with one open whose text is parsed in the
+    /// background, scroll without their height jumping, and keeping that
+    /// text's state never has the view draw itself over and over.
+    #[gpui_kit::test]
+    async fn history_scrollbar_holds_still_while_scrolling(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        cx.run_until_parked();
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                for t in 0..20 {
+                    let ix = this.push_task(format!("task {t}").into(), cx);
+                    for n in 0..6 {
+                        this.apply_event(ix, HarnessEvent::TextStarted, cx);
+                        let words =
+                            "Long words wrap here. ".repeat(if n % 2 == 0 { 300 } else { 5 });
+                        this.apply_event(ix, HarnessEvent::TextDelta(format!("P{n}. {words}")), cx);
+                    }
+                    this.apply_event(
+                        ix,
+                        HarnessEvent::Finished {
+                            is_error: false,
+                            result: String::new(),
+                        },
+                        cx,
+                    );
+                }
+                this.task_history.toggle();
+                this.task_history.open = Some(17);
+                cx.notify();
+            });
+        })
+        .unwrap();
+        let scroll = prompt_mode.read_with(cx, |this, _| {
+            crate::scrollbar::Scroll::from(&this.task_history.scroll)
+        });
+        let frame = |cx: &mut TestAppContext| {
+            for _ in 0..4 {
+                cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                    .unwrap();
+                cx.executor().advance_clock(crate::markdown::POLL_INTERVAL);
+                cx.run_until_parked();
+            }
+        };
+        frame(cx);
+        prompt_mode.update(cx, |this, _| {
+            this.task_history.scroll.scroll_to(gpui_kit::ListOffset {
+                item_ix: 0,
+                offset_in_item: gpui_kit::px(0.),
+            })
+        });
+        frame(cx);
+        let max = scroll.max_offset().y;
+        assert!(max > gpui_kit::px(2000.), "{max:?}");
+        let mut last = gpui_kit::px(0.);
+        for _ in 0..8 {
+            cx.update_window(handle, |_, window, cx| {
+                let delta = gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(-300.));
+                window.scroll("task-list-scroll", gpui_kit::ScrollDelta::Pixels(delta), cx);
+            })
+            .unwrap();
+            frame(cx);
+            let now = scroll.max_offset().y;
+            assert!((now - max).abs() < gpui_kit::px(1.), "{now:?}, not {max:?}");
+            let offset = -scroll.offset().y;
+            assert!(offset >= last, "scrolled back from {last:?} to {offset:?}");
+            last = offset;
+        }
+    }
+
     /// Scrolling through long output of rows of differing heights, rows not yet
     /// seen are already counted at their height, so how far the output scrolls,
     /// and with it the scrollbar's thumb, holds still rather than jumping as
@@ -5263,12 +5486,13 @@ mod tests {
         cx.update_window(handle, |_, _, cx| {
             prompt_mode.update(cx, |this, cx| {
                 let ix = this.push_task("Do it".into(), cx);
-                for n in 0..200 {
+                for n in 0..60 {
                     this.apply_event(ix, HarnessEvent::TextStarted, cx);
-                    let text = if n % 3 == 0 {
-                        format!("Paragraph {n}. {}", "Long words wrap here. ".repeat(40))
-                    } else {
-                        format!("Paragraph {n}.")
+                    // Some over the few kilobytes parsed in the background.
+                    let text = match n % 4 {
+                        0 => format!("Paragraph {n}. {}", "Long words wrap here. ".repeat(300)),
+                        1 => format!("Paragraph {n}. {}", "Long words wrap here. ".repeat(40)),
+                        _ => format!("Paragraph {n}."),
                     };
                     this.apply_event(ix, HarnessEvent::TextDelta(text), cx);
                 }
@@ -5279,12 +5503,15 @@ mod tests {
         let scroll = prompt_mode.read_with(cx, |this, _| {
             crate::scrollbar::Scroll::from(&this.output_list)
         });
+        // Draws, letting background parses land and the rows they're in be
+        // measured again.
         let frame = |cx: &mut TestAppContext| {
-            cx.update_window(handle, |_, window, cx| {
-                window.render_frame(cx);
-                window.render_frame(cx);
-            })
-            .unwrap();
+            for _ in 0..4 {
+                cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                    .unwrap();
+                cx.executor().advance_clock(crate::markdown::POLL_INTERVAL);
+                cx.run_until_parked();
+            }
         };
         frame(cx);
         let max = scroll.max_offset().y;
@@ -5303,6 +5530,97 @@ mod tests {
             );
             y += gpui_kit::px(400.);
         }
+
+        // Scrolled by the wheel, the thumb only moves on; dragged, it stays
+        // under the pointer the whole way, rows coming into view or not.
+        scroll.set_offset(gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(0.)));
+        frame(cx);
+        let thumb = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let track = window.find("task-output-scroll-track").bounds();
+                (track, crate::scrollbar::thumb_for_test(&scroll, track))
+            })
+            .unwrap()
+        };
+        let mut last = thumb(cx).1.0;
+        for _ in 0..10 {
+            cx.update_window(handle, |_, window, cx| {
+                let delta = gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(-250.));
+                window.scroll("task-output", gpui_kit::ScrollDelta::Pixels(delta), cx);
+            })
+            .unwrap();
+            frame(cx);
+            let (top, _) = thumb(cx).1;
+            assert!(top > last, "the thumb went from {last:?} to {top:?}");
+            assert!((scroll.max_offset().y - max).abs() < gpui_kit::px(1.));
+            last = top;
+        }
+        let (track, (top, height)) = thumb(cx);
+        let grab = gpui_kit::point(track.center().x, top + height / 2.);
+        cx.update_window(handle, |_, window, cx| {
+            use gpui_kit::{Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, PlatformInput};
+            window.dispatch_event(
+                PlatformInput::MouseMove(MouseMoveEvent {
+                    position: grab,
+                    pressed_button: None,
+                    modifiers: Modifiers::default(),
+                }),
+                cx,
+            );
+            window.dispatch_event(
+                PlatformInput::MouseDown(MouseDownEvent {
+                    position: grab,
+                    button: MouseButton::Left,
+                    modifiers: Modifiers::default(),
+                    click_count: 1,
+                    first_mouse: false,
+                }),
+                cx,
+            );
+        })
+        .unwrap();
+        let end = track.bottom() - height;
+        for step in 1..=8 {
+            let y = grab.y + (end - grab.y) * (step as f32 / 8.);
+            cx.update_window(handle, |_, window, cx| {
+                use gpui_kit::{Modifiers, MouseButton, MouseMoveEvent, PlatformInput};
+                window.dispatch_event(
+                    PlatformInput::MouseMove(MouseMoveEvent {
+                        position: gpui_kit::point(grab.x, y),
+                        pressed_button: Some(MouseButton::Left),
+                        modifiers: Modifiers::default(),
+                    }),
+                    cx,
+                );
+            })
+            .unwrap();
+            frame(cx);
+            let (_, (top, height)) = thumb(cx);
+            assert!(
+                (top + height / 2. - y).abs() < gpui_kit::px(1.5),
+                "dragged to {y:?}, the thumb's middle is at {:?}",
+                top + height / 2.
+            );
+            assert!((scroll.max_offset().y - max).abs() < gpui_kit::px(1.));
+        }
+        cx.update_window(handle, |_, window, cx| {
+            use gpui_kit::{Modifiers, MouseButton, MouseUpEvent, PlatformInput};
+            window.dispatch_event(
+                PlatformInput::MouseUp(MouseUpEvent {
+                    position: grab,
+                    button: MouseButton::Left,
+                    modifiers: Modifiers::default(),
+                    click_count: 1,
+                }),
+                cx,
+            );
+        })
+        .unwrap();
+        // Back at the top, rows scrolled past measure as they did.
+        scroll.set_offset(gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(0.)));
+        frame(cx);
+        assert!((scroll.max_offset().y - max).abs() < gpui_kit::px(1.));
 
         // Rows that come while the output is scrolled away from its end count
         // at their height straight away.

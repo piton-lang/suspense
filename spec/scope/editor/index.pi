@@ -1,4 +1,5 @@
 use /lib
+from /ui/components/selection-popover import SelectionPopoverScope
 from /scope/lsp import LSP
 from /ui/components/file-tree import FileTreeScope
 
@@ -35,6 +36,19 @@ shape EditorShape:
         Cargo.lock for TOML, Gemfile and Rakefile for Ruby, and shell startup
         files like .bashrc and .zshrc for Bash. A file in any other language, or
         with no extension, is plain text.
+
+    selectingText:
+        Selecting text in the editor by dragging across it shows a
+        @{SelectionPopoverScope} with four buttons:
+        - Cut, with a scissors icon, which puts the selected text on the clipboard and removes it from the file
+        - Copy, with a copy icon, which puts the selected text on the clipboard
+        - Paste, with a clipboard icon, which puts what is on the clipboard in place of the selected text
+        - Send to Prompt, with a paperclip icon, which attaches the selected text to the prompt, as attaching text selected in an answer does
+
+        Cut, Copy, and Paste do just what their shortcuts do in the editor, and
+        can be undone the same way. Cut and Paste are disabled while the file
+        can't be edited yet. After any of them the editor keeps focus. The
+        popover also closes when the text changes, or when the file closes.
 
     saving:
         Ctrl+S (Cmd+S on macOS) or the save button writes the file to disk. A

@@ -23,6 +23,7 @@ use gpui_kit::*;
 use lsp_types::{CompletionContext, CompletionResponse};
 
 use crate::completion_menu::CompletionMenu;
+use crate::growing_input::GrowToFit;
 use crate::harness_mentions;
 use crate::main_window::FocusChat;
 use crate::piton_lsp::PitonSession;
@@ -32,9 +33,6 @@ use crate::project_lsp::ProjectLsp;
 
 /// The input grows with its text up to this many rows, then scrolls.
 const MAX_ROWS: usize = 12;
-
-/// Room the editor keeps free at the right of each line when soft wrapping.
-const WRAP_RIGHT_MARGIN: Pixels = px(10.);
 
 #[cfg(target_os = "macos")]
 const SEND_SHORTCUT: &str = "⌘Enter";
@@ -52,6 +50,9 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-tab", PreviousMode, Some(CONTEXT)),
     ]);
 }
+
+/// The tab selected to start with: the chain, Code and Spec together.
+const DEFAULT_TAB: usize = 1;
 
 /// The tabs the input sits in, in the order Ctrl+Tab cycles them.
 const TABS: [SendMode; 4] = [
@@ -226,12 +227,8 @@ pub struct ChatInput {
     tint_target: f32,
     lsp: Option<Arc<PitonSession>>,
     busy: bool,
-    /// Width the editor's text was last laid out in, which decides where long
-    /// lines soft wrap.
-    text_width: Option<Pixels>,
-    /// What the editor adds around its rows (padding and border) as last
-    /// laid out, rounded to device pixels.
-    chrome: Option<Pixels>,
+    /// How the input grows to fit its text.
+    fit: GrowToFit,
     /// Width of the chain's tab as last laid out, which is how far Code and
     /// Spec slide together beneath it when it is selected.
     chain_width: Option<Pixels>,
@@ -295,12 +292,11 @@ impl ChatInput {
             editor,
             completion,
             focus_handle: cx.focus_handle(),
-            selected_tab: 0,
-            tint_target: 0.,
+            selected_tab: DEFAULT_TAB,
+            tint_target: DEFAULT_TAB as f32,
             lsp: None,
             busy: false,
-            text_width: None,
-            chrome: None,
+            fit: GrowToFit::new(MAX_ROWS),
             chain_width: None,
             attachments: Vec::new(),
             next_attachment_id: 0,
@@ -537,81 +533,22 @@ impl ChatInput {
             self.focus_handle.focus(window, cx);
         }
     }
-
-    /// The rows `text` takes in the editor: one per line, plus one for every
-    /// soft wrap, wrapped the way the editor wraps it.
-    fn visual_rows(&self, text: &str, window: &Window, cx: &App) -> usize {
-        let Some(wrap_width) = self.text_width.map(|width| width - WRAP_RIGHT_MARGIN) else {
-            return text.split('\n').count();
-        };
-        let theme = cx.theme();
-        let mut wrapper = window
-            .text_system()
-            .line_wrapper(font(theme.mono_font_family.clone()), theme.mono_font_size);
-        text.split('\n')
-            .map(|line| {
-                1 + wrapper
-                    .wrap_line(&[LineFragment::text(line)], wrap_width)
-                    .count()
-            })
-            .sum()
-    }
 }
 
 impl Render for ChatInput {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let text = self.editor.read(cx).value();
-        let rows = self.visual_rows(&text, window, cx).clamp(1, MAX_ROWS);
-        // Fit the text with the editor's own metrics: its laid-out line height
-        // plus the padding and border around its rows. Until the editor has
-        // painted, the border is estimated at a device pixel or more per side.
-        let line_height = self
-            .editor
-            .read(cx)
-            .line_height()
-            .unwrap_or_else(|| window.line_height());
-        let chrome = self.chrome.unwrap_or_else(|| {
-            gpui_kit::component::Size::Medium.input_py() * 2.
-                + ceil_to_device_pixel(px(1.), window) * 2.
-        });
-        let height = ceil_to_device_pixel(line_height * rows as f32 + chrome, window);
-        let one_row = ceil_to_device_pixel(line_height + chrome, window);
+        let (height, one_row) = self.fit.heights(&self.editor, window, cx);
         let empty = text.is_empty();
         // A question is asked straight away, beside whatever the harness is
         // working on, so it never queues.
         let queues = self.busy && TABS[self.selected_tab] != SendMode::Ask;
 
-        // Once the editor has painted, check how it was laid out: the width
-        // its text wrapped in (a resized window wraps long lines differently)
-        // and the padding and border around its rows. When either changed,
-        // the input re-fits.
-        let this = cx.entity().downgrade();
-        let editor = self.editor.clone();
-        let track_layout = canvas(
-            |_, _, _| {},
-            move |bounds, _, _, cx| {
-                let Some(text_bounds) = editor.read(cx).text_bounds() else {
-                    return;
-                };
-                let width = text_bounds.size.width;
-                let chrome = bounds.size.height - text_bounds.size.height;
-                this.update(cx, |this, cx| {
-                    let chrome_changed = this
-                        .chrome
-                        .is_none_or(|old| (old - chrome).abs() > px(0.01));
-                    if this.text_width != Some(width) || chrome_changed {
-                        this.text_width = Some(width);
-                        if chrome_changed {
-                            this.chrome = Some(chrome);
-                        }
-                        cx.notify();
-                    }
-                })
-                .ok();
-            },
-        )
-        .absolute()
-        .size_full();
+        // Follows how the editor is laid out, to fit it anew.
+        let track_layout =
+            GrowToFit::tracker(&self.editor, cx.entity().downgrade(), |this: &mut Self| {
+                &mut this.fit
+            });
 
         // Code, the chain, Spec, and Ask are tabs side by side, each its own
         // bar so that selecting the chain can show Code and Spec selected
@@ -941,17 +878,6 @@ impl CompletionProvider for PromptCompletions {
     }
 }
 
-/// Rounds `length` up to a whole device pixel. Layout rounds lengths to
-/// device pixels half toward zero, so at fractional scales an input sized in
-/// logical pixels can come out a fraction of a pixel short of its rows; the
-/// editor then takes its last row for out of view and scrolls it in for a
-/// frame, which flickers the text a line up and back.
-fn ceil_to_device_pixel(length: Pixels, window: &Window) -> Pixels {
-    let scale_factor = window.scale_factor();
-    // Float noise just past a whole device pixel must not round up to the next.
-    px((f32::from(length) * scale_factor - 1e-3).ceil() / scale_factor)
-}
-
 #[cfg(test)]
 mod tests {
     // Explicit imports: globbing `gpui_kit::*` would bring in GPUI's `test`
@@ -1238,10 +1164,18 @@ mod tests {
         })
         .await;
 
-        cx.update_window(handle, |_, window, cx| window.input("hi", cx))
-            .unwrap();
+        // It starts on the chain, Code and Spec together.
+        chat_input.read_with(cx, |input, _| {
+            assert_eq!(input.mode(), super::SendMode::Both);
+            assert_eq!(input.tint_target, 1.);
+        });
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| input.select_tab(0, window, cx));
+            window.input("hi", cx);
+        })
+        .unwrap();
         cx.run_until_parked();
-        // With where the tint slides to: on past Ask to Code (4) and back
+        // From Code, with where the tint slides to: on past Ask to Code (4) and back
         // before Code to Ask (-1), rather than across the tabs between.
         let presses = [
             ("ctrl-tab", 1, 1.),
@@ -1342,7 +1276,7 @@ mod tests {
                 list.top() >= tabs.bottom() && list.bottom() <= editor.top(),
                 "the attachments {list:?} aren't between the tabs {tabs:?} and the input {editor:?}"
             );
-            window.press("ctrl-tab", cx);
+            // From the chain, on to Spec.
             window.press("ctrl-tab", cx);
             window.render_frame(cx);
             window.click(("remove-attachment", 2usize), cx);
@@ -1440,7 +1374,11 @@ mod tests {
         })
         .await;
 
-        // Code starts selected.
+        // From Code selected, once the chain has slid back all the way.
+        cx.update_window(handle, |_, window, cx| window.press("ctrl-shift-tab", cx))
+            .unwrap();
+        settle_tabs(handle, false, cx);
+        std::thread::sleep(Duration::from_millis(600));
         let [code, chain, spec, ask] = settle_tabs(handle, false, cx);
         for (left, right, between) in [
             (code, chain, "Code and the chain"),

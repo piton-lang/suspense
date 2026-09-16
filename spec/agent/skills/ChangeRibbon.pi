@@ -1,0 +1,75 @@
+use @piton/belay
+
+from /ui/components/ribbon import RibbonScope
+from /ui/components/ribbon/project-tab import RibbonProjectTabScope
+from /ui/components/ribbon/code-tab import RibbonCodeTabScope
+from /ui/components/ribbon/spec-tab import RibbonSpecTabScope
+from /ui/components/ribbon/research-tab import RibbonResearchTabScope
+from /ui/components/ribbon/application-tab import RibbonApplicationTabScope
+
+export skill ChangeRibbon:
+    description:
+        change the main ribbon's tabs, groups, or commands, keeping the spec
+        of each tab in its own scope
+    useWhen:
+        you're asked to add, change, move, or remove anything in the main
+        ribbon, such as a command, a group, or a whole tab
+    prompt:
+        Change the ribbon spec first, which is the source of truth, then make
+        the code match it. The ribbon's spec is split by tab: @{RibbonScope}
+        describes the ribbon as a whole, and each tab is described in a scope of
+        its own. Changes within a tab go in that tab's scope, and a new tab gets
+        a new scope, never a section of the ribbon's.
+
+    specLayout:
+        @{RibbonScope} describes the ribbon as a whole: the order of its tabs,
+        opening several at once, collapsing, the project's name and the activity
+        spinner, and how groups are laid out. What each tab holds, its groups in
+        order and each command's label, icon, tooltip, what it does, when it's
+        disabled, and whether it stays in the collapsed ribbon, is described in
+        that tab's own scope, in a folder of its own under the ribbon.
+
+    tabScopes:
+        - @{RibbonProjectTabScope}, in project-tab
+        - @{RibbonCodeTabScope}, in code-tab
+        - @{RibbonSpecTabScope}, in spec-tab
+        - @{RibbonResearchTabScope}, in research-tab
+        - @{RibbonApplicationTabScope}, in application-tab
+
+    changingOneTab:
+        To add, change, move, or remove a command or group within a tab, edit
+        that tab's scope, never the ribbon's. Describe each group under the
+        tab's groups, in order, and each command under its commands, with its
+        label, icon, tooltip, what clicking it does, when and why it is
+        disabled, and whether it is primary, staying in the collapsed ribbon. A
+        command that opens a scope of its own references that scope rather than
+        repeating what it does. A tab left with no commands says it reads
+        "No commands yet".
+
+    addingOrRemovingTabs:
+        To add a tab, create a new scope for it rather than describing it in
+        the ribbon's scope: a folder under the ribbon's, named for the tab in
+        kebab case followed by -tab, holding an index.pi that exports a scope
+        named Ribbon, then the tab's name, then TabScope, with a concept and a
+        shape following the other tabs', giving its pitch, its groups, and its
+        commands. Then, in @{RibbonScope}, import the new scope, reference it,
+        and add the tab where it belongs in the order of the tabs. Removing a
+        tab is the reverse: delete its folder, and take it out of the ribbon's
+        scope.
+
+    changingTheRibbon:
+        Only what applies to the ribbon as a whole, rather than to one tab,
+        changes @{RibbonScope}, such as the order of the tabs, how open tabs
+        and groups are laid out, or collapsing.
+
+    code:
+        Each tab's commands live in its own module under the ribbon's code, one
+        per tab scope, and the ribbon's own module holds the tabs, the order
+        they're in, and the layout. Keep the two in step: a new tab scope gets
+        a new module, a tab's commands change only in its module, and a tab
+        added or removed is added to or removed from the ribbon's list of tabs.
+
+    checking:
+        After changing the spec, run piton check over the spec and
+        piton build check, then piton build, so the compiled reference and
+        skills are up to date, before changing the code.
