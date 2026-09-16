@@ -1,5 +1,9 @@
 use /lib
-from /scope/project-directory import ProjectDirectoryScope
+from ./project-tab import RibbonProjectTabScope
+from ./code-tab import RibbonCodeTabScope
+from ./spec-tab import RibbonSpecTabScope
+from ./research-tab import RibbonResearchTabScope
+from ./application-tab import RibbonApplicationTabScope
 
 export scope RibbonScope:
     concept: {RibbonConcept}
@@ -27,41 +31,34 @@ shape RibbonShape:
         within the strip. Groups sit side by side with no divider between
         them: each group's title strip is what marks where it starts.
 
-        project:
-            A "Project" group holds the button for the @{ProjectDirectoryScope}.
-
-        code:
-            Nothing yet.
-
-        spec:
-            A "Build" group holds "Build Spec", which runs `piton build`.
-
-        research:
-            Nothing yet.
-
-        application:
-            An "Appearance" group holds the "Dark mode" switch, and a
-            "Preferences" group holds "Settings", which opens the settings
-            window.
-
         A tab with no commands reads "No commands yet".
 
+    tabs:
+        Each tab is a scope of its own, which says what groups and commands it
+        holds, and what each command does.
+
+        project: @{RibbonProjectTabScope}
+
+        code: @{RibbonCodeTabScope}
+
+        spec: @{RibbonSpecTabScope}
+
+        research: @{RibbonResearchTabScope}
+
+        application: @{RibbonApplicationTabScope}
+
     commands:
-        A command button shows a large icon above its label: a folder for the
-        project, a hammer for Build Spec, and a gear for Settings. The project
-        button reads "Open Project…" until a project is open, then the project's
-        name. An on or off setting, like dark mode, is a switch rather than a
-        button.
+        A command button shows a large icon above its label. An on or off
+        setting, like dark mode, is a switch rather than a button.
 
         A command's tooltip explains what it does rather than repeating its
         label, and gives its keyboard shortcut if it has one.
 
-        A command can be marked primary. For now, every command is primary:
-        Open Project, Build Spec, Dark mode, and Settings.
+        A command can be marked primary; each tab says which of its commands
+        are.
 
-        A command that can't run is disabled, not hidden, and its tooltip
-        says why: Build Spec is disabled until a project is open, and while the
-        spec is building.
+        A command that can't run is disabled, not hidden, and its tooltip says
+        why.
 
     height:
         The command area is the same height on every tab, even one with no
@@ -74,10 +71,10 @@ shape RibbonShape:
         restored on the next launch.
 
         Collapsed, the tabs go away too. The ribbon becomes a single thin row
-        holding every primary command, from all of the tabs, as small buttons:
-        a small icon beside its label, and dark mode as a small switch. They
-        keep the order of their tabs, with a thin vertical divider between the
+        holding every primary command, from all of the tabs, as small buttons: a
+        small icon beside its label, and dark mode as a small switch. They keep
+        the order of their tabs, with a thin vertical divider between the
         commands of one tab and the next, and keep their tooltips and disabled
         states. The chevron sits at the right end of the row. Every control in
-        the row, the chevron and the dividers included, is vertically centred
-        in it.
+        the row, the chevron and the dividers included, is vertically centred in
+        it.

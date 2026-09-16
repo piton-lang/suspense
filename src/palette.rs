@@ -810,7 +810,7 @@ impl Render for Palette {
                                 .max_h(MAX_LIST_HEIGHT - px(8.))
                                 .overflow_y_scroll()
                                 .track_scroll(&search.scroll)
-                                .child(output_table(0, &search.reply, None, cx));
+                                .child(output_table(0, &search.reply, None, None, cx));
                             // Lets UI tests find the search; inert in normal builds.
                             let table = gpui_kit::TestSupportExt::test_support(table);
                             crate::scroll_column::with_scroll_column(

@@ -1,8 +1,6 @@
 //! The ribbon along the top of the main window: tabs, with the selected tab's
-//! commands beneath them in labelled groups. Project opens the project
-//! directory, Spec runs `piton build` in it, and Application switches between
-//! light and dark mode and opens the settings. Code and Research have nothing
-//! in them yet.
+//! commands beneath them in labelled groups. Each tab is a module of its own,
+//! which says which commands it holds, and renders and runs them.
 //!
 //! Following the usual ribbon conventions: main commands are large icons
 //! above their labels, tooltips explain rather than repeat the label and give
@@ -14,17 +12,19 @@
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::notification::Notification;
 use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::component::{
-    ActiveTheme, Disableable, Icon, Sizable as _, Size, WindowExt, h_flex, v_flex,
-};
+use gpui_kit::component::{ActiveTheme, Icon, Sizable as _, Size, h_flex, v_flex};
 use gpui_kit::*;
 
-use crate::piton_build;
 use crate::project_directory::ProjectDirectory;
-use crate::settings_window::OpenSettings;
-use crate::theme_preference;
+
+mod application_tab;
+mod code_tab;
+mod project_tab;
+mod research_tab;
+mod spec_tab;
+
+pub use application_tab::set_dark_mode;
 
 actions!(suspense, [ToggleRibbon]);
 
@@ -81,9 +81,20 @@ impl RibbonTab {
     fn index(self) -> usize {
         Self::ALL.iter().position(|tab| *tab == self).unwrap_or(0)
     }
+
+    /// The tab's commands, in the order of its groups.
+    fn commands(self) -> &'static [CommandPlace] {
+        match self {
+            RibbonTab::Project => project_tab::COMMANDS,
+            RibbonTab::Code => code_tab::COMMANDS,
+            RibbonTab::Spec => spec_tab::COMMANDS,
+            RibbonTab::Research => research_tab::COMMANDS,
+            RibbonTab::Application => application_tab::COMMANDS,
+        }
+    }
 }
 
-/// A command in the ribbon.
+/// A command in the ribbon, from whichever tab holds it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Command {
     OpenProject,
@@ -92,43 +103,14 @@ enum Command {
     Settings,
 }
 
-/// Where a command sits, and whether it stays in the collapsed ribbon.
+/// Where a command sits in its tab, and whether it stays in the collapsed
+/// ribbon.
 struct CommandPlace {
     command: Command,
-    tab: RibbonTab,
     group: &'static str,
     /// Shown, small, in the collapsed ribbon.
     primary: bool,
 }
-
-/// Every command, in the order of their tabs and groups. For now every
-/// command is primary.
-const COMMANDS: [CommandPlace; 4] = [
-    CommandPlace {
-        command: Command::OpenProject,
-        tab: RibbonTab::Project,
-        group: "Project",
-        primary: true,
-    },
-    CommandPlace {
-        command: Command::BuildSpec,
-        tab: RibbonTab::Spec,
-        group: "Build",
-        primary: true,
-    },
-    CommandPlace {
-        command: Command::DarkMode,
-        tab: RibbonTab::Application,
-        group: "Appearance",
-        primary: true,
-    },
-    CommandPlace {
-        command: Command::Settings,
-        tab: RibbonTab::Application,
-        group: "Preferences",
-        primary: true,
-    },
-];
 
 pub struct Ribbon {
     selected_tab: RibbonTab,
@@ -179,82 +161,12 @@ impl Ribbon {
         self.selected_tab = tab;
         cx.notify();
     }
-
-    /// Whether a build is running.
-    pub fn is_building(&self) -> bool {
-        self.building
-    }
-
-    /// Whether Build can run: there is a project and no build is running.
-    pub fn can_build(&self, cx: &App) -> bool {
-        ProjectDirectory::get(cx).is_some() && !self.building
-    }
-
-    pub fn pick_project(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let picked = ProjectDirectory::pick(cx);
-        cx.spawn_in(window, async move |_, cx| {
-            let result = picked.await;
-            cx.update(|window, cx| match result {
-                Ok(Some(dir)) => ProjectDirectory::set(dir, cx),
-                Ok(None) => {}
-                Err(err) => window.push_notification(Notification::error(err.to_string()), cx),
-            })
-            .ok();
-        })
-        .detach();
-    }
-
-    pub fn build(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(dir) = ProjectDirectory::get(cx).filter(|_| !self.building) else {
-            return;
-        };
-        self.building = true;
-        cx.notify();
-
-        let build = piton_build::run(dir, cx);
-        cx.spawn_in(window, async move |this, cx| {
-            let result = build.await;
-            this.update_in(cx, |this, window, cx| {
-                this.building = false;
-                cx.notify();
-                let note = match result {
-                    Ok(outcome) if outcome.success => {
-                        let title = match outcome.files.len() {
-                            1 => "Built 1 file".to_string(),
-                            count => format!("Built {count} files"),
-                        };
-                        let files = outcome.files;
-                        Notification::success("")
-                            .title(title)
-                            .content(move |_, _, _| {
-                                // One line per written file, never wrapped.
-                                gpui_kit::component::v_flex()
-                                    .children(files.iter().map(|file| {
-                                        gpui_kit::component::label::Label::new(file.clone())
-                                            .whitespace_nowrap()
-                                            .truncate()
-                                    }))
-                                    .into_any_element()
-                            })
-                    }
-                    Ok(outcome) => Notification::error(outcome.report).title("Build failed"),
-                    Err(err) => {
-                        Notification::error(err.to_string()).title("Could not run piton build")
-                    }
-                };
-                window.push_notification(note, cx);
-            })
-            .ok();
-        })
-        .detach();
-    }
 }
 
 impl Ribbon {
     /// `command`'s control: large, with its icon above its label, or small,
     /// with its icon beside it, for the collapsed ribbon.
     fn render_command(&self, command: Command, small: bool, cx: &mut Context<Self>) -> AnyElement {
-        let project = ProjectDirectory::get(cx);
         let button = |id: &'static str, icon: IconName, label: SharedString| {
             if small {
                 Button::new(id).ghost().small().icon(icon).label(label)
@@ -269,57 +181,10 @@ impl Ribbon {
             }
         };
         match command {
-            Command::OpenProject => {
-                let (label, tooltip): (SharedString, SharedString) = match &project {
-                    Some(dir) => (
-                        dir.file_name()
-                            .map(|name| name.to_string_lossy().into_owned())
-                            .unwrap_or_default()
-                            .into(),
-                        format!("{}\nOpen a different piton.config.pi", dir.display()).into(),
-                    ),
-                    None => (
-                        "Open Project…".into(),
-                        "Pick a piton.config.pi file; its folder becomes the project".into(),
-                    ),
-                };
-                button("project-directory", IconName::FolderOpen, label)
-                    .tooltip(tooltip)
-                    .on_click(cx.listener(|this, _, window, cx| this.pick_project(window, cx)))
-                    .into_any_element()
-            }
-            Command::BuildSpec => {
-                // Disabled rather than hidden, so it is always found in the
-                // same place, with the tooltip saying why.
-                let tooltip = if project.is_none() {
-                    "Open a project to build its spec"
-                } else if self.building {
-                    "The spec is building"
-                } else {
-                    "Run piton build to compile the spec"
-                };
-                button("build", IconName::Hammer, "Build Spec".into())
-                    .tooltip(tooltip)
-                    .loading(self.building)
-                    .disabled(project.is_none() || self.building)
-                    .on_click(cx.listener(|this, _, window, cx| this.build(window, cx)))
-                    .into_any_element()
-            }
-            Command::DarkMode => {
-                let switch = gpui_kit::component::switch::Switch::new("dark-mode")
-                    .label("Dark mode")
-                    .checked(cx.theme().is_dark())
-                    .on_click(|dark, window, cx| set_dark_mode(*dark, window, cx));
-                if small { switch.small() } else { switch }.into_any_element()
-            }
-            Command::Settings => button("settings", IconName::Settings, "Settings".into())
-                .tooltip_with_action(
-                    "Edit the system prompt each chat tab sends",
-                    &OpenSettings,
-                    None,
-                )
-                .on_click(|_, _, cx| crate::settings_window::open(cx))
-                .into_any_element(),
+            Command::OpenProject => project_tab::open_project(button, cx),
+            Command::BuildSpec => spec_tab::build_spec(self, button, cx),
+            Command::DarkMode => application_tab::dark_mode(small, cx),
+            Command::Settings => application_tab::settings(button),
         }
     }
 }
@@ -360,12 +225,18 @@ impl Render for Ribbon {
             // between one tab's commands and the next.
             let mut row = Vec::new();
             let mut last_tab = None;
-            for place in COMMANDS.iter().filter(|place| place.primary) {
-                if last_tab.is_some_and(|tab| tab != place.tab) {
+            let primary = RibbonTab::ALL.into_iter().flat_map(|tab| {
+                tab.commands()
+                    .iter()
+                    .filter(|place| place.primary)
+                    .map(move |place| (tab, place))
+            });
+            for (tab, place) in primary {
+                if last_tab.is_some_and(|last| last != tab) {
                     // Centred like the controls, rather than stretched.
                     row.push(div().w_px().h(px(16.)).bg(border).into_any_element());
                 }
-                last_tab = Some(place.tab);
+                last_tab = Some(tab);
                 row.push(self.render_command(place.command, true, cx));
             }
             // Lets UI tests find the row; inert in normal builds.
@@ -399,10 +270,7 @@ impl Render for Ribbon {
 
         // The selected tab's commands, gathered into their groups in order.
         let mut groups: Vec<(&'static str, Vec<AnyElement>)> = Vec::new();
-        for place in COMMANDS
-            .iter()
-            .filter(|place| place.tab == self.selected_tab)
-        {
+        for place in self.selected_tab.commands() {
             let element = self.render_command(place.command, false, cx);
             match groups.last_mut() {
                 Some((group, commands)) if *group == place.group => commands.push(element),
@@ -510,19 +378,6 @@ fn group_title(label: &str, color: Hsla, font: &str) -> impl IntoElement {
         .with_transformation(Transformation::rotate(radians(
             -std::f32::consts::FRAC_PI_2,
         )))
-}
-
-/// Switches between light and dark mode, saving the choice.
-pub fn set_dark_mode(dark: bool, window: &mut Window, cx: &mut App) {
-    let mode = if dark {
-        gpui_kit::component::ThemeMode::Dark
-    } else {
-        gpui_kit::component::ThemeMode::Light
-    };
-    if let Err(err) = theme_preference::set(mode, window, cx) {
-        let note = Notification::error(format!("{err:#}")).title("Could not save dark mode");
-        window.push_notification(note, cx);
-    }
 }
 
 /// Whether the user collapsed the ribbon, saved in the platform's per-user

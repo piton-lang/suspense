@@ -12,10 +12,10 @@ concept ScrollColumnConcept:
 
 shape ScrollColumnShape:
     description:
-        A narrow column along the right of the list, with a thin border
-        between them, always shown, whether or not the list has anything to
-        scroll. It is the list's only scrollbar: no scrollbar is laid over the
-        list, or appears only while hovering or scrolling.
+        A narrow column along the right of the list, with a thin border between
+        them, always shown, whether or not the list has anything to scroll. It
+        is the list's only scrollbar: no scrollbar is laid over the list, or
+        appears only while hovering or scrolling.
 
     buttons:
         A square button at the top of the column scrolls the list up a little,
@@ -26,18 +26,37 @@ shape ScrollColumnShape:
         Between the buttons, a track holds a thumb as tall as the share of the
         list in view, and never too short to grab, placed as far down the track
         as the list is scrolled. The thumb is a plain rectangle that fills the
-        track's full width, with no inset and no rounded corners. With nothing to scroll, the thumb fills the
-        track. Pressing the thumb and dragging scrolls the list with it for as
-        long as the button is held, even once the pointer leaves the column,
-        and pressing the track elsewhere moves the thumb there, from where it
-        can be dragged straight away.
+        track's full width, with no inset and no rounded corners. With nothing
+        to scroll, the thumb fills the track. Pressing the thumb and dragging
+        scrolls the list with it for as long as the button is held, even once
+        the pointer leaves the column, and pressing the track elsewhere moves
+        the thumb there, from where it can be dragged straight away.
 
     lockToBottom:
         A list that keeps receiving output, like a task's, adds one more square
-        button below the others that locks the scroll to the bottom. While it
-        is locked, the button shows as selected and the list stays scrolled to
-        the bottom as output arrives. Pressing it again unlocks it. Its tooltip
-        says which it will do.
+        button below the others that locks the scroll to the bottom. While it is
+        locked, the button shows as selected and the list stays scrolled to the
+        bottom as output arrives. Pressing it again unlocks it. Its tooltip says
+        which it will do.
+
+        lockPulse:
+            Whenever the scroll becomes locked, whether by pressing the button
+            or by scrolling to the bottom by hand, a glowing pulse emanates from
+            the lock button once, to confirm it. It is a single, brief
+            confirmation in the manner of Apple's own, not a repeating pulse,
+            which would suggest something still going on.
+
+            The pulse is in the theme's focus ring colour. A soft, blurred glow
+            blooms around the button, quickly, and fades away. At the same time
+            two thin rings ripple out from the button's centre, the second a
+            moment after the first, each starting as a circle the size of the
+            button and growing to nearly three times that, easing out so it
+            slows as it spreads, thinning and fading to nothing as it goes. All
+            of it is over in under a second. It is drawn over whatever is beside
+            the column, but never takes the mouse.
+
+            A list that shows already locked doesn't pulse, and unlocking the
+            scroll while it pulses stops the pulse straight away.
 
         Scrolling the list by hand locks and unlocks it as well: scrolling with
         the mouse wheel or trackpad over the list, pressing the column's up or

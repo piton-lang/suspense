@@ -7,27 +7,30 @@ export scope HistoryListScope:
 
 concept HistoryListConcept:
     pitch:
-        A way back to everything sent before of one kind, such as previous
-        tasks or previous answers: a small row that expands into a list of
-        every one of them.
+        A way back to everything sent before of one kind, such as previous tasks
+        or previous answers: a small row that expands into a list of every one
+        of them.
 
     shape: {HistoryListShape}
 
 shape HistoryListShape:
     description:
-        The same row and list, looking and behaving the same, wherever
-        something sent before can be looked back on. Each use names what it
-        lists, what the row counts, and what the row reads while expanded.
+        The same row and list, looking and behaving the same, wherever something
+        sent before can be looked back on. Each use names what it lists, what
+        the row counts, and what the row reads while expanded.
 
     row:
         A small row, always shown where it is used, with the tab bar's
-        background colour. It reads "No …", "1 …", or "N …" followed by what
-        it counts, beside a chevron, and does nothing until there is anything
-        to list. Clicking it expands the list, and the row then reads what it
-        says to go back; clicking it again closes the list.
+        background colour. It reads "No …", "1 …", or "N …" followed by what it
+        counts, beside a chevron, and does nothing until there is anything to
+        list. Clicking it expands the list, and the row then reads what it says
+        to go back; clicking it again closes the list.
 
     list:
         A scrollable accordion of every item, oldest first, scrolled to the
-        latest when expanded, with a @{ScrollColumnScope}. Each is headed by its status and the first line
-        of its prompt, and opens onto the compiled prompt it was sent as and
-        its task table, as in the @{MessageList}. One item is open at a time.
+        latest when expanded, with a @{ScrollColumnScope}. Each is headed by its
+        status and the first line of its prompt, and opens onto the compiled
+        prompt it was sent as and its task table, as in the @{MessageList}. One
+        item is open at a time. A use can say its tables collapse the steps
+        leading up to the result, as previous answers do; previous tasks show
+        their tables whole.

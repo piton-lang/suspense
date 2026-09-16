@@ -1,0 +1,40 @@
+use /lib
+
+export scope RibbonApplicationTabScope:
+    concept: {RibbonApplicationTabConcept}
+
+concept RibbonApplicationTabConcept:
+    pitch:
+        The ribbon's Application tab: the commands for the application itself,
+        rather than the project.
+
+    shape: {RibbonApplicationTabShape}
+
+shape RibbonApplicationTabShape:
+    description:
+        The Application tab of the ribbon, last of the tabs.
+
+    groups:
+        appearance:
+            An "Appearance" group holds the Dark mode command.
+
+        preferences:
+            A "Preferences" group holds the Settings command.
+
+    commands:
+        darkMode:
+            A "Dark mode" switch, on while the window is in dark mode. Switching
+            it changes the window between light and dark mode straight away, and
+            saves the choice for the user, so the next launch starts in it. A
+            choice that can't be saved shows a notification titled
+            "Could not save dark mode", with why.
+
+            It is primary.
+
+        settings:
+            A "Settings" button with a gear icon. Clicking it opens the settings
+            window, where the system prompt each chat tab sends is edited. Its
+            tooltip says so, and gives its keyboard shortcut, Ctrl+, (Cmd+, on
+            macOS).
+
+            It is primary.

@@ -1,0 +1,37 @@
+use /lib
+
+export scope RibbonSpecTabScope:
+    concept: {RibbonSpecTabConcept}
+
+concept RibbonSpecTabConcept:
+    pitch:
+        The ribbon's Spec tab: the commands for working on the spec.
+
+    shape: {RibbonSpecTabShape}
+
+shape RibbonSpecTabShape:
+    description:
+        The Spec tab of the ribbon.
+
+    groups:
+        build:
+            A "Build" group holds the Build Spec command.
+
+    commands:
+        buildSpec:
+            A "Build Spec" button with a hammer icon. Clicking it runs
+            `piton build` in the project, to compile the spec, and its tooltip
+            says so.
+
+            It is disabled until a project is open, with a tooltip saying to
+            open a project to build its spec, and while the spec is building,
+            when it shows a spinner and its tooltip says the spec is building.
+
+            When the build is over, a notification says how it went. A build
+            that succeeds is titled "Built 1 file" or "Built N files", and lists
+            each file written on a line of its own, never wrapped. A build that
+            fails is titled "Build failed", with what the build reported. When
+            `piton build` can't be run at all, the notification is titled
+            "Could not run piton build", with why.
+
+            It is primary.

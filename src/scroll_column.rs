@@ -6,6 +6,7 @@
 
 use std::cell::Cell;
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -21,6 +22,9 @@ const STEP: Pixels = px(48.);
 
 /// The shortest the thumb gets, so it can always be grabbed.
 const MIN_THUMB: Pixels = px(16.);
+
+/// How long the pulse lasts when the scroll locks.
+const PULSE_TIME: Duration = Duration::from_millis(900);
 
 /// Locks the scroll to the bottom (`true`) or unlocks it (`false`).
 pub type SetLock = Rc<dyn Fn(bool, &mut Window, &mut App)>;
@@ -215,21 +219,181 @@ fn scroll_column(
                 .on_click(scroll_by(-STEP)),
         )
         .when_some(lock, |column, (locked, set_lock)| {
+            let button = square("scroll-lock", IconName::ArrowDownToLine)
+                .selected(locked)
+                .tooltip(if locked {
+                    "Unlock the scroll from the bottom"
+                } else {
+                    "Lock the scroll to the bottom"
+                })
+                .on_click(move |_, window, cx| set_lock(!locked, window, cx))
+                .border_t_1()
+                .border_color(border);
             column.child(
-                square("scroll-lock", IconName::ArrowDownToLine)
-                    .selected(locked)
-                    .tooltip(if locked {
-                        "Unlock the scroll from the bottom"
-                    } else {
-                        "Lock the scroll to the bottom"
-                    })
-                    .on_click(move |_, window, cx| set_lock(!locked, window, cx))
-                    .border_t_1()
-                    .border_color(border),
+                div()
+                    .id(SharedString::from(format!("{id}-scroll-lock-pulse")))
+                    .relative()
+                    .child(pulse(locked, cx))
+                    .child(button),
             )
         });
     // Lets UI tests find the column; inert in normal builds.
     gpui_kit::TestSupportExt::test_support(column).into_any_element()
+}
+
+/// The glowing pulse that emanates from the lock button when the scroll
+/// locks: a soft glow that blooms and fades, and two thin rings that ripple
+/// out, the second just after the first. Drawn behind the button, over
+/// whatever is beside the column, and never taking the mouse.
+fn pulse(locked: bool, cx: &App) -> impl IntoElement {
+    let color = cx.theme().ring;
+    canvas(
+        move |_, window, cx| {
+            let state =
+                window.use_keyed_state("pulse", cx, |_, _| Rc::new(Cell::new(Pulse::default())));
+            let mut pulse = state.read(cx).get();
+            let elapsed = pulse.observe(locked, Instant::now());
+            state.read(cx).set(pulse);
+            if elapsed.is_some() {
+                window.request_animation_frame();
+            }
+            elapsed
+        },
+        move |bounds, elapsed, window, _| {
+            let Some(elapsed) = elapsed else {
+                return;
+            };
+            let frame = PulseFrame::at(elapsed);
+            let center = bounds.center();
+            let side = bounds.size.width.min(bounds.size.height);
+            if frame.glow > 0. {
+                window.paint_drop_shadows(
+                    bounds,
+                    (side / 2.).into(),
+                    &[BoxShadow {
+                        color: color.opacity(0.6 * frame.glow),
+                        offset: point(px(0.), px(0.)),
+                        blur_radius: px(10.),
+                        spread_radius: px(2.) * frame.glow,
+                        inset: false,
+                    }],
+                );
+            }
+            for ring in frame.rings {
+                if ring.opacity <= 0. {
+                    continue;
+                }
+                let diameter = side * ring.scale;
+                let bounds = Bounds::new(
+                    point(center.x - diameter / 2., center.y - diameter / 2.),
+                    size(diameter, diameter),
+                );
+                window.paint_quad(quad(
+                    bounds,
+                    diameter / 2.,
+                    transparent_black(),
+                    px(ring.width),
+                    color.opacity(ring.opacity),
+                    BorderStyle::Solid,
+                ));
+            }
+        },
+    )
+    .absolute()
+    .inset_0()
+}
+
+/// Whether the lock button is pulsing, from how the scroll was locked in the
+/// frames before.
+#[derive(Clone, Copy, Debug, Default)]
+struct Pulse {
+    /// Whether the scroll was locked last frame; `None` before the first.
+    locked: Option<bool>,
+    started: Option<Instant>,
+}
+
+impl Pulse {
+    /// Notes whether the scroll is locked `now`, returning how far into the
+    /// pulse it is while one is under way. Locking starts one; a list first
+    /// shown locked doesn't, and unlocking stops one.
+    fn observe(&mut self, locked: bool, now: Instant) -> Option<Duration> {
+        if locked && self.locked == Some(false) {
+            self.started = Some(now);
+        }
+        if !locked {
+            self.started = None;
+        }
+        self.locked = Some(locked);
+        let elapsed = self
+            .started
+            .map(|started| now.saturating_duration_since(started));
+        let elapsed = elapsed.filter(|elapsed| *elapsed < PULSE_TIME);
+        if elapsed.is_none() {
+            self.started = None;
+        }
+        elapsed
+    }
+}
+
+/// One frame of the pulse.
+#[derive(Debug, PartialEq)]
+struct PulseFrame {
+    /// How strong the glow is, from 0 to 1.
+    glow: f32,
+    rings: [Ring; 2],
+}
+
+/// One of the pulse's rings, sized against the button.
+#[derive(Debug, PartialEq)]
+struct Ring {
+    scale: f32,
+    opacity: f32,
+    width: f32,
+}
+
+impl PulseFrame {
+    /// How long the glow takes to bloom, and then to fade.
+    const BLOOM: f32 = 0.12;
+    const FADE: f32 = 0.5;
+    /// When each ring sets out, and how long it takes to spread.
+    const RING_DELAYS: [f32; 2] = [0., 0.16];
+    const RING_TIME: f32 = 0.7;
+    /// How large a ring grows, against the button.
+    const RING_SCALE: f32 = 2.8;
+
+    fn at(elapsed: Duration) -> Self {
+        let t = elapsed.as_secs_f32();
+        let glow = if t < Self::BLOOM {
+            ease_out_cubic(t / Self::BLOOM)
+        } else {
+            1. - ease_in_out(((t - Self::BLOOM) / Self::FADE).min(1.))
+        };
+        let rings = Self::RING_DELAYS.map(|delay| {
+            let progress = ((t - delay) / Self::RING_TIME).clamp(0., 1.);
+            if t < delay {
+                return Ring {
+                    scale: 1.,
+                    opacity: 0.,
+                    width: 0.,
+                };
+            }
+            let spread = ease_out_quint()(progress);
+            let left = 1. - progress;
+            Ring {
+                scale: 1. + (Self::RING_SCALE - 1.) * spread,
+                opacity: 0.7 * left * left,
+                width: 0.75 + 1.25 * left,
+            }
+        });
+        Self {
+            glow: glow.clamp(0., 1.),
+            rings,
+        }
+    }
+}
+
+fn ease_out_cubic(t: f32) -> f32 {
+    1. - (1. - t.clamp(0., 1.)).powi(3)
 }
 
 /// Where the thumb sits in a track, for a list scrolled as `handle` is.
@@ -290,7 +454,66 @@ mod tests {
         div, point, px, size,
     };
 
-    use super::{Geometry, MIN_THUMB, with_scroll_column};
+    use std::time::{Duration, Instant};
+
+    use super::{Geometry, MIN_THUMB, PULSE_TIME, Pulse, PulseFrame, with_scroll_column};
+
+    /// Locking starts a pulse, which runs out; a list first shown locked
+    /// doesn't pulse, and unlocking stops one under way.
+    #[test]
+    fn locking_pulses_once() {
+        let start = Instant::now();
+        let at = |ms: u64| start + Duration::from_millis(ms);
+
+        let mut shown_locked = Pulse::default();
+        assert_eq!(shown_locked.observe(true, at(0)), None);
+        assert_eq!(shown_locked.observe(true, at(16)), None);
+
+        let mut pulse = Pulse::default();
+        assert_eq!(pulse.observe(false, at(0)), None);
+        assert_eq!(pulse.observe(true, at(100)), Some(Duration::ZERO));
+        assert_eq!(
+            pulse.observe(true, at(400)),
+            Some(Duration::from_millis(300))
+        );
+        assert_eq!(pulse.observe(true, at(100) + PULSE_TIME), None);
+        assert_eq!(pulse.observe(true, at(2000)), None, "it pulsed again");
+
+        let mut stopped = Pulse::default();
+        stopped.observe(false, at(0));
+        assert!(stopped.observe(true, at(10)).is_some());
+        assert_eq!(stopped.observe(false, at(50)), None);
+        assert_eq!(stopped.observe(false, at(60)), None);
+    }
+
+    /// The glow blooms then fades; each ring spreads from the button's size
+    /// as it fades and thins, the second setting out after the first; and
+    /// all of it is gone by the end.
+    #[test]
+    fn pulse_blooms_ripples_and_fades() {
+        let frame = |ms: u64| PulseFrame::at(Duration::from_millis(ms));
+        assert_eq!(frame(0).glow, 0.);
+        assert!(frame(120).glow > 0.99);
+        assert!(frame(400).glow < frame(200).glow);
+        assert!(
+            frame(100).rings[1].opacity == 0.,
+            "the second ring set out with the first"
+        );
+
+        let mut last = frame(0).rings[0].scale;
+        assert!((last - 1.).abs() < 1e-3);
+        for ms in (50..=850).step_by(50) {
+            let ring = &frame(ms).rings[0];
+            assert!(ring.scale >= last, "the ring shrank at {ms}ms");
+            last = ring.scale;
+        }
+        assert!(frame(300).rings[0].opacity < frame(50).rings[0].opacity);
+        assert!(frame(300).rings[0].width < frame(50).rings[0].width);
+
+        let end = PulseFrame::at(PULSE_TIME);
+        assert_eq!(end.glow, 0.);
+        assert!(end.rings.iter().all(|ring| ring.opacity < 0.01), "{end:?}");
+    }
 
     struct TallList {
         scroll: ScrollHandle,

@@ -1,0 +1,17 @@
+
+anchor Prompt_e775f0d1796e6d5d:
+    userPrompt:
+        Oh, we do have a small problem where when a question is in the process of being asked, and so we show kind of the progress rows, those are sitting on top of the layer beneath. So we can't see all the progress of a currently running prompt or task. It should actually shift that up. It's only the full answer or the history of answers that should actually slide up and over the previous contents and dim it. That's a drawer. The others are columns that stack and push content. 
+
+    mode: combined
+
+    systemPrompt:
+        We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec.
+        
+        You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec.
+        
+        Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other.
+        
+        Then build the spec and execute the prompt directly on the code using a unified plan.
+        
+        Make sure that you write both code and spec.

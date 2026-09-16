@@ -26,9 +26,10 @@ shape MessageListShape:
 
     status:
         A task's status is a coloured label that spells it out: "Building" in
-        blue, "Compiling" in cyan, "Running" in yellow, "Done" in green, "Failed" in red, and
-        "Not recorded" in grey for a task from the history with no record of its
-        run. The labels are readable in both light and dark mode.
+        blue, "Compiling" in cyan, "Running" in yellow, "Done" in green,
+        "Failed" in red, and "Not recorded" in grey for a task from the history
+        with no record of its run. The labels are readable in both light and
+        dark mode.
 
     outputTable:
         A task's output is a table with Type, Output, and Status columns, with
@@ -42,8 +43,8 @@ shape MessageListShape:
         WebFetch and WebSearch; "Agent" for Task and Agent; and "Tool" for
         anything else.
 
-        A tool call's status is "running", "done", or "failed", and a call
-        still running when the run ends takes the state the run ended in.
+        A tool call's status is "running", "done", or "failed", and a call still
+        running when the run ends takes the state the run ended in.
 
         Reply text is rendered as markdown, with no border around it. What
         subagents do is left out. If nothing streamed but the harness reports a
@@ -58,9 +59,9 @@ shape MessageListShape:
         Any path inside the project directory is shown relative to it, and the
         project directory itself reads `.`.
 
-        A command is shown whole, as a syntax-highlighted bash block, and a
-        long one is split across lines at `&&`, `||`, `|`, and `;`, one command
-        per line with the chained ones indented. It never splits inside quotes,
+        A command is shown whole, as a syntax-highlighted bash block, and a long
+        one is split across lines at `&&`, `||`, `|`, and `;`, one command per
+        line with the chained ones indented. It never splits inside quotes,
         command substitutions, brackets, comments, or heredocs. Other arguments
         are shown on a single line.
 
@@ -70,16 +71,16 @@ shape MessageListShape:
         Type cell is a skeleton and its Output cell shows the last three lines
         of the harness's raw output: muted, monospace, JSON syntax-highlighted,
         and always three lines tall so the row doesn't jump. Before any output
-        has arrived it reads "Waiting for the harness…". As soon as a row's
-        type is known, its badge is real, and as soon as its text or argument
+        has arrived it reads "Waiting for the harness…". As soon as a row's type
+        is known, its badge is real, and as soon as its text or argument
         arrives, that is shown. While the input of a Files, Edit, Command, Web,
         or Agent call is still arriving, its Output cell shows only a skeleton.
 
     runningSkeleton:
         A skeleton stands in for a currently running task only while there is
         nothing meaningful to show for it. As soon as there is anything
-        meaningful to display for that task in the message list, no skeleton
-        is shown for it at all.
+        meaningful to display for that task in the message list, no skeleton is
+        shown for it at all.
 
     links:
         Links in the compiled prompt and in reply text are clickable. A link to
@@ -94,17 +95,19 @@ shape MessageListShape:
         tab: a subtle red for Code, purple for Chain, and a subtle blue for
         Spec. A task from the history that doesn't say which tab it was sent
         from keeps the tab bar's colour. The queue along the bottom and the
-        previous tasks row along the top both have the same background colour
-        as the tab bar.
+        previous tasks row along the top both have the same background colour as
+        the tab bar.
 
     askDimming:
         While a finished question from the Ask tab is open onto its full task
-        table, a dark shade fades in over the message list to draw attention
-        to it, and fades back out when it is closed or closed down to its row.
-        The shade also shows while the previous answers are expanded on the Ask
-        tab. Questions still running, each a single row, never dim the list.
-        It covers only the message list, not a file open beside it, and doesn't
-        block clicks.
+        table, a dark shade fades in over the message list to draw attention to
+        it, and fades back out when it is closed or closed down to its row. The
+        shade also shows while the previous answers are expanded on the Ask
+        tab: while the answer drawer is open. Question rows in the stack above
+        the tabs, running or finished, never dim the list; they push it up
+        instead. The shade covers all the space above the chat input beneath the
+        drawer: the message list, any file open beside it, and the stack of
+        question rows.
 
     scrolling:
         The latest task's output scrolls with a @{ScrollColumnScope}, with its

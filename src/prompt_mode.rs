@@ -27,7 +27,7 @@
 //! does the message list dim behind it.
 
 use std::cell::Cell;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -101,15 +101,22 @@ const STATUS_WIDTH: Pixels = px(110.);
 const RAW_TAIL_LINES: usize = 3;
 const RAW_LINE_CHARS: usize = 400;
 
-/// The tallest a question's output gets once it has expanded, before it
-/// scrolls.
-const MAX_ASK_OUTPUT_HEIGHT: Pixels = px(320.);
-
-/// How far a question slides up out of the chat input: enough for its single
-/// row while the harness works on it, and for its heading and output once it
-/// has expanded.
+/// How far a question slides up out of the chat input while it is a single
+/// row.
 const ASK_ROW_HEIGHT: Pixels = px(80.);
-const MAX_ASK_HEIGHT: Pixels = px(320. + 80.);
+
+/// The share of the space above the chat input the answer drawer opens to,
+/// and the least and most it can be dragged to.
+const DRAWER_SHARE: f32 = 0.8;
+const MIN_DRAWER_SHARE: f32 = 0.2;
+const MAX_DRAWER_SHARE: f32 = 0.95;
+
+/// The least an open question's table, or the previous answers, gets in the
+/// drawer, however little room the drawer's other rows leave.
+const MIN_DRAWER_FILL: Pixels = px(96.);
+
+/// How tall the strip along the drawer's top edge that resizes it is.
+const DRAWER_HANDLE_HEIGHT: Pixels = px(6.);
 
 /// How a question slides up and expands: critically damped, so it settles
 /// without bouncing.
@@ -119,9 +126,6 @@ const ASK_SPRING: SpringConfig = SpringConfig::new(400., 40., 1.);
 /// it fades there and back: slower than the slide, so the dimming is seen.
 const ASK_DIM: f32 = 0.45;
 const ASK_DIM_SPRING: SpringConfig = SpringConfig::new(120., 22., 1.);
-
-/// How tall the previous answers are once expanded, before they scroll.
-const MAX_ASK_HISTORY_HEIGHT: Pixels = px(360.);
 
 /// Where a previous answer's task index starts in its element ids, apart
 /// from the tasks' and the open questions'.
@@ -618,6 +622,8 @@ struct HistoryList {
     scroll: ScrollHandle,
     /// Counts the times it was expanded.
     opened: usize,
+    /// Its tables collapse the steps leading up to the answer.
+    collapse_steps: bool,
 }
 
 impl HistoryList {
@@ -681,6 +687,7 @@ impl HistoryList {
         tasks: &[PromptTask],
         select: fn(&mut PromptMode) -> &mut HistoryList,
         open_file: &OpenFile,
+        steps_shown: &HashSet<usize>,
         cx: &mut Context<PromptMode>,
     ) -> AnyElement {
         let this = cx.entity().downgrade();
@@ -699,7 +706,14 @@ impl HistoryList {
                                     .gap_3()
                                     .pt_1()
                                     .child(task_prompt(task_ix, task, open_file, cx))
-                                    .child(output_table(task_ix, &task.reply, Some(open_file), cx)),
+                                    .child(output_table(
+                                        task_ix,
+                                        &task.reply,
+                                        Some(open_file),
+                                        self.collapse_steps
+                                            .then(|| steps(task_ix, steps_shown, cx)),
+                                        cx,
+                                    )),
                             )
                         })
                 })
@@ -840,6 +854,13 @@ struct PaneClosing {
     closed: Instant,
 }
 
+/// Dragged by the answer drawer's top edge to resize it.
+struct DrawerResize;
+
+/// What is open in the answer drawer: the question open onto its table, and
+/// which expanding of the previous answers is showing.
+type DrawerContents = (Option<usize>, Option<usize>);
+
 pub struct PromptMode {
     /// Every task sent, oldest first; the last heads the view.
     tasks: Vec<PromptTask>,
@@ -887,6 +908,19 @@ pub struct PromptMode {
     next_ask_id: usize,
     /// The finished question opened onto its whole task table, if any.
     expanded_ask: Option<usize>,
+    /// The answers' tables whose steps were expanded, by task index.
+    steps_shown: HashSet<usize>,
+    /// The share of the space above the chat input the answer drawer takes
+    /// while open; dragging its top edge changes it for the rest of the run.
+    drawer_share: f32,
+    /// What was open in the drawer when it was last dragged; while that is
+    /// still what's open, the drawer follows the drag rather than sliding.
+    drawer_dragged: Option<DrawerContents>,
+    /// The space above the chat input, the whole drawer, and what fills it,
+    /// as last laid out.
+    body_height: Rc<Cell<Pixels>>,
+    drawer_height: Rc<Cell<Pixels>>,
+    drawer_fill_height: Rc<Cell<Pixels>>,
     /// Every question asked before, oldest first: those saved with the
     /// project, and those closed since.
     answers: Vec<PromptTask>,
@@ -942,6 +976,7 @@ impl PromptMode {
                 singular: "previous task",
                 plural: "previous tasks",
                 back: "Back to the latest task",
+                collapse_steps: false,
                 id_base: 0,
                 expanded: false,
                 open: None,
@@ -964,6 +999,12 @@ impl PromptMode {
             asks: Vec::new(),
             next_ask_id: 0,
             expanded_ask: None,
+            steps_shown: HashSet::new(),
+            drawer_share: DRAWER_SHARE,
+            drawer_dragged: None,
+            body_height: Rc::default(),
+            drawer_height: Rc::default(),
+            drawer_fill_height: Rc::default(),
             answers: Vec::new(),
             ask_history: HistoryList {
                 toggle: "ask-history-toggle",
@@ -972,6 +1013,7 @@ impl PromptMode {
                 singular: "previous answer",
                 plural: "previous answers",
                 back: "Back to the questions",
+                collapse_steps: true,
                 id_base: ASK_HISTORY_IX,
                 expanded: false,
                 open: None,
@@ -1813,9 +1855,60 @@ impl PromptMode {
             .find(|ask| ask.id == id && ask.task.reply.is_done())
     }
 
+    /// Whether the steps before the answer in the table for `task_ix` are
+    /// shown, and how to show or hide them.
+    fn steps(&self, task_ix: usize, cx: &Context<Self>) -> Steps {
+        steps(task_ix, &self.steps_shown, cx)
+    }
+
     /// The previous answers are expanded on the Ask tab.
     fn ask_history_shown(&self) -> bool {
         self.on_ask_tab && self.ask_history.expanded
+    }
+
+    fn drawer_contents(&self) -> DrawerContents {
+        (
+            self.expanded().map(|ask| ask.id),
+            self.ask_history_shown().then_some(self.ask_history.opened),
+        )
+    }
+
+    /// Whether the answer drawer is open: a question onto its table, or the
+    /// previous answers expanded.
+    fn drawer_open(&self) -> bool {
+        self.drawer_contents() != (None, None)
+    }
+
+    /// How tall each thing filling the open drawer is: its share of the space
+    /// above the chat input, less what the drawer's other rows take, split
+    /// between the question and the previous answers if both are open.
+    fn drawer_fill(&self) -> Pixels {
+        let (question, answers) = self.drawer_contents();
+        let open = question.iter().count() + answers.iter().count();
+        let body = self.body_height.get();
+        if open == 0 || body <= px(0.) {
+            return px(360.);
+        }
+        let rest = (self.drawer_height.get() - self.drawer_fill_height.get()).max(px(0.));
+        ((body * self.drawer_share - rest) / open as f32).max(MIN_DRAWER_FILL)
+    }
+
+    /// Whether the drawer follows a drag rather than sliding: it was dragged
+    /// while what is open now was open.
+    fn drawer_follows_drag(&self) -> bool {
+        self.drawer_dragged == Some(self.drawer_contents())
+    }
+
+    /// Resizes the open drawer so its top is at `y`, within `body`, the space
+    /// above the chat input.
+    fn drag_drawer(&mut self, y: Pixels, body: Bounds<Pixels>, cx: &mut Context<Self>) {
+        if !self.drawer_open() || body.size.height <= px(0.) {
+            return;
+        }
+        self.drawer_share =
+            ((body.bottom() - y) / body.size.height).clamp(MIN_DRAWER_SHARE, MAX_DRAWER_SHARE);
+        self.drawer_dragged = Some(self.drawer_contents());
+        cx.notify();
     }
 
     /// Closes the question `id`, stopping its run if it is still under way.
@@ -1834,60 +1927,124 @@ impl PromptMode {
     }
 
     /// The questions, stacked above the chat input's tabs, the newest nearest
-    /// them, each sliding up out of the input as it is asked. A question is a
+    /// them, each sliding up out of the input as it is asked and pushing the
+    /// task view up to make room, so nothing of it is hidden. A question is a
     /// single row of its task table: the latest thing the harness did while it
-    /// runs, or its status and first line once it is over. The finished one
-    /// that is open shows its whole table instead, headed by the question.
-    fn render_ask(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+    /// runs, or its status and first line once it is over. On the Ask tab, the
+    /// previous answers' row heads the stack. What is open in the answer
+    /// drawer leaves the stack.
+    fn render_ask_stack(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         if self.asks.is_empty() && !self.on_ask_tab {
             return None;
         }
-        let mut history: Vec<AnyElement> = Vec::new();
-        if self.on_ask_tab {
-            history.push(self.ask_history.render_row(
-                self.answers.len(),
-                !self.answers.is_empty(),
-                |this| &mut this.ask_history,
-                cx,
-            ));
-            if self.ask_history.expanded {
-                let open_file = self.file_opener(cx);
-                let list = self.ask_history.render_list(
-                    &self.answers,
-                    |this| &mut this.ask_history,
-                    &open_file,
-                    cx,
-                );
-                // Slides up each time it is expanded.
-                let height = SpringAnimation::new(ASK_SPRING)
-                    .to(MAX_ASK_HISTORY_HEIGHT)
-                    .from(px(0.));
-                history.push(
-                    v_flex()
-                        .id(("ask-history", self.ask_history.opened))
-                        .overflow_hidden()
-                        .child(list)
-                        .with_spring(
-                            ("ask-history-slide", self.ask_history.opened),
-                            height,
-                            |this, height| this.h(height),
-                        )
-                        .into_any_element(),
-                );
-            }
-        }
         let expanded = self.expanded().map(|ask| ask.id);
+        let history_row =
+            (self.on_ask_tab && !self.ask_history_shown()).then(|| self.render_ask_history_row(cx));
         let cards: Vec<AnyElement> = self
             .asks
             .iter()
-            .map(|ask| self.render_ask_card(ask, expanded == Some(ask.id), cx))
+            .filter(|ask| expanded != Some(ask.id))
+            .map(|ask| self.render_ask_card(ask, false, cx))
             .collect();
+        if history_row.is_none() && cards.is_empty() {
+            return None;
+        }
         let theme = cx.theme();
-        let panel = v_flex()
+        let stack = v_flex()
             .id("ask")
-            // Laid over the bottom of the message list rather than beside it,
-            // so the list neither jumps nor reflows as questions rise, and
-            // takes no clicks or scrolling meant for them.
+            .flex_none()
+            .bg(theme.tab_bar)
+            .border_t_1()
+            .border_color(theme.border)
+            .children(history_row)
+            .children(cards);
+        // Lets UI tests find the questions; inert in normal builds.
+        Some(gpui_kit::TestSupportExt::test_support(stack).into_any_element())
+    }
+
+    fn render_ask_history_row(&self, cx: &mut Context<Self>) -> AnyElement {
+        self.ask_history.render_row(
+            self.answers.len(),
+            !self.answers.is_empty(),
+            |this| &mut this.ask_history,
+            cx,
+        )
+    }
+
+    /// The answer drawer: a finished question open onto its whole table, or
+    /// the previous answers expanded, sliding up out of the chat input over
+    /// the task view and the stack of questions, which dim behind it. Its top
+    /// edge resizes it.
+    fn render_ask_drawer(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.drawer_open() {
+            return None;
+        }
+        let mut history: Vec<AnyElement> = Vec::new();
+        if self.ask_history_shown() {
+            history.push(self.render_ask_history_row(cx));
+            let open_file = self.file_opener(cx);
+            let list = self.ask_history.render_list(
+                &self.answers,
+                |this| &mut this.ask_history,
+                &open_file,
+                &self.steps_shown,
+                cx,
+            );
+            let fill = self.drawer_fill();
+            let list = v_flex()
+                .id(("ask-history", self.ask_history.opened))
+                .flex_none()
+                .overflow_hidden()
+                .on_prepaint({
+                    let filled = self.drawer_fill_height.clone();
+                    move |bounds, _, _| filled.set(filled.get() + bounds.size.height)
+                })
+                .child(list);
+            // Slides up each time it is expanded, unless it is being dragged
+            // to size.
+            history.push(if self.drawer_follows_drag() {
+                list.h(fill).into_any_element()
+            } else {
+                let height = SpringAnimation::new(ASK_SPRING).to(fill).from(px(0.));
+                list.with_spring(
+                    ("ask-history-slide", self.ask_history.opened),
+                    height,
+                    |this, height| this.h(height),
+                )
+                .into_any_element()
+            });
+        }
+        let card = self
+            .expanded()
+            .map(|ask| self.render_ask_card(ask, true, cx));
+        let theme = cx.theme();
+        let ring = theme.ring;
+        let handle = div()
+            .id("ask-drawer-resize")
+            .group("ask-drawer-resize")
+            .absolute()
+            .top(-DRAWER_HANDLE_HEIGHT / 2.)
+            .left_0()
+            .right_0()
+            .h(DRAWER_HANDLE_HEIGHT)
+            .flex()
+            .items_center()
+            .cursor_row_resize()
+            .child(
+                div()
+                    .w_full()
+                    .h(px(2.))
+                    .group_hover("ask-drawer-resize", |line| line.bg(ring)),
+            )
+            .on_drag(DrawerResize, |_, _, _, cx| cx.new(|_| EmptyView));
+        // Lets UI tests find the edge; inert in normal builds.
+        let handle = gpui_kit::TestSupportExt::test_support(handle);
+        let drawer_height = self.drawer_height.clone();
+        self.drawer_fill_height.set(px(0.));
+        let drawer = v_flex()
+            .id("ask-drawer")
+            // Laid over what is beneath rather than beside it, taking no
+            // clicks or scrolling meant for it.
             .absolute()
             .left_0()
             .right_0()
@@ -1897,10 +2054,12 @@ impl PromptMode {
             .bg(theme.tab_bar)
             .border_t_1()
             .border_color(theme.border)
+            .on_prepaint(move |bounds, _, _| drawer_height.set(bounds.size.height))
             .children(history)
-            .children(cards);
-        // Lets UI tests find the questions; inert in normal builds.
-        Some(gpui_kit::TestSupportExt::test_support(panel).into_any_element())
+            .children(card)
+            .child(handle);
+        // Lets UI tests find the drawer; inert in normal builds.
+        Some(gpui_kit::TestSupportExt::test_support(drawer).into_any_element())
     }
 
     fn render_ask_card(&self, ask: &Ask, expanded: bool, cx: &mut Context<Self>) -> AnyElement {
@@ -1938,13 +2097,18 @@ impl PromptMode {
             }
             let output = div()
                 .id(("ask-output", id))
-                .min_h_0()
-                .max_h(MAX_ASK_OUTPUT_HEIGHT)
+                .size_full()
                 .overflow_y_scroll()
                 .track_scroll(&ask.scroll)
                 .px_4()
                 .pb_3()
-                .child(output_table(ASK_IX - id, &task.reply, Some(&open), cx));
+                .child(output_table(
+                    ASK_IX - id,
+                    &task.reply,
+                    Some(&open),
+                    Some(self.steps(ASK_IX - id, cx)),
+                    cx,
+                ));
             // Lets UI tests find the output; inert in normal builds.
             let output = gpui_kit::TestSupportExt::test_support(output);
             let this = cx.entity().downgrade();
@@ -1968,7 +2132,7 @@ impl PromptMode {
                     format!("ask-output-{id}"),
                     &ask.scroll,
                     output,
-                    false,
+                    true,
                     Some((ask.locked, toggle)),
                     cx,
                 ),
@@ -2006,33 +2170,45 @@ impl PromptMode {
             vec![gpui_kit::TestSupportExt::test_support(row).into_any_element()]
         };
 
-        // Each question slides up from nothing; expanding carries on from
-        // wherever its row is.
-        let height = SpringAnimation::new(ASK_SPRING)
-            .to(if expanded {
-                MAX_ASK_HEIGHT
-            } else {
-                ASK_ROW_HEIGHT
-            })
-            .from(px(0.));
         let card = v_flex()
             .id(("ask-card", id))
+            .flex_none()
             // Anchored to the chat input, so it rises out of it rather than
             // unrolling down onto it.
             .justify_end()
             .overflow_hidden()
             .border_t_1()
             .border_color(cx.theme().border)
+            .when(expanded, |card| {
+                let filled = self.drawer_fill_height.clone();
+                card.on_prepaint(move |bounds, _, _| filled.set(filled.get() + bounds.size.height))
+            })
             .children(content);
-        gpui_kit::TestSupportExt::test_support(card)
-            .with_spring(("ask-slide", id), height, |this, height| this.max_h(height))
+        let card = gpui_kit::TestSupportExt::test_support(card);
+        if !expanded {
+            // Each question slides up from nothing, as far as its row.
+            let height = SpringAnimation::new(ASK_SPRING)
+                .to(ASK_ROW_HEIGHT)
+                .from(px(0.));
+            return card
+                .with_spring(("ask-slide", id), height, |this, height| this.max_h(height))
+                .into_any_element();
+        }
+        // Open, it fills the drawer: sliding there from wherever its row is,
+        // unless the drawer is being dragged to size.
+        let fill = self.drawer_fill();
+        if self.drawer_follows_drag() {
+            return card.h(fill).into_any_element();
+        }
+        let height = SpringAnimation::new(ASK_SPRING).to(fill).from(px(0.));
+        card.with_spring(("ask-slide", id), height, |this, height| this.h(height))
             .into_any_element()
     }
 
-    /// A shade over the message list that fades in while a finished question
-    /// is open onto its whole table, drawing the eye to it, and back out once
-    /// it closes. Questions still running, a row each, leave the list
-    /// undimmed. It takes no clicks, so the list stays usable behind it.
+    /// A shade over everything above the chat input that fades in while the
+    /// answer drawer is open over it, drawing the eye to the drawer, and back
+    /// out once it closes. The stack of question rows pushes the list rather
+    /// than covering it, so leaves it undimmed.
     fn render_ask_dim(&self) -> AnyElement {
         let shade = SpringAnimation::new(ASK_DIM_SPRING)
             .to(if self.expanded().is_some() || self.ask_history_shown() {
@@ -2224,6 +2400,8 @@ impl PromptMode {
                 self.tasks.len() - 1,
                 &task.reply,
                 Some(&self.file_opener(cx)),
+                // A task's whole chain is of interest, so none of it collapses.
+                None,
                 cx,
             ));
         // Lets UI tests find the output; inert in normal builds.
@@ -2275,6 +2453,7 @@ impl Render for PromptMode {
                 &self.tasks,
                 |this| &mut this.task_history,
                 &open_file,
+                &self.steps_shown,
                 cx,
             )
         } else {
@@ -2296,14 +2475,9 @@ impl Render for PromptMode {
             .children(self.render_queue(cx));
         // Lets UI tests find the history; inert in normal builds.
         let history = gpui_kit::TestSupportExt::test_support(history);
-        let history = div()
-            .relative()
-            .size_full()
-            .child(history)
-            .child(self.render_ask_dim());
+        let history = div().relative().size_full().child(history);
 
-        // The task view, and any file split off it, sit above the chat input,
-        // with any question rising over them out of it.
+        // The task view, and any file split off it.
         let body = div().relative().flex_1().min_h_0().on_prepaint({
             let body_width = self.body_width.clone();
             move |bounds, _, _| body_width.set(bounds.size.width)
@@ -2438,7 +2612,35 @@ impl Render for PromptMode {
             }
             None => body.child(history),
         };
-        let body = body.children(self.render_ask(cx));
+        // Above the chat input: the task view, pushed up by the stack of
+        // questions beneath it, with the answer drawer sliding up over both
+        // and dimming them.
+        let body = div()
+            .id("prompt-body")
+            .relative()
+            .flex_1()
+            .min_h_0()
+            .on_prepaint({
+                let body_height = self.body_height.clone();
+                move |bounds, _, _| body_height.set(bounds.size.height)
+            })
+            // Dragging the answer drawer's top edge resizes it.
+            .on_drag_move(
+                cx.listener(|this, event: &DragMoveEvent<DrawerResize>, _, cx| {
+                    this.drag_drawer(event.event.position.y, event.bounds, cx)
+                }),
+            )
+            .child(
+                v_flex()
+                    .size_full()
+                    .child(body)
+                    .children(self.render_ask_stack(cx)),
+            )
+            .child(self.render_ask_dim())
+            .children(self.render_ask_drawer(cx));
+        // Lets UI tests find the space above the chat input; inert in normal
+        // builds.
+        let body = gpui_kit::TestSupportExt::test_support(body);
 
         v_flex()
             .size_full()
@@ -2644,6 +2846,7 @@ pub(crate) fn output_table(
     task_ix: usize,
     reply: &Reply,
     open: Option<&OpenFile>,
+    steps: Option<Steps>,
     cx: &App,
 ) -> AnyElement {
     let theme = cx.theme();
@@ -2663,7 +2866,7 @@ pub(crate) fn output_table(
             .child(TableHead::new().w(STATUS_WIDTH).flex_none().child("Status")),
     );
     let project_dir = ProjectDirectory::get(cx);
-    let body = TableBody::new().children(rows.iter().enumerate().map(|(row_ix, row)| {
+    let render_row = |row_ix: usize, row: &OutputRow| {
         let detail = match row {
             OutputRow::Text(text) if text.trim().is_empty() => raw_tail(reply, cx),
             OutputRow::Pending => raw_tail(reply, cx),
@@ -2786,7 +2989,62 @@ pub(crate) fn output_table(
                     .items_start()
                     .children(status),
             )
-    }));
+    };
+
+    // With `steps`, a finished reply's rows up to its last tool call collapse
+    // behind a row that shows or hides them, leaving the answer after them.
+    let collapsed = steps.filter(|_| reply.is_done()).and_then(|steps| {
+        let last_tool = rows
+            .iter()
+            .rposition(|row| matches!(row, OutputRow::Tool(_)))?;
+        (last_tool + 1 < rows.len()).then_some((steps, last_tool + 1))
+    });
+    let body = match collapsed {
+        None => TableBody::new().children(
+            rows.iter()
+                .enumerate()
+                .map(|(row_ix, row)| render_row(row_ix, row)),
+        ),
+        Some((steps, count)) => {
+            let label = match (steps.shown, count) {
+                (false, 1) => "Show 1 step".to_string(),
+                (false, count) => format!("Show {count} steps"),
+                (true, 1) => "Hide 1 step".to_string(),
+                (true, count) => format!("Hide {count} steps"),
+            };
+            let toggle = steps.toggle;
+            let toggle_row = h_flex()
+                .id(("output-steps", task_ix))
+                .w_full()
+                .gap_1p5()
+                .cursor_pointer()
+                .text_color(theme.muted_foreground)
+                .child(Icon::new(if steps.shown {
+                    IconName::ChevronDown
+                } else {
+                    IconName::ChevronRight
+                }))
+                .child(label)
+                .on_click(move |_, window, cx| toggle(window, cx));
+            // Lets UI tests find the row; inert in normal builds.
+            let toggle_row = TableRow::new().child(
+                TableCell::new()
+                    .flex_1()
+                    .min_w_0()
+                    .child(gpui_kit::TestSupportExt::test_support(toggle_row)),
+            );
+            let shown = if steps.shown { 0..count } else { 0..0 };
+            TableBody::new()
+                .child(toggle_row)
+                .children(shown.map(|row_ix| render_row(row_ix, &rows[row_ix])))
+                .children(
+                    rows.iter()
+                        .enumerate()
+                        .skip(count)
+                        .map(|(row_ix, row)| render_row(row_ix, row)),
+                )
+        }
+    };
 
     Table::new()
         // Legible at the window's base font size; tables are otherwise smaller.
@@ -2798,6 +3056,32 @@ pub(crate) fn output_table(
         .child(header)
         .child(body)
         .into_any_element()
+}
+
+/// Whether a table's steps up to its answer are shown, and how to show or
+/// hide them.
+pub(crate) struct Steps {
+    pub shown: bool,
+    pub toggle: Rc<dyn Fn(&mut Window, &mut App)>,
+}
+
+/// The steps of prompt mode's table for `task_ix`, which a click shows or
+/// hides.
+fn steps(task_ix: usize, shown: &HashSet<usize>, cx: &Context<PromptMode>) -> Steps {
+    let this = cx.entity().downgrade();
+    let shown = shown.contains(&task_ix);
+    Steps {
+        shown,
+        toggle: Rc::new(move |_, cx| {
+            this.update(cx, |this, cx| {
+                if !this.steps_shown.remove(&task_ix) {
+                    this.steps_shown.insert(task_ix);
+                }
+                cx.notify();
+            })
+            .ok();
+        }),
+    }
 }
 
 /// A tool call's state in the status column, as an icon and spelled out
@@ -3562,7 +3846,7 @@ mod tests {
         cx.update_window(handle, |_, _, cx| {
             prompt_mode.update(cx, |this, cx| {
                 // Off the Ask tab, there is no row.
-                assert!(this.render_ask(cx).is_none());
+                assert!(this.render_ask_stack(cx).is_none());
                 this.on_ask_tab = true;
                 for text in ["first question", "second question"] {
                     let id = this.push_ask(text.into(), cx);
@@ -3870,11 +4154,15 @@ mod tests {
         }
     }
 
-    /// A question rises over the message list rather than appearing at its
-    /// full height, and the list keeps its size underneath. The shade covers
-    /// exactly the list.
+    /// A running question rises out of the chat input rather than appearing at
+    /// its full height, pushing the message list up so none of it is hidden,
+    /// and undimmed. Opened onto its whole table, it becomes a drawer that
+    /// slides up over the message list instead, and the shade covers all the
+    /// space above the chat input.
     #[gpui_kit::test]
-    async fn a_question_slides_up_over_the_dimmed_message_list(cx: &mut TestAppContext) {
+    async fn a_running_question_pushes_the_list_up_and_an_answer_slides_over_it(
+        cx: &mut TestAppContext,
+    ) {
         let (prompt_mode, handle) = open(cx);
         let find = |id: &'static str, cx: &mut TestAppContext| {
             cx.update_window(handle, |_, window, cx| {
@@ -3884,6 +4172,7 @@ mod tests {
             .unwrap()
         };
         let history = find("history", cx).unwrap();
+        let body = find("prompt-body", cx).unwrap();
         cx.update_window(handle, |_, _, cx| {
             prompt_mode.update(cx, |this, cx| {
                 this.push_ask("What does the chain do?".into(), cx);
@@ -3905,13 +4194,45 @@ mod tests {
                 .any(|&height| height > gpui_kit::px(0.5) && height < settled - gpui_kit::px(0.5)),
             "the question {heights:?} appeared without sliding up"
         );
+        let (list, ask) = (find("history", cx).unwrap(), find("ask", cx).unwrap());
+        assert!(
+            (list.bottom() - ask.top()).abs() <= gpui_kit::px(1.)
+                && (list.size.height + ask.size.height - history.size.height).abs()
+                    <= gpui_kit::px(1.),
+            "the question {ask:?} did not push the message list {list:?} up from {history:?}"
+        );
+        assert!(find("ask-drawer", cx).is_none());
 
-        let dim = find("ask-dim", cx).unwrap();
-        assert_eq!(dim, history, "the shade does not cover the message list");
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.update_ask(
+                    1,
+                    |ask| {
+                        ask.apply(HarnessEvent::TextStarted);
+                        ask.apply(HarnessEvent::TextDelta("It joins Code and Spec.".into()));
+                        ask.end();
+                    },
+                    cx,
+                );
+                this.expand_ask(1, cx);
+            });
+        })
+        .unwrap();
+        std::thread::sleep(Duration::from_millis(600));
+        let drawer = find("ask-drawer", cx).expect("the answer is not in a drawer");
+        let list = find("history", cx).unwrap();
         assert_eq!(
-            find("history", cx).unwrap(),
-            history,
-            "the message list moved for the question"
+            list, history,
+            "the answer pushed the message list instead of covering it"
+        );
+        assert!(
+            drawer.top() < list.bottom(),
+            "the drawer {drawer:?} is not over the list"
+        );
+        assert_eq!(
+            find("ask-dim", cx).unwrap(),
+            body,
+            "the shade does not cover the space"
         );
     }
 
@@ -4002,6 +4323,186 @@ mod tests {
             assert!(window.try_find(("output-row", 1usize)).is_some());
         })
         .unwrap();
+    }
+
+    /// A finished question shows only its answer, with the steps before it
+    /// collapsed behind a row that a click expands and collapses again; a
+    /// task shows its whole chain.
+    #[gpui_kit::test]
+    async fn an_answer_collapses_its_steps_but_a_task_does_not(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        let events = || {
+            [
+                HarnessEvent::TextStarted,
+                HarnessEvent::TextDelta("Let me look.".into()),
+                tool("t1", "Read"),
+                HarnessEvent::ToolFinished {
+                    id: "t1".into(),
+                    is_error: false,
+                },
+                HarnessEvent::TextStarted,
+                HarnessEvent::TextDelta("It joins Code and Spec.".into()),
+            ]
+        };
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let ix = this.push_task("What does the chain do?".into(), cx);
+                for event in events() {
+                    this.apply_event(ix, event, cx);
+                }
+                let id = this.push_ask("What does the chain do?".into(), cx);
+                this.update_ask(
+                    id,
+                    |ask| {
+                        for event in events() {
+                            ask.apply(event);
+                        }
+                        ask.end();
+                    },
+                    cx,
+                );
+                this.expand_ask(id, cx);
+            });
+        })
+        .unwrap();
+        let steps = ("output-steps", super::ASK_IX - 1);
+        let rows = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let within = |window: &mut gpui_kit::Window, id: &'static str| {
+                    let scoped = window.within(id);
+                    (0..3usize)
+                        .filter(|row| scoped.try_find(("output-row", *row)).is_some())
+                        .count()
+                };
+                (
+                    window.try_find(steps).is_some(),
+                    within(window, "ask-drawer"),
+                    within(window, "task-output"),
+                )
+            })
+            .unwrap()
+        };
+        cx.wait_for(handle, Duration::from_secs(2), |window, _| {
+            window.try_find(steps).is_some()
+        })
+        .await;
+
+        let (toggle, answer_rows, task_rows) = rows(cx);
+        assert!(toggle, "the answer has no row for its steps");
+        assert_eq!(answer_rows, 1, "only the answer shows");
+        assert_eq!(task_rows, 3, "the task collapsed its chain");
+
+        let (row, _) = settle(
+            handle,
+            steps,
+            |row, _| row.size.height > gpui_kit::px(0.),
+            cx,
+        );
+        let _ = settle(
+            handle,
+            "ask-drawer",
+            |panel, _| panel.top() <= row.top(),
+            cx,
+        );
+        std::thread::sleep(Duration::from_millis(400));
+        cx.update_window(handle, |_, window, cx| window.click(steps, cx))
+            .unwrap();
+        cx.run_until_parked();
+        let (toggle, answer_rows, _) = rows(cx);
+        assert!(toggle, "expanding the steps took away their row");
+        assert_eq!(answer_rows, 3, "the steps did not expand");
+
+        cx.update_window(handle, |_, window, cx| window.click(steps, cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert_eq!(rows(cx).1, 1, "the steps did not collapse again");
+    }
+
+    /// An open question fills the answer drawer to 80% of the space above the
+    /// chat input; dragging the drawer's top edge resizes it, following the
+    /// pointer, and the size sticks for the next question opened.
+    #[gpui_kit::test]
+    async fn the_answer_drawer_opens_to_most_of_the_space_and_resizes(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                for question in ["What does the chain do?", "And the ribbon?"] {
+                    let id = this.push_ask(question.into(), cx);
+                    this.update_ask(
+                        id,
+                        |ask| {
+                            ask.apply(HarnessEvent::TextStarted);
+                            ask.apply(HarnessEvent::TextDelta("Briefly.".into()));
+                            ask.end();
+                        },
+                        cx,
+                    );
+                }
+                this.expand_ask(1, cx);
+            });
+        })
+        .unwrap();
+        let body = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.find("prompt-body").bounds()
+            })
+            .unwrap()
+        };
+        let share = |panel: Bounds, body: Bounds| panel.size.height / body.size.height;
+
+        let mut last = None;
+        let panel = loop {
+            let (panel, _) = settle(handle, "ask-drawer", |_, _| true, cx);
+            if last == Some(panel) {
+                break panel;
+            }
+            last = Some(panel);
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        let space = body(cx);
+        assert!(
+            (share(panel, space) - 0.8).abs() < 0.02,
+            "the drawer {panel:?} takes {} of {space:?}",
+            share(panel, space)
+        );
+
+        // Dragged to half the space, it follows the pointer straight there.
+        cx.update_window(handle, |_, window, cx| {
+            let edge = window.find("ask-drawer-resize").bounds().center();
+            let to = gpui_kit::point(edge.x, space.top() + space.size.height * 0.5);
+            window.drag(edge, to, cx);
+            window.render_frame(cx);
+            window.render_frame(cx);
+        })
+        .unwrap();
+        let (panel, _) = settle(handle, "ask-drawer", |_, _| true, cx);
+        assert!(
+            (share(panel, space) - 0.5).abs() < 0.02,
+            "dragged, the drawer {panel:?} takes {} of {space:?}",
+            share(panel, space)
+        );
+
+        // Another question opened keeps that size.
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| this.expand_ask(2, cx))
+        })
+        .unwrap();
+        let mut last = None;
+        let panel = loop {
+            let (panel, _) = settle(handle, "ask-drawer", |_, _| true, cx);
+            if last == Some(panel) {
+                break panel;
+            }
+            last = Some(panel);
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        assert!(
+            (share(panel, space) - 0.5).abs() < 0.02,
+            "reopened, the drawer {panel:?} takes {} of {space:?}",
+            share(panel, space)
+        );
     }
 
     /// Questions run at once, a row each, stacked above the tabs with the

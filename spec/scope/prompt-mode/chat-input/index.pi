@@ -32,36 +32,36 @@ shape ChatInputShape:
     tabs:
         overview:
             The input and send button live inside the body of a tab bar, using
-            gpui-kit's default tab styling. There are four tabs, in order:
-            Code, Chain, Spec, and Ask. Code, Spec, and Ask are ordinary tabs.
-            Chain is also a tab, just a small one, because it only shows an
-            icon. All four sit flush against each other with no extra gaps,
-            and no tab has more padding than a normal tab.
+            gpui-kit's default tab styling. There are four tabs, in order: Code,
+            Chain, Spec, and Ask. Code, Spec, and Ask are ordinary tabs. Chain
+            is also a tab, just a small one, because it only shows an icon. All
+            four sit flush against each other with no extra gaps, and no tab has
+            more padding than a normal tab.
 
-            Pressing <Tab> while in the chat input cycles from Code to Chain
-            to Spec to Ask and back to Code, <Shift+Tab> the other way, and
-            focus remains in the chat input.
+            Pressing <Tab> while in the chat input cycles from Code to Chain to
+            Spec to Ask and back to Code, <Shift+Tab> the other way, and focus
+            remains in the chat input.
 
         chain:
-            Chain is a tab with unusual behaviour. It shows an icon rather
-            than a label, reading "Code and Spec" as its tooltip, and
-            selecting it selects both Code and Spec. It never shows a focus
-            outline, and its icon looks evenly spaced between Code and Spec
-            whichever of the two is selected.
+            Chain is a tab with unusual behaviour. It shows an icon rather than
+            a label, reading "Code and Spec" as its tooltip, and selecting it
+            selects both Code and Spec. It never shows a focus outline, and its
+            icon looks evenly spaced between Code and Spec whichever of the two
+            is selected.
 
-            Unselected, it shows a broken chain dimmed to 50% opacity, and
-            sits between Code and Spec like any other tab, overlapping
-            neither of them.
+            Unselected, it shows a broken chain dimmed to 50% opacity, and sits
+            between Code and Spec like any other tab, overlapping neither of
+            them.
 
             Selected, it shows a joined chain at full opacity. Selecting it
-            animates as though it took a margin of -50% of its own width on
-            both its left and right sides: Code and Spec slide together until
-            they meet underneath it, so it ends up sitting on top of both.
-            Deselecting it animates them apart again. While Chain is
-            selected, Code and Spec both show as selected and read as a single
-            unified tab, with no line between them. Chain itself has a
-            transparent background and no left or right borders, so the joined
-            Code and Spec show through underneath it.
+            animates as though it took a margin of -50% of its own width on both
+            its left and right sides: Code and Spec slide together until they
+            meet underneath it, so it ends up sitting on top of both.
+            Deselecting it animates them apart again. While Chain is selected,
+            Code and Spec both show as selected and read as a single unified
+            tab, with no line between them. Chain itself has a transparent
+            background and no left or right borders, so the joined Code and Spec
+            show through underneath it.
 
         help:
             To the right of the tabs, filling the rest of the bar, a line of
@@ -89,23 +89,23 @@ shape ChatInputShape:
             Ask. With Chain selected, Code, Spec, and the body are all purple.
             The colour transitions smoothly whenever the selected tab changes,
             straight from the old tab's colour to the new one's. The tabs wrap
-            around, so pressing <Tab> on Ask fades green straight to Code's
-            red, and <Shift+Tab> on Code fades red straight to Ask's green;
-            neither lights up Chain or Spec on the way.
+            around, so pressing <Tab> on Ask fades green straight to Code's red,
+            and <Shift+Tab> on Code fades red straight to Ask's green; neither
+            lights up Chain or Spec on the way.
 
     systemPrompt:
         The selected tab is the mode a prompt is sent in, and each mode gives
-        the hidden anchor a systemPrompt property alongside its userPrompt.
-        The code location is `codeRoot` and the spec location is `root`, as
-        set in the project's piton.config.pi.
+        the hidden anchor a systemPrompt property alongside its userPrompt. The
+        code location is `codeRoot` and the spec location is `root`, as set in
+        the project's piton.config.pi.
 
         code:
-            We're working on the code located in <code location>. Don't edit
-            the spec located in <spec location>.
+            We're working on the code located in <code location>. Don't edit the
+            spec located in <spec location>.
 
         spec:
-            We're working on the spec located in <spec location>. Don't edit
-            the code located in <code location>.
+            We're working on the spec located in <spec location>. Don't edit the
+            code located in <code location>.
 
         both:
             We're working on both the code located in <code location> and the
@@ -113,45 +113,88 @@ shape ChatInputShape:
 
         ask:
             We're only asking a question about the code located in <code
-            location> and the spec located in <spec location>. Don't edit
-            either of them.
+            location> and the spec located in <spec location>. Don't edit either
+            of them.
 
         A prompt keeps the mode it was sent in while it waits in the queue.
 
     ask:
         Ask is for simply asking a question. A question runs straight away,
-        separately from any Code, Chain, or Spec task, even while the harness
-        is working on one. Any number of questions can be asked, and they all
-        run at the same time; asking another never stops or waits for one
-        already running.
+        separately from any Code, Chain, or Spec task, even while the harness is
+        working on one. Any number of questions can be asked, and they all run
+        at the same time; asking another never stops or waits for one already
+        running.
 
         Each question's progress and results are shown in a task table, as in
         the @{MessageList}. The questions stack directly above the tabs, the
-        newest nearest them, over the bottom of the message list rather than
-        pushing it up, and each slides up out of the chat input with an
-        animation as it is asked. While the harness works on a question, it is
-        a single row showing the latest thing the harness did. A finished
-        question is a row with its status and first line.
+        newest nearest them, in a column that pushes the message list up to make
+        room rather than covering it, so none of a running task's progress is
+        ever hidden behind them. Each slides up out of the chat input with an
+        animation as it is asked, the message list giving way above it. While
+        the harness works on a question, it is a single row showing the latest
+        thing the harness did. A finished question is a row with its status and
+        first line.
 
         Once a question is complete, it opens onto a heading, with its status
-        and first line, above its full task table, which scrolls once it gets
-        tall, with a @{ScrollColumnScope} and its lock to the bottom. Only one question is open at a time: opening another closes the
-        one open back down to its row. Clicking an open question's heading
-        closes it down to its row, and clicking a finished question's row opens
-        it again. Each question has a close button, which removes it and stops
-        it if it is still running, leaving the others running. A closed
-        question becomes a previous answer.
+        and first line, above its full task table, in the answer drawer, which
+        it fills, scrolling once it is taller, with a @{ScrollColumnScope} and
+        its lock to the bottom. Only one question is open at a time: opening
+        another closes the one open back down to its row. An open question
+        leaves the stack for the drawer. Clicking an open question's heading
+        closes it down to its row in the stack, and clicking a finished
+        question's row opens it again. Each question has a close button, which
+        removes it and stops it if it is still running, leaving the others
+        running. A closed question becomes a previous answer.
+
+    answerSteps:
+        For a question, only the answer matters, so the steps leading up to it
+        are collapsed by default wherever a finished question's task table
+        is shown: an open question, and a previous answer. The steps are every
+        row up to and including the harness's last tool call; the answer is the
+        rows after it. In their place, the table's first row reads "Show 1 step"
+        or "Show N steps", muted, beside a right chevron, with the answer
+        beneath it. A single click on that row expands the steps in place, above
+        the answer, and the row then reads "Hide 1 step" or "Hide N steps"
+        beside a down chevron; clicking it again collapses them. Each question's
+        table is expanded or collapsed on its own, and a question closed into
+        the previous answers starts collapsed again.
+
+        A reply with no tool calls, or with nothing after its last one, has
+        nothing to collapse and shows whole. A question still running shows its
+        latest step as usual. Tasks are never collapsed like this, since their
+        whole chain is of interest: see the @{MessageList}.
 
     previousAnswers:
-        Previous answers are a @{HistoryListScope}, shown only while the Ask
-        tab is selected, at the top of the questions stacked above the tabs.
-        It lists every question asked before and closed: those saved with the
+        Previous answers are a @{HistoryListScope}, shown only while the Ask tab
+        is selected, at the top of the questions stacked above the tabs. It
+        lists every question asked before and closed: those saved with the
         project and those closed since. Its row reads "No previous answers",
         "1 previous answer", or "N previous answers", and while expanded,
-        "Back to the questions". Expanded, the list slides up out of the chat
-        input, as questions do, above any questions still open. The questions
-        asked from now on carry on the conversation the latest of them left
-        off.
+        "Back to the questions". Expanded, the row and the list go into the
+        answer drawer, the list sliding up out of the chat input. The questions
+        asked from now on carry on the conversation the latest of them left off.
+
+    answerDrawer:
+        Only a question open onto its task table, or the previous answers
+        expanded, are a drawer. Unlike the stack of question rows, which pushes
+        what is above it, the drawer slides up out of the chat input over
+        everything above it, the message list, any file beside it, and the
+        stack, covering them rather than pushing them, and dims them: see the
+        @{MessageList}. Closing it slides nothing back; the stack and the
+        message list are where they were beneath it.
+
+        The drawer opens to 80% of the height of the space above the chat input
+        by default: the open question's table, or the previous answers list,
+        grows to fill whatever the drawer's other rows leave, rather than
+        stopping at a fixed height. It slides up out of the chat input as it
+        opens.
+
+        While open, the drawer is resizable by dragging its top edge, which
+        shows a resize cursor and a thin highlight when hovered. It follows the
+        pointer exactly, with no slide, and can be dragged from 20% to 95% of
+        that space. The size it is dragged to is kept for as long as the
+        application runs, for every question or list opened afterwards, rather
+        than going back to 80%.
 
     escape:
         Pressing <Escape> while in the chat input takes focus out of the chat
@@ -181,12 +224,12 @@ shape ChatInputShape:
 
         trigger:
             A mention starts at `/` or `@` at the start of the input or after
-            whitespace, so paths and email addresses never open it, and an at sign
-            followed by an opening curly brace is still a Piton reference. Completions are
-            requested after typing the `/` or `@`, and after each letter,
-            digit, hyphen, underscore, or colon of the name that follows. Only
-            inside a mention are a slash or a hyphen a trigger; outside of one
-            they never reach the @{LSP}.
+            whitespace, so paths and email addresses never open it, and an at
+            sign followed by an opening curly brace is still a Piton reference.
+            Completions are requested after typing the `/` or `@`, and after
+            each letter, digit, hyphen, underscore, or colon of the name that
+            follows. Only inside a mention are a slash or a hyphen a trigger;
+            outside of one they never reach the @{LSP}.
 
         offered:
             Skills and commands are those of the selected
