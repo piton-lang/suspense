@@ -1,6 +1,7 @@
 //! Harness integration: sends a compiled prompt to a local coding harness as a
 //! one-off run (`claude -p`) in the project directory, streaming what it does
-//! as it does it.
+//! as it does it. A run can resume the conversation of an earlier one, so the
+//! harness keeps its context between prompts.
 
 use std::io::{BufRead as _, BufReader, Write as _};
 use std::path::{Path, PathBuf};
@@ -17,6 +18,8 @@ const HARNESS_COMMAND: &str = "claude";
 /// Something the harness did, in the order it happened.
 #[derive(Debug, PartialEq)]
 pub enum HarnessEvent {
+    /// The conversation the run is part of, which a later run can resume.
+    Session(String),
     /// A raw line of the harness's output, sent before the events parsed
     /// from it.
     Output(String),
@@ -44,16 +47,25 @@ pub enum HarnessEvent {
 }
 
 /// Runs the harness once with `prompt`, and `system_prompt` appended to its
-/// own system prompt, streaming its events. The run is stopped once the
-/// receiver is dropped.
+/// own system prompt, streaming its events. With `resume`, a session reported
+/// by an earlier run, the run continues that conversation. The run is stopped
+/// once the receiver is dropped.
 pub fn send(
     prompt: String,
     system_prompt: Option<String>,
+    resume: Option<String>,
     project_dir: PathBuf,
 ) -> mpsc::UnboundedReceiver<HarnessEvent> {
     let (tx, rx) = mpsc::unbounded();
     std::thread::spawn(move || {
-        if let Err(err) = run(&prompt, system_prompt.as_deref(), &project_dir, &tx) {
+        let result = run(
+            &prompt,
+            system_prompt.as_deref(),
+            resume.as_deref(),
+            &project_dir,
+            &tx,
+        );
+        if let Err(err) = result {
             tx.unbounded_send(HarnessEvent::Failed(format!("{err:#}")))
                 .ok();
         }
@@ -64,6 +76,7 @@ pub fn send(
 fn run(
     prompt: &str,
     system_prompt: Option<&str>,
+    resume: Option<&str>,
     project_dir: &Path,
     tx: &mpsc::UnboundedSender<HarnessEvent>,
 ) -> Result<()> {
@@ -77,7 +90,14 @@ fn run(
         "stream-json",
         "--verbose",
         "--include-partial-messages",
+        // A resumed conversation otherwise keeps the system prompt of its
+        // first run, and each prompt's own must apply, as its mode may differ.
+        "--system-prompt-snapshot",
+        "off",
     ]);
+    if let Some(session) = resume {
+        command.args(["--resume", session]);
+    }
     if let Some(system_prompt) = system_prompt {
         command.args(["--append-system-prompt", system_prompt]);
     }
@@ -167,6 +187,12 @@ pub fn parse(event: &Value) -> Vec<HarnessEvent> {
     }
 
     match str_at(event, "/type").as_deref() {
+        Some("system") if str_at(event, "/subtype").as_deref() == Some("init") => {
+            str_at(event, "/session_id")
+                .map(HarnessEvent::Session)
+                .into_iter()
+                .collect()
+        }
         Some("stream_event") => {
             let inner = &event["event"];
             match str_at(inner, "/type").as_deref() {
@@ -300,6 +326,7 @@ mod tests {
         assert_eq!(
             events,
             [
+                HarnessEvent::Session("s".into()),
                 HarnessEvent::ToolStarted {
                     id: "t1".into(),
                     name: "Read".into()

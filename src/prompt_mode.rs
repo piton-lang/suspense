@@ -18,6 +18,13 @@
 //!
 //! Every task is saved with the project too (see [`crate::prompt_history`]),
 //! and opening the project brings back the tasks sent before.
+//!
+//! A question asked from the Ask tab is not one of those tasks: it runs
+//! straight away, beside any task the harness is working on, and never
+//! queues. It slides up out of the chat input, above its tabs and over the
+//! message list, which dims behind it, as a single row of its task table
+//! while the harness works on it, expanding into the whole table once it is
+//! over.
 
 use std::cell::Cell;
 use std::collections::VecDeque;
@@ -31,6 +38,8 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::ElementExt as _;
 use gpui_kit::component::accordion::Accordion;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::highlighter::{HighlightTheme, SyntaxHighlighter};
+use gpui_kit::component::input::Rope;
 use gpui_kit::component::label::Label;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::resizable::{ResizableState, h_resizable, resizable_panel};
@@ -53,6 +62,7 @@ use crate::file_view::{CloseFile, FileView, OpenDefinition};
 use crate::harness::{self, HarnessEvent};
 use crate::hidden_anchor::{self, HiddenAnchor};
 use crate::markdown;
+use crate::piton_lsp::PitonSession;
 use crate::project_directory::ProjectDirectory;
 use crate::prompt_history::{self, RunRecord, SavedPrompt};
 use crate::prompt_queue::{self, QueuedPrompt};
@@ -79,6 +89,28 @@ const STATUS_WIDTH: Pixels = px(110.);
 /// that has yet to arrive, and how much of each line is kept.
 const RAW_TAIL_LINES: usize = 3;
 const RAW_LINE_CHARS: usize = 400;
+
+/// The tallest a question's output gets once it has expanded, before it
+/// scrolls.
+const MAX_ASK_OUTPUT_HEIGHT: Pixels = px(320.);
+
+/// How far a question slides up out of the chat input: enough for its single
+/// row while the harness works on it, and for its heading and output once it
+/// has expanded.
+const ASK_ROW_HEIGHT: Pixels = px(80.);
+const MAX_ASK_HEIGHT: Pixels = px(320. + 80.);
+
+/// How a question slides up and expands: critically damped, so it settles
+/// without bouncing.
+const ASK_SPRING: SpringConfig = SpringConfig::new(400., 40., 1.);
+
+/// How dark the message list gets behind an open question, and how quickly
+/// it fades there and back: slower than the slide, so the dimming is seen.
+const ASK_DIM: f32 = 0.45;
+const ASK_DIM_SPRING: SpringConfig = SpringConfig::new(120., 22., 1.);
+
+/// Stands in for a question's task index in its element ids.
+const ASK_IX: usize = usize::MAX;
 
 /// A prompt in the queue. Its hidden anchor is resolved and saved in the
 /// background just after it is queued; until then it cannot be sent.
@@ -326,6 +358,20 @@ impl ToolKind {
         }
     }
 
+    /// What stands in for a call's input while it streams in, for a kind whose
+    /// raw output would only be noise until the input is known. A tool of no
+    /// known kind has none, and shows the raw output instead.
+    fn pending_input(self) -> Option<&'static str> {
+        match self {
+            Self::Read => Some("Choosing what to read…"),
+            Self::Edit => Some("Writing the edit…"),
+            Self::Command => Some("Writing the command…"),
+            Self::Web => Some("Preparing the request…"),
+            Self::Agent => Some("Briefing the agent…"),
+            Self::Other => None,
+        }
+    }
+
     fn color(self) -> ColorName {
         match self {
             Self::Read => ColorName::Sky,
@@ -447,6 +493,7 @@ impl Reply {
                 self.settle_tools(ToolState::Failed);
                 return Some(error);
             }
+            HarnessEvent::Session(_) => {}
         }
         None
     }
@@ -514,6 +561,53 @@ impl Reply {
     }
 }
 
+/// A conversation with the harness, which later runs in the same project
+/// resume so the harness keeps its context.
+#[derive(Clone)]
+struct Session {
+    project_dir: PathBuf,
+    id: String,
+}
+
+impl Session {
+    /// The conversation to resume from `session`, if it is `project_dir`'s.
+    fn resume(session: &Option<Self>, project_dir: &Path) -> Option<String> {
+        session
+            .as_ref()
+            .filter(|session| session.project_dir == project_dir)
+            .map(|session| session.id.clone())
+    }
+
+    /// Forgets `session` if it is still `id`, which the harness could not
+    /// resume, so the next run starts a new conversation.
+    fn forget(session: &mut Option<Self>, id: &str) {
+        if session.as_ref().is_some_and(|session| session.id == id) {
+            *session = None;
+        }
+    }
+
+    /// The latest conversation in a project's history.
+    fn latest(history: &[SavedPrompt], project_dir: &Path) -> Option<Self> {
+        let id = history.iter().rev().find_map(|saved| {
+            saved
+                .record
+                .as_ref()?
+                .output
+                .iter()
+                .flat_map(harness::parse)
+                .filter_map(|event| match event {
+                    HarnessEvent::Session(id) => Some(id),
+                    _ => None,
+                })
+                .last()
+        })?;
+        Some(Self {
+            project_dir: project_dir.to_path_buf(),
+            id,
+        })
+    }
+}
+
 pub struct PromptMode {
     /// Every task sent, oldest first; the last heads the view.
     tasks: Vec<PromptTask>,
@@ -547,6 +641,16 @@ pub struct PromptMode {
     /// The width the task view and any file share, as last laid out.
     body_width: Rc<Cell<Pixels>>,
     _pending: Task<()>,
+    /// The conversation the tasks share, each resuming the last.
+    session: Option<Session>,
+    /// The question asked from the Ask tab, run apart from the tasks.
+    ask: Option<PromptTask>,
+    /// Counts the questions asked, so a replaced one's run changes nothing.
+    ask_run: usize,
+    ask_scroll: ScrollHandle,
+    _ask_pending: Task<()>,
+    /// The conversation questions share, apart from the tasks'.
+    ask_session: Option<Session>,
     _file_subscriptions: Vec<Subscription>,
     _subscriptions: Vec<Subscription>,
 }
@@ -587,6 +691,12 @@ impl PromptMode {
             file_split: cx.new(|_| ResizableState::default()),
             body_width: Rc::default(),
             _pending: Task::ready(()),
+            session: None,
+            ask: None,
+            ask_run: 0,
+            ask_scroll: ScrollHandle::new(),
+            _ask_pending: Task::ready(()),
+            ask_session: None,
             _file_subscriptions: Vec::new(),
             _subscriptions: subscriptions,
         };
@@ -595,9 +705,10 @@ impl PromptMode {
         this
     }
 
-    /// Whether the harness is working on a prompt, compiling or running it.
+    /// Whether the harness is working on a prompt or a question, compiling or
+    /// running it.
     pub fn is_working(&self) -> bool {
-        self.working
+        self.working || self.ask.as_ref().is_some_and(|ask| ask.status.is_active())
     }
 
     #[cfg(test)]
@@ -740,7 +851,8 @@ impl PromptMode {
         cx.notify();
     }
 
-    /// Sends `text` in `mode` now if the harness is free, or queues it.
+    /// Sends `text` in `mode` now if the harness is free, or queues it. A
+    /// question is always asked now.
     fn send(&mut self, text: String, mode: SendMode, window: &mut Window, cx: &mut Context<Self>) {
         if ProjectDirectory::get(cx).is_none() {
             window.push_notification(
@@ -750,7 +862,9 @@ impl PromptMode {
             );
             return;
         }
-        if self.working {
+        if mode == SendMode::Ask {
+            self.ask(text, cx);
+        } else if self.working {
             self.enqueue(text, mode, window, cx);
         } else {
             self.start(text, Sending::Now(mode), cx);
@@ -793,19 +907,24 @@ impl PromptMode {
             return;
         };
         let load = cx.background_spawn(async move {
-            prompt_history::load(&project_dir)
+            let history = prompt_history::load(&project_dir);
+            // Tasks sent now carry on the conversation the history left off.
+            let session = Session::latest(&history, &project_dir);
+            let tasks = history
                 .into_iter()
                 .map(PromptTask::restore)
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>();
+            (tasks, session)
         });
         self._history_load = cx.spawn(async move |this, cx| {
-            let tasks = load.await;
+            let (tasks, session) = load.await;
             this.update(cx, |this, cx| {
                 if this.working {
                     this.history_stale = true;
                     return;
                 }
                 this.tasks = tasks;
+                this.session = session;
                 this.open_task = None;
                 this.output_scroll.set_offset(point(px(0.), px(0.)));
                 cx.notify();
@@ -848,11 +967,7 @@ impl PromptMode {
         let save = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
-                let mut anchor = match lsp {
-                    Some(lsp) => lsp.anchor_for(&text)?,
-                    None => HiddenAnchor::random(),
-                };
-                anchor.system_prompt = Some(hidden_anchor::system_prompt(mode, &project_dir)?);
+                let anchor = resolve_anchor(&text, mode, lsp, &project_dir)?;
                 prompt_queue::add(anchor, text, &project_dir)
             }
         });
@@ -975,6 +1090,7 @@ impl PromptMode {
         self.chat_input
             .update(cx, |input, cx| input.set_busy(true, cx));
 
+        let resume = Session::resume(&self.session, &project_dir);
         let lsp = self.chat_input.read(cx).lsp();
         let compile = cx.background_spawn({
             let project_dir = project_dir.clone();
@@ -985,18 +1101,7 @@ impl PromptMode {
                         prompt_queue::remove(&queued.file)?;
                         queued.anchor
                     }
-                    // Without `piton lsp` nothing is imported, and any spec
-                    // name the prompt uses fails to compile with an explicit
-                    // error.
-                    Sending::Now(mode) => {
-                        let mut anchor = match lsp {
-                            Some(lsp) => lsp.anchor_for(&text)?,
-                            None => HiddenAnchor::random(),
-                        };
-                        anchor.system_prompt =
-                            Some(hidden_anchor::system_prompt(mode, &project_dir)?);
-                        anchor
-                    }
+                    Sending::Now(mode) => resolve_anchor(&text, mode, lsp, &project_dir)?,
                 };
                 let file = hidden_anchor::save(&anchor, &text, &project_dir)?;
                 let compiled = hidden_anchor::compile(&anchor, &file, &project_dir);
@@ -1017,8 +1122,12 @@ impl PromptMode {
                 Ok((anchor, compiled)) => {
                     let prompt = compiled.user_prompt;
                     record.user_prompt = Some(prompt.clone());
-                    let mut events =
-                        harness::send(prompt.clone(), compiled.system_prompt, project_dir);
+                    let mut events = harness::send(
+                        prompt.clone(),
+                        compiled.system_prompt,
+                        resume.clone(),
+                        project_dir.clone(),
+                    );
                     if this
                         .update(cx, |this, cx| {
                             this.show_compiled(task_ix, anchor, prompt, cx)
@@ -1027,14 +1136,28 @@ impl PromptMode {
                     {
                         return;
                     }
+                    let mut started = false;
                     while let Some(event) = events.next().await {
                         record.note(&event);
                         if this
-                            .update(cx, |this, cx| this.apply_event(task_ix, event, cx))
+                            .update(cx, |this, cx| {
+                                if let HarnessEvent::Session(id) = &event {
+                                    started = true;
+                                    this.session = Some(Session {
+                                        project_dir: project_dir.clone(),
+                                        id: id.clone(),
+                                    });
+                                }
+                                this.apply_event(task_ix, event, cx)
+                            })
                             .is_err()
                         {
                             return;
                         }
+                    }
+                    if let Some(resume) = resume.filter(|_| !started) {
+                        this.update(cx, |this, _| Session::forget(&mut this.session, &resume))
+                            .ok();
                     }
                 }
                 Err(err) => {
@@ -1083,6 +1206,220 @@ impl PromptMode {
             })
             .ok();
         });
+    }
+
+    /// Asks `text` straight away, beside any task the harness is working on,
+    /// in place of any question still open. It is saved apart from the
+    /// history, so it never becomes one of the tasks.
+    fn ask(&mut self, text: String, cx: &mut Context<Self>) {
+        let Some(project_dir) = ProjectDirectory::get(cx) else {
+            return;
+        };
+        let run = self.push_ask(text.clone().into(), cx);
+        let resume = Session::resume(&self.ask_session, &project_dir);
+        let lsp = self.chat_input.read(cx).lsp();
+        let compile = cx.background_spawn({
+            let project_dir = project_dir.clone();
+            async move {
+                let anchor = resolve_anchor(&text, SendMode::Ask, lsp, &project_dir)?;
+                let file = hidden_anchor::save_ask(&anchor, &text, &project_dir)?;
+                let compiled = hidden_anchor::compile(&anchor, &file, &project_dir)?;
+                anyhow::Ok((anchor.name().to_string(), compiled))
+            }
+        });
+
+        // Replacing the run drops any earlier question's, which stops it.
+        self._ask_pending = cx.spawn(async move |this, cx| {
+            match compile.await {
+                Ok((anchor, compiled)) => {
+                    let prompt = compiled.user_prompt;
+                    let mut events = harness::send(
+                        prompt.clone(),
+                        compiled.system_prompt,
+                        resume.clone(),
+                        project_dir.clone(),
+                    );
+                    let compiled = Compiled {
+                        anchor: anchor.into(),
+                        markdown: prompt,
+                    };
+                    if this
+                        .update(cx, |this, cx| {
+                            this.update_ask(run, |ask| ask.set_compiled(compiled), cx)
+                        })
+                        .is_err()
+                    {
+                        return;
+                    }
+                    let mut started = false;
+                    while let Some(event) = events.next().await {
+                        if this
+                            .update(cx, |this, cx| {
+                                if let HarnessEvent::Session(id) = &event {
+                                    started = true;
+                                    this.ask_session = Some(Session {
+                                        project_dir: project_dir.clone(),
+                                        id: id.clone(),
+                                    });
+                                }
+                                this.update_ask(run, |ask| ask.apply(event), cx)
+                            })
+                            .is_err()
+                        {
+                            return;
+                        }
+                    }
+                    if let Some(resume) = resume.filter(|_| !started) {
+                        this.update(cx, |this, _| {
+                            Session::forget(&mut this.ask_session, &resume)
+                        })
+                        .ok();
+                    }
+                }
+                Err(err) => {
+                    this.update(cx, |this, cx| {
+                        this.update_ask(run, |ask| ask.fail(format!("{err:#}")), cx)
+                    })
+                    .ok();
+                }
+            }
+            this.update(cx, |this, cx| this.update_ask(run, PromptTask::end, cx))
+                .ok();
+        });
+    }
+
+    /// Opens a question for `text`, compiling, in place of any other.
+    /// Returns its run.
+    fn push_ask(&mut self, text: SharedString, cx: &mut Context<Self>) -> usize {
+        self.ask_run += 1;
+        self.ask = Some(PromptTask::new(text));
+        self.ask_scroll.set_offset(point(px(0.), px(0.)));
+        cx.notify();
+        self.ask_run
+    }
+
+    /// Updates the open question, if it is still the one of `run`.
+    fn update_ask(
+        &mut self,
+        run: usize,
+        update: impl FnOnce(&mut PromptTask),
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(ask) = self.ask.as_mut().filter(|_| self.ask_run == run) {
+            update(ask);
+            cx.notify();
+        }
+    }
+
+    /// Closes the question, stopping its run if it is still under way.
+    fn close_ask(&mut self, cx: &mut Context<Self>) {
+        self.ask = None;
+        self.ask_run += 1;
+        self._ask_pending = Task::ready(());
+        cx.notify();
+    }
+
+    /// The open question, sliding up out of the chat input above its tabs.
+    /// While the harness works on it, its task table is a single row: the
+    /// latest thing the harness did. Once it is over, it expands into the
+    /// whole table, headed by the question.
+    fn render_ask(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let ask = self.ask.as_ref()?;
+        let done = ask.reply.is_done();
+        let close = Button::new("close-ask")
+            .ghost()
+            .xsmall()
+            .icon(IconName::X)
+            .tooltip(if done { "Close" } else { "Stop and close" })
+            .on_click(cx.listener(|this, _, _, cx| this.close_ask(cx)));
+        let content: Vec<AnyElement> = if done {
+            let open = self.file_opener(cx);
+            let heading = h_flex()
+                .flex_none()
+                .gap_3()
+                .px_4()
+                .py_1p5()
+                .child(div().flex_none().child(task_title(ASK_IX, ask, cx)))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .child(first_line(&ask.text)),
+                )
+                .child(close);
+            let output = div()
+                .id("ask-output")
+                .min_h_0()
+                .max_h(MAX_ASK_OUTPUT_HEIGHT)
+                .overflow_y_scroll()
+                .track_scroll(&self.ask_scroll)
+                .px_4()
+                .pb_3()
+                .child(output_table(ASK_IX, &ask.reply, Some(&open), cx));
+            vec![
+                heading.into_any_element(),
+                // Lets UI tests find the output; inert in normal builds.
+                gpui_kit::TestSupportExt::test_support(output).into_any_element(),
+            ]
+        } else {
+            let row = h_flex()
+                .id("ask-row")
+                .flex_none()
+                .gap_2()
+                .px_4()
+                .py_1p5()
+                .child(div().flex_1().min_w_0().child(latest_row(&ask.reply, cx)))
+                .child(close);
+            // Lets UI tests find the row; inert in normal builds.
+            vec![gpui_kit::TestSupportExt::test_support(row).into_any_element()]
+        };
+
+        let theme = cx.theme();
+        // Each question slides up from nothing; expanding carries on from
+        // wherever the row is.
+        let height = SpringAnimation::new(ASK_SPRING)
+            .to(if done { MAX_ASK_HEIGHT } else { ASK_ROW_HEIGHT })
+            .from(px(0.));
+        let panel = v_flex()
+            .id("ask")
+            // Laid over the bottom of the message list rather than beside it,
+            // so the list neither jumps nor reflows as the question rises,
+            // and takes no clicks or scrolling meant for the question.
+            .absolute()
+            .left_0()
+            .right_0()
+            .bottom_0()
+            .occlude()
+            // Anchored to the chat input, so it rises out of it rather than
+            // unrolling down onto it.
+            .justify_end()
+            .overflow_hidden()
+            .bg(theme.tab_bar)
+            .border_t_1()
+            .border_color(theme.border)
+            .children(content);
+        let panel = gpui_kit::TestSupportExt::test_support(panel)
+            .with_spring(("ask-slide", self.ask_run), height, |this, height| {
+                this.max_h(height)
+            });
+        Some(panel.into_any_element())
+    }
+
+    /// A shade over the message list that fades in while a question is open,
+    /// drawing the eye to it, and back out once it closes. It takes no
+    /// clicks, so the list stays usable behind it.
+    fn render_ask_dim(&self) -> AnyElement {
+        let shade = SpringAnimation::new(ASK_DIM_SPRING)
+            .to(if self.ask.is_some() { ASK_DIM } else { 0. })
+            .from(0.);
+        let dim = div().id("ask-dim").absolute().inset_0().bg(black());
+        // Lets UI tests find the shade; inert in normal builds.
+        gpui_kit::TestSupportExt::test_support(dim)
+            .with_spring("ask-dim", shade, |this, shade| {
+                this.opacity(shade.clamp(0., 1.))
+            })
+            .into_any_element()
     }
 
     /// The small row above the header that expands it into the list of every
@@ -1216,7 +1553,6 @@ impl PromptMode {
                     let id = item.id;
                     let row = h_flex()
                         .id(("queued-prompt", ix))
-                        .items_start()
                         .gap_2()
                         .child(
                             div()
@@ -1233,7 +1569,7 @@ impl PromptMode {
                                 .child(item.text.clone()),
                         )
                         .when(item.saved.is_none(), |row| {
-                            row.child(div().flex_none().mt_0p5().child(Spinner::new().small()))
+                            row.child(div().flex_none().child(Spinner::new().small()))
                         })
                         .child(
                             Button::new(("cancel-queued", ix))
@@ -1369,8 +1705,14 @@ impl Render for PromptMode {
             .children(self.render_queue(cx));
         // Lets UI tests find the history; inert in normal builds.
         let history = gpui_kit::TestSupportExt::test_support(history);
+        let history = div()
+            .relative()
+            .size_full()
+            .child(history)
+            .child(self.render_ask_dim());
 
-        // The task view, and any file split off it, sit above the chat input.
+        // The task view, and any file split off it, sit above the chat input,
+        // with any question rising over them out of it.
         let body = div().relative().flex_1().min_h_0().on_prepaint({
             let body_width = self.body_width.clone();
             move |bounds, _, _| body_width.set(bounds.size.width)
@@ -1395,6 +1737,7 @@ impl Render for PromptMode {
             }
             None => body.child(history),
         };
+        let body = body.children(self.render_ask(cx));
 
         v_flex()
             .size_full()
@@ -1425,6 +1768,33 @@ fn markdown_view(
         }
         None => view,
     }
+}
+
+/// The hidden anchor `text` is sent as in `mode`: importing what `piton lsp`
+/// resolved for it, with the mode's system prompt. Without `piton lsp`
+/// nothing is imported, and any spec name the prompt uses fails to compile
+/// with an explicit error.
+fn resolve_anchor(
+    text: &str,
+    mode: SendMode,
+    lsp: Option<Arc<PitonSession>>,
+    project_dir: &Path,
+) -> Result<HiddenAnchor> {
+    let mut anchor = match lsp {
+        Some(lsp) => lsp.anchor_for(text)?,
+        None => HiddenAnchor::random(),
+    };
+    anchor.system_prompt = Some(hidden_anchor::system_prompt(mode, project_dir)?);
+    Ok(anchor)
+}
+
+/// The first line of `text` with anything in it.
+fn first_line(text: &str) -> SharedString {
+    text.lines()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or_default()
+        .to_string()
+        .into()
 }
 
 /// `code` as a fenced markdown code block, its fence longer than any run of
@@ -1530,20 +1900,13 @@ fn task_prompt(ix: usize, task: &PromptTask, open: &OpenFile, cx: &App) -> AnyEl
 /// A task in the expanded list, on one line: its title, then the start of its
 /// prompt as typed.
 fn task_summary(ix: usize, task: &PromptTask, cx: &App) -> AnyElement {
-    let first_line: SharedString = task
-        .text
-        .lines()
-        .find(|line| !line.trim().is_empty())
-        .unwrap_or_default()
-        .to_string()
-        .into();
     let summary = h_flex()
         .id(("history-task", ix))
         .flex_1()
         .min_w_0()
         .gap_3()
         .child(div().flex_none().child(task_title(ix, task, cx)))
-        .child(div().flex_1().min_w_0().truncate().child(first_line));
+        .child(div().flex_1().min_w_0().truncate().child(first_line(&task.text)));
     // Lets UI tests find the task; inert in normal builds.
     gpui_kit::TestSupportExt::test_support(summary).into_any_element()
 }
@@ -1610,6 +1973,13 @@ pub(crate) fn output_table(
                             code_block("bash", &shell_format::format_command(&command)),
                         ))
                         .into_any_element(),
+                    // A known tool whose input is on its way shows only a
+                    // skeleton, with nothing else beside it.
+                    None if row.is_partial()
+                        && ToolKind::of(&call.name).pending_input().is_some() =>
+                    {
+                        Skeleton::new().w(relative(0.6)).h_4().rounded_md().into_any_element()
+                    }
                     summary => h_flex()
                         .w_full()
                         .min_w_0()
@@ -1617,7 +1987,8 @@ pub(crate) fn output_table(
                         .when_some(call.shown_name(), |row, name| {
                             row.child(div().flex_none().font_medium().child(name.to_string()))
                         })
-                        // Its input is on its way.
+                        // Its input is on its way, and there is no telling
+                        // what it will be.
                         .when(row.is_partial(), |row| {
                             row.child(div().flex_1().min_w_0().child(raw_tail(reply, cx)))
                         })
@@ -1663,33 +2034,7 @@ pub(crate) fn output_table(
             .min_w_0()
             .child(detail);
 
-        let status = match row {
-            OutputRow::Tool(call) => {
-                let icon = match call.state {
-                    ToolState::Running => Spinner::new().small().into_any_element(),
-                    ToolState::Done => Icon::new(IconName::Check)
-                        .small()
-                        .text_color(theme.success)
-                        .into_any_element(),
-                    ToolState::Failed => Icon::new(IconName::X)
-                        .small()
-                        .text_color(theme.danger)
-                        .into_any_element(),
-                };
-                Some(
-                    h_flex().gap_1p5().child(icon).child(
-                        div()
-                            .map(|state| match call.state {
-                                // A failure reads at full strength.
-                                ToolState::Failed => state.font_medium(),
-                                _ => state.text_color(theme.muted_foreground),
-                            })
-                            .child(call.state.label()),
-                    ),
-                )
-            }
-            OutputRow::Text(_) | OutputRow::Error(_) | OutputRow::Pending => None,
-        };
+        let status = row_status(row, cx);
 
         TableRow::new()
             .child(
@@ -1728,31 +2073,197 @@ pub(crate) fn output_table(
         .into_any_element()
 }
 
+/// A tool call's state in the status column, as an icon and spelled out
+/// rather than only coloured. Other rows have none.
+fn row_status(row: &OutputRow, cx: &App) -> Option<AnyElement> {
+    let OutputRow::Tool(call) = row else {
+        return None;
+    };
+    let theme = cx.theme();
+    let icon = match call.state {
+        ToolState::Running => Spinner::new().small().into_any_element(),
+        ToolState::Done => Icon::new(IconName::Check)
+            .small()
+            .text_color(theme.success)
+            .into_any_element(),
+        ToolState::Failed => Icon::new(IconName::X)
+            .small()
+            .text_color(theme.danger)
+            .into_any_element(),
+    };
+    Some(
+        h_flex()
+            .gap_1p5()
+            .child(icon)
+            .child(
+                div()
+                    .map(|state| match call.state {
+                        // A failure reads at full strength.
+                        ToolState::Failed => state.font_medium(),
+                        _ => state.text_color(theme.muted_foreground),
+                    })
+                    .child(call.state.label()),
+            )
+            .into_any_element(),
+    )
+}
+
+/// A reply's latest row, the thing the harness is doing now, as the only row
+/// of its task table, on a single line: the last line of its text, a tool
+/// call's name and input, or the harness's latest raw output while nothing
+/// else is known. A row with no status of its own shows a spinner while the
+/// reply streams.
+fn latest_row(reply: &Reply, cx: &App) -> AnyElement {
+    let theme = cx.theme();
+    let rows = reply.rows();
+    let Some(row) = rows.last() else {
+        return div()
+            .text_color(theme.muted_foreground)
+            .child("No output.")
+            .into_any_element();
+    };
+    let muted = |text: SharedString| {
+        div()
+            .min_w_0()
+            .truncate()
+            .text_color(theme.muted_foreground)
+            .child(text)
+            .into_any_element()
+    };
+    let raw_line = || match reply.raw_tail.back() {
+        Some(line) => div()
+            .min_w_0()
+            .truncate()
+            .font_family(theme.mono_font_family.clone())
+            .text_color(theme.muted_foreground)
+            .child(highlighted_json(line, cx))
+            .into_any_element(),
+        None => muted("Waiting for the harness…".into()),
+    };
+    let detail = match row {
+        OutputRow::Text(text) if !text.trim().is_empty() => {
+            let line = text
+                .lines()
+                .rev()
+                .find(|line| !line.trim().is_empty())
+                .unwrap_or_default();
+            div()
+                .min_w_0()
+                .truncate()
+                .child(line.to_string())
+                .into_any_element()
+        }
+        OutputRow::Tool(call) => {
+            let project_dir = ProjectDirectory::get(cx);
+            let input = match &call.summary {
+                Some(summary) => div()
+                    .min_w_0()
+                    .truncate()
+                    .font_family(theme.mono_font_family.clone())
+                    .child(relative_to_project(summary, project_dir.as_deref()))
+                    .into_any_element(),
+                None => match ToolKind::of(&call.name).pending_input() {
+                    Some(label) => muted(label.into()),
+                    None => raw_line(),
+                },
+            };
+            h_flex()
+                .w_full()
+                .min_w_0()
+                .gap_2()
+                .when_some(call.shown_name(), |row, name| {
+                    row.child(div().flex_none().font_medium().child(name.to_string()))
+                })
+                .child(div().flex_1().min_w_0().child(input))
+                .into_any_element()
+        }
+        OutputRow::Error(error) => div()
+            .min_w_0()
+            .truncate()
+            .child(first_line(error))
+            .into_any_element(),
+        OutputRow::Text(_) | OutputRow::Pending => raw_line(),
+    };
+    let status = row_status(row, cx).or_else(|| {
+        (!reply.is_done()).then(|| Spinner::new().small().into_any_element())
+    });
+    let detail = div()
+        .id("ask-row-detail")
+        .w_full()
+        .min_w_0()
+        .child(detail);
+
+    Table::new()
+        // Legible at the window's base font size; tables are otherwise smaller.
+        .text_base()
+        .line_height(relative(1.5))
+        .rounded(theme.radius)
+        .border_1()
+        .border_color(theme.border)
+        .child(
+            TableBody::new().child(
+                TableRow::new()
+                    .child(
+                        TableCell::new()
+                            .w(KIND_WIDTH)
+                            .flex_none()
+                            .child(row.badge()),
+                    )
+                    .child(
+                        TableCell::new()
+                            .flex_1()
+                            .min_w_0()
+                            // Lets UI tests find the detail; inert in normal builds.
+                            .child(gpui_kit::TestSupportExt::test_support(detail)),
+                    )
+                    .child(
+                        TableCell::new()
+                            .w(STATUS_WIDTH)
+                            .flex_none()
+                            .children(status),
+                    ),
+            ),
+        )
+        .into_any_element()
+}
+
 /// The harness's latest raw output, standing in for output that has yet to
-/// arrive: a line for each of its last few events, newest last, cut off at the
-/// cell's edge. It is always as tall as a full tail, so the row keeps its
-/// height as lines stream in.
+/// arrive: a line for each of its last few events, newest last, highlighted as
+/// JSON and cut off at the cell's edge. It is always as tall as a full tail, so
+/// the row keeps its height as lines stream in.
 fn raw_tail(reply: &Reply, cx: &App) -> AnyElement {
     let theme = cx.theme();
-    let mut lines: Vec<SharedString> = reply
-        .raw_tail
-        .iter()
-        .map(|line| line.clone().into())
-        .collect();
-    if lines.is_empty() {
-        lines.push("Waiting for the harness…".into());
-    }
     v_flex()
         .w_full()
         .min_w_0()
         .font_family(theme.mono_font_family.clone())
         .text_color(theme.muted_foreground)
         .children((0..RAW_TAIL_LINES).map(|ix| {
-            // A no-break space keeps a line with nothing in it a line tall.
-            let line = lines.get(ix).cloned().unwrap_or_else(|| "\u{a0}".into());
+            let line: AnyElement = match reply.raw_tail.get(ix) {
+                Some(line) => highlighted_json(line, cx).into_any_element(),
+                None if ix == 0 => "Waiting for the harness…".into_any_element(),
+                // A no-break space keeps a line with nothing in it a line tall.
+                None => "\u{a0}".into_any_element(),
+            };
             div().w_full().min_w_0().truncate().child(line)
         }))
         .into_any_element()
+}
+
+/// A line of the harness's raw output, highlighted as JSON. A line cut short
+/// is still highlighted as far as it parses.
+fn highlighted_json(line: &str, cx: &App) -> StyledText {
+    let styles = json_highlights(line, &cx.theme().highlight_theme);
+    StyledText::new(SharedString::from(line.to_string())).with_highlights(styles)
+}
+
+fn json_highlights(
+    line: &str,
+    theme: &HighlightTheme,
+) -> Vec<(std::ops::Range<usize>, HighlightStyle)> {
+    let mut highlighter = SyntaxHighlighter::new("json");
+    highlighter.update(None, &Rope::from(line), None);
+    highlighter.styles(&(0..line.len()), theme)
 }
 
 #[cfg(test)]
@@ -1765,7 +2276,9 @@ mod tests {
     use gpui_kit::test::{TestAppContextExt as _, TestWindowExt as _};
     use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 
-    use super::{OutputRow, PromptMode, PromptTask, RAW_LINE_CHARS, Reply, TaskStatus, ToolState};
+    use super::{
+        OutputRow, PromptMode, PromptTask, RAW_LINE_CHARS, Reply, Session, TaskStatus, ToolState,
+    };
     use crate::harness::HarnessEvent;
     use crate::hidden_anchor::HiddenAnchor;
     use crate::piton_syntax;
@@ -1914,6 +2427,36 @@ mod tests {
         );
     }
 
+    /// The raw output is highlighted as JSON, even a line cut off mid-object.
+    #[test]
+    fn raw_output_is_highlighted_as_json() {
+        use gpui_kit::component::highlighter::HighlightTheme;
+
+        let theme = HighlightTheme::default_dark();
+        for line in [
+            r#"{"type":"stream_event","index":0,"done":true}"#,
+            r#"{"type":"stream_event","event":{"delta":{"partial_js"#,
+        ] {
+            let colored = super::json_highlights(line, &theme)
+                .into_iter()
+                .filter(|(_, style)| style.color.is_some())
+                .count();
+            assert!(colored > 1, "{line}");
+        }
+    }
+
+    /// A tool of a known kind says what it is getting ready to do while its
+    /// input streams in; any other tool shows the raw output.
+    #[test]
+    fn known_tools_replace_the_raw_output_while_their_input_streams() {
+        use super::ToolKind;
+
+        for name in ["Read", "Grep", "Edit", "Write", "Bash", "WebFetch", "Task"] {
+            assert!(ToolKind::of(name).pending_input().is_some(), "{name}");
+        }
+        assert_eq!(ToolKind::of("mcp__backlog__list").pending_input(), None);
+    }
+
     /// Paths in the project directory are shown relative to it; anything
     /// outside it, or only sharing its name's start, is left as it is.
     #[test]
@@ -2024,6 +2567,44 @@ mod tests {
         });
         assert_eq!(unrecorded.status, TaskStatus::Unrecorded);
         assert!(unrecorded.reply.done && unrecorded.compiled.is_none());
+    }
+
+    /// Tasks carry on the latest conversation in the history, passing over
+    /// runs that never reported one; a session is only resumed in its own
+    /// project, and one the harness could not resume is forgotten.
+    #[test]
+    fn sessions_resume_the_latest_conversation() {
+        let saved = |lines: &[&str]| {
+            let mut record = RunRecord::default();
+            for line in lines {
+                record.note(&HarnessEvent::Output((*line).into()));
+            }
+            SavedPrompt {
+                anchor: HiddenAnchor::random(),
+                text: "Do it".into(),
+                record: Some(record),
+            }
+        };
+        let history = [
+            saved(&[r#"{"type":"system","subtype":"init","session_id":"old"}"#]),
+            saved(&[r#"{"type":"system","subtype":"init","session_id":"latest"}"#]),
+            saved(&["not json"]),
+            SavedPrompt {
+                anchor: HiddenAnchor::random(),
+                text: "Old".into(),
+                record: None,
+            },
+        ];
+        let project = std::path::Path::new("/project");
+        let mut session = Session::latest(&history, project);
+        assert_eq!(Session::resume(&session, project).as_deref(), Some("latest"));
+        assert_eq!(Session::resume(&session, std::path::Path::new("/other")), None);
+
+        Session::forget(&mut session, "old");
+        assert!(session.is_some(), "a different session was forgotten");
+        Session::forget(&mut session, "latest");
+        assert!(session.is_none());
+        assert!(Session::latest(&history[2..], project).is_none());
     }
 
     /// The latest task heads the view with its status, its anchor and the
@@ -2314,5 +2895,212 @@ mod tests {
         assert_eq!(prompt_mode.read_with(cx, |this, _| this.queue.len()), 1);
 
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A question is asked while the harness works on a task, without
+    /// queueing it or touching the task, and is kept out of the history.
+    #[gpui_kit::test]
+    async fn asking_runs_beside_the_working_task(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+
+        // No piton.config.pi, so the question fails before reaching the
+        // harness.
+        let dir = std::env::temp_dir().join(format!("suspense-ask-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.push_task("Working on this".into(), cx);
+                this.working = true;
+                this.send("Why?".into(), SendMode::Ask, window, cx);
+                assert!(this.queue.is_empty(), "the question was queued");
+                assert_eq!(this.tasks.len(), 1);
+                assert!(this.ask.is_some(), "the question was not asked");
+            });
+        })
+        .unwrap();
+
+        cx.wait_for(handle, Duration::from_secs(5), |_, cx| {
+            prompt_mode
+                .read(cx)
+                .ask
+                .as_ref()
+                .is_some_and(|ask| ask.status == TaskStatus::Failed)
+        })
+        .await;
+        prompt_mode.read_with(cx, |this, _| {
+            assert!(this.working, "the task stopped working");
+            assert_eq!(this.tasks[0].status, TaskStatus::Compiling);
+        });
+        assert!(!crate::hidden_anchor::history_dir(&dir).exists());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    type Bounds = gpui_kit::Bounds<gpui_kit::Pixels>;
+
+    /// Draws frames until `id` is laid out with `settled` holding of it and
+    /// the chat input's tabs.
+    fn settle(
+        handle: AnyWindowHandle,
+        id: &'static str,
+        settled: impl Fn(Bounds, Bounds) -> bool,
+        cx: &mut TestAppContext,
+    ) -> (Bounds, Bounds) {
+        let start = std::time::Instant::now();
+        loop {
+            let found = cx
+                .update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    let bounds = window.try_find(id)?.bounds();
+                    Some((bounds, window.find("chat-tabs").bounds()))
+                })
+                .unwrap();
+            if let Some((bounds, tabs)) = found
+                && settled(bounds, tabs)
+            {
+                return (bounds, tabs);
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "{id} did not settle: {found:?}"
+            );
+            std::thread::sleep(Duration::from_millis(16));
+        }
+    }
+
+    /// A question rises over the message list rather than appearing at its
+    /// full height, and a shade covering the list comes with it; the list
+    /// keeps its size underneath.
+    #[gpui_kit::test]
+    async fn a_question_slides_up_over_the_dimmed_message_list(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        let find = |id: &'static str, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.try_find(id).map(|found| found.bounds())
+            })
+            .unwrap()
+        };
+        let history = find("history", cx).unwrap();
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.push_ask("What does the chain do?".into(), cx);
+            });
+        })
+        .unwrap();
+
+        let mut heights = Vec::new();
+        let start = std::time::Instant::now();
+        while start.elapsed() < Duration::from_secs(2) {
+            heights.push(find("ask", cx).unwrap().size.height);
+            std::thread::sleep(Duration::from_millis(8));
+        }
+        let settled = *heights.last().unwrap();
+        assert!(settled > gpui_kit::px(0.), "the question never rose");
+        assert!(
+            heights
+                .iter()
+                .any(|&height| height > gpui_kit::px(0.5) && height < settled - gpui_kit::px(0.5)),
+            "the question {heights:?} appeared without sliding up"
+        );
+
+        let dim = find("ask-dim", cx).unwrap();
+        assert_eq!(dim, history, "the shade does not cover the message list");
+        assert_eq!(
+            find("history", cx).unwrap(),
+            history,
+            "the message list moved for the question"
+        );
+    }
+
+    /// While the harness works on a question, it is a single row directly
+    /// above the chat input's tabs, sliding up out of them; once it is over,
+    /// it expands into its whole task table, still above the tabs.
+    #[gpui_kit::test]
+    async fn a_question_is_a_row_above_the_tabs_until_it_is_over(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let run = this.push_ask("What does the chain do?".into(), cx);
+                for event in [
+                    tool("t1", "Read"),
+                    HarnessEvent::ToolInput {
+                        id: "t1".into(),
+                        summary: "src/chat_input.rs".into(),
+                    },
+                ] {
+                    this.update_ask(run, |ask| ask.apply(event), cx);
+                }
+            });
+        })
+        .unwrap();
+
+        // The row rises until it is whole, its bottom on the tabs' top.
+        let line_height = cx
+            .update_window(handle, |_, window, _| window.line_height())
+            .unwrap();
+        let (row, tabs) = settle(
+            handle,
+            "ask-row",
+            |row, _| row.size.height > gpui_kit::px(0.),
+            cx,
+        );
+        let (panel, _) = settle(
+            handle,
+            "ask",
+            |panel, _| panel.top() <= row.top() + gpui_kit::px(0.5),
+            cx,
+        );
+        assert!(
+            (panel.bottom() - tabs.top()).abs() <= gpui_kit::px(1.),
+            "the question {panel:?} is not right above the tabs {tabs:?}"
+        );
+        assert!(
+            row.size.height < line_height * 4.,
+            "the question {row:?} is more than a single row"
+        );
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find("ask-output").is_none());
+        })
+        .unwrap();
+
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let run = this.ask_run;
+                this.update_ask(
+                    run,
+                    |ask| {
+                        ask.apply(HarnessEvent::TextStarted);
+                        ask.apply(HarnessEvent::TextDelta("It joins Code and Spec.".into()));
+                        ask.apply(HarnessEvent::Finished {
+                            is_error: false,
+                            result: String::new(),
+                        });
+                    },
+                    cx,
+                );
+            });
+        })
+        .unwrap();
+
+        let (output, tabs) = settle(
+            handle,
+            "ask-output",
+            |output, _| output.size.height > line_height * 3.,
+            cx,
+        );
+        assert!(
+            output.bottom() <= tabs.top() + gpui_kit::px(1.),
+            "the expanded question {output:?} is not above the tabs {tabs:?}"
+        );
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find("ask-row").is_none());
+            assert!(window.try_find(("output-row", 1usize)).is_some());
+        })
+        .unwrap();
     }
 }

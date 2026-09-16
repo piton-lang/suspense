@@ -25,6 +25,8 @@ pub const PROMPT_INDENT: &str = "        ";
 /// Where the application keeps its files, relative to the project directory.
 pub const APP_DIR: &str = ".suspense";
 const HISTORY_DIR: &str = "history";
+/// Where questions asked from the Ask tab are saved, apart from the history.
+const ASKS_DIR: &str = "asks";
 
 /// The hidden anchor's imports: names by module.
 #[derive(Clone, Debug, Default)]
@@ -234,13 +236,21 @@ pub fn history_dir(project_dir: &Path) -> PathBuf {
 
 /// Saves `prompt`, as `anchor`'s source, to the project's prompt history.
 pub fn save(anchor: &HiddenAnchor, prompt: &str, project_dir: &Path) -> Result<PathBuf> {
-    let history_dir = history_dir(project_dir);
-    fs::create_dir_all(&history_dir)
-        .with_context(|| format!("could not create {}", history_dir.display()))?;
+    save_in(&history_dir(project_dir), anchor, prompt)
+}
+
+/// Saves a question, as `anchor`'s source, where it can be compiled without
+/// joining the prompt history.
+pub fn save_ask(anchor: &HiddenAnchor, prompt: &str, project_dir: &Path) -> Result<PathBuf> {
+    save_in(&project_dir.join(APP_DIR).join(ASKS_DIR), anchor, prompt)
+}
+
+fn save_in(dir: &Path, anchor: &HiddenAnchor, prompt: &str) -> Result<PathBuf> {
+    fs::create_dir_all(dir).with_context(|| format!("could not create {}", dir.display()))?;
     let sent_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs());
-    let file = history_dir.join(format!("{sent_at}-{}.pi", anchor.name));
+    let file = dir.join(format!("{sent_at}-{}.pi", anchor.name));
     fs::write(&file, anchor.source(prompt))
         .with_context(|| format!("could not save {}", file.display()))?;
     Ok(file)

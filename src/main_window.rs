@@ -705,6 +705,7 @@ mod tests {
     fn finds_notes(
         _: String,
         system_prompt: Option<String>,
+        _: Option<String>,
         _: std::path::PathBuf,
     ) -> futures::channel::mpsc::UnboundedReceiver<crate::harness::HarnessEvent> {
         assert!(system_prompt.is_some_and(|prompt| prompt.contains("one file")));
@@ -727,6 +728,7 @@ mod tests {
     /// A harness that finds two files.
     fn finds_both(
         _: String,
+        _: Option<String>,
         _: Option<String>,
         _: std::path::PathBuf,
     ) -> futures::channel::mpsc::UnboundedReceiver<crate::harness::HarnessEvent> {

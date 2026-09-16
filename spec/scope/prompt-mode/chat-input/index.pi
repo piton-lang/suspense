@@ -27,30 +27,25 @@ shape ChatInputShape:
     tabs:
         overview:
             The input and send button live inside the body of a tab bar, using
-            gpui-kit's default tab styling. The two tabs are Code and Spec,
-            with a chain button between them that selects both, reading
-            "Code and Spec" as its tooltip.
+            gpui-kit's default tab styling. There are three tabs, in order:
+            Code, Chain, and Spec. They are all tabs, laid out, sized, and
+            spaced like any other tabs in the bar, with no extra gap around
+            the Chain tab.
 
-            Pressing <Tab> while in the chat input cycles from Code to the
-            chain to Spec and back to Code, <Shift+Tab> the other way, and
-            focus remains in the chat input.
+            Pressing <Tab> while in the chat input cycles from Code to Chain
+            to Spec and back to Code, <Shift+Tab> the other way, and focus
+            remains in the chat input.
 
         chain:
-            A small square button, half the height of the tabs and vertically
-            centred on them, with no focus border.
+            Chain is a tab with unusual behaviour. It shows an icon rather
+            than a label, reading "Code and Spec" as its tooltip, and
+            selecting it selects both Code and Spec.
 
-            Inactive, it shows a broken chain dimmed to 50% opacity, and
-            Code and Spec sit apart with a gap between them wide enough that
-            the chain sits in the gap without overlapping either tab.
+            Unselected, it shows a broken chain dimmed to 50% opacity.
 
-            Active, it shows a joined chain at full opacity, both tabs are
-            selected, and Code and Spec animate closer together until they
-            meet beneath the chain, which overlaps both and covers the seam
-            so they read as one locked tab. Deactivating it animates them
-            apart again.
-
-            The chain never moves: it stays at the same place in both states,
-            and only the tabs slide toward or away from it.
+            Selected, it shows a joined chain at full opacity, and Code,
+            Chain, and Spec all show as selected so the three read as one
+            locked tab.
 
     systemPrompt:
         The selected tab is the mode a prompt is sent in, and each mode gives

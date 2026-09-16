@@ -1,6 +1,7 @@
 //! Chat input: a multi-line, Piton-highlighted editor on the left and a send
-//! button on the right, in the body of the Code, chain, Spec, and Ask tabs. Enter adds a
-//! line; Ctrl/Cmd+Enter sends, or queues the prompt while the harness works.
+//! button on the right, in the body of the Code, Chain, Spec, and Ask tabs.
+//! Enter adds a line; Ctrl/Cmd+Enter sends, or queues the prompt while the
+//! harness works.
 //! Tab and Shift+Tab cycle the tabs and Esc takes focus out of the input.
 
 use std::rc::Rc;
@@ -14,7 +15,8 @@ use gpui_kit::component::input::{
     MoveUp, OutdentInline, Rope,
 };
 use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::component::{ActiveTheme, Disableable, FocusableExt as _};
+use gpui_kit::component::tooltip::Tooltip;
+use gpui_kit::component::{ActiveTheme, Disableable, Icon};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use lsp_types::{CompletionContext, CompletionResponse};
@@ -41,21 +43,22 @@ const SEND_SHORTCUT: &str = "Ctrl+Enter";
 /// The tabs the input sits in, in the order Tab cycles them.
 const TABS: [SendMode; 4] = [SendMode::Code, SendMode::Both, SendMode::Spec, SendMode::Ask];
 
-/// The side of the square chain tab, half the height of the tabs.
-const BOTH_TAB_SIZE: Pixels = px(16.);
-
 /// Index of the chain tab in `TABS`.
 const BOTH_TAB: usize = 1;
 
 /// Index of the Ask tab in `TABS`.
 const ASK_TAB: usize = 3;
 
-/// The gap between Code and Spec while the chain is inactive: the chain, with
-/// room either side so it overlaps neither tab.
-const CHAIN_GAP: Pixels = px(16. + 6. * 2.);
+/// How far the cover over the seam between two locked tabs reaches either
+/// side of it: past both 1px borders, with a pixel to spare.
+const SEAM_COVER_REACH: Pixels = px(2.);
 
-/// How the tabs slide toward and away from the chain: critically damped, so
-/// they meet without bouncing past the seam.
+/// The chain's width until its tab has been laid out: an icon tab is a square
+/// a little wider than the icon it centres.
+const CHAIN_WIDTH_ESTIMATE: Pixels = px(40.);
+
+/// How the tint and the chain's icon slide between tabs: critically damped,
+/// so they settle without bouncing past.
 const CHAIN_SPRING: SpringConfig = SpringConfig::new(400., 40., 1.);
 
 /// How strongly the selected tabs and their body are tinted: red for Code,
@@ -153,6 +156,9 @@ pub struct ChatInput {
     /// What the editor adds around its rows (padding and border) as last
     /// laid out, rounded to device pixels.
     chrome: Option<Pixels>,
+    /// Width of the chain's tab as last laid out, which is how far Code and
+    /// Spec slide together beneath it when it is selected.
+    chain_width: Option<Pixels>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -205,6 +211,7 @@ impl ChatInput {
             busy: false,
             text_width: None,
             chrome: None,
+            chain_width: None,
             _subscriptions: subscriptions,
         };
         this.connect_lsp(cx);
@@ -355,6 +362,9 @@ impl Render for ChatInput {
         let height = ceil_to_device_pixel(line_height * rows as f32 + chrome, window);
         let one_row = ceil_to_device_pixel(line_height + chrome, window);
         let empty = text.is_empty();
+        // A question is asked straight away, beside whatever the harness is
+        // working on, so it never queues.
+        let queues = self.busy && TABS[self.selected_tab] != SendMode::Ask;
 
         // Once the editor has painted, check how it was laid out: the width
         // its text wrapped in (a resized window wraps long lines differently)
@@ -388,26 +398,45 @@ impl Render for ChatInput {
         .absolute()
         .size_full();
 
-        // Code and Spec are full tabs, each its own bar, with a gap between
-        // them where the chain sits: broken and dimmed until selected, then
-        // joined. Selecting it selects both tabs, which slide toward the chain
-        // until they meet beneath it, so they read as one locked tab. The chain
-        // itself never moves; only the tabs slide.
+        // Code, the chain, Spec, and Ask are tabs side by side, each its own
+        // bar so that selecting the chain can show Code and Spec selected
+        // along with it, as one locked tab. The chain shows an icon: broken
+        // and dimmed until selected, then joined. Selecting it pulls in half
+        // its width from either side, as though by negative margins, so Code
+        // and Spec slide together until they meet beneath it and it sits on
+        // the seam between them.
         let selected = self.selected_tab;
         let unified = selected == BOTH_TAB;
-        // How far each tab has slid toward the chain: none while apart, half
-        // the gap once they meet.
-        let slide = SpringAnimation::new(CHAIN_SPRING).to(if unified {
-            CHAIN_GAP * 0.5
-        } else {
-            px(0.)
-        });
-        // The tint slides between the tabs the same way, so going from Code
-        // to Spec passes through purple. Its position is the selected tab's
-        // index: 0 for Code, 1 for both, 2 for Spec, 3 for Ask.
+        let chain_width = self.chain_width.unwrap_or(CHAIN_WIDTH_ESTIMATE);
+        let join = SpringAnimation::new(CHAIN_SPRING).to(if unified { 1. } else { 0. });
+        // The tint slides between the tabs, so going from Code to Spec passes
+        // through purple. Its position is the selected tab's index: 0 for
+        // Code, 1 for the chain, 2 for Spec, 3 for Ask.
         let tint_slide = SpringAnimation::new(CHAIN_SPRING).to(selected as f32);
         let (red, blue, green) = (cx.theme().red, cx.theme().blue, cx.theme().green);
         let tint = move |position| tint(red, blue, green, position);
+        // A joined chain once selected, and a broken one dimmed to half
+        // opacity until then.
+        let chain_icon = Icon::new(if unified {
+            IconName::Link
+        } else {
+            IconName::Unlink
+        })
+        .text_color(if unified {
+            cx.theme().tab_active_foreground
+        } else {
+            cx.theme().tab_foreground.opacity(0.5)
+        });
+        // A tab's contents: its label, or the chain's icon. An icon tab is a
+        // small square with none of a label's padding, so no room has to be
+        // made for the chain: it sits between Code and Spec the way any two
+        // tabs sit side by side.
+        let tab = |ix: usize| match TABS[ix] {
+            SendMode::Both => Tab::new()
+                .icon(chain_icon.clone())
+                .tooltip(|window, cx| Tooltip::new(SendMode::Both.label()).build(window, cx)),
+            mode => Tab::new().label(mode.label()),
+        };
         // A tint laid over a tab, as wide as the tab itself (an invisible copy
         // of it) rather than its bar, fading out as the tab is deselected.
         let tab_tint = |ix: usize| {
@@ -421,7 +450,7 @@ impl Render for ChatInput {
                 .child(
                     TabBar::new(("tint-width", ix))
                         .selected_index(0)
-                        .child(Tab::new().label(TABS[ix].label()).px_2())
+                        .child(Tab::new().label(TABS[ix].label()))
                         .invisible(),
                 )
                 .with_spring(("tab-tint", ix), tint_slide, move |this, position| {
@@ -442,102 +471,81 @@ impl Render for ChatInput {
                         .update(cx, |this, cx| this.select_tab(ix, window, cx))
                         .ok();
                 })
-                .child(Tab::new().label(TABS[ix].label()).px_2());
-            if selected == ix || unified {
+                .child(tab(ix));
+            // The chain itself never shows as selected: once joined it sits
+            // over Code and Spec, whose selection shows through around its icon.
+            if ix != BOTH_TAB && (selected == ix || (unified && ix != ASK_TAB)) {
                 bar.selected_index(0)
             } else {
                 bar
             }
         };
-        let code = div()
-            .relative()
-            .child(full_tab(0))
-            .child(tab_tint(0))
-            .with_spring("code-slide", slide.clone(), |this, slide| this.left(slide));
-        // Spec slides by pulling its left edge in, which carries Ask along.
+        let measure_chain = {
+            let chat_input = chat_input.clone();
+            canvas(
+                |_, _, _| {},
+                move |bounds, _, _, cx| {
+                    let width = bounds.size.width;
+                    chat_input
+                        .update(cx, |this, cx| {
+                            if this.chain_width.is_none_or(|old| (old - width).abs() > px(0.01)) {
+                                this.chain_width = Some(width);
+                                cx.notify();
+                            }
+                        })
+                        .ok();
+                },
+            )
+            .absolute()
+            .size_full()
+        };
+        let code = div().relative().child(full_tab(0)).child(tab_tint(0));
+        // The chain is laid over the start of Spec, so that it paints above
+        // both Code and Spec once they slide beneath it. Its bar is
+        // transparent, and clipped above the bottom border every bar draws,
+        // so Code and Spec show through beneath it; in the gap between them,
+        // the row's own background and border show instead.
+        let both = div()
+            .absolute()
+            .top_0()
+            .bottom(px(1.))
+            .overflow_hidden()
+            .child(full_tab(BOTH_TAB).bg(cx.theme().transparent))
+            .child(measure_chain);
+        // Once Code and Spec meet, Code's facing border is covered, in their
+        // purple, so the joined tab shows no outline beneath the chain. The
+        // cover reaches past the border so that, at fractional display scales,
+        // no sliver of it is left showing at its edges.
+        let seam_cover = cx.theme().tab_active.blend(tint(BOTH_TAB as f32));
         let spec = div()
             .relative()
-            .ml(CHAIN_GAP)
             .child(full_tab(2))
             .child(tab_tint(2))
-            .with_spring("spec-slide", slide.clone(), |this, slide| {
-                this.ml(CHAIN_GAP - slide)
+            .with_spring("chain-join", join, move |this, joined| {
+                let joined = joined.clamp(0., 1.);
+                // What is left of the gap the chain holds open between Code
+                // and Spec, as it gives up half its width either side.
+                let gap = chain_width * (1. - joined);
+                let seam = gpui_kit::TestSupportExt::test_support(
+                    div()
+                        .id("seam")
+                        .absolute()
+                        .top_0()
+                        .bottom_0()
+                        .left(-gap - SEAM_COVER_REACH)
+                        .w(SEAM_COVER_REACH * 2.)
+                        .when(unified && gap <= SEAM_COVER_REACH, |this| this.bg(seam_cover)),
+                );
+                this.ml(gap)
+                    .child(seam)
+                    .child(both.left(-gap - chain_width * 0.5 * joined))
             });
-        // Ask stands apart from the tabs that edit, and stretches to the
-        // right edge.
+        // Ask stretches to the right edge.
         let ask = div()
             .relative()
             .flex_1()
-            .ml(CHAIN_GAP)
             .child(full_tab(ASK_TAB).w_full())
             .child(tab_tint(ASK_TAB));
-        let both = Button::new("both")
-            .outline()
-            .icon(if unified {
-                IconName::Link
-            } else {
-                IconName::Unlink
-            })
-            .tooltip(SendMode::Both.label())
-            .size(BOTH_TAB_SIZE)
-            .focus_ring(false)
-            .tab_stop(false)
-            .on_click(cx.listener(|this, _, window, cx| this.select_tab(BOTH_TAB, window, cx)));
-        let both = if unified { both.primary() } else { both };
-        // The selected tabs' facing borders, covered once the tabs meet, in
-        // their purple.
-        let meet = CHAIN_GAP * 0.5 - px(0.5);
-        let seam_cover = cx.theme().tab_active.blend(tint(BOTH_TAB as f32));
-        let cover = div()
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left(px(-1.))
-            .w(px(2.))
-            .with_spring("seam-cover", slide, move |this, slide| {
-                if slide >= meet {
-                    this.bg(seam_cover)
-                } else {
-                    this
-                }
-            });
-        // An invisible copy of the Code tab bar and half the gap put the
-        // chain's place, whatever width Code's label takes.
-        let seam = div()
-            .absolute()
-            .left_0()
-            .top_0()
-            .bottom_0()
-            .flex()
-            .child(
-                TabBar::new("code-tab-width")
-                    .child(Tab::new().label(SendMode::Code.label()).px_2())
-                    .invisible(),
-            )
-            .child(div().w(CHAIN_GAP * 0.5))
-            .child(
-                div()
-                    .relative()
-                    .w_0()
-                    .flex()
-                    .items_center()
-                    .child(cover)
-                    .child(
-                        div().relative().w_0().h(BOTH_TAB_SIZE).child(
-                            gpui_kit::TestSupportExt::test_support(
-                                div()
-                                    .id(SendMode::Both.id())
-                                    .absolute()
-                                    .top_0()
-                                    .left(BOTH_TAB_SIZE * -0.5)
-                                    .rounded(cx.theme().radius)
-                                    .when(unified, |this| this.bg(cx.theme().background))
-                                    .opacity(if unified { 1. } else { 0.5 })
-                                    .child(both),
-                            ),
-                        ),
-                    ),
-            );
         let tabs = gpui_kit::TestSupportExt::test_support(
             div()
                 .id("chat-tabs")
@@ -556,8 +564,7 @@ impl Render for ChatInput {
                 )
                 .child(code)
                 .child(spec)
-                .child(ask)
-                .child(seam),
+                .child(ask),
         );
 
         let body = div()
@@ -630,10 +637,10 @@ impl Render for ChatInput {
                     Button::new("send")
                         .primary()
                         // While the harness works, sending queues the prompt.
-                        .label(if self.busy { "Queue" } else { "Send" })
+                        .label(if queues { "Queue" } else { "Send" })
                         // As tall as the input's single line, so the two line up.
                         .h(one_row)
-                        .tooltip(if self.busy {
+                        .tooltip(if queues {
                             format!("Queue until the harness is free ({SEND_SHORTCUT})")
                         } else {
                             format!("Send ({SEND_SHORTCUT})")
@@ -945,45 +952,48 @@ mod tests {
 
     type Bounds = gpui_kit::Bounds<gpui_kit::Pixels>;
 
-    /// The Code tab, the chain, and the Spec tab, as last laid out.
-    fn chain_layout(window: &mut Window, cx: &mut gpui_kit::App) -> (Bounds, Bounds, Bounds) {
+    /// The Code, chain, Spec, and Ask tabs, as last laid out.
+    fn tab_layout(window: &mut Window, cx: &mut gpui_kit::App) -> [Bounds; 4] {
         window.render_frame(cx);
-        (
+        [
             window.within("code-tab").find(0usize).bounds(),
-            window.find("both-tab").bounds(),
+            window.within("both-tab").find(0usize).bounds(),
             window.within("spec-tab").find(0usize).bounds(),
-        )
+            window.within("ask-tab").find(0usize).bounds(),
+        ]
     }
 
-    /// Draws frames until the gap between Code and Spec is `gap`.
-    fn settle_chain(
+    /// Draws frames until Spec has slid into place: against Code once the
+    /// chain is selected and the three lock together, and against the chain
+    /// itself, sitting between them as an ordinary tab, until then.
+    fn settle_tabs(
         handle: gpui_kit::AnyWindowHandle,
-        gap: gpui_kit::Pixels,
+        joined: bool,
         cx: &mut TestAppContext,
-    ) -> (Bounds, Bounds, Bounds) {
+    ) -> [Bounds; 4] {
         let start = std::time::Instant::now();
         loop {
             let layout = cx
-                .update_window(handle, |_, window, cx| chain_layout(window, cx))
+                .update_window(handle, |_, window, cx| tab_layout(window, cx))
                 .unwrap();
-            let (code, _, spec) = layout;
-            if (spec.left() - code.right() - gap).abs() <= super::px(0.5) {
+            let [code, chain, spec, _] = layout;
+            let spec_offset = spec.left() - if joined { code.right() } else { chain.right() };
+            if spec_offset.abs() <= super::px(0.5) {
                 return layout;
             }
             assert!(
                 start.elapsed() < TIMEOUT,
-                "the tabs did not settle {gap:?} apart: Code {code:?}, Spec {spec:?}"
+                "the tabs did not settle: Spec is {spec_offset:?} out of place"
             );
             std::thread::sleep(Duration::from_millis(16));
         }
     }
 
-    /// The chain is a square half the height of the tabs, centred on them.
-    /// Inactive, it sits in the gap between Code and Spec, overlapping neither.
-    /// Active, the tabs slide in until they meet beneath it, and it overlaps
-    /// both, centred on the seam. The chain stays put throughout.
+    /// The chain is a tab like the others: a small square, with no gap either
+    /// side of it, between Code and Spec. Selected, it gives up its width so
+    /// Code and Spec meet beneath it, with the chain centred on the seam.
     #[gpui_kit::test]
-    async fn chain_joins_the_tabs_beneath_it(cx: &mut TestAppContext) {
+    async fn chain_is_an_evenly_spaced_tab(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
             piton_syntax::init();
@@ -999,57 +1009,53 @@ mod tests {
         })
         .await;
 
-        let (code, chain, spec) = settle_chain(handle, super::CHAIN_GAP, cx);
-        assert_eq!(
-            chain.size.width, chain.size.height,
-            "chain {chain:?} is not square"
-        );
+        // Code starts selected.
+        let [code, chain, spec, ask] = settle_tabs(handle, false, cx);
+        for (left, right, between) in [
+            (code, chain, "Code and the chain"),
+            (chain, spec, "the chain and Spec"),
+            (spec, ask, "Spec and Ask"),
+        ] {
+            assert!(
+                (right.left() - left.right()).abs() <= super::px(0.5),
+                "there is a gap between {between}: {left:?}, {right:?}"
+            );
+            assert_eq!(left.size.height, right.size.height, "{between}");
+        }
+        // The chain is only an icon, so it is the narrowest of the tabs.
         assert!(
-            (chain.size.height - code.size.height * 0.5).abs() <= super::px(0.5),
-            "chain {chain:?} is not half the height of Code {code:?}"
+            chain.size.width < code.size.width && chain.size.width < spec.size.width,
+            "the chain {chain:?} is not narrower than Code {code:?} and Spec {spec:?}"
         );
-        assert!(
-            (chain.center().y - code.center().y).abs() <= super::px(0.5),
-            "chain {chain:?} is not centred on Code {code:?}"
-        );
-        assert!(
-            code.right() <= chain.left() && chain.right() <= spec.left(),
-            "inactive chain {chain:?} overlaps Code {code:?} or Spec {spec:?}"
-        );
-        assert!(
-            (chain.center().x - (code.right() + spec.left()) * 0.5).abs() <= super::px(0.5),
-            "inactive chain {chain:?} is not centred in the gap"
-        );
-        let resting = chain;
 
-        // Tab moves to the chain; the tabs slide rather than jump together.
+        // Tab moves to the chain, which selects Code and Spec with it.
         cx.update_window(handle, |_, window, cx| window.press("tab", cx))
             .unwrap();
-        let (code, _, spec) = cx
-            .update_window(handle, |_, window, cx| chain_layout(window, cx))
+        let [code, chain, _, _] = settle_tabs(handle, true, cx);
+        let edge = code.right();
+        assert!(
+            (chain.center().x - edge).abs() <= super::px(0.5),
+            "the chain {chain:?} is not centred on the seam at {edge:?}"
+        );
+        // The border where Code meets Spec is covered, with room to spare, so
+        // no outline shows beneath the chain.
+        let seam = cx
+            .update_window(handle, |_, window, _| window.find("seam").bounds())
             .unwrap();
         assert!(
-            spec.left() - code.right() > super::px(1.),
-            "the tabs met without sliding: Code {code:?}, Spec {spec:?}"
+            seam.left() <= edge - super::px(2.) && seam.right() >= edge + super::px(2.),
+            "the border between Code and Spec, at {edge:?}, is not covered: {seam:?}"
+        );
+        assert_eq!(
+            (seam.top(), seam.bottom()),
+            (chain.top(), chain.bottom()),
+            "the cover is not as tall as the tabs"
         );
 
-        let (code, chain, spec) = settle_chain(handle, super::px(0.), cx);
-        assert_eq!(chain, resting, "the chain moved when activated");
-        assert!(
-            chain.left() < code.right() && spec.left() < chain.right(),
-            "active chain {chain:?} does not overlap Code {code:?} and Spec {spec:?}"
-        );
-        assert!(
-            (chain.center().x - code.right()).abs() <= super::px(0.5),
-            "active chain {chain:?} is not centred on the seam at {:?}",
-            code.right()
-        );
-
-        // Back to Code: the tabs slide apart again, around the same chain.
-        cx.update_window(handle, |_, window, cx| window.press("shift-tab", cx))
+        // Tab again moves to Spec alone, and the chain opens up between them.
+        cx.update_window(handle, |_, window, cx| window.press("tab", cx))
             .unwrap();
-        let (_, chain, _) = settle_chain(handle, super::CHAIN_GAP, cx);
-        assert_eq!(chain, resting, "the chain moved when deactivated");
+        settle_tabs(handle, false, cx);
     }
 
     /// Code is tinted red and Spec blue, faintly, both together purple, a hue

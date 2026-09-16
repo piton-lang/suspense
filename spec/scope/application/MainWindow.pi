@@ -62,6 +62,19 @@ shape MainWindowShape:
             and the selection in place. The sidebar is resized by dragging its
             edge. Until a project is picked it reads "No project open".
 
+        gitStatus:
+            When the project is inside a git repository, the tree colors each
+            name by its git status: modified, added, untracked, and conflicted
+            each have their own color, and ignored files and folders are
+            dimmed. Unchanged names keep the default color. A folder takes the
+            color of the most pressing status among its contents, conflicted
+            first, then modified, added, and untracked, so a change stays
+            visible while its folder is collapsed. The colors suit both the
+            light and the dark theme. The highlighting refreshes by itself when
+            files change on disk or the repository's state changes, such as
+            after staging, committing, or switching branches. Outside a git
+            repository the tree is not highlighted.
+
         openFile:
             Clicking a file in the tree opens it in an @{EditorScope}, in a
             split beside the chat history: the file on the left taking 50% of

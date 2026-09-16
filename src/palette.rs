@@ -90,7 +90,8 @@ nothing matches, reply {{\"files\": []}}."
 }
 
 /// Runs the harness: [`harness::send`], replaced in tests.
-type SendToHarness = fn(String, Option<String>, PathBuf) -> mpsc::UnboundedReceiver<HarnessEvent>;
+type SendToHarness =
+    fn(String, Option<String>, Option<String>, PathBuf) -> mpsc::UnboundedReceiver<HarnessEvent>;
 
 /// A search handed to the harness, and what the harness did with it.
 struct FileSearch {
@@ -518,7 +519,7 @@ impl Palette {
         let query = self.query.clone();
         let prompt = format!("Find the file I'm looking for: {query}");
         let mut events =
-            (self.send_to_harness)(prompt, Some(search_system_prompt(&root)), root.clone());
+            (self.send_to_harness)(prompt, Some(search_system_prompt(&root)), None, root.clone());
         let task = cx.spawn_in(window, async move |this, cx| {
             let mut answer = None;
             while let Some(event) = events.next().await {
