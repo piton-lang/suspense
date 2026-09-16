@@ -2,6 +2,7 @@ use /lib
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/lsp import LSP
+from /scope/prompt-mode/message-list import MessageList
 
 export scope ChatInputScope:
     concept: {ChatInputConcept}
@@ -21,31 +22,51 @@ shape ChatInputShape:
         the ${HarnessIntegrationScope}
 
         Sending is never blocked by the harness working: while it is, the send
-        button reads "Queue" and sending adds the prompt to prompt mode's
-        queue. The button is only disabled while the input is empty.
+        button on the Code, Chain, and Spec tabs reads "Queue" and sending adds
+        the prompt to prompt mode's queue. On the Ask tab it always reads
+        "Send", because a question is never queued. The button is only disabled
+        while the input is empty.
 
     tabs:
         overview:
             The input and send button live inside the body of a tab bar, using
-            gpui-kit's default tab styling. There are three tabs, in order:
-            Code, Chain, and Spec. They are all tabs, laid out, sized, and
-            spaced like any other tabs in the bar, with no extra gap around
-            the Chain tab.
+            gpui-kit's default tab styling. There are four tabs, in order:
+            Code, Chain, Spec, and Ask. Code, Spec, and Ask are ordinary tabs.
+            Chain is also a tab, just a small one, because it only shows an
+            icon. All four sit flush against each other with no extra gaps,
+            and no tab has more padding than a normal tab. Ask stretches to
+            the right edge of the bar.
 
             Pressing <Tab> while in the chat input cycles from Code to Chain
-            to Spec and back to Code, <Shift+Tab> the other way, and focus
-            remains in the chat input.
+            to Spec to Ask and back to Code, <Shift+Tab> the other way, and
+            focus remains in the chat input.
 
         chain:
             Chain is a tab with unusual behaviour. It shows an icon rather
             than a label, reading "Code and Spec" as its tooltip, and
-            selecting it selects both Code and Spec.
+            selecting it selects both Code and Spec. It never shows a focus
+            outline, and its icon looks evenly spaced between Code and Spec
+            whichever of the two is selected.
 
-            Unselected, it shows a broken chain dimmed to 50% opacity.
+            Unselected, it shows a broken chain dimmed to 50% opacity, and
+            sits between Code and Spec like any other tab, overlapping
+            neither of them.
 
-            Selected, it shows a joined chain at full opacity, and Code,
-            Chain, and Spec all show as selected so the three read as one
-            locked tab.
+            Selected, it shows a joined chain at full opacity. Selecting it
+            animates as though it took a margin of -50% of its own width on
+            both its left and right sides: Code and Spec slide together until
+            they meet underneath it, so it ends up sitting on top of both.
+            Deselecting it animates them apart again. While Chain is
+            selected, Code and Spec both show as selected and read as a single
+            unified tab, with no line between them. Chain itself has a
+            transparent background and no left or right borders, so the joined
+            Code and Spec show through underneath it.
+
+        colour:
+            The selected tab and the tab body holding the input are tinted: a
+            subtle red for Code, a subtle blue for Spec, and a subtle green for
+            Ask. With Chain selected, Code, Spec, and the body are all purple.
+            The colour transitions smoothly whenever the selected tab changes.
 
     systemPrompt:
         The selected tab is the mode a prompt is sent in, and each mode gives
@@ -65,7 +86,28 @@ shape ChatInputShape:
             We're working on both the code located in <code location> and the
             spec located in <spec location>. Edit both of them.
 
+        ask:
+            We're only asking a question about the code located in <code
+            location> and the spec located in <spec location>. Don't edit
+            either of them.
+
         A prompt keeps the mode it was sent in while it waits in the queue.
+
+    ask:
+        Ask is for simply asking a question. A question runs straight away,
+        separately from any Code, Chain, or Spec task, even while the harness
+        is working on one. Only one question is open at a time: asking another
+        replaces it, stopping it if it is still running.
+
+        The question's progress and results are shown in a task table, as in
+        the @{MessageList}, in a panel that slides up out of the chat input
+        with an animation, over the bottom of the message list rather than
+        pushing it up. While the harness is working on the question, the panel
+        is a single row directly above the tabs, showing the latest thing the
+        harness did. Only once the question is complete does it expand into a
+        heading, with the question's status and first line, above the full
+        task table, which scrolls once it gets tall. A close button closes the
+        panel, and stops the question if it is still running.
 
     escape:
         Pressing <Escape> while in the chat input takes focus out of the chat

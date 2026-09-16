@@ -2,6 +2,7 @@
 //! run `piton build` in it, and switch between light and dark mode at the far
 //! right.
 
+use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::{ActiveTheme, Disableable, WindowExt};
@@ -146,12 +147,21 @@ impl Render for Toolbar {
                     ),
             )
             .child(
-                side().justify_end().child(
-                    gpui_kit::component::switch::Switch::new("dark-mode")
-                        .label("Dark mode")
-                        .checked(cx.theme().is_dark())
-                        .on_click(|dark, window, cx| set_dark_mode(*dark, window, cx)),
-                ),
+                side()
+                    .justify_end()
+                    .child(
+                        gpui_kit::component::switch::Switch::new("dark-mode")
+                            .label("Dark mode")
+                            .checked(cx.theme().is_dark())
+                            .on_click(|dark, window, cx| set_dark_mode(*dark, window, cx)),
+                    )
+                    .child(
+                        Button::new("settings")
+                            .ghost()
+                            .icon(IconName::Settings)
+                            .tooltip("Settings")
+                            .on_click(|_, _, cx| crate::settings_window::open(cx)),
+                    ),
             )
     }
 }

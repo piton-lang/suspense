@@ -12,6 +12,7 @@ use crate::app::{APP_TITLE, Quit};
 use crate::palette::{Palette, Picked, SystemCommand, SystemState};
 use crate::project_tree::{OpenFile, ProjectTree};
 use crate::prompt_mode::PromptMode;
+use crate::settings_window;
 use crate::theme_preference;
 use crate::toolbar::{self, Toolbar};
 
@@ -101,8 +102,14 @@ impl MainWindow {
         // Closing the window ends the application, so it asks first too.
         let this = cx.weak_entity();
         window.on_window_should_close(cx, move |window, cx| {
-            this.update(cx, |this, cx| this.confirm_quit(window, cx))
-                .unwrap_or(true)
+            let close = this
+                .update(cx, |this, cx| this.confirm_quit(window, cx))
+                .unwrap_or(true);
+            // The settings window does not keep the application running.
+            if close {
+                cx.defer(|cx| cx.quit());
+            }
+            close
         });
 
         Self {
@@ -203,6 +210,7 @@ impl MainWindow {
                 SystemCommand::ToggleDarkMode => {
                     toolbar::set_dark_mode(!cx.theme().is_dark(), window, cx)
                 }
+                SystemCommand::Settings => settings_window::open(cx),
                 SystemCommand::Quit => self.quit(window, cx),
             },
         }

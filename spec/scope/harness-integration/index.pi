@@ -7,7 +7,8 @@ export scope HarnessIntegrationScope:
 concept HarnessIntegrationConcept:
     pitch:
         Uses the one-off version for a coding harness for the selected
-        ${ProjectDirectoryScope}. For example, `claude -p`
+        ${ProjectDirectoryScope}. For example, `claude -p`. Each run carries on
+        a conversation, so the harness keeps its context between requests.
 
     shape: {HarnessIntegrationShape}
 
@@ -18,3 +19,18 @@ shape HarnessIntegrationShape:
         The compiled systemPrompt of a prompt's hidden anchor is appended to
         the harness's own system prompt, for example with
         `--append-system-prompt`.
+
+        The prompt is given to the harness on its standard input, and what the
+        harness does is streamed back as it happens.
+
+    context:
+        The harness keeps its context between requests instead of starting
+        fresh each time. Tasks share one ongoing conversation, and each task
+        sent carries it on. When the project is opened, tasks carry on the
+        latest conversation in its history. Questions from the Ask tab share a
+        separate conversation of their own, which lasts while the application
+        is open. A conversation is only carried on in the project it began in,
+        and if one can't be carried on, the next request starts a new one. Each
+        run applies its own prompt's systemPrompt, even when it carries on a
+        conversation begun in a different mode. The palette's file search
+        always starts fresh.

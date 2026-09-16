@@ -1,0 +1,52 @@
+
+anchor Prompt_ad3f6a390143725f:
+    userPrompt:
+        Bring the spec located in spec/ up to date with everything I've prompted and 
+        you've built.
+        
+        1. Collect the history. .suspense/history holds one entry per prompt I've sent,
+           named <unix-timestamp>-Prompt_<hash>. Older entries only have a .pi file,
+           which contains the userPrompt. Newer entries have a .json file with a
+           userPrompt field and an output array. The last type == "result" event in that
+           array is the agent's final summary of what it did.
+        
+          Go through them in timestamp order.
+        
+        2. Fold them into the end state. Work oldest to newest and keep one running
+           statement per part of the behaviour. In order to understand the categories of
+           what's changed you need to read and understand everything, then break them
+           into well-categorized chunks that relate to a known or unknown scope that can
+           be further refined into a concept and a shape as demonstrated in the spec/
+           folder itself.
+        
+          A later prompt or result replaces whatever an earlier one said about the same
+          part.
+        
+          My prompts say what I wanted; the result summaries say what was actually
+          built.
+        
+          If a result skipped or misunderstood a request and a later prompt of mine
+          corrected it, go with my correction. If nothing later addressed it, go with
+          what I asked for. Leave out implementation workarounds, test details, and
+          instructions about how the agent should work, as opposed to how the app should
+          behave.
+        
+        3. Check against the current state. Read the spec under spec/ and the relevant
+           code under src/. Take note what the spec already says correctly, so the
+           prompt can skip it; what the spec is missing or has wrong, anything the code
+           does or the prompts inform is true.
+        
+        4. Write the spec-agent prompt. Write it in my voice, as plain statements of how
+           things should work now, with no history and no "change X to Y". Start by
+           referencing the right scope, using an @\{ScopeName} reference. Group it under
+           short bold headings. Include only what the spec is missing or has wrong, plus
+           whatever context the agent needs to place it. If a system prompt or other
+           text has to appear word for word, quote it exactly.
+        
+        5. After the prompt, list separately: behaviour that came up but belongs in a
+           different scope, with the scope it belongs in; choices the agent made that I
+           never asked for; anywhere my prompts contradict each other in a way that step
+           2 couldn't settle.
+
+    systemPrompt:
+        We're working on the spec located in ./spec. Don't edit the code located in ./src.

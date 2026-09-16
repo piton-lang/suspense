@@ -201,6 +201,7 @@ pub enum SystemCommand {
     OpenProject,
     Build,
     ToggleDarkMode,
+    Settings,
     Quit,
 }
 
@@ -218,6 +219,7 @@ impl SystemState {
             (SystemCommand::OpenProject, "Open Project…", true),
             (SystemCommand::Build, "Build", self.can_build),
             (SystemCommand::ToggleDarkMode, theme, true),
+            (SystemCommand::Settings, "Settings…", true),
             (SystemCommand::Quit, "Quit", true),
         ]
         .into_iter()

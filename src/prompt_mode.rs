@@ -56,7 +56,7 @@ use gpui_kit::component::{Disableable as _, WindowExt as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use crate::chat_input::{ChatInput, SendMode, Submit};
+use crate::chat_input::{self, ChatInput, SendMode, Submit};
 use crate::file_link::{self, OpenFile};
 use crate::file_view::{CloseFile, FileView, OpenDefinition};
 use crate::harness::{self, HarnessEvent};
@@ -67,6 +67,7 @@ use crate::project_directory::ProjectDirectory;
 use crate::prompt_history::{self, RunRecord, SavedPrompt};
 use crate::prompt_queue::{self, QueuedPrompt};
 use crate::shell_format;
+use crate::system_prompts;
 
 /// The share of the width an opened file takes from the task view.
 const FILE_SHARE: f32 = 0.5;
@@ -135,6 +136,8 @@ struct PromptTask {
     compiled: Option<Compiled>,
     reply: Reply,
     status: TaskStatus,
+    /// The mode it was sent in, when known, which tints its header.
+    mode: Option<SendMode>,
 }
 
 /// A sent prompt once compiled.
@@ -192,6 +195,7 @@ impl PromptTask {
             compiled: None,
             reply: Reply::default(),
             status: TaskStatus::Compiling,
+            mode: None,
         }
     }
 
@@ -199,6 +203,7 @@ impl PromptTask {
     /// through the harness's parser.
     fn restore(saved: SavedPrompt) -> Self {
         let mut task = Self::new(saved.text.into());
+        task.mode = anchor_mode(&saved.anchor);
         let Some(record) = saved.record else {
             task.reply.done = true;
             task.status = TaskStatus::Unrecorded;
@@ -1086,6 +1091,10 @@ impl PromptMode {
             return;
         };
         let task_ix = self.push_task(text.clone().into(), cx);
+        self.tasks[task_ix].mode = match &sending {
+            Sending::Now(mode) => Some(*mode),
+            Sending::Queued(queued) => anchor_mode(&queued.anchor),
+        };
         self.working = true;
         self.chat_input
             .update(cx, |input, cx| input.set_busy(true, cx));
@@ -1467,6 +1476,12 @@ impl PromptMode {
             .filter(|_| !self.history_expanded)
             .map(|task| (self.tasks.len() - 1, task))?;
         let open = self.file_opener(cx);
+        // Tinted like the tab the task was sent from, as the chat input's body
+        // is: red for Code, purple for both, blue for Spec.
+        let background = match task.mode {
+            Some(mode) => cx.theme().background.blend(chat_input::mode_tint(mode, cx)),
+            None => cx.theme().tab_bar,
+        };
         let theme = cx.theme();
         let header = v_flex()
             .id("task-header")
@@ -1474,7 +1489,7 @@ impl PromptMode {
             .gap_2()
             .px_4()
             .py_2()
-            .bg(theme.tab_bar)
+            .bg(background)
             .border_b_1()
             .border_color(theme.border)
             .child(task_title(ix, task, cx))
@@ -1784,8 +1799,21 @@ fn resolve_anchor(
         Some(lsp) => lsp.anchor_for(text)?,
         None => HiddenAnchor::random(),
     };
-    anchor.system_prompt = Some(hidden_anchor::system_prompt(mode, project_dir)?);
+    // Once a project has been prompted, each mode's system prompt can be
+    // found in it and edited by hand. The defaults still apply if they
+    // cannot be saved.
+    system_prompts::save_missing(project_dir).ok();
+    anchor.mode = Some(mode);
+    anchor.system_prompt = hidden_anchor::system_prompt(mode, project_dir)?;
     Ok(anchor)
+}
+
+/// The mode an anchor was sent in: as saved with it, or for one saved before
+/// modes were, as its system prompt tells.
+fn anchor_mode(anchor: &HiddenAnchor) -> Option<SendMode> {
+    anchor
+        .mode
+        .or_else(|| anchor.system_prompt.as_deref().and_then(hidden_anchor::mode_of))
 }
 
 /// The first line of `text` with anything in it.

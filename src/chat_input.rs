@@ -75,6 +75,13 @@ fn tint(red: Hsla, blue: Hsla, green: Hsla, position: f32) -> Hsla {
     }
 }
 
+/// The tint of the tab `mode` is sent from, as the chat input shows it.
+pub fn mode_tint(mode: SendMode, cx: &App) -> Hsla {
+    let position = TABS.iter().position(|tab| *tab == mode).unwrap_or(0);
+    let theme = cx.theme();
+    tint(theme.red, theme.blue, theme.green, position as f32)
+}
+
 /// `from` blended `t` of the way to `to`, at the tint's opacity.
 fn blend(from: Hsla, to: Hsla, t: f32) -> Hsla {
     let t = t.clamp(0., 1.);
@@ -114,13 +121,31 @@ pub enum SendMode {
 }
 
 impl SendMode {
-    fn label(self) -> &'static str {
+    /// Every mode, in the order of their tabs.
+    pub const ALL: [SendMode; 4] = TABS;
+
+    pub fn label(self) -> &'static str {
         match self {
             SendMode::Code => "Code",
             SendMode::Both => "Code and Spec",
             SendMode::Spec => "Spec",
             SendMode::Ask => "Ask",
         }
+    }
+
+    /// The name the mode is saved under.
+    pub fn key(self) -> &'static str {
+        match self {
+            SendMode::Code => "code",
+            SendMode::Both => "combined",
+            SendMode::Spec => "spec",
+            SendMode::Ask => "ask",
+        }
+    }
+
+    /// The mode saved under `key`.
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|mode| mode.key() == key)
     }
 
     fn id(self) -> &'static str {

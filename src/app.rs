@@ -8,6 +8,7 @@ use crate::main_window::{self, MainWindow};
 use crate::piton_syntax;
 use crate::project_directory::ProjectDirectory;
 use crate::project_lsp::ProjectLsp;
+use crate::settings_window;
 
 pub const APP_TITLE: &str = "Suspense";
 
@@ -33,6 +34,7 @@ pub fn run() {
         ]);
         main_window::bind_keys(cx);
         file_view::bind_keys(cx);
+        settings_window::bind_keys(cx);
 
         // Closing the last window ends the application on every platform.
         cx.on_window_closed(|cx, _| {

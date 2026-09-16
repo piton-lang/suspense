@@ -18,6 +18,7 @@ use serde_json::Value;
 
 use crate::chat_input::SendMode;
 use crate::project_directory::CONFIG_FILE_NAME;
+use crate::system_prompts;
 
 /// Indentation of each prompt line inside the anchor's `userPrompt` block.
 pub const PROMPT_INDENT: &str = "        ";
@@ -84,7 +85,9 @@ fn absolute_module(module: &str) -> String {
 pub struct HiddenAnchor {
     name: String,
     pub imports: Imports,
-    /// The `systemPrompt` written after the `userPrompt`, if any.
+    /// The mode the prompt was sent in, written after the `userPrompt`.
+    pub mode: Option<SendMode>,
+    /// The `systemPrompt` written after the mode, if any.
     pub system_prompt: Option<String>,
 }
 
@@ -103,6 +106,7 @@ impl HiddenAnchor {
                 RandomState::new().hash_one(SystemTime::now())
             ),
             imports: Imports::default(),
+            mode: None,
             system_prompt: None,
         }
     }
@@ -122,6 +126,10 @@ impl HiddenAnchor {
         push_block(&mut source, prompt);
         // After the prompt, so the prompt's lines stay where
         // `prompt_first_line` says they are.
+        if let Some(mode) = self.mode {
+            source.push('\n');
+            writeln!(source, "{MODE_PREFIX}{}", mode.key()).ok();
+        }
         if let Some(system_prompt) = &self.system_prompt {
             source.push('\n');
             source.push_str(SYSTEM_PROMPT_LINE);
@@ -150,26 +158,37 @@ impl HiddenAnchor {
             return None;
         }
         let lines: Vec<&str> = lines.collect();
-        // Prompt lines are indented deeper, so only the property itself
-        // matches this line.
-        let (prompt, system_prompt) =
-            match lines.iter().position(|line| *line == SYSTEM_PROMPT_LINE) {
-                Some(at) => {
-                    // Drop the blank line separating the two properties; prompt
-                    // lines, even empty ones, are always indented.
-                    let prompt = &lines[..at];
-                    let prompt = prompt.strip_suffix(&[""]).unwrap_or(prompt);
-                    (unindent(prompt), Some(unindent(&lines[at + 1..])))
-                }
-                None => (unindent(&lines), None),
-            };
+        // Prompt lines are indented deeper, so only the properties themselves
+        // match these lines.
+        let property = |line: &&str| *line == SYSTEM_PROMPT_LINE || line.starts_with(MODE_PREFIX);
+        let end = lines.iter().position(property).unwrap_or(lines.len());
+        // Drop the blank line separating the prompt from the next property;
+        // prompt lines, even empty ones, are always indented.
+        let prompt = &lines[..end];
+        let prompt = if end < lines.len() {
+            prompt.strip_suffix(&[""]).unwrap_or(prompt)
+        } else {
+            prompt
+        };
+        let mut rest = &lines[end..];
+        let mut mode = None;
+        if let Some(key) = rest.first().and_then(|line| line.strip_prefix(MODE_PREFIX)) {
+            mode = SendMode::from_key(key.trim());
+            rest = &rest[1..];
+            rest = rest.strip_prefix(&[""]).unwrap_or(rest);
+        }
+        let system_prompt = match rest.first() {
+            Some(&SYSTEM_PROMPT_LINE) => Some(unindent(&rest[1..])),
+            _ => None,
+        };
         Some((
             Self {
                 name,
                 imports,
+                mode,
                 system_prompt,
             },
-            prompt,
+            unindent(prompt),
         ))
     }
 
@@ -178,6 +197,9 @@ impl HiddenAnchor {
         self.imports.0.len() as u32 + 3
     }
 }
+
+/// The start of the `mode` line of [`HiddenAnchor::source`].
+const MODE_PREFIX: &str = "    mode: ";
 
 /// The line opening the `systemPrompt` property of [`HiddenAnchor::source`].
 const SYSTEM_PROMPT_LINE: &str = "    systemPrompt:";
@@ -200,25 +222,31 @@ fn push_block(source: &mut String, text: &str) {
     }
 }
 
-/// The system prompt a prompt sent in `mode` is given, naming the code and
-/// spec locations set in the project's `piton.config.pi`.
-pub fn system_prompt(mode: SendMode, project_dir: &Path) -> Result<String> {
+/// The system prompt a prompt sent in `mode` is given: the project's template
+/// for it (see [`crate::system_prompts`]), naming the code and spec locations
+/// set in its `piton.config.pi`. A template left empty gives none.
+pub fn system_prompt(mode: SendMode, project_dir: &Path) -> Result<Option<String>> {
+    let template = system_prompts::load(mode, project_dir)?;
+    if template.trim().is_empty() {
+        return Ok(None);
+    }
     let code = config_value(project_dir, "codeRoot")?;
     let spec = config_value(project_dir, "root")?;
-    Ok(match mode {
-        SendMode::Code => format!(
-            "We're working on the code located in {code}. Don't edit the spec located in {spec}."
-        ),
-        SendMode::Both => format!(
-            "We're working on both the code located in {code} and the spec located in {spec}. Edit both of them."
-        ),
-        SendMode::Spec => format!(
-            "We're working on the spec located in {spec}. Don't edit the code located in {code}."
-        ),
-        SendMode::Ask => format!(
-            "We're only asking a question about the code located in {code} and the spec located in {spec}. Don't edit either of them."
-        ),
-    })
+    Ok(Some(system_prompts::fill(&template, &code, &spec)))
+}
+
+/// The mode of a prompt saved before modes were, read from the default system
+/// prompt it was given; `None` for one sent without a system prompt, or with
+/// an edited one.
+pub fn mode_of(system_prompt: &str) -> Option<SendMode> {
+    [
+        ("We're working on the code ", SendMode::Code),
+        ("We're working on both ", SendMode::Both),
+        ("We're working on the spec ", SendMode::Spec),
+        ("We're only asking a question ", SendMode::Ask),
+    ]
+    .into_iter()
+    .find_map(|(start, mode)| system_prompt.starts_with(start).then_some(mode))
 }
 
 /// The path the chat input's unsent text is presented to `piton lsp` under.
@@ -329,9 +357,11 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        HiddenAnchor, Imports, PROMPT_INDENT, SYSTEM_PROMPT_LINE, compile, prose, system_prompt,
+        HiddenAnchor, MODE_PREFIX, mode_of, Imports, PROMPT_INDENT, SYSTEM_PROMPT_LINE, compile, prose, system_prompt,
     };
     use crate::chat_input::SendMode;
+    use crate::project_directory::CONFIG_FILE_NAME;
+    use crate::system_prompts;
 
     #[test]
     fn merges_import_edits_into_absolute_imports() {
@@ -344,6 +374,7 @@ mod tests {
         let anchor = HiddenAnchor {
             name: "Prompt_test".into(),
             imports,
+            mode: None,
             system_prompt: None,
         };
         assert_eq!(
@@ -381,29 +412,51 @@ mod tests {
         assert_eq!(text, prompt);
         assert_eq!(parsed.system_prompt, anchor.system_prompt);
         assert_eq!(parsed.source(&text), source);
+
+        anchor.mode = Some(SendMode::Both);
+        let source = anchor.source(prompt);
+        assert!(
+            source.contains(&format!("\n\n{MODE_PREFIX}combined\n\n{SYSTEM_PROMPT_LINE}\n")),
+            "{source}"
+        );
+        let (parsed, text) = HiddenAnchor::parse(&source).unwrap();
+        assert_eq!(text, prompt);
+        assert_eq!(parsed.mode, Some(SendMode::Both));
+        assert_eq!(parsed.system_prompt, anchor.system_prompt);
+        assert_eq!(parsed.source(&text), source);
     }
 
-    /// Each mode names this repository's code and spec locations, from its
-    /// `piton.config.pi`.
+    /// A project without saved templates gives each mode its default, naming
+    /// this repository's code and spec locations from its `piton.config.pi`,
+    /// and the mode reads back from it.
     #[test]
-    fn system_prompt_names_configured_locations() {
-        let project_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    fn system_prompt_fills_in_the_template() {
+        let project_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/system-prompt-test");
+        fs::remove_dir_all(&project_dir).ok();
+        fs::create_dir_all(&project_dir).unwrap();
+        fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join(CONFIG_FILE_NAME),
+            project_dir.join(CONFIG_FILE_NAME),
+        )
+        .unwrap();
+
+        for mode in SendMode::ALL {
+            let prompt = system_prompt(mode, &project_dir).unwrap().unwrap();
+            assert_eq!(
+                prompt,
+                system_prompts::fill(system_prompts::default_template(mode), "./src", "./spec")
+            );
+            assert_eq!(mode_of(&prompt), Some(mode));
+        }
+        assert_eq!(mode_of("Something else."), None);
+
+        system_prompts::save(SendMode::Code, "Code in ${CODE_LOCATION} only.", &project_dir).unwrap();
         assert_eq!(
-            system_prompt(SendMode::Code, project_dir).unwrap(),
-            "We're working on the code located in ./src. Don't edit the spec located in ./spec."
+            system_prompt(SendMode::Code, &project_dir).unwrap().as_deref(),
+            Some("Code in ./src only.")
         );
-        assert_eq!(
-            system_prompt(SendMode::Both, project_dir).unwrap(),
-            "We're working on both the code located in ./src and the spec located in ./spec. Edit both of them."
-        );
-        assert_eq!(
-            system_prompt(SendMode::Spec, project_dir).unwrap(),
-            "We're working on the spec located in ./spec. Don't edit the code located in ./src."
-        );
-        assert_eq!(
-            system_prompt(SendMode::Ask, project_dir).unwrap(),
-            "We're only asking a question about the code located in ./src and the spec located in ./spec. Don't edit either of them."
-        );
+        system_prompts::save(SendMode::Ask, "", &project_dir).unwrap();
+        assert_eq!(system_prompt(SendMode::Ask, &project_dir).unwrap(), None);
     }
 
     #[test]
@@ -434,7 +487,12 @@ mod tests {
         anchor
             .imports
             .add_from_source("from ./scope/application import ApplicationScope");
-        anchor.system_prompt = Some(system_prompt(SendMode::Spec, project_dir).unwrap());
+        anchor.mode = Some(SendMode::Spec);
+        anchor.system_prompt = Some(system_prompts::fill(
+            system_prompts::default_template(SendMode::Spec),
+            "./src",
+            "./spec",
+        ));
 
         let dir = project_dir.join("target/hidden-anchor-test");
         fs::create_dir_all(&dir).unwrap();

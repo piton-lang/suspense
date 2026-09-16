@@ -1,34 +1,78 @@
 use /lib
+from /scope/editor import EditorScope
+from /scope/prompt-mode/chat-input import ChatInputScope
 
 export scope MessageList:
     concept: {MessageListConcept}
 
 concept MessageListConcept:
     pitch:
-        The chat history of prompt mode: the prompts sent to the harness and
-        its responses, as a conversation.
+        The task view of prompt mode: the tasks sent to the harness and their
+        output as the harness works on them.
 
     shape: {MessageListShape}
 
 shape MessageListShape:
     description:
-        Conversation-style, shows send prompts on the right, received input on
-        the left.
+        Shows tasks and their output, not a conversation. Prompts aren't shown
+        on the right with responses on the left, and tool calls aren't gathered
+        into groups.
 
     sentPrompt:
-        A sent prompt shows the compiled markdown that was actually sent to the
-        harness, rendered as markdown, once it has compiled. Its message
-        header shows the name of the hidden anchor it was compiled from.
+        A task's header shows the compiled markdown that was actually sent to
+        the harness, rendered as markdown, once it has compiled, along with the
+        name of the hidden anchor it was compiled from.
 
-    response:
-        A response from the harness is grouped by general type, in the order it
-        happened. The harness's own text is shown as markdown. Tool calls in a
-        row that share a general type (reading and searching files, editing
-        files, running commands, the web, agents, and anything else) are
-        gathered into one group, headed by that type and how many calls it
-        holds. Each call in a group lists the tool's name, its most telling
-        argument, and whether it is running, done, or failed, spelled out
-        rather than only coloured.
+    status:
+        A task's status is a coloured label that spells it out: "Compiling" in
+        cyan, "Running" in yellow, "Done" in green, "Failed" in red, and
+        "Not recorded" in grey for a task from the history with no record of its
+        run. The labels are readable in both light and dark mode.
+
+    outputTable:
+        A task's output is a table with Type, Output, and Status columns, with
+        one row per thing the harness did, in order: each piece of reply text,
+        each tool call, and any error.
+
+        Type is a coloured badge with an icon. Reply text is "Reply" and errors
+        are "Error". Tool calls are "Files" for Read, Glob, Grep, LS, and
+        NotebookRead; "Edit" for Edit, MultiEdit, Write, and NotebookEdit;
+        "Command" for Bash, BashOutput, KillShell, and KillBash; "Web" for
+        WebFetch and WebSearch; "Agent" for Task and Agent; and "Tool" for
+        anything else.
+
+        A tool call's status is "running", "done", or "failed", and a call
+        still running when the run ends takes the state the run ended in.
+
+        Reply text is rendered as markdown, with no border around it. What
+        subagents do is left out. If nothing streamed but the harness reports a
+        final result, that result is shown as the reply. A finished task with
+        nothing to show reads "No output."
+
+    toolCalls:
+        A tool call's Output cell shows its most telling argument. For Files,
+        Edit, Command, Web, and Agent calls the tool's name is left out, since
+        the badge already says what it is; any other tool's name comes first.
+
+        Any path inside the project directory is shown relative to it, and the
+        project directory itself reads `.`.
+
+        A command is shown whole, as a syntax-highlighted bash block, and a
+        long one is split across lines at `&&`, `||`, `|`, and `;`, one command
+        per line with the chained ones indented. It never splits inside quotes,
+        command substitutions, brackets, comments, or heredocs. Other arguments
+        are shown on a single line.
+
+    running:
+        While a task is under way, its table ends in a row for whatever the
+        harness does next. Until a row has something meaningful to show, its
+        Type cell is a skeleton and its Output cell shows the last three lines
+        of the harness's raw output: muted, monospace, JSON syntax-highlighted,
+        and always three lines tall so the row doesn't jump. Before any output
+        has arrived it reads "Waiting for the harness…". As soon as a row's
+        type is known, its badge is real, and as soon as its text or argument
+        arrives, that is shown. While the input of a Files, Edit, Command, Web,
+        or Agent call is still arriving, its Output cell shows only a skeleton.
 
     runningSkeleton:
         A skeleton stands in for a currently running task only while there is
@@ -36,9 +80,27 @@ shape MessageListShape:
         meaningful to display for that task in the message list, no skeleton
         is shown for it at all.
 
-    queueBackground:
-        The header along the top of the message list, holding the pinned prompt
-        and the queue, has the same background colour as the tab bar.
+    links:
+        Links in the compiled prompt and in reply text are clickable. A link to
+        a file opens it in the @{EditorScope} beside the task view, a web link
+        opens in the browser, and a link to a file that doesn't exist shows an
+        error notification. The file path on a Read, Edit, Write, or MultiEdit
+        row is shown as a link and opens that file the same way.
+
+    backgrounds:
+        The header for the latest task is coloured like the tab the task was
+        sent from, the same colour the @{ChatInputScope} body shows for that
+        tab: a subtle red for Code, purple for Chain, and a subtle blue for
+        Spec. A task from the history that doesn't say which tab it was sent
+        from keeps the tab bar's colour. The queue along the bottom and the
+        previous tasks row along the top both have the same background colour
+        as the tab bar.
+
+    askDimming:
+        While a question from the Ask tab is open, a dark shade fades in over
+        the message list to draw attention to it, and fades back out when the
+        question is closed. It covers only the message list, not a file open
+        beside it, and doesn't block clicks.
 
     legibility:
         The output from a realtime agent should be readable and

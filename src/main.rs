@@ -22,7 +22,9 @@ mod project_tree;
 mod prompt_history;
 mod prompt_mode;
 mod prompt_queue;
+mod settings_window;
 mod shell_format;
+mod system_prompts;
 mod theme_preference;
 mod toolbar;
 

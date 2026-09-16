@@ -7,34 +7,45 @@ export scope PromptEditor:
 
 concept PromptEditorConcept:
     pitch:
-        A chat-style interface for prompting a local coding harness like Claude
-        Code directly with compiled-on-depand Piton.
+        An interface for sending tasks to a local coding harness like Claude
+        Code, written directly with compiled-on-depand Piton.
 
     shape: {PromptEditorShape}
 
 shape PromptEditorShape:
     description:
-        Typical AI-style chat interface.
+        Not a chat. Each prompt sent is a task for the harness, tasks can
+        queue, and each task shows its output until it finishes. There are no
+        message bubbles.
 
     basicDesignAndLayout:
-        Chat history fills that all available space except for a
-        @{ChatInputScope} along the bottom.
+        The @{MessageList} fills all available space except for a
+        @{ChatInputScope} along the bottom. From top to bottom it holds the
+        previous tasks row, the header for the latest task, the latest task's
+        output, and the queue.
+
+        Before any task has been sent, the space shows a hint instead, which
+        wraps when the view is narrow. It reads
+        "Write a prompt below. Enter adds a line; Ctrl/Cmd+Enter sends it."
+        or, while no project is open, "Open a project to start prompting."
 
     chatHistory: @{MessageList}
 
-    pinnedHeader:
-        While the harness is working, the prompt it is working on is pinned as
-        a header along the top of the chat history, and the conversation
-        scrolls beneath it. It shows up to three lines of the prompt beside a
-        spinner, and clicking it scrolls the conversation to that prompt.
+    previousTasks:
+        A small row along the top is always shown. It reads
+        "No previous tasks", "1 previous task", or "N previous tasks", and does
+        nothing until a task has been sent. Clicking it expands into a
+        scrollable accordion of every task, oldest first, each headed by its
+        status and the first line of its prompt. Opening one shows that task's
+        compiled prompt and output. While expanded, the row reads
+        "Back to the latest task".
 
-        The queue sits in the same header as an expanding list: a row saying
-        how many prompts are queued, with a chevron, expands to list each
-        queued prompt in order, a line or two of each, with a button to cancel
-        it. The header also holds the auto-send switch and the "Send next"
-        button. The queue row, with its switch and button, is shown only while
-        the queue has anything in it. The header is shown whenever the harness
-        is working or the queue has anything in it.
+    header:
+        The latest task heads the view whether or not the harness is working:
+        its status, with a spinner while it is under way, the name of the
+        hidden anchor it was compiled from, and the compiled markdown the
+        harness actually received, which scrolls once it gets tall. Until it
+        has compiled, the prompt as typed is shown instead.
 
     queue:
         overview:
@@ -42,6 +53,20 @@ shape PromptEditorShape:
             in a queue, in the order they were sent, and are sent one at a
             time. While the harness is working, the chat input's send button
             reads "Queue".
+
+            A question from the Ask tab never queues. It runs straight away,
+            even while the harness is working on a task.
+
+        placement:
+            The queue sits along the bottom of the view, below the output and
+            directly above the chat input, with a border along its top. It is
+            not part of the header. A row saying how many prompts are queued,
+            with a chevron, expands to list each queued prompt in order, a line
+            or two of each, with a button to cancel it. Each prompt in the list
+            is numbered, with its number, text, and cancel button vertically
+            centred in its row, and the list scrolls once it gets tall. The
+            same area holds the auto-send switch and the "Send next" button.
+            The queue is shown only while it has anything in it.
 
         cancel:
             A queued prompt that has not been sent yet can be cancelled, which
@@ -58,7 +83,7 @@ shape PromptEditorShape:
             queue.
 
         persistence:
-            Queued prompts are saved in the project's `.piton-repl/queue`
+            Queued prompts are saved in the project's `.suspense/queue`
             directory, each as its hidden anchor's source, imports included,
             the way prompt history is, and named so they list in the order they
             were queued. The queue is restored whenever the project is opened;
@@ -66,5 +91,16 @@ shape PromptEditorShape:
             own. A queued prompt's file is removed when it is cancelled, or
             when it is sent, at which point it is saved to the prompt history
             like any other prompt.
+
+    history:
+        Every task sent is saved in the project's `.suspense/history` directory
+        as its hidden anchor's source, named by the second it was sent and the
+        anchor's name. Once its run is over, what came of it is saved beside it
+        in a `.json` file of the same name: the compiled userPrompt the harness
+        received, each line the harness printed, and any error. Opening the
+        project brings back every task in order, with its output replayed from
+        that record. A task with no record shows as "Not recorded". Questions
+        from the Ask tab are saved in `.suspense/asks` instead, so they never
+        come back as tasks.
 
     chatInput: @{ChatInputScope}

@@ -1,0 +1,33 @@
+
+anchor Prompt_2d7be386b9f0e202:
+    userPrompt:
+        If I run the following prompt in spec mode, I end up getting a piton compile error
+        
+        I want a prompt I can send to the spec agent that brings the spec up to date with everything I've asked for about .
+        1. Collect the history. .suspense/history holds one entry per prompt I've sent, named <unix-timestamp>-Prompt_<hash>.
+        Older entries only have a .pi file, which contains the userPrompt.
+        Newer entries have a .json file with a userPrompt field and an output array. The last type == "result" event in that array is the agent's final summary of what it did.
+        Go through them in timestamp order. Keep the ones that are actually about , judged by reading the prompt rather than matching keywords. Include prompts that change  indirectly, such as new neighbouring elements, spacing or colour.
+        2. Fold them into the end state. Work oldest to newest and keep one running statement per part of the behaviour (layout, sizing, interaction, keyboard, animation, colour, system prompts, and so on).
+        A later prompt or result replaces whatever an earlier one said about the same part.
+        My prompts say what I wanted; the result summaries say what was actually built.
+        If a result skipped or misunderstood a request and a later prompt of mine corrected it, go with my correction.
+        If nothing later addressed it, go with what I asked for.
+        Leave out implementation workarounds, test details, and instructions about how the agent should work, as opposed to how the app should behave.
+        3. Check against the current state. Read the spec for  under spec/ and the relevant code under src/. Note:
+        what the spec already says correctly, so the prompt can skip it;
+        what the spec is missing or has wrong;
+        anything the code does that I never asked for, where the agent chose it for me.
+        4. Write the spec-agent prompt. Write it in my voice, as plain statements of how things should work now, with no history and no "change X to Y".
+        Start by referencing the right scope, using an @{ScopeName} reference.
+        Group it under short bold headings.
+        Include only what the spec is missing or has wrong, plus whatever context the agent needs to place it.
+        If a system prompt or other text has to appear word for word, quote it exactly.
+        5. After the prompt, list separately:
+        behaviour that came up but belongs in a different scope, with the scope it belongs in;
+        choices the agent made that I never asked for, so I can confirm or change them;
+        anywhere my prompts contradict each other in a way that step 2 couldn't settle.
+        Don't edit anything under src/ or spec/.
+
+    systemPrompt:
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.

@@ -2,7 +2,6 @@ use /lib
 from ../project-directory import ProjectDirectoryScope
 from ../prompt-mode import PromptEditor
 from ../prompt-mode/chat-input import ChatInputScope
-from ../harness-stream import HarnessStream
 from ../editor import EditorScope
 from ../palette import PaletteScope
 
@@ -37,6 +36,16 @@ shape MainWindowShape:
         focus to the @{ChatInputScope}. Esc first closes whatever it would
         otherwise dismiss, such as a completion menu or a popup.
 
+    quitting:
+        Quitting while the harness is working on a task or a question, or
+        while a build is running, asks first. That goes for Ctrl+Q (Cmd+Q on
+        macOS), Quit in the @{PaletteScope}, and the window's close button. The
+        message is titled "Quit while a task is running?" and says what is
+        still running. "Quit" exits, and "Keep Running" or Esc dismisses it.
+        Asking to quit again while it is open doesn't open a second one, and an
+        open palette closes first. Prompts waiting in the queue don't count as
+        running work, since they are saved with the project.
+
     palette:
         Ctrl+P (Cmd+P on macOS) opens the @{PaletteScope} over the window, for
         fuzzy searching the project's files, the application's own commands,
@@ -45,12 +54,9 @@ shape MainWindowShape:
     header:
         toolbar:
             Toolbar on top that contains a button for @{ProjectDirectoryScope}
-            As well as a Build button that will run `piton build`
-
-            In the middle of the toolbar, a toggle button shows or hides a
-            @{HarnessStream} split view beside prompt mode. It reads
-            "View Raw Output" while the split is hidden and "Hide Raw Output"
-            while it is shown.
+            As well as a Build button that will run `piton build`, with the
+            "Dark mode" switch at the far right. There is no raw output view
+            and no toggle for one.
 
     body:
         sidebar:
