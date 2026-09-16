@@ -1,0 +1,35 @@
+# Builds and tests every push to main and every pull request.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, release]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # What GPUI needs to build on Linux: X11, Wayland, keyboard layouts,
+      # fonts, and Vulkan.
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+            libx11-xcb-dev libxcb1-dev libfontconfig-dev libfreetype-dev \
+            libvulkan-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # Tests that need the `piton` CLI skip themselves here, where it isn't
+      # installed.
+      - name: Test
+        run: cargo test --locked

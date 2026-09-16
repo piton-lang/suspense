@@ -776,7 +776,10 @@ impl HistoryList {
                     .flex_none()
                     .text_color(muted),
                 );
+            // As wide as the list, however long its lines, so they wrap and it
+            // is laid out as tall as it is measured.
             v_flex()
+                .w_full()
                 .border_b_1()
                 .border_color(border)
                 .child(trigger)
@@ -4279,7 +4282,12 @@ mod tests {
                         id,
                         |ask| {
                             ask.apply(HarnessEvent::TextStarted);
-                            ask.apply(HarnessEvent::TextDelta(format!("Answer to {text}")));
+                            ask.apply(HarnessEvent::TextDelta(format!(
+                                "Answer to {text}. {}\n\n- {}\n- {}\n\nEnd.",
+                                "Words that go on. ".repeat(30),
+                                "A long bullet that keeps going on and on. ".repeat(12),
+                                "Short one."
+                            )));
                             ask.apply(HarnessEvent::Finished {
                                 is_error: false,
                                 result: String::new(),
@@ -4348,6 +4356,37 @@ mod tests {
             prompt_mode.read_with(cx, |this, _| this.ask_history.open),
             Some(1)
         );
+        // An answer with long lines wraps them within the list, so the open
+        // item ends just below its table, with no space left beneath it.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.render_frame(cx);
+            let list = window.find("ask-list-scroll").bounds();
+            let panel = window
+                .find(("history-panel", super::ASK_HISTORY_IX + 1))
+                .bounds();
+            let row = window.find(("output-row", 0usize)).bounds();
+            assert!(
+                panel.right() <= list.right(),
+                "the open answer {panel:?} is wider than its list {list:?}"
+            );
+            assert!(
+                panel.bottom() - row.bottom() < gpui_kit::px(32.),
+                "{:?} of space below the answer's last row",
+                panel.bottom() - row.bottom()
+            );
+            let item = prompt_mode
+                .read(cx)
+                .ask_history
+                .scroll
+                .bounds_for_item(1)
+                .unwrap();
+            assert!(
+                item.bottom() - panel.bottom() < gpui_kit::px(2.),
+                "the list measured the item {item:?} taller than it is drawn"
+            );
+        })
+        .unwrap();
 
         // Off the Ask tab, the answers go, and the list is undimmed.
         prompt_mode.update(cx, |this, cx| {

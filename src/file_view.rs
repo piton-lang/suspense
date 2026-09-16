@@ -1104,6 +1104,9 @@ mod tests {
     /// the editor.
     #[gpui_kit::test]
     async fn saving_a_piton_file_formats_it(cx: &mut TestAppContext) {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
         let file = std::env::temp_dir().join(format!(
             "suspense-file-view-format-{}.pi",
             std::process::id()
@@ -1231,6 +1234,9 @@ mod tests {
     /// accepting the completion with Enter also imports the name.
     #[gpui_kit::test]
     async fn completing_a_reference_imports_it(cx: &mut TestAppContext) {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
         let (view, handle) = open_spec_file(cx, "support for Piton files.").await;
         let editor = view.read_with(cx, |view, _| view.editor.clone());
 
@@ -1265,6 +1271,9 @@ mod tests {
     /// `piton lsp` and shown in the editor.
     #[gpui_kit::test]
     async fn unknown_reference_is_diagnosed(cx: &mut TestAppContext) {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
         let (view, handle) = open_spec_file(cx, "support for Piton files.").await;
         let editor = view.read_with(cx, |view, _| view.editor.clone());
 

@@ -706,6 +706,9 @@ mod tests {
     /// Asks the real `piton lsp` for completions over this repository's spec.
     #[test]
     fn completes_spec_names() {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
         let session = session();
         let prompt = "Update @{Appl";
         let response =
@@ -729,6 +732,9 @@ mod tests {
     /// Accepting a completion takes on the import `piton lsp` attached to it.
     #[test]
     fn accepted_completion_imports_its_name() {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
         let session = session();
         let prompt = "Update @{Appl";
         session.complete(prompt, prompt.len()).unwrap();
@@ -749,6 +755,9 @@ mod tests {
     /// Lets the real `piton lsp` import the names a prompt uses.
     #[test]
     fn auto_imports_names_used_in_prompt() {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
         let session = session();
         let anchor = session
             .anchor_for("See @{ApplicationScope} and ${MainWindowScope.concept.pitch}")

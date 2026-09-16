@@ -971,7 +971,9 @@ mod tests {
 
     #[test]
     fn lists_files_by_path_leaving_out_ignored_ones() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/palette-files-test");
+        // Outside this repository, whose own .gitignore would apply.
+        let root =
+            std::env::temp_dir().join(format!("suspense-palette-files-{}", std::process::id()));
         fs::remove_dir_all(&root).ok();
         for path in [
             "src/b.rs",

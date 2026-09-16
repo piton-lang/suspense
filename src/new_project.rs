@@ -783,6 +783,9 @@ belay-agent-adapter CodexAdapter:
     /// the roots; it refuses a folder that already holds a config.
     #[test]
     fn creating_writes_a_project_piton_builds() {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
         let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/new-project-test");
         std::fs::remove_dir_all(&base).ok();
         std::fs::create_dir_all(&base).unwrap();

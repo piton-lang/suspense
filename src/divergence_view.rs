@@ -24,7 +24,7 @@ use gpui_kit::*;
 
 use crate::divergence::{
     self, AgentReply, Build, Cancel, FileResult, Files, Report, RunAgent, SavedReport, Side,
-    Verdict, percent, strength_label, tree_rows,
+    Verdict, percent, tree_rows,
 };
 use crate::harness::{self, HarnessEvent};
 use crate::prompt_mode::{Reply, output_table};
@@ -578,6 +578,10 @@ impl DivergenceView {
                 header.child(gpui_kit::TestSupportExt::test_support(
                     h_flex()
                         .id("divergence-score")
+                        .tooltip(explain(
+                            "Aligned",
+                            figure_meaning("divergence-figure-aligned"),
+                        ))
                         .h_full()
                         .gap_3()
                         .pl_3()
@@ -976,6 +980,11 @@ impl DivergenceView {
                     .child(div().flex_1().min_w_0().child(gap))
             }));
 
+        // Which way the influence runs, from the spec into the code.
+        let influence_label = match self.side {
+            Side::Source => "Influence from spec",
+            Side::Spec => "Influence on code",
+        };
         let rows = connections.iter().enumerate().map(|(ix, connection)| {
             let target = connection.end(other).to_string();
             let strength = connection.strength;
@@ -1006,11 +1015,7 @@ impl DivergenceView {
                                 .flex_none()
                                 .text_sm()
                                 .text_color(theme.muted_foreground)
-                                .child(format!(
-                                    "{} · {}%",
-                                    strength_label(strength),
-                                    percent(strength)
-                                )),
+                                .child(format!("{} {}%", influence_label, percent(strength))),
                         )
                         .children(connection.divergence.map(|value| {
                             div()
@@ -1110,8 +1115,10 @@ impl DivergenceView {
         };
 
         // A figure: its value, large, above what it is.
-        let figure = |label: &str, value: Option<u32>, color: Option<Hsla>| {
-            v_flex()
+        let figure = |id: &'static str, label: &str, value: Option<u32>, color: Option<Hsla>| {
+            let card = v_flex()
+                .id(id)
+                .tooltip(explain(label, figure_meaning(id)))
                 .min_w(px(110.))
                 .gap_0p5()
                 .px_3()
@@ -1126,7 +1133,9 @@ impl DivergenceView {
                         .when_some(color, |value, color| value.text_color(color))
                         .child(value.map_or("—".to_string(), |value| format!("{value}%"))),
                 )
-                .child(muted(label))
+                .child(muted(label));
+            // Lets UI tests find the figure; inert in normal builds.
+            gpui_kit::TestSupportExt::test_support(card)
         };
         let [aligned, drifting, diverged] = report.verdict_counts();
         let score = report.score();
@@ -1136,28 +1145,42 @@ impl DivergenceView {
             .flex_wrap()
             .gap_2()
             .child(figure(
+                "divergence-figure-aligned",
                 "Aligned",
                 report.alignment(),
                 score.map(|score| Self::verdict_color(score, cx)),
             ))
             .child(figure(
+                "divergence-figure-source-definition",
                 "Source definition",
                 definition(Side::Source),
                 definition(Side::Source).map(|value| Self::definition_color(value, cx)),
             ))
             .child(figure(
+                "divergence-figure-spec-definition",
                 "Spec definition",
                 definition(Side::Spec),
                 definition(Side::Spec).map(|value| Self::definition_color(value, cx)),
             ))
             .child(figure(
+                "divergence-figure-source-coverage",
                 "Source coverage",
                 report.coverage(Side::Source),
                 None,
             ))
-            .child(figure("Spec coverage", report.coverage(Side::Spec), None))
-            .child(
+            .child(figure(
+                "divergence-figure-spec-coverage",
+                "Spec coverage",
+                report.coverage(Side::Spec),
+                None,
+            ))
+            .child(gpui_kit::TestSupportExt::test_support(
                 v_flex()
+                    .id("divergence-figure-verdicts")
+                    .tooltip(explain(
+                        "Aligned · Drifting · Diverged",
+                        figure_meaning("divergence-figure-verdicts"),
+                    ))
                     .gap_0p5()
                     .px_3()
                     .py_2()
@@ -1174,7 +1197,7 @@ impl DivergenceView {
                             .child(div().text_color(theme.danger).child(diverged.to_string())),
                     )
                     .child(muted("Aligned · Drifting · Diverged")),
-            );
+            ));
 
         let assessment = |side: Side, text: &str| {
             v_flex()
@@ -1464,6 +1487,62 @@ impl DivergenceView {
     }
 }
 
+/// What the report's figure with `id` means, for its tooltip.
+fn figure_meaning(id: &str) -> &'static str {
+    match id {
+        "divergence-figure-aligned" => {
+            "How closely the code and the spec agree: 100% less the average divergence of \
+             every file analyzed, source and spec alike. Green above 80%, amber above 50%, and \
+             red otherwise."
+        }
+        "divergence-figure-source-definition" => {
+            "How much of the code the spec defines, averaged over the source files. Low means \
+             the implementation filled in a lot that the spec never says."
+        }
+        "divergence-figure-spec-definition" => {
+            "How precisely the spec describes what to build, averaged over the spec files. Low \
+             means gaps an implementation has to guess at."
+        }
+        "divergence-figure-source-coverage" => {
+            "The share of source files connected to at least one spec file. A source file with \
+             no connection isn't driven by the spec at all."
+        }
+        "divergence-figure-spec-coverage" => {
+            "The share of spec files that at least one source file implements. A spec file with \
+             no connection isn't built, or can't be traced to the code."
+        }
+        "divergence-figure-verdicts" => {
+            "How many files analyzed, source and spec alike, are aligned, diverging less than \
+             20%; drifting, from 20% up to 50%; and diverged, 50% or more."
+        }
+        _ => "",
+    }
+}
+
+/// A tooltip naming a figure and explaining what it means, wrapped to a
+/// readable width.
+fn explain(
+    title: &str,
+    meaning: &'static str,
+) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+    let title = SharedString::from(title.to_string());
+    move |window, cx| {
+        let title = title.clone();
+        gpui_kit::component::tooltip::Tooltip::element(move |_, cx| {
+            let tooltip = v_flex()
+                .id("divergence-tooltip")
+                .w(px(280.))
+                .gap_0p5()
+                .py_1()
+                .child(div().font_medium().child(title.clone()))
+                .child(div().text_color(cx.theme().muted_foreground).child(meaning));
+            // Lets UI tests find the tooltip; inert in normal builds.
+            gpui_kit::TestSupportExt::test_support(tooltip)
+        })
+        .build(window, cx)
+    }
+}
+
 impl Render for DivergenceView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let body = match (self.saved(), self.running()) {
@@ -1746,6 +1825,26 @@ mod tests {
             assert!(window.try_find("divergence-score").is_some());
             assert!(window.try_find("divergence-figures").is_some());
             assert!(window.try_find(("divergence-saved", 0usize)).is_some());
+            assert!(window.try_find("divergence-tooltip").is_none());
+            window.hover("divergence-figure-spec-coverage", cx);
+        })
+        .unwrap();
+        // Hovered a moment, a figure explains itself.
+        cx.executor().advance_clock(Duration::from_millis(600));
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("divergence-tooltip").is_some());
+            for id in [
+                "divergence-figure-aligned",
+                "divergence-figure-source-definition",
+                "divergence-figure-spec-definition",
+                "divergence-figure-source-coverage",
+                "divergence-figure-spec-coverage",
+                "divergence-figure-verdicts",
+            ] {
+                assert!(!super::figure_meaning(id).is_empty(), "{id}");
+            }
             assert!(window.try_find(("divergence-most", 0usize)).is_some());
             // The least well defined file is src/main.rs.
             window.click(("divergence-least", 0usize), cx);

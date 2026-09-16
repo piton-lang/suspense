@@ -995,6 +995,9 @@ mod tests {
     /// input sits at the bottom of the window, and the menu stays inside it.
     #[gpui_kit::test]
     async fn typing_a_reference_autocompletes_and_imports(cx: &mut TestAppContext) {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
         cx.update(|cx| {
             gpui_kit::init(cx);
             super::bind_keys(cx);
@@ -1102,6 +1105,9 @@ mod tests {
     /// the way the harness understands them.
     #[gpui_kit::test]
     async fn typing_a_mention_completes_skills_and_agents(cx: &mut TestAppContext) {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
         cx.update(|cx| {
             gpui_kit::init(cx);
             super::bind_keys(cx);

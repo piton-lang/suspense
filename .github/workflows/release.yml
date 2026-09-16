@@ -1,0 +1,107 @@
+# Builds Suspense for Linux, macOS, and Windows whenever something is merged
+# into the release branch, and publishes a zip for each as a GitHub release.
+name: Release
+
+on:
+  push:
+    branches: [release]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            os: ubuntu-22.04
+          - name: macos-universal
+            os: macos-14
+          - name: windows-x86_64
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+            libx11-xcb-dev libxcb1-dev libfontconfig-dev libfreetype-dev \
+            libvulkan-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          # Both Mac architectures, for one universal app.
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.name }}
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cargo build --release --locked
+          mkdir -p dist/suspense
+          cp target/release/suspense LICENSE.md dist/suspense/
+          cd dist && zip -r ../suspense-${{ matrix.name }}.zip suspense
+
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cargo build --release --locked --target aarch64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          app=dist/Suspense.app
+          mkdir -p "$app/Contents/MacOS"
+          lipo -create -output "$app/Contents/MacOS/suspense" \
+            target/aarch64-apple-darwin/release/suspense \
+            target/x86_64-apple-darwin/release/suspense
+          sed "s/@VERSION@/$version/g" packaging/macos/Info.plist > "$app/Contents/Info.plist"
+          cp LICENSE.md dist/
+          # ditto keeps the bundle's permissions and structure intact.
+          cd dist && ditto -c -k --sequesterRsrc --keepParent Suspense.app ../suspense-${{ matrix.name }}.zip
+          zip -j ../suspense-${{ matrix.name }}.zip LICENSE.md
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo build --release --locked
+          New-Item -ItemType Directory -Force dist/suspense | Out-Null
+          Copy-Item target/release/suspense.exe, LICENSE.md dist/suspense/
+          Compress-Archive -Path dist/suspense -DestinationPath suspense-${{ matrix.name }}.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: suspense-${{ matrix.name }}
+          path: suspense-${{ matrix.name }}.zip
+          if-no-files-found: error
+
+  # Once all three have built, they're published together as one release.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          tag="v${version}-build.${{ github.run_number }}"
+          gh release create "$tag" dist/*.zip \
+            --target "${{ github.sha }}" \
+            --title "Suspense $version (build ${{ github.run_number }})" \
+            --notes "Built from ${{ github.sha }} on the release branch."

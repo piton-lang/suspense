@@ -56,3 +56,17 @@ fn relative_to(path: &Path, root: &Path) -> String {
         .display()
         .to_string()
 }
+
+/// Whether `piton` can't be run, as on a machine that doesn't have it
+/// installed, such as CI's: tests that need it say they're skipped and pass.
+#[cfg(test)]
+pub fn piton_missing() -> bool {
+    let missing = std::process::Command::new("piton")
+        .arg("--version")
+        .output()
+        .is_err();
+    if missing {
+        eprintln!("skipped: `piton` isn't installed");
+    }
+    missing
+}

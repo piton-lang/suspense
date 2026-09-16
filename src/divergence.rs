@@ -23,10 +23,6 @@ use crate::hidden_anchor::{self, APP_DIR};
 /// The most files of each side analyzed.
 pub const MAX_FILES: usize = 400;
 
-/// How strong a connection has to be to count as strong, or as moderate.
-pub const STRONG: f32 = 2. / 3.;
-pub const MODERATE: f32 = 1. / 3.;
-
 /// The side of the project a file is on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Side {
@@ -308,17 +304,6 @@ impl Verdict {
             20..50 => Verdict::Drifting,
             _ => Verdict::Diverged,
         }
-    }
-}
-
-/// How strong a connection of `strength` is.
-pub fn strength_label(strength: f32) -> &'static str {
-    if strength >= STRONG {
-        "Strong"
-    } else if strength >= MODERATE {
-        "Moderate"
-    } else {
-        "Weak"
     }
 }
 
@@ -862,10 +847,7 @@ fn kill(child: &Arc<Mutex<Child>>) {
 mod tests {
     use std::path::Path;
 
-    use super::{
-        AgentReply, Side, Verdict, list_files, merge, normalize, parse_reply, strength_label,
-        tree_rows,
-    };
+    use super::{AgentReply, Side, Verdict, list_files, merge, normalize, parse_reply, tree_rows};
 
     fn reply(json: &str) -> AgentReply {
         parse_reply(json).unwrap()
@@ -936,14 +918,11 @@ mod tests {
     }
 
     #[test]
-    fn scores_and_strengths_are_named() {
+    fn scores_are_named() {
         assert_eq!(Verdict::of(0), Verdict::Aligned);
         assert_eq!(Verdict::of(19), Verdict::Aligned);
         assert_eq!(Verdict::of(20), Verdict::Drifting);
         assert_eq!(Verdict::of(50), Verdict::Diverged);
-        assert_eq!(strength_label(0.9), "Strong");
-        assert_eq!(strength_label(0.4), "Moderate");
-        assert_eq!(strength_label(0.1), "Weak");
     }
 
     /// The reply is the result the stream ends with.

@@ -608,6 +608,9 @@ mod tests {
     /// repository's own spec with the real `piton` CLI.
     #[test]
     fn compiles_against_this_project() {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
         let project_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let mut anchor = HiddenAnchor::random();
         anchor
@@ -643,6 +646,9 @@ mod tests {
     /// backticks.
     #[test]
     fn attached_text_is_taken_as_it_is() {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
         let tricky = "fn main() { println!(\"${x} @{Y}\"); }\n\n  - item: value // not a comment\nends with \\\n```rust\ninner\n```";
         let mut anchor = HiddenAnchor::random();
         anchor.mode = Some(SendMode::Ask);

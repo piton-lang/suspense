@@ -112,9 +112,7 @@ shape DivergenceShape:
             the average of what both agents said of it, or what one said when
             only one mentioned it, from 0 to 1, and so is its divergence, which
             is unknown when neither agent said. Connections to files that aren't
-            among the source or spec files are left out. A strength of two
-            thirds or more is strong, one third or more moderate, and anything
-            less weak.
+            among the source or spec files are left out.
 
         measures:
             Each file analyzed has:
@@ -157,6 +155,18 @@ shape DivergenceShape:
             - "Most diverged" on the left: the five files that diverge most, source and spec alike; and "Saved reports" on the right: each report saved for the project, newest first, with how long ago it was made and how aligned it was, the one showing marked; clicking another shows it
             - "Notes", when there are any notes about the analysis
 
+            Hovering a figure, or the header's alignment, shows a tooltip naming
+            it and explaining what it means:
+            - Aligned: how closely the code and the spec agree, 100% less the average divergence of every file analyzed, source and spec alike, green above 80%, amber above 50%, and red otherwise
+            - Source definition: how much of the code the spec defines, averaged over the source files, low meaning the implementation filled in a lot the spec never says
+            - Spec definition: how precisely the spec describes what to build, averaged over the spec files, low meaning gaps an implementation has to guess at
+            - Source coverage: the share of source files connected to at least one spec file, a source file with no connection not being driven by the spec at all
+            - Spec coverage: the share of spec files at least one source file implements, a spec file with no connection not being built, or not traceable to the code
+            - Aligned, drifting, and diverged: how many files analyzed are aligned, diverging less than 20%; drifting, from 20% up to 50%; and diverged, 50% or more
+
+            Each tooltip is its name, then its explanation, muted, wrapped to a
+            readable width.
+
             A file in any of these lists is a row of its path and its
             percentage at the column's right, and opens that file in its tree
             when clicked. Rows highlight on hover, and the highlight reaches a
@@ -180,8 +190,10 @@ shape DivergenceShape:
             a spec file, "Gaps in the spec", listing them, or saying there are
             none. Then its connections to files on the other side, strongest
             first, each with the other file's path, a bar as long as the
-            connection is strong, its strength as a percentage, whether it is
-            strong, moderate, or weak, its divergence as a percentage when known,
+            connection is strong, its strength as a percentage, labelled by
+            which way the influence runs: for a source file,
+            "Influence from spec", and for a spec file, "Influence on code";
+            its divergence as a percentage when known,
             coloured as the score is, and what the agents noted of it. Clicking
             a connection switches to the other tree with that file selected and
             scrolled into view. With nothing selected, the details say to select
