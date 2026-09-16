@@ -200,6 +200,36 @@ shape ChatInputShape:
         application runs, for every question or list opened afterwards, rather
         than going back to 80%.
 
+    selectingAnswerText:
+        The text of an answer being viewed, in the answer drawer, whether an
+        open question or a previous answer, can be selected by dragging across
+        it, as any text can. When a drag that selects text ends within the
+        drawer, a small popover appears just below and to the right of where the
+        pointer was let go, floating above everything, with two small buttons
+        side by side: "Copy", with a copy icon, and "Attach to prompt", with a
+        paperclip icon.
+
+        Copy puts the selected text on the clipboard. Attach to prompt adds it
+        to the prompt as an attachment. Either one closes the popover and clears
+        the selection. The popover also closes without doing anything when the
+        mouse is pressed anywhere outside it, including to start selecting
+        something else, or when the drawer closes.
+
+    attachments:
+        What is attached to the prompt is listed above the text input, between
+        the tabs and the input, one row per attachment in the order they were
+        attached, and only while there is anything attached. An attached piece
+        of text shows a quote icon, the text's first line cut off with an
+        ellipsis, and, when it runs to more than one line, how many lines it
+        has, muted, and at the right end a small button with a cross, whose
+        tooltip says it removes the attachment, which removes just that one.
+
+        Attachments belong to the prompt being written, not to a tab: switching
+        tabs keeps them all, and they go with the prompt whichever tab it is
+        sent from. When the prompt is sent, its attachments are sent along with
+        it and the list empties, as the text input does. A queued prompt keeps
+        the attachments it was sent with.
+
     escape:
         Pressing <Escape> while in the chat input takes focus out of the chat
         input.
@@ -259,3 +289,18 @@ shape ChatInputShape:
         they'll be typing into a randomly-named piton anchor with a userPrompt
         property.  It's this compiled anchor that will be send to the
         @{HarnessIntegrationScope}
+
+        attachedText:
+            A prompt with attached text gives the hidden anchor an attachedText
+            property: a list with an item per attached piece of text, in the
+            order they were attached. Since attached text is taken as it is, not
+            as Piton, each item is itself a list of the text's lines, each a
+            quoted string, with quotes and backslashes escaped, so nothing in it
+            is interpolated or evaluated. A prompt with nothing attached has no
+            attachedText property.
+
+            What the harness receives is the compiled userPrompt followed by the
+            attached text: a line reading "Attached text:", then each piece as a
+            fenced code block, whose fence is longer than any run of backticks
+            in the text itself. This is also the compiled prompt shown in the
+            task's header.

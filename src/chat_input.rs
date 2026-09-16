@@ -16,7 +16,7 @@ use gpui_kit::component::input::{
 };
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{ActiveTheme, Disableable, Icon};
+use gpui_kit::component::{ActiveTheme, Disableable, Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use lsp_types::{CompletionContext, CompletionResponse};
@@ -188,6 +188,15 @@ impl SendMode {
 pub struct Submit {
     pub text: String,
     pub mode: SendMode,
+    /// The text attached to the prompt, in the order it was attached.
+    pub attached_text: Vec<String>,
+}
+
+/// Something attached to the prompt being written, sent along with it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Attachment {
+    pub id: usize,
+    pub text: String,
 }
 
 pub struct ChatInput {
@@ -213,6 +222,10 @@ pub struct ChatInput {
     /// Width of the chain's tab as last laid out, which is how far Code and
     /// Spec slide together beneath it when it is selected.
     chain_width: Option<Pixels>,
+    /// What is attached to the prompt: kept across tab switches, and sent,
+    /// then cleared, with the prompt.
+    attachments: Vec<Attachment>,
+    next_attachment_id: usize,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -276,10 +289,92 @@ impl ChatInput {
             text_width: None,
             chrome: None,
             chain_width: None,
+            attachments: Vec::new(),
+            next_attachment_id: 0,
             _subscriptions: subscriptions,
         };
         this.connect_lsp(cx);
         this
+    }
+
+    /// Attaches `text` to the prompt, after anything already attached.
+    pub fn attach_text(&mut self, text: String, cx: &mut Context<Self>) {
+        self.next_attachment_id += 1;
+        self.attachments.push(Attachment {
+            id: self.next_attachment_id,
+            text,
+        });
+        cx.notify();
+    }
+
+    /// Removes the attachment `id`.
+    pub fn remove_attachment(&mut self, id: usize, cx: &mut Context<Self>) {
+        self.attachments.retain(|attachment| attachment.id != id);
+        cx.notify();
+    }
+
+    #[cfg(test)]
+    pub fn attachments(&self) -> &[Attachment] {
+        &self.attachments
+    }
+
+    /// The attachments listed above the input, one row each.
+    fn render_attachments(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.attachments.is_empty() {
+            return None;
+        }
+        let theme = cx.theme();
+        let rows = self.attachments.iter().map(|attachment| {
+            let id = attachment.id;
+            let lines = attachment.text.lines().count().max(1);
+            let first_line = attachment
+                .text
+                .lines()
+                .find(|line| !line.trim().is_empty())
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            let row = h_flex()
+                .id(("attachment", id))
+                .gap_2()
+                .px_2()
+                .py_1()
+                .rounded(theme.radius)
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.background)
+                .text_sm()
+                .child(
+                    Icon::new(IconName::TextQuote)
+                        .small()
+                        .text_color(theme.muted_foreground),
+                )
+                .child(div().flex_1().min_w_0().truncate().child(first_line))
+                .when(lines > 1, |row| {
+                    row.child(
+                        div()
+                            .flex_none()
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(format!("{lines} lines")),
+                    )
+                })
+                .child(
+                    Button::new(("remove-attachment", id))
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::X)
+                        .tooltip("Remove this attachment")
+                        .on_click(
+                            cx.listener(move |this, _, _, cx| this.remove_attachment(id, cx)),
+                        ),
+                );
+            // Lets UI tests find the row; inert in normal builds.
+            gpui_kit::TestSupportExt::test_support(row)
+        });
+        let list = v_flex().id("attachments").gap_1().children(rows);
+        // Lets UI tests find the list; inert in normal builds.
+        Some(gpui_kit::TestSupportExt::test_support(list).into_any_element())
     }
 
     /// The project's `piton lsp` session, once it is running.
@@ -352,9 +447,15 @@ impl ChatInput {
         }
         self.editor
             .update(cx, |editor, cx| editor.set_value("", window, cx));
+        // The attachments go with the prompt.
+        let attached_text = std::mem::take(&mut self.attachments)
+            .into_iter()
+            .map(|attachment| attachment.text)
+            .collect();
         cx.emit(Submit {
             text,
             mode: TABS[self.selected_tab],
+            attached_text,
         });
     }
 
@@ -676,15 +777,14 @@ impl Render for ChatInput {
                 .child(help),
         );
 
-        let body = div()
-            .flex()
-            .flex_row()
-            .items_end()
-            .gap_2()
-            .p_3()
-            .with_spring("body-tint", tint_slide, move |this, position| {
-                this.bg(tint(position))
-            });
+        // Anything attached is listed above the input.
+        let attachments = self.render_attachments(cx);
+        let body = div().flex().flex_col().gap_2().p_3().with_spring(
+            "body-tint",
+            tint_slide,
+            move |this, position| this.bg(tint(position)),
+        );
+        let input_row = div().flex().flex_row().items_end().gap_2();
 
         div()
             .track_focus(&self.focus_handle)
@@ -732,30 +832,35 @@ impl Render for ChatInput {
             }))
             .child(tabs)
             .child(
-                body.child(gpui_kit::TestSupportExt::test_support(
-                    div()
-                        .id("prompt-editor")
-                        .relative()
-                        .flex_1()
-                        .min_w_0()
-                        .child(Editor::new(&self.editor).h(height))
-                        .child(track_layout)
-                        .child(self.completion.clone()),
-                ))
-                .child(
-                    Button::new("send")
-                        .primary()
-                        // While the harness works, sending queues the prompt.
-                        .label(if queues { "Queue" } else { "Send" })
-                        // As tall as the input's single line, so the two line up.
-                        .h(one_row)
-                        .tooltip(if queues {
-                            format!("Queue until the harness is free ({SEND_SHORTCUT})")
-                        } else {
-                            format!("Send ({SEND_SHORTCUT})")
-                        })
-                        .disabled(empty)
-                        .on_click(cx.listener(|this, _, window, cx| this.submit(window, cx))),
+                body.children(attachments).child(
+                    input_row
+                        .child(gpui_kit::TestSupportExt::test_support(
+                            div()
+                                .id("prompt-editor")
+                                .relative()
+                                .flex_1()
+                                .min_w_0()
+                                .child(Editor::new(&self.editor).h(height))
+                                .child(track_layout)
+                                .child(self.completion.clone()),
+                        ))
+                        .child(
+                            Button::new("send")
+                                .primary()
+                                // While the harness works, sending queues the prompt.
+                                .label(if queues { "Queue" } else { "Send" })
+                                // As tall as the input's single line, so the two line up.
+                                .h(one_row)
+                                .tooltip(if queues {
+                                    format!("Queue until the harness is free ({SEND_SHORTCUT})")
+                                } else {
+                                    format!("Send ({SEND_SHORTCUT})")
+                                })
+                                .disabled(empty)
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.submit(window, cx)),
+                                ),
+                        ),
                 ),
             )
     }
@@ -1123,6 +1228,99 @@ mod tests {
             })
             .unwrap();
         }
+    }
+
+    /// Attachments are listed above the input, survive switching tabs, can be
+    /// removed one at a time, and go with the prompt when it is sent, which
+    /// empties the list.
+    #[gpui_kit::test]
+    async fn attachments_are_listed_kept_across_tabs_and_sent(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut chat_input = None;
+        let window = cx.add_window(|window, cx| {
+            let input = cx.new(|cx| ChatInput::new(window, cx));
+            chat_input = Some(input.clone());
+            Root::new(input, window, cx)
+        });
+        let chat_input = chat_input.unwrap();
+        let handle = window.into();
+        let submitted = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let _subscription = cx.update(|cx| {
+            let submitted = submitted.clone();
+            cx.subscribe(&chat_input, move |_, submit: &super::Submit, _| {
+                submitted.borrow_mut().push((
+                    submit.text.clone(),
+                    submit.mode,
+                    submit.attached_text.clone(),
+                ))
+            })
+        });
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("prompt-editor").is_some()
+        })
+        .await;
+        cx.update_window(handle, |_, window, _| {
+            assert!(
+                window.try_find("attachments").is_none(),
+                "an empty list shows"
+            );
+        })
+        .unwrap();
+
+        chat_input.update(cx, |input, cx| {
+            input.attach_text("first line\nsecond line".into(), cx);
+            input.attach_text("drop me".into(), cx);
+            input.attach_text("third".into(), cx);
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let list = window.find("attachments").bounds();
+            let editor = window.find("prompt-editor").bounds();
+            let tabs = window.find("chat-tabs").bounds();
+            assert!(
+                list.top() >= tabs.bottom() && list.bottom() <= editor.top(),
+                "the attachments {list:?} aren't between the tabs {tabs:?} and the input {editor:?}"
+            );
+            window.press("tab", cx);
+            window.press("tab", cx);
+            window.render_frame(cx);
+            window.click(("remove-attachment", 2usize), cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let texts = |cx: &mut TestAppContext| {
+            chat_input.read_with(cx, |input, _| {
+                input
+                    .attachments()
+                    .iter()
+                    .map(|attachment| attachment.text.clone())
+                    .collect::<Vec<_>>()
+            })
+        };
+        assert_eq!(texts(cx), ["first line\nsecond line", "third"]);
+
+        cx.update_window(handle, |_, window, cx| {
+            window.input("go", cx);
+            #[cfg(target_os = "macos")]
+            window.press("cmd-enter", cx);
+            #[cfg(not(target_os = "macos"))]
+            window.press("ctrl-enter", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(
+            *submitted.borrow(),
+            [(
+                "go".to_string(),
+                super::SendMode::Spec,
+                vec!["first line\nsecond line".to_string(), "third".to_string()]
+            )]
+        );
+        assert!(texts(cx).is_empty(), "sending left the attachments behind");
     }
 
     type Bounds = gpui_kit::Bounds<gpui_kit::Pixels>;

@@ -37,6 +37,7 @@ use anyhow::Result;
 use futures::StreamExt as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::ElementExt as _;
+use gpui_kit::base::TextSelection;
 use gpui_kit::component::accordion::Accordion;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::highlighter::{HighlightTheme, SyntaxHighlighter};
@@ -145,8 +146,8 @@ struct QueueItem {
 
 /// A prompt on its way to the harness.
 enum Sending {
-    /// Typed and sent straight away, in a mode.
-    Now(SendMode),
+    /// Typed and sent straight away, in a mode, with any text attached.
+    Now(SendMode, Vec<String>),
     /// Out of the queue, saved with its anchor.
     Queued(QueuedPrompt),
 }
@@ -908,6 +909,9 @@ pub struct PromptMode {
     next_ask_id: usize,
     /// The finished question opened onto its whole task table, if any.
     expanded_ask: Option<usize>,
+    /// The popover offering to copy text selected in an answer, or attach it
+    /// to the prompt: where the selecting drag ended, and what it selected.
+    selection_popover: Option<(Point<Pixels>, String)>,
     /// The answers' tables whose steps were expanded, by task index.
     steps_shown: HashSet<usize>,
     /// The share of the space above the chat input the answer drawer takes
@@ -946,7 +950,13 @@ impl PromptMode {
                 &chat_input,
                 window,
                 |this, _, submit: &Submit, window, cx| {
-                    this.send(submit.text.clone(), submit.mode, window, cx)
+                    this.send(
+                        submit.text.clone(),
+                        submit.mode,
+                        submit.attached_text.clone(),
+                        window,
+                        cx,
+                    )
                 },
             ),
             cx.subscribe(&chat_input, |this, input, _: &TabChanged, cx| {
@@ -999,6 +1009,7 @@ impl PromptMode {
             asks: Vec::new(),
             next_ask_id: 0,
             expanded_ask: None,
+            selection_popover: None,
             steps_shown: HashSet::new(),
             drawer_share: DRAWER_SHARE,
             drawer_dragged: None,
@@ -1192,7 +1203,14 @@ impl PromptMode {
 
     /// Sends `text` in `mode` now if the harness is free, or queues it. A
     /// question is always asked now.
-    fn send(&mut self, text: String, mode: SendMode, window: &mut Window, cx: &mut Context<Self>) {
+    fn send(
+        &mut self,
+        text: String,
+        mode: SendMode,
+        attached_text: Vec<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if ProjectDirectory::get(cx).is_none() {
             window.push_notification(
                 Notification::error("Open a project before sending a prompt.")
@@ -1202,11 +1220,11 @@ impl PromptMode {
             return;
         }
         if mode == SendMode::Ask {
-            self.ask(text, cx);
+            self.ask(text, attached_text, cx);
         } else if self.working {
-            self.enqueue(text, mode, window, cx);
+            self.enqueue(text, mode, attached_text, window, cx);
         } else {
-            self.start(text, Sending::Now(mode), cx);
+            self.start(text, Sending::Now(mode, attached_text), cx);
         }
     }
 
@@ -1287,6 +1305,7 @@ impl PromptMode {
         &mut self,
         text: String,
         mode: SendMode,
+        attached_text: Vec<String>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1306,7 +1325,7 @@ impl PromptMode {
         let save = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
-                let anchor = resolve_anchor(&text, mode, lsp, &project_dir)?;
+                let anchor = resolve_anchor(&text, mode, attached_text, lsp, &project_dir)?;
                 prompt_queue::add(anchor, text, &project_dir)
             }
         });
@@ -1476,7 +1495,7 @@ impl PromptMode {
         };
         let task_ix = self.push_task(text.clone().into(), cx);
         self.tasks[task_ix].mode = match &sending {
-            Sending::Now(mode) => Some(*mode),
+            Sending::Now(mode, _) => Some(*mode),
             Sending::Queued(queued) => anchor_mode(&queued.anchor),
         };
         self.working = true;
@@ -1509,7 +1528,9 @@ impl PromptMode {
                         prompt_queue::remove(&queued.file)?;
                         queued.anchor
                     }
-                    Sending::Now(mode) => resolve_anchor(&text, mode, lsp, &project_dir)?,
+                    Sending::Now(mode, attached_text) => {
+                        resolve_anchor(&text, mode, attached_text, lsp, &project_dir)?
+                    }
                 };
                 let file = hidden_anchor::save(&anchor, &text, &project_dir)?;
                 let compiled = hidden_anchor::compile(&anchor, &file, &project_dir);
@@ -1669,7 +1690,7 @@ impl PromptMode {
     /// Asks `text` straight away, beside any task the harness is working on,
     /// in place of any question still open. It is saved apart from the
     /// history, so it never becomes one of the tasks.
-    fn ask(&mut self, text: String, cx: &mut Context<Self>) {
+    fn ask(&mut self, text: String, attached_text: Vec<String>, cx: &mut Context<Self>) {
         let Some(project_dir) = ProjectDirectory::get(cx) else {
             return;
         };
@@ -1689,15 +1710,21 @@ impl PromptMode {
                 // Every question is logged, even one whose anchor could not
                 // be resolved: it is saved under a fresh anchor, with the
                 // error recorded beside it.
-                let (anchor, resolve_error) =
-                    match resolve_anchor(&text, SendMode::Ask, lsp, &project_dir) {
-                        Ok(anchor) => (anchor, None),
-                        Err(err) => {
-                            let mut anchor = HiddenAnchor::random();
-                            anchor.mode = Some(SendMode::Ask);
-                            (anchor, Some(err))
-                        }
-                    };
+                let (anchor, resolve_error) = match resolve_anchor(
+                    &text,
+                    SendMode::Ask,
+                    attached_text.clone(),
+                    lsp,
+                    &project_dir,
+                ) {
+                    Ok(anchor) => (anchor, None),
+                    Err(err) => {
+                        let mut anchor = HiddenAnchor::random();
+                        anchor.mode = Some(SendMode::Ask);
+                        anchor.attached_text = attached_text;
+                        (anchor, Some(err))
+                    }
+                };
                 let file = hidden_anchor::save_ask(&anchor, &text, &project_dir);
                 let compiled = match (resolve_error, &file) {
                     (Some(err), _) => Err(err),
@@ -2055,11 +2082,94 @@ impl PromptMode {
             .border_t_1()
             .border_color(theme.border)
             .on_prepaint(move |bounds, _, _| drawer_height.set(bounds.size.height))
+            // A drag that selects some of an answer's text offers to copy it
+            // or attach it to the prompt, once the selection has settled.
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|_, event: &MouseUpEvent, window, cx| {
+                    let position = event.position;
+                    cx.defer_in(window, move |this, window, cx| {
+                        let text = TextSelection::selected_text(window, cx);
+                        if !text.trim().is_empty() && this.drawer_open() {
+                            this.selection_popover = Some((position, text));
+                            cx.notify();
+                        }
+                    });
+                }),
+            )
             .children(history)
             .children(card)
             .child(handle);
         // Lets UI tests find the drawer; inert in normal builds.
         Some(gpui_kit::TestSupportExt::test_support(drawer).into_any_element())
+    }
+
+    /// Copies the text selected in an answer, closing the popover.
+    fn copy_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some((_, text)) = self.selection_popover.take() {
+            cx.write_to_clipboard(ClipboardItem::new_string(text));
+        }
+        TextSelection::clear(window, cx);
+        cx.notify();
+    }
+
+    /// Attaches the text selected in an answer to the prompt, closing the
+    /// popover.
+    fn attach_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some((_, text)) = self.selection_popover.take() {
+            self.chat_input
+                .update(cx, |input, cx| input.attach_text(text, cx));
+        }
+        TextSelection::clear(window, cx);
+        cx.notify();
+    }
+
+    /// The popover by text selected in an answer: Copy, and Attach to prompt.
+    /// Pressing the mouse anywhere else closes it.
+    fn render_selection_popover(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (position, _) = self.selection_popover.as_ref()?;
+        let theme = cx.theme();
+        let popover = h_flex()
+            .id("selection-popover")
+            .gap_1()
+            .p_1()
+            .rounded(theme.radius)
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.popover)
+            .shadow_md()
+            .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                this.selection_popover = None;
+                cx.notify();
+            }))
+            .child(
+                Button::new("selection-copy")
+                    .ghost()
+                    .small()
+                    .icon(IconName::Copy)
+                    .label("Copy")
+                    .on_click(cx.listener(|this, _, window, cx| this.copy_selection(window, cx))),
+            )
+            .child(
+                Button::new("selection-attach")
+                    .ghost()
+                    .small()
+                    .icon(IconName::Paperclip)
+                    .label("Attach to prompt")
+                    .on_click(cx.listener(|this, _, window, cx| this.attach_selection(window, cx))),
+            );
+        // Lets UI tests find the popover; inert in normal builds.
+        let popover = gpui_kit::TestSupportExt::test_support(popover);
+        Some(
+            deferred(
+                anchored()
+                    .position(*position + point(px(6.), px(10.)))
+                    .snap_to_window()
+                    .child(popover),
+            )
+            .with_priority(1)
+            .into_any_element(),
+        )
     }
 
     fn render_ask_card(&self, ask: &Ask, expanded: bool, cx: &mut Context<Self>) -> AnyElement {
@@ -2424,6 +2534,10 @@ impl PromptMode {
 
 impl Render for PromptMode {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // The popover for text selected in an answer goes with the drawer.
+        if !self.drawer_open() {
+            self.selection_popover = None;
+        }
         let hint = if ProjectDirectory::get(cx).is_some() {
             "Write a prompt below. Enter adds a line; Ctrl/Cmd+Enter sends it."
         } else {
@@ -2637,7 +2751,8 @@ impl Render for PromptMode {
                     .children(self.render_ask_stack(cx)),
             )
             .child(self.render_ask_dim())
-            .children(self.render_ask_drawer(cx));
+            .children(self.render_ask_drawer(cx))
+            .children(self.render_selection_popover(cx));
         // Lets UI tests find the space above the chat input; inert in normal
         // builds.
         let body = gpui_kit::TestSupportExt::test_support(body);
@@ -2680,6 +2795,7 @@ fn markdown_view(
 fn resolve_anchor(
     text: &str,
     mode: SendMode,
+    attached_text: Vec<String>,
     lsp: Option<Arc<PitonSession>>,
     project_dir: &Path,
 ) -> Result<HiddenAnchor> {
@@ -2692,6 +2808,7 @@ fn resolve_anchor(
     // cannot be saved.
     system_prompts::save_missing(project_dir).ok();
     anchor.mode = Some(mode);
+    anchor.attached_text = attached_text;
     anchor.system_prompt = hidden_anchor::system_prompt(mode, project_dir)?;
     Ok(anchor)
 }
@@ -4072,7 +4189,7 @@ mod tests {
             prompt_mode.update(cx, |this, cx| {
                 this.push_task("Working on this".into(), cx);
                 this.working = true;
-                this.send("Why?".into(), SendMode::Ask, window, cx);
+                this.send("Why?".into(), SendMode::Ask, Vec::new(), window, cx);
                 assert!(this.queue.is_empty(), "the question was queued");
                 assert_eq!(this.tasks.len(), 1);
                 assert_eq!(this.asks.len(), 1, "the question was not asked");
@@ -4417,6 +4534,95 @@ mod tests {
             .unwrap();
         cx.run_until_parked();
         assert_eq!(rows(cx).1, 1, "the steps did not collapse again");
+    }
+
+    /// Selecting some of an answer's text offers a popover to copy it or attach
+    /// it to the prompt; either closes the popover, and attaching lists the
+    /// text above the chat input.
+    #[gpui_kit::test]
+    async fn selected_answer_text_can_be_copied_or_attached(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let id = this.push_ask("What does the chain do?".into(), cx);
+                this.update_ask(
+                    id,
+                    |ask| {
+                        ask.apply(HarnessEvent::TextStarted);
+                        ask.apply(HarnessEvent::TextDelta(
+                            "It joins Code and Spec into one prompt.".into(),
+                        ));
+                        ask.end();
+                    },
+                    cx,
+                );
+                this.expand_ask(id, cx);
+            });
+        })
+        .unwrap();
+        let (row, _) = settle(
+            handle,
+            ("output-row", 0usize),
+            |row, _| row.size.height > gpui_kit::px(0.),
+            cx,
+        );
+        let _ = settle(
+            handle,
+            "ask-drawer",
+            |drawer, _| drawer.top() <= row.top(),
+            cx,
+        );
+        std::thread::sleep(Duration::from_millis(400));
+        let select_answer = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let row = window
+                    .within("ask-drawer")
+                    .find(("output-row", 0usize))
+                    .bounds();
+                let y = row.center().y;
+                window.drag(
+                    gpui_kit::point(row.left() + gpui_kit::px(1.), y),
+                    gpui_kit::point(row.right() - gpui_kit::px(1.), y),
+                    cx,
+                );
+                window.render_frame(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.try_find("selection-popover").is_some()
+            })
+            .unwrap()
+        };
+
+        assert!(select_answer(cx), "no popover for the selected text");
+        cx.update_window(handle, |_, window, cx| window.click("selection-attach", cx))
+            .unwrap();
+        cx.run_until_parked();
+        let attached = prompt_mode.read_with(cx, |this, cx| {
+            this.chat_input
+                .read(cx)
+                .attachments()
+                .iter()
+                .map(|attachment| attachment.text.clone())
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(attached.len(), 1, "{attached:?}");
+        assert!(attached[0].contains("joins Code and Spec"), "{attached:?}");
+        assert!(prompt_mode.read_with(cx, |this, _| this.selection_popover.is_none()));
+
+        assert!(select_answer(cx), "no popover for the text selected again");
+        cx.update_window(handle, |_, window, cx| window.click("selection-copy", cx))
+            .unwrap();
+        cx.run_until_parked();
+        let copied = cx
+            .read_from_clipboard()
+            .and_then(|item| item.text())
+            .unwrap_or_default();
+        assert!(copied.contains("joins Code and Spec"), "{copied:?}");
+        assert!(prompt_mode.read_with(cx, |this, _| this.selection_popover.is_none()));
     }
 
     /// An open question fills the answer drawer to 80% of the space above the
@@ -4771,7 +4977,7 @@ mod tests {
         cx.run_until_parked();
         cx.update_window(handle, |_, window, cx| {
             prompt_mode.update(cx, |this, cx| {
-                this.send("Change it".into(), SendMode::Code, window, cx);
+                this.send("Change it".into(), SendMode::Code, Vec::new(), window, cx);
                 assert_eq!(this.tasks.last().unwrap().status, TaskStatus::Building);
             });
         })
@@ -4801,7 +5007,7 @@ mod tests {
 
         cx.update_window(handle, |_, window, cx| {
             prompt_mode.update(cx, |this, cx| {
-                this.send("Why?".into(), SendMode::Ask, window, cx);
+                this.send("Why?".into(), SendMode::Ask, Vec::new(), window, cx);
                 assert_ne!(this.asks[0].task.status, TaskStatus::Building);
             });
         })

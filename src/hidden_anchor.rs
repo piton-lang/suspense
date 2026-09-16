@@ -87,7 +87,10 @@ pub struct HiddenAnchor {
     pub imports: Imports,
     /// The mode the prompt was sent in, written after the `userPrompt`.
     pub mode: Option<SendMode>,
-    /// The `systemPrompt` written after the mode, if any.
+    /// Text attached to the prompt, written as `attachedText` after the mode:
+    /// each piece a list of quoted lines, taken as it is rather than as Piton.
+    pub attached_text: Vec<String>,
+    /// The `systemPrompt` written after the attached text, if any.
     pub system_prompt: Option<String>,
 }
 
@@ -107,6 +110,7 @@ impl HiddenAnchor {
             ),
             imports: Imports::default(),
             mode: None,
+            attached_text: Vec::new(),
             system_prompt: None,
         }
     }
@@ -129,6 +133,22 @@ impl HiddenAnchor {
         if let Some(mode) = self.mode {
             source.push('\n');
             writeln!(source, "{MODE_PREFIX}{}", mode.key()).ok();
+        }
+        if !self.attached_text.is_empty() {
+            source.push('\n');
+            source.push_str(ATTACHED_TEXT_LINE);
+            source.push('\n');
+            for text in &self.attached_text {
+                writeln!(source, "{ATTACHMENT_ITEM}").ok();
+                for line in text.split('\n') {
+                    writeln!(
+                        source,
+                        "{ATTACHMENT_LINE_PREFIX}{}",
+                        quote(line.trim_end_matches('\r'))
+                    )
+                    .ok();
+                }
+            }
         }
         if let Some(system_prompt) = &self.system_prompt {
             source.push('\n');
@@ -160,7 +180,11 @@ impl HiddenAnchor {
         let lines: Vec<&str> = lines.collect();
         // Prompt lines are indented deeper, so only the properties themselves
         // match these lines.
-        let property = |line: &&str| *line == SYSTEM_PROMPT_LINE || line.starts_with(MODE_PREFIX);
+        let property = |line: &&str| {
+            *line == SYSTEM_PROMPT_LINE
+                || *line == ATTACHED_TEXT_LINE
+                || line.starts_with(MODE_PREFIX)
+        };
         let end = lines.iter().position(property).unwrap_or(lines.len());
         // Drop the blank line separating the prompt from the next property;
         // prompt lines, even empty ones, are always indented.
@@ -177,6 +201,25 @@ impl HiddenAnchor {
             rest = &rest[1..];
             rest = rest.strip_prefix(&[""]).unwrap_or(rest);
         }
+        let mut attached_text = Vec::new();
+        if rest.first() == Some(&ATTACHED_TEXT_LINE) {
+            rest = &rest[1..];
+            while let Some(line) = rest.first() {
+                if *line == ATTACHMENT_ITEM {
+                    attached_text.push(Vec::new());
+                } else if let Some(quoted) = line.strip_prefix(ATTACHMENT_LINE_PREFIX) {
+                    attached_text.last_mut()?.push(unquote(quoted)?);
+                } else {
+                    break;
+                }
+                rest = &rest[1..];
+            }
+            rest = rest.strip_prefix(&[""]).unwrap_or(rest);
+        }
+        let attached_text = attached_text
+            .into_iter()
+            .map(|lines| lines.join("\n"))
+            .collect();
         let system_prompt = match rest.first() {
             Some(&SYSTEM_PROMPT_LINE) => Some(unindent(&rest[1..])),
             _ => None,
@@ -186,6 +229,7 @@ impl HiddenAnchor {
                 name,
                 imports,
                 mode,
+                attached_text,
                 system_prompt,
             },
             unindent(prompt),
@@ -203,6 +247,54 @@ const MODE_PREFIX: &str = "    mode: ";
 
 /// The line opening the `systemPrompt` property of [`HiddenAnchor::source`].
 const SYSTEM_PROMPT_LINE: &str = "    systemPrompt:";
+
+/// The line opening the `attachedText` property of [`HiddenAnchor::source`],
+/// the line opening each piece of text in it, and the start of each of the
+/// piece's quoted lines.
+const ATTACHED_TEXT_LINE: &str = "    attachedText:";
+const ATTACHMENT_ITEM: &str = "        -";
+const ATTACHMENT_LINE_PREFIX: &str = "            - ";
+
+/// `line` as a quoted Piton string, taken as it is: quotes and backslashes
+/// escaped, and nothing in it interpolated or evaluated.
+fn quote(line: &str) -> String {
+    let mut quoted = String::with_capacity(line.len() + 2);
+    quoted.push('"');
+    for c in line.chars() {
+        if matches!(c, '"' | '\\') {
+            quoted.push('\\');
+        }
+        quoted.push(c);
+    }
+    quoted.push('"');
+    quoted
+}
+
+/// The line a string written by [`quote`] holds.
+fn unquote(quoted: &str) -> Option<String> {
+    let inner = quoted.strip_prefix('"')?.strip_suffix('"')?;
+    let mut line = String::with_capacity(inner.len());
+    let mut chars = inner.chars();
+    while let Some(c) = chars.next() {
+        line.push(if c == '\\' { chars.next()? } else { c });
+    }
+    Some(line)
+}
+
+/// What the harness receives for a prompt: its compiled userPrompt, then any
+/// attached text, each piece fenced so nothing in it closes the fence early.
+pub fn with_attached_text(user_prompt: &str, attached_text: &[String]) -> String {
+    if attached_text.is_empty() {
+        return user_prompt.to_string();
+    }
+    let mut prompt = format!("{user_prompt}\n\nAttached text:");
+    for text in attached_text {
+        let longest = text.split(|c| c != '`').map(str::len).max().unwrap_or(0);
+        let fence = "`".repeat((longest + 1).max(3));
+        prompt.push_str(&format!("\n\n{fence}\n{text}\n{fence}"));
+    }
+    prompt
+}
 
 /// The text of a property's indented lines, as written by [`push_block`].
 fn unindent(block: &[&str]) -> String {
@@ -311,8 +403,26 @@ pub fn compile(anchor: &HiddenAnchor, file: &Path, project_dir: &Path) -> Result
     let user_prompt = compiled
         .get("userPrompt")
         .ok_or_else(|| anyhow!("the compiled anchor has no userPrompt"))?;
+    // Each piece of attached text compiles to the list of its lines.
+    let attached_text: Vec<String> = compiled
+        .get("attachedText")
+        .and_then(Value::as_array)
+        .map(|pieces| {
+            pieces
+                .iter()
+                .map(|piece| match piece {
+                    Value::Array(lines) => lines
+                        .iter()
+                        .map(|line| line.as_str().unwrap_or_default())
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                    other => prose(other),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     Ok(CompiledPrompt {
-        user_prompt: prose(user_prompt),
+        user_prompt: with_attached_text(&prose(user_prompt), &attached_text),
         system_prompt: compiled.get("systemPrompt").map(prose),
     })
 }
@@ -381,6 +491,7 @@ mod tests {
             name: "Prompt_test".into(),
             imports,
             mode: None,
+            attached_text: Vec::new(),
             system_prompt: None,
         };
         assert_eq!(
@@ -522,6 +633,41 @@ mod tests {
         let text = compiled.user_prompt;
         assert!(text.contains("[ApplicationScope]("), "{text}");
         assert!(text.contains("- a list item"), "{text}");
+        assert!(!text.contains("Attached text"), "{text}");
         assert_eq!(compiled.system_prompt, anchor.system_prompt);
+    }
+
+    /// Attached text that looks like Piton, or holds quotes, backslashes, and
+    /// fences, is saved and read back as it is, compiles as it is, and reaches
+    /// the harness after the prompt, each piece fenced beyond its own
+    /// backticks.
+    #[test]
+    fn attached_text_is_taken_as_it_is() {
+        let tricky = "fn main() { println!(\"${x} @{Y}\"); }\n\n  - item: value // not a comment\nends with \\\n```rust\ninner\n```";
+        let mut anchor = HiddenAnchor::random();
+        anchor.mode = Some(SendMode::Ask);
+        anchor.attached_text = vec![tricky.to_string(), "single line".to_string()];
+        anchor.system_prompt = Some("Answer.".into());
+        let source = anchor.source("What does it do?");
+
+        let (parsed, prompt) = HiddenAnchor::parse(&source).unwrap();
+        assert_eq!(prompt, "What does it do?");
+        assert_eq!(parsed.attached_text, anchor.attached_text);
+        assert_eq!(parsed.mode, Some(SendMode::Ask));
+        assert_eq!(parsed.system_prompt.as_deref(), Some("Answer."));
+
+        let project_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let dir = project_dir.join("target/hidden-anchor-test");
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("attached.pi");
+        fs::write(&file, &source).unwrap();
+        let compiled = compile(&anchor, &file, project_dir).unwrap();
+        assert_eq!(
+            compiled.user_prompt,
+            format!(
+                "What does it do?\n\nAttached text:\n\n````\n{tricky}\n````\n\n```\nsingle line\n```"
+            )
+        );
+        assert_eq!(compiled.system_prompt.as_deref(), Some("Answer."));
     }
 }
