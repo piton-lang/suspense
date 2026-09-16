@@ -1,6 +1,8 @@
 use /lib
 from /scope/git import GitScope
 from /ui/components/scrollbar import ScrollbarScope
+from /scope/open-file import OpenFileScope
+from /scope/user-preferences import UserPreferencesScope
 
 export scope DiffViewScope:
     concept: {DiffViewConcept}
@@ -23,7 +25,8 @@ shape DiffViewShape:
         were added (+, in green) and removed (−, in red). At the right end:
         buttons to step to the previous and next change; a switch between
         "Side by side" and "Unified", each with an icon, the chosen one shown
-        selected; a button that opens the file in the editor instead; and a
+        selected; a button that opens the file instead, as the
+        @{OpenFileScope} says; and a
         close button.
 
     layouts:
@@ -40,8 +43,8 @@ shape DiffViewShape:
             number in the old file and in the new, either blank where the line
             isn't in that version.
 
-        The chosen layout is remembered for the user across launches; it
-        starts side by side.
+        The chosen layout is one of the @{UserPreferencesScope}, starting side
+        by side.
 
     lines:
         Lines are shown in the editor's monospace font, one row each, without

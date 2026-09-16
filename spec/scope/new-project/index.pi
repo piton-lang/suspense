@@ -1,6 +1,8 @@
 use /lib
+from /scope/project/open-project import OpenProjectScope
 from /ui/components/folder-browser import FolderBrowserScope
 from /scope/project-directory import ProjectDirectoryScope
+from /scope/project-data import ProjectDataScope
 
 export scope NewProjectScope:
     concept: {NewProjectConcept}
@@ -15,9 +17,16 @@ concept NewProjectConcept:
 shape NewProjectShape:
     description:
         A form titled "New Project", with a close button, holding the project's
-        name, where it goes, and its Belay options, and along the bottom a
-        "Cancel" button and a primary "New" button that creates it. The name
-        field has focus when the form opens.
+        name, where it goes, the template it starts from, and its Belay options,
+        and along the bottom a "Cancel" button and a primary "New" button that
+        creates it. The name field has focus when the form opens.
+
+    layout:
+        The form's body is two columns of equal width side by side, top
+        aligned, scrolling together when the panel is too short for them. The
+        first holds the project itself: its name, its location, the Git
+        checkbox, and the spec, code, and shape roots. The second holds what it
+        starts from and what it's written for: the template, then the agents.
 
     name:
         A "Name" field for the project's name, which is also the name of its
@@ -40,8 +49,26 @@ shape NewProjectShape:
         Beneath the location, an "Initialize a Git repository" checkbox, checked
         to start with. Its label is shown in full, like the agents' labels.
 
+    templates:
+        At the top of the second column, a "Template" group lists the templates
+        a project can start from, one row each, in order, as radio buttons, only
+        one chosen at a time: each shows the template's name, and beneath it,
+        muted, what it holds. The first is chosen to start with. There are two:
+        - "Base", with nothing more than the project needs: an empty index.pi in the spec root
+        - "Scope, concept, and shape", which seeds the spec root with a lib of the abstract scope, concept, and shape anchors a spec is written with, each in a file of its own, an index.pi in the lib exporting them all, an index.pi in the spec root using the lib, and an example scope, with its concept and shape, to start from
+
+        The templates are folders in the project-templates folder at the root
+        of the Suspense repository, one per template, and are built into the
+        application when it is built, so changing or adding one changes what the
+        next build offers. Each holds a template.json giving its name, its
+        description, and its place in the order, and, in a spec folder, the
+        files it seeds the spec root with, laid out as they are to be written
+        there. A template with no spec folder seeds nothing more than the base
+        does.
+
     agents:
-        An "Agents" group of checkboxes, one per agent Belay writes for, each
+        Beneath the template, in the second column, an "Agents" group of
+        checkboxes, one per agent Belay writes for, each
         with the directory it writes into: "Claude Code" (.claude), "OpenCode"
         (.opencode), "Codex" (.codex), "Cursor" (.cursor), and "Agents"
         (.agents). Only Claude Code starts checked. At least one must be
@@ -82,23 +109,24 @@ shape NewProjectShape:
         been typed in it.
 
         Pressing it creates the project's folder, and any folders leading to it,
-        then writes piton.config.pi there, creates the spec root with an empty
-        index.pi in it, and creates the code root and any shape root. It never
+        then writes piton.config.pi there, creates the spec root, writes the
+        chosen template's files into it, or an empty index.pi when the template
+        gives none, and creates the code root and any shape root. It never
         overwrites anything: a folder that already holds a piton.config.pi is
-        refused, an index.pi already in the spec root is left as it is, and
-        folders that already exist are kept.
+        refused, a file already in the spec root is left as it is, and folders
+        that already exist are kept. A project created from either template
+        builds with `piton build` straight away.
 
         With "Initialize a Git repository" checked, once the rest is created the
         project's folder is made a Git repository with `git init`, unless it
         already is the top of one, and a .gitignore is written there ignoring
-        what Suspense keeps for this machine alone rather than for the project:
-        the harness report .suspense/harness.json, the send queue
-        .suspense/queue/, the commit notes .suspense/commit-notes.json, and the
-        draft .suspense-draft.pi wherever it is. The prompt history is kept. An
-        existing .gitignore is left as it is. Nothing is committed. If Git fails, the project still
-        opens, and a warning notification says the repository couldn't be
-        initialized, and why.
+        what Suspense keeps for this machine alone rather than for the project,
+        as the @{ProjectDataScope} says. An existing .gitignore is left as it
+        is. Nothing is committed. If Git fails, the project still opens, and a
+        warning notification says the repository couldn't be initialized, and
+        why.
 
-        Once created, the project opens as if picked through the
-        @{ProjectDirectoryScope}, and the form closes. If anything fails, the
+        Once created, the project opens as if opened with the
+        @{OpenProjectScope}, becoming the @{ProjectDirectoryScope}, and the
+        form closes. If anything fails, the
         form stays open and says what went wrong above its buttons.

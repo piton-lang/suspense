@@ -1,36 +1,32 @@
-//! The settings window: the system prompt each tab gives a prompt, for the open
-//! project. Every edit is saved straight away to the project's
-//! `.suspense/system-prompts` (see [`crate::system_prompts`]), and the prompts
-//! are read from there again whenever the window is brought forward, so an
-//! edit made by hand shows up.
+//! The settings, shown in the main window's inset panel: the system prompt
+//! each tab gives a prompt, for the open project. Every edit is saved straight
+//! away to the project's `.suspense/system-prompts` (see
+//! [`crate::system_prompts`]), and the prompts are read from there each time
+//! the settings open, so an edit made by hand shows up.
 
+use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Editor, EditorState, InputEvent};
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Root, Sizable as _, StyledExt as _, h_flex, v_flex,
+    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, h_flex, v_flex,
 };
 use gpui_kit::*;
 
-use crate::app::APP_TITLE;
 use crate::chat_input::SendMode;
 use crate::piton_syntax;
 use crate::project_directory::ProjectDirectory;
 use crate::system_prompts::{self, CODE_LOCATION, SPEC_LOCATION};
-use crate::theme_preference;
 
 actions!(suspense, [OpenSettings]);
 
-const WINDOW_SIZE: Size<Pixels> = size(px(760.), px(760.));
+/// Emitted when the settings are closed.
+pub struct CloseSettings;
 
 /// How tall each prompt's editor is before it scrolls.
 const EDITOR_HEIGHT: Pixels = px(120.);
 
-/// The settings window while it is open, so opening it again brings it forward.
-struct OpenWindow(WindowHandle<Root>);
-
-impl Global for OpenWindow {}
-
-/// Ctrl+, (Cmd+, on macOS) opens the settings window from anywhere.
+/// Ctrl+, (Cmd+, on macOS) opens the settings from anywhere in the main
+/// window, which handles the action.
 pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
         #[cfg(target_os = "macos")]
@@ -38,38 +34,6 @@ pub fn bind_keys(cx: &mut App) {
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-,", OpenSettings, None),
     ]);
-    cx.on_action(|_: &OpenSettings, cx| open(cx));
-}
-
-/// Opens the settings window, or brings it forward if it is already open.
-pub fn open(cx: &mut App) {
-    if let Some(handle) = cx.try_global::<OpenWindow>().map(|open| open.0)
-        && handle
-            .update(cx, |_, window, _| window.activate_window())
-            .is_ok()
-    {
-        return;
-    }
-    let options = WindowOptions {
-        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-            None,
-            WINDOW_SIZE,
-            cx,
-        ))),
-        titlebar: Some(TitlebarOptions {
-            title: Some(format!("{APP_TITLE} Settings").into()),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-    let opened = cx.open_window(options, |window, cx| {
-        theme_preference::apply(window, cx);
-        let view = cx.new(|cx| SettingsWindow::new(window, cx));
-        cx.new(|cx| Root::new(view, window, cx))
-    });
-    if let Ok(handle) = opened {
-        cx.set_global(OpenWindow(handle));
-    }
 }
 
 /// One mode's system prompt, as edited.
@@ -85,7 +49,16 @@ pub struct SettingsWindow {
     /// Set while the editors are filled from disk, so doing so saves nothing.
     loading: bool,
     scroll: ScrollHandle,
+    focus_handle: FocusHandle,
     _subscriptions: Vec<Subscription>,
+}
+
+impl EventEmitter<CloseSettings> for SettingsWindow {}
+
+impl Focusable for SettingsWindow {
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus_handle.clone()
+    }
 }
 
 impl SettingsWindow {
@@ -93,12 +66,6 @@ impl SettingsWindow {
         let mut subscriptions = vec![
             cx.observe_global_in::<ProjectDirectory>(window, |this, window, cx| {
                 this.load(window, cx)
-            }),
-            // Brought forward, it picks up any edit made by hand meanwhile.
-            cx.observe_window_activation(window, |this, window, cx| {
-                if window.is_window_active() {
-                    this.load(window, cx);
-                }
             }),
         ];
         let prompts = SendMode::ALL
@@ -132,6 +99,7 @@ impl SettingsWindow {
             prompts,
             loading: false,
             scroll: ScrollHandle::new(),
+            focus_handle: cx.focus_handle(),
             _subscriptions: subscriptions,
         };
         this.load(window, cx);
@@ -240,10 +208,14 @@ impl SettingsWindow {
 }
 
 impl Render for SettingsWindow {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
-        let (background, foreground, muted) =
-            (theme.background, theme.foreground, theme.muted_foreground);
+        let (background, foreground, muted, border) = (
+            theme.background,
+            theme.foreground,
+            theme.muted_foreground,
+            theme.border,
+        );
         let body: AnyElement = if ProjectDirectory::get(cx).is_some() {
             let prompts: Vec<AnyElement> = self
                 .prompts
@@ -258,6 +230,21 @@ impl Render for SettingsWindow {
                 .into_any_element()
         };
 
+        let heading = h_flex()
+            .flex_none()
+            .px_4()
+            .py_3()
+            .border_b_1()
+            .border_color(border)
+            .child(div().flex_1().font_semibold().child("Settings"))
+            .child(
+                Button::new("settings-close")
+                    .ghost()
+                    .small()
+                    .icon(IconName::X)
+                    .tooltip("Close the settings")
+                    .on_click(cx.listener(|_, _, _, cx| cx.emit(CloseSettings))),
+            );
         let page = div()
             .id("settings")
             .size_full()
@@ -278,20 +265,24 @@ impl Render for SettingsWindow {
                     )))
                     .child(body),
             );
-        div()
+        v_flex()
             .size_full()
-            .flex()
-            .flex_col()
+            .track_focus(&self.focus_handle)
             .bg(background)
-            .child(crate::scrollbar::with_scrollbar(
-                "settings",
-                &self.scroll,
-                page,
-                true,
-                None,
-                cx,
-            ))
-            .children(Root::render_notification_layer(window, cx))
+            .child(heading)
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .child(crate::scrollbar::with_scrollbar(
+                        "settings",
+                        &self.scroll,
+                        page,
+                        true,
+                        None,
+                        cx,
+                    )),
+            )
     }
 }
 

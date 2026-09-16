@@ -15,6 +15,8 @@ pub enum JobKind {
     Build,
     /// A divergence analysis.
     Divergence,
+    /// A search for concepts to rescope.
+    Rescope,
 }
 
 /// A running job, as the activity list shows it.

@@ -532,6 +532,15 @@ pub fn list_files(project_dir: &Path) -> Result<Files> {
     })
 }
 
+/// The project's spec location, and its .pi files, relative to the project.
+pub fn list_spec_files(project_dir: &Path) -> Result<(String, Vec<String>)> {
+    let spec_root = normalize(&hidden_anchor::config_value(project_dir, "root")?);
+    let (specs, _) = walk(project_dir, &spec_root, |path| {
+        path.extension().is_some_and(|ext| ext == "pi")
+    })?;
+    Ok((spec_root, specs))
+}
+
 /// The files under `root` in `project_dir` that Git doesn't ignore and
 /// `keep` keeps, sorted, at most [`MAX_FILES`] of them.
 fn walk(

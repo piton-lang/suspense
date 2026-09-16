@@ -1,0 +1,44 @@
+use /lib
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
+
+export scope BakedSystemPromptsScope:
+    concept: {BakedSystemPromptsConcept}
+
+concept BakedSystemPromptsConcept:
+    pitch:
+        The prompts the application gives the harness for its own work, rather
+        than a prompt someone writes, written in Piton and built into the
+        application.
+
+    shape: {BakedSystemPromptsShape}
+
+shape BakedSystemPromptsShape:
+    description:
+        The prompts are Piton files in the repository's system-prompts folder,
+        one for each piece of the application's own work.
+
+    prompts:
+        - divergence.pi, for the two agents of a divergence analysis
+        - generate-skills.pi, for ranking the spec's scopes for skills
+        - rescope.pi, for finding concepts to extract into scopes, and for the refactoring prompt sent for those chosen
+        - commit-note.pi, for a finished task's commit note
+        - commit-message.pi, for writing a commit message
+        - file-search.pi, for the palette's search for a file by description
+
+    writing:
+        Each is an exported anchor, its text written as prose, one property for
+        each paragraph or piece the application puts together, such as a
+        heading above a list of files. What the application fills in is a name
+        in angle brackets, such as <codeRoot>, so it isn't taken as Piton.
+
+    building:
+        They are compiled with `piton compile` when the application is built,
+        and built into it: changing one changes what the next build sends, and
+        a prompt that doesn't compile fails the build, with piton's error. Each
+        build keeps what it compiled in system-prompts/compiled.json, with the
+        source, so the application still builds where `piton` isn't installed,
+        such as on CI, from the prompts as last compiled, saying so.
+
+    modePrompts:
+        The system prompts each chat mode sends are not among them: see the
+        @{ModeSystemPromptsScope}.

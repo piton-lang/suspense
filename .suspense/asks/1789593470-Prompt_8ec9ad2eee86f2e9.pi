@@ -1,0 +1,14 @@
+from /ui/components/inset-panel import InsetPanelScope
+
+anchor Prompt_8ec9ad2eee86f2e9:
+    userPrompt:
+        -
+            - "Did you build the animation for "
+            - @{InsetPanelScope}
+            - " ?"
+
+    mode: ask
+
+    systemPrompt:
+        -
+            - "We're only asking a question about the code located in ./src and the spec located in ./spec. Don't edit either of them."

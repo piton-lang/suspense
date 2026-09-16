@@ -1,0 +1,45 @@
+use /lib
+from /scope/harness-integration import HarnessIntegrationScope
+from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
+from /ui/components/task-table import TaskTableScope
+
+export scope OneOffAgentRunScope:
+    concept: {OneOffAgentRunConcept}
+
+concept OneOffAgentRunConcept:
+    pitch:
+        A run of the harness for the application's own work, such as analyzing
+        or ranking the spec, that can look at the project but never change it.
+
+    shape: {OneOffAgentRunShape}
+
+shape OneOffAgentRunShape:
+    description:
+        A separate run of the @{HarnessIntegrationScope}'s harness in the
+        project directory. It keeps no session: it never carries on a
+        conversation, not even one of its own, and nothing carries on from it,
+        so the tasks and questions never see it. It can only read, glob, and
+        search files, never change anything.
+
+    prompt:
+        Its prompt is one of the @{BakedSystemPromptsScope}, with what the
+        application fills in, then whatever the use hands it after, such as a
+        list of files, given to the harness on its standard input.
+
+    streaming:
+        It streams its output as JSON, a line per event, text as it is written,
+        shown as it arrives in a @{TaskTableScope}, whose lock to the bottom
+        starts on, so it follows the run's latest output. Its reply is the
+        result it finishes with.
+
+    reply:
+        It replies with nothing but JSON, shaped as its prompt asks, which each
+        use describes.
+
+    failing:
+        When the harness can't be run, fails, or replies with something that
+        can't be read as that JSON, the run fails, with why. Each use says what
+        it does then.
+
+    stopping:
+        Closing whatever started it stops it.

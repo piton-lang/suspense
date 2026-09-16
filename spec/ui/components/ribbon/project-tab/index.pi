@@ -1,4 +1,6 @@
 use /lib
+from /scope/project/open-project import OpenProjectScope
+from /ui/components/project-indicator import ProjectIndicator
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/new-project import NewProjectScope
 
@@ -31,13 +33,10 @@ shape RibbonProjectTabShape:
 
         openProject:
             A button with a folder icon that always reads "Open Project…",
-            whether or not a project is open; the open project's name is shown
-            beside the ribbon's tabs instead. Its tooltip says to pick a
+            whether or not a project is open; the @{ProjectIndicator} beside
+            the ribbon's tabs shows which is. Its tooltip says to pick a
             piton.config.pi file, whose folder becomes the project.
 
-            Clicking it opens the @{ProjectDirectoryScope} picker, and the
-            folder of the file picked becomes the project. Cancelling the picker
-            changes nothing, and a picker that fails shows its error as a
-            notification.
+            Clicking it opens the @{OpenProjectScope}.
 
             It is primary.

@@ -8,6 +8,7 @@ use crate::main_window::{self, MainWindow};
 use crate::piton_syntax;
 use crate::project_directory::ProjectDirectory;
 use crate::project_lsp::ProjectLsp;
+use crate::recent_projects;
 use crate::settings_window;
 
 pub const APP_TITLE: &str = "Suspense";
@@ -24,6 +25,10 @@ pub fn run() {
         piton_syntax::init();
         ProjectDirectory::init(cx);
         ProjectLsp::init(cx);
+        // The project open when the application last closed opens again.
+        if let Some(last) = recent_projects::init(recent_projects::default_file(), cx) {
+            ProjectDirectory::set(last, cx);
+        }
 
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([

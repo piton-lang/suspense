@@ -1,0 +1,36 @@
+use /lib
+from /scope/application/MainWindow import MainWindowScope
+from /scope/editor import EditorScope
+from /scope/palette import PaletteScope
+from /scope/prompt-mode/message-list import MessageList
+from /ui/components/diff-view import DiffViewScope
+from /ui/components/file-tree import FileTreeScope
+
+export scope OpenFileScope:
+    concept: {OpenFileConcept}
+
+concept OpenFileConcept:
+    pitch:
+        Opens one of the project's files to read or edit, from wherever the
+        file is named, always in the same place.
+
+    shape: {OpenFileShape}
+
+shape OpenFileShape:
+    description:
+        A file opens in an @{EditorScope}, in the split beside the chat history
+        that the @{MainWindowScope} lays out. Opening a file while another is
+        showing shows it in that one's place, the editor first asking to
+        discard any unsaved changes.
+
+    openedFrom:
+        A file opens this way, however it is opened:
+        - clicking it in the @{FileTreeScope}
+        - picking it in the @{PaletteScope}, or its search for a file finding just that one, which closes the palette
+        - clicking a link to it in a task's compiled prompt or reply text, or its path on a row of the @{MessageList}
+        - the button for opening it in a @{DiffViewScope}'s header, which closes the diff first
+        - going to a definition in another file from the editor, which opens that file at the definition
+
+    missing:
+        A link to a file that doesn't exist shows an error notification, and
+        opens nothing.

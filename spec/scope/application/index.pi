@@ -1,5 +1,8 @@
 use /lib
+from /scope/project-directory import ProjectDirectoryScope
 from ./MainWindow import MainWindowScope
+from /scope/project-data import ProjectDataScope
+from /scope/user-preferences import UserPreferencesScope
 
 export scope ApplicationScope:
     concept: {ApplicationConcept}
@@ -23,10 +26,15 @@ shape ApplicationShape:
     name:
         The application is called Suspense.
 
-    projectFiles:
-        Everything the application keeps for a project lives in a `.suspense`
-        directory inside the project directory: the prompt history, questions
-        asked from the Ask tab, the queue, and the last harness report.
+    lastProject:
+        When the application starts, it opens the project that was opened most
+        recently, the first of the @{ProjectDirectoryScope}'s recent projects
+        that still holds its piton.config.pi. With none, it starts with no
+        project open.
+
+    projectFiles: @{ProjectDataScope}
+
+    userPreferences: @{UserPreferencesScope}
 
     platforms:
         - windows

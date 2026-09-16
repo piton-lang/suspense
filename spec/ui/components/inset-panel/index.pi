@@ -1,4 +1,5 @@
 use /lib
+from /ui/animations/rise-in import RiseInAnimation
 
 export scope InsetPanelScope:
     concept: {InsetPanelConcept}
@@ -17,6 +18,12 @@ shape InsetPanelShape:
         corners, a border, and a shadow, and whatever it holds fills it. The
         window behind it is dimmed, and nothing behind it takes the mouse while
         it is open. Only one panel is open at a time.
+
+    animating:
+        The panel comes in each time it opens and goes away each time it closes
+        with the @{RiseInAnimation}: the panel is its surface, and the dimmed
+        window around the panel is its dimming. Switching what the panel holds,
+        such as opening a diff while the settings are open, swaps it in place.
 
     modal:
         While the panel is open, nothing beneath it can take focus or input;

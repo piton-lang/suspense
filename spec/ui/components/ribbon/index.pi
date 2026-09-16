@@ -1,9 +1,12 @@
 use /lib
+from /ui/components/project-indicator import ProjectIndicator
 from ./project-tab import RibbonProjectTabScope
 from ./code-tab import RibbonCodeTabScope
 from ./spec-tab import RibbonSpecTabScope
 from ./research-tab import RibbonResearchTabScope
 from ./application-tab import RibbonApplicationTabScope
+from /scope/running-activity import RunningActivityScope
+from /scope/user-preferences import UserPreferencesScope
 
 export scope RibbonScope:
     concept: {RibbonConcept}
@@ -43,33 +46,13 @@ shape RibbonShape:
         launches: the window always opens with only Project open.
 
     activity:
-        While anything is running, a small spinner sits just to the right of the
-        project's name, as it is beside the tabs or leading the collapsed
-        ribbon, with how many things are running beside it when more than one
-        is. Its tooltip says what is running, or how many things are. While
-        nothing is, neither shows, and nothing takes their place.
+        The indicator and list of the @{RunningActivityScope} sit just to the
+        right of the project indicator, as it is beside the tabs or leading the
+        collapsed ribbon.
 
-        Clicking the spinner opens a small list beneath it of everything
-        running, one row each, the newest last: the task the harness is working
-        on, headed "Task" with the first line of its prompt; each question still
-        running, headed "Question" with its first line; a spec build,
-        "Building the spec"; and a divergence analysis, "Analyzing divergence".
-        Each row has a small spinner of its own. Clicking a row closes the list
-        and reveals what it is: a task brings back the latest task's output,
-        closing the previous tasks and any inset panel over it, and scrolls it
-        to the end; a question closes the answer drawer and any inset panel, so
-        its row is in view; a divergence analysis brings its panel back. A spec
-        build has nothing to show, so its row only closes the list. Pressing the
-        mouse outside the list, or <Escape>, closes it too, as does everything
-        in it finishing.
-
-    projectName:
-        To the left of the tabs, in the same bar, sits the name of the open
-        project: its folder's name, in medium weight, after a small folder
-        icon, with a thin vertical divider between it and the first tab. Its
-        tooltip gives the project's full path. It is only a label, and does
-        nothing when clicked. While no project is open, it reads "No project",
-        muted. A name wider than 320 pixels is cut off with an ellipsis.
+    projectIndicator:
+        To the left of the tabs, in the same bar, sits the @{ProjectIndicator},
+        with a thin vertical divider between it and the first tab.
 
     groups:
         Each group has its title in muted text rotated -90deg (bottom to top)
@@ -115,11 +98,11 @@ shape RibbonShape:
     collapsing:
         The ribbon collapses, and expands again, with a chevron button at the
         right end of the ribbon, by double-clicking a tab, or with Ctrl+F1
-        (Cmd+F1 on macOS). Whether it is collapsed is saved for the user and
-        restored on the next launch.
+        (Cmd+F1 on macOS). Whether it is collapsed is one of the
+        @{UserPreferencesScope}.
 
         Collapsed, the tabs go away too. The ribbon becomes a single thin row
-        led by the project's name, as it is beside the tabs and with the same
+        led by the project indicator, as it is beside the tabs and with the same
         divider after it, and then holding every primary command, from all of
         the tabs, as small buttons: a small icon beside its label, and dark mode
         as a small switch. They keep the order of their tabs, with a thin

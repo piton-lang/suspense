@@ -1,0 +1,47 @@
+use /lib
+from /scope/project-directory import ProjectDirectoryScope
+from /scope/project-locations import ProjectLocationsScope
+
+export scope ProjectDataScope:
+    concept: {ProjectDataConcept}
+
+concept ProjectDataConcept:
+    pitch:
+        What the application keeps for a project, kept in the project itself
+        so it survives a restart and travels with the project.
+
+    shape: {ProjectDataShape}
+
+shape ProjectDataShape:
+    description:
+        Everything the application keeps for a project lives in a `.suspense`
+        directory inside the @{ProjectDirectoryScope}, created as it is needed.
+        Nothing about a project is kept anywhere else, apart from the draft.
+
+    contents:
+        - `history/`: every task sent, as its hidden anchor's source, named by the second it was sent and the anchor's name, and beside it, once its run is over, a `.json` record of the same name holding the compiled userPrompt the harness received, each line the harness printed, and any error
+        - `asks/`: every question asked from the Ask tab, saved the same way as a task but apart from them
+        - `queue/`: each queued prompt, as its hidden anchor's source, imports included, named so they list in the order they were queued
+        - `divergence/`: each divergence report, a JSON file named by when it was made
+        - `system-prompts/`: each mode's system prompt template, a Markdown file named after its mode, code.md, combined.md for Chain, spec.md, and ask.md
+        - `commit-notes.json`: the Git panel's commit notes
+        - `harness.json`: the last report the harness gave of the skills and agents it has
+
+        The draft, `.suspense-draft.pi`, isn't in `.suspense`: it is the prompt
+        being written, as `piton lsp` is shown it, a document named as if it
+        were in the spec location, as the @{ProjectLocationsScope} says, so the
+        server resolves its imports.
+
+    machineOnly:
+        Some of it belongs to one machine rather than to the project: the
+        harness report `.suspense/harness.json`, the queue `.suspense/queue/`,
+        the commit notes `.suspense/commit-notes.json`, and the draft
+        `.suspense-draft.pi` wherever it is, should it ever be written. Git
+        ignores these, so they are
+        never committed. Everything else, the prompt history, the questions,
+        the divergence reports, and the system prompts, is kept with the
+        project.
+
+    reading:
+        What can't be read is left out, or shown as missing, rather than
+        stopping the rest from being read.

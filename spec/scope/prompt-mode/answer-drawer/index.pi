@@ -1,0 +1,53 @@
+use /lib
+from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/prompt-mode/message-list import MessageList
+
+export scope AnswerDrawerScope:
+    concept: {AnswerDrawerConcept}
+
+concept AnswerDrawerConcept:
+    pitch:
+        A drawer over prompt mode for reading an answer, or looking back
+        through previous ones, without losing sight of where they came from.
+
+    shape: {AnswerDrawerShape}
+
+shape AnswerDrawerShape:
+    description:
+        The drawer slides up out of the @{ChatInputScope} over everything
+        above it: the @{MessageList}, any file beside it, and the stack of
+        question rows. Only two things are a drawer: a question open onto its
+        task table, and the previous answers expanded. Unlike the stack of
+        question rows, which pushes what is above it, the drawer covers what is
+        above it rather than pushing it. Closing it slides nothing back; the
+        stack and the message list are where they were beneath it.
+
+    previousAnswers:
+        The previous answers are the exception: they slide up from on top of
+        the question rows in the stack rather than out of the chat input over
+        them, leaving those rows where they were, uncovered and undimmed, and
+        the drawer's share of the space counts from the chat input, rows
+        included. With no rows left in the stack, they slide up out of the chat
+        input as usual.
+
+    height:
+        The drawer opens to 80% of the height of the space above the chat input
+        by default: the open question's table, or the previous answers list,
+        grows to fill whatever the drawer's other rows leave, rather than
+        stopping at a fixed height. It slides up as it opens.
+
+        While open, the drawer is resizable by dragging its top edge, which
+        shows a resize cursor and a thin highlight when hovered. It follows the
+        pointer exactly, with no slide, and can be dragged from 20% to 95% of
+        that space. The size it is dragged to is kept for as long as the
+        application runs, for every question or list opened afterwards, rather
+        than going back to 80%.
+
+    dimming:
+        While the drawer is open, a dark shade fades in over what it covers, to
+        draw attention to it, and fades back out when it closes. The shade
+        covers all the space above the chat input beneath the drawer: the
+        message list, any file open beside it, and the stack of question rows,
+        except those the previous answers leave uncovered. Question rows in the
+        stack, running or finished, never dim anything themselves; they push
+        the message list up instead.

@@ -1,0 +1,46 @@
+use /lib
+from /scope/prompt-mode/modes import PromptModesScope
+from /scope/project-data import ProjectDataScope
+from /scope/project-locations import ProjectLocationsScope
+from /scope/settings-window import SettingsWindowScope
+
+export scope ModeSystemPromptsScope:
+    concept: {ModeSystemPromptsConcept}
+
+concept ModeSystemPromptsConcept:
+    pitch:
+        The system prompt each mode sends, which tells the harness what kind of
+        work a prompt is, and which each project can make its own.
+
+    shape: {ModeSystemPromptsShape}
+
+shape ModeSystemPromptsShape:
+    description:
+        Each of the @{PromptModesScope} has a system prompt template. A prompt
+        sent in a mode gives its hidden anchor a systemPrompt property,
+        alongside its userPrompt, from that mode's template.
+
+    templates:
+        A template is Piton prose, like the prompt it is sent with, so it can
+        reference the spec, with two placeholders, CODE_LOCATION and
+        SPEC_LOCATION, each written after a dollar sign and inside braces like a
+        Piton interpolation. Before the prompt is compiled, they are filled in
+        with the code location and the spec location, as the
+        @{ProjectLocationsScope} says.
+
+    saving:
+        Each project has its own templates, saved with its data, as the
+        @{ProjectDataScope} says, a Markdown file per mode, and edited in the
+        @{SettingsWindowScope}. A mode with no file yet sends its default.
+
+    defaults:
+        The defaults are the templates saved in this application's own
+        repository, in its `.suspense/system-prompts` directory, one Markdown
+        file per mode, named as a project's are. They are the source of truth
+        for the defaults, and are baked into the application when it is built,
+        so a build always ships with whatever those files say, and changing
+        them changes the defaults the next build has. A build can't be made
+        without them.
+
+        The defaults are only where a project starts, and what resetting a
+        template puts back.

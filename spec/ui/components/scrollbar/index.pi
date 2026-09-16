@@ -12,21 +12,26 @@ concept ScrollbarConcept:
 
 shape ScrollbarShape:
     description:
-        A narrow column along the right of the list, with a thin border between
-        them, always shown, whether or not the list has anything to scroll. It
+        A narrow column along the right of the list, always shown, whether or not the list has anything to scroll. It
         is the list's only scrollbar: no scrollbar is laid over the list, or
         appears only while hovering or scrolling.
 
     buttons:
         A square button at the top of the column scrolls the list up a little,
         and a square button at the bottom scrolls it down a little. The column
-        is as wide as the buttons are tall.
+        is as wide as the buttons are tall. Each button has a thin border, and
+        fills the column's full width, with nothing beside it.
 
     track:
         Between the buttons, a track holds a thumb as tall as the share of the
         list in view, and never too short to grab, placed as far down the track
         as the list is scrolled. The thumb is a plain rectangle that fills the
-        track's full width, with no inset and no rounded corners. With nothing
+        column's full width, with no inset and no rounded corners. Its fill is
+        darker than the track it sits in, and it has a one pixel border of its
+        own that stands out from both, towards the theme's foreground colour:
+        in dark mode, brighter than the track. Where there is no thumb, the
+        track has a thin line down its side against the list, in the theme's
+        border colour. With nothing
         to scroll, the thumb fills the track. Pressing the thumb and dragging
         scrolls the list with it for as long as the button is held, even once
         the pointer leaves the column, and pressing the track elsewhere moves

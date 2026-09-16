@@ -1210,6 +1210,15 @@ impl PromptMode {
         self.working || self.asks.iter().any(|ask| ask.task.status.is_active())
     }
 
+    /// The prompts queued, oldest first.
+    #[cfg(test)]
+    pub fn queued_texts(&self) -> Vec<String> {
+        self.queue
+            .iter()
+            .map(|item| item.text.to_string())
+            .collect()
+    }
+
     #[cfg(test)]
     pub fn set_working(&mut self, working: bool) {
         self.working = working;
@@ -1399,7 +1408,7 @@ impl PromptMode {
 
     /// Sends `text` in `mode` now if the harness is free, or queues it. A
     /// question is always asked now.
-    fn send(
+    pub fn send(
         &mut self,
         text: String,
         mode: SendMode,
@@ -5843,6 +5852,19 @@ mod tests {
                 column.left() >= output.right() - gpui_kit::px(1.),
                 "the column {column:?} is not right of the output {output:?}"
             );
+            // The track and every button span the column's full width.
+            for id in [
+                "task-output-scroll-track",
+                "task-output-scroll-up",
+                "task-output-scroll-down",
+                "task-output-scroll-lock",
+            ] {
+                let part = window.find(id).bounds();
+                assert!(
+                    part.left() == column.left() && part.right() == column.right(),
+                    "{id} {part:?} doesn't span the column {column:?}"
+                );
+            }
             assert!(
                 window.try_find("task-output-scroll-up").is_some()
                     && window.try_find("task-output-scroll-down").is_some()

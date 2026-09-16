@@ -1,0 +1,60 @@
+use /lib
+from /scope/prompt-mode import PromptEditor
+from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/spec-build import SpecBuildScope
+from /scope/divergence import DivergenceScope
+from /scope/rescope import RescopeScope
+from /ui/components/minimizable-panel import MinimizablePanelScope
+
+export scope RunningActivityScope:
+    concept: {RunningActivityConcept}
+
+concept RunningActivityConcept:
+    pitch:
+        What the application is still working on, where to see it and get back
+        to it, and what makes quitting ask first.
+
+    shape: {RunningActivityShape}
+
+shape RunningActivityShape:
+    description:
+        What counts as work still running in the application, and how each is
+        listed, newest last.
+
+    running:
+        - the task the harness is working on, from the @{PromptEditor}, headed "Task" with the first line of its prompt
+        - each question still running, from the @{ChatInputScope}'s Ask tab, headed "Question" with its first line
+        - a spec build run on its own, as the @{SpecBuildScope} says, "Building the spec"
+        - a divergence analysis in the @{DivergenceScope}, "Analyzing divergence"
+        - a search for concepts to rescope in the @{RescopeScope}, "Finding scopes to extract"
+
+        Prompts waiting in the queue don't count as running, since they are
+        saved with the project, and neither does a panel whose work is over.
+
+    indicator:
+        While anything is running, a small spinner shows, with how many things
+        are running beside it when more than one is. Its tooltip says what is
+        running, or how many things are. While nothing is, neither shows, and
+        nothing takes their place. Where it sits is up to what holds it.
+
+    list:
+        Clicking the spinner opens a small list beneath it of everything
+        running, one row each, in the order above, each with a small spinner of
+        its own. Clicking a row closes the list and reveals what it is:
+        - a task brings back the latest task's output, closing the previous tasks and any inset panel over it, and scrolls it to the end
+        - a question closes the answer drawer and any inset panel, so its row is in view
+        - a divergence analysis or a rescope search brings its @{MinimizablePanelScope} back
+        - a spec build has nothing to show, so its row only closes the list
+
+        Pressing the mouse outside the list, or <Escape>, closes it too, as
+        does everything in it finishing.
+
+    quitting:
+        Quitting, however it is asked for, while the harness is working on a
+        task or a question, or while a spec build runs on its own, asks first.
+        A divergence analysis or a rescope search doesn't ask, and quitting
+        stops it. The message is titled "Quit while a task is running?" and
+        says what is still running: the harness working on a prompt, piton
+        build, or both. "Quit" exits, and "Keep Running" or <Escape> dismisses
+        it. Asking to quit again while it is open doesn't open a second one,
+        and an open palette closes first.

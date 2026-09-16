@@ -1,17 +1,30 @@
 use /lib
+from /ui/components/project-indicator import ProjectIndicator
+from /scope/project/open-project import OpenProjectScope
+from /scope/new-project import NewProjectScope
+from /scope/user-preferences import UserPreferencesScope
 
 export scope ProjectDirectoryScope:
     concept: {ProjectDirectoryConcept}
 
 concept ProjectDirectoryConcept:
     pitch:
-        Allows user to pick a directory containing a piton.config.pi file as the
-        root directory of the project.
+        The project the application works on: the directory holding the
+        project's piton.config.pi.
 
     shape: {ProjectDirectoryShape}
 
 shape ProjectDirectoryShape:
     description:
-        Opens a file picker modal that allows the user to select the
-        piton.config.pi file, then the application will store during that
-        session the location of that file's directory as the project directory.
+        The application stores the folder holding the project's piton.config.pi
+        as the project directory, set when a project is opened with the
+        @{OpenProjectScope}, created with the @{NewProjectScope}, or picked
+        from the recent projects of the @{ProjectIndicator}. Setting it again
+        replaces the project for the whole application.
+
+    recentProjects:
+        Every project opened, however it was opened, is remembered among the
+        @{UserPreferencesScope}: the five opened most recently, newest first,
+        opening one again moving it to the front rather than listing it twice.
+        A project that no longer holds its piton.config.pi is left out wherever
+        they are offered.

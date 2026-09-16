@@ -34,7 +34,7 @@ pub(super) fn dark_mode(small: bool, cx: &mut Context<Ribbon>) -> AnyElement {
     if small { switch.small() } else { switch }.into_any_element()
 }
 
-/// Settings: opens the settings window.
+/// Settings: opens the settings in the inset panel.
 pub(super) fn settings(
     button: impl Fn(&'static str, IconName, SharedString) -> Button,
 ) -> AnyElement {
@@ -44,7 +44,7 @@ pub(super) fn settings(
             &OpenSettings,
             None,
         )
-        .on_click(|_, _, cx| crate::settings_window::open(cx))
+        .on_click(|_, window, cx| window.dispatch_action(Box::new(OpenSettings), cx))
         .into_any_element()
 }
 

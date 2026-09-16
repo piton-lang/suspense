@@ -21,6 +21,7 @@ use gpui_kit::*;
 
 use crate::activity::{Job, RevealJob};
 use crate::project_directory::ProjectDirectory;
+use crate::project_indicator::ProjectIndicator;
 
 mod application_tab;
 mod code_tab;
@@ -102,6 +103,8 @@ enum Command {
     BuildSpec,
     AnalyzeDivergence,
     ViewDivergenceReports,
+    GenerateSkills,
+    Rescope,
     DarkMode,
     Settings,
 }
@@ -127,6 +130,8 @@ pub struct Ribbon {
     jobs: Vec<Job>,
     /// Whether the list of what's running is open.
     jobs_open: bool,
+    /// Which project is open, and the recent projects when clicked.
+    project_indicator: Entity<ProjectIndicator>,
 }
 
 impl EventEmitter<RevealJob> for Ribbon {}
@@ -142,6 +147,7 @@ impl Ribbon {
             building: false,
             jobs: Vec::new(),
             jobs_open: false,
+            project_indicator: cx.new(ProjectIndicator::new),
         }
     }
 
@@ -161,6 +167,11 @@ impl Ribbon {
     #[cfg(test)]
     pub fn jobs(&self) -> &[Job] {
         &self.jobs
+    }
+
+    /// The project indicator.
+    pub fn project_indicator(&self) -> &Entity<ProjectIndicator> {
+        &self.project_indicator
     }
 
     pub fn jobs_open(&self) -> bool {
@@ -339,10 +350,12 @@ impl Ribbon {
         };
         match command {
             Command::NewProject => project_tab::new_project(button),
-            Command::OpenProject => project_tab::open_project(button, cx),
+            Command::OpenProject => project_tab::open_project(button),
             Command::BuildSpec => spec_tab::build_spec(self, button, cx),
             Command::AnalyzeDivergence => spec_tab::analyze_divergence(button, cx),
             Command::ViewDivergenceReports => spec_tab::view_divergence_reports(button, cx),
+            Command::GenerateSkills => spec_tab::generate_skills(button, cx),
+            Command::Rescope => spec_tab::rescope(button, cx),
             Command::DarkMode => application_tab::dark_mode(small, cx),
             Command::Settings => application_tab::settings(button),
         }
@@ -384,7 +397,7 @@ impl Render for Ribbon {
             // No tabs: every primary command, small, in one row, a divider
             // between one tab's commands and the next.
             // Led by the project's name, as beside the tabs.
-            let mut row = vec![project_tab::project_name(cx)];
+            let mut row = vec![self.project_indicator.clone().into_any_element()];
             row.extend(self.render_activity(cx));
             row.push(div().w_px().h(px(16.)).bg(border).into_any_element());
             let mut last_tab = None;
@@ -436,7 +449,7 @@ impl Render for Ribbon {
                     .pr_1()
                     .border_r_1()
                     .border_color(border)
-                    .child(project_tab::project_name(cx))
+                    .child(self.project_indicator.clone())
                     .children(self.render_activity(cx)),
             )
             .children(tabs)

@@ -1,0 +1,39 @@
+use /lib
+
+export scope RiseInAnimation:
+    concept: {RiseInAnimationConcept}
+
+concept RiseInAnimationConcept:
+    pitch:
+        How something that floats over the window, holding the user's attention
+        while it's there, comes in and goes away: rising gently into place over
+        a dimming window, and sinking away again. Anything shown that way can
+        use it.
+
+    shape: {RiseInAnimationShape}
+
+shape RiseInAnimationShape:
+    description:
+        Two parts move together: the surface, which is whatever comes in, and
+        the dimming, which darkens everything behind it. Both follow one quick
+        spring that settles in about a quarter of a second, from gone to fully
+        in when coming in, and back when going away. Only how they look moves:
+        where the surface settles, and so where it takes the mouse and focus,
+        is its place from the start.
+
+    comingIn:
+        The dimming darkens the window behind from not at all to 40% black. The
+        surface fades in from transparent as it rises into place from about 28
+        pixels below, easing to a stop, as though tipping up towards the
+        viewer. It comes in afresh each time what uses it opens.
+
+    goingAway:
+        The same played backwards: the surface fades out as it sinks the same
+        distance, and the dimming fades away. While it goes, neither takes the
+        mouse nor focus, so what is beneath can be used straight away, and
+        something opened meanwhile comes in as usual. Once the spring has had
+        about a quarter of a second, it's gone.
+
+    swapping:
+        Changing what the surface holds while it's in swaps it in place without
+        animating: only coming in and going away animate.

@@ -1,0 +1,37 @@
+use /lib
+from /scope/harness-integration import HarnessIntegrationScope
+from /scope/project-data import ProjectDataScope
+from /scope/project-directory import ProjectDirectoryScope
+
+export scope HarnessCatalogScope:
+    concept: {HarnessCatalogConcept}
+
+concept HarnessCatalogConcept:
+    pitch:
+        The skills, commands, and agents the harness has, so they can be found
+        and used in a prompt the way they are in the harness itself.
+
+    shape: {HarnessCatalogShape}
+
+shape HarnessCatalogShape:
+    description:
+        What the @{HarnessIntegrationScope}'s harness has to offer, each one a
+        skill, a command, or an agent, with its name, and its description when
+        it has one.
+
+    sources:
+        Skills and commands are those of the @{ProjectDirectoryScope}, of the
+        user, and of the user's enabled plugins, a plugin's own being named
+        `plugin:name`. Agents come from the same places, plus the harness's
+        built-in agents.
+
+        Every harness run reports the skills and agents it has, built-in ones
+        included. The last report is saved with the project's data, as the
+        @{ProjectDataScope} says, and offered too.
+
+    mentioning:
+        A skill or command is used in a prompt as `/name `, and an agent as
+        `@agent-name `, which the harness understands as a request to use that
+        agent. They pass through the hidden anchor and its compilation
+        unchanged, so a prompt starting with `/name` runs that skill or
+        command.

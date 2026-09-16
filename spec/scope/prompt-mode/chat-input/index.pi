@@ -2,12 +2,15 @@ use /lib
 from /ui/components/growing-text-input import GrowingTextInputScope
 from /ui/components/selection-popover import SelectionPopoverScope
 from /scope/harness-integration import HarnessIntegrationScope
-from /scope/project-directory import ProjectDirectoryScope
+from /scope/harness-integration/catalog import HarnessCatalogScope
 from /scope/lsp import LSP
+from /scope/prompt-mode/answer-drawer import AnswerDrawerScope
 from /scope/prompt-mode/message-list import MessageList
-from /scope/settings-window import SettingsWindowScope
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
+from /scope/prompt-mode/modes import PromptModesScope
+from /scope/prompt-mode/sending import PromptSendingScope
 from /ui/components/history-list import HistoryListScope
-from /ui/components/scrollbar import ScrollbarScope
+from /ui/components/task-table import TaskTableScope
 
 export scope ChatInputScope:
     concept: {ChatInputConcept}
@@ -26,19 +29,20 @@ shape ChatInputShape:
         <Enter> allows for creating new lines, like Ctrl/Cmd+Enter sends it to
         the ${HarnessIntegrationScope}
 
-        Sending is never blocked by the harness working: while it is, the send
-        button on the Code, Chain, and Spec tabs reads "Queue" and sending adds
-        the prompt to prompt mode's queue. On the Ask tab it always reads
-        "Send", because a question is never queued. The button is only disabled
-        while the input is empty.
+        Sending sends the prompt in the selected tab's mode, as the
+        @{PromptSendingScope} says. While the harness is working, the send
+        button on the Code, Chain, and Spec tabs reads "Queue", since the
+        prompt will queue. On the Ask tab it always reads "Send", because a
+        question is never queued. The button is only disabled while the input
+        is empty.
 
     tabs:
         overview:
             The input and send button live inside the body of a tab bar, using
-            gpui-kit's default tab styling. There are four tabs, in order: Code,
-            Chain, Spec, and Ask. Code, Spec, and Ask are ordinary tabs. Chain
-            is also a tab, just a small one, because it only shows an icon. All
-            four sit flush against each other with no extra gaps, and no tab has
+            gpui-kit's default tab styling. There is a tab for each of the
+            @{PromptModesScope}, in their order: Code, Chain, Spec, and Ask.
+            Code, Spec, and Ask are ordinary tabs. Chain is also a tab, just a
+            small one, because it only shows an icon. All four sit flush against each other with no extra gaps, and no tab has
             more padding than a normal tab.
 
             The chat input starts in the combined mode: Chain is selected, so
@@ -84,58 +88,31 @@ shape ChatInputShape:
             note about the tab rather than as another tab. It is cut off rather
             than wrapped when the bar is too narrow.
 
-            code:
-                Changes the code, leaving the spec as it is.
-
-            chain:
-                Changes the code and the spec together.
-
-            spec:
-                Changes the spec, leaving the code as it is.
-
-            ask:
-                Asks a question about the code and the spec, changing neither.
+            It reads what the selected tab's mode is for, as the
+            @{PromptModesScope} says.
 
         colour:
-            The selected tab and the tab body holding the input are tinted: a
-            subtle red for Code, a subtle blue for Spec, and a subtle green for
-            Ask. With Chain selected, Code, Spec, and the body are all purple.
-            The colour transitions smoothly whenever the selected tab changes,
-            straight from the old tab's colour to the new one's. The tabs wrap
-            around, so pressing <Ctrl+Tab> on Ask fades green straight to Code's
-            red, and <Ctrl+Shift+Tab> on Code fades red straight to Ask's green;
-            neither lights up Chain or Spec on the way.
+            The selected tab and the tab body holding the input are tinted the
+            colour of its mode, of the @{PromptModesScope}. With Chain selected,
+            Code, Spec, and the body are all purple. The colour transitions
+            smoothly whenever the selected tab changes, straight from the old
+            tab's colour to the new one's. The tabs wrap around, so pressing
+            <Ctrl+Tab> on Ask fades green straight to Code's red, and
+            <Ctrl+Shift+Tab> on Code fades red straight to Ask's green; neither
+            lights up Chain or Spec on the way.
 
     systemPrompt:
-        The selected tab is the mode a prompt is sent in, and each mode gives
-        the hidden anchor a systemPrompt property alongside its userPrompt. The
-        code location is `codeRoot` and the spec location is `root`, as set in
-        the project's piton.config.pi.
-
-        defaults:
-            Each mode's default system prompt is the template saved for it in
-            this application's own repository, in its `.suspense/system-prompts`
-            directory, one Markdown file per mode: code.md, combined.md for
-            Chain, spec.md, and ask.md. They are the source of truth for the
-            defaults, and are baked into the application when it is built, so a
-            build always ships with whatever those files say, and changing them
-            changes the defaults the next build has. A build can't be made
-            without them.
-
-            The defaults are only where a project starts: each is saved with the
-            project and can be edited in the @{SettingsWindowScope}.
-
-        A prompt keeps the mode it was sent in while it waits in the queue.
+        The selected tab is the mode a prompt is sent in, and each mode's system
+        prompt is sent with it, as the @{ModeSystemPromptsScope} says.
 
     ask:
-        Ask is for simply asking a question. A question runs straight away,
-        separately from any Code, Chain, or Spec task, even while the harness is
-        working on one. Any number of questions can be asked, and they all run
-        at the same time; asking another never stops or waits for one already
-        running.
+        Ask is for simply asking a question, which runs as the
+        @{PromptModesScope} says. Any number of questions can be asked, and they
+        all run at the same time; asking another never stops or waits for one
+        already running.
 
-        Each question's progress and results are shown in a task table, as in
-        the @{MessageList}. The questions stack directly above the tabs, the
+        Each question's progress and results are shown in a
+        @{TaskTableScope}. The questions stack directly above the tabs, the
         newest nearest them, in a column that pushes the message list up to make
         room rather than covering it, so none of a running task's progress is
         ever hidden behind them. Each slides up out of the chat input with an
@@ -145,33 +122,23 @@ shape ChatInputShape:
         first line.
 
         Once a question is complete, it opens onto a heading, with its status
-        and first line, above its full task table, in the answer drawer, which
-        it fills, scrolling once it is taller, with a @{ScrollbarScope} and its
-        lock to the bottom. Only one question is open at a time: opening another
-        closes the one open back down to its row. An open question leaves the
-        stack for the drawer. Clicking an open question's heading closes it down
-        to its row in the stack, and clicking a finished question's row opens it
-        again. Each question has a close button, which removes it and stops it
-        if it is still running, leaving the others running. A closed question
-        becomes a previous answer.
+        and first line, above its full task table, in the @{AnswerDrawerScope},
+        which it fills, the table scrolling once it is taller, with its lock to
+        the bottom off to start with. Only one question is open at a time:
+        opening another closes the one open back down to its row. An open
+        question leaves the stack for the drawer. Clicking an open question's
+        heading closes it down to its row in the stack, and clicking a finished
+        question's row opens it again. Each question has a close button, which
+        removes it and stops it if it is still running, leaving the others
+        running. A closed question becomes a previous answer.
 
     answerSteps:
-        For a question, only the answer matters, so the steps leading up to it
-        are collapsed by default wherever a finished question's task table
-        is shown: an open question, and a previous answer. The steps are every
-        row up to and including the harness's last tool call; the answer is the
-        rows after it. In their place, the table's first row reads "Show 1 step"
-        or "Show N steps", muted, beside a right chevron, with the answer
-        beneath it. A single click on that row expands the steps in place, above
-        the answer, and the row then reads "Hide 1 step" or "Hide N steps"
-        beside a down chevron; clicking it again collapses them. Each question's
-        table is expanded or collapsed on its own, and a question closed into
-        the previous answers starts collapsed again.
-
-        A reply with no tool calls, or with nothing after its last one, has
-        nothing to collapse and shows whole. A question still running shows its
-        latest step as usual. Tasks are never collapsed like this, since their
-        whole chain is of interest: see the @{MessageList}.
+        For a question, only the answer matters, so wherever a finished
+        question's task table is shown, an open question and a previous answer,
+        the table collapses the steps leading up to the answer, as the
+        @{TaskTableScope} says. A question closed into the previous answers
+        starts collapsed again. Tasks are never collapsed like this: see the
+        @{MessageList}.
 
     previousAnswers:
         Previous answers are a @{HistoryListScope}, shown only while the Ask tab
@@ -180,37 +147,11 @@ shape ChatInputShape:
         project and those closed since. Its row reads "No previous answers",
         "1 previous answer", or "N previous answers", and while expanded,
         "Back to the questions". Expanded, the row and the list go into the
-        answer drawer, the list sliding up from on top of any question rows
-        still in the stack, rather than out of the chat input over them: those
-        rows stay where they were, in view and undimmed, beneath the drawer, and
-        with no rows left there it slides up out of the chat input as usual. The
-        questions asked from now on carry on the conversation the latest of them
-        left off.
+        @{AnswerDrawerScope}, sliding up from on top of any question rows still
+        in the stack. The questions asked from now on carry on the conversation
+        the latest of them left off.
 
-    answerDrawer:
-        Only a question open onto its task table, or the previous answers
-        expanded, are a drawer. Unlike the stack of question rows, which pushes
-        what is above it, the drawer slides up out of the chat input over
-        everything above it, the message list, any file beside it, and the
-        stack, covering them rather than pushing them, and dims them: see the
-        @{MessageList}. The previous answers are the exception: they slide up
-        from on top of the question rows in the stack, leaving those rows
-        uncovered and undimmed, and the drawer's share of the space counts from
-        the chat input, rows included. Closing it slides nothing back; the stack
-        and the message list are where they were beneath it.
-
-        The drawer opens to 80% of the height of the space above the chat input
-        by default: the open question's table, or the previous answers list,
-        grows to fill whatever the drawer's other rows leave, rather than
-        stopping at a fixed height. It slides up out of the chat input as it
-        opens.
-
-        While open, the drawer is resizable by dragging its top edge, which
-        shows a resize cursor and a thin highlight when hovered. It follows the
-        pointer exactly, with no slide, and can be dragged from 20% to 95% of
-        that space. The size it is dragged to is kept for as long as the
-        application runs, for every question or list opened afterwards, rather
-        than going back to 80%.
+    answerDrawer: @{AnswerDrawerScope}
 
     selectingAnswerText:
         The text of an answer being viewed, in the answer drawer, whether an
@@ -271,23 +212,17 @@ shape ChatInputShape:
             outside of one they never reach the @{LSP}.
 
         offered:
-            Skills and commands are those of the selected
-            ${ProjectDirectoryScope}, of the user, and of the user's enabled
-            plugins, a plugin's own being named `plugin:name`. Agents come from
-            the same places, plus the harness's built-in agents. Each shows
-            whether it is a skill, command, or agent, and its description as
-            documentation when it has one. Every harness run reports the skills
-            and agents it has, built-in ones included; the last report is saved
-            with the project and offered too. Results are narrowed and ordered
+            The skills, commands, and agents offered are the
+            @{HarnessCatalogScope}'s. Each shows whether it is a skill, command,
+            or agent, and its description as documentation when it has one.
+            Results are narrowed and ordered
             like Piton completions: matches at the start of a name before
             matches anywhere in it, then by name.
 
         accepting:
-            Accepting a skill or command inserts `/name `, and accepting an
-            agent inserts `@agent-name `, which the harness understands as a
-            request to use that agent. They pass through the hidden anchor and
-            its compilation unchanged, so a prompt starting with `/name` runs
-            that skill or command. Mentions work without the @{LSP}.
+            Accepting one inserts it as a mention, as the
+            @{HarnessCatalogScope} says, in place of what was typed of it.
+            Mentions work without the @{LSP}.
 
     hiddenAnchor:
         While the user will be able to type plain text, behind the scenes,

@@ -1,0 +1,48 @@
+use /lib
+from /scope/prompt-mode import PromptEditor
+from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/prompt-mode/message-list import MessageList
+from /scope/prompt-mode/modes import PromptModesScope
+from /scope/project-data import ProjectDataScope
+from /scope/spec-build import SpecBuildScope
+
+export scope PromptSendingScope:
+    concept: {PromptSendingConcept}
+
+concept PromptSendingConcept:
+    pitch:
+        How a prompt gets to the harness, whether written in the chat input or
+        sent on the application's behalf.
+
+    shape: {PromptSendingShape}
+
+shape PromptSendingShape:
+    description:
+        A prompt is sent in one of the @{PromptModesScope}, with anything
+        attached to it. Sending is never blocked by the harness working.
+
+    tasks:
+        A task, a prompt in Code, Chain, or Spec, is sent straight away while
+        the harness is free. While the harness is working, it waits in the
+        @{PromptEditor}'s queue instead, in the order it was sent, keeping its
+        mode and attachments, until its turn comes.
+
+        When a task is actually sent, the spec is built ahead of it, as the
+        @{SpecBuildScope} says, the task showing "Building" until the build is
+        over; then its hidden anchor is compiled and run. It heads the
+        @{MessageList} as the latest task, and is saved in the prompt history,
+        as the @{ProjectDataScope} says. A prompt that fails to compile or run
+        fails its task, and doesn't stop the queue.
+
+    questions:
+        A question, a prompt in Ask, never queues: it runs straight away, even
+        while the harness is working on a task or other questions, joins the
+        questions stacked above the @{ChatInputScope}'s tabs, and is saved
+        among the questions asked.
+
+    onTheApplicationsBehalf:
+        Something in the application can send a prompt as if it were written in
+        the chat input and sent from one of its tabs. It goes just the same
+        way: queued if the harness is busy, shown as a task, and entered in the
+        history. What is being written in the chat input, and attached to it,
+        is left alone.

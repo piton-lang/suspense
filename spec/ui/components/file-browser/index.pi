@@ -1,0 +1,30 @@
+use /lib
+from /ui/components/fs-browser import FsBrowserScope, FsBrowserConcept, FsBrowserShape
+
+export scope FileBrowserScope extends FsBrowserScope:
+    concept: {FileBrowserConcept}
+
+concept FileBrowserConcept extends FsBrowserConcept:
+    pitch:
+        An @{FsBrowserScope} for choosing a file.
+
+    shape: {FileBrowserShape}
+
+shape FileBrowserShape extends FsBrowserShape:
+    listed:
+        The current folder's folders are listed, to find the file in, then its
+        files. Whatever uses it can give the name a file must have, such as
+        piton.config.pi; then only files with that name are listed. A folder
+        with nothing listed in it says so: "No folders or", then that name,
+        then "here", or "Nothing here" when any file will do.
+
+    opening:
+        Clicking a file twice, or <Enter> or <Right> with it selected, chooses
+        it. <Enter> with nothing selected does nothing.
+
+    chosen:
+        What will be chosen is the selected file. With no file selected, as
+        when a folder is, nothing can be chosen: the footer says to select
+        one, naming the file needed when there is one, as in
+        "Select a piton.config.pi", and Choose is disabled. Choose's tooltip
+        says it chooses this file.

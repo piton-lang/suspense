@@ -2,14 +2,15 @@ use /lib
 from /ui/components/selection-popover import SelectionPopoverScope
 from /scope/lsp import LSP
 from /ui/components/file-tree import FileTreeScope
+from /scope/open-file import OpenFileScope
 
 export scope EditorScope:
     concept: {EditorConcept}
 
 concept EditorConcept:
     pitch:
-        An editor for a file opened from the @{FileTreeScope}, with language
-        support for Piton files.
+        An editor for a file opened from the @{FileTreeScope}, or anywhere else
+        the @{OpenFileScope} says, with language support for Piton files.
 
     shape: {EditorShape}
 
@@ -79,7 +80,7 @@ shape EditorShape:
         definitions:
             Ctrl-clicking (Cmd-clicking on macOS) a name goes to its
             `textDocument/definition`. A definition in another file opens that
-            file in the editor, at the definition.
+            file at the definition, as the @{OpenFileScope} says.
 
         diagnostics:
             What the server publishes for the file is underlined, with the

@@ -96,6 +96,23 @@ pub fn measure_new_rows(state: &ListState) {
     state.clone().measure_all();
 }
 
+/// The thumb's fill and border over a track of `track`: the fill darker than
+/// the track, and the border towards `foreground`, standing out from both:
+/// brighter than the track in dark mode.
+pub fn thumb_colors(track: Hsla, foreground: Hsla, dark: bool) -> (Hsla, Hsla) {
+    let towards = |color: Hsla, amount: f32| {
+        let mut blended = track.blend(color.opacity(amount));
+        blended.a = 1.;
+        blended
+    };
+    let black = hsla(0., 0., 0., 1.);
+    if dark {
+        (towards(black, 0.35), towards(foreground, 0.28))
+    } else {
+        (towards(black, 0.1), towards(foreground, 0.35))
+    }
+}
+
 /// Locks the scroll to the bottom (`true`) or unlocks it (`false`).
 pub type SetLock = Rc<dyn Fn(bool, &mut Window, &mut App)>;
 
@@ -166,15 +183,19 @@ fn scrollbar(
     cx: &App,
 ) -> AnyElement {
     let theme = cx.theme();
-    let (border, thumb_color, track_color) = (theme.border, theme.muted_foreground, theme.tab_bar);
+    let (border, track_color) = (theme.border, theme.tab_bar);
+    let (thumb_color, thumb_border) = thumb_colors(track_color, theme.foreground, theme.is_dark());
     let square = |name: &str, icon: IconName| {
         Button::new(SharedString::from(format!("{id}-{name}")))
             .ghost()
             .xsmall()
             .icon(icon)
+            // The full width of the column, bordered like the thumb.
             .w(COLUMN_WIDTH)
             .h(COLUMN_WIDTH)
             .rounded_none()
+            .border_1()
+            .border_color(border)
     };
     let follow = follower(handle, &lock);
     let scroll_by = |delta: Pixels| {
@@ -205,14 +226,24 @@ fn scrollbar(
             move |bounds, grab: Entity<Rc<Cell<Option<Pixels>>>>, window, cx| {
                 let grab = grab.read(cx).clone();
                 let geometry = Geometry::of(&handle, bounds);
+                // The track, with a line down the side against the list.
                 window.paint_quad(fill(bounds, track_color));
-                // The thumb fills the track's width, square.
                 window.paint_quad(fill(
+                    Bounds::new(bounds.origin, size(px(1.), bounds.size.height)),
+                    border,
+                ));
+                // The thumb fills the track's width, square: only a little
+                // apart from the track, with a border that stands out more.
+                window.paint_quad(quad(
                     Bounds::new(
                         point(bounds.origin.x, geometry.thumb_top),
                         size(bounds.size.width, geometry.thumb_height),
                     ),
-                    thumb_color.opacity(0.5),
+                    px(0.),
+                    thumb_color,
+                    px(1.),
+                    thumb_border,
+                    BorderStyle::Solid,
                 ));
 
                 window.on_mouse_event({
@@ -269,9 +300,9 @@ fn scrollbar(
     let column = v_flex()
         .id(SharedString::from(format!("{id}-scroll-column")))
         .flex_none()
+        // No border of its own: the buttons and the thumb each fill its width
+        // with theirs, and the track draws the line beside the list.
         .w(COLUMN_WIDTH)
-        .border_l_1()
-        .border_color(border)
         .child(
             square("scroll-up", IconName::ChevronUp)
                 .tooltip("Scroll up")
@@ -297,9 +328,7 @@ fn scrollbar(
                 } else {
                     "Lock the scroll to the bottom"
                 })
-                .on_click(move |_, window, cx| set_lock(!locked, window, cx))
-                .border_t_1()
-                .border_color(border);
+                .on_click(move |_, window, cx| set_lock(!locked, window, cx));
             column.child(
                 div()
                     .id(SharedString::from(format!("{id}-scroll-lock-pulse")))
@@ -520,6 +549,28 @@ impl Geometry {
 pub fn thumb_for_test(handle: &Scroll, track: Bounds<Pixels>) -> (Pixels, Pixels) {
     let geometry = Geometry::of(handle, track);
     (geometry.thumb_top, geometry.thumb_height)
+}
+
+#[cfg(test)]
+mod thumb_tests {
+    use gpui_kit::{Hsla, hsla};
+
+    /// Darker than the track, with a border that stands out: brighter over a
+    /// dark track, darker over a light one.
+    #[test]
+    fn thumb_is_darker_than_the_track_with_a_brighter_border() {
+        let (track, foreground) = (hsla(0., 0., 0.2, 1.), hsla(0., 0., 0.95, 1.));
+        let (fill, border) = super::thumb_colors(track, foreground, true);
+        assert!(fill.l < track.l, "{fill:?} isn't darker than {track:?}");
+        assert!(
+            border.l > track.l,
+            "{border:?} isn't brighter than {track:?}"
+        );
+        let light: (Hsla, Hsla) = (hsla(0., 0., 0.97, 1.), hsla(0., 0., 0.05, 1.));
+        let (fill, border) = super::thumb_colors(light.0, light.1, false);
+        assert!(fill.l < light.0.l, "{fill:?}");
+        assert!(border.l < fill.l, "{border:?} over {fill:?}");
+    }
 }
 
 #[cfg(test)]

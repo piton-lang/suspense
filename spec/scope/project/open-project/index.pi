@@ -1,0 +1,40 @@
+use /lib
+from /scope/project-directory import ProjectDirectoryScope
+from /ui/components/file-browser import FileBrowserScope
+from /ui/components/inset-panel import InsetPanelScope
+from /scope/user-preferences import UserPreferencesScope
+
+export scope OpenProjectScope:
+    concept: {OpenProjectConcept}
+
+concept OpenProjectConcept:
+    pitch:
+        Opens an existing Piton project by choosing its piton.config.pi, making
+        the folder holding it the @{ProjectDirectoryScope}.
+
+    shape: {OpenProjectShape}
+
+shape OpenProjectShape:
+    description:
+        A @{FileBrowserScope} in an @{InsetPanelScope} over the main window,
+        not the platform's own dialog, titled
+        "Open a project: choose its piton.config.pi", listing only files named
+        piton.config.pi among the folders.
+
+    opening:
+        It opens from whatever command opens a project, such as the ribbon's
+        Open Project or the palette's "Open Project…", in place of anything
+        else in the inset panel. It starts in the folder a project was last
+        opened from with it, one of the @{UserPreferencesScope}; when
+        there is none, or it no longer exists, in the folder holding the open
+        project; and otherwise in the home folder. Opening it while it is
+        already open leaves it as it is.
+
+    choosing:
+        Choosing a piton.config.pi closes the panel, the folder holding it
+        becomes the project directory, and that folder is remembered as the
+        one to start in next time.
+
+    cancelling:
+        Cancelling, or closing the panel any way an inset panel closes, changes
+        nothing.

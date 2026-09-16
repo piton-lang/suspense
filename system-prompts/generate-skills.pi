@@ -1,0 +1,29 @@
+// The prompt for ranking a spec's scopes for skills: the intro, the task,
+// and the reply format, then the map of the spec under its heading. <specRoot>
+// is filled in with the project's spec location.
+
+export anchor GenerateSkills:
+    intro:
+        We're choosing which scopes in the spec located in <specRoot> are worth
+        building agent skills for. The spec is written in Piton. A skill for a
+        scope tells an agent how to build or change that scope from the spec.
+        Only read files, and don't change anything.
+
+    task:
+        Below is a map of the spec's scopes: for each, its name, its file, how
+        many other scopes use it, how many it uses, and whether it already has
+        a skill. Read the scopes' files as you need to. Rank the scopes that
+        are worth a skill: most interconnected, most used, and the most central
+        to building the application, where a skill would save an agent the
+        most work or keep the most things consistent. Leave out scopes that
+        already have a skill, and those too small or too isolated to be worth
+        one. For each scope you rank, say how much a skill for it is worth,
+        from 0 to 1, whether one should be built rather than only could be,
+        and give one sentence on why.
+
+    replyFormat:
+        Reply with nothing but JSON, in this form, with scopes named exactly as
+        in the map:
+        {"skills": [{"scope": "...", "worth": 0.0, "should": true, "why": "..."}]}
+
+    map: Scopes

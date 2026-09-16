@@ -1,5 +1,7 @@
 use /lib
+from ../rescope import RescopeScope
 from ../project-directory import ProjectDirectoryScope
+from ../project/open-project import OpenProjectScope
 from ../prompt-mode import PromptEditor
 from ../prompt-mode/chat-input import ChatInputScope
 from ../editor import EditorScope
@@ -11,6 +13,13 @@ from /ui/components/diff-view import DiffViewScope
 from /ui/components/inset-panel import InsetPanelScope
 from ../new-project import NewProjectScope
 from ../divergence import DivergenceScope
+from ../settings-window import SettingsWindowScope
+from ../harness-integration/catalog import HarnessCatalogScope
+from ../open-file import OpenFileScope
+from ../prompt-mode/sending import PromptSendingScope
+from ../running-activity import RunningActivityScope
+from ../user-preferences import UserPreferencesScope
+from /ui/components/minimizable-panel import MinimizablePanelScope
 
 export scope MainWindowScope:
     concept: {MainWindowConcept}
@@ -33,9 +42,9 @@ shape MainWindowShape:
         A "Dark mode" switch in the ribbon's Application tab toggles between the
         two.
 
-        The choice is persistent: it is saved for the user, across all projects,
-        and restored on the next launch. Until a choice has been made, the
-        window follows the operating system's light or dark appearance.
+        The choice is one of the @{UserPreferencesScope}, so until a choice has
+        been made, the window follows the operating system's light or dark
+        appearance.
 
     escape:
         Pressing Esc anywhere in the window, including in an @{EditorScope},
@@ -43,19 +52,14 @@ shape MainWindowShape:
         otherwise dismiss, such as a completion menu or a popup.
 
     quitting:
-        Quitting while the harness is working on a task or a question, or while
-        a build is running, asks first. That goes for Ctrl+Q (Cmd+Q on macOS),
-        Quit in the @{PaletteScope}, and the window's close button. The message
-        is titled "Quit while a task is running?" and says what is still
-        running. "Quit" exits, and "Keep Running" or Esc dismisses it. Asking to
-        quit again while it is open doesn't open a second one, and an open
-        palette closes first. Prompts waiting in the queue don't count as
-        running work, since they are saved with the project.
+        The application quits with Ctrl+Q (Cmd+Q on macOS), Quit in the
+        @{PaletteScope}, or the window's close button. Any of them asks first
+        while work is running, as the @{RunningActivityScope} says.
 
     palette:
         Ctrl+P (Cmd+P on macOS) opens the @{PaletteScope} over the window, for
         fuzzy searching the project's files, the application's own commands, and
-        the harness's commands, skills, and agents.
+        the commands, skills, and agents of the @{HarnessCatalogScope}.
 
     header:
         ribbon: @{RibbonScope}
@@ -64,8 +68,9 @@ shape MainWindowShape:
         sidebar: @{SidebarScope}
 
         openFile:
-            A file clicked in the @{FileTreeScope} opens in an @{EditorScope},
-            in a split beside the chat history: the file on the left taking 50%
+            A file opened, from the @{FileTreeScope} or anywhere else the
+            @{OpenFileScope} says, shows in an @{EditorScope}, in a split beside
+            the chat history: the file on the left taking 50%
             of the width, the chat history on the right taking the rest. The
             split can be resized by dragging its edge. Closing the file closes
             the split.
@@ -94,13 +99,19 @@ shape MainWindowShape:
             there stays open, unsaved changes and all. Opening another file's
             diff replaces the one in the panel, as does opening one while a new
             project is being set up. Opening the file from the diff closes the
-            panel and opens the file in the split, as clicking it in the
-            @{FileTreeScope} would.
+            panel and opens the file, as the @{OpenFileScope} says.
 
         analyzeDivergence:
             The ribbon's Analyze Divergence command opens the @{DivergenceScope}
-            in an @{InsetPanelScope}, to analyze, in place of whatever else is
-            open there, or brings back one that was minimized.
+            as a @{MinimizablePanelScope}, to analyze, in place of whatever else
+            is open there, or brings back one that was minimized.
+
+        rescope:
+            The ribbon's Rescope command opens the @{RescopeScope} as a
+            @{MinimizablePanelScope}, in place of whatever else is open there,
+            or brings back one that was minimized. Its Refactor sends its prompt
+            to the prompt mode on the application's behalf, as the
+            @{PromptSendingScope} says.
 
         viewDivergenceReports:
             The ribbon's View Divergence Reports command opens the
@@ -112,6 +123,16 @@ shape MainWindowShape:
             @{InsetPanelScope}, fresh each time, in place of any diff open
             there. Once the project is created, the panel closes and the new
             project is open.
+
+        openProject:
+            The Open Project commands, from the ribbon or the palette, show the
+            @{OpenProjectScope} in an @{InsetPanelScope}, in place of whatever
+            else is open there.
+
+        settings:
+            The settings, opened with Ctrl+, (Cmd+, on macOS), the ribbon's
+            Settings command, or the palette, show the @{SettingsWindowScope}
+            in an @{InsetPanelScope}, in place of whatever else is open there.
 
         promptMode:
             The body displays the @{PromptEditor} and any splits, to the right

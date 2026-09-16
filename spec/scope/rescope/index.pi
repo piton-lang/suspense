@@ -1,0 +1,82 @@
+use /lib
+from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
+from /scope/harness-integration/one-off-run import OneOffAgentRunScope
+from /scope/project-locations import ProjectLocationsScope
+from /scope/prompt-mode/modes import PromptModesScope
+from /scope/prompt-mode/sending import PromptSendingScope
+from /scope/running-activity import RunningActivityScope
+from /ui/components/minimizable-panel import MinimizablePanelScope
+from /ui/components/ranked-selection-list import RankedSelectionListScope
+from /ui/components/task-table import TaskTableScope
+
+export scope RescopeScope:
+    concept: {RescopeConcept}
+
+concept RescopeConcept:
+    pitch:
+        Finds concepts the spec describes over and over in different scopes
+        that would be better as scopes of their own, ranks them, and hands the
+        ones chosen to the harness to refactor the spec around them.
+
+    shape: {RescopeShape}
+
+shape RescopeShape:
+    description:
+        A @{MinimizablePanelScope} titled "Rescope". Opening it starts looking
+        straight away. Once it is over, a "Look again" button in the header
+        starts afresh.
+
+    minimizing:
+        Its minimize button's tooltip says the search keeps running. While it
+        runs, it is listed among the @{RunningActivityScope} as
+        "Finding scopes to extract". The Rescope command brings back a
+        minimized panel as it was, without looking again.
+
+    looking:
+        steps:
+            While it runs, the panel lists its steps, "Reading the spec" and
+            "Looking for repeated concepts", each with a spinner while it runs,
+            a tick once done, or a cross and why if it failed.
+
+        agent:
+            First the panel lists the spec files, as the
+            @{ProjectLocationsScope} says. Then a @{OneOffAgentRunScope} looks
+            through them. Its prompt is rescope.pi, of the
+            @{BakedSystemPromptsScope}, with the list of spec files after it.
+            It replies, for each repeated concept worth a scope of its own, with
+            a name for the scope, a sentence on what the concept is, from 0 to 1
+            how much extracting it is worth, a sentence on why, and each place
+            the spec describes it, with the file, the scope there, and a short
+            excerpt.
+
+        progress:
+            Beneath the steps, the run's output shows in its
+            @{TaskTableScope}.
+
+        failing:
+            When the run fails, the step says why, and nothing is offered.
+
+    results:
+        list:
+            Once found, the panel lists the concepts in a
+            @{RankedSelectionListScope}, most worth extracting first, those
+            with the most places after, each row with the proposed scope's
+            name, how much it is worth, and in how many places and how many
+            scopes the spec describes it. Those worth half or more start
+            checked. With none found, the panel says the spec repeats no
+            concepts worth a scope of their own.
+
+        details:
+            The selected concept's details are its proposed name, what it is,
+            why it is worth extracting, then "Where the spec describes it", each
+            place with its scope, its file, muted, and its excerpt in the
+            editor's monospace font.
+
+    refactoring:
+        The list's action is "Refactor", counting concepts. Pressing it closes
+        the panel and sends a prompt in Spec mode, of the @{PromptModesScope},
+        on the application's behalf, as the @{PromptSendingScope} says. The
+        prompt is the refactoring request from rescope.pi, then each checked
+        concept: its name, what it is, and every place the spec describes it,
+        asking for each to become a scope of its own that those places
+        reference instead of describing it again.

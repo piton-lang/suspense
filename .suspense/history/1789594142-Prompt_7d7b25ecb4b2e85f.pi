@@ -1,0 +1,33 @@
+from /ui/components/inset-panel import InsetPanelScope
+from /ui/components/ribbon/spec-tab import RibbonSpecTabScope
+
+anchor Prompt_7d7b25ecb4b2e85f:
+    userPrompt:
+        -
+            - "in the "
+            - @{RibbonSpecTabScope}
+            - " there should be a group that includes an option to generate skills.  That should use a system prompt analyze the spec/ directory for the most interconnected or most used scopes and rank them for what skills could and should be built.  The results will appear in an "
+            - @{InsetPanelScope}
+            - " and you'll be able to select them while viewing their interconnectedness.  When you click \"Create Skills\" skills will be added to the spec that build those skills."
+
+    mode: combined
+
+    systemPrompt:
+        -
+            - "We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec."
+        -
+            - ""
+        -
+            - "You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec."
+        -
+            - ""
+        -
+            - "Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other."
+        -
+            - ""
+        -
+            - "Then build the spec and execute the prompt directly on the code using a unified plan."
+        -
+            - ""
+        -
+            - "Make sure that you write both code and spec."

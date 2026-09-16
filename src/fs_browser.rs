@@ -1,11 +1,14 @@
-//! A folder picker drawn by the application rather than the platform: a bar
-//! with up, home, the current folder's path as a breadcrumb, and a "Show
+//! A file system browser drawn by the application rather than the platform: a
+//! bar with up, home, the current folder's path as a breadcrumb, and a "Show
 //! hidden" checkbox; a "New Folder" button that opens a row for naming one;
-//! the current folder's folders, which a click selects and a second click goes
-//! into; and "Choose" and "Cancel" along the bottom. It can all be driven from
+//! the entries in the current folder, which a click selects and a second click
+//! opens; and "Choose" and "Cancel" along the bottom. It can all be driven from
 //! the keyboard, as a platform's own file dialog can: the arrows, Home, End,
-//! and the page keys move the selection, typing selects by name, Enter goes in,
+//! and the page keys move the selection, typing selects by name, Enter opens,
 //! Backspace goes up, and so on.
+//!
+//! What it chooses is its [`Browse`]: a folder, listing only folders, or a
+//! file, listing folders to find it in and the files that can be chosen.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -25,7 +28,7 @@ use crate::main_window::FocusChat;
 use crate::scrollbar;
 
 actions!(
-    folder_browser,
+    fs_browser,
     [
         SelectNext,
         SelectPrevious,
@@ -36,15 +39,32 @@ actions!(
         OpenSelected,
         GoUp,
         GoHome,
-        ChooseFolderAction,
+        ChooseAction,
         ToggleHidden,
         NewFolderAction,
     ]
 );
 
-const CONTEXT: &str = "FolderBrowser";
+const CONTEXT: &str = "FsBrowser";
 
-/// How many folders the page keys move.
+/// What a browser chooses.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Browse {
+    /// A folder: only folders are listed.
+    Folder,
+    /// A file, among folders to find it in; with a name, only files with that
+    /// name are listed.
+    File(Option<String>),
+}
+
+/// A listed folder or file.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Entry {
+    pub path: PathBuf,
+    pub is_dir: bool,
+}
+
+/// How many entries the page keys move.
 const PAGE: usize = 10;
 
 /// How long a pause starts typing to select afresh.
@@ -72,9 +92,9 @@ pub fn bind_keys(cx: &mut App) {
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("alt-home", GoHome, context),
         #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-enter", ChooseFolderAction, context),
+        KeyBinding::new("cmd-enter", ChooseAction, context),
         #[cfg(not(target_os = "macos"))]
-        KeyBinding::new("ctrl-enter", ChooseFolderAction, context),
+        KeyBinding::new("ctrl-enter", ChooseAction, context),
         #[cfg(target_os = "macos")]
         KeyBinding::new("cmd-shift-.", ToggleHidden, context),
         #[cfg(not(target_os = "macos"))]
@@ -102,11 +122,11 @@ pub fn step_selection(selected: Option<usize>, count: usize, step: isize) -> Opt
     Some(next as usize)
 }
 
-/// The first of `folders` whose name starts with `typed`, ignoring case.
-pub fn type_ahead_match(folders: &[PathBuf], typed: &str) -> Option<usize> {
+/// The first of `entries` whose name starts with `typed`, ignoring case.
+pub fn type_ahead_match(entries: &[PathBuf], typed: &str) -> Option<usize> {
     let typed = typed.to_lowercase();
-    folders.iter().position(|folder| {
-        folder
+    entries.iter().position(|entry| {
+        entry
             .file_name()
             .is_some_and(|name| name.to_string_lossy().to_lowercase().starts_with(&typed))
     })
@@ -147,35 +167,51 @@ struct NewFolder {
     _subscription: Subscription,
 }
 
-/// Emitted with the folder chosen.
-pub struct ChooseFolder(pub PathBuf);
+/// Emitted with what was chosen.
+pub struct ChoosePath(pub PathBuf);
 
 /// Emitted when the browser is left without choosing.
-pub struct CancelFolder;
+pub struct CancelBrowse;
 
-/// The folders in `dir`, sorted by name ignoring case, leaving out those whose
-/// names start with a dot unless `show_hidden`.
-pub fn list_folders(dir: &Path, show_hidden: bool) -> std::io::Result<Vec<PathBuf>> {
-    let mut folders: Vec<PathBuf> = std::fs::read_dir(dir)?
+/// What `browse` lists in `dir`: its folders, then, browsing for a file, the
+/// files that can be chosen; each sorted by name ignoring case, leaving out
+/// those whose names start with a dot unless `show_hidden`.
+pub fn list_entries(dir: &Path, browse: &Browse, show_hidden: bool) -> std::io::Result<Vec<Entry>> {
+    let name_of = |path: &Path| {
+        path.file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    };
+    let mut entries: Vec<Entry> = std::fs::read_dir(dir)?
         .filter_map(|entry| entry.ok())
-        .filter(|entry| {
+        .filter_map(|entry| {
+            let path = entry.path();
             // Following links, so a link to a folder counts as one.
-            std::fs::metadata(entry.path()).is_ok_and(|meta| meta.is_dir())
+            let meta = std::fs::metadata(&path).ok()?;
+            Some(Entry {
+                is_dir: meta.is_dir(),
+                path,
+            })
         })
-        .map(|entry| entry.path())
-        .filter(|path| {
-            show_hidden
-                || !path
-                    .file_name()
-                    .is_some_and(|name| name.to_string_lossy().starts_with('.'))
+        .filter(|entry| show_hidden || !name_of(&entry.path).starts_with('.'))
+        .filter(|entry| match browse {
+            _ if entry.is_dir => true,
+            Browse::Folder => false,
+            Browse::File(None) => true,
+            Browse::File(Some(name)) => name_of(&entry.path) == *name,
         })
         .collect();
-    folders.sort_by_key(|path| {
-        path.file_name()
-            .map(|name| name.to_string_lossy().to_lowercase())
-            .unwrap_or_default()
-    });
-    Ok(folders)
+    entries.sort_by_key(|entry| (!entry.is_dir, name_of(&entry.path).to_lowercase()));
+    Ok(entries)
+}
+
+/// The folders in `dir`, as a folder browser lists them.
+#[cfg(test)]
+pub fn list_folders(dir: &Path, show_hidden: bool) -> std::io::Result<Vec<PathBuf>> {
+    Ok(list_entries(dir, &Browse::Folder, show_hidden)?
+        .into_iter()
+        .map(|entry| entry.path)
+        .collect())
 }
 
 /// Each folder along `dir`'s path, from the top of the file system down to
@@ -195,12 +231,13 @@ pub fn crumbs(dir: &Path) -> Vec<(String, PathBuf)> {
         .collect()
 }
 
-pub struct FolderBrowser {
+pub struct FsBrowser {
     title: SharedString,
+    browse: Browse,
     dir: PathBuf,
     show_hidden: bool,
-    /// The current folder's folders, or why they couldn't be read.
-    folders: Result<Vec<PathBuf>, SharedString>,
+    /// The current folder's entries, or why they couldn't be read.
+    folders: Result<Vec<Entry>, SharedString>,
     selected: Option<usize>,
     scroll: ScrollHandle,
     new_folder: Option<NewFolder>,
@@ -211,21 +248,33 @@ pub struct FolderBrowser {
     typed_at: Option<Instant>,
 }
 
-impl Focusable for FolderBrowser {
+impl Focusable for FsBrowser {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus_handle.clone()
     }
 }
 
-impl EventEmitter<ChooseFolder> for FolderBrowser {}
-impl EventEmitter<CancelFolder> for FolderBrowser {}
+impl EventEmitter<ChoosePath> for FsBrowser {}
+impl EventEmitter<CancelBrowse> for FsBrowser {}
 
-impl FolderBrowser {
-    /// A browser titled `title`, starting in `dir`, or the home folder when
-    /// `dir` isn't a folder.
-    pub fn new(title: impl Into<SharedString>, dir: PathBuf, cx: &mut Context<Self>) -> Self {
+impl FsBrowser {
+    /// A folder browser titled `title`, starting in `dir`, or the home folder
+    /// when `dir` isn't a folder.
+    pub fn folder(title: impl Into<SharedString>, dir: PathBuf, cx: &mut Context<Self>) -> Self {
+        Self::new(title, Browse::Folder, dir, cx)
+    }
+
+    /// A browser for `browse`, titled `title`, starting in `dir`, or the home
+    /// folder when `dir` isn't a folder.
+    pub fn new(
+        title: impl Into<SharedString>,
+        browse: Browse,
+        dir: PathBuf,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let dir = if dir.is_dir() { dir } else { home() };
         let mut this = Self {
+            browse,
             focus_handle: cx.focus_handle().tab_stop(true),
             typed: String::new(),
             typed_at: None,
@@ -256,15 +305,36 @@ impl FolderBrowser {
         &self.dir
     }
 
-    /// What "Choose" chooses: the selected folder, or the current one.
-    pub fn choice(&self) -> PathBuf {
+    fn selected_entry(&self) -> Option<&Entry> {
         self.selected
-            .and_then(|ix| self.folders.as_ref().ok()?.get(ix).cloned())
-            .unwrap_or_else(|| self.dir.clone())
+            .and_then(|ix| self.folders.as_ref().ok()?.get(ix))
+    }
+
+    /// What "Choose" chooses: browsing for a folder, the selected folder, or
+    /// the current one; browsing for a file, the selected file, if one is.
+    pub fn choice(&self) -> Option<PathBuf> {
+        let selected = self.selected_entry();
+        match self.browse {
+            Browse::Folder => Some(
+                selected
+                    .map(|entry| entry.path.clone())
+                    .unwrap_or_else(|| self.dir.clone()),
+            ),
+            Browse::File(_) => selected
+                .filter(|entry| !entry.is_dir)
+                .map(|entry| entry.path.clone()),
+        }
+    }
+
+    /// Chooses what "Choose" chooses, if anything.
+    fn choose(&mut self, cx: &mut Context<Self>) {
+        if let Some(choice) = self.choice() {
+            cx.emit(ChoosePath(choice));
+        }
     }
 
     fn load(&mut self, dir: PathBuf) {
-        self.folders = list_folders(&dir, self.show_hidden)
+        self.folders = list_entries(&dir, &self.browse, self.show_hidden)
             .map_err(|err| format!("Couldn't read {}: {err}", dir.display()).into());
         self.dir = dir;
         self.selected = None;
@@ -319,7 +389,7 @@ impl FolderBrowser {
         if self.new_folder.is_some() {
             self.close_new_folder(window, cx);
         } else {
-            cx.emit(CancelFolder);
+            cx.emit(CancelBrowse);
         }
     }
 
@@ -349,7 +419,7 @@ impl FolderBrowser {
                     .folders
                     .as_ref()
                     .ok()
-                    .and_then(|folders| folders.iter().position(|path| *path == folder));
+                    .and_then(|folders| folders.iter().position(|entry| entry.path == folder));
                 if let Some(ix) = self.selected {
                     self.scroll.scroll_to_item(ix);
                 }
@@ -375,9 +445,7 @@ impl FolderBrowser {
     }
 
     fn set_show_hidden(&mut self, show: bool, cx: &mut Context<Self>) {
-        let selected = self
-            .selected
-            .and_then(|ix| self.folders.as_ref().ok()?.get(ix).cloned());
+        let selected = self.selected_entry().map(|entry| entry.path.clone());
         self.show_hidden = show;
         self.load(self.dir.clone());
         if let Some(selected) = selected {
@@ -392,7 +460,7 @@ impl FolderBrowser {
             .folders
             .as_ref()
             .ok()
-            .and_then(|folders| folders.iter().position(|folder| folder == path));
+            .and_then(|folders| folders.iter().position(|entry| entry.path == path));
         if ix.is_some() {
             self.select(ix);
         }
@@ -425,12 +493,13 @@ impl FolderBrowser {
         cx.notify();
     }
 
-    /// Goes into the selected folder, or, with none selected, chooses the
-    /// current one.
+    /// Opens the selected entry: goes into a folder, and chooses a file. With
+    /// nothing selected, a folder browser chooses the current folder.
     fn open_selected(&mut self, cx: &mut Context<Self>) {
         match self.selected {
             Some(ix) => self.click_folder(ix, 2, cx),
-            None => cx.emit(ChooseFolder(self.dir.clone())),
+            None if self.browse == Browse::Folder => cx.emit(ChoosePath(self.dir.clone())),
+            None => {}
         }
     }
 
@@ -466,26 +535,26 @@ impl FolderBrowser {
         }
         self.typed.push_str(typed);
         self.typed_at = Some(Instant::now());
-        if let Some(ix) = self
-            .folders
-            .as_ref()
-            .ok()
-            .and_then(|folders| type_ahead_match(folders, &self.typed))
-        {
+        if let Some(ix) = self.folders.as_ref().ok().and_then(|folders| {
+            let paths: Vec<PathBuf> = folders.iter().map(|entry| entry.path.clone()).collect();
+            type_ahead_match(&paths, &self.typed)
+        }) {
             self.select(Some(ix));
         }
         cx.stop_propagation();
         cx.notify();
     }
 
-    /// A click on the folder at `ix`: the first selects it, the second goes
-    /// into it.
+    /// A click on the entry at `ix`: the first selects it, the second opens
+    /// it, going into a folder or choosing a file.
     pub fn click_folder(&mut self, ix: usize, clicks: usize, cx: &mut Context<Self>) {
-        let Some(folder) = self.folders.as_ref().ok().and_then(|f| f.get(ix)).cloned() else {
+        let Some(entry) = self.folders.as_ref().ok().and_then(|f| f.get(ix)).cloned() else {
             return;
         };
-        if clicks >= 2 {
-            self.go(folder, cx);
+        if clicks >= 2 && entry.is_dir {
+            self.go(entry.path, cx);
+        } else if clicks >= 2 {
+            cx.emit(ChoosePath(entry.path));
         } else {
             self.selected = Some(ix);
             cx.notify();
@@ -578,11 +647,16 @@ impl FolderBrowser {
                     .into_any_element();
             }
             Ok(folders) if folders.is_empty() && self.new_folder.is_none() => {
+                let empty = match &self.browse {
+                    Browse::Folder => "No folders here".to_string(),
+                    Browse::File(Some(name)) => format!("No folders or {name} here"),
+                    Browse::File(None) => "Nothing here".to_string(),
+                };
                 return div()
                     .flex_1()
                     .p_4()
                     .text_color(theme.muted_foreground)
-                    .child("No folders here")
+                    .child(empty)
                     .into_any_element();
             }
             Ok(folders) => folders,
@@ -643,8 +717,14 @@ impl FolderBrowser {
             // Lets UI tests find the row; inert in normal builds.
             gpui_kit::TestSupportExt::test_support(row_element)
         });
-        let rows = folders.iter().enumerate().map(|(ix, folder)| {
-            let name = folder
+        let rows = folders.iter().enumerate().map(|(ix, entry)| {
+            let icon = if entry.is_dir {
+                IconName::FolderClosed
+            } else {
+                IconName::File
+            };
+            let name = entry
+                .path
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_default();
@@ -664,7 +744,7 @@ impl FolderBrowser {
                 .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
                     this.click_folder(ix, event.click_count(), cx)
                 }))
-                .child(Icon::new(IconName::FolderClosed).text_color(theme.muted_foreground))
+                .child(Icon::new(icon).text_color(theme.muted_foreground))
                 .child(div().min_w_0().truncate().child(name));
             // Lets UI tests find the row; inert in normal builds.
             gpui_kit::TestSupportExt::test_support(row)
@@ -694,7 +774,7 @@ impl FolderBrowser {
     }
 }
 
-impl Render for FolderBrowser {
+impl Render for FsBrowser {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (border, muted) = (cx.theme().border, cx.theme().muted_foreground);
         let choice = self.choice();
@@ -713,9 +793,7 @@ impl Render for FolderBrowser {
             .on_action(cx.listener(|this, _: &OpenSelected, _, cx| this.open_selected(cx)))
             .on_action(cx.listener(|this, _: &GoUp, _, cx| this.up(cx)))
             .on_action(cx.listener(|this, _: &GoHome, _, cx| this.go(home(), cx)))
-            .on_action(cx.listener(|this, _: &ChooseFolderAction, _, cx| {
-                cx.emit(ChooseFolder(this.choice()))
-            }))
+            .on_action(cx.listener(|this, _: &ChooseAction, _, cx| this.choose(cx)))
             .on_action(cx.listener(|this, _: &ToggleHidden, _, cx| {
                 this.set_show_hidden(!this.show_hidden, cx)
             }))
@@ -763,26 +841,34 @@ impl Render for FolderBrowser {
                             .truncate()
                             .text_sm()
                             .text_color(muted)
-                            .child(choice.display().to_string()),
+                            .child(match &choice {
+                                Some(choice) => choice.display().to_string(),
+                                None => match &self.browse {
+                                    Browse::File(Some(name)) => format!("Select a {name}"),
+                                    _ => "Select a file".to_string(),
+                                },
+                            }),
                     )
                     .child(
                         Button::new("folder-cancel")
                             .label("Cancel")
                             .tooltip_with_action("Leave without choosing", &Escape, None)
-                            .on_click(cx.listener(|_, _, _, cx| cx.emit(CancelFolder))),
+                            .on_click(cx.listener(|_, _, _, cx| cx.emit(CancelBrowse))),
                     )
                     .child(
                         Button::new("folder-choose")
                             .primary()
                             .label("Choose")
                             .tooltip_with_action(
-                                "Choose this folder",
-                                &ChooseFolderAction,
+                                match self.browse {
+                                    Browse::Folder => "Choose this folder",
+                                    Browse::File(_) => "Choose this file",
+                                },
+                                &ChooseAction,
                                 Some(CONTEXT),
                             )
-                            .on_click(
-                                cx.listener(|this, _, _, cx| cx.emit(ChooseFolder(this.choice()))),
-                            ),
+                            .disabled(choice.is_none())
+                            .on_click(cx.listener(|this, _, _, cx| this.choose(cx))),
                     ),
             );
         // Lets UI tests find the browser; inert in normal builds.
@@ -806,8 +892,8 @@ mod tests {
     use gpui_kit::{AppContext as _, Focusable as _, TestAppContext};
 
     use super::{
-        ChooseFolder, FolderBrowser, create_folder, crumbs, list_folders, new_folder_problem,
-        step_selection, type_ahead_match,
+        Browse, ChoosePath, FsBrowser, create_folder, crumbs, list_entries, list_folders,
+        new_folder_problem, step_selection, type_ahead_match,
     };
 
     #[test]
@@ -844,7 +930,7 @@ mod tests {
         });
         let mut browser = None;
         let window = cx.add_window(|window, cx| {
-            let view = cx.new(|cx| FolderBrowser::new("Pick", dir.clone(), cx));
+            let view = cx.new(|cx| FsBrowser::folder("Pick", dir.clone(), cx));
             view.read(cx).focus_handle(cx).focus(window, cx);
             browser = Some(view.clone());
             Root::new(view, window, cx)
@@ -856,10 +942,10 @@ mod tests {
         let _subscriptions = cx.update(|cx| {
             let (chosen, cancelled) = (chosen.clone(), cancelled.clone());
             (
-                cx.subscribe(&browser, move |_, ChooseFolder(folder), _| {
+                cx.subscribe(&browser, move |_, ChoosePath(folder), _| {
                     chosen.borrow_mut().push(folder.clone())
                 }),
-                cx.subscribe(&browser, move |_, _: &super::CancelFolder, _| {
+                cx.subscribe(&browser, move |_, _: &super::CancelBrowse, _| {
                     cancelled.set(true)
                 }),
             )
@@ -877,6 +963,7 @@ mod tests {
         let name = |cx: &mut TestAppContext| {
             browser.read_with(cx, |b, _| {
                 b.choice()
+                    .unwrap()
                     .file_name()
                     .unwrap()
                     .to_string_lossy()
@@ -988,6 +1075,101 @@ mod tests {
         assert_eq!(names(false), ["Alpha", "beta", "gamma"]);
         assert_eq!(names(true), [".hidden", "Alpha", "beta", "gamma"]);
         assert!(list_folders(&dir.join("missing"), false).is_err());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Browsing for a file lists folders first, then only the files with the
+    /// name asked for; a file is chosen when selected and opened, and nothing
+    /// is chosen with only a folder selected.
+    #[gpui_kit::test]
+    async fn browses_for_a_file(cx: &mut TestAppContext) {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/fs-browser-file-test");
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(dir.join("project")).unwrap();
+        for file in ["piton.config.pi", "other.pi", "project/piton.config.pi"] {
+            std::fs::write(dir.join(file), "").unwrap();
+        }
+        let names = |browse: &Browse| {
+            list_entries(&dir, browse, false)
+                .unwrap()
+                .iter()
+                .map(|entry| {
+                    entry
+                        .path
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned()
+                })
+                .collect::<Vec<_>>()
+        };
+        let config = Browse::File(Some("piton.config.pi".into()));
+        assert_eq!(names(&config), ["project", "piton.config.pi"]);
+        assert_eq!(
+            names(&Browse::File(None)),
+            ["project", "other.pi", "piton.config.pi"]
+        );
+        assert_eq!(names(&Browse::Folder), ["project"]);
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::main_window::bind_keys(cx);
+        });
+        let mut browser = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| FsBrowser::new("Open", config.clone(), dir.clone(), cx));
+            view.read(cx).focus_handle(cx).focus(window, cx);
+            browser = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let browser = browser.unwrap();
+        let handle = window.into();
+        let chosen = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let _subscription = cx.update(|cx| {
+            let chosen = chosen.clone();
+            cx.subscribe(&browser, move |_, ChoosePath(path), _| {
+                chosen.borrow_mut().push(path.clone())
+            })
+        });
+        let press = |key: &str, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| window.press(key, cx))
+                .unwrap();
+            cx.run_until_parked();
+        };
+        // The folder selected, nothing can be chosen.
+        press("down", cx);
+        assert_eq!(browser.read_with(cx, |b, _| b.choice()), None);
+        press("ctrl-enter", cx);
+        assert!(chosen.borrow().is_empty());
+        // The file selected, Enter chooses it.
+        press("down", cx);
+        assert_eq!(
+            browser.read_with(cx, |b, _| b.choice()),
+            Some(dir.join("piton.config.pi"))
+        );
+        press("enter", cx);
+        assert_eq!(*chosen.borrow(), [dir.join("piton.config.pi")]);
+        // Double-clicking the folder goes in; double-clicking the file there
+        // chooses it.
+        cx.update_window(handle, |_, window, cx| {
+            window.double_click(("folder-row", 0usize), cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(
+            browser.read_with(cx, |b, _| b.dir().to_path_buf()),
+            dir.join("project")
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.double_click(("folder-row", 0usize), cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(
+            chosen.borrow().last(),
+            Some(&dir.join("project/piton.config.pi"))
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 

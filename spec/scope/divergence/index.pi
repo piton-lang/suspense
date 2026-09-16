@@ -1,7 +1,14 @@
 use /lib
-from /scope/harness-integration import HarnessIntegrationScope
-from /ui/components/inset-panel import InsetPanelScope
+from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
+from /scope/harness-integration/one-off-run import OneOffAgentRunScope
+from /scope/project-data import ProjectDataScope
+from /scope/project-locations import ProjectLocationsScope
+from /scope/running-activity import RunningActivityScope
+from /scope/spec-build import SpecBuildScope
+from /ui/components/minimizable-panel import MinimizablePanelScope
+from /ui/components/ranked-selection-list import RankedSelectionListScope
 from /ui/components/scrollbar import ScrollbarScope
+from /ui/components/task-table import TaskTableScope
 
 export scope DivergenceScope:
     concept: {DivergenceConcept}
@@ -19,43 +26,35 @@ concept DivergenceConcept:
 
 shape DivergenceShape:
     description:
-        An analysis of the open project, shown in an @{InsetPanelScope} titled
-        "Divergence", with a close button. It opens in one of two ways: to
-        analyze, which starts a fresh analysis straight away, or to view the
-        reports, which starts nothing and shows the project's latest saved
-        report on the Report tab, from which its earlier reports can be opened.
-        Viewing the reports of a project with none saved yet shows, in place of
-        the results, "No divergence reports yet", with a line saying an
-        analysis is saved once it's over, and an "Analyze" button that starts
-        one. Closing the panel while it runs stops it. Whenever no analysis is
-        running, an "Analyze again" button in the panel's header starts
-        another.
+        An analysis of the open project, shown in a @{MinimizablePanelScope}
+        titled "Divergence". It opens in one of two ways: to analyze, which
+        starts a fresh analysis straight away, or to view the reports, which
+        starts nothing and shows the project's latest saved report on the Report
+        tab, from which its earlier reports can be opened. Viewing the reports
+        of a project with none saved yet shows, in place of the results,
+        "No divergence reports yet", with a line saying an analysis is saved
+        once it's over, and an "Analyze" button that starts one. Whenever no
+        analysis is running, an "Analyze again" button in the panel's header
+        starts another.
 
     minimizing:
-        Beside the close button, a minimize button, whose tooltip says the
-        analysis keeps running, hides the panel without stopping anything: the
-        analysis carries on out of sight, and the window beneath can be used
-        again. The panel comes back just as it was left, steps or results, from
-        the ribbon's activity list while it runs, or from either command, which
-        brings back a minimized panel rather than opening another: to analyze,
-        it then starts an analysis unless one is already running; to view the
-        reports, it shows the Report tab of the latest report unless an
-        analysis is running, which carries on. Opening another inset panel, such as a file's diff, while the
-        divergence panel is showing minimizes it rather than closing it. Only
-        closing it stops it.
+        Its minimize button's tooltip says the analysis keeps running. While it
+        runs, it is listed among the @{RunningActivityScope} as
+        "Analyzing divergence". Either command brings back a minimized panel:
+        to analyze, it then starts an analysis unless one is already running;
+        to view the reports, it shows the Report tab of the latest report
+        unless an analysis is running, which carries on.
 
     files:
-        The source files are every file under the code location, codeRoot in
-        piton.config.pi, leaving out what Git ignores and anything that isn't
-        text. The spec files are every .pi file under the spec location, root in
-        piton.config.pi. Paths are shown relative to the project. Each side is
-        capped at 400 files, and the panel says when a side was cut short.
+        The source files and the spec files are those the
+        @{ProjectLocationsScope} lists, leaving out source files that aren't
+        text. Each side is capped at 400 files, and the panel says when a side
+        was cut short.
 
     analyzing:
         steps:
-            The analysis first runs `piton build` in the project, so the
-            compiled spec is up to date. A build that fails doesn't stop the
-            analysis; the panel notes that the compiled spec may be out of date.
+            The analysis first builds the spec ahead of itself, as the
+            @{SpecBuildScope} says; a build that fails is noted in the panel.
             Then two agents run at the same time: one analyzes the code, one
             analyzes the spec. While it runs, the panel shows
             "Building the spec" along the top, with a spinner while it runs, a
@@ -65,35 +64,22 @@ shape DivergenceShape:
             Beneath it, the two agents' progress side by side, each taking half
             the panel's width and the rest of its height: "Analyzing the code"
             on the left and "Analyzing the spec" on the right. Each is headed by
-            its name, with a spinner while its agent runs, a tick once done, or a
-            cross and why if it failed, and before its agent starts, muted.
+            its name, with a spinner while its agent runs, a tick once done, or
+            a cross and why if it failed, and before its agent starts, muted.
 
-            Beneath its heading, each shows its agent's output as a task's is
-            shown, in the same table: a row for each piece of text, tool call,
-            and error, in order, with its kind as a badge, what it was, and a
-            tool call's state, and while it streams, its last row showing the
-            last few lines of the harness's raw JSON, reading
-            "Waiting for the harness…" until the first arrives. It fills in as
-            the agent streams, and scrolls with a @{ScrollbarScope} that locks
-            to the bottom, locked to start with, so each follows its agent's
-            latest output until scrolled away from the bottom. Once both agents
+            Beneath its heading, each shows its agent's output in its
+            @{TaskTableScope}. Once both agents
             are over and there are results, the results take their place; when
             neither agent got anywhere, the tables stay, with what went wrong.
 
         agents:
-            Each agent is a one-off run of the harness in the project, which can
-            only read, glob, and search files, never change anything, and keeps
-            no session. It streams its output as JSON, a line per event, text
-            as it is written, and its reply is the result it finishes with. It is given both lists of
-            files, the code and spec locations, and that the compiled spec is in
-            the agent directory's reference folder, and replies with nothing but
-            JSON.
-
-            Their prompts are system-prompts/divergence.pi, built into the
-            application (see @{HarnessIntegrationScope}). The code agent goes
-            through every source file, and for each says which spec files drove
-            it, how strongly, and how far it diverges from each; how far it
-            diverges from the spec as a whole; how well defined it is; the
+            Each agent is a @{OneOffAgentRunScope}, whose prompt is
+            divergence.pi, of the @{BakedSystemPromptsScope}. It is given both
+            lists of files, the code and spec locations, and that the compiled
+            spec is in the agent directory's reference folder. The code agent
+            goes through every source file, and for each says which spec files
+            drove it, how strongly, and how far it diverges from each; how far
+            it diverges from the spec as a whole; how well defined it is; the
             blanks the implementation filled in; and a sentence summing it up.
             The spec agent goes through every spec file the same way from the
             other side: which source files implement it, how far the code
@@ -106,9 +92,8 @@ shape DivergenceShape:
             why.
 
         failing:
-            An agent that fails, or replies with something that can't be read,
-            fails the analysis, and the panel says why. If only one agent fails,
-            what the other found is still shown.
+            An agent whose run fails fails the analysis, and the panel says why.
+            If only one agent fails, what the other found is still shown.
 
     results:
         connections:
@@ -186,8 +171,10 @@ shape DivergenceShape:
             measured, reads "No definition". The tree scrolls with a
             @{ScrollbarScope}.
 
-            Clicking a file selects it. Beside the tree, the selected file's
-            details: its path and summary, then its measures, each with a bar:
+            Clicking a file selects it, and beside the tree, the selected file's
+            details show, as in a @{RankedSelectionListScope}, though the tree
+            has no checkboxes or action. The details are its path and summary,
+            then its measures, each with a bar:
             - influence, as "Influence"
             - divergence, for a source file as "Diverges from the spec", and for a spec file as "Implementation diverges", coloured as the score is
             - definition, as "Definition"
@@ -208,8 +195,8 @@ shape DivergenceShape:
 
     saving:
         Each analysis that gets results, even with one agent failed, is saved
-        as soon as it is over in the project's .suspense/divergence folder, a
-        JSON file per report named by when it was made, with everything the
+        as soon as it is over as a report among the project's data, as the
+        @{ProjectDataScope} says, with everything the
         report shows: its files and their measures, the connections, the
         assessments and areas, and its notes. So they survive a restart of the
         application. A saved report that can't be read is left out.

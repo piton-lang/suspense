@@ -11,21 +11,26 @@ use gpui_kit::component::{ActiveTheme, Root, WindowExt as _};
 use gpui_kit::*;
 
 use crate::activity::{Job, JobKind, RevealJob};
+use crate::animations::rise_in::Leaving;
 use crate::app::{APP_TITLE, Quit};
 use crate::diff_view::{CloseDiff, DiffView, OpenInEditor};
 use crate::divergence_view::{
     AnalyzeDivergence, CloseDivergence, DivergenceView, MinimizeDivergence, Opening,
     ViewDivergenceReports,
 };
+use crate::fs_browser::{CancelBrowse, ChoosePath, FsBrowser};
+use crate::generate_skills_view::{CloseGenerateSkills, GenerateSkills, GenerateSkillsView};
 use crate::git_panel::GitPanel;
-use crate::inset_panel::inset_panel;
+use crate::inset_panel::{closing_panel, inset_panel};
 use crate::new_project::{CloseNewProject, NewProject, NewProjectForm, ProjectCreated};
 use crate::palette::{Palette, Picked, SystemCommand, SystemState};
+use crate::project::open_project::{self, OpenProject};
 use crate::project_directory::ProjectDirectory;
 use crate::project_tree::{OpenDiff, OpenFile, ProjectTree};
 use crate::prompt_mode::PromptMode;
+use crate::rescope_view::{CloseRescope, MinimizeRescope, RefactorConcepts, Rescope, RescopeView};
 use crate::ribbon::{self, Ribbon};
-use crate::settings_window;
+use crate::settings_window::{CloseSettings, OpenSettings, SettingsWindow};
 use crate::theme_preference;
 
 /// Size the window restores to when it is un-maximized.
@@ -56,7 +61,7 @@ pub fn bind_keys(cx: &mut App) {
     ribbon::bind_keys(cx);
     crate::diff_view::bind_keys(cx);
     crate::chat_input::bind_keys(cx);
-    crate::folder_browser::bind_keys(cx);
+    crate::fs_browser::bind_keys(cx);
 }
 
 pub struct MainWindow {
@@ -72,17 +77,28 @@ pub struct MainWindow {
     /// window in an inset panel.
     diff: Option<Entity<DiffView>>,
     new_project: Option<Entity<NewProjectForm>>,
+    settings: Option<Entity<SettingsWindow>>,
+    /// The Generate Skills panel.
+    generate_skills: Option<Entity<GenerateSkillsView>>,
+    /// The file browser for opening a project.
+    project_picker: Option<Entity<FsBrowser>>,
     /// The divergence panel, which can be minimized while its analysis
     /// carries on.
     divergence: Option<Entity<DivergenceView>>,
     divergence_minimized: bool,
     _divergence_subscriptions: Vec<Subscription>,
+    /// The Rescope panel, which can likewise be minimized while it looks.
+    rescope: Option<Entity<RescopeView>>,
+    rescope_minimized: bool,
+    _rescope_subscriptions: Vec<Subscription>,
     /// Tracks the inset panel, which keeps focus within it while open.
     panel_focus: FocusHandle,
     /// What was last focused within the panel, to go back to when something
     /// takes focus beneath it.
     panel_last_focus: Option<FocusHandle>,
     _panel_subscriptions: Vec<Subscription>,
+    /// What the inset panel shows, to know when it comes in and goes away.
+    panel_motion: Leaving<AnyView>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -118,6 +134,12 @@ impl MainWindow {
             // The ribbon's activity spinner follows whatever is running.
             cx.observe(&prompt_mode, |this, _, cx| this.refresh_jobs(cx)),
             cx.observe(&ribbon, |this, _, cx| this.refresh_jobs(cx)),
+            // The project indicator's "Open Project…".
+            cx.subscribe_in(
+                &ribbon.read(cx).project_indicator().clone(),
+                window,
+                |this, _, _: &OpenProject, window, cx| this.open_project_picker(window, cx),
+            ),
             cx.subscribe_in(&ribbon, window, |this, _, RevealJob(kind), window, cx| {
                 this.reveal_job(*kind, window, cx)
             }),
@@ -182,14 +204,109 @@ impl MainWindow {
             sidebar_split: cx.new(|_| ResizableState::default()),
             diff: None,
             new_project: None,
+            settings: None,
+            generate_skills: None,
+            project_picker: None,
             divergence: None,
             divergence_minimized: false,
             _divergence_subscriptions: Vec::new(),
+            rescope: None,
+            rescope_minimized: false,
+            _rescope_subscriptions: Vec::new(),
             panel_focus,
             panel_last_focus: None,
             _panel_subscriptions: Vec::new(),
+            panel_motion: Leaving::default(),
             _subscriptions: subscriptions,
         }
+    }
+
+    /// Opens a file browser for a project's piton.config.pi in the inset
+    /// panel, in place of anything else there, starting in the folder holding
+    /// the open project; the folder of the file chosen becomes the project.
+    pub fn open_project_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.project_picker.is_some() {
+            return;
+        }
+        let picker = open_project::picker(cx);
+        self.clear_panel();
+        self._panel_subscriptions = vec![
+            cx.subscribe_in(
+                &picker,
+                window,
+                |this, _, ChoosePath(config), window, cx| {
+                    open_project::open(config, cx);
+                    this.close_panel(window, cx)
+                },
+            ),
+            cx.subscribe_in(&picker, window, |this, _, _: &CancelBrowse, window, cx| {
+                this.close_panel(window, cx)
+            }),
+        ];
+        picker.read(cx).focus_handle(cx).focus(window, cx);
+        self.project_picker = Some(picker);
+        cx.notify();
+    }
+
+    /// Takes away whatever is in the inset panel to make room for something
+    /// else, minimizing a divergence analysis.
+    fn clear_panel(&mut self) {
+        self.diff = None;
+        self.new_project = None;
+        self.settings = None;
+        self.generate_skills = None;
+        self.project_picker = None;
+        self.divergence_minimized = self.divergence.is_some();
+        self.rescope_minimized = self.rescope.is_some();
+    }
+
+    /// Opens the Generate Skills panel for the open project, ranking its
+    /// scopes afresh, in place of anything else in the inset panel.
+    pub fn open_generate_skills(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.generate_skills.is_some() {
+            return;
+        }
+        let Some(project_dir) = ProjectDirectory::get(cx) else {
+            return;
+        };
+        let view = cx.new(|cx| GenerateSkillsView::new(project_dir, cx));
+        self.show_generate_skills(view, window, cx);
+    }
+
+    /// Shows `view` in the inset panel, in place of anything else there.
+    pub fn show_generate_skills(
+        &mut self,
+        view: Entity<GenerateSkillsView>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.clear_panel();
+        self._panel_subscriptions = vec![cx.subscribe_in(
+            &view,
+            window,
+            |this, _, _: &CloseGenerateSkills, window, cx| this.close_panel(window, cx),
+        )];
+        view.read(cx).focus_handle(cx).focus(window, cx);
+        self.generate_skills = Some(view);
+        cx.notify();
+    }
+
+    /// Opens the settings in the inset panel, in place of anything else
+    /// there, reading the prompts afresh; already open, they stay as they are.
+    pub fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings.is_some() {
+            return;
+        }
+        let settings = cx.new(|cx| SettingsWindow::new(window, cx));
+        self.clear_panel();
+        self._panel_subscriptions = vec![cx.subscribe_in(
+            &settings,
+            window,
+            |this, _, _: &CloseSettings, window, cx| this.close_panel(window, cx),
+        )];
+        settings.read(cx).focus_handle(cx).focus(window, cx);
+        self.settings = Some(settings);
+        cx.notify();
     }
 
     /// Opens a changed file's diff in the floating panel, replacing any diff
@@ -197,7 +314,11 @@ impl MainWindow {
     pub fn open_diff(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         let diff = cx.new(|cx| DiffView::new(path, cx));
         self.new_project = None;
+        self.settings = None;
+        self.generate_skills = None;
+        self.project_picker = None;
         self.divergence_minimized = self.divergence.is_some();
+        self.rescope_minimized = self.rescope.is_some();
         self._panel_subscriptions = vec![
             cx.subscribe_in(&diff, window, |this, _, _: &CloseDiff, window, cx| {
                 this.close_panel(window, cx)
@@ -272,8 +393,12 @@ impl MainWindow {
     ) {
         self.diff = None;
         self.new_project = None;
+        self.settings = None;
+        self.generate_skills = None;
+        self.project_picker = None;
         self._panel_subscriptions.clear();
         self.divergence_minimized = false;
+        self.rescope_minimized = self.rescope.is_some();
         view.read(cx).focus_handle(cx).focus(window, cx);
         self.refresh_jobs(cx);
         cx.notify();
@@ -301,6 +426,108 @@ impl MainWindow {
                 .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx));
         }
         cx.notify();
+    }
+
+    /// Opens the Rescope panel for the open project, looking through its spec,
+    /// or brings back one that was minimized.
+    pub fn open_rescope(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(view) = self.rescope.clone() {
+            self.restore_rescope(&view, window, cx);
+            return;
+        }
+        let Some(project_dir) = ProjectDirectory::get(cx) else {
+            return;
+        };
+        let view = cx.new(|cx| RescopeView::new(project_dir, cx));
+        self.show_rescope(view, window, cx);
+    }
+
+    /// Shows `view` in the panel, in place of anything else there.
+    pub fn show_rescope(
+        &mut self,
+        view: Entity<RescopeView>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self._rescope_subscriptions = vec![
+            cx.subscribe_in(&view, window, |this, _, _: &CloseRescope, window, cx| {
+                this.close_rescope(window, cx)
+            }),
+            cx.subscribe_in(&view, window, |this, _, _: &MinimizeRescope, window, cx| {
+                this.minimize_rescope(window, cx)
+            }),
+            // Refactoring closes the panel and sends the prompt from the Spec
+            // tab, as if written there.
+            cx.subscribe_in(
+                &view,
+                window,
+                |this, _, RefactorConcepts(prompt), window, cx| {
+                    let prompt = prompt.clone();
+                    this.close_rescope(window, cx);
+                    this.prompt_mode.update(cx, |prompt_mode, cx| {
+                        prompt_mode.send(
+                            prompt,
+                            crate::chat_input::SendMode::Spec,
+                            Vec::new(),
+                            window,
+                            cx,
+                        )
+                    });
+                },
+            ),
+            cx.observe(&view, |this, _, cx| this.refresh_jobs(cx)),
+        ];
+        self.rescope = Some(view.clone());
+        self.restore_rescope(&view, window, cx);
+    }
+
+    /// Shows the Rescope panel, in place of anything else in the panel.
+    fn restore_rescope(
+        &mut self,
+        view: &Entity<RescopeView>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.diff = None;
+        self.new_project = None;
+        self.settings = None;
+        self.generate_skills = None;
+        self.project_picker = None;
+        self._panel_subscriptions.clear();
+        self.divergence_minimized = self.divergence.is_some();
+        self.rescope_minimized = false;
+        view.read(cx).focus_handle(cx).focus(window, cx);
+        self.refresh_jobs(cx);
+        cx.notify();
+    }
+
+    /// Hides the Rescope panel, its search carrying on.
+    fn minimize_rescope(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.rescope_minimized = true;
+        self.panel_last_focus = None;
+        self.prompt_mode
+            .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx));
+        cx.notify();
+    }
+
+    /// Closes the Rescope panel, stopping any search still running.
+    fn close_rescope(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let showing = self.showing_rescope();
+        self.rescope = None;
+        self.rescope_minimized = false;
+        self._rescope_subscriptions.clear();
+        self.refresh_jobs(cx);
+        if showing {
+            self.panel_last_focus = None;
+            self.prompt_mode
+                .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx));
+        }
+        cx.notify();
+    }
+
+    /// Whether the Rescope panel is showing, rather than minimized.
+    fn showing_rescope(&self) -> bool {
+        self.rescope.is_some() && !self.rescope_minimized
     }
 
     /// Whether the divergence panel is showing, rather than minimized.
@@ -331,6 +558,17 @@ impl MainWindow {
                 detail: None,
             });
         }
+        if self
+            .rescope
+            .as_ref()
+            .is_some_and(|view| view.read(cx).is_running())
+        {
+            jobs.push(Job {
+                kind: JobKind::Rescope,
+                title: "Finding scopes to extract".into(),
+                detail: None,
+            });
+        }
         self.ribbon
             .update(cx, |ribbon, cx| ribbon.set_jobs(jobs, cx));
     }
@@ -345,9 +583,16 @@ impl MainWindow {
                     self.restore_divergence(&view, window, cx);
                 }
             }
+            JobKind::Rescope => {
+                if let Some(view) = self.rescope.clone() {
+                    self.restore_rescope(&view, window, cx);
+                }
+            }
             JobKind::Task | JobKind::Question(_) => {
                 if self.showing_divergence() {
                     self.minimize_divergence(window, cx);
+                } else if self.showing_rescope() {
+                    self.minimize_rescope(window, cx);
                 } else if self.panel_open() {
                     self.close_panel(window, cx);
                 }
@@ -362,7 +607,11 @@ impl MainWindow {
     pub fn open_new_project(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let form = cx.new(|cx| NewProjectForm::new(window, cx));
         self.diff = None;
+        self.settings = None;
+        self.generate_skills = None;
+        self.project_picker = None;
         self.divergence_minimized = self.divergence.is_some();
+        self.rescope_minimized = self.rescope.is_some();
         self._panel_subscriptions = vec![
             cx.subscribe_in(&form, window, |this, _, _: &CloseNewProject, window, cx| {
                 this.close_panel(window, cx)
@@ -399,11 +648,19 @@ impl MainWindow {
             diff.read(cx).focus_handle(cx)
         } else if let Some(form) = &self.new_project {
             form.read(cx).focus_handle(cx)
+        } else if let Some(settings) = &self.settings {
+            settings.read(cx).focus_handle(cx)
+        } else if let Some(view) = &self.generate_skills {
+            view.read(cx).focus_handle(cx)
+        } else if let Some(picker) = &self.project_picker {
+            picker.read(cx).focus_handle(cx)
         } else if let Some(view) = self
             .divergence
             .as_ref()
             .filter(|_| !self.divergence_minimized)
         {
+            view.read(cx).focus_handle(cx)
+        } else if let Some(view) = self.rescope.as_ref().filter(|_| !self.rescope_minimized) {
             view.read(cx).focus_handle(cx)
         } else {
             return;
@@ -419,7 +676,13 @@ impl MainWindow {
 
     /// Whether the inset panel is open.
     fn panel_open(&self) -> bool {
-        self.diff.is_some() || self.new_project.is_some() || self.showing_divergence()
+        self.diff.is_some()
+            || self.new_project.is_some()
+            || self.settings.is_some()
+            || self.generate_skills.is_some()
+            || self.project_picker.is_some()
+            || self.showing_divergence()
+            || self.showing_rescope()
     }
 
     /// Closes the inset panel, handing focus back to the chat input.
@@ -427,13 +690,26 @@ impl MainWindow {
         if !self.panel_open() {
             return;
         }
-        if self.diff.is_none() && self.new_project.is_none() {
-            // Only the divergence panel is showing: closing it stops it.
-            self.close_divergence(window, cx);
+        if self.diff.is_none()
+            && self.new_project.is_none()
+            && self.settings.is_none()
+            && self.generate_skills.is_none()
+            && self.project_picker.is_none()
+        {
+            // Only the divergence or Rescope panel is showing: closing it
+            // stops it.
+            if self.showing_rescope() {
+                self.close_rescope(window, cx);
+            } else {
+                self.close_divergence(window, cx);
+            }
             return;
         }
         self.diff = None;
         self.new_project = None;
+        self.settings = None;
+        self.generate_skills = None;
+        self.project_picker = None;
         self.panel_last_focus = None;
         self._panel_subscriptions.clear();
         self.prompt_mode
@@ -443,38 +719,55 @@ impl MainWindow {
 
     /// The diff or the new project form, in an inset panel over the window;
     /// clicking the dimmed window around it closes it.
-    fn render_panel(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let close = cx.listener(|this, _, window, cx| this.close_panel(window, cx));
+    /// What the inset panel shows, if it is open: its name and its view.
+    fn panel_content(&self) -> Option<(&'static str, AnyView)> {
+        if let Some(view) = self.rescope.as_ref().filter(|_| self.showing_rescope()) {
+            return Some(("rescope", view.clone().into()));
+        }
         if let Some(view) = self
             .divergence
             .as_ref()
             .filter(|_| self.showing_divergence())
         {
-            return Some(inset_panel(
-                "divergence",
-                &self.panel_focus,
-                view.clone(),
-                close,
-                cx,
-            ));
+            return Some(("divergence", view.clone().into()));
         }
         if let Some(diff) = &self.diff {
+            return Some(("diff", diff.clone().into()));
+        }
+        if let Some(picker) = &self.project_picker {
+            return Some(("open-project", picker.clone().into()));
+        }
+        if let Some(view) = &self.generate_skills {
+            return Some(("generate-skills", view.clone().into()));
+        }
+        if let Some(settings) = &self.settings {
+            return Some(("settings", settings.clone().into()));
+        }
+        let form = self.new_project.clone()?;
+        Some(("new-project", form.into()))
+    }
+
+    /// The inset panel, animating in each time it opens, or the one just
+    /// closed, animating out.
+    fn render_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let content = self.panel_content();
+        let leaving = self
+            .panel_motion
+            .frame(content.as_ref().map(|(_, view)| view.clone()));
+        if let Some((name, view)) = content {
+            let close = cx.listener(|this, _, window, cx| this.close_panel(window, cx));
             return Some(inset_panel(
-                "diff",
+                name,
                 &self.panel_focus,
-                diff.clone(),
+                view,
                 close,
+                self.panel_motion.came_in,
                 cx,
             ));
         }
-        let form = self.new_project.clone()?;
-        Some(inset_panel(
-            "new-project",
-            &self.panel_focus,
-            form,
-            close,
-            cx,
-        ))
+        let view = leaving?;
+        window.request_animation_frame();
+        Some(closing_panel(view, self.panel_motion.went_away, cx))
     }
 
     /// Quits, once confirmed if a task is running.
@@ -557,16 +850,14 @@ impl MainWindow {
                 prompt_mode.insert_mention(mention, window, cx)
             }),
             Picked::System(command) => match command {
-                SystemCommand::OpenProject => self
-                    .ribbon
-                    .update(cx, |ribbon, cx| ribbon.pick_project(window, cx)),
+                SystemCommand::OpenProject => self.open_project_picker(window, cx),
                 SystemCommand::Build => self
                     .ribbon
                     .update(cx, |ribbon, cx| ribbon.build(window, cx)),
                 SystemCommand::ToggleDarkMode => {
                     ribbon::set_dark_mode(!cx.theme().is_dark(), window, cx)
                 }
-                SystemCommand::Settings => settings_window::open(cx),
+                SystemCommand::Settings => self.open_settings(window, cx),
                 SystemCommand::Quit => self.quit(window, cx),
             },
         }
@@ -601,6 +892,12 @@ impl Render for MainWindow {
                     this.ribbon.update(cx, |ribbon, cx| ribbon.close_jobs(cx));
                     return;
                 }
+                // Then the list of recent projects.
+                let indicator = this.ribbon.read(cx).project_indicator().clone();
+                if indicator.read(cx).is_open() {
+                    indicator.update(cx, |indicator, cx| indicator.close(cx));
+                    return;
+                }
                 // Then the inset panel.
                 if this.panel_open() {
                     this.close_panel(window, cx);
@@ -618,6 +915,18 @@ impl Render for MainWindow {
             .on_action(cx.listener(|this, _: &Quit, window, cx| this.quit(window, cx)))
             .on_action(
                 cx.listener(|this, _: &NewProject, window, cx| this.open_new_project(window, cx)),
+            )
+            .on_action(
+                cx.listener(|this, _: &OpenSettings, window, cx| this.open_settings(window, cx)),
+            )
+            .on_action(cx.listener(|this, _: &Rescope, window, cx| this.open_rescope(window, cx)))
+            .on_action(cx.listener(|this, _: &GenerateSkills, window, cx| {
+                this.open_generate_skills(window, cx)
+            }))
+            .on_action(
+                cx.listener(|this, _: &OpenProject, window, cx| {
+                    this.open_project_picker(window, cx)
+                }),
             )
             .on_action(cx.listener(|this, _: &AnalyzeDivergence, window, cx| {
                 this.open_divergence(Opening::Analyze, window, cx)
@@ -656,7 +965,7 @@ impl Render for MainWindow {
                         ]),
                 ),
             )
-            .children(self.render_panel(cx))
+            .children(self.render_panel(window, cx))
             // Inside the window's element tree, so actions such as
             // TogglePalette reach it from a focused dialog.
             .children(Root::render_dialog_layer(window, cx))
@@ -1071,6 +1380,366 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// Open Project opens a file browser for a piton.config.pi in the inset
+    /// panel rather than the platform's dialog; choosing one makes its folder
+    /// the project and closes the panel.
+    #[gpui_kit::test]
+    async fn open_project_browses_for_its_config(cx: &mut TestAppContext) {
+        let base =
+            std::env::temp_dir().join(format!("suspense-open-project-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("demo")).unwrap();
+        std::fs::write(base.join("demo/piton.config.pi"), "").unwrap();
+        std::fs::write(base.join("demo/notes.md"), "").unwrap();
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+            crate::recent_projects::init(Some(base.join("recent.json")), cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        let windows = cx.update(|cx| cx.windows().len());
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("project-directory", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let picker = main.read_with(cx, |main, _| {
+            main.project_picker.clone().expect("no picker")
+        });
+        assert_eq!(
+            cx.update(|cx| cx.windows().len()),
+            windows,
+            "a window opened"
+        );
+        picker.update(cx, |picker, cx| picker.go(base.join("demo"), cx));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("open-project-panel").is_some());
+            // Only the config is listed, so it is the first row.
+            assert!(
+                window.try_find(("folder-row", 1usize)).is_none(),
+                "notes.md is listed"
+            );
+            window.double_click(("folder-row", 0usize), cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(
+            cx.update(|cx| ProjectDirectory::get(cx)),
+            Some(base.join("demo"))
+        );
+        assert!(
+            !main.read_with(cx, |main, _| main.panel_open()),
+            "the panel stayed open"
+        );
+        // Opened again, it starts in the folder the project was chosen in.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("project-directory", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let picker = main.read_with(cx, |main, _| main.project_picker.clone().unwrap());
+        assert_eq!(
+            picker.read_with(cx, |picker, _| picker.dir().to_path_buf()),
+            base.join("demo")
+        );
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// Clicking the project indicator lists the recent projects that can
+    /// still be opened, newest first, the one open marked; clicking one opens
+    /// it, and the last row opens the project browser. Escape closes the list.
+    #[gpui_kit::test]
+    async fn project_indicator_lists_recent_projects(cx: &mut TestAppContext) {
+        let base = std::env::temp_dir().join(format!("suspense-indicator-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        for name in ["first", "second", "gone"] {
+            std::fs::create_dir_all(base.join(name)).unwrap();
+        }
+        for name in ["first", "second"] {
+            std::fs::write(base.join(name).join("piton.config.pi"), "").unwrap();
+        }
+        let file = base.join("recent.json");
+        let mut recent = crate::recent_projects::RecentProjects::default();
+        for name in ["first", "gone", "second"] {
+            recent.note(&base.join(name));
+        }
+        recent.save(&file).unwrap();
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+            // The last project opened opens again.
+            let last = crate::recent_projects::init(Some(file.clone()), cx);
+            assert_eq!(last, Some(base.join("second")));
+            ProjectDirectory::set(last.unwrap(), cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("ribbon-project-name", cx);
+            window.render_frame(cx);
+            assert!(window.try_find(("recent-project", 0usize)).is_some());
+            assert!(window.try_find(("recent-project", 1usize)).is_some());
+            assert!(
+                window.try_find(("recent-project", 2usize)).is_none(),
+                "a project without its config is listed"
+            );
+            window.press("escape", cx);
+            window.render_frame(cx);
+            assert!(
+                window.try_find("recent-projects").is_none(),
+                "Escape left it open"
+            );
+
+            window.click("ribbon-project-name", cx);
+            window.render_frame(cx);
+            window.click(("recent-project", 1usize), cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(
+            cx.update(|cx| ProjectDirectory::get(cx)),
+            Some(base.join("first"))
+        );
+        // Opening it noted it, newest first, and saved that.
+        assert_eq!(
+            crate::recent_projects::RecentProjects::load(&file).projects[0],
+            base.join("first")
+        );
+
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("ribbon-project-name", cx);
+            window.render_frame(cx);
+            window.click("open-project-from-recent", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(main.read_with(cx, |main, _| main.project_picker.is_some()));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// Rescope opens its panel, which minimizes while it looks, and comes back
+    /// from the activity list or the command; its
+    /// Refactor closes it and sends the prompt from the Spec tab, queued while
+    /// the harness is busy.
+    #[gpui_kit::test]
+    async fn rescope_minimizes_and_refactors(cx: &mut TestAppContext) {
+        use crate::activity::JobKind;
+        let (dir, _) = crate::generate_skills::fixture("rescope-main");
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+            ProjectDirectory::set(dir.clone(), cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| {
+                let view = cx.new(|cx| {
+                    crate::rescope_view::RescopeView::with_agent(
+                        dir.clone(),
+                        crate::rescope_view::tests::agent,
+                        cx,
+                    )
+                });
+                main.show_rescope(view, window, cx);
+            });
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("rescope-panel").is_some());
+            window.click("rescope-minimize", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(
+            !main.read_with(cx, |main, _| main.panel_open()),
+            "minimizing left it open"
+        );
+        assert!(main.read_with(cx, |main, _| main.rescope.is_some()));
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| main.reveal_job(JobKind::Rescope, window, cx));
+        })
+        .unwrap();
+        assert!(main.read_with(cx, |main, _| main.showing_rescope()));
+        // The command brings back the same panel rather than another.
+        let first = main.read_with(cx, |main, _| main.rescope.clone().unwrap());
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| {
+                main.minimize_rescope(window, cx);
+                main.open_rescope(window, cx);
+            });
+        })
+        .unwrap();
+        assert_eq!(
+            main.read_with(cx, |main, _| main.rescope.clone()),
+            Some(first)
+        );
+
+        cx.wait_for(handle, Duration::from_secs(10), |window, _| {
+            window.try_find("rescope-refactor").is_some()
+        })
+        .await;
+        let prompt_mode = main.read_with(cx, |main, _| main.prompt_mode.clone());
+        prompt_mode.update(cx, |prompt_mode, _| prompt_mode.set_working(true));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("rescope-refactor", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(
+            main.read_with(cx, |main, _| main.rescope.is_none()),
+            "the panel stayed"
+        );
+        let queued = prompt_mode.read_with(cx, |prompt_mode, _| prompt_mode.queued_texts());
+        assert_eq!(queued.len(), 1);
+        assert!(queued[0].contains("TooltipScope"), "{queued:?}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Ctrl/Cmd+, opens the settings in the inset panel, in the main window
+    /// rather than a window of their own; opening them again keeps the one
+    /// panel, and the close button closes it.
+    #[gpui_kit::test]
+    async fn settings_open_in_the_inset_panel(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+            crate::settings_window::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        #[cfg(target_os = "macos")]
+        let open = "cmd-,";
+        #[cfg(not(target_os = "macos"))]
+        let open = "ctrl-,";
+
+        let windows = cx.update(|cx| cx.windows().len());
+        cx.update_window(handle, |_, window, cx| window.press(open, cx))
+            .unwrap();
+        cx.run_until_parked();
+        let first = main.read_with(cx, |main, _| main.settings.clone().expect("no settings"));
+        assert_eq!(
+            cx.update(|cx| cx.windows().len()),
+            windows,
+            "a window opened"
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let backdrop = window.find("settings-backdrop").bounds();
+            let panel = window.find("settings-panel").bounds();
+            assert_eq!(panel.left() - backdrop.left(), gpui_kit::px(32.));
+            assert!(window.try_find("settings-close").is_some());
+            window.press(open, cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        main.read_with(cx, |main, _| {
+            assert_eq!(main.settings.as_ref(), Some(&first), "opened another")
+        });
+
+        // It animates in: the panel starts below where it settles, and comes
+        // to rest there.
+        let surface_offset = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let place = window.find("settings-panel").bounds();
+                let surface = window.find("settings-panel-surface").bounds();
+                surface.top() - place.top()
+            })
+            .unwrap()
+        };
+        assert!(
+            surface_offset(cx) > gpui_kit::px(0.),
+            "the panel didn't start below its place"
+        );
+        let mut settled = false;
+        for _ in 0..60 {
+            if surface_offset(cx).abs() < gpui_kit::px(0.5) {
+                settled = true;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(16));
+        }
+        assert!(settled, "the panel never settled into place");
+
+        cx.update_window(handle, |_, window, cx| window.click("settings-close", cx))
+            .unwrap();
+        cx.run_until_parked();
+        main.read_with(cx, |main, _| assert!(main.settings.is_none()));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("settings-panel").is_none());
+        })
+        .unwrap();
+        // It animates out, then is gone; while it goes, it doesn't block the
+        // window beneath.
+        assert!(main.read_with(cx, |main, _| main.panel_motion.is_leaving()));
+        cx.update_window(handle, |_, window, cx| window.click("new-project", cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert!(
+            main.read_with(cx, |main, _| main.new_project.is_some()),
+            "the closing panel took the click"
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.click("new-project-close", cx)
+        })
+        .unwrap();
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+            .unwrap();
+        std::thread::sleep(crate::animations::rise_in::LEAVE_TIME + Duration::from_millis(50));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.render_frame(cx);
+        })
+        .unwrap();
+        assert!(main.read_with(cx, |main, _| !main.panel_motion.is_leaving()));
+    }
+
     /// New Project opens the form in the inset panel; browsing for a location
     /// goes through the folder browser and back; and New creates the project,
     /// opens it, and closes the panel.
@@ -1109,6 +1778,23 @@ mod tests {
             let panel = window.find("new-project-panel").bounds();
             assert_eq!(panel.left() - backdrop.left(), gpui_kit::px(32.));
             assert_eq!(backdrop.bottom() - panel.bottom(), gpui_kit::px(32.));
+            // Templates and agents sit in a second column, beside the rest.
+            let main = window.find("new-project-main-column").bounds();
+            let side = window.find("new-project-side-column").bounds();
+            let templates = window.find("new-project-templates").bounds();
+            let agents = window.find("new-project-agents").bounds();
+            assert!(
+                side.left() >= main.right(),
+                "{side:?} isn't right of {main:?}"
+            );
+            assert!((side.top() - main.top()).abs() < gpui_kit::px(1.));
+            for group in [templates, agents] {
+                assert!(
+                    group.left() >= side.left()
+                        && group.right() <= side.right() + gpui_kit::px(0.5)
+                );
+            }
+            assert!(agents.top() > templates.bottom());
         })
         .unwrap();
         // In a window too short for the whole form, it scrolls rather than
@@ -1197,7 +1883,7 @@ mod tests {
                 "the folder wasn't created"
             );
             assert!(!browser.read(cx).new_folder_open());
-            assert_eq!(browser.read(cx).choice(), base.join("projects/apps"));
+            assert_eq!(browser.read(cx).choice(), Some(base.join("projects/apps")));
             window.click("folder-choose", cx);
         })
         .unwrap();
@@ -1207,8 +1893,12 @@ mod tests {
             form.settings(cx)
         });
         assert_eq!(settings.folder(), base.join("projects/apps/demo"));
+        assert_eq!(settings.template, "base", "the first template isn't chosen");
 
         cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            // The second template: scope, concept, and shape.
+            window.click(("new-project-template", 1usize), cx);
             window.render_frame(cx);
             window.click("new-project-create", cx);
         })
@@ -1227,6 +1917,10 @@ mod tests {
             Some(base.join("projects/apps/demo"))
         );
         assert!(base.join("projects/apps/demo/piton.config.pi").exists());
+        assert!(
+            base.join("projects/apps/demo/spec/lib/Scope.pi").exists(),
+            "the chosen template's files weren't written"
+        );
         // Git is initialized unless unchecked.
         assert!(
             base.join("projects/apps/demo/.git").is_dir(),
@@ -1522,6 +2216,12 @@ mod tests {
                     let analyze = window.find("analyze-divergence").bounds();
                     let view = window.find("view-divergence-reports").bounds();
                     assert!(build.right() <= analyze.left() && analyze.right() <= view.left());
+                    // Then Skills: Generate Skills.
+                    let skills = window.find("generate-skills").bounds();
+                    assert!(view.right() <= skills.left());
+                    // Then Refactor: Rescope.
+                    let rescope = window.find("rescope").bounds();
+                    assert!(skills.right() <= rescope.left());
                 }
             })
             .unwrap();

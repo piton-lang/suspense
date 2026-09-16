@@ -3,6 +3,8 @@ from /scope/project-directory import ProjectDirectoryScope
 from /ui/components/scrollbar import ScrollbarScope
 from /scope/git import GitScope
 from /ui/components/diff-view import DiffViewScope
+from /scope/no-project import NoProjectStateScope
+from /scope/open-file import OpenFileScope
 
 export scope FileTreeScope:
     concept: {FileTreeConcept}
@@ -18,7 +20,8 @@ shape FileTreeShape:
     description:
         Folders are listed before files, both by name, and a folder's contents
         are shown when it is expanded. It scrolls with a @{ScrollbarScope}.
-        Until a project is picked it reads "No project open".
+        Until a project is picked it reads "No project open", as the
+        @{NoProjectStateScope} says.
 
     refreshing:
         The tree refreshes by itself when files or folders are added, removed,
@@ -38,5 +41,4 @@ shape FileTreeShape:
         itself.
 
     opening:
-        Clicking a file opens it. Where it opens is up to whatever holds the
-        tree.
+        Clicking a file opens it, as the @{OpenFileScope} says.

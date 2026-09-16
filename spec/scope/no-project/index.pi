@@ -1,0 +1,30 @@
+use /lib
+from /scope/project-directory import ProjectDirectoryScope
+
+export scope NoProjectStateScope:
+    concept: {NoProjectStateConcept}
+
+concept NoProjectStateConcept:
+    pitch:
+        How the parts of the application that need a project behave before one
+        is open: quietly, saying what opening a project would let them do.
+
+    shape: {NoProjectStateShape}
+
+shape NoProjectStateShape:
+    description:
+        Until a @{ProjectDirectoryScope} is open, nothing that needs one does
+        anything, or fails for want of one.
+
+    views:
+        Something that shows the project's things shows, in place of them, a
+        short message saying no project is open, or what to open one for. Each
+        use gives its words.
+
+    commands:
+        A command that needs a project is disabled, not hidden, with a tooltip
+        saying to open a project to do what the command does. Each use gives
+        its words.
+
+    opening:
+        As soon as a project opens, each comes to life by itself.

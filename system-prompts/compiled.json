@@ -26,5 +26,19 @@
     "goal": "Your goal is to identify the one file they mean. Search with tools that only read, such as Glob, Grep and Read, and never change anything. Stop searching as soon as you are confident. Only when several files are all genuinely and equally what was asked for, give each of them; otherwise give the single best file.",
     "places": "Look in these places in this order of priority, preferring a match from an earlier one over an equally good match from a later one:",
     "reply": "End with a reply of nothing but JSON, with no prose and no code fence, listing paths relative to the project directory: {\"files\": [\"path/to/file\"]}. If nothing matches, reply {\"files\": []}."
+  },
+  "GenerateSkills": {
+    "intro": "We're choosing which scopes in the spec located in <specRoot> are worth building agent skills for. The spec is written in Piton. A skill for a scope tells an agent how to build or change that scope from the spec. Only read files, and don't change anything.",
+    "task": "Below is a map of the spec's scopes: for each, its name, its file, how many other scopes use it, how many it uses, and whether it already has a skill. Read the scopes' files as you need to. Rank the scopes that are worth a skill: most interconnected, most used, and the most central to building the application, where a skill would save an agent the most work or keep the most things consistent. Leave out scopes that already have a skill, and those too small or too isolated to be worth one. For each scope you rank, say how much a skill for it is worth, from 0 to 1, whether one should be built rather than only could be, and give one sentence on why.",
+    "replyFormat": "Reply with nothing but JSON, in this form, with scopes named exactly as in the map: {\"skills\": [{\"scope\": \"...\", \"worth\": 0.0, \"should\": true, \"why\": \"...\"}]}",
+    "map": "Scopes"
+  },
+  "Rescope": {
+    "intro": "We're looking for concepts that the spec located in <specRoot> describes again and again, in different scopes, that would be better as scopes of their own. The spec is written in Piton. Only read files, and don't change anything.",
+    "task": "Read the spec files listed below. Find the concepts that several scopes each describe for themselves: the same behaviour, component, rule, or idea, written out more than once rather than referenced from one place. Leave out anything already a scope of its own, and anything described only once. For each concept worth extracting, give the scope it would become a name ending in Scope, say in one sentence what the concept is, say how much extracting it is worth, from 0 to 1, weighing how often it's repeated, how far the repetitions have drifted apart, and how much a single definition would help, and give one sentence on why. List every place the spec describes it, with the file relative to the project, the scope there, and a short excerpt.",
+    "replyFormat": "Reply with nothing but JSON, in this form: {\"concepts\": [{\"name\": \"...\", \"concept\": \"...\", \"worth\": 0.0, \"why\": \"...\", \"places\": [{\"file\": \"...\", \"scope\": \"...\", \"excerpt\": \"...\"}]}]}",
+    "files": "Spec files",
+    "refactor": "Refactor the spec so that each concept below becomes a scope of its own. For each, create the new scope where it fits in the spec, describing the concept once, completely, reconciling any ways its descriptions have drifted apart. Then, in every place listed, replace the description with a reference to the new scope, keeping only what is particular to that place. Keep the spec valid Piton, and check it compiles when you're done.",
+    "concepts": "Concepts to extract into scopes"
   }
 }

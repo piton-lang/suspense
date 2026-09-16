@@ -1,11 +1,15 @@
 use /lib
-from /scope/harness-integration import HarnessIntegrationScope
+from /scope/project/open-project import OpenProjectScope
+from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
+from /scope/harness-integration/catalog import HarnessCatalogScope
+from /scope/no-project import NoProjectStateScope
+from /scope/open-file import OpenFileScope
 from /scope/project-directory import ProjectDirectoryScope
+from /scope/project-locations import ProjectLocationsScope
 from /scope/prompt-mode/chat-input import ChatInputScope
-from /scope/editor import EditorScope
-from /ui/components/file-tree import FileTreeScope
+from /scope/spec-build import SpecBuildScope
 from /ui/components/scrollbar import ScrollbarScope
-from /scope/prompt-mode/message-list import MessageList
+from /ui/components/task-table import TaskTableScope
 from /scope/settings-window import SettingsWindowScope
 
 export scope PaletteScope:
@@ -48,12 +52,11 @@ shape PaletteShape:
             the search field.
 
         files:
-            Every file in the selected @{ProjectDirectoryScope}, at any depth,
-            listed by its path in the project. `.git`, and whatever the
-            project's `.gitignore` files ignore, are left out. Picking a file
-            opens it in the @{EditorScope}, as clicking it in the
-            @{FileTreeScope} does. Until a project is picked the tab reads
-            "No project open".
+            Every file in the selected @{ProjectDirectoryScope}, listed as the
+            @{ProjectLocationsScope} lists the files under a folder. Picking a
+            file opens it, as the @{OpenFileScope} says. Until a project is
+            picked the tab reads "No project open", as the
+            @{NoProjectStateScope} says.
 
         fileSearch:
             On the Files tab, Ctrl+Enter (Cmd+Enter on macOS) sends the search
@@ -64,8 +67,9 @@ shape PaletteShape:
             with the harness instead, reading
             "No results. Press Enter to perform an agentic search." in place of
             "No matches".
-            While the search runs, the results area shows its task table, as in
-            the @{MessageList}, scrolling with a @{ScrollbarScope}. When it
+            While the search runs, the results area shows its
+            @{TaskTableScope}, scrolling with a @{ScrollbarScope} with no lock
+            to the bottom. When it
             finishes, a single file closes the palette and opens that file,
             several files show a "Multiple results were found" alert, and no
             files adds a "No file matching the search was found." row. Changing
@@ -74,45 +78,42 @@ shape PaletteShape:
             opens.
 
         fileSearchSystemPrompt:
-            The search's system prompt, system-prompts/file-search.pi, built
-            into the application (see @{HarnessIntegrationScope}), is appended
-            to the harness's own. It tells the harness we're really trying to find the one file being
+            The search's system prompt, file-search.pi, of the
+            @{BakedSystemPromptsScope}, is appended to the harness's own. It
+            tells the harness we're really trying to find the one file being
             asked for, giving several only when they are all equally what was
             asked for; to only read and never change anything; and to stop as
             soon as it is confident. It lists where to look, in this order of
             priority, preferring a match from an earlier place over an equally
-            good match from a later one: the spec, at `root` in piton.config.pi;
-            the code, at `codeRoot` in piton.config.pi; `.suspense`; then
-            `.claude`. A location missing from the config is left out of the
-            list. The harness's final reply is only JSON listing the files by
-            path relative to the project, and paths that don't exist are
-            dropped.
+            good match from a later one: the spec location; the code location;
+            `.suspense`; then `.claude`, the locations being those of the
+            @{ProjectLocationsScope}. The harness's final reply is only JSON
+            listing the files by path relative to the project, and paths that
+            don't exist are dropped.
 
         system:
             The application's own commands, each doing what its toolbar control
-            or shortcut does: "Open Project…", "Build", "Dark mode" or
+            or shortcut does: "Open Project…", which opens the
+            @{OpenProjectScope}, "Build", "Dark mode" or
             "Light mode" (whichever is not the current one), "Settings…", which
-            opens the @{SettingsWindowScope}, and "Quit". Build is unavailable
-            while there is no project or a build is running.
+            opens the @{SettingsWindowScope}, and "Quit". Build builds the spec
+            on its own, as the @{SpecBuildScope} says.
 
         commands:
-            The harness's commands, the same ones the @{ChatInputScope} offers
-            after `/`.
+            The commands of the @{HarnessCatalogScope}.
 
         skills:
-            The harness's skills, the same ones the @{ChatInputScope} offers
-            after `/`.
+            The skills of the @{HarnessCatalogScope}.
 
         agents:
-            The harness's agents, the same ones the @{ChatInputScope} offers
-            after `@`.
+            The agents of the @{HarnessCatalogScope}.
 
         mentions:
             A command, skill, or agent shows its description when it has one.
-            Picking one inserts it into the @{ChatInputScope} at the cursor the
-            way accepting it as a mention does, `/name ` for a command or skill
-            and `@agent-name ` for an agent, with a space before it when the
-            cursor follows other text. Focus then moves to the chat input.
+            Picking one inserts it into the @{ChatInputScope} at the cursor as a
+            mention, as the @{HarnessCatalogScope} says, with a space before it
+            when the cursor follows other text. Focus then moves to the chat
+            input.
 
     fuzzySearch:
         A result matches when the search's characters all appear in it in order,

@@ -1,0 +1,46 @@
+use /lib
+from /scope/project/open-project import OpenProjectScope
+from /scope/project-directory import ProjectDirectoryScope
+from /scope/no-project import NoProjectStateScope
+
+export scope ProjectIndicator:
+    concept: {ProjectIndicatorConcept}
+
+concept ProjectIndicatorConcept:
+    pitch:
+        Shows which project is loaded, at a glance, wherever it sits.
+
+    shape: {ProjectIndicatorShape}
+
+shape ProjectIndicatorShape:
+    description:
+        A small label: a small folder icon, then the name of the project open
+        through the @{ProjectDirectoryScope}, which is its folder's name, in
+        medium weight. It highlights on hover.
+
+    noProject:
+        While no project is open, as the @{NoProjectStateScope} says, it reads
+        "No project", muted, after the same icon, and has no tooltip.
+
+    tooltip:
+        While a project is open, its tooltip gives the project's full path.
+
+    recentProjects:
+        Clicking it opens a small list beneath it of the recent projects of the
+        @{ProjectDirectoryScope}, up to five, newest first, each a row with the
+        project's folder name in medium weight above its full path, muted, after
+        a folder icon, or a tick for the project open now. Clicking a row closes
+        the list and opens that project, or just closes it for the one already
+        open. Clicking the indicator again, pressing the mouse outside the
+        list, or <Escape>, closes it.
+
+        The last row, beneath a thin divider and whether or not there are any
+        recent projects, reads "Open Project…" after a folder icon, and
+        closes the list and opens the @{OpenProjectScope}.
+
+    width:
+        A name wider than 320 pixels is cut off with an ellipsis.
+
+    following:
+        It always shows the project open now: opening or creating another
+        project changes it straight away.

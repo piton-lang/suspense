@@ -1,5 +1,6 @@
 use /lib
 from /scope/settings-window import SettingsWindowScope
+from /scope/user-preferences import UserPreferencesScope
 
 export scope RibbonApplicationTabScope:
     concept: {RibbonApplicationTabConcept}
@@ -26,8 +27,8 @@ shape RibbonApplicationTabShape:
         darkMode:
             A "Dark mode" switch, on while the window is in dark mode. Switching
             it changes the window between light and dark mode straight away, and
-            saves the choice for the user, so the next launch starts in it. A
-            choice that can't be saved shows a notification titled
+            saves the choice among the @{UserPreferencesScope}. A choice that
+            can't be saved shows a notification titled
             "Could not save dark mode", with why.
 
             It is primary.

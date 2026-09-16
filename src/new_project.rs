@@ -9,6 +9,7 @@ use anyhow::{Context as _, Result, bail};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
+use gpui_kit::component::radio::Radio;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, h_flex, v_flex,
 };
@@ -16,8 +17,9 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::checkbox::checkbox;
-use crate::folder_browser::{self, CancelFolder, ChooseFolder, FolderBrowser};
+use crate::fs_browser::{self, CancelBrowse, ChoosePath, FsBrowser};
 use crate::project_directory::{CONFIG_FILE_NAME, ProjectDirectory};
+use crate::project_templates;
 
 actions!(suspense, [NewProject]);
 
@@ -118,6 +120,8 @@ pub struct Settings {
     /// Empty to go without one.
     pub shape_root: String,
     pub init_git: bool,
+    /// The key of the template the project starts from.
+    pub template: String,
 }
 
 /// Why a name can't be the project's folder, if it can't.
@@ -280,11 +284,13 @@ impl Settings {
         let spec_root = dir(&self.spec_root);
         std::fs::create_dir_all(&spec_root)
             .with_context(|| format!("Couldn't create {}", spec_root.display()))?;
-        let index = spec_root.join("index.pi");
-        if !index.exists() {
-            std::fs::write(&index, "")
-                .with_context(|| format!("Couldn't write {}", index.display()))?;
-        }
+        let templates = project_templates::all();
+        let template = templates
+            .iter()
+            .find(|template| template.key == self.template)
+            .or(templates.first())
+            .context("There are no project templates")?;
+        template.write(&spec_root)?;
         let mut roots = vec![dir(&self.code_root)];
         if !self.shape_root.trim().is_empty() {
             roots.push(dir(&self.shape_root));
@@ -331,8 +337,10 @@ pub struct NewProjectForm {
     location: PathBuf,
     agents: Vec<Agent>,
     init_git: bool,
+    /// The key of the template chosen.
+    template: String,
     /// The folder browser, while choosing where the project goes.
-    browser: Option<Entity<FolderBrowser>>,
+    browser: Option<Entity<FsBrowser>>,
     creating: bool,
     error: Option<SharedString>,
     focus_handle: FocusHandle,
@@ -376,7 +384,7 @@ impl NewProjectForm {
             .collect();
         let location = ProjectDirectory::get(cx)
             .and_then(|dir| dir.parent().map(Path::to_path_buf))
-            .unwrap_or_else(folder_browser::home);
+            .unwrap_or_else(fs_browser::home);
         name.update(cx, |name, cx| name.focus(window, cx));
         Self {
             name,
@@ -386,6 +394,10 @@ impl NewProjectForm {
             location,
             agents: vec![Agent::Claude],
             init_git: true,
+            template: project_templates::all()
+                .first()
+                .map(|template| template.key.to_string())
+                .unwrap_or_default(),
             browser: None,
             creating: false,
             error: None,
@@ -403,6 +415,7 @@ impl NewProjectForm {
             code_root: self.code_root.read(cx).value().to_string(),
             shape_root: self.shape_root.read(cx).value().to_string(),
             init_git: self.init_git,
+            template: self.template.clone(),
         }
     }
 
@@ -414,7 +427,7 @@ impl NewProjectForm {
     }
 
     #[cfg(test)]
-    pub fn browser(&self) -> Option<Entity<FolderBrowser>> {
+    pub fn browser(&self) -> Option<Entity<FsBrowser>> {
         self.browser.clone()
     }
 
@@ -435,14 +448,13 @@ impl NewProjectForm {
     /// Opens the folder browser in place of the form.
     pub fn browse(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let location = self.location.clone();
-        let browser =
-            cx.new(|cx| FolderBrowser::new("Choose where the project goes", location, cx));
+        let browser = cx.new(|cx| FsBrowser::folder("Choose where the project goes", location, cx));
         // The browser has the keyboard as it opens.
         browser.read(cx).focus_handle(cx).focus(window, cx);
         self._subscriptions.push(cx.subscribe_in(
             &browser,
             window,
-            |this, _, ChooseFolder(folder), window, cx| {
+            |this, _, ChoosePath(folder), window, cx| {
                 this.set_location(folder.clone(), cx);
                 this.close_browser(window, cx);
             },
@@ -450,7 +462,7 @@ impl NewProjectForm {
         self._subscriptions.push(cx.subscribe_in(
             &browser,
             window,
-            |this, _, _: &CancelFolder, window, cx| this.close_browser(window, cx),
+            |this, _, _: &CancelBrowse, window, cx| this.close_browser(window, cx),
         ));
         self.browser = Some(browser);
         cx.notify();
@@ -575,6 +587,39 @@ impl NewProjectForm {
                 cx.notify();
             }));
 
+        let templates =
+            v_flex()
+                .id("new-project-templates")
+                .gap_2()
+                .child(div().text_sm().font_medium().child("Template"))
+                .children(project_templates::all().into_iter().enumerate().map(
+                    |(ix, template)| {
+                        let key = template.key;
+                        let radio = Radio::new(("new-project-template", ix))
+                            .label(template.name.clone())
+                            .checked(self.template == key)
+                            .on_click(cx.listener(move |this, _: &bool, _, cx| {
+                                this.template = key.to_string();
+                                cx.notify();
+                            }));
+                        let row = v_flex()
+                            .id(("new-project-template-row", ix))
+                            .gap_0p5()
+                            .child(radio)
+                            .child(
+                                div()
+                                    .pl_6()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(template.description),
+                            );
+                        // Lets UI tests find the row; inert in normal builds.
+                        gpui_kit::TestSupportExt::test_support(row)
+                    },
+                ));
+        // Lets UI tests find the group; inert in normal builds.
+        let templates = gpui_kit::TestSupportExt::test_support(templates);
+
         let agents = v_flex()
             .id("new-project-agents")
             .gap_1p5()
@@ -610,32 +655,51 @@ impl NewProjectForm {
             .min_h_0()
             .overflow_y_scroll()
             .child(
-                v_flex()
-                    .max_w(px(640.))
-                    .gap_5()
+                // The project itself on the left; what it starts from and the
+                // agents it writes for on the right, each column top aligned.
+                h_flex()
+                    .items_start()
+                    .gap_8()
                     .p_6()
-                    .child(Self::field("Name", &self.name, name_problem, cx))
-                    .child(location)
-                    .child(git)
-                    .child(agents)
-                    .child(Self::field(
-                        "Spec root",
-                        &self.spec_root,
-                        path_problem(&self.spec_root, true),
-                        cx,
-                    ))
-                    .child(Self::field(
-                        "Code root",
-                        &self.code_root,
-                        path_problem(&self.code_root, true),
-                        cx,
-                    ))
-                    .child(Self::field(
-                        "Shape root",
-                        &self.shape_root,
-                        path_problem(&self.shape_root, false),
-                        cx,
-                    )),
+                    .child(
+                        v_flex()
+                            .id("new-project-main-column")
+                            .flex_1()
+                            .min_w_0()
+                            .gap_5()
+                            .child(Self::field("Name", &self.name, name_problem, cx))
+                            .child(location)
+                            .child(git)
+                            .child(Self::field(
+                                "Spec root",
+                                &self.spec_root,
+                                path_problem(&self.spec_root, true),
+                                cx,
+                            ))
+                            .child(Self::field(
+                                "Code root",
+                                &self.code_root,
+                                path_problem(&self.code_root, true),
+                                cx,
+                            ))
+                            .child(Self::field(
+                                "Shape root",
+                                &self.shape_root,
+                                path_problem(&self.shape_root, false),
+                                cx,
+                            ))
+                            .map(gpui_kit::TestSupportExt::test_support),
+                    )
+                    .child(
+                        v_flex()
+                            .id("new-project-side-column")
+                            .flex_1()
+                            .min_w_0()
+                            .gap_5()
+                            .child(templates)
+                            .child(agents)
+                            .map(gpui_kit::TestSupportExt::test_support),
+                    ),
             );
 
         let theme = cx.theme();
@@ -714,6 +778,7 @@ mod tests {
             code_root: "./src/".into(),
             shape_root: "./spec/shape".into(),
             init_git: false,
+            template: "base".into(),
         }
     }
 
@@ -811,6 +876,42 @@ belay-agent-adapter CodexAdapter:
         );
         let err = settings.create().unwrap_err();
         std::fs::remove_dir_all(&folder).ok();
+
+        // Started from scope, concept, and shape, it's seeded with the lib and
+        // an example, and builds all the same; a file already there is kept.
+        settings.template = "scope-concept-shape".into();
+        std::fs::create_dir_all(folder.join("spec")).unwrap();
+        std::fs::write(folder.join("spec/index.pi"), "// mine\n").unwrap();
+        let (folder, _) = settings.create().unwrap();
+        assert_eq!(
+            std::fs::read_to_string(folder.join("spec/index.pi")).unwrap(),
+            "// mine\n"
+        );
+        std::fs::remove_file(folder.join("spec/index.pi")).unwrap();
+        std::fs::remove_file(folder.join("piton.config.pi")).unwrap();
+        let (folder, _) = settings.create().unwrap();
+        for path in [
+            "spec/index.pi",
+            "spec/lib/index.pi",
+            "spec/lib/Scope.pi",
+            "spec/lib/Concept.pi",
+            "spec/lib/Shape.pi",
+            "spec/scope/application/index.pi",
+        ] {
+            assert!(folder.join(path).exists(), "{path} was not written");
+        }
+        let build = Command::new("piton")
+            .arg("build")
+            .current_dir(&folder)
+            .output()
+            .unwrap();
+        assert!(
+            build.status.success(),
+            "piton build failed: {}",
+            String::from_utf8_lossy(&build.stderr)
+        );
+        std::fs::remove_dir_all(&folder).ok();
+        settings.template = "base".into();
 
         // Asked for, the folder becomes a repository, ignoring Suspense's
         // per-machine state, with nothing committed.

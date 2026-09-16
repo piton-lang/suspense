@@ -1,0 +1,51 @@
+use /lib
+from /scope/harness-integration import HarnessIntegrationScope
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
+from /scope/prompt-mode/sending import PromptSendingScope
+from /scope/spec-build import SpecBuildScope
+from /ui/components/git-panel import GitPanelScope
+
+export scope PromptModesScope:
+    concept: {PromptModesConcept}
+
+concept PromptModesConcept:
+    pitch:
+        The modes a prompt is sent in, each for a different kind of work on the
+        code and the spec.
+
+    shape: {PromptModesShape}
+
+shape PromptModesShape:
+    description:
+        There are four modes, and wherever they are listed, they are in this
+        order.
+
+    modes:
+        - Code: changes the code, leaving the spec as it is; a subtle red
+        - Chain: changes the code and the spec together; purple
+        - Spec: changes the spec, leaving the code as it is; a subtle blue
+        - Ask: asks a question about the code and the spec, changing neither; a subtle green
+
+    colours:
+        Whatever shows a mode, or something sent in it, takes the mode's
+        colour, readable in both light and dark mode. Chain is Code and Spec
+        together, so wherever it shows Code and Spec as well, both are purple.
+
+    tasks:
+        A prompt sent in Code, Chain, or Spec is a task, sent as the
+        @{PromptSendingScope} says. Tasks carry on one conversation, one at a
+        time, and queue while the harness is working. Before one is sent, the
+        spec is built ahead of it, as the @{SpecBuildScope} says. Once one
+        finishes without error, having changed files, it adds a commit note to
+        the @{GitPanelScope}.
+
+    questions:
+        A prompt sent in Ask is a question. It runs straight away, alongside
+        any task and any other question, and never queues, builds the spec, or
+        adds a commit note. Questions carry on a conversation of their own,
+        apart from the tasks', as the @{HarnessIntegrationScope} says.
+
+    systemPrompts:
+        Each mode sends its own system prompt, from the
+        @{ModeSystemPromptsScope}. A prompt keeps the mode it was sent in while
+        it waits in the queue.

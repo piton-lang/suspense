@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod activity;
+mod animations;
 mod app;
 mod baked_prompts;
 mod chat_input;
@@ -14,8 +15,10 @@ mod divergence;
 mod divergence_view;
 mod file_link;
 mod file_view;
-mod folder_browser;
+mod fs_browser;
 mod fuzzy;
+mod generate_skills;
+mod generate_skills_view;
 mod git_panel;
 mod git_status;
 mod growing_input;
@@ -30,12 +33,18 @@ mod palette;
 mod piton_build;
 mod piton_lsp;
 mod piton_syntax;
+mod project;
 mod project_directory;
+mod project_indicator;
 mod project_lsp;
+mod project_templates;
 mod project_tree;
 mod prompt_history;
 mod prompt_mode;
 mod prompt_queue;
+mod recent_projects;
+mod rescope;
+mod rescope_view;
 mod ribbon;
 mod scrollbar;
 mod selection_popover;

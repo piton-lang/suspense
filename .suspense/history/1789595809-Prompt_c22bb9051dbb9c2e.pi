@@ -1,0 +1,315 @@
+
+anchor Prompt_c22bb9051dbb9c2e:
+    userPrompt:
+        -
+            - "Refactor the spec so that each concept below becomes a scope of its own. For each, create the new scope where it fits in the spec, describing the concept once, completely, reconciling any ways its descriptions have drifted apart. Then, in every place listed, replace the description with a reference to the new scope, keeping only what is particular to that place. Keep the spec valid Piton, and check it compiles when you're done."
+        -
+            - ""
+        -
+            - "Concepts to extract into scopes:"
+        -
+            - ""
+        -
+            - "TaskTableScope: The table of one harness run's output: a row for each piece of reply text, tool call, and error, with a type badge and state, a waiting row showing raw JSON while it streams, and a scrollbar that locks to the bottom."
+        -
+            - "- MessageList in spec/scope/prompt-mode/message-list/index.pi: A task's output is a table with Type, Output, and Status columns, with one row per thing the harness did"
+        -
+            - "- MessageList in spec/scope/prompt-mode/message-list/index.pi: The latest task's output scrolls with a @{ScrollbarScope}, with its lock to the bottom. ... The lock is off until switched on."
+        -
+            - "- DivergenceScope in spec/scope/divergence/index.pi: each shows its agent's output as a task's is shown, in the same table ... reading \"Waiting for the harness…\" until the first arrives ... locked to start with"
+        -
+            - "- GenerateSkillsScope in spec/scope/generate-skills/index.pi: the harness's output shows as a task's does, in the same table as the @{MessageList}, following its latest output, with a @{ScrollbarScope} that locks to the bottom"
+        -
+            - "- RescopeScope in spec/scope/rescope/index.pi: the harness's output shows as a task's does, in the same table as the @{MessageList}, following its latest output, with a @{ScrollbarScope} that locks to the bottom"
+        -
+            - "- PaletteScope in spec/scope/palette/index.pi: While the search runs, the results area shows its task table, as in the @{MessageList}, scrolling with a @{ScrollbarScope}."
+        -
+            - "- ChatInputScope in spec/scope/prompt-mode/chat-input/index.pi: Each question's progress and results are shown in a task table, as in the @{MessageList}."
+        -
+            - "- ChatInputScope in spec/scope/prompt-mode/chat-input/index.pi: the steps leading up to it are collapsed by default wherever a finished question's task table is shown"
+        -
+            - "- HistoryListScope in spec/ui/components/history-list/index.pi: opens onto the compiled prompt it was sent as and its task table, as in the @{MessageList}"
+        -
+            - ""
+        -
+            - ""
+        -
+            - "OneOffAgentRunScope: A separate, read-only run of the harness for the application's own work: no session, only reading, globbing, and searching, a prompt baked into the application, a reply of nothing but JSON, and what happens when that reply fails or can't be read."
+        -
+            - ""
+        -
+            - ""
+        -
+            - "MinimizablePanelScope: An inset panel for long-running work that can be minimized without stopping, comes back as it was left from its command or the activity list, is minimized rather than closed when another panel opens, and stops only when closed."
+        -
+            - "- DivergenceScope in spec/scope/divergence/index.pi: a minimize button, whose tooltip says the analysis keeps running, hides the panel without stopping anything ... Only closing it stops it."
+        -
+            - "- RescopeScope in spec/scope/rescope/index.pi: The minimize button, whose tooltip says the search keeps running, hides the panel without stopping anything ... Only closing it ... stops it."
+        -
+            - "- MainWindowScope in spec/scope/application/MainWindow.pi: opens the @{DivergenceScope} in an @{InsetPanelScope}, to analyze, in place of whatever else is open there, or brings back one that was minimized"
+        -
+            - "- MainWindowScope in spec/scope/application/MainWindow.pi: opens the @{RescopeScope} in an @{InsetPanelScope}, in place of whatever else is open there, or brings back one that was minimized"
+        -
+            - "- RibbonSpecTabScope in spec/ui/components/ribbon/spec-tab/index.pi: Clicking it opens the @{RescopeScope} and starts looking for repeated concepts, or brings back a minimized one"
+        -
+            - "- GenerateSkillsScope in spec/scope/generate-skills/index.pi: An @{InsetPanelScope} titled \"Generate Skills\", with a close button. ... Closing the panel while it runs stops it."
+        -
+            - ""
+        -
+            - ""
+        -
+            - "SpecBuildScope: Running `piton build` in the project to bring the compiled spec up to date, including when it runs, how progress shows, and that a failed build is reported but doesn't stop what comes next."
+        -
+            - "- PromptEditor in spec/scope/prompt-mode/index.pi: Before a Code, Chain, or Spec prompt is sent, `piton build` runs in the project ... A build that fails does not stop the prompt"
+        -
+            - "- DivergenceScope in spec/scope/divergence/index.pi: The analysis first runs `piton build` in the project ... A build that fails doesn't stop the analysis"
+        -
+            - "- RibbonSpecTabScope in spec/ui/components/ribbon/spec-tab/index.pi: Clicking it runs `piton build` in the project ... A build that fails is titled \"Build failed\""
+        -
+            - "- PaletteScope in spec/scope/palette/index.pi: Build is unavailable while there is no project or a build is running."
+        -
+            - "- RibbonScope in spec/ui/components/ribbon/index.pi: a spec build, \"Building the spec\" ... A spec build has nothing to show, so its row only closes the list."
+        -
+            - "- MainWindowScope in spec/scope/application/MainWindow.pi: or while a build is running, asks first"
+        -
+            - ""
+        -
+            - ""
+        -
+            - "RunningActivityScope: What counts as work still running in the application (tasks, questions, spec builds, divergence analyses, rescope searches), how the ribbon's activity list shows and reveals it, and what asks before quitting."
+        -
+            - "- RibbonScope in spec/ui/components/ribbon/index.pi: the task the harness is working on ... each question still running ... a spec build, \"Building the spec\"; a divergence analysis, \"Analyzing divergence\"; and a search for concepts to rescope"
+        -
+            - "- MainWindowScope in spec/scope/application/MainWindow.pi: Quitting while the harness is working on a task or a question, or while a build is running, asks first."
+        -
+            - "- DivergenceScope in spec/scope/divergence/index.pi: The panel comes back just as it was left, steps or results, from the ribbon's activity list while it runs"
+        -
+            - "- RescopeScope in spec/scope/rescope/index.pi: While it runs, it is listed in the ribbon's activity list as \"Finding scopes to extract\""
+        -
+            - ""
+        -
+            - ""
+        -
+            - "ProjectDataScope: Everything the application keeps for a project in its `.suspense` directory, what each file or folder holds, and which parts belong to one machine and are ignored by Git."
+        -
+            - "- ApplicationScope in spec/scope/application/index.pi: Everything the application keeps for a project lives in a `.suspense` directory ... the prompt history, questions asked from the Ask tab, the queue, and the last harness report."
+        -
+            - "- PromptEditor in spec/scope/prompt-mode/index.pi: Queued prompts are saved in the project's `.suspense/queue` directory"
+        -
+            - "- PromptEditor in spec/scope/prompt-mode/index.pi: Every task sent is saved in the project's `.suspense/history` directory ... in the project's `.suspense/asks` directory instead"
+        -
+            - "- DivergenceScope in spec/scope/divergence/index.pi: saved as soon as it is over in the project's .suspense/divergence folder, a JSON file per report"
+        -
+            - "- GitPanelScope in spec/ui/components/git-panel/index.pi: Notes are saved with the project, in its `.suspense/commit-notes.json`"
+        -
+            - "- SettingsWindowScope in spec/scope/settings-window/index.pi: each saved as a Markdown file named after its tab in the project's `.suspense/system-prompts` directory"
+        -
+            - "- NewProjectScope in spec/scope/new-project/index.pi: the harness report .suspense/harness.json, the send queue .suspense/queue/, the commit notes .suspense/commit-notes.json, and the draft .suspense-draft.pi"
+        -
+            - "- ChatInputScope in spec/scope/prompt-mode/chat-input/index.pi: the last report is saved with the project and offered too"
+        -
+            - ""
+        -
+            - ""
+        -
+            - "RankedSelectionListScope: A ranked results list of checkable rows with a bar and percentage, a details pane for the selected row that starts on the first-ranked one, and a count with a primary action along the bottom that is disabled with nothing checked."
+        -
+            - "- GenerateSkillsScope in spec/scope/generate-skills/index.pi: Each row has a checkbox, the scope's name, a bar and percentage for how much a skill is worth"
+        -
+            - "- GenerateSkillsScope in spec/scope/generate-skills/index.pi: Clicking a row selects it. Beside the list, the selected scope's details ... The scope ranked first is selected to start with."
+        -
+            - "- GenerateSkillsScope in spec/scope/generate-skills/index.pi: Along the bottom, how many scopes are checked, and a primary \"Create Skills\" button, disabled with none checked."
+        -
+            - "- RescopeScope in spec/scope/rescope/index.pi: An @{InsetPanelScope} titled \"Rescope\", laid out like the @{GenerateSkillsScope}"
+        -
+            - "- RescopeScope in spec/scope/rescope/index.pi: each row with a checkbox, the proposed scope's name, a bar and percentage for how much it is worth"
+        -
+            - "- RescopeScope in spec/scope/rescope/index.pi: Clicking a row selects it. Beside the list, the selected concept's details ... The concept ranked first is selected to start with."
+        -
+            - "- RescopeScope in spec/scope/rescope/index.pi: Along the bottom, how many concepts are checked, and a primary \"Refactor\" button, disabled with none checked."
+        -
+            - "- DivergenceScope in spec/scope/divergence/index.pi: Clicking a file selects it. Beside the tree, the selected file's details ... the source file with the highest divergence is selected."
+        -
+            - ""
+        -
+            - ""
+        -
+            - "PromptModesScope: The four modes a prompt is sent in (Code, Chain, Spec, and Ask): what each changes, its colour, whether it builds the spec, queues, or adds a commit note, and the order they appear in."
+        -
+            - "- ChatInputScope in spec/scope/prompt-mode/chat-input/index.pi: a subtle red for Code, a subtle blue for Spec, and a subtle green for Ask. With Chain selected, Code, Spec, and the body are all purple."
+        -
+            - "- MessageList in spec/scope/prompt-mode/message-list/index.pi: a subtle red for Code, purple for Chain, and a subtle blue for Spec"
+        -
+            - "- PromptEditor in spec/scope/prompt-mode/index.pi: Before a Code, Chain, or Spec prompt is sent ... A question from the Ask tab is sent without building."
+        -
+            - "- PromptEditor in spec/scope/prompt-mode/index.pi: Once a Code, Chain, or Spec task finishes without error, it adds a commit note"
+        -
+            - "- GitPanelScope in spec/ui/components/git-panel/index.pi: Each Code, Chain, or Spec task that finishes without error adds a note ... neither does a question from the Ask tab"
+        -
+            - "- SettingsWindowScope in spec/scope/settings-window/index.pi: for each tab in order, Code, Chain, Spec, and Ask"
+        -
+            - "- RescopeScope in spec/scope/rescope/index.pi: sends a prompt to the harness in the Spec tab's mode, as if written in the chat input and sent from there"
+        -
+            - ""
+        -
+            - ""
+        -
+            - "ProjectLocationsScope: The spec location (`root`) and code location (`codeRoot`) from piton.config.pi, and how the files under them are listed, leaving out what Git ignores."
+        -
+            - "- DivergenceScope in spec/scope/divergence/index.pi: every file under the code location, codeRoot in piton.config.pi, leaving out what Git ignores ... every .pi file under the spec location, root in piton.config.pi"
+        -
+            - "- GenerateSkillsScope in spec/scope/generate-skills/index.pi: every .pi file under the spec location, root in piton.config.pi, leaving out what Git ignores"
+        -
+            - "- RescopeScope in spec/scope/rescope/index.pi: the spec's .pi files under the spec location, root in piton.config.pi, leaving out what Git ignores"
+        -
+            - "- PaletteScope in spec/scope/palette/index.pi: the spec, at `root` in piton.config.pi; the code, at `codeRoot` in piton.config.pi"
+        -
+            - "- PaletteScope in spec/scope/palette/index.pi: `.git`, and whatever the project's `.gitignore` files ignore, are left out"
+        -
+            - "- ChatInputScope in spec/scope/prompt-mode/chat-input/index.pi: The code location is `codeRoot` and the spec location is `root`, as set in the project's piton.config.pi."
+        -
+            - "- SettingsWindowScope in spec/scope/settings-window/index.pi: the CODE_LOCATION and SPEC_LOCATION placeholders stand for codeRoot and root in piton.config.pi"
+        -
+            - ""
+        -
+            - ""
+        -
+            - "BakedSystemPromptsScope: The Piton prompt files in system-prompts/ that are compiled at build time and built into the application for its own harness runs."
+        -
+            - "- HarnessIntegrationScope in spec/scope/harness-integration/index.pi: - divergence.pi ... - commit-note.pi ... - commit-message.pi ... - file-search.pi"
+        -
+            - "- DivergenceScope in spec/scope/divergence/index.pi: Their prompts are system-prompts/divergence.pi, built into the application (see @{HarnessIntegrationScope})"
+        -
+            - "- GenerateSkillsScope in spec/scope/generate-skills/index.pi: Its prompt is system-prompts/generate-skills.pi, built into the application (see @{HarnessIntegrationScope})"
+        -
+            - "- RescopeScope in spec/scope/rescope/index.pi: Its prompt is system-prompts/rescope.pi, built into the application (see @{HarnessIntegrationScope})"
+        -
+            - "- PaletteScope in spec/scope/palette/index.pi: The search's system prompt, system-prompts/file-search.pi, built into the application (see @{HarnessIntegrationScope})"
+        -
+            - "- GitPanelScope in spec/ui/components/git-panel/index.pi: as system-prompts/commit-note.pi asks"
+        -
+            - "- GitPanelScope in spec/ui/components/git-panel/index.pi: as system-prompts/commit-message.pi asks"
+        -
+            - ""
+        -
+            - ""
+        -
+            - "AnswerDrawerScope: The drawer that slides up over prompt mode to show an open question or the previous answers: its height, resizing, dimming of what's beneath, and the previous-answers exception."
+        -
+            - "- ChatInputScope in spec/scope/prompt-mode/chat-input/index.pi: Only a question open onto its task table, or the previous answers expanded, are a drawer."
+        -
+            - "- ChatInputScope in spec/scope/prompt-mode/chat-input/index.pi: Expanded, the row and the list go into the answer drawer, the list sliding up from on top of any question rows still in the stack"
+        -
+            - "- ChatInputScope in spec/scope/prompt-mode/chat-input/index.pi: Once a question is complete, it opens onto a heading ... in the answer drawer, which it fills"
+        -
+            - "- MessageList in spec/scope/prompt-mode/message-list/index.pi: a dark shade fades in over the message list ... The shade also shows while the previous answers are expanded on the Ask tab: while the answer drawer is open."
+        -
+            - ""
+        -
+            - ""
+        -
+            - "ModeSystemPromptsScope: The system prompt template for each chat mode: defaults baked in from `.suspense/system-prompts`, saved and edited per project, with CODE_LOCATION and SPEC_LOCATION filled in before compiling."
+        -
+            - "- ChatInputScope in spec/scope/prompt-mode/chat-input/index.pi: Each mode's default system prompt is the template saved for it in this application's own repository, in its `.suspense/system-prompts` directory"
+        -
+            - "- SettingsWindowScope in spec/scope/settings-window/index.pi: A prompt is a template: the placeholders CODE_LOCATION and SPEC_LOCATION ... are filled in with codeRoot and root"
+        -
+            - "- SettingsWindowScope in spec/scope/settings-window/index.pi: The defaults, which a reset puts back, are the ones the @{ChatInputScope} gives each tab, baked into the application when it is built."
+        -
+            - "- HarnessIntegrationScope in spec/scope/harness-integration/index.pi: The per-mode system prompt templates are separate: they are saved with each project, in its .suspense/system-prompts"
+        -
+            - ""
+        -
+            - ""
+        -
+            - "PromptSendingScope: Sending a prompt to the harness: queued while the harness is busy unless it is a question, built first, shown as a task, and entered in the history."
+        -
+            - "- ChatInputScope in spec/scope/prompt-mode/chat-input/index.pi: Sending is never blocked by the harness working: while it is, the send button on the Code, Chain, and Spec tabs reads \"Queue\""
+        -
+            - "- PromptEditor in spec/scope/prompt-mode/index.pi: Prompts can still be sent while the harness is working: they wait in a queue ... A question from the Ask tab never queues."
+        -
+            - "- RescopeScope in spec/scope/rescope/index.pi: as if written in the chat input and sent from there: queued if the harness is busy, and shown as a task"
+        -
+            - "- MainWindowScope in spec/scope/application/MainWindow.pi: Its Refactor sends its prompt as if from the chat input's Spec tab."
+        -
+            - ""
+        -
+            - ""
+        -
+            - "OpenFileScope: Opening a project file in the editor from anywhere (file tree, palette, message links, diff view, or go-to-definition), and where it opens."
+        -
+            - "- MainWindowScope in spec/scope/application/MainWindow.pi: A file clicked in the @{FileTreeScope} opens in an @{EditorScope}, in a split beside the chat history"
+        -
+            - "- MainWindowScope in spec/scope/application/MainWindow.pi: Opening the file from the diff closes the panel and opens the file in the split, as clicking it in the @{FileTreeScope} would."
+        -
+            - "- PaletteScope in spec/scope/palette/index.pi: Picking a file opens it in the @{EditorScope}, as clicking it in the @{FileTreeScope} does."
+        -
+            - "- MessageList in spec/scope/prompt-mode/message-list/index.pi: A link to a file opens it in the @{EditorScope} beside the task view"
+        -
+            - "- DiffViewScope in spec/ui/components/diff-view/index.pi: a button that opens the file in the editor instead"
+        -
+            - "- FileTreeScope in spec/ui/components/file-tree/index.pi: Clicking a file opens it. Where it opens is up to whatever holds the tree."
+        -
+            - "- EditorScope in spec/scope/editor/index.pi: A definition in another file opens that file in the editor, at the definition."
+        -
+            - ""
+        -
+            - ""
+        -
+            - "HarnessCatalogScope: The harness's skills, commands, and agents: where they come from, how each is described, and how it is inserted as a `/name` or `@agent` mention."
+        -
+            - "- ChatInputScope in spec/scope/prompt-mode/chat-input/index.pi: Skills and commands are those of the selected \${ProjectDirectoryScope}, of the user, and of the user's enabled plugins"
+        -
+            - "- ChatInputScope in spec/scope/prompt-mode/chat-input/index.pi: Accepting a skill or command inserts `/name `, and accepting an agent inserts `@agent-name `"
+        -
+            - "- PaletteScope in spec/scope/palette/index.pi: The harness's commands, the same ones the @{ChatInputScope} offers after `/`."
+        -
+            - "- PaletteScope in spec/scope/palette/index.pi: Picking one inserts it into the @{ChatInputScope} at the cursor the way accepting it as a mention does, `/name ` for a command or skill and `@agent-name `"
+        -
+            - "- MainWindowScope in spec/scope/application/MainWindow.pi: the application's own commands, and the harness's commands, skills, and agents"
+        -
+            - ""
+        -
+            - ""
+        -
+            - "NoProjectStateScope: How anything that needs an open project behaves without one: its empty-state message, or a disabled command with a tooltip saying to open a project."
+        -
+            - "- FileTreeScope in spec/ui/components/file-tree/index.pi: Until a project is picked it reads \"No project open\"."
+        -
+            - "- PaletteScope in spec/scope/palette/index.pi: Until a project is picked the tab reads \"No project open\"."
+        -
+            - "- PromptEditor in spec/scope/prompt-mode/index.pi: or, while no project is open, \"Open a project to start prompting.\""
+        -
+            - "- SettingsWindowScope in spec/scope/settings-window/index.pi: Without a project open, in place of the prompts it reads \"Open a project to edit its system prompts.\""
+        -
+            - "- ProjectIndicator in spec/ui/components/project-indicator/index.pi: While no project is open, it reads \"No project\", muted"
+        -
+            - "- RibbonSpecTabScope in spec/ui/components/ribbon/spec-tab/index.pi: It is disabled until a project is open, with a tooltip saying to open a project to rescope its spec."
+        -
+            - "- RibbonSpecTabScope in spec/ui/components/ribbon/spec-tab/index.pi: It is disabled until a project is open, with a tooltip saying to open a project to generate skills for it."
+        -
+            - ""
+        -
+            - ""
+        -
+            - "UserPreferencesScope: Settings remembered for the user across launches and projects (dark mode, ribbon collapse, diff layout, recent projects, the last Open Project folder) and what happens when one can't be saved."
+        -
+            - "- MainWindowScope in spec/scope/application/MainWindow.pi: The choice is persistent: it is saved for the user, across all projects, and restored on the next launch."
+        -
+            - "- RibbonApplicationTabScope in spec/ui/components/ribbon/application-tab/index.pi: saves the choice for the user ... A choice that can't be saved shows a notification titled \"Could not save dark mode\""
+        -
+            - "- RibbonScope in spec/ui/components/ribbon/index.pi: Whether it is collapsed is saved for the user and restored on the next launch."
+        -
+            - "- DiffViewScope in spec/ui/components/diff-view/index.pi: The chosen layout is remembered for the user across launches; it starts side by side."
+        -
+            - "- ProjectDirectoryScope in spec/scope/project-directory/index.pi: remembered for the user across launches, in the platform's per-user config directory ... What can't be saved is still remembered for the session."
+        -
+            - "- OpenProjectScope in spec/scope/project/open-project/index.pi: It starts in the folder a project was last opened from with it, remembered for the user across launches"
+        -
+            - ""
+
+    mode: spec
+
+    systemPrompt:
+        -
+            - "We're working on the spec located in ./spec. Don't edit the code located in ./src."

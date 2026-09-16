@@ -1,0 +1,102 @@
+use /lib
+from /ui/components/scrollbar import ScrollbarScope
+
+export scope TaskTableScope:
+    concept: {TaskTableConcept}
+
+concept TaskTableConcept:
+    pitch:
+        The output of one run of the harness, as a table of everything it did,
+        filling in as it does it.
+
+    shape: {TaskTableShape}
+
+shape TaskTableShape:
+    description:
+        A table with Type, Output, and Status columns, with one row per thing
+        the harness did, in order: each piece of reply text, each tool call, and
+        any error. It is the same table wherever a run's output is shown, a
+        task, a question, a previous task or answer, the palette's search for a
+        file, or a run in one of the application's own panels, and each use
+        says where it sits.
+
+    types:
+        Type is a coloured badge with an icon. Reply text is "Reply" and errors
+        are "Error". Tool calls are "Files" for Read, Glob, Grep, LS, and
+        NotebookRead; "Edit" for Edit, MultiEdit, Write, and NotebookEdit;
+        "Command" for Bash, BashOutput, KillShell, and KillBash; "Web" for
+        WebFetch and WebSearch; "Agent" for Task and Agent; and "Tool" for
+        anything else.
+
+    status:
+        A tool call's status is "running", "done", or "failed", and a call still
+        running when the run ends takes the state the run ended in.
+
+    replies:
+        Reply text is rendered as markdown, with no border around it. What
+        subagents do is left out. If nothing streamed but the harness reports a
+        final result, that result is shown as the reply. A finished run with
+        nothing to show reads "No output."
+
+    toolCalls:
+        A tool call's Output cell shows its most telling argument. For Files,
+        Edit, Command, Web, and Agent calls the tool's name is left out, since
+        the badge already says what it is; any other tool's name comes first.
+
+        Any path inside the project directory is shown relative to it, and the
+        project directory itself reads `.`.
+
+        A command is shown whole, as a syntax-highlighted bash block, and a long
+        one is split across lines at `&&`, `||`, `|`, and `;`, one command per
+        line with the chained ones indented. It never splits inside quotes,
+        command substitutions, brackets, comments, or heredocs. Other arguments
+        are shown on a single line.
+
+    streaming:
+        While the run is under way, the table ends in a waiting row for
+        whatever the harness does next. Until a row has something meaningful to
+        show, its Type cell is a skeleton and its Output cell shows the last
+        three lines of the harness's raw JSON output: muted, monospace, JSON
+        syntax-highlighted, and always three lines tall so the row doesn't jump.
+        Before any output has arrived it reads "Waiting for the harness…". As
+        soon as a row's type is known, its badge is real, and as soon as its
+        text or argument arrives, that is shown. While the input of a Files,
+        Edit, Command, Web, or Agent call is still arriving, its Output cell
+        shows only a skeleton.
+
+        A skeleton stands in for a running row only while there is nothing
+        meaningful to show for it. As soon as there is, no skeleton is shown for
+        it at all.
+
+    scrolling:
+        The rows scroll beneath the table's header, which stays at the top,
+        with a @{ScrollbarScope}, usually with its lock to the bottom. Locked,
+        the table follows the run's latest output. Unlocked, it still follows
+        new output while it is already scrolled to the bottom, and stays put
+        once scrolled away from it. Each use says whether its table has the
+        lock, and whether it starts on.
+
+        However long the output grows, drawing it costs no more than drawing
+        the rows in view, so scrolling, animations, and new output stay smooth.
+        While the end of the table is scrolled out of view, raw output that
+        would only change the waiting row redraws nothing.
+
+    collapsedSteps:
+        A use can say its table collapses the steps leading up to the answer,
+        once the run is finished. The steps are every row up to and including
+        the harness's last tool call; the answer is the rows after it. In their
+        place, the table's first row reads "Show 1 step" or "Show N steps",
+        muted, beside a right chevron, with the answer beneath it. A single
+        click on that row expands the steps in place, above the answer, and the
+        row then reads "Hide 1 step" or "Hide N steps" beside a down chevron;
+        clicking it again collapses them. Each table is expanded or collapsed on
+        its own.
+
+        A run with no tool calls, or with nothing after its last one, has
+        nothing to collapse and shows whole. A run still under way shows its
+        latest step as usual.
+
+    legibility:
+        The output from a realtime agent should be readable and meaningful.
+        Make sure the font size is large enough, and that the colours are
+        legible in both light and dark mode.

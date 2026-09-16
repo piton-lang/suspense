@@ -3,7 +3,10 @@ from ./chat-input import ChatInputScope
 from ./message-list import MessageList
 from /ui/components/history-list import HistoryListScope
 from /ui/components/scrollbar import ScrollbarScope
-from /ui/components/git-panel import GitPanelScope
+from /scope/no-project import NoProjectStateScope
+from /scope/project-data import ProjectDataScope
+from /scope/prompt-mode/modes import PromptModesScope
+from /scope/prompt-mode/sending import PromptSendingScope
 
 export scope PromptEditor:
     concept: {PromptEditorConcept}
@@ -30,7 +33,8 @@ shape PromptEditorShape:
         Before any task has been sent, the space shows a hint instead, which
         wraps when the view is narrow. It reads
         "Write a prompt below. Enter adds a line; Ctrl/Cmd+Enter sends it."
-        or, while no project is open, "Open a project to start prompting."
+        or, while no project is open, as the @{NoProjectStateScope} says,
+        "Open a project to start prompting."
 
     chatHistory: @{MessageList}
 
@@ -50,13 +54,9 @@ shape PromptEditorShape:
 
     queue:
         overview:
-            Prompts can still be sent while the harness is working: they wait
-            in a queue, in the order they were sent, and are sent one at a
-            time. While the harness is working, the chat input's send button
-            reads "Queue".
-
-            A question from the Ask tab never queues. It runs straight away,
-            even while the harness is working on a task.
+            The queue holds the tasks sent while the harness is working, as the
+            @{PromptSendingScope} says, in the order they were sent, and sends
+            them one at a time.
 
         placement:
             The queue sits along the bottom of the view, below the output and
@@ -83,49 +83,33 @@ shape PromptEditorShape:
             switched on. Switching it on while the harness is free sends the
             next queued prompt straight away. Whenever the harness is free and
             the queue is not empty, a "Send next" button sends the first queued
-            prompt. A prompt that fails to compile or run does not stop the
-            queue.
+            prompt.
 
         persistence:
-            Queued prompts are saved in the project's `.suspense/queue`
-            directory, each as its hidden anchor's source, imports included,
-            the way prompt history is, and named so they list in the order they
-            were queued. The queue is restored whenever the project is opened;
-            a restored queue waits for "Send next" rather than sending on its
-            own. A queued prompt's file is removed when it is cancelled, or
-            when it is sent, at which point it is saved to the prompt history
-            like any other prompt.
+            Queued prompts are saved with the project's data as they are queued,
+            as the @{ProjectDataScope} says. The queue is restored whenever the
+            project is opened; a restored queue waits for "Send next" rather
+            than sending on its own. A queued prompt's file is removed when it
+            is cancelled, or when it is sent, at which point it is saved to the
+            prompt history like any other prompt.
 
     buildingTheSpec:
-        Before a Code, Chain, or Spec prompt is sent, `piton build` runs in the
-        project, so the compiled spec the harness reads is up to date. It runs
-        when the prompt is actually sent, so a queued prompt builds when its
-        turn comes, not when it is queued. The task shows "Building" until the
-        build is over. A build that fails does not stop the prompt, since the
-        prompt may be the one to fix the spec: the task's output starts with
-        an error saying the build failed, so the compiled spec may be out of
-        date, with what the build reported. A question from the Ask tab is sent
-        without building.
-
-    commitNote:
-        Once a Code, Chain, or Spec task finishes without error, it adds a
-        commit note summarising what it changed to the @{GitPanelScope}.
+        A task builds the spec before it is sent, as the @{PromptModesScope}
+        says, since the task may be the one to fix the spec, its output
+        starting with an error saying the build failed when it does.
 
     history:
-        Every task sent is saved in the project's `.suspense/history` directory
-        as its hidden anchor's source, named by the second it was sent and the
-        anchor's name. Once its run is over, what came of it is saved beside it
-        in a `.json` file of the same name: the compiled userPrompt the harness
-        received, each line the harness printed, and any error. Opening the
-        project brings back every task in order, with its output replayed from
-        that record. A task with no record shows as "Not recorded".
+        Every task sent is saved in the prompt history with the project's data,
+        as the @{ProjectDataScope} says, and its record once its run is over.
+        Opening the project brings back every task in order, with its output
+        replayed from that record. A task with no record shows as
+        "Not recorded".
 
-        Every question asked from the Ask tab is logged the same way, but in
-        the project's `.suspense/asks` directory instead, so it never comes back
-        as a task: its hidden anchor's source, and beside it a `.json` record
-        of what came of it. The record is saved when the run is over, and also
-        when the question is closed or replaced while it runs, with as much as
-        the harness had done. A question that fails before it reaches the
-        harness is logged too, with the error in its record.
+        Every question asked from the Ask tab is logged the same way, but among
+        the questions instead, so it never comes back as a task. The record is
+        saved when the run is over, and also when the question is closed or
+        replaced while it runs, with as much as the harness had done. A question
+        that fails before it reaches the harness is logged too, with the error
+        in its record.
 
     chatInput: @{ChatInputScope}

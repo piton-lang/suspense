@@ -1,0 +1,40 @@
+// The prompts for rescoping a spec: finding concepts it repeats, then asking
+// for them to be refactored into scopes of their own. <specRoot> is filled in
+// with the project's spec location.
+
+export anchor Rescope:
+    intro:
+        We're looking for concepts that the spec located in <specRoot> describes
+        again and again, in different scopes, that would be better as scopes of
+        their own. The spec is written in Piton. Only read files, and don't
+        change anything.
+
+    task:
+        Read the spec files listed below. Find the concepts that several scopes
+        each describe for themselves: the same behaviour, component, rule, or
+        idea, written out more than once rather than referenced from one
+        place. Leave out anything already a scope of its own, and anything
+        described only once. For each concept worth extracting, give the scope
+        it would become a name ending in Scope, say in one sentence what the
+        concept is, say how much extracting it is worth, from 0 to 1, weighing
+        how often it's repeated, how far the repetitions have drifted apart,
+        and how much a single definition would help, and give one sentence on
+        why. List every place the spec describes it, with the file relative to
+        the project, the scope there, and a short excerpt.
+
+    replyFormat:
+        Reply with nothing but JSON, in this form:
+        {"concepts": [{"name": "...", "concept": "...", "worth": 0.0, "why": "...", "places": [{"file": "...", "scope": "...", "excerpt": "..."}]}]}
+
+    files: Spec files
+
+    refactor:
+        Refactor the spec so that each concept below becomes a scope of its
+        own. For each, create the new scope where it fits in the spec,
+        describing the concept once, completely, reconciling any ways its
+        descriptions have drifted apart. Then, in every place listed, replace
+        the description with a reference to the new scope, keeping only what is
+        particular to that place. Keep the spec valid Piton, and check it
+        compiles when you're done.
+
+    concepts: Concepts to extract into scopes

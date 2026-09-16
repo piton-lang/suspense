@@ -1,0 +1,106 @@
+use /lib
+from /ui/components/scrollbar import ScrollbarScope
+
+export scope FsBrowserScope:
+    concept: {FsBrowserConcept}
+
+export concept FsBrowserConcept:
+    pitch:
+        A browser of the file system drawn by the application itself rather
+        than the platform's native dialog, so it looks and behaves the same
+        everywhere and sits inside whatever panel needs it. What it lists, and
+        what it chooses, is up to each kind of browser built on it.
+
+    shape: {FsBrowserShape}
+
+export shape FsBrowserShape:
+    description:
+        A title saying what is being chosen and for what, a bar for getting
+        around, the entries in the current folder, and buttons to choose or
+        cancel along the bottom. It starts in whatever folder it is given, or
+        the user's home folder when that doesn't exist.
+
+    navigation:
+        The bar holds an up button, disabled at the top of the file system, and
+        a home button, each with a tooltip, then the current folder's path as a
+        breadcrumb, where clicking any folder along it goes straight there. At
+        the right end, a "Show hidden" checkbox, off by default, shows the
+        entries whose names start with a dot. Its label is shown in full, never
+        cut off below its baseline.
+
+    entries:
+        The current folder's entries, each a row with an icon and its name: a
+        folder icon for a folder, and a file icon for a file. Folders come
+        first, then files, each sorted by name ignoring case, with a
+        @{ScrollbarScope}. Clicking a row selects it, highlighted; clicking it
+        twice opens it. Clicking a folder twice goes into it. A folder that
+        can't be read says why in place of the list. Going to another folder
+        clears the selection and scrolls back to the top. Which entries are
+        listed is up to each kind of browser.
+
+    newFolder:
+        The bar holds a "New Folder" button with a folder-plus icon, after the
+        home button, whose tooltip says it creates a folder in the current one.
+        Pressing it opens a row at the top of the list, above the entries: a
+        folder icon, a name field with focus, a "Create" button, and a cancel
+        button. <Enter> in the field creates the folder, as does Create; the
+        cancel button, or <Escape> in the field, closes the row without creating
+        anything, and <Escape> there doesn't close whatever the browser sits in.
+        Going to another folder closes the row too.
+
+        The name can't be empty, contain a slash or backslash, be "." or "..",
+        or be the name of something already in the current folder; while it is
+        one of those, once something has been typed, the row says why beneath
+        the field and Create is disabled. A folder that can't be created says
+        why the same way, and the row stays open.
+
+        Once created, the row closes and the new folder is listed in its place
+        among the others, selected and scrolled into view.
+
+    keyboard:
+        overview:
+            The browser can be used entirely from the keyboard, the way a
+            platform's own file dialog can. It takes focus when it opens, on its
+            list, and the selected entry is always scrolled into view. <Tab> and
+            <Shift+Tab> move between its controls: the bar's buttons, the
+            breadcrumb, the checkbox, the list, and the footer's buttons. The
+            keys below work wherever focus is in the browser, except while
+            typing a new folder's name, where the name field has the keys.
+
+        movingTheSelection:
+            <Down> selects the next entry and <Up> the previous one; with
+            nothing selected, <Down> selects the first and <Up> the last.
+            Neither goes past the ends. <Home> selects the first entry and
+            <End> the last. <Page Down> and <Page Up> move ten entries at a
+            time, stopping at the ends.
+
+        typeToSelect:
+            Typing letters, digits, or other characters selects the first entry
+            whose name starts with what has been typed, ignoring case. What is
+            typed builds up while the keys come less than a second apart, and
+            starts afresh after a longer pause. Typing that matches no entry
+            leaves the selection where it is.
+
+        going:
+            <Enter> or <Right> opens the selected entry, as clicking it twice
+            does. <Backspace>, <Left>, or <Alt+Up> (<Cmd+Up> on macOS) goes up
+            to the folder holding the current one, and selects the folder just
+            left, so going in and back out returns to where it was. <Alt+Home>
+            (<Cmd+Shift+H> on macOS) goes to the home folder.
+
+        choosingAndCancelling:
+            <Ctrl+Enter> (<Cmd+Enter> on macOS) chooses, as the Choose button
+            does. <Escape> leaves without choosing, as Cancel does, once there
+            is no new folder row open to close first.
+
+        otherCommands:
+            <Ctrl+H> (<Cmd+Shift+.> on macOS) switches Show hidden, keeping the
+            selected entry selected when it is still listed. <Ctrl+Shift+N>
+            (<Cmd+Shift+N> on macOS) opens the new folder row. Each button's
+            tooltip gives its shortcut.
+
+    choosing:
+        The footer shows what will be chosen, then "Cancel", which leaves
+        without choosing, and a primary "Choose", which chooses it, disabled
+        while there is nothing to choose. What can be chosen is up to each kind
+        of browser.

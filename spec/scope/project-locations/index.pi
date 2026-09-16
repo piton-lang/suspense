@@ -1,0 +1,36 @@
+use /lib
+from /scope/project-directory import ProjectDirectoryScope
+
+export scope ProjectLocationsScope:
+    concept: {ProjectLocationsConcept}
+
+concept ProjectLocationsConcept:
+    pitch:
+        Where in a project its spec and its code are, and which files are
+        counted as being there.
+
+    shape: {ProjectLocationsShape}
+
+shape ProjectLocationsShape:
+    description:
+        A project's locations are set in the piton.config.pi of the
+        @{ProjectDirectoryScope}, each a path relative to the project directory.
+
+    locations:
+        - the spec location is `root`, of its piton-config anchor
+        - the code location is `codeRoot`, of its belay-config framework
+
+    missing:
+        A location missing from the config is left out of whatever would use
+        it, or, where it can't be left out, what needs it says it couldn't be
+        read.
+
+    listingFiles:
+        The files under a folder, whether a location or the whole project
+        directory, are every file at any depth, hidden ones included, leaving
+        out `.git` and whatever the project's `.gitignore` files ignore. They
+        are shown by their path relative to the project, and sorted by it.
+
+        The spec files are the .pi files under the spec location, and the
+        source files are the files under the code location. A use can leave
+        out more, or cap how many it takes.

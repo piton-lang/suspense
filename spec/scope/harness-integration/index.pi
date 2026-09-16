@@ -1,6 +1,9 @@
 use /lib
 from ../project-directory import ProjectDirectoryScope
-from ../settings-window import SettingsWindowScope
+from ./baked-prompts import BakedSystemPromptsScope
+from ./catalog import HarnessCatalogScope
+from ./one-off-run import OneOffAgentRunScope
+from ../prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 
 export scope HarnessIntegrationScope:
     concept: {HarnessIntegrationConcept}
@@ -25,40 +28,24 @@ shape HarnessIntegrationShape:
         harness does is streamed back as it happens.
 
     context:
-        The harness keeps its context between requests instead of starting
-        fresh each time. Tasks share one ongoing conversation, and each task
-        sent carries it on. When the project is opened, tasks carry on the
-        latest conversation in its history. Questions from the Ask tab share a
-        separate conversation of their own, and when the project is opened they
-        carry on the latest conversation among the questions saved with it. A question asked while another is running carries on a copy of
-        that conversation, so questions running at the same time never write
-        over each other. A conversation is only carried on in the project it began in,
-        and if one can't be carried on, the next request starts a new one. Each
-        run applies its own prompt's systemPrompt, even when it carries on a
-        conversation begun in a different mode. The palette's file search
-        always starts fresh.
+        The harness keeps its context between requests instead of starting fresh
+        each time. Tasks share one ongoing conversation, and each task sent
+        carries it on. When the project is opened, tasks carry on the latest
+        conversation in its history. Questions from the Ask tab share a separate
+        conversation of their own, and when the project is opened they carry on
+        the latest conversation among the questions saved with it. A question
+        asked while another is running carries on a copy of that conversation,
+        so questions running at the same time never write over each other. A
+        conversation is only carried on in the project it began in, and if one
+        can't be carried on, the next request starts a new one. Each run applies
+        its own prompt's systemPrompt, even when it carries on a conversation
+        begun in a different mode. The palette's file search always starts
+        fresh.
 
-    bakedPrompts:
-        The prompts the application gives the harness for its own work, rather
-        than a prompt someone writes, are Piton files in the repository's
-        system-prompts folder, one for each:
-        - divergence.pi, for the two agents of a divergence analysis
-        - commit-note.pi, for a finished task's commit note
-        - commit-message.pi, for writing a commit message
-        - file-search.pi, for the palette's search for a file by description
+    bakedPrompts: @{BakedSystemPromptsScope}
 
-        Each is an exported anchor, its text written as prose, one property for
-        each paragraph or piece the application puts together, such as a
-        heading above a list of files. What the application fills in is a
-        name in angle brackets, such as <codeRoot>, so it isn't taken as Piton.
+    oneOffRuns: @{OneOffAgentRunScope}
 
-        They are compiled with `piton compile` when the application is built,
-        and built into it: changing one changes what the next build sends, and
-        a prompt that doesn't compile fails the build, with piton's error. Each
-        build keeps what it compiled in system-prompts/compiled.json, with the
-        source, so the application still builds where `piton` isn't installed,
-        such as on CI, from the prompts as last compiled, saying so.
+    catalog: @{HarnessCatalogScope}
 
-        The per-mode system prompt templates are separate: they are saved with
-        each project, in its .suspense/system-prompts, and edited in the
-        @{SettingsWindowScope}.
+    modeSystemPrompts: @{ModeSystemPromptsScope}

@@ -1,0 +1,46 @@
+use /lib
+from /scope/no-project import NoProjectStateScope
+from /scope/running-activity import RunningActivityScope
+
+export scope SpecBuildScope:
+    concept: {SpecBuildConcept}
+
+concept SpecBuildConcept:
+    pitch:
+        Brings the project's compiled spec up to date, so what the harness
+        reads of the spec is what the spec says now.
+
+    shape: {SpecBuildShape}
+
+shape SpecBuildShape:
+    description:
+        `piton build` runs in the project directory, compiling the spec and
+        writing it out for the agents, the reference folder the harness reads
+        included. A build runs either on its own, from a command, or ahead of
+        other work that relies on the compiled spec.
+
+    onItsOwn:
+        The Build Spec command, and Build in the palette, run a build on their
+        own. They are unavailable while no project is open, as the
+        @{NoProjectStateScope} says, and while such a build is running, when the
+        command shows a spinner and its tooltip says the spec is building. The
+        build is listed among the @{RunningActivityScope} as
+        "Building the spec".
+
+        When the build is over, a notification says how it went. A build that
+        succeeds is titled "Built 1 file" or "Built N files", and lists each
+        file written on a line of its own, never wrapped. A build that fails is
+        titled "Build failed", with what the build reported. When
+        `piton build` can't be run at all, the notification is titled
+        "Could not run piton build", with why.
+
+    aheadOfWork:
+        A build ahead of other work runs when that work actually starts, not
+        when it is asked for, and shows as a step of that work until it is
+        over. It isn't listed among the running activity on its own, since the
+        work it leads is.
+
+        A build that fails, or can't be run, never stops the work that follows,
+        since that work may be what fixes the spec, or can go on with the
+        compiled spec as it was. The work says the build failed, so the compiled
+        spec may be out of date, with what the build reported.

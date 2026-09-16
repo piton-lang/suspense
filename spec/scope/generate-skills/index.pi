@@ -1,0 +1,104 @@
+use /lib
+from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
+from /scope/harness-integration/one-off-run import OneOffAgentRunScope
+from /scope/project-locations import ProjectLocationsScope
+from /ui/components/inset-panel import InsetPanelScope
+from /ui/components/minimizable-panel import MinimizablePanelScope
+from /ui/components/ranked-selection-list import RankedSelectionListScope
+from /ui/components/task-table import TaskTableScope
+
+export scope GenerateSkillsScope:
+    concept: {GenerateSkillsConcept}
+
+concept GenerateSkillsConcept:
+    pitch:
+        Finds which of the spec's scopes are the most connected and the most
+        used, ranks them for the skills that could and should be built for
+        them, and adds the skills chosen to the spec, each building its scope.
+
+    shape: {GenerateSkillsShape}
+
+shape GenerateSkillsShape:
+    description:
+        An @{InsetPanelScope} titled "Generate Skills", with a close button.
+        Opening it maps the spec and ranks its scopes straight away. Unlike a
+        @{MinimizablePanelScope}, it can't be minimized: closing the panel
+        while it runs stops it. Once it is over, a "Rank again" button in the
+        header starts afresh.
+
+    mapping:
+        First, without the harness, the panel maps the spec: every spec file,
+        as the @{ProjectLocationsScope} says. A scope is each scope a file
+        exports, the file it's in, and the path it's imported from, the file's
+        path within the spec location without its .pi, and without a trailing
+        /index. A scope references another each time a file of its own names
+        the other with an at-brace or a dollar-brace reference; references to
+        itself don't count. Each scope is used by the scopes that reference it,
+        and uses those it references, each connection with how many times. A
+        scope already has a skill when a skill in the spec's agent/skills
+        folder builds it: its scope is that scope, or it is named Build, then
+        the scope's name without a trailing Scope, and imports it. A skill that
+        only mentions a scope doesn't count.
+
+    ranking:
+        steps:
+            While it runs, the panel lists its steps, "Mapping the spec" and
+            "Ranking scopes for skills", each with a spinner while it runs, a
+            tick once done, or a cross and why if it failed.
+
+        agent:
+            Then a @{OneOffAgentRunScope} ranks the scopes. Its prompt is
+            generate-skills.pi, of the @{BakedSystemPromptsScope}, with the map
+            of the spec after it: each scope, its file, how many scopes use it
+            and how many it uses, and whether it already has a skill. It
+            replies, for each scope worth a skill, with from 0 to 1 how much a
+            skill for it is worth, whether one should be built rather than only
+            could be, and a sentence on why.
+
+        progress:
+            Beneath the steps, the run's output shows in its
+            @{TaskTableScope}.
+
+        failing:
+            When the run fails, the step says why, and the scopes are still
+            offered, ranked by how connected they are alone, with a note saying
+            the harness couldn't rank them.
+
+    results:
+        list:
+            Once ranked, the panel lists the scopes in a
+            @{RankedSelectionListScope}: those the harness named, most worth a
+            skill first, then any others ranked by how connected they are,
+            those used by the most scopes first, then those using the most.
+            Each row has the scope's name, how much a skill is worth, how many
+            scopes use it and how many it uses, and "Should" or "Could". The
+            scopes it says should have a skill start checked. A scope that
+            already has a skill can't be chosen, and reads "Has a skill".
+
+        details:
+            The selected scope's details are its name, its file, why the
+            harness ranked it as it did, then "Used by" and "Uses", each listing
+            the scopes on that side of its connections, most references first,
+            each with a bar as long as its share of the most references there,
+            and how many. Clicking one of those selects that scope.
+
+        creating:
+            The list's action is "Create Skills", counting scopes. It writes a
+            skill into the spec for each scope checked: a file in the spec's
+            agent/skills folder named Build, then the scope's name without a
+            trailing Scope, then .pi, that imports the scope and exports a
+            skill building it. When the spec has a build-scope keyword, from
+            lib/agent/skills/BuildScope.pi, the skill is a build-scope with the
+            scope as its scope; otherwise it is a skill of its own, whose
+            description and useWhen say it builds or changes the scope, and
+            whose prompt says to build it from the spec, the spec being the
+            source of truth. The skills folder's index.pi exports each new
+            skill, created if it isn't there, and when the agent folder is new,
+            its index.pi exports the skills and the spec's index.pi exports the
+            agent folder. A file already there is never overwritten, and its
+            scope is left out.
+
+            Once written, the rows for the new skills read "Has a skill", and a
+            note says how many were created, and to build the spec for them to
+            be written for the agents. A skill that couldn't be written says
+            why in the note.

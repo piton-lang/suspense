@@ -1,5 +1,6 @@
 use @piton/belay
 
+from /ui/components/project-indicator import ProjectIndicator
 from /ui/components/ribbon import RibbonScope
 from /ui/components/ribbon/project-tab import RibbonProjectTabScope
 from /ui/components/ribbon/code-tab import RibbonCodeTabScope
@@ -23,8 +24,9 @@ export skill ChangeRibbon:
 
     specLayout:
         @{RibbonScope} describes the ribbon as a whole: the order of its tabs,
-        opening several at once, collapsing, the project's name and the activity
-        spinner, and how groups are laid out. What each tab holds, its groups in
+        opening several at once, collapsing, where the project indicator and the
+        activity spinner sit, and how groups are laid out. The indicator itself
+        is a @{ProjectIndicator} of its own. What each tab holds, its groups in
         order and each command's label, icon, tooltip, what it does, when it's
         disabled, and whether it stays in the collapsed ribbon, is described in
         that tab's own scope, in a folder of its own under the ribbon.

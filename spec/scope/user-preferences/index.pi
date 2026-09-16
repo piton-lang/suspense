@@ -1,0 +1,32 @@
+use /lib
+
+export scope UserPreferencesScope:
+    concept: {UserPreferencesConcept}
+
+concept UserPreferencesConcept:
+    pitch:
+        The choices the application remembers for the user, rather than for a
+        project, so each launch starts as the last one left off.
+
+    shape: {UserPreferencesShape}
+
+shape UserPreferencesShape:
+    description:
+        Preferences are remembered for the user across launches and across all
+        projects, in the platform's per-user config directory, never in a
+        project.
+
+    preferences:
+        - light or dark mode, which, until chosen, follows the operating system's appearance
+        - whether the ribbon is collapsed, which starts expanded
+        - the layout of a file's diff, which starts side by side
+        - the recent projects
+        - the folder a project was last opened from
+
+        A preference is saved as soon as it is chosen, and restored on the next
+        launch.
+
+    failing:
+        A preference that can't be saved still holds for the rest of the
+        session. Only dark mode says so, as its command does; the others fail
+        quietly, being only a convenience.

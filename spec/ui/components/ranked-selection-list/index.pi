@@ -1,0 +1,36 @@
+use /lib
+from /ui/components/scrollbar import ScrollbarScope
+
+export scope RankedSelectionListScope:
+    concept: {RankedSelectionListConcept}
+
+concept RankedSelectionListConcept:
+    pitch:
+        Findings ranked by how much they're worth, to look through one at a
+        time, choose from, and act on those chosen.
+
+    shape: {RankedSelectionListShape}
+
+shape RankedSelectionListShape:
+    description:
+        A list of ranked rows, beside it the details of the row selected, and
+        along the bottom how many are checked and what to do with them. Each use
+        names what it ranks and how, what its rows and details add, which rows
+        start checked, and its action.
+
+    rows:
+        The rows are in the order ranked, the most worth first. Each row has a
+        checkbox, the name of what it ranks, and a bar and percentage for how
+        much it is worth, then whatever the use adds. A row that can't be
+        chosen has its checkbox unchecked and disabled, and says why, muted.
+        The list scrolls with a @{ScrollbarScope}. With nothing ranked, the use
+        says why in place of the list.
+
+    details:
+        Clicking a row selects it, and beside the list, the selected row's
+        details show. The row ranked first is selected to start with.
+
+    action:
+        Along the bottom, how many rows are checked, as "No …", "1 …", or
+        "N …" followed by what the use ranks and "checked", and a primary
+        button for the use's action, disabled with none checked.

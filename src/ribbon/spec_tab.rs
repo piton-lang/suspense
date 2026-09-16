@@ -10,8 +10,10 @@ use gpui_kit::*;
 
 use super::{Command, CommandPlace, Ribbon};
 use crate::divergence_view::{AnalyzeDivergence, ViewDivergenceReports};
+use crate::generate_skills_view::GenerateSkills;
 use crate::piton_build;
 use crate::project_directory::ProjectDirectory;
+use crate::rescope_view::Rescope;
 
 pub(super) const COMMANDS: &[CommandPlace] = &[
     CommandPlace {
@@ -27,6 +29,16 @@ pub(super) const COMMANDS: &[CommandPlace] = &[
     CommandPlace {
         command: Command::ViewDivergenceReports,
         group: "Analysis",
+        primary: false,
+    },
+    CommandPlace {
+        command: Command::GenerateSkills,
+        group: "Skills",
+        primary: false,
+    },
+    CommandPlace {
+        command: Command::Rescope,
+        group: "Refactor",
         primary: false,
     },
 ];
@@ -73,6 +85,46 @@ pub(super) fn view_divergence_reports(
     .disabled(project.is_none())
     .on_click(|_, window, cx| window.dispatch_action(Box::new(ViewDivergenceReports), cx))
     .into_any_element()
+}
+
+/// Generate Skills: opens the Generate Skills panel, which ranks the spec's
+/// scopes for the skills worth building.
+pub(super) fn generate_skills(
+    button: impl Fn(&'static str, IconName, SharedString) -> Button,
+    cx: &mut Context<Ribbon>,
+) -> AnyElement {
+    let project = ProjectDirectory::get(cx);
+    button(
+        "generate-skills",
+        IconName::Sparkles,
+        "Generate Skills".into(),
+    )
+    .tooltip(if project.is_none() {
+        "Open a project to generate skills for it"
+    } else {
+        "Find which scopes skills should be built for"
+    })
+    .disabled(project.is_none())
+    .on_click(|_, window, cx| window.dispatch_action(Box::new(GenerateSkills), cx))
+    .into_any_element()
+}
+
+/// Rescope: opens the Rescope panel, which looks for concepts the spec repeats
+/// that could be scopes of their own, or brings back a minimized one.
+pub(super) fn rescope(
+    button: impl Fn(&'static str, IconName, SharedString) -> Button,
+    cx: &mut Context<Ribbon>,
+) -> AnyElement {
+    let project = ProjectDirectory::get(cx);
+    button("rescope", IconName::Shapes, "Rescope".into())
+        .tooltip(if project.is_none() {
+            "Open a project to rescope its spec"
+        } else {
+            "Find concepts the spec repeats that could be scopes of their own"
+        })
+        .disabled(project.is_none())
+        .on_click(|_, window, cx| window.dispatch_action(Box::new(Rescope), cx))
+        .into_any_element()
 }
 
 /// Build Spec: disabled rather than hidden until it can run, so it is always
