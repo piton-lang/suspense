@@ -640,16 +640,18 @@ impl Render for ChatInput {
             .relative()
             .child(full_tab(ASK_TAB))
             .child(tab_tint(ASK_TAB));
-        // What the selected tab is for, in the rest of the bar.
+        // What the selected tab is for, in the rest of the bar: smaller and
+        // fainter than the tab labels, so it reads as a note about the tab
+        // rather than another tab.
         let help = gpui_kit::TestSupportExt::test_support(
             div()
                 .id("tab-help")
                 .flex_1()
                 .min_w_0()
-                .px_3()
+                .px_4()
                 .truncate()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
+                .text_xs()
+                .text_color(cx.theme().muted_foreground.opacity(0.7))
                 .child(TABS[selected].help()),
         );
         let tabs = gpui_kit::TestSupportExt::test_support(

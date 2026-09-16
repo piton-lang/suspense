@@ -3,6 +3,7 @@ from ./chat-input import ChatInputScope
 from ./message-list import MessageList
 from /ui/components/history-list import HistoryListScope
 from /ui/components/scroll-column import ScrollColumnScope
+from /ui/components/git-panel import GitPanelScope
 
 export scope PromptEditor:
     concept: {PromptEditorConcept}
@@ -103,6 +104,10 @@ shape PromptEditorShape:
         an error saying the build failed, so the compiled spec may be out of
         date, with what the build reported. A question from the Ask tab is sent
         without building.
+
+    commitNote:
+        Once a Code, Chain, or Spec task finishes without error, it adds a
+        commit note summarising what it changed to the @{GitPanelScope}.
 
     history:
         Every task sent is saved in the project's `.suspense/history` directory

@@ -6,9 +6,10 @@
 //!
 //! Following the usual ribbon conventions: main commands are large icons
 //! above their labels, tooltips explain rather than repeat the label and give
-//! any shortcut, a command that can't run is disabled rather than hidden, and
-//! the ribbon collapses by double-clicking a tab, its chevron, or Ctrl/Cmd+F1,
-//! which is remembered across launches. Collapsed, the tabs go too, and the
+//! any shortcut, a command that can't run is disabled rather than hidden,
+//! groups are titled down their left edge, and the ribbon collapses by
+//! double-clicking a tab, its chevron, or Ctrl/Cmd+F1, which is remembered
+//! across launches. Collapsed, the tabs go too, and the
 //! commands marked primary (for now, all of them) sit small in a single row.
 
 use gpui_kit::assets::IconName;
@@ -29,6 +30,13 @@ actions!(suspense, [ToggleRibbon]);
 
 /// The height of the commands beneath the tabs.
 const RIBBON_BODY_HEIGHT: Pixels = px(76.);
+
+/// The width of the strip down a group's left edge that holds its title,
+/// leaving room either side of the title.
+const GROUP_TITLE_WIDTH: Pixels = px(28.);
+
+/// The size of a group's title.
+const GROUP_TITLE_SIZE: f32 = 12.;
 
 /// Ctrl+F1 (Cmd+F1 on macOS) collapses or expands the ribbon, as in Office.
 pub fn bind_keys(cx: &mut App) {
@@ -320,7 +328,7 @@ impl Render for Ribbon {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
         let (border, muted) = (theme.border, theme.muted_foreground);
-        let divider = move || div().w_px().my_2().bg(border).into_any_element();
+        let (title_background, font) = (theme.muted, theme.font_family.clone());
 
         let collapse = Button::new("ribbon-collapse")
             .ghost()
@@ -413,11 +421,9 @@ impl Render for Ribbon {
                     .into_any_element(),
             );
         }
-        for (ix, (label, commands)) in groups.into_iter().enumerate() {
-            if ix > 0 {
-                row.push(divider());
-            }
-            row.push(group(label, commands, muted));
+        // No dividers: each group's title strip marks where it starts.
+        for (label, commands) in groups {
+            row.push(group(label, commands, muted, title_background, &font));
         }
 
         // Lets UI tests find the tabs and the commands; inert in normal builds.
@@ -431,8 +437,8 @@ impl Render for Ribbon {
                     .flex()
                     .flex_row()
                     .items_stretch()
-                    .gap_2()
-                    .px_2()
+                    .gap_3()
+                    .pr_2()
                     // Every tab is as tall, so the window beneath doesn't jump
                     // when switching tabs.
                     .h(RIBBON_BODY_HEIGHT)
@@ -441,22 +447,69 @@ impl Render for Ribbon {
     }
 }
 
-/// A group of related commands, labelled along its bottom.
-fn group(label: &'static str, commands: Vec<AnyElement>, muted: Hsla) -> AnyElement {
-    v_flex()
-        .id(label)
+/// A group of related commands, titled along its left edge, reading bottom to
+/// top, on a strip of its own.
+fn group(
+    label: &'static str,
+    commands: Vec<AnyElement>,
+    muted: Hsla,
+    title_background: Hsla,
+    font: &str,
+) -> AnyElement {
+    // Lets UI tests find the group; inert in normal builds.
+    gpui_kit::TestSupportExt::test_support(h_flex().id(label))
         .h_full()
-        .px_1()
-        .child(h_flex().flex_1().items_center().gap_2().children(commands))
+        .gap_2()
         .child(
             div()
-                .pb_1()
-                .text_xs()
-                .text_center()
-                .text_color(muted)
-                .child(label),
+                .relative()
+                .flex_none()
+                .h_full()
+                .w(GROUP_TITLE_WIDTH)
+                .bg(title_background)
+                .child(group_title(label, muted, font)),
         )
+        .child(h_flex().flex_1().items_center().gap_2().children(commands))
         .into_any_element()
+}
+
+/// A group's title, turned -90deg. gpui can only turn an SVG, so the title is
+/// drawn as SVG text: laid out across a box as long as the strip is tall, then
+/// turned about its centre, which is the strip's centre.
+fn group_title(label: &str, color: Hsla, font: &str) -> impl IntoElement {
+    let (long, short) = (RIBBON_BODY_HEIGHT, GROUP_TITLE_WIDTH);
+    let escape = |text: &str| {
+        text.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+    };
+    let source = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}"><text x="{x}" y="{y}" font-family="{font}" font-size="{GROUP_TITLE_SIZE}" text-anchor="middle" dominant-baseline="central" fill="black">{label}</text></svg>"#,
+        w = f32::from(long),
+        h = f32::from(short),
+        x = f32::from(long) / 2.,
+        y = f32::from(short) / 2.,
+        // The SVG renderer doesn't know gpui's own names, like
+        // ".SystemUIFont", so those take the usual sans serif.
+        font = if font.starts_with('.') {
+            "sans-serif".to_string()
+        } else {
+            format!("'{}', sans-serif", escape(font))
+        },
+        label = escape(label),
+    );
+    svg()
+        .data(source.as_bytes())
+        .absolute()
+        .top((long - short) / 2.)
+        .left((short - long) / 2.)
+        .w(long)
+        .h(short)
+        .text_color(color)
+        .with_transformation(Transformation::rotate(radians(
+            -std::f32::consts::FRAC_PI_2,
+        )))
 }
 
 /// Switches between light and dark mode, saving the choice.

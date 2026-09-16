@@ -12,7 +12,7 @@ use std::time::Duration;
 use anyhow::{Context as _, Result, anyhow, bail};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::input::{Editor, EditorState, InputEvent};
+use gpui_kit::component::input::{Editor, EditorState, Input, InputEvent, InputState};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::{
     ActiveTheme as _, ColorName, Disableable as _, Icon, Sizable as _, StyledExt as _,
@@ -21,6 +21,7 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
+use crate::commit_notes::{self, Note, NotesVersion};
 use crate::project_directory::ProjectDirectory;
 
 /// How often the summary is read again.
@@ -183,9 +184,25 @@ fn git(dir: &Path, args: &[&str]) -> Result<Vec<u8>> {
     Ok(output.stdout)
 }
 
-/// Commits every change, new files included, with `message`.
+/// Commits every change in the repository, new files included, with
+/// `message`. The commit notes' own file is left out, since the notes go into
+/// the message.
 pub fn commit(dir: &Path, message: &str) -> Result<()> {
-    git(dir, &["add", "--all"])?;
+    let notes = commit_notes::file(Path::new("."));
+    let exclude = format!(":(exclude){}", notes.display());
+    let mut add = vec!["add", "--all", "--", ":/"];
+    // Where the project already ignores the file, it is left out anyway, and
+    // naming an ignored file at all, even to exclude it, makes `git add` fail.
+    let ignored = Command::new("git")
+        .args(["check-ignore", "--quiet", "--"])
+        .arg(&notes)
+        .current_dir(dir)
+        .status()
+        .is_ok_and(|status| status.success());
+    if !ignored {
+        add.push(&exclude);
+    }
+    git(dir, &add)?;
     git(dir, &["commit", "--quiet", "--message", message])?;
     Ok(())
 }
@@ -203,10 +220,84 @@ pub fn push(dir: &Path, has_upstream: bool) -> Result<()> {
     Ok(())
 }
 
-/// Pulls, only fast-forwarding, so a pull never starts a merge.
-pub fn pull(dir: &Path) -> Result<()> {
-    git(dir, &["pull", "--quiet", "--ff-only"])?;
-    Ok(())
+/// What a pull did.
+#[derive(Debug, PartialEq)]
+pub enum Pulled {
+    /// There was nothing new.
+    UpToDate,
+    /// The branch moved up to its upstream.
+    FastForwarded,
+    /// The branch and its upstream had both moved on, and were merged.
+    Merged,
+}
+
+/// Pulls the branch's upstream, merging it if it can be merged without
+/// conflicts. If it would conflict, nothing is changed: the pull is cancelled
+/// with the conflicting files named, and the repository is never left
+/// mid-merge.
+pub fn pull(dir: &Path) -> Result<Pulled> {
+    git(dir, &["fetch", "--quiet"])?;
+    let behind = |range: &str| -> Result<usize> {
+        Ok(
+            String::from_utf8_lossy(&git(dir, &["rev-list", "--count", range])?)
+                .trim()
+                .parse()
+                .unwrap_or(0),
+        )
+    };
+    if behind("HEAD..@{upstream}")? == 0 {
+        return Ok(Pulled::UpToDate);
+    }
+    if behind("@{upstream}..HEAD")? == 0 {
+        git(dir, &["merge", "--quiet", "--ff-only", "@{upstream}"])?;
+        return Ok(Pulled::FastForwarded);
+    }
+
+    // Tried out first without touching the working tree or the index, so a
+    // merge that would conflict is never started.
+    let trial = Command::new("git")
+        .args([
+            "merge-tree",
+            "--write-tree",
+            "--name-only",
+            "HEAD",
+            "@{upstream}",
+        ])
+        .current_dir(dir)
+        .output()
+        .context("could not run git")?;
+    match trial.status.code() {
+        Some(0) => {}
+        Some(1) => {
+            // The tree, then the conflicting files, then a blank line and
+            // messages.
+            let output = String::from_utf8_lossy(&trial.stdout);
+            let files: Vec<&str> = output
+                .lines()
+                .skip(1)
+                .take_while(|line| !line.is_empty())
+                .collect();
+            bail!(
+                "Pulling would conflict in {}, so nothing was changed.",
+                if files.is_empty() {
+                    "some files".to_string()
+                } else {
+                    files.join(", ")
+                }
+            );
+        }
+        _ => bail!("{}", String::from_utf8_lossy(&trial.stderr).trim()),
+    }
+
+    if let Err(err) = git(dir, &["merge", "--quiet", "--no-edit", "@{upstream}"]) {
+        // Should the merge stop partway anyway, it is undone.
+        if git(dir, &["rev-parse", "--quiet", "--verify", "MERGE_HEAD"]).is_ok() {
+            git(dir, &["merge", "--abort"]).ok();
+            bail!("The merge couldn't be finished, so it was cancelled: {err:#}");
+        }
+        return Err(err);
+    }
+    Ok(Pulled::Merged)
 }
 
 /// What the harness is handed to write a commit message: the kinds of change,
@@ -281,11 +372,20 @@ enum Busy {
     Generate,
 }
 
+/// A commit note, as its row's input.
+struct NoteRow {
+    id: u64,
+    input: Entity<InputState>,
+    _subscription: Subscription,
+}
+
 pub struct GitPanel {
     root: Option<PathBuf>,
     /// `None` outside a git repository, where the panel isn't shown.
     summary: Option<Summary>,
     message: Entity<EditorState>,
+    /// The commit notes, as rows that can be edited, in order.
+    notes: Vec<NoteRow>,
     busy: Option<Busy>,
     _refresh: Task<()>,
     _subscriptions: Vec<Subscription>,
@@ -301,7 +401,14 @@ impl GitPanel {
                 .placeholder("Commit message")
         });
         let subscriptions = vec![
-            cx.observe_global::<ProjectDirectory>(|this, cx| this.open(cx)),
+            cx.observe_global_in::<ProjectDirectory>(window, |this, window, cx| {
+                this.open(cx);
+                this.load_notes(window, cx);
+            }),
+            // A task that finished has written a note.
+            cx.observe_global_in::<NotesVersion>(window, |this, window, cx| {
+                this.load_notes(window, cx)
+            }),
             // The commit button follows whether there is a message.
             cx.subscribe(&message, |_, _, _: &InputEvent, cx| cx.notify()),
         ];
@@ -309,12 +416,78 @@ impl GitPanel {
             root: None,
             summary: None,
             message,
+            notes: Vec::new(),
             busy: None,
             _refresh: Task::ready(()),
             _subscriptions: subscriptions,
         };
         this.open(cx);
+        this.load_notes(window, cx);
         this
+    }
+
+    /// Shows the project's commit notes, keeping the rows of those already
+    /// shown, so an edit under way isn't disturbed.
+    fn load_notes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let notes = self
+            .root
+            .as_deref()
+            .map(commit_notes::load)
+            .unwrap_or_default();
+        let mut rows = std::mem::take(&mut self.notes);
+        self.notes = notes
+            .into_iter()
+            .map(|note| match rows.iter().position(|row| row.id == note.id) {
+                Some(ix) => {
+                    let row = rows.remove(ix);
+                    let focused = row.input.read(cx).focus_handle(cx).is_focused(window);
+                    if !focused && row.input.read(cx).value().as_ref() != note.text {
+                        row.input
+                            .update(cx, |input, cx| input.set_value(note.text, window, cx));
+                    }
+                    row
+                }
+                None => self.note_row(note, window, cx),
+            })
+            .collect();
+        cx.notify();
+    }
+
+    fn note_row(&mut self, note: Note, window: &mut Window, cx: &mut Context<Self>) -> NoteRow {
+        let id = note.id;
+        let input = cx.new(|cx| InputState::new(window, cx).default_value(note.text));
+        // Saved as it is edited.
+        let subscription = cx.subscribe(&input, move |this, input, event: &InputEvent, cx| {
+            if matches!(event, InputEvent::Change)
+                && let Some(root) = &this.root
+            {
+                commit_notes::edit(root, id, &input.read(cx).value()).ok();
+                cx.notify();
+            }
+        });
+        NoteRow {
+            id,
+            input,
+            _subscription: subscription,
+        }
+    }
+
+    /// The notes as they read now, edits included.
+    fn current_notes(&self, cx: &App) -> Vec<Note> {
+        self.notes
+            .iter()
+            .map(|row| Note {
+                id: row.id,
+                text: row.input.read(cx).value().to_string(),
+            })
+            .collect()
+    }
+
+    fn remove_note(&mut self, id: u64, cx: &mut Context<Self>) {
+        if let Some(root) = &self.root {
+            commit_notes::remove(root, id).ok();
+            commit_notes::changed(cx);
+        }
     }
 
     #[cfg(test)]
@@ -422,8 +595,10 @@ impl GitPanel {
         .detach();
     }
 
+    /// Commits with the message typed and the commit notes beneath it.
     pub fn commit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let message = self.message.read(cx).value().trim().to_string();
+        let message =
+            commit_notes::message(&self.message.read(cx).value(), &self.current_notes(cx));
         if message.is_empty() {
             return;
         }
@@ -433,6 +608,11 @@ impl GitPanel {
             |this, (), window, cx| {
                 this.message
                     .update(cx, |editor, cx| editor.set_value("", window, cx));
+                // The notes went into the commit.
+                if let Some(root) = &this.root {
+                    commit_notes::save(root, &[]).ok();
+                }
+                commit_notes::changed(cx);
                 window.push_notification(Notification::success("Committed"), cx);
             },
             window,
@@ -458,7 +638,14 @@ impl GitPanel {
         self.run(
             Busy::Pull,
             pull,
-            |_, (), window, cx| window.push_notification(Notification::success("Pulled"), cx),
+            |_, pulled, window, cx| {
+                let message = match pulled {
+                    Pulled::UpToDate => "Already up to date",
+                    Pulled::FastForwarded => "Pulled",
+                    Pulled::Merged => "Pulled and merged",
+                };
+                window.push_notification(Notification::success(message), cx)
+            },
             window,
             cx,
         );
@@ -493,7 +680,9 @@ impl Render for GitPanel {
         let theme = cx.theme();
         let (border, muted) = (theme.border, theme.muted_foreground);
         let busy = self.busy;
-        let has_message = !self.message.read(cx).value().trim().is_empty();
+        let has_message =
+            !commit_notes::message(&self.message.read(cx).value(), &self.current_notes(cx))
+                .is_empty();
 
         let branch = h_flex()
             .flex_1()
@@ -522,7 +711,7 @@ impl Render for GitPanel {
             .ghost()
             .xsmall()
             .icon(IconName::CloudDownload)
-            .tooltip("Pull, fast-forwarding only")
+            .tooltip("Pull, merging if there are no conflicts")
             .loading(busy == Some(Busy::Pull))
             .disabled(busy.is_some() || !summary.has_upstream)
             .on_click(cx.listener(|this, _, window, cx| this.pull(window, cx)));
@@ -574,7 +763,7 @@ impl Render for GitPanel {
             .xsmall()
             .icon(IconName::GitCommitHorizontal)
             .label("Commit")
-            .tooltip("Commit every change, new files included")
+            .tooltip("Commit every change, new files included, with the message and notes")
             .loading(busy == Some(Busy::Commit))
             .disabled(busy.is_some() || !has_message || !summary.has_changes())
             .on_click(cx.listener(|this, _, window, cx| this.commit(window, cx)));
@@ -603,6 +792,27 @@ impl Render for GitPanel {
                     .child(div().min_w_0().text_color(muted).child(counts))
                     .children(lines),
             )
+            .children(self.notes.iter().map(|row| {
+                let id = row.id;
+                h_flex()
+                    .id(("commit-note", id as usize))
+                    .gap_1()
+                    .items_center()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(Input::new(&row.input).xsmall()),
+                    )
+                    .child(
+                        Button::new(("remove-commit-note", id as usize))
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::X)
+                            .tooltip("Remove this note")
+                            .on_click(cx.listener(move |this, _, _, cx| this.remove_note(id, cx))),
+                    )
+            }))
             .child(Editor::new(&self.message).h(MESSAGE_HEIGHT))
             .child(
                 h_flex()
@@ -804,5 +1014,212 @@ mod tests {
         let message = super::generate_message(Path::new(env!("CARGO_MANIFEST_DIR"))).unwrap();
         println!("{:?}\n{message}", started.elapsed());
         assert!(message.lines().next().unwrap().chars().count() <= 100);
+    }
+
+    /// A remote, and two clones of it, `mine` and `theirs`, each able to
+    /// commit, in a fresh temporary directory named after `name`.
+    fn clones(name: &str) -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
+        let base =
+            std::env::temp_dir().join(format!("suspense-pull-{name}-{}", std::process::id()));
+        std::fs::remove_dir_all(&base).ok();
+        let (remote, mine, theirs) = (
+            base.join("remote.git"),
+            base.join("mine"),
+            base.join("theirs"),
+        );
+        std::fs::create_dir_all(&remote).unwrap();
+        git(&remote, &["init", "--bare", "-q", "-b", "main"]);
+        for clone in [&mine, &theirs] {
+            git(
+                &base,
+                &[
+                    "clone",
+                    "-q",
+                    remote.to_str().unwrap(),
+                    clone.to_str().unwrap(),
+                ],
+            );
+            git(clone, &["config", "user.name", "Test"]);
+            git(clone, &["config", "user.email", "test@example.com"]);
+        }
+        std::fs::write(mine.join("shared.txt"), "one\ntwo\nthree\n").unwrap();
+        git(&mine, &["add", "."]);
+        git(&mine, &["commit", "-q", "-m", "first"]);
+        git(&mine, &["push", "-q", "-u", "origin", "main"]);
+        git(&theirs, &["pull", "-q", "origin", "main"]);
+        git(&theirs, &["branch", "-q", "--set-upstream-to=origin/main"]);
+        (base, mine, theirs)
+    }
+
+    /// Nothing new pulls as up to date, and only new commits fast-forward.
+    #[test]
+    fn pull_fast_forwards() {
+        let (base, mine, theirs) = clones("forward");
+        assert_eq!(super::pull(&theirs).unwrap(), super::Pulled::UpToDate);
+        std::fs::write(mine.join("new.txt"), "new\n").unwrap();
+        git(&mine, &["add", "."]);
+        git(&mine, &["commit", "-q", "-m", "new"]);
+        git(&mine, &["push", "-q"]);
+        assert_eq!(super::pull(&theirs).unwrap(), super::Pulled::FastForwarded);
+        assert!(theirs.join("new.txt").exists());
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// When both sides moved on without touching the same lines, pulling
+    /// merges them.
+    #[test]
+    fn pull_merges_without_conflicts() {
+        let (base, mine, theirs) = clones("merge");
+        std::fs::write(mine.join("shared.txt"), "ONE\ntwo\nthree\n").unwrap();
+        git(&mine, &["commit", "-q", "-am", "mine"]);
+        git(&mine, &["push", "-q"]);
+        std::fs::write(theirs.join("other.txt"), "theirs\n").unwrap();
+        git(&theirs, &["add", "."]);
+        git(&theirs, &["commit", "-q", "-m", "theirs"]);
+
+        assert_eq!(super::pull(&theirs).unwrap(), super::Pulled::Merged);
+        assert_eq!(
+            std::fs::read_to_string(theirs.join("shared.txt")).unwrap(),
+            "ONE\ntwo\nthree\n"
+        );
+        assert!(theirs.join("other.txt").exists());
+        assert_eq!(git(&theirs, &["status", "--porcelain"]), "");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// When the merge would conflict, the pull is cancelled with nothing
+    /// changed: the same commit, the same files, and no merge in progress.
+    #[test]
+    fn pull_cancels_instead_of_conflicting() {
+        let (base, mine, theirs) = clones("conflict");
+        std::fs::write(mine.join("shared.txt"), "one\nmine\nthree\n").unwrap();
+        git(&mine, &["commit", "-q", "-am", "mine"]);
+        git(&mine, &["push", "-q"]);
+        std::fs::write(theirs.join("shared.txt"), "one\ntheirs\nthree\n").unwrap();
+        git(&theirs, &["commit", "-q", "-am", "theirs"]);
+        let head = git(&theirs, &["rev-parse", "HEAD"]);
+
+        let err = super::pull(&theirs).unwrap_err().to_string();
+        assert!(err.contains("shared.txt"), "{err}");
+        assert_eq!(git(&theirs, &["rev-parse", "HEAD"]), head);
+        assert_eq!(git(&theirs, &["status", "--porcelain"]), "");
+        assert!(
+            !theirs.join(".git/MERGE_HEAD").exists(),
+            "a merge was left in progress"
+        );
+        assert_eq!(
+            std::fs::read_to_string(theirs.join("shared.txt")).unwrap(),
+            "one\ntheirs\nthree\n"
+        );
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// Everything is committed but the notes' own file, whether or not the
+    /// project ignores it.
+    #[test]
+    fn commits_leave_out_the_notes_file_even_when_it_is_ignored() {
+        for ignored in [false, true] {
+            let dir = std::env::temp_dir().join(format!(
+                "suspense-commit-ignored-{ignored}-{}",
+                std::process::id()
+            ));
+            std::fs::remove_dir_all(&dir).ok();
+            std::fs::create_dir_all(&dir).unwrap();
+            git(&dir, &["init", "-q", "-b", "main"]);
+            git(&dir, &["config", "user.name", "Test"]);
+            git(&dir, &["config", "user.email", "test@example.com"]);
+            if ignored {
+                std::fs::write(dir.join(".gitignore"), "/.suspense/commit-notes.json\n").unwrap();
+            }
+            std::fs::write(dir.join("readme.md"), "hello\n").unwrap();
+            crate::commit_notes::add(&dir, "Add the readme").unwrap();
+
+            super::commit(&dir, "First")
+                .unwrap_or_else(|err| panic!("ignored {ignored}: could not commit: {err:#}"));
+            let files = git(&dir, &["show", "--name-only", "--format=", "HEAD"]);
+            assert!(files.contains("readme.md"), "ignored {ignored}: {files}");
+            assert!(
+                !files.contains("commit-notes"),
+                "ignored {ignored}: {files}"
+            );
+            std::fs::remove_dir_all(&dir).ok();
+        }
+    }
+
+    /// Commit notes saved with the project show as rows that can be removed,
+    /// go into the commit beneath the message, and are cleared once
+    /// committed.
+    #[gpui_kit::test]
+    async fn commit_notes_go_into_the_commit(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-panel-notes-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).unwrap();
+        git(&dir, &["init", "-q", "-b", "main"]);
+        git(&dir, &["config", "user.name", "Test"]);
+        git(&dir, &["config", "user.email", "test@example.com"]);
+        std::fs::write(dir.join("readme.md"), "hello\n").unwrap();
+        git(&dir, &["add", "."]);
+        git(&dir, &["commit", "-q", "-m", "first"]);
+        std::fs::write(dir.join("readme.md"), "hello again\n").unwrap();
+        for note in ["Add the ribbon", "Drop this one", "Fix scrolling"] {
+            crate::commit_notes::add(&dir, note).unwrap();
+        }
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            ProjectDirectory::set(dir.clone(), cx);
+        });
+        let mut panel = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| GitPanel::new(window, cx));
+            panel = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let panel = panel.unwrap();
+        let handle = window.into();
+        cx.wait_for(handle, Duration::from_secs(5), |window, _| {
+            window.try_find(("remove-commit-note", 2usize)).is_some()
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("remove-commit-note", 2usize), cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(panel.read_with(cx, |panel, _| panel.notes.len()), 2);
+
+        cx.update_window(handle, |_, window, cx| {
+            panel.update(cx, |panel, cx| {
+                panel.set_message("Tidy the UI", window, cx);
+                panel.commit(window, cx);
+            });
+        })
+        .unwrap();
+        let start = std::time::Instant::now();
+        while !git(&dir, &["log", "-1", "--format=%s"]).contains("Tidy the UI") {
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "nothing was committed"
+            );
+            cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        cx.run_until_parked();
+        assert_eq!(
+            git(&dir, &["log", "-1", "--format=%B"]).trim(),
+            "Tidy the UI\n\n- Add the ribbon\n- Fix scrolling"
+        );
+        assert!(
+            crate::commit_notes::load(&dir).is_empty(),
+            "the notes were not cleared"
+        );
+        assert!(
+            !git(&dir, &["show", "--name-only", "--format=", "HEAD"]).contains("commit-notes"),
+            "the notes' own file was committed"
+        );
+        assert!(panel.read_with(cx, |panel, _| panel.notes.is_empty()));
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

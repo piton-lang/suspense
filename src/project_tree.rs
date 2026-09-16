@@ -10,15 +10,16 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use gpui_kit::assets::IconName;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::list::ListItem;
-use gpui_kit::component::tree::{TreeEntry, TreeEvent, TreeItem, TreeState, tree};
+use gpui_kit::component::tree::{TreeEntry, TreeEvent, TreeItem, TreeState};
 use gpui_kit::component::{ActiveTheme, Icon, Sizable, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use notify::event::ModifyKind;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as _};
 
-use crate::git_status::GitStatus;
+use crate::git_status::{GitStatus, Status};
 use crate::project_directory::ProjectDirectory;
 
 /// Names never listed.
@@ -49,6 +50,9 @@ type Listing = Result<Vec<DirEntry>, SharedString>;
 /// Emitted when a file in the tree is clicked.
 pub struct OpenFile(pub PathBuf);
 
+/// Emitted when a changed file's diff button is clicked.
+pub struct OpenDiff(pub PathBuf);
+
 pub struct ProjectTree {
     root: Option<PathBuf>,
     /// Every folder read so far, keyed by path.
@@ -69,6 +73,7 @@ pub struct ProjectTree {
 }
 
 impl EventEmitter<OpenFile> for ProjectTree {}
+impl EventEmitter<OpenDiff> for ProjectTree {}
 
 impl ProjectTree {
     pub fn new(cx: &mut Context<Self>) -> Self {
@@ -382,6 +387,7 @@ fn render_entry(
     };
     let row = h_flex()
         .id((id, ix))
+        .w_full()
         .gap_1()
         .min_w_0()
         .child(div().flex_none().size_4().children(chevron.map(icon)))
@@ -396,6 +402,35 @@ fn render_entry(
                     label.text_color(color)
                 })
                 .child(entry.item().label.clone()),
+        )
+        // A new or changed file has a button beside it that opens its diff.
+        .when(
+            !entry.is_folder()
+                && matches!(
+                    status,
+                    Some(Status::Added | Status::Modified | Status::Untracked)
+                ),
+            |row| {
+                let tree = tree.clone();
+                let path = PathBuf::from(entry.item().id.as_ref());
+                row.child(div().flex_1()).child(
+                    div()
+                        .flex_none()
+                        // Not also a click on the row, which opens the file.
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .child(
+                            Button::new(("project-diff", ix))
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::FileDiff)
+                                .tooltip("Show the changes")
+                                .on_click(move |_, _, cx| {
+                                    tree.update(cx, |_, cx| cx.emit(OpenDiff(path.clone())))
+                                        .ok();
+                                }),
+                        ),
+                )
+            },
         )
         // Folders expand in the tree itself; a file is opened elsewhere.
         .when(!entry.is_folder() && !entry.is_disabled(), |row| {
@@ -431,9 +466,21 @@ impl Render for ProjectTree {
                 let tree = div()
                     .size_full()
                     .py_1()
-                    .child(tree(&self.tree, move |ix, entry, _, _, cx| {
-                        render_entry(&this, ix, entry, cx)
-                    }));
+                    // The base tree rather than gpui-kit's, which lays its own
+                    // scrollbar over the rows: the scroll column is the only
+                    // scrollbar.
+                    .child(
+                        gpui_kit::base::Tree::new(&self.tree)
+                            .item(move |ix, entry, entry_state, _, cx| {
+                                render_entry(&this, ix, entry, cx)
+                                    .disabled(entry.is_disabled())
+                                    .selected(entry_state.is_selected())
+                                    .into_any_element()
+                            })
+                            .list_style(StyleRefinement::default().flex_grow_1().size_full())
+                            .relative()
+                            .size_full(),
+                    );
                 sidebar.child(crate::scroll_column::with_scroll_column(
                     "project-tree",
                     &scroll,
@@ -609,5 +656,79 @@ mod tests {
         }
         cx.wait_for(handle, Duration::ZERO, |_, cx| predicate(cx))
             .await;
+    }
+
+    /// In a git repository, a changed or new file has a diff button beside
+    /// it, which asks for its diff rather than opening the file; an unchanged
+    /// file has none.
+    #[gpui_kit::test]
+    async fn changed_files_have_a_diff_button(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-tree-diff-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("changed.txt"), "one\n").unwrap();
+        fs::write(dir.join("same.txt"), "same\n").unwrap();
+        let git = |args: &[&str]| {
+            assert!(
+                std::process::Command::new("git")
+                    .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
+                    .args(args)
+                    .current_dir(&dir)
+                    .output()
+                    .unwrap()
+                    .status
+                    .success()
+            );
+        };
+        git(&["init", "-q"]);
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "first"]);
+        fs::write(dir.join("changed.txt"), "two\n").unwrap();
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            ProjectDirectory::init(cx);
+        });
+        let tree = cx.update(|cx| cx.new(ProjectTree::new));
+        let window = cx.add_window(|window, cx| Root::new(tree.clone(), window, cx));
+        let handle = window.into();
+        let (opened, diffs) = (
+            Rc::new(RefCell::new(Vec::new())),
+            Rc::new(RefCell::new(Vec::new())),
+        );
+        let _subscriptions = cx.update(|cx| {
+            let (opened, diffs) = (opened.clone(), diffs.clone());
+            (
+                cx.subscribe(&tree, move |_, OpenFile(path), _| {
+                    opened.borrow_mut().push(path.clone())
+                }),
+                cx.subscribe(&tree, move |_, super::OpenDiff(path), _| {
+                    diffs.borrow_mut().push(path.clone())
+                }),
+            )
+        });
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find(("project-diff", 0usize)).is_some()
+        })
+        .await;
+        cx.update_window(handle, |_, window, _| {
+            assert!(
+                window.try_find(("project-diff", 1usize)).is_none(),
+                "the unchanged file has a diff button"
+            );
+        })
+        .unwrap();
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("project-diff", 0usize), cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(*diffs.borrow(), [dir.join("changed.txt")]);
+        assert!(
+            opened.borrow().is_empty(),
+            "the diff button also opened the file"
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 }

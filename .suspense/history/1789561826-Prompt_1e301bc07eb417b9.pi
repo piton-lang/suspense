@@ -1,0 +1,17 @@
+
+anchor Prompt_1e301bc07eb417b9:
+    userPrompt:
+        After every code or spec or combined prompt is made, it should also summarize its changes into a short one-liner that gets added to the commit message. Those one-liners should be displayed above the commit message box as rows and they can be edited and removed if we would rather. But they should be automatically kind of built up as each task completes. Those should survive a restart of the application. 
+
+    mode: combined
+
+    systemPrompt:
+        We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec.
+        
+        You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec.
+        
+        Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other.
+        
+        Then build the spec and execute the prompt directly on the code using a unified plan.
+        
+        Make sure that you write both code and spec.

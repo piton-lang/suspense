@@ -1,0 +1,49 @@
+use /lib
+from /scope/project-directory import ProjectDirectoryScope
+
+export scope GitScope:
+    concept: {GitConcept}
+
+concept GitConcept:
+    pitch:
+        Awareness of the git repository the ${ProjectDirectoryScope} is in:
+        what has changed in it, and what each file was at the last commit.
+        Whatever shows git state reads it from here.
+
+    shape: {GitShape}
+
+shape GitShape:
+    description:
+        The project may sit anywhere inside a repository, including at its
+        top. Outside a git repository, or without git, there is no git state,
+        and nothing that shows it is shown or highlighted.
+
+    statuses:
+        A file's status is one of modified, added, untracked, conflicted, or
+        ignored; an unchanged file has none. A renamed file counts as
+        modified. Everything inside an ignored folder is ignored too. A folder
+        takes the most pressing status among its contents, conflicted first,
+        then modified, added, and untracked.
+
+    colors:
+        Modified is amber, added green, untracked teal, and conflicted red,
+        each a shade readable in both the light and the dark theme. Ignored is
+        dimmed.
+
+    branch:
+        The current branch, or a detached HEAD, and how many commits it is
+        ahead of and behind its upstream, when it has one.
+
+    changes:
+        The kinds of change are counted separately: modified, added, deleted,
+        renamed, untracked, and conflicted. Lines added and removed are
+        counted across tracked files, against the last commit.
+
+    committedFile:
+        What a file was at the last commit. A file new since then, or in a
+        repository with no commits yet, was empty.
+
+    refreshing:
+        Git state follows the repository by itself, within a couple of
+        seconds of files changing on disk or of the repository changing, such
+        as after staging, committing, or switching branches.

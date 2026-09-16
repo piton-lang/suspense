@@ -3,7 +3,10 @@
 
 mod app;
 mod chat_input;
+mod commit_notes;
 mod completion_menu;
+mod diff;
+mod diff_view;
 mod file_link;
 mod file_view;
 mod fuzzy;

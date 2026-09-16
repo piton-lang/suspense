@@ -1,0 +1,70 @@
+use /lib
+from /scope/git import GitScope
+from /ui/components/scroll-column import ScrollColumnScope
+
+export scope DiffViewScope:
+    concept: {DiffViewConcept}
+
+concept DiffViewConcept:
+    pitch:
+        A view of one file's uncommitted changes: the file as of the last
+        commit, from the @{GitScope}, against the file as it is on disk.
+
+    shape: {DiffViewShape}
+
+shape DiffViewShape:
+    description:
+        A header along the top, and beneath it the changes, which scroll with
+        a @{ScrollColumnScope}. It fills whatever holds it, and follows the
+        file as it changes on disk.
+
+    header:
+        The file's path in the project, beside a diff icon, and how many lines
+        were added (+, in green) and removed (−, in red). At the right end:
+        buttons to step to the previous and next change; a switch between
+        "Side by side" and "Unified", each with an icon, the chosen one shown
+        selected; a button that opens the file in the editor instead; and a
+        close button.
+
+    layouts:
+        sideBySide:
+            The file as of the last commit on the left and as it is now on the
+            right, divided by a thin line. A removed line faces the added line
+            that replaced it, and a line with no counterpart faces blank,
+            shaded filler, so the two sides stay level. Each side has its own
+            line numbers.
+
+        unified:
+            One column, with each block of removed lines before the added
+            lines that replaced them. Each line shows both line numbers: its
+            number in the old file and in the new, either blank where the line
+            isn't in that version.
+
+        The chosen layout is remembered for the user across launches; it
+        starts side by side.
+
+    lines:
+        Lines are shown in the editor's monospace font, one row each, without
+        wrapping, tabs shown as four spaces. An added line is tinted green and
+        marked +, a removed line tinted red and marked −, so a change never
+        relies on colour alone; unchanged lines are neither. Within a line
+        that replaced, or was replaced by, a similar one, the words that
+        changed get a stronger tint of the same colour. A line changed through
+        and through isn't marked word by word.
+
+    unchangedLines:
+        Three unchanged lines are kept either side of each change. A longer run
+        of unchanged lines, four or more, collapses into a single shaded row
+        reading "Show N unchanged lines", which expands them when clicked. A
+        file with no changes is shown whole.
+
+    navigating:
+        F7 steps to the next change and Shift+F7 to the previous one, stopping
+        at the first and last, as do the header's buttons. The change stepped
+        to is scrolled to the middle of the view and marked with an accent bar
+        along its left.
+
+    states:
+        While the file is read it says "Loading…". A binary file says its
+        changes can't be shown. An empty file says so. A file that can't be
+        read says why.

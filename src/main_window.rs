@@ -1,6 +1,8 @@
 //! The main window of the application, from which all main functionality is
 //! reached: a ribbon on top, and below it the project tree in a sidebar on the
-//! left, then prompt mode.
+//! left, then prompt mode. A file's diff floats over all of it.
+
+use std::path::PathBuf;
 
 use gpui_kit::component::button::ButtonVariant;
 use gpui_kit::component::dialog::DialogButtonProps;
@@ -9,9 +11,10 @@ use gpui_kit::component::{ActiveTheme, Root, WindowExt as _};
 use gpui_kit::*;
 
 use crate::app::{APP_TITLE, Quit};
+use crate::diff_view::{CloseDiff, DiffView, OpenInEditor};
 use crate::git_panel::GitPanel;
 use crate::palette::{Palette, Picked, SystemCommand, SystemState};
-use crate::project_tree::{OpenFile, ProjectTree};
+use crate::project_tree::{OpenDiff, OpenFile, ProjectTree};
 use crate::prompt_mode::PromptMode;
 use crate::ribbon::{self, Ribbon};
 use crate::settings_window;
@@ -26,6 +29,9 @@ const MIN_SPLIT_WIDTH: Pixels = px(240.);
 /// The sidebar's width until it is dragged, and the narrowest it can be.
 const SIDEBAR_WIDTH: Pixels = px(260.);
 const MIN_SIDEBAR_WIDTH: Pixels = px(160.);
+
+/// How far the diff's floating panel is inset from each edge of the window.
+const DIFF_INSET: Pixels = px(32.);
 
 actions!(suspense, [FocusChat, TogglePalette]);
 
@@ -43,6 +49,7 @@ pub fn bind_keys(cx: &mut App) {
     ]);
     crate::palette::bind_keys(cx);
     ribbon::bind_keys(cx);
+    crate::diff_view::bind_keys(cx);
 }
 
 pub struct MainWindow {
@@ -54,6 +61,9 @@ pub struct MainWindow {
     palette: Option<Entity<Palette>>,
     _palette_subscription: Option<Subscription>,
     sidebar_split: Entity<ResizableState>,
+    /// A changed file's diff, floating over the window.
+    diff: Option<Entity<DiffView>>,
+    _diff_subscriptions: Vec<Subscription>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -90,6 +100,9 @@ impl MainWindow {
                     prompt_mode.open_file(path.clone(), window, cx)
                 })
             }),
+            cx.subscribe_in(&sidebar, window, |this, _, OpenDiff(path), window, cx| {
+                this.open_diff(path.clone(), window, cx)
+            }),
             // Until light or dark mode is chosen, the window keeps following
             // the system's appearance as it changes.
             cx.observe_window_appearance(window, |_, window, cx| {
@@ -123,8 +136,73 @@ impl MainWindow {
             palette: None,
             _palette_subscription: None,
             sidebar_split: cx.new(|_| ResizableState::default()),
+            diff: None,
+            _diff_subscriptions: Vec::new(),
             _subscriptions: subscriptions,
         }
+    }
+
+    /// Opens a changed file's diff in the floating panel, replacing any diff
+    /// already there. Any file open in the split is left as it is.
+    pub fn open_diff(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        let diff = cx.new(|cx| DiffView::new(path, cx));
+        self._diff_subscriptions = vec![
+            cx.subscribe_in(&diff, window, |this, _, _: &CloseDiff, window, cx| {
+                this.close_diff(window, cx)
+            }),
+            // Opening the file closes the diff, and opens the file in the
+            // split as clicking it in the tree would.
+            cx.subscribe_in(&diff, window, |this, _, OpenInEditor(path), window, cx| {
+                this.close_diff(window, cx);
+                this.prompt_mode.update(cx, |prompt_mode, cx| {
+                    prompt_mode.open_file(path.clone(), window, cx)
+                })
+            }),
+        ];
+        diff.read(cx).focus_handle(cx).focus(window, cx);
+        self.diff = Some(diff);
+        cx.notify();
+    }
+
+    fn close_diff(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.diff.take().is_none() {
+            return;
+        }
+        self._diff_subscriptions.clear();
+        self.prompt_mode
+            .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx));
+        cx.notify();
+    }
+
+    /// The diff, floating over the whole window inset from its edges, with
+    /// the window dimmed behind it; clicking the dimmed window closes it.
+    fn render_diff(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
+        let diff = self.diff.clone()?;
+        let theme = cx.theme();
+        let panel = div()
+            .id("diff-panel")
+            .absolute()
+            .inset(DIFF_INSET)
+            // Clicks inside stay inside, rather than reaching the backdrop.
+            .occlude()
+            .overflow_hidden()
+            .rounded_lg()
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.background)
+            .shadow_2xl()
+            .child(diff);
+        let backdrop = div()
+            .id("diff-backdrop")
+            .absolute()
+            .inset_0()
+            // Nothing beneath takes the mouse while the diff is open.
+            .occlude()
+            .bg(black().opacity(0.4))
+            .on_click(cx.listener(|this, _, window, cx| this.close_diff(window, cx)))
+            .child(gpui_kit::TestSupportExt::test_support(panel));
+        // Lets UI tests find the panel and backdrop; inert in normal builds.
+        Some(gpui_kit::TestSupportExt::test_support(backdrop))
     }
 
     /// Quits, once confirmed if a task is running.
@@ -226,6 +304,7 @@ impl MainWindow {
 impl Render for MainWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
+            .relative()
             .size_full()
             .flex()
             .flex_col()
@@ -243,6 +322,11 @@ impl Render for MainWindow {
                 // Likewise any other dialog, such as the quit confirmation.
                 if window.has_active_dialog(cx) {
                     window.close_dialog(cx);
+                    return;
+                }
+                // Then the diff's floating panel.
+                if this.diff.is_some() {
+                    this.close_diff(window, cx);
                     return;
                 }
                 this.prompt_mode
@@ -280,6 +364,7 @@ impl Render for MainWindow {
                         ]),
                 ),
             )
+            .children(self.render_diff(cx))
             // Inside the window's element tree, so actions such as
             // TogglePalette reach it from a focused dialog.
             .children(Root::render_dialog_layer(window, cx))
@@ -379,6 +464,46 @@ mod tests {
             window.try_find("file-view").is_some()
         })
         .await;
+
+        // The file slides in from the sidebar: its pane grows from the
+        // sidebar's edge, through widths in between, and the file sits at the
+        // pane's right edge as it does.
+        let sidebar = cx
+            .update_window(handle, |_, window, _| window.find("project-tree").bounds())
+            .unwrap();
+        let mut widths = Vec::new();
+        let start = std::time::Instant::now();
+        while start.elapsed() < Duration::from_millis(350) {
+            let found = cx
+                .update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    window
+                        .try_find(("pane-slide", 1usize))
+                        .map(|pane| pane.bounds())
+                })
+                .unwrap();
+            if let Some(pane) = found {
+                assert!(
+                    (pane.left() - sidebar.right()).abs() <= gpui_kit::px(2.),
+                    "the pane {pane:?} doesn't grow from the sidebar {sidebar:?}"
+                );
+                widths.push(pane.size.width);
+            }
+            std::thread::sleep(Duration::from_millis(8));
+        }
+        let widest = widths
+            .iter()
+            .copied()
+            .fold(gpui_kit::px(0.), gpui_kit::Pixels::max);
+        assert!(
+            widths
+                .iter()
+                .any(|width| *width > gpui_kit::px(1.) && *width < widest - gpui_kit::px(1.)),
+            "the pane {widths:?} appeared without sliding in"
+        );
+
+        // Once it has, the split settles at its share of the width.
+        std::thread::sleep(Duration::from_millis(200));
         for _ in 0..3 {
             cx.run_until_parked();
             cx.update_window(handle, |_, window, cx| window.render_frame(cx))
@@ -409,12 +534,188 @@ mod tests {
         })
         .unwrap();
 
+        // Closing it slides it back into the sidebar: the pane shrinks at the
+        // sidebar's edge, through widths in between, then is gone.
         cx.update_window(handle, |_, window, cx| window.click("close-file", cx))
+            .unwrap();
+        let mut widths = Vec::new();
+        let start = std::time::Instant::now();
+        while start.elapsed() < Duration::from_millis(350) {
+            let found = cx
+                .update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    window
+                        .try_find(("pane-slide-out", 1usize))
+                        .map(|pane| pane.bounds())
+                })
+                .unwrap();
+            if let Some(pane) = found {
+                assert!(
+                    (pane.left() - sidebar.right()).abs() <= gpui_kit::px(2.),
+                    "the pane {pane:?} doesn't shrink into the sidebar {sidebar:?}"
+                );
+                widths.push(pane.size.width);
+            }
+            std::thread::sleep(Duration::from_millis(8));
+        }
+        assert!(
+            widths.windows(2).all(|pair| pair[1] <= pair[0] + gpui_kit::px(1.))
+                && widths
+                    .iter()
+                    .any(|width| *width > gpui_kit::px(1.) && *width < widths[0] - gpui_kit::px(1.)),
+            "the pane {widths:?} closed without sliding out"
+        );
+        std::thread::sleep(Duration::from_millis(200));
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))
             .unwrap();
         cx.wait_for(handle, TIMEOUT, |window, _| {
             window.try_find("file-view").is_none()
         })
         .await;
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A file's diff floats over the whole window, inset 32px from each edge,
+    /// leaving any file open in the split alone; Esc closes it, as does
+    /// clicking the dimmed window around it, and opening the file from it
+    /// closes it and opens the file in the split.
+    #[gpui_kit::test]
+    async fn diff_floats_over_the_window(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-diff-panel-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("notes.md"), "# Notes\n").unwrap();
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find(("project-entry", 0usize)).is_some()
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("project-entry", 0usize), cx)
+        })
+        .unwrap();
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("file-view").is_some()
+        })
+        .await;
+
+        let open = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                main.update(cx, |main, cx| {
+                    main.open_diff(dir.join("notes.md"), window, cx)
+                });
+            })
+            .unwrap();
+        };
+        open(cx);
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("diff-view").is_some()
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let backdrop = window.find("diff-backdrop").bounds();
+            let panel = window.find("diff-panel").bounds();
+            let inset = gpui_kit::px(32.);
+            assert_eq!(
+                backdrop.origin,
+                gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(0.))
+            );
+            assert_eq!(
+                panel.left() - backdrop.left(),
+                inset,
+                "{panel:?} in {backdrop:?}"
+            );
+            assert_eq!(
+                panel.top() - backdrop.top(),
+                inset,
+                "{panel:?} in {backdrop:?}"
+            );
+            assert_eq!(
+                backdrop.right() - panel.right(),
+                inset,
+                "{panel:?} in {backdrop:?}"
+            );
+            assert_eq!(
+                backdrop.bottom() - panel.bottom(),
+                inset,
+                "{panel:?} in {backdrop:?}"
+            );
+            assert!(
+                window.try_find("file-view").is_some(),
+                "the diff closed the file in the split"
+            );
+        })
+        .unwrap();
+
+        // Esc closes it.
+        cx.update_window(handle, |_, window, cx| window.press("escape", cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert!(
+            main.read_with(cx, |main, _| main.diff.is_none()),
+            "Esc left the diff open"
+        );
+
+        // So does clicking the dimmed window around it, but not the panel.
+        open(cx);
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("diff-panel", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(
+            main.read_with(cx, |main, _| main.diff.is_some()),
+            "clicking the panel closed it"
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.click_at(
+                "diff-backdrop",
+                gpui_kit::point(gpui_kit::px(8.), gpui_kit::px(8.)),
+                cx,
+            )
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(
+            main.read_with(cx, |main, _| main.diff.is_none()),
+            "clicking the dimmed window left the diff open"
+        );
+
+        // Opening the file from it closes it, with the file in the split.
+        open(cx);
+        cx.run_until_parked();
+        let diff = main.read_with(cx, |main, _| main.diff.clone().unwrap());
+        cx.update(|cx| {
+            diff.update(cx, |_, cx| {
+                cx.emit(crate::diff_view::OpenInEditor(dir.join("notes.md")))
+            })
+        });
+        cx.run_until_parked();
+        assert!(main.read_with(cx, |main, _| main.diff.is_none()));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("file-view").is_some());
+        })
+        .unwrap();
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -525,6 +826,19 @@ mod tests {
             })
             .unwrap();
         }
+
+        // Groups sit side by side with nothing between them but the gap: the
+        // title strip down each one's left edge marks where it starts.
+        cx.update_window(handle, |_, window, _| {
+            let appearance = window.find("Appearance").bounds();
+            let preferences = window.find("Preferences").bounds();
+            assert_eq!(
+                preferences.left() - appearance.right(),
+                gpui_kit::px(12.),
+                "something sits between {appearance:?} and {preferences:?}"
+            );
+        })
+        .unwrap();
 
         // Ctrl+F1 collapses the ribbon: the tabs go, and every primary
         // command shows in a single row, whichever tab was selected.

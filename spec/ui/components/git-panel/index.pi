@@ -1,6 +1,7 @@
 use /lib
 from /ui/components/file-tree import FileTreeScope
 from /scope/project-directory import ProjectDirectoryScope
+from /scope/git import GitScope
 
 export scope GitPanelScope:
     concept: {GitPanelConcept}
@@ -8,8 +9,9 @@ export scope GitPanelScope:
 concept GitPanelConcept:
     pitch:
         A very basic git panel for the repository the
-        ${ProjectDirectoryScope} is in: see what has changed at a glance,
-        write a commit message, commit, push, and pull.
+        ${ProjectDirectoryScope} is in, as the @{GitScope} knows it: see what
+        has changed at a glance, write a commit message, commit, push, and
+        pull.
 
     shape: {GitPanelShape}
 
@@ -19,19 +21,31 @@ shape GitPanelShape:
         while the project is inside a git repository.
 
     branch:
-        The top row shows the current branch, or "Detached HEAD", beside how
-        many commits it is ahead of its upstream (↑) and behind it (↓), each
-        only when not zero. At the right end are a Pull button and a Push
+        The top row shows the branch from the @{GitScope}, or
+        "Detached HEAD", beside how many commits it is ahead of its upstream
+        (↑) and behind it (↓), each only when not zero. At the right end are a Pull button and a Push
         button, icons with tooltips.
 
     summary:
-        Below the branch, a line counts what has changed, leaving out any
-        kind with none: modified, added, deleted, renamed, untracked, and
-        conflicted, as "2 modified · 1 untracked", or "No changes". Beside it,
-        how many lines were added (+, in green) and removed (−, in red) in
-        tracked files. The files themselves are not listed, since the
-        @{FileTreeScope} shows them. The summary refreshes by itself every
-        couple of seconds, and straight after anything the panel does.
+        Below the branch, a line counts the @{GitScope}'s changes, leaving out
+        any kind with none, as "2 modified · 1 untracked", or "No changes".
+        Beside it, how many lines were added (+, in green) and removed (−, in
+        red). The files themselves are not listed, since the @{FileTreeScope}
+        shows them. The summary refreshes as the @{GitScope} does, and
+        straight after anything the panel does.
+
+    commitNotes:
+        Above the message box, a row for each commit note, in the order they
+        were added: a one-line box holding the note, which can be edited, and a
+        small button to remove it. Each Code, Chain, or Spec task that finishes
+        without error adds a note, a one-line summary of what the task changed,
+        once the harness has written it, quickly, in the same way as a written
+        message: from what the task asked and the harness's own summary of what
+        it did, at most 72 characters in the imperative mood. A task that
+        changed no files adds none, and neither does a question from the Ask
+        tab. Notes are saved with the project, in its
+        `.suspense/commit-notes.json`, as they are added, edited, and removed,
+        so they survive a restart; that file is never itself committed.
 
     message:
         A multi-line commit message box, a few lines tall, reading
@@ -48,17 +62,29 @@ shape GitPanelShape:
         is disabled while there are no changes.
 
     committing:
-        A primary "Commit" button commits every change, new files included,
-        with the message, then clears the message box. It is disabled while
-        the message is empty or there are no changes.
+        A primary "Commit" button commits every change, new files included.
+        The commit message is what was typed, then a blank line, then each
+        note that isn't blank as a line of its own starting "- "; with nothing
+        typed, it is the notes alone. Once committed, the message box and the
+        notes are cleared. It is disabled while there is neither a message nor
+        a note, or there are no changes.
 
     pushingAndPulling:
         Push pushes the branch, setting its upstream on origin first if it has
-        none. Pull only fast-forwards, so it never starts a merge, and is
-        disabled while the branch has no upstream.
+        none.
+
+        Pull fetches the branch's upstream. With nothing new it says the
+        branch is already up to date. When only the upstream has moved on, the
+        branch fast-forwards to it. When both have moved on, the upstream is
+        merged in automatically, as long as the merge has no conflicts. If it
+        would conflict, the pull is cancelled before anything changes: the
+        branch, its files, and the index stay exactly as they were, no merge is
+        left in progress, and an error names the files that would have
+        conflicted. Pull is disabled while the branch has no upstream.
 
     feedback:
         While the panel is committing, pushing, pulling, or writing a
         message, that button shows a spinner and the others are disabled.
         Committing, pushing, and pulling say so in a notification when they
-        succeed. Anything that fails says why in an error notification.
+        succeed; a pull says whether it was already up to date, pulled, or
+        pulled and merged. Anything that fails says why in an error notification.

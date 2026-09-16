@@ -31,6 +31,7 @@ use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use futures::StreamExt as _;
@@ -57,6 +58,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::chat_input::{self, ChatInput, SendMode, Submit, TabChanged};
+use crate::commit_notes;
 use crate::file_link::{self, OpenFile};
 use crate::file_view::{CloseFile, FileView, OpenDefinition};
 use crate::harness::{self, HarnessEvent};
@@ -67,12 +69,18 @@ use crate::piton_lsp::PitonSession;
 use crate::project_directory::ProjectDirectory;
 use crate::prompt_history::{self, RunRecord, SavedPrompt};
 use crate::prompt_queue::{self, QueuedPrompt};
-use crate::scroll_column::{self, ToggleLock};
+use crate::scroll_column::{self, SetLock};
 use crate::shell_format;
 use crate::system_prompts;
 
 /// The share of the width an opened file takes from the task view.
 const FILE_SHARE: f32 = 0.5;
+
+/// How long the file pane takes to slide in from the sidebar, or back into it
+/// when closed, and how it moves: critically damped, so it settles without
+/// bouncing.
+const PANE_SLIDE_TIME: Duration = Duration::from_millis(450);
+const PANE_SPRING: SpringConfig = SpringConfig::new(300., 35., 1.);
 
 /// The narrowest either side of the file split can be dragged.
 const MIN_SPLIT_WIDTH: Pixels = px(160.);
@@ -717,6 +725,34 @@ impl HistoryList {
     }
 }
 
+/// Writes a commit note for a task from its prompt and its final summary.
+type Summarize = fn(&Path, &str, &str) -> Result<Option<String>>;
+
+/// Has `summarize` write the note of a task that asked `asked` and finished
+/// with `result`, in the background, and adds it to the project's commit
+/// notes. A task that changed nothing gets none, and one that couldn't be
+/// written is left out: the note is only a convenience.
+fn add_commit_note(
+    summarize: Summarize,
+    project_dir: PathBuf,
+    asked: String,
+    result: String,
+    cx: &mut App,
+) {
+    let note = cx.background_spawn({
+        let project_dir = project_dir.clone();
+        async move { summarize(&project_dir, &asked, &result) }
+    });
+    cx.spawn(async move |cx| {
+        if let Ok(Some(note)) = note.await
+            && commit_notes::add(&project_dir, &note).is_ok()
+        {
+            cx.update(commit_notes::changed);
+        }
+    })
+    .detach();
+}
+
 /// A question asked from the Ask tab.
 struct Ask {
     id: usize,
@@ -794,6 +830,16 @@ impl Session {
     }
 }
 
+/// A file pane sliding closed.
+struct PaneClosing {
+    file: Entity<FileView>,
+    /// The width it slides closed from.
+    width: Pixels,
+    /// Which opening of the pane this closes, so each slide animates afresh.
+    slide: usize,
+    closed: Instant,
+}
+
 pub struct PromptMode {
     /// Every task sent, oldest first; the last heads the view.
     tasks: Vec<PromptTask>,
@@ -822,6 +868,13 @@ pub struct PromptMode {
     queue_held: bool,
     /// The file opened from the project tree, beside the task view.
     file: Option<Entity<FileView>>,
+    /// When the file pane last opened, and how many times it has, for its
+    /// slide in from the sidebar.
+    pane_opened: Option<(usize, Instant)>,
+    /// A file just closed, sliding back into the sidebar.
+    pane_closing: Option<PaneClosing>,
+    /// The file pane's width, as last laid out, for it to slide closed from.
+    pane_width: Rc<Cell<Pixels>>,
     file_split: Entity<ResizableState>,
     /// The width the task view and any file share, as last laid out.
     body_width: Rc<Cell<Pixels>>,
@@ -845,6 +898,9 @@ pub struct PromptMode {
     /// The conversation questions share, apart from the tasks'.
     ask_session: Option<Session>,
     _file_subscriptions: Vec<Subscription>,
+    /// Writes a finished task's commit note: [`commit_notes::summarize`],
+    /// replaced in tests.
+    summarize: Summarize,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -898,6 +954,9 @@ impl PromptMode {
             auto_send: true,
             queue_held: false,
             file: None,
+            pane_opened: None,
+            pane_closing: None,
+            pane_width: Rc::default(),
             file_split: cx.new(|_| ResizableState::default()),
             body_width: Rc::default(),
             _pending: Task::ready(()),
@@ -923,6 +982,7 @@ impl PromptMode {
             on_ask_tab: false,
             ask_session: None,
             _file_subscriptions: Vec::new(),
+            summarize: commit_notes::summarize,
             _subscriptions: subscriptions,
         };
         this.load_queue(cx);
@@ -1011,11 +1071,22 @@ impl PromptMode {
         if self.file.is_none() {
             // Fresh split sizes, so the file opens at its share of the width.
             self.file_split = cx.new(|_| ResizableState::default());
+            self.pane_opened = Some((self.pane_opened.map_or(0, |(n, _)| n) + 1, Instant::now()));
+            // A file still sliding closed gives way to this one.
+            self.pane_closing = None;
         }
         let file = cx.new(|cx| FileView::new(path, position, window, cx));
         self._file_subscriptions = vec![
             cx.subscribe(&file, |this, _, _: &CloseFile, cx| {
-                this.file = None;
+                // It slides back into the sidebar from the width it had.
+                if let Some(file) = this.file.take() {
+                    this.pane_closing = Some(PaneClosing {
+                        file,
+                        width: this.pane_width.get(),
+                        slide: this.pane_opened.map_or(0, |(n, _)| n),
+                        closed: Instant::now(),
+                    });
+                }
                 cx.notify();
             }),
             cx.subscribe_in(
@@ -1297,8 +1368,11 @@ impl PromptMode {
     }
 
     /// Locks the latest task's output to the bottom, or unlocks it.
-    fn toggle_output_lock(&mut self, cx: &mut Context<Self>) {
-        self.output_locked = !self.output_locked;
+    fn set_output_lock(&mut self, locked: bool, cx: &mut Context<Self>) {
+        if self.output_locked == locked {
+            return;
+        }
+        self.output_locked = locked;
         if self.output_locked {
             self.output_scroll.scroll_to_bottom();
         }
@@ -1377,6 +1451,9 @@ impl PromptMode {
         if builds {
             self.tasks[task_ix].status = TaskStatus::Building;
         }
+        // What the task asked, for its commit note.
+        let asked = text.clone();
+        let summarize = self.summarize;
         let build = builds.then(|| {
             let project_dir = project_dir.clone();
             cx.background_spawn(async move { piton_build::build(&project_dir) })
@@ -1430,6 +1507,8 @@ impl PromptMode {
             // is over.
             let mut record = RunRecord::default();
             let mut prompt_file = None;
+            // The harness's final summary, once the run finished without error.
+            let mut finished: Option<String> = None;
             let compiled = compile.await.and_then(|(anchor, file, compiled)| {
                 prompt_file = Some(file);
                 Ok((anchor, compiled?))
@@ -1458,6 +1537,13 @@ impl PromptMode {
                     let mut started = false;
                     while let Some(event) = events.next().await {
                         record.note(&event);
+                        if let HarnessEvent::Finished {
+                            is_error: false,
+                            result,
+                        } = &event
+                        {
+                            finished = Some(result.clone());
+                        }
                         if this
                             .update(cx, |this, cx| {
                                 if let HarnessEvent::Session(id) = &event {
@@ -1518,6 +1604,17 @@ impl PromptMode {
                 }
                 this.chat_input
                     .update(cx, |input, cx| input.set_busy(false, cx));
+                // A Code, Chain, or Spec task that finished well adds a note to
+                // the next commit, written in the background.
+                if builds
+                    && let Some(result) = finished.take()
+                    && this
+                        .tasks
+                        .get(task_ix)
+                        .is_some_and(|task| task.status == TaskStatus::Done)
+                {
+                    add_commit_note(summarize, project_dir.clone(), asked, result, cx);
+                }
                 // Deferred: starting the next run replaces this task.
                 let prompt_mode = cx.entity();
                 cx.defer(move |cx| prompt_mode.update(cx, |this, cx| this.auto_send_next(cx)));
@@ -1851,10 +1948,12 @@ impl PromptMode {
             // Lets UI tests find the output; inert in normal builds.
             let output = gpui_kit::TestSupportExt::test_support(output);
             let this = cx.entity().downgrade();
-            let toggle: ToggleLock = Rc::new(move |_, cx| {
+            let toggle: SetLock = Rc::new(move |locked, _, cx| {
                 this.update(cx, |this, cx| {
-                    if let Some(ask) = this.asks.iter_mut().find(|ask| ask.id == id) {
-                        ask.locked = !ask.locked;
+                    if let Some(ask) = this.asks.iter_mut().find(|ask| ask.id == id)
+                        && ask.locked != locked
+                    {
+                        ask.locked = locked;
                         if ask.locked {
                             ask.scroll.scroll_to_bottom();
                         }
@@ -2130,8 +2229,9 @@ impl PromptMode {
         // Lets UI tests find the output; inert in normal builds.
         let output = gpui_kit::TestSupportExt::test_support(output);
         let this = cx.entity().downgrade();
-        let toggle: ToggleLock = Rc::new(move |_, cx| {
-            this.update(cx, |this, cx| this.toggle_output_lock(cx)).ok();
+        let toggle: SetLock = Rc::new(move |locked, _, cx| {
+            this.update(cx, |this, cx| this.set_output_lock(locked, cx))
+                .ok();
         });
         scroll_column::with_scroll_column(
             "task-output",
@@ -2208,11 +2308,79 @@ impl Render for PromptMode {
             let body_width = self.body_width.clone();
             move |bounds, _, _| body_width.set(bounds.size.width)
         });
-        let body = match &self.file {
-            Some(file) => {
-                // The file can't be dragged narrower than its editor's 80
-                // columns.
-                let file_min = file.read(cx).min_width(window, cx);
+        // A file split off beside the task view, which can't be dragged
+        // narrower than its editor's 80 columns.
+        let pane = self
+            .file
+            .as_ref()
+            .map(|file| (file.clone(), file.read(cx).min_width(window, cx)));
+        // The width the pane opens at: its share of the body, or its narrowest.
+        let pane_width = |file_min: Pixels| {
+            if self.body_width.get() > px(0.) {
+                (self.body_width.get() * FILE_SHARE).max(file_min)
+            } else {
+                file_min
+            }
+        };
+        let sliding = self
+            .pane_opened
+            .filter(|(_, opened)| opened.elapsed() < PANE_SLIDE_TIME)
+            .map(|(n, _)| n);
+        if self
+            .pane_closing
+            .as_ref()
+            .is_some_and(|closing| closing.closed.elapsed() >= PANE_SLIDE_TIME)
+        {
+            self.pane_closing = None;
+        }
+        // Records the pane's width as laid out, for it to slide closed from.
+        let measured = |pane: AnyElement| {
+            let pane_width = self.pane_width.clone();
+            div()
+                .size_full()
+                .on_prepaint(move |bounds, _, _| pane_width.set(bounds.size.width))
+                .child(pane)
+        };
+        let body = match pane {
+            // Just opened, the pane grows out of the sidebar at its left, with
+            // the file sliding into view from behind the sidebar's edge, and
+            // the task view giving way beside it. Once it has, it is an ordinary
+            // split that can be dragged.
+            Some((file, file_min)) if sliding.is_some() && self.body_width.get() > px(0.) => {
+                window.request_animation_frame();
+                let width = pane_width(file_min);
+                let grow = SpringAnimation::new(PANE_SPRING).to(width).from(px(0.));
+                // Lets UI tests find the pane as it slides; inert in normal
+                // builds.
+                let pane = gpui_kit::TestSupportExt::test_support(
+                    div().id(("pane-slide", sliding.unwrap_or(0))),
+                )
+                .relative()
+                .flex_none()
+                .h_full()
+                .overflow_hidden()
+                .child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .bottom_0()
+                        .right_0()
+                        .w(width)
+                        .child(measured(file.into_any_element())),
+                )
+                .with_spring(
+                    ("pane-grow", sliding.unwrap_or(0)),
+                    grow,
+                    |this, width| this.w(width.max(px(0.))),
+                );
+                body.child(
+                    h_flex()
+                        .size_full()
+                        .child(pane)
+                        .child(div().flex_1().min_w_0().h_full().child(history)),
+                )
+            }
+            Some((file, file_min)) => {
                 let mut file_panel = resizable_panel().size_range(file_min..Pixels::MAX);
                 // Not laid out yet: the split starts even, and can be dragged.
                 if self.body_width.get() > px(0.) {
@@ -2223,11 +2391,49 @@ impl Render for PromptMode {
                     h_resizable("file-split")
                         .with_state(&self.file_split)
                         .children([
-                            file_panel.child(file.clone()),
+                            file_panel.child(measured(file.into_any_element())),
                             resizable_panel()
                                 .size_range(MIN_SPLIT_WIDTH..Pixels::MAX)
                                 .child(history),
                         ]),
+                )
+            }
+            // Just closed, the pane shrinks back into the sidebar, with the
+            // file sliding out of view behind the sidebar's edge, and the task
+            // view growing back beside it.
+            None if let Some(closing) = &self.pane_closing => {
+                window.request_animation_frame();
+                let shrink = SpringAnimation::new(PANE_SPRING)
+                    .to(px(0.))
+                    .from(closing.width);
+                // Lets UI tests find the pane as it slides; inert in normal
+                // builds.
+                let pane = gpui_kit::TestSupportExt::test_support(
+                    div().id(("pane-slide-out", closing.slide)),
+                )
+                .relative()
+                .flex_none()
+                .h_full()
+                .overflow_hidden()
+                .child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .bottom_0()
+                        .right_0()
+                        .w(closing.width)
+                        .child(closing.file.clone()),
+                )
+                .with_spring(
+                    ("pane-shrink", closing.slide),
+                    shrink,
+                    |this, width| this.w(width.max(px(0.))),
+                );
+                body.child(
+                    h_flex()
+                        .size_full()
+                        .child(pane)
+                        .child(div().flex_1().min_w_0().h_full().child(history)),
                 )
             }
             None => body.child(history),
@@ -3960,6 +4166,90 @@ mod tests {
             (offset + max).abs() <= gpui_kit::px(1.),
             "locked, the output is at {offset:?} rather than the bottom {max:?}"
         );
+
+        // Scrolling the output by hand breaks the lock, however many wheel
+        // events the gesture sends, and leaves it where it was scrolled to.
+        cx.update_window(handle, |_, window, cx| {
+            for _ in 0..3 {
+                window.scroll(
+                    "task-output",
+                    gpui_kit::ScrollDelta::Pixels(gpui_kit::point(
+                        gpui_kit::px(0.),
+                        gpui_kit::px(120.),
+                    )),
+                    cx,
+                );
+            }
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(
+            !prompt_mode.read_with(cx, |this, _| this.output_locked),
+            "scrolling did not break the lock"
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.render_frame(cx);
+        })
+        .unwrap();
+        let (offset, max) = prompt_mode.read_with(cx, |this, _| {
+            (
+                this.output_scroll.offset().y,
+                this.output_scroll.max_offset().y,
+            )
+        });
+        assert!(
+            offset + max > gpui_kit::px(1.),
+            "unlocked, the output went back to the bottom: {offset:?} of {max:?}"
+        );
+
+        // The column's buttons break it too.
+        cx.update_window(handle, |_, window, cx| {
+            window.click("task-output-scroll-lock", cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(prompt_mode.read_with(cx, |this, _| this.output_locked));
+        cx.update_window(handle, |_, window, cx| {
+            window.click("task-output-scroll-up", cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(!prompt_mode.read_with(cx, |this, _| this.output_locked));
+
+        // Scrolling back to the bottom by hand locks it again, with the column's
+        // button or the wheel.
+        cx.update_window(handle, |_, window, cx| {
+            window.click("task-output-scroll-down", cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(
+            prompt_mode.read_with(cx, |this, _| this.output_locked),
+            "scrolling down to the bottom did not lock the output"
+        );
+        let wheel = |dy: f32, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.scroll(
+                    "task-output",
+                    gpui_kit::ScrollDelta::Pixels(gpui_kit::point(
+                        gpui_kit::px(0.),
+                        gpui_kit::px(dy),
+                    )),
+                    cx,
+                );
+                window.render_frame(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        };
+        wheel(200., cx);
+        assert!(!prompt_mode.read_with(cx, |this, _| this.output_locked));
+        wheel(-1000., cx);
+        assert!(
+            prompt_mode.read_with(cx, |this, _| this.output_locked),
+            "wheeling down to the bottom did not lock the output"
+        );
     }
 
     /// A Code, Chain, or Spec prompt runs `piton build` before it is sent,
@@ -4015,6 +4305,59 @@ mod tests {
             });
         })
         .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A finished task's note is written from what it asked and what it did,
+    /// and added to the project's commit notes; a task that changed nothing
+    /// adds none.
+    #[gpui_kit::test]
+    async fn finished_tasks_add_commit_notes(cx: &mut TestAppContext) {
+        fn summarize(
+            _: &std::path::Path,
+            asked: &str,
+            result: &str,
+        ) -> anyhow::Result<Option<String>> {
+            Ok((!result.contains("nothing")).then(|| format!("Do what was asked: {asked}")))
+        }
+        let dir = std::env::temp_dir().join(format!("suspense-notes-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).unwrap();
+        cx.update(|cx| {
+            super::add_commit_note(
+                summarize,
+                dir.clone(),
+                "Add a ribbon".into(),
+                "Added it.".into(),
+                cx,
+            );
+            super::add_commit_note(
+                summarize,
+                dir.clone(),
+                "Look around".into(),
+                "Changed nothing.".into(),
+                cx,
+            );
+        });
+        let start = std::time::Instant::now();
+        while crate::commit_notes::load(&dir).is_empty() {
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "no note was added"
+            );
+            cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        cx.run_until_parked();
+        let notes: Vec<String> = crate::commit_notes::load(&dir)
+            .into_iter()
+            .map(|note| note.text)
+            .collect();
+        assert_eq!(notes, ["Do what was asked: Add a ribbon"]);
+        assert!(cx.update(|cx| {
+            cx.try_global::<crate::commit_notes::NotesVersion>()
+                .is_some()
+        }));
         std::fs::remove_dir_all(&dir).ok();
     }
 }

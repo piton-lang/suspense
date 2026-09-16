@@ -239,7 +239,9 @@ mod tests {
     #[test]
     fn existing_continuations_are_folded_into_the_layout() {
         assert_eq!(
-            format_command("cargo test --workspace --all-features \\\n  && cargo clippy --workspace -- -D warnings"),
+            format_command(
+                "cargo test --workspace --all-features \\\n  && cargo clippy --workspace -- -D warnings"
+            ),
             "cargo test --workspace --all-features\n  && cargo clippy --workspace -- -D warnings"
         );
     }

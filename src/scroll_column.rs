@@ -22,22 +22,25 @@ const STEP: Pixels = px(48.);
 /// The shortest the thumb gets, so it can always be grabbed.
 const MIN_THUMB: Pixels = px(16.);
 
-/// Called when the lock to the bottom is switched.
-pub type ToggleLock = Rc<dyn Fn(&mut Window, &mut App)>;
+/// Locks the scroll to the bottom (`true`) or unlocks it (`false`).
+pub type SetLock = Rc<dyn Fn(bool, &mut Window, &mut App)>;
 
 /// `content`, which scrolls with `handle`, beside its scroll column. With
 /// `fill`, it fills the space it is given; otherwise it is as tall as
 /// `content`, which is expected to cap its own height. With `lock`, whether
 /// the scroll is locked to the bottom and how to switch it, the column ends in
-/// a button for that.
+/// a button for that; scrolling the list by hand, with the wheel or the
+/// column, locks it when that leaves the list at the bottom and breaks the lock
+/// when it doesn't.
 pub fn with_scroll_column(
     id: impl Into<SharedString>,
     handle: &ScrollHandle,
     content: impl IntoElement,
     fill: bool,
-    lock: Option<(bool, ToggleLock)>,
+    lock: Option<(bool, SetLock)>,
     cx: &App,
 ) -> AnyElement {
+    let follow = follower(handle, &lock);
     let row = h_flex()
         .items_stretch()
         .w_full()
@@ -47,17 +50,44 @@ pub fn with_scroll_column(
                 .flex_1()
                 .min_w_0()
                 .when(fill, |it| it.h_full())
+                // Scrolling by hand locks or unlocks the scroll. This bubbles
+                // up from the list, which has already taken the scroll.
+                .when_some(follow, |content, follow| {
+                    content.on_scroll_wheel(move |_, window, cx| follow(window, cx))
+                })
                 .child(content),
         )
         .child(scroll_column(id.into(), handle, lock, cx));
     row.into_any_element()
 }
 
+/// After the list is scrolled by hand: locks the scroll when the list is left
+/// at the bottom, and unlocks it when it isn't. A list with nothing to scroll
+/// keeps its lock as it is.
+type Follow = Rc<dyn Fn(&mut Window, &mut App)>;
+
+fn follower(handle: &ScrollHandle, lock: &Option<(bool, SetLock)>) -> Option<Follow> {
+    let (_, set_lock) = lock.as_ref()?;
+    let (handle, set_lock) = (handle.clone(), set_lock.clone());
+    Some(Rc::new(move |window, cx| {
+        let max = handle.max_offset().y;
+        if max > px(0.) {
+            set_lock(at_bottom(&handle), window, cx);
+        }
+    }))
+}
+
+/// Whether the list is scrolled to its bottom, or past it before it is
+/// clamped.
+fn at_bottom(handle: &ScrollHandle) -> bool {
+    handle.offset().y <= -handle.max_offset().y + px(1.)
+}
+
 /// The column itself.
 fn scroll_column(
     id: SharedString,
     handle: &ScrollHandle,
-    lock: Option<(bool, ToggleLock)>,
+    lock: Option<(bool, SetLock)>,
     cx: &App,
 ) -> AnyElement {
     let theme = cx.theme();
@@ -71,77 +101,94 @@ fn scroll_column(
             .h(COLUMN_WIDTH)
             .rounded_none()
     };
+    let follow = follower(handle, &lock);
     let scroll_by = |delta: Pixels| {
         let handle = handle.clone();
-        move |_: &ClickEvent, window: &mut Window, _: &mut App| {
+        let follow = follow.clone();
+        move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
             let offset = handle.offset();
             let max = handle.max_offset().y;
             let y = (offset.y + delta).min(px(0.)).max(-max);
             handle.set_offset(point(offset.x, y));
+            if let Some(follow) = &follow {
+                follow(window, cx);
+            }
             window.refresh();
         }
     };
 
-    // Where on the thumb it was grabbed, while it is being dragged.
-    let grab: Rc<Cell<Option<Pixels>>> = Rc::default();
-    let track = canvas(|_, _, _| {}, {
-        let handle = handle.clone();
-        move |bounds, _, window, _| {
-            let geometry = Geometry::of(&handle, bounds);
-            window.paint_quad(fill(bounds, track_color));
-            window.paint_quad(
-                fill(
+    let track = canvas(
+        // Where on the thumb it was grabbed, while it is being dragged. Kept
+        // with the track from frame to frame, since each mouse move redraws
+        // the column.
+        |_, window, cx| {
+            window.use_keyed_state("scroll-grab", cx, |_, _| Rc::new(Cell::new(None::<Pixels>)))
+        },
+        {
+            let handle = handle.clone();
+            let follow = follow.clone();
+            move |bounds, grab: Entity<Rc<Cell<Option<Pixels>>>>, window, cx| {
+                let grab = grab.read(cx).clone();
+                let geometry = Geometry::of(&handle, bounds);
+                window.paint_quad(fill(bounds, track_color));
+                // The thumb fills the track's width, square.
+                window.paint_quad(fill(
                     Bounds::new(
-                        point(bounds.origin.x + px(4.), geometry.thumb_top),
-                        size(bounds.size.width - px(8.), geometry.thumb_height),
+                        point(bounds.origin.x, geometry.thumb_top),
+                        size(bounds.size.width, geometry.thumb_height),
                     ),
                     thumb_color.opacity(0.5),
-                )
-                .corner_radii(px(3.)),
-            );
+                ));
 
-            window.on_mouse_event({
-                let (handle, grab) = (handle.clone(), grab.clone());
-                move |event: &MouseDownEvent, phase, window, _| {
-                    if phase != DispatchPhase::Bubble || !bounds.contains(&event.position) {
-                        return;
-                    }
-                    let geometry = Geometry::of(&handle, bounds);
-                    let y = event.position.y;
-                    // Grabbed where it was pressed; pressed off the thumb, the
-                    // thumb first jumps to centre on the press.
-                    let at = if y >= geometry.thumb_top
-                        && y <= geometry.thumb_top + geometry.thumb_height
-                    {
-                        y - geometry.thumb_top
-                    } else {
-                        geometry.thumb_height / 2.
-                    };
-                    grab.set(Some(at));
-                    geometry.scroll_thumb_to(&handle, y - at);
-                    window.refresh();
-                }
-            });
-            window.on_mouse_event({
-                let (handle, grab) = (handle.clone(), grab.clone());
-                move |event: &MouseMoveEvent, _, window, _| {
-                    if let Some(at) = grab.get() {
-                        if !event.dragging() {
-                            grab.set(None);
+                window.on_mouse_event({
+                    let (handle, grab, follow) = (handle.clone(), grab.clone(), follow.clone());
+                    move |event: &MouseDownEvent, phase, window, cx| {
+                        if phase != DispatchPhase::Bubble || !bounds.contains(&event.position) {
                             return;
                         }
-                        Geometry::of(&handle, bounds)
-                            .scroll_thumb_to(&handle, event.position.y - at);
+                        let geometry = Geometry::of(&handle, bounds);
+                        let y = event.position.y;
+                        // Grabbed where it was pressed; pressed off the thumb, the
+                        // thumb first jumps to centre on the press.
+                        let at = if y >= geometry.thumb_top
+                            && y <= geometry.thumb_top + geometry.thumb_height
+                        {
+                            y - geometry.thumb_top
+                        } else {
+                            geometry.thumb_height / 2.
+                        };
+                        grab.set(Some(at));
+                        geometry.scroll_thumb_to(&handle, y - at);
+                        if let Some(follow) = &follow {
+                            follow(window, cx);
+                        }
                         window.refresh();
                     }
-                }
-            });
-            window.on_mouse_event({
-                let grab = grab.clone();
-                move |_: &MouseUpEvent, _, _, _| grab.set(None)
-            });
-        }
-    })
+                });
+                window.on_mouse_event({
+                    let (handle, grab, follow) = (handle.clone(), grab.clone(), follow.clone());
+                    move |event: &MouseMoveEvent, _, window, cx| {
+                        if let Some(at) = grab.get() {
+                            if !event.dragging() {
+                                grab.set(None);
+                                return;
+                            }
+                            Geometry::of(&handle, bounds)
+                                .scroll_thumb_to(&handle, event.position.y - at);
+                            if let Some(follow) = &follow {
+                                follow(window, cx);
+                            }
+                            window.refresh();
+                        }
+                    }
+                });
+                window.on_mouse_event({
+                    let grab = grab.clone();
+                    move |_: &MouseUpEvent, _, _, _| grab.set(None)
+                });
+            }
+        },
+    )
     .size_full();
 
     let column = v_flex()
@@ -155,13 +202,19 @@ fn scroll_column(
                 .tooltip("Scroll up")
                 .on_click(scroll_by(STEP)),
         )
-        .child(div().flex_1().min_h(px(8.)).child(track))
+        .child(gpui_kit::TestSupportExt::test_support(
+            div()
+                .id(SharedString::from(format!("{id}-scroll-track")))
+                .flex_1()
+                .min_h(px(8.))
+                .child(track),
+        ))
         .child(
             square("scroll-down", IconName::ChevronDown)
                 .tooltip("Scroll down")
                 .on_click(scroll_by(-STEP)),
         )
-        .when_some(lock, |column, (locked, toggle)| {
+        .when_some(lock, |column, (locked, set_lock)| {
             column.child(
                 square("scroll-lock", IconName::ArrowDownToLine)
                     .selected(locked)
@@ -170,7 +223,7 @@ fn scroll_column(
                     } else {
                         "Lock the scroll to the bottom"
                     })
-                    .on_click(move |_, window, cx| toggle(window, cx))
+                    .on_click(move |_, window, cx| set_lock(!locked, window, cx))
                     .border_t_1()
                     .border_color(border),
             )
@@ -229,9 +282,74 @@ impl Geometry {
 
 #[cfg(test)]
 mod tests {
-    use gpui_kit::{Bounds, ScrollHandle, point, px, size};
+    use gpui_kit::component::{Root, v_flex};
+    use gpui_kit::test::TestWindowExt as _;
+    use gpui_kit::{
+        AppContext as _, Bounds, Context, InteractiveElement as _, IntoElement, ParentElement as _,
+        Render, ScrollHandle, StatefulInteractiveElement as _, Styled as _, TestAppContext, Window,
+        div, point, px, size,
+    };
 
-    use super::{Geometry, MIN_THUMB};
+    use super::{Geometry, MIN_THUMB, with_scroll_column};
+
+    struct TallList {
+        scroll: ScrollHandle,
+    }
+
+    impl Render for TallList {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let list = div()
+                .id("tall")
+                .size_full()
+                .overflow_y_scroll()
+                .track_scroll(&self.scroll)
+                .child(
+                    v_flex()
+                        .children((0..200).map(|ix| div().h(px(20.)).child(format!("row {ix}")))),
+                );
+            div().size_full().child(with_scroll_column(
+                "tall",
+                &self.scroll,
+                list,
+                true,
+                None,
+                cx,
+            ))
+        }
+    }
+
+    /// Dragging the thumb down the track scrolls the list with it, all the way
+    /// to the bottom when dragged there.
+    #[gpui_kit::test]
+    async fn dragging_the_thumb_scrolls_the_list(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let scroll = ScrollHandle::new();
+        let window = cx.add_window({
+            let scroll = scroll.clone();
+            |window, cx| {
+                let view = cx.new(|_| TallList { scroll });
+                Root::new(view, window, cx)
+            }
+        });
+        let handle = window.into();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.render_frame(cx);
+            let track = window.find("tall-scroll-track").bounds();
+            let from = point(track.center().x, track.top() + px(4.));
+            let to = point(track.center().x, track.bottom() + px(40.));
+            window.drag(from, to, cx);
+            window.render_frame(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let (offset, max) = (scroll.offset().y, scroll.max_offset().y);
+        assert!(max > px(0.), "nothing to scroll");
+        assert!(
+            (offset + max).abs() <= px(1.),
+            "dragging the thumb to the bottom left the list at {offset:?} of {max:?}"
+        );
+    }
 
     /// With nothing to scroll, the thumb fills the track; otherwise it is as
     /// tall as the share of the list in view, and never too short to grab.

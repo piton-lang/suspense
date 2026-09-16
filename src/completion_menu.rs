@@ -114,7 +114,11 @@ impl CompletionMenu {
         };
         let previous = std::mem::replace(&mut self.text, text.clone());
         self.cursor = cursor;
-        if self.inserted.take().is_some_and(|inserted| inserted == text) {
+        if self
+            .inserted
+            .take()
+            .is_some_and(|inserted| inserted == text)
+        {
             return;
         }
         let Some(provider) = self.provider.clone() else {
@@ -608,9 +612,16 @@ mod tests {
     #[test]
     fn stays_inside_the_window() {
         let popover = size(px(300.), px(500.));
-        for cursor in [cursor_at(780., 300.), cursor_at(0., 0.), cursor_at(790., 590.)] {
+        for cursor in [
+            cursor_at(780., 300.),
+            cursor_at(0., 0.),
+            cursor_at(790., 590.),
+        ] {
             let (origin, _) = place_popover(cursor, popover, VIEWPORT);
-            assert!(origin.x >= WINDOW_MARGIN && origin.y >= WINDOW_MARGIN, "{origin:?}");
+            assert!(
+                origin.x >= WINDOW_MARGIN && origin.y >= WINDOW_MARGIN,
+                "{origin:?}"
+            );
             assert!(
                 origin.x + popover.width <= VIEWPORT.width - WINDOW_MARGIN
                     && origin.y + popover.height <= VIEWPORT.height - WINDOW_MARGIN,

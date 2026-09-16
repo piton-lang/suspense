@@ -7,6 +7,7 @@ from ../palette import PaletteScope
 from /ui/components/ribbon import RibbonScope
 from /ui/components/file-tree import FileTreeScope
 from /ui/components/sidebar import SidebarScope
+from /ui/components/diff-view import DiffViewScope
 
 export scope MainWindowScope:
     concept: {MainWindowConcept}
@@ -65,8 +66,39 @@ shape MainWindowShape:
             in a split beside the chat history: the file on the left taking 50%
             of the width, the chat history on the right taking the rest. The split
             can be resized by dragging its edge. Closing the file closes the
-            split. The @{ChatInputScope} is never split: it stays along the
+            split.
+
+            When the split opens, it slides in from the sidebar, so it's clear
+            where it came from: the file's side grows out of the sidebar's
+            edge to its share of the width, the file sliding into view from
+            behind that edge as it does, while the chat history gives way
+            beside it. The slide is quick and settles without bouncing, and
+            only then can the split be dragged. A file opened in place of one
+            already showing doesn't slide, since the split is already
+            open. The @{ChatInputScope} is never split: it stays along the
             bottom, across the full width of prompt mode.
+
+            Closing the file plays the slide in reverse, back into the
+            sidebar: the file's side shrinks from whatever width it was
+            dragged to down to nothing at the sidebar's edge, the file sliding
+            out of view behind that edge as it does, while the chat history
+            grows back across the full width. It is as quick as the slide in,
+            and settles without bouncing. Opening a file while one is still
+            sliding out slides the new one in straight away.
+
+        openDiff:
+            A file's @{DiffViewScope}, opened from the @{FileTreeScope}, opens
+            in a floating panel over the whole window, the ribbon and sidebar
+            included, inset 32 pixels from every edge of the window. The panel
+            has rounded corners, a border, and a shadow, and the window behind
+            it is dimmed. It leaves the split alone: any file open there stays
+            open, unsaved changes and all. Opening another file's diff replaces
+            the one in the panel.
+
+            The panel closes with the diff's close button, with Esc, or by
+            clicking the dimmed window around it. Opening the file from the
+            diff closes the panel and opens the file in the split, as clicking
+            it in the @{FileTreeScope} would.
 
         promptMode:
             The body displays the @{PromptEditor} and any splits, to the

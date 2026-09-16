@@ -1,6 +1,8 @@
 use /lib
 from /scope/project-directory import ProjectDirectoryScope
 from /ui/components/scroll-column import ScrollColumnScope
+from /scope/git import GitScope
+from /ui/components/diff-view import DiffViewScope
 
 export scope FileTreeScope:
     concept: {FileTreeConcept}
@@ -24,18 +26,16 @@ shape FileTreeShape:
         place.
 
     gitStatus:
-        When the project is inside a git repository, the tree colors each name
-        by its git status: modified in amber, added in green, untracked in
-        teal, and conflicted in red, and ignored files and folders are dimmed,
-        as is everything inside an ignored folder. A renamed file counts as
-        modified. Unchanged names keep the default color. A folder takes the
-        color of the most pressing status among its contents, conflicted
-        first, then modified, added, and untracked, so a change stays visible
-        while its folder is collapsed. The colors suit both the light and the
-        dark theme. The highlighting refreshes by itself within a couple of
-        seconds when files change on disk or the repository's state changes,
-        such as after staging, committing, or switching branches. Outside a git
-        repository the tree is not highlighted.
+        Each name is coloured by its status in the @{GitScope}, in that
+        status's color; unchanged names keep the default color, and a folder
+        shows the status it takes from its contents, so a change stays visible
+        while its folder is collapsed.
+
+    diffButton:
+        A new, untracked, or modified file has a small diff button, an icon
+        with a "Show the changes" tooltip, at the right end of its row.
+        Clicking it opens the file's @{DiffViewScope} rather than the file
+        itself.
 
     opening:
         Clicking a file opens it. Where it opens is up to whatever holds the
