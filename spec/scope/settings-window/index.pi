@@ -1,7 +1,7 @@
 use /lib
 from ../project-directory import ProjectDirectoryScope
 from ../prompt-mode/chat-input import ChatInputScope
-from /ui/components/scroll-column import ScrollColumnScope
+from /ui/components/scrollbar import ScrollbarScope
 
 export scope SettingsWindowScope:
     concept: {SettingsWindowConcept}
@@ -17,7 +17,7 @@ shape SettingsWindowShape:
     description:
         A separate window, titled "Suspense Settings", 760 pixels square and
         centred when it opens, in the same light or dark mode as the main
-        window. Its page scrolls with a @{ScrollColumnScope}. Closing it doesn't
+        window. Its page scrolls with a @{ScrollbarScope}. Closing it doesn't
         quit the application.
 
     opening:

@@ -1,0 +1,23 @@
+
+anchor Prompt_06d31d64df4f0cae:
+    userPrompt:
+        Look into these performance issues.
+
+    mode: code
+
+    attachedText:
+        -
+            - "Split PromptMode into separate views: the history list, the output, the ask drawer and the question stack. Then an animation or new output only redraws its own part, not the whole screen."
+            - ""
+        -
+            - "Only draw visible rows. GPUI's list or uniform_list would render just the history rows and output on screen, so frame cost stops growing with history."
+            - ""
+        -
+            - "Batch stream updates: redraw at most once per frame, and ignore raw Output lines while the raw tail isn't visible."
+            - ""
+        -
+            - "Fix the drawer measurement: measure the height once, when the drawer opens or is dragged, so the spring can settle."
+            - ""
+
+    systemPrompt:
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.

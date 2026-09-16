@@ -22,7 +22,7 @@ use gpui_kit::*;
 
 use crate::checkbox::checkbox;
 use crate::main_window::FocusChat;
-use crate::scroll_column;
+use crate::scrollbar;
 
 actions!(
     folder_browser,
@@ -682,7 +682,7 @@ impl FolderBrowser {
         div()
             .flex_1()
             .min_h_0()
-            .child(scroll_column::with_scroll_column(
+            .child(scrollbar::with_scrollbar(
                 "folder-list",
                 &self.scroll,
                 list,

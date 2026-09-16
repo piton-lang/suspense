@@ -5,7 +5,7 @@ from /scope/lsp import LSP
 from /scope/prompt-mode/message-list import MessageList
 from /scope/settings-window import SettingsWindowScope
 from /ui/components/history-list import HistoryListScope
-from /ui/components/scroll-column import ScrollColumnScope
+from /ui/components/scrollbar import ScrollbarScope
 
 export scope ChatInputScope:
     concept: {ChatInputConcept}
@@ -141,7 +141,7 @@ shape ChatInputShape:
 
         Once a question is complete, it opens onto a heading, with its status
         and first line, above its full task table, in the answer drawer, which
-        it fills, scrolling once it is taller, with a @{ScrollColumnScope} and
+        it fills, scrolling once it is taller, with a @{ScrollbarScope} and
         its lock to the bottom. Only one question is open at a time: opening
         another closes the one open back down to its row. An open question
         leaves the stack for the drawer. Clicking an open question's heading
@@ -175,8 +175,12 @@ shape ChatInputShape:
         project and those closed since. Its row reads "No previous answers",
         "1 previous answer", or "N previous answers", and while expanded,
         "Back to the questions". Expanded, the row and the list go into the
-        answer drawer, the list sliding up out of the chat input. The questions
-        asked from now on carry on the conversation the latest of them left off.
+        answer drawer, the list sliding up from on top of any question rows
+        still in the stack, rather than out of the chat input over them: those
+        rows stay where they were, in view and undimmed, beneath the drawer, and
+        with no rows left there it slides up out of the chat input as usual. The
+        questions asked from now on carry on the conversation the latest of them
+        left off.
 
     answerDrawer:
         Only a question open onto its task table, or the previous answers
@@ -184,8 +188,11 @@ shape ChatInputShape:
         what is above it, the drawer slides up out of the chat input over
         everything above it, the message list, any file beside it, and the
         stack, covering them rather than pushing them, and dims them: see the
-        @{MessageList}. Closing it slides nothing back; the stack and the
-        message list are where they were beneath it.
+        @{MessageList}. The previous answers are the exception: they slide up
+        from on top of the question rows in the stack, leaving those rows
+        uncovered and undimmed, and the drawer's share of the space counts from
+        the chat input, rows included. Closing it slides nothing back; the stack
+        and the message list are where they were beneath it.
 
         The drawer opens to 80% of the height of the space above the chat input
         by default: the open question's table, or the previous answers list,

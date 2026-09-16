@@ -2,7 +2,7 @@ use /lib
 from ./chat-input import ChatInputScope
 from ./message-list import MessageList
 from /ui/components/history-list import HistoryListScope
-from /ui/components/scroll-column import ScrollColumnScope
+from /ui/components/scrollbar import ScrollbarScope
 from /ui/components/git-panel import GitPanelScope
 
 export scope PromptEditor:
@@ -66,7 +66,7 @@ shape PromptEditorShape:
             or two of each, with a button to cancel it. Each prompt in the list
             is numbered, with its number, text, and cancel button vertically
             centred in its row, and the list scrolls once it gets tall, with a
-            @{ScrollColumnScope}. The
+            @{ScrollbarScope}. The
             same area holds the auto-send switch and the "Send next" button.
             The queue is shown only while it has anything in it.
 

@@ -1,6 +1,6 @@
 use /lib
 from /scope/git import GitScope
-from /ui/components/scroll-column import ScrollColumnScope
+from /ui/components/scrollbar import ScrollbarScope
 
 export scope DiffViewScope:
     concept: {DiffViewConcept}
@@ -15,7 +15,7 @@ concept DiffViewConcept:
 shape DiffViewShape:
     description:
         A header along the top, and beneath it the changes, which scroll with
-        a @{ScrollColumnScope}. It fills whatever holds it, and follows the
+        a @{ScrollbarScope}. It fills whatever holds it, and follows the
         file as it changes on disk.
 
     header:

@@ -26,6 +26,59 @@ const MIN_THUMB: Pixels = px(16.);
 /// How long the pulse lasts when the scroll locks.
 const PULSE_TIME: Duration = Duration::from_millis(900);
 
+/// What a scroll column scrolls: an element tracking a [`ScrollHandle`], or a
+/// virtualized [`list`] with its [`ListState`].
+#[derive(Clone)]
+pub enum Scroll {
+    Handle(ScrollHandle),
+    List(ListState),
+}
+
+impl From<&ScrollHandle> for Scroll {
+    fn from(handle: &ScrollHandle) -> Self {
+        Scroll::Handle(handle.clone())
+    }
+}
+
+impl From<&ListState> for Scroll {
+    fn from(state: &ListState) -> Self {
+        Scroll::List(state.clone())
+    }
+}
+
+impl Scroll {
+    /// How far it is scrolled, negative going down.
+    pub fn offset(&self) -> Point<Pixels> {
+        match self {
+            Scroll::Handle(handle) => handle.offset(),
+            Scroll::List(state) => state.scroll_px_offset_for_scrollbar(),
+        }
+    }
+
+    /// How far it can scroll.
+    pub fn max_offset(&self) -> Point<Pixels> {
+        match self {
+            Scroll::Handle(handle) => handle.max_offset(),
+            Scroll::List(state) => state.max_offset_for_scrollbar(),
+        }
+    }
+
+    pub fn set_offset(&self, offset: Point<Pixels>) {
+        match self {
+            Scroll::Handle(handle) => handle.set_offset(offset),
+            Scroll::List(state) => state.set_offset_from_scrollbar(offset),
+        }
+    }
+
+    /// The part of it in view.
+    fn viewport(&self) -> Bounds<Pixels> {
+        match self {
+            Scroll::Handle(handle) => handle.bounds(),
+            Scroll::List(state) => state.viewport_bounds(),
+        }
+    }
+}
+
 /// Locks the scroll to the bottom (`true`) or unlocks it (`false`).
 pub type SetLock = Rc<dyn Fn(bool, &mut Window, &mut App)>;
 
@@ -36,15 +89,16 @@ pub type SetLock = Rc<dyn Fn(bool, &mut Window, &mut App)>;
 /// a button for that; scrolling the list by hand, with the wheel or the
 /// column, locks it when that leaves the list at the bottom and breaks the lock
 /// when it doesn't.
-pub fn with_scroll_column(
+pub fn with_scrollbar(
     id: impl Into<SharedString>,
-    handle: &ScrollHandle,
+    handle: impl Into<Scroll>,
     content: impl IntoElement,
     fill: bool,
     lock: Option<(bool, SetLock)>,
     cx: &App,
 ) -> AnyElement {
-    let follow = follower(handle, &lock);
+    let handle: Scroll = handle.into();
+    let follow = follower(&handle, &lock);
     let row = h_flex()
         .items_stretch()
         .w_full()
@@ -61,7 +115,7 @@ pub fn with_scroll_column(
                 })
                 .child(content),
         )
-        .child(scroll_column(id.into(), handle, lock, cx));
+        .child(scrollbar(id.into(), &handle, lock, cx));
     row.into_any_element()
 }
 
@@ -70,7 +124,7 @@ pub fn with_scroll_column(
 /// keeps its lock as it is.
 type Follow = Rc<dyn Fn(&mut Window, &mut App)>;
 
-fn follower(handle: &ScrollHandle, lock: &Option<(bool, SetLock)>) -> Option<Follow> {
+fn follower(handle: &Scroll, lock: &Option<(bool, SetLock)>) -> Option<Follow> {
     let (_, set_lock) = lock.as_ref()?;
     let (handle, set_lock) = (handle.clone(), set_lock.clone());
     Some(Rc::new(move |window, cx| {
@@ -83,14 +137,14 @@ fn follower(handle: &ScrollHandle, lock: &Option<(bool, SetLock)>) -> Option<Fol
 
 /// Whether the list is scrolled to its bottom, or past it before it is
 /// clamped.
-fn at_bottom(handle: &ScrollHandle) -> bool {
+fn at_bottom(handle: &Scroll) -> bool {
     handle.offset().y <= -handle.max_offset().y + px(1.)
 }
 
 /// The column itself.
-fn scroll_column(
+fn scrollbar(
     id: SharedString,
-    handle: &ScrollHandle,
+    handle: &Scroll,
     lock: Option<(bool, SetLock)>,
     cx: &App,
 ) -> AnyElement {
@@ -406,8 +460,8 @@ struct Geometry {
 }
 
 impl Geometry {
-    fn of(handle: &ScrollHandle, track: Bounds<Pixels>) -> Self {
-        let viewport = handle.bounds().size.height;
+    fn of(handle: &Scroll, track: Bounds<Pixels>) -> Self {
+        let viewport = handle.viewport().size.height;
         let max = handle.max_offset().y.max(px(0.));
         let content = viewport + max;
         let height = track.size.height;
@@ -433,7 +487,7 @@ impl Geometry {
     }
 
     /// Scrolls the list so the thumb's top is at `top`.
-    fn scroll_thumb_to(&self, handle: &ScrollHandle, top: Pixels) {
+    fn scroll_thumb_to(&self, handle: &Scroll, top: Pixels) {
         let room = self.track.size.height - self.thumb_height;
         if room <= px(0.) || self.max <= px(0.) {
             return;
@@ -456,7 +510,7 @@ mod tests {
 
     use std::time::{Duration, Instant};
 
-    use super::{Geometry, MIN_THUMB, PULSE_TIME, Pulse, PulseFrame, with_scroll_column};
+    use super::{Geometry, MIN_THUMB, PULSE_TIME, Pulse, PulseFrame, with_scrollbar};
 
     /// Locking starts a pulse, which runs out; a list first shown locked
     /// doesn't pulse, and unlocking stops one under way.
@@ -530,14 +584,9 @@ mod tests {
                     v_flex()
                         .children((0..200).map(|ix| div().h(px(20.)).child(format!("row {ix}")))),
                 );
-            div().size_full().child(with_scroll_column(
-                "tall",
-                &self.scroll,
-                list,
-                true,
-                None,
-                cx,
-            ))
+            div()
+                .size_full()
+                .child(with_scrollbar("tall", &self.scroll, list, true, None, cx))
         }
     }
 
@@ -579,7 +628,7 @@ mod tests {
     #[test]
     fn thumb_fills_the_track_until_there_is_something_to_scroll() {
         let track = Bounds::new(point(px(0.), px(100.)), size(px(18.), px(200.)));
-        let geometry = Geometry::of(&ScrollHandle::new(), track);
+        let geometry = Geometry::of(&(&ScrollHandle::new()).into(), track);
         assert_eq!(geometry.thumb_top, px(100.));
         assert_eq!(geometry.thumb_height, px(200.));
         assert!(MIN_THUMB < px(200.));

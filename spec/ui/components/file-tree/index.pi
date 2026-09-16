@@ -1,6 +1,6 @@
 use /lib
 from /scope/project-directory import ProjectDirectoryScope
-from /ui/components/scroll-column import ScrollColumnScope
+from /ui/components/scrollbar import ScrollbarScope
 from /scope/git import GitScope
 from /ui/components/diff-view import DiffViewScope
 
@@ -17,7 +17,7 @@ concept FileTreeConcept:
 shape FileTreeShape:
     description:
         Folders are listed before files, both by name, and a folder's contents
-        are shown when it is expanded. It scrolls with a @{ScrollColumnScope}.
+        are shown when it is expanded. It scrolls with a @{ScrollbarScope}.
         Until a project is picked it reads "No project open".
 
     refreshing:

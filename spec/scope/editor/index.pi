@@ -14,14 +14,32 @@ concept EditorConcept:
 
 shape EditorShape:
     description:
-        Editable and syntax highlighted, under a header with the file's path
-        in the project, a dot while it has unsaved changes, a save button, and
-        a close button.
+        Editable and syntax highlighted, under a header with the file's path in
+        the project, a dot while it has unsaved changes, a save button, and a
+        close button.
+
+    syntaxHighlighting:
+        Every file is highlighted in its language, using the grammars gpui-kit's
+        editor comes with: Piton, and Astro, Bash, C, C++, C#, CMake, CSS,
+        diffs, EJS, Elixir, ERB, Go, GraphQL, HTML, Java, JavaScript, JSON,
+        Kotlin, Lua, Make, Markdown, PHP, Protocol Buffers, Python, Ruby, Rust,
+        Scala, Svelte, Swift, TOML, TSX, TypeScript, YAML, and Zig. SQL is left
+        out, as its grammar can't be built alongside gpui.
+
+        The language comes from the file's extension, ignoring case, including
+        the other extensions a language goes by, such as .h for C, .hpp and .cc
+        for C++, .jsx, .mjs, and .cjs for JavaScript, .mts and .cts for
+        TypeScript, .htm for HTML, .exs for Elixir, .zsh for Bash, .yml for
+        YAML, and .scss, .sass, and .less for CSS. Some files are known by their
+        whole name instead: Makefile for Make, CMakeLists.txt for CMake,
+        Cargo.lock for TOML, Gemfile and Rakefile for Ruby, and shell startup
+        files like .bashrc and .zshrc for Bash. A file in any other language, or
+        with no extension, is plain text.
 
     saving:
-        Ctrl+S (Cmd+S on macOS) or the save button writes the file to disk.
-        A file that cannot be saved keeps its changes and says why beneath
-        the header.
+        Ctrl+S (Cmd+S on macOS) or the save button writes the file to disk. A
+        file that cannot be saved keeps its changes and says why beneath the
+        header.
 
     languageSupport:
         overview:
@@ -31,15 +49,15 @@ shape EditorShape:
             full-text `textDocument/didChange`, reported with
             `textDocument/didSave` when saved, and closed with
             `textDocument/didClose` when the editor closes or shows another
-            file. Other files are edited without language support, as is a
-            Piton file while the server is not running.
+            file. Other files are edited without language support, as is a Piton
+            file while the server is not running.
 
         completions:
             `textDocument/completion` is requested after typing a letter, a
-            digit, an opening curly brace, a period, a dollar sign, an at
-            sign, a colon, or an underscore, and narrowed and ordered as in
-            the chat input. Accepting a completion also applies the import the
-            server attaches to it.
+            digit, an opening curly brace, a period, a dollar sign, an at sign,
+            a colon, or an underscore, and narrowed and ordered as in the chat
+            input. Accepting a completion also applies the import the server
+            attaches to it.
 
         hover:
             Hovering a name shows the server's `textDocument/hover`.
@@ -51,13 +69,12 @@ shape EditorShape:
 
         diagnostics:
             What the server publishes for the file is underlined, with the
-            message shown on hover, and kept while the text is edited until
-            the server publishes again.
+            message shown on hover, and kept while the text is edited until the
+            server publishes again.
 
         quickFixes:
-            Ctrl+. (Cmd+. on macOS) lists the server's
-            `textDocument/codeAction` fixes at the cursor, and picking one
-            applies its edits to the file.
+            Ctrl+. (Cmd+. on macOS) lists the server's `textDocument/codeAction`
+            fixes at the cursor, and picking one applies its edits to the file.
 
     replacing:
         Opening another file shows that file in its place. While there are

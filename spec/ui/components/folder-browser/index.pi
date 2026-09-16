@@ -1,5 +1,5 @@
 use /lib
-from /ui/components/scroll-column import ScrollColumnScope
+from /ui/components/scrollbar import ScrollbarScope
 
 export scope FolderBrowserScope:
     concept: {FolderBrowserConcept}
@@ -30,7 +30,7 @@ shape FolderBrowserShape:
     folders:
         The current folder's folders, never its files, each a row with a folder
         icon and its name, sorted by name ignoring case, with a
-        @{ScrollColumnScope}. Clicking a row selects it, highlighted; clicking
+        @{ScrollbarScope}. Clicking a row selects it, highlighted; clicking
         it twice goes into it. A folder with no folders in it reads
         "No folders here", and one that can't be read says why in place of the
         list. Going to another folder clears the selection and scrolls back to

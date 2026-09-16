@@ -283,7 +283,7 @@ impl Render for SettingsWindow {
             .flex()
             .flex_col()
             .bg(background)
-            .child(crate::scroll_column::with_scroll_column(
+            .child(crate::scrollbar::with_scrollbar(
                 "settings",
                 &self.scroll,
                 page,

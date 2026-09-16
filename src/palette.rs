@@ -813,7 +813,7 @@ impl Render for Palette {
                                 .child(output_table(0, &search.reply, None, None, cx));
                             // Lets UI tests find the search; inert in normal builds.
                             let table = gpui_kit::TestSupportExt::test_support(table);
-                            crate::scroll_column::with_scroll_column(
+                            crate::scrollbar::with_scrollbar(
                                 "palette-search",
                                 &search.scroll,
                                 table,

@@ -1,0 +1,19 @@
+from /scope/application import ApplicationScope
+from /scope/editor import EditorScope
+
+anchor Prompt_6f0e19baf5577228:
+    userPrompt:
+        My understanding that the @{ApplicationScope.concept.shape.stack.components} text editor component we use in the @{EditorScope} actually already supports syntax highlighting for most common languages ?  If so can we enable that for everything ?
+
+    mode: combined
+
+    systemPrompt:
+        We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec.
+        
+        You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec.
+        
+        Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other.
+        
+        Then build the spec and execute the prompt directly on the code using a unified plan.
+        
+        Make sure that you write both code and spec.

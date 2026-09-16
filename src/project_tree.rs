@@ -481,7 +481,7 @@ impl Render for ProjectTree {
                             .relative()
                             .size_full(),
                     );
-                sidebar.child(crate::scroll_column::with_scroll_column(
+                sidebar.child(crate::scrollbar::with_scrollbar(
                     "project-tree",
                     &scroll,
                     tree,

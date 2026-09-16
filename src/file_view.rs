@@ -114,12 +114,7 @@ impl FileView {
                 .to_string(),
             None => path.display().to_string(),
         };
-        // Highlighting is chosen by extension; one it does not know is plain text.
-        let language = match path.extension().and_then(|ext| ext.to_str()) {
-            Some("pi") => piton_syntax::LANGUAGE_NAME.to_string(),
-            Some(ext) => ext.to_string(),
-            None => String::new(),
-        };
+        let language = language_for(&path);
         let editor = cx.new(|cx| {
             EditorState::new(window, cx)
                 .language(language)
@@ -854,6 +849,54 @@ fn show_document(document_path: PathBuf, file: WeakEntity<FileView>) -> ShowDocu
     })
 }
 
+/// The language `path` is highlighted as, by its name or extension: Piton, or
+/// any language gpui-kit has a grammar for. One it does not know, or has no
+/// grammar for, is plain text.
+pub(crate) fn language_for(path: &Path) -> String {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    // Files known by their whole name rather than an extension.
+    let by_name = match name {
+        "Makefile" | "makefile" | "GNUmakefile" => Some("make"),
+        "CMakeLists.txt" => Some("cmake"),
+        "Cargo.lock" | "Pipfile" => Some("toml"),
+        "Gemfile" | "Rakefile" | "Podfile" | "Brewfile" => Some("ruby"),
+        ".bashrc" | ".bash_profile" | ".profile" | ".zshrc" | ".zprofile" | ".envrc" => {
+            Some("bash")
+        }
+        _ => None,
+    };
+    if let Some(language) = by_name {
+        return language.to_string();
+    }
+    let Some(ext) = path.extension().and_then(|ext| ext.to_str()) else {
+        return String::new();
+    };
+    let ext = ext.to_ascii_lowercase();
+    // Extensions of languages gpui-kit knows under another name.
+    let language = match ext.as_str() {
+        "pi" => piton_syntax::LANGUAGE_NAME,
+        "h" => "c",
+        "hpp" | "hh" | "hxx" | "cc" | "cxx" | "ino" => "cpp",
+        "jsx" | "mjs" | "cjs" => "javascript",
+        "mts" | "cts" => "typescript",
+        "htm" | "xhtml" => "html",
+        "exs" | "heex" => "elixir",
+        "zsh" | "ksh" => "bash",
+        "json5" | "jsonl" | "geojson" => "json",
+        "mk" => "make",
+        "less" | "sass" => "css",
+        "kts" | "ktm" => "kotlin",
+        "gql" => "graphql",
+        "markdown" | "mdown" => "markdown",
+        "yml" => "yaml",
+        ext => ext,
+    };
+    language.to_string()
+}
+
 /// `text` in Piton's canonical formatting, from `piton format` run in
 /// `project_dir`; an error if it could not be formatted.
 pub(crate) fn format_piton(text: &str, project_dir: &Path) -> anyhow::Result<String> {
@@ -898,7 +941,74 @@ mod tests {
     use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, Focusable as _, TestAppContext};
     use lsp_types::Position;
 
-    use super::{CloseFile, FileView};
+    use super::{CloseFile, FileView, language_for};
+
+    /// Common languages are highlighted by their extensions, and some files by
+    /// their whole names; every one of them has a grammar in gpui-kit. Files it
+    /// has no grammar for are plain text.
+    #[test]
+    fn files_are_highlighted_in_their_language() {
+        use gpui_kit::component::highlighter::LanguageRegistry;
+
+        let cases = [
+            ("src/main.rs", "rust"),
+            ("app.py", "python"),
+            ("index.ts", "typescript"),
+            ("view.tsx", "tsx"),
+            ("util.mjs", "javascript"),
+            ("button.jsx", "javascript"),
+            ("main.go", "go"),
+            ("lib.h", "c"),
+            ("lib.hpp", "cpp"),
+            ("Main.java", "java"),
+            ("Program.cs", "csharp"),
+            ("style.scss", "css"),
+            ("page.html", "html"),
+            ("README.md", "markdown"),
+            ("Cargo.toml", "toml"),
+            ("Cargo.lock", "toml"),
+            ("config.yml", "yaml"),
+            ("data.json", "json"),
+            ("run.sh", "bash"),
+            (".zshrc", "bash"),
+            ("Makefile", "make"),
+            ("CMakeLists.txt", "cmake"),
+            ("app.rb", "ruby"),
+            ("Gemfile", "ruby"),
+            ("init.lua", "lua"),
+            ("App.swift", "swift"),
+            ("main.kt", "kotlin"),
+            ("mix.exs", "elixir"),
+            ("schema.graphql", "graphql"),
+            ("api.proto", "proto"),
+            ("change.diff", "diff"),
+            ("main.zig", "zig"),
+        ];
+        let registry = LanguageRegistry::singleton();
+        for (file, language) in cases {
+            let config = registry
+                .language(&language_for(Path::new(file)))
+                .unwrap_or_else(|| panic!("{file} has no language"));
+            assert!(config.has_grammar(), "{file} has no grammar");
+            assert_eq!(
+                Some(config.name),
+                registry.language(language).map(|config| config.name),
+                "{file} isn't highlighted as {language}"
+            );
+        }
+        assert_eq!(
+            language_for(Path::new("spec/index.pi")),
+            crate::piton_syntax::LANGUAGE_NAME
+        );
+        for plain in ["LICENSE", "notes.txt"] {
+            assert!(
+                registry
+                    .language(&language_for(Path::new(plain)))
+                    .is_none_or(|config| !config.has_grammar()),
+                "{plain} is highlighted"
+            );
+        }
+    }
     use crate::piton_lsp;
     use crate::piton_syntax;
     use crate::project_directory::ProjectDirectory;

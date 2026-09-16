@@ -1,7 +1,7 @@
 use /lib
 from /scope/editor import EditorScope
 from /scope/prompt-mode/chat-input import ChatInputScope
-from /ui/components/scroll-column import ScrollColumnScope
+from /ui/components/scrollbar import ScrollbarScope
 
 export scope MessageList:
     concept: {MessageListConcept}
@@ -110,9 +110,16 @@ shape MessageListShape:
         question rows.
 
     scrolling:
-        The latest task's output scrolls with a @{ScrollColumnScope}, with its
+        The latest task's output scrolls with a @{ScrollbarScope}, with its
         lock to the bottom. Unlocked, it still follows new output while it is
         already scrolled to the bottom. The lock is off until switched on.
+
+        The rows of the output table scroll beneath its header, which stays at
+        the top. However long the output or the list of previous tasks grows,
+        drawing it costs no more than drawing the rows in view, so scrolling,
+        animations, and new output stay smooth. While the end of the output is
+        scrolled out of view, raw harness output that would only change the
+        waiting row at the end redraws nothing.
 
     legibility:
         The output from a realtime agent should be readable and

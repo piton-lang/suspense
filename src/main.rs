@@ -32,7 +32,7 @@ mod prompt_history;
 mod prompt_mode;
 mod prompt_queue;
 mod ribbon;
-mod scroll_column;
+mod scrollbar;
 mod settings_window;
 mod shell_format;
 mod system_prompts;

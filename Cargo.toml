@@ -14,7 +14,45 @@ path = "src/main.rs"
 anyhow = "1"
 dirs = "6"
 futures = "0.3"
-gpui-kit = { version = "0.6.1", features = ["tree-sitter", "tree-sitter-bash"] }
+gpui-kit = { version = "0.6.1", features = [
+    "tree-sitter",
+    # Highlighting for every language gpui-kit has a grammar for but SQL, whose
+    # grammar pins an older `cc` than gpui builds with.
+    "tree-sitter-astro",
+    "tree-sitter-bash",
+    "tree-sitter-c",
+    "tree-sitter-cmake",
+    "tree-sitter-cpp",
+    "tree-sitter-csharp",
+    "tree-sitter-css",
+    "tree-sitter-diff",
+    "tree-sitter-ejs",
+    "tree-sitter-elixir",
+    "tree-sitter-erb",
+    "tree-sitter-go",
+    "tree-sitter-graphql",
+    "tree-sitter-html",
+    "tree-sitter-java",
+    "tree-sitter-javascript",
+    "tree-sitter-jsdoc",
+    "tree-sitter-kotlin",
+    "tree-sitter-lua",
+    "tree-sitter-make",
+    "tree-sitter-markdown",
+    "tree-sitter-php",
+    "tree-sitter-proto",
+    "tree-sitter-python",
+    "tree-sitter-ruby",
+    "tree-sitter-rust",
+    "tree-sitter-scala",
+    "tree-sitter-svelte",
+    "tree-sitter-swift",
+    "tree-sitter-toml",
+    "tree-sitter-tsx",
+    "tree-sitter-typescript",
+    "tree-sitter-yaml",
+    "tree-sitter-zig",
+] }
 ignore = "0.4"
 lsp-types = "0.97"
 notify = "7"
@@ -25,7 +63,46 @@ tree-sitter = "0.26"
 tree-sitter-language = "0.1"
 
 [dev-dependencies]
-gpui-kit = { version = "0.6.1", features = ["tree-sitter", "tree-sitter-bash", "test-support"] }
+gpui-kit = { version = "0.6.1", features = [
+    "tree-sitter",
+    # Highlighting for every language gpui-kit has a grammar for but SQL, whose
+    # grammar pins an older `cc` than gpui builds with.
+    "tree-sitter-astro",
+    "tree-sitter-bash",
+    "tree-sitter-c",
+    "tree-sitter-cmake",
+    "tree-sitter-cpp",
+    "tree-sitter-csharp",
+    "tree-sitter-css",
+    "tree-sitter-diff",
+    "tree-sitter-ejs",
+    "tree-sitter-elixir",
+    "tree-sitter-erb",
+    "tree-sitter-go",
+    "tree-sitter-graphql",
+    "tree-sitter-html",
+    "tree-sitter-java",
+    "tree-sitter-javascript",
+    "tree-sitter-jsdoc",
+    "tree-sitter-kotlin",
+    "tree-sitter-lua",
+    "tree-sitter-make",
+    "tree-sitter-markdown",
+    "tree-sitter-php",
+    "tree-sitter-proto",
+    "tree-sitter-python",
+    "tree-sitter-ruby",
+    "tree-sitter-rust",
+    "tree-sitter-scala",
+    "tree-sitter-svelte",
+    "tree-sitter-swift",
+    "tree-sitter-toml",
+    "tree-sitter-tsx",
+    "tree-sitter-typescript",
+    "tree-sitter-yaml",
+    "tree-sitter-zig",
+    "test-support",
+] }
 
 [build-dependencies]
 cc = "1"

@@ -380,7 +380,7 @@ impl DiffView {
         .track_scroll(&self.scroll)
         .size_full();
         let handle = self.scroll.0.borrow().base_handle.clone();
-        crate::scroll_column::with_scroll_column("diff", &handle, list, true, None, cx)
+        crate::scrollbar::with_scrollbar("diff", &handle, list, true, None, cx)
     }
 
     fn render_unified_row(
