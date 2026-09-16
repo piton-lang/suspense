@@ -1,0 +1,22 @@
+from /scope/divergence import DivergenceScope
+
+anchor Prompt_a3311b2938aa0f79:
+    userPrompt:
+        The @{DivergenceScope} display how connected a given file, how much drive and influence it has.  And more importantly.  When we're viewing a spec entry we should also be able to see how much the implementation diverges from the spec, and vice versa when viewing a source file.  So we can see influence, as well as divergence.  We'd also like to be able to see how well defined a given file is.  The spec may have big gaps, or the implementation may have filled in a lot of the blanks.  Obviously we'll need to save all this as part of the prompt we send to calculate all of this.
+        
+        We should also save divergence reports since they're costly to run.  They should survive restarts of the application.
+        
+        The reports tab should show a detailed overall assessment of all the factors we've discussed.  It should also show well defined areas and less well defined areas.
+
+    mode: combined
+
+    systemPrompt:
+        We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec.
+        
+        You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec.
+        
+        Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other.
+        
+        Then build the spec and execute the prompt directly on the code using a unified plan.
+        
+        Make sure that you write both code and spec.

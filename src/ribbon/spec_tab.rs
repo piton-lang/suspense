@@ -8,14 +8,44 @@ use gpui_kit::component::{Disableable as _, WindowExt as _};
 use gpui_kit::*;
 
 use super::{Command, CommandPlace, Ribbon};
+use crate::divergence_view::AnalyzeDivergence;
 use crate::piton_build;
 use crate::project_directory::ProjectDirectory;
 
-pub(super) const COMMANDS: &[CommandPlace] = &[CommandPlace {
-    command: Command::BuildSpec,
-    group: "Build",
-    primary: true,
-}];
+pub(super) const COMMANDS: &[CommandPlace] = &[
+    CommandPlace {
+        command: Command::BuildSpec,
+        group: "Build",
+        primary: true,
+    },
+    CommandPlace {
+        command: Command::AnalyzeDivergence,
+        group: "Analysis",
+        primary: true,
+    },
+];
+
+/// Analyze Divergence: opens the divergence panel, which shows the latest saved
+/// report of how the code and the spec have diverged, or starts analyzing.
+pub(super) fn analyze_divergence(
+    button: impl Fn(&'static str, IconName, SharedString) -> Button,
+    cx: &mut Context<Ribbon>,
+) -> AnyElement {
+    let project = ProjectDirectory::get(cx);
+    button(
+        "analyze-divergence",
+        IconName::GitCompareArrows,
+        "Analyze Divergence".into(),
+    )
+    .tooltip(if project.is_none() {
+        "Open a project to analyze it"
+    } else {
+        "Analyze how the code and the spec have diverged"
+    })
+    .disabled(project.is_none())
+    .on_click(|_, window, cx| window.dispatch_action(Box::new(AnalyzeDivergence), cx))
+    .into_any_element()
+}
 
 /// Build Spec: disabled rather than hidden until it can run, so it is always
 /// found in the same place, with the tooltip saying why.

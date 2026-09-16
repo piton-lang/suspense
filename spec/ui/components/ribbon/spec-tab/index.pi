@@ -1,4 +1,5 @@
 use /lib
+from /scope/divergence import DivergenceScope
 
 export scope RibbonSpecTabScope:
     concept: {RibbonSpecTabConcept}
@@ -17,7 +18,21 @@ shape RibbonSpecTabShape:
         build:
             A "Build" group holds the Build Spec command.
 
+        analysis:
+            An "Analysis" group, after Build, holds the Analyze Divergence
+            command.
+
     commands:
+        analyzeDivergence:
+            An "Analyze Divergence" button with a compare-arrows icon. Clicking
+            it opens the @{DivergenceScope}, showing the latest saved report or
+            starting an analysis when there is none, and its tooltip says it
+            analyzes how the code and the spec have diverged. It
+            is disabled until a project is open, with a tooltip saying to open a
+            project to analyze it.
+
+            It is primary.
+
         buildSpec:
             A "Build Spec" button with a hammer icon. Clicking it runs
             `piton build` in the project, to compile the spec, and its tooltip

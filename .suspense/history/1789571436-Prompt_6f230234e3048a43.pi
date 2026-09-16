@@ -1,0 +1,19 @@
+from /ui/components/inset-panel import InsetPanelScope
+from /ui/components/ribbon/spec-tab import RibbonSpecTabScope
+
+anchor Prompt_6f230234e3048a43:
+    userPrompt:
+        We need a new button in @{RibbonSpecTabScope} "Analyze Divergence" and it's a whole new scope in the spec as well.  It should first build the current spec with `piton build` and then run two parallel agents, one that analyzes the CODE_LOCATION and one that analyzes the spec, looking for how they diverge.  For each source file, it should analyze which spec source files were used to drive it/had influence on it.  A final divergence score should be calculated. The results should be displayed in an @{InsetPanelScope}.  We should be able to view the source tree or the spec tree and see connections to their related source/spec files based on how strong the influence is.
+
+    mode: combined
+
+    systemPrompt:
+        We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec.
+        
+        You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec.
+        
+        Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other.
+        
+        Then build the spec and execute the prompt directly on the code using a unified plan.
+        
+        Make sure that you write both code and spec.

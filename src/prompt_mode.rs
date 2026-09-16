@@ -57,6 +57,7 @@ use gpui_kit::component::{Disableable as _, WindowExt as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
+use crate::activity::{Job, JobKind};
 use crate::chat_input::{self, ChatInput, SendMode, Submit, TabChanged};
 use crate::commit_notes;
 use crate::file_link::{self, OpenFile};
@@ -480,6 +481,12 @@ impl OutputRow<'_> {
 }
 
 impl Reply {
+    /// How many rows its table has.
+    #[cfg(test)]
+    pub(crate) fn row_count(&self) -> usize {
+        self.rows().len()
+    }
+
     /// Folds a harness event into the reply. Returns an error to show when the
     /// run failed.
     pub(crate) fn apply(&mut self, event: HarnessEvent) -> Option<String> {
@@ -938,7 +945,7 @@ pub struct PromptMode {
     output_list: ListState,
     /// The task, and how many rows of it, the output list was last laid out
     /// for.
-    output_list_for: Cell<(u64, usize)>,
+    output_list_for: Cell<(u64, usize, u64)>,
     output_locked: bool,
     queue_scroll: ScrollHandle,
     chat_input: Entity<ChatInput>,
@@ -1046,8 +1053,8 @@ impl PromptMode {
 
         let mut this = Self {
             tasks: Vec::new(),
-            output_list: ListState::new(0, ListAlignment::Top, OUTPUT_OVERDRAW),
-            output_list_for: Cell::new((0, 0)),
+            output_list: scrollbar::measured_list(ListAlignment::Top, OUTPUT_OVERDRAW),
+            output_list_for: Cell::new((0, 0, 0)),
             output_locked: false,
             queue_scroll: ScrollHandle::new(),
             chat_input,
@@ -1065,7 +1072,7 @@ impl PromptMode {
                 id_base: 0,
                 expanded: false,
                 open: None,
-                scroll: ListState::new(0, ListAlignment::Top, OUTPUT_OVERDRAW),
+                scroll: scrollbar::measured_list(ListAlignment::Top, OUTPUT_OVERDRAW),
                 laid_out: Cell::new((0, None)),
                 opened: 0,
             },
@@ -1105,7 +1112,7 @@ impl PromptMode {
                 id_base: ASK_HISTORY_IX,
                 expanded: false,
                 open: None,
-                scroll: ListState::new(0, ListAlignment::Top, OUTPUT_OVERDRAW),
+                scroll: scrollbar::measured_list(ListAlignment::Top, OUTPUT_OVERDRAW),
                 laid_out: Cell::new((0, None)),
                 opened: 0,
             },
@@ -1124,6 +1131,66 @@ impl PromptMode {
 
     /// Whether the harness is working on a prompt or a question, compiling or
     /// running it.
+    /// What is running: the task the harness is working on, then each
+    /// question still running.
+    pub fn running_jobs(&self) -> Vec<Job> {
+        let task = self
+            .tasks
+            .last()
+            .filter(|task| self.working && task.status.is_active())
+            .map(|task| Job {
+                kind: JobKind::Task,
+                title: "Task".into(),
+                detail: Some(first_line(&task.text)),
+            });
+        let questions = self
+            .asks
+            .iter()
+            .filter(|ask| ask.task.status.is_active())
+            .map(|ask| Job {
+                kind: JobKind::Question(ask.id),
+                title: "Question".into(),
+                detail: Some(first_line(&ask.task.text)),
+            });
+        task.into_iter().chain(questions).collect()
+    }
+
+    /// Starts a question that stays running, for tests elsewhere.
+    #[cfg(test)]
+    pub fn start_test_question(&mut self, text: &str, cx: &mut Context<Self>) -> usize {
+        let id = self.push_ask(text.to_string().into(), cx);
+        self.update_ask(id, |ask| ask.apply(HarnessEvent::TextStarted), cx);
+        id
+    }
+
+    #[cfg(test)]
+    pub fn close_test_question(&mut self, id: usize, cx: &mut Context<Self>) {
+        self.close_ask(id, cx);
+    }
+
+    /// Brings the latest task's output into view: out from behind the
+    /// previous tasks and the answer drawer, scrolled to its end.
+    pub fn reveal_task(&mut self, cx: &mut Context<Self>) {
+        self.task_history.expanded = false;
+        self.close_answer_drawer();
+        self.output_list.scroll_to_end();
+        cx.notify();
+    }
+
+    /// Brings the question `id`'s row into view, closing the answer drawer
+    /// over it.
+    pub fn reveal_question(&mut self, _id: usize, cx: &mut Context<Self>) {
+        self.close_answer_drawer();
+        cx.notify();
+    }
+
+    fn close_answer_drawer(&mut self) {
+        self.expanded_ask = None;
+        if self.ask_history.expanded {
+            self.ask_history.toggle();
+        }
+    }
+
     pub fn is_working(&self) -> bool {
         self.working || self.asks.iter().any(|ask| ask.task.status.is_active())
     }
@@ -2633,12 +2700,31 @@ impl PromptMode {
             return div().into_any_element();
         };
         let task_ix = self.tasks.len() - 1;
-        let count = task.reply.rows().len();
+        let rows = task.reply.rows();
+        let count = rows.len();
+        // What the last rows, which stream, show, so they're remeasured only
+        // when that changes; remeasuring has the list go over every row.
+        let streaming = {
+            use std::hash::{Hash as _, Hasher as _};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            for row in &rows[count.saturating_sub(2)..] {
+                match row {
+                    OutputRow::Text(text) => (0, *text).hash(&mut hasher),
+                    OutputRow::Error(text) => (1, *text).hash(&mut hasher),
+                    OutputRow::Tool(call) => {
+                        (2, &call.name, &call.summary, call.state as u8).hash(&mut hasher)
+                    }
+                    OutputRow::Pending => 3.hash(&mut hasher),
+                }
+            }
+            hasher.finish()
+        };
+        drop(rows);
         // Only the rows in view are laid out, so drawing it costs the same
         // however long the output grows. The list is told when the task
         // changes, when rows come or go, and that the last rows, which
         // stream, may have changed height.
-        let (laid_out_task, laid_out_count) = self.output_list_for.get();
+        let (laid_out_task, laid_out_count, laid_out_streaming) = self.output_list_for.get();
         if laid_out_task != task.uid {
             self.output_list.reset(count);
         } else if laid_out_count != count {
@@ -2646,9 +2732,10 @@ impl PromptMode {
                 laid_out_count.min(count)..laid_out_count,
                 count - laid_out_count.min(count),
             );
+            scrollbar::measure_new_rows(&self.output_list);
         }
-        self.output_list_for.set((task.uid, count));
-        if count > 0 {
+        self.output_list_for.set((task.uid, count, streaming));
+        if count > 0 && streaming != laid_out_streaming {
             self.output_list
                 .remeasure_items(count.saturating_sub(2)..count);
         }
@@ -3600,7 +3687,7 @@ fn raw_tail(reply: &Reply, cx: &App) -> AnyElement {
 
 /// A line of the harness's raw output, highlighted as JSON. A line cut short
 /// is still highlighted as far as it parses.
-fn highlighted_json(line: &str, cx: &App) -> StyledText {
+pub(crate) fn highlighted_json(line: &str, cx: &App) -> StyledText {
     let styles = json_highlights(line, &cx.theme().highlight_theme);
     StyledText::new(SharedString::from(line.to_string())).with_highlights(styles)
 }
@@ -4875,7 +4962,7 @@ mod tests {
             });
         })
         .unwrap();
-        let (row, _) = settle(
+        let _ = settle(
             handle,
             ("ask-row", 2usize),
             |row, _| row.size.height > gpui_kit::px(0.),
@@ -4968,6 +5055,89 @@ mod tests {
         .unwrap();
         cx.run_until_parked();
         assert!(notified.get() > 0, "a raw line in view didn't redraw");
+    }
+
+    /// Scrolling through long output of rows of differing heights, rows not yet
+    /// seen are already counted at their height, so how far the output scrolls,
+    /// and with it the scrollbar's thumb, holds still rather than jumping as
+    /// rows come into view; and so it does once the output's width changes.
+    #[gpui_kit::test]
+    async fn output_scrollbar_holds_still_while_scrolling(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let ix = this.push_task("Do it".into(), cx);
+                for n in 0..200 {
+                    this.apply_event(ix, HarnessEvent::TextStarted, cx);
+                    let text = if n % 3 == 0 {
+                        format!("Paragraph {n}. {}", "Long words wrap here. ".repeat(40))
+                    } else {
+                        format!("Paragraph {n}.")
+                    };
+                    this.apply_event(ix, HarnessEvent::TextDelta(text), cx);
+                }
+                this.scroll_output_to_top();
+            });
+        })
+        .unwrap();
+        let scroll = prompt_mode.read_with(cx, |this, _| {
+            crate::scrollbar::Scroll::from(&this.output_list)
+        });
+        let frame = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.render_frame(cx);
+            })
+            .unwrap();
+        };
+        frame(cx);
+        let max = scroll.max_offset().y;
+        assert!(
+            max > gpui_kit::px(2000.),
+            "the output barely scrolls: {max:?}"
+        );
+        let mut y = gpui_kit::px(0.);
+        while y < max {
+            scroll.set_offset(gpui_kit::point(gpui_kit::px(0.), -y));
+            frame(cx);
+            let now = scroll.max_offset().y;
+            assert!(
+                (now - max).abs() < gpui_kit::px(1.),
+                "at {y:?} the output scrolls {now:?}, not {max:?}"
+            );
+            y += gpui_kit::px(400.);
+        }
+
+        // Rows that come while the output is scrolled away from its end count
+        // at their height straight away.
+        scroll.set_offset(gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(0.)));
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.apply_event(0, HarnessEvent::TextStarted, cx);
+                let text = "Late words wrap here. ".repeat(60);
+                this.apply_event(0, HarnessEvent::TextDelta(text), cx);
+            });
+        })
+        .unwrap();
+        frame(cx);
+        let grown = scroll.max_offset().y;
+        assert!(grown > max + gpui_kit::px(40.), "{grown:?} after {max:?}");
+        scroll.set_offset(gpui_kit::point(gpui_kit::px(0.), -grown / 2.));
+        frame(cx);
+        assert!((scroll.max_offset().y - grown).abs() < gpui_kit::px(1.));
+        let max = grown;
+
+        // A narrower window rewraps the rows; once drawn, the output's height
+        // is known in full again straight away.
+        gpui_kit::VisualTestContext::from_window(handle, cx)
+            .simulate_resize(gpui_kit::size(gpui_kit::px(500.), gpui_kit::px(700.)));
+        scroll.set_offset(gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(0.)));
+        frame(cx);
+        let narrow = scroll.max_offset().y;
+        assert!(narrow > max, "rewrapped rows are no taller");
+        scroll.set_offset(gpui_kit::point(gpui_kit::px(0.), -narrow / 2.));
+        frame(cx);
+        assert!((scroll.max_offset().y - narrow).abs() < gpui_kit::px(1.));
     }
 
     /// An open question fills the answer drawer to 80% of the space above the

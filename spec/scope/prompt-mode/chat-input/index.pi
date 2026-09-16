@@ -39,9 +39,15 @@ shape ChatInputShape:
             four sit flush against each other with no extra gaps, and no tab has
             more padding than a normal tab.
 
-            Pressing <Tab> while in the chat input cycles from Code to Chain to
-            Spec to Ask and back to Code, <Shift+Tab> the other way, and focus
-            remains in the chat input.
+            Pressing <Ctrl+Tab> while in the chat input cycles from Code to
+            Chain to Spec to Ask and back to Code, <Ctrl+Shift+Tab> the other
+            way, and focus remains in the chat input. It is <Ctrl> on macOS too,
+            not <Cmd>.
+
+            <Tab> and <Shift+Tab> don't switch tabs, and don't indent the text
+            either: they move keyboard focus out of the chat input to the next
+            or previous control, as they do everywhere else. While the
+            completion menu is open, <Tab> is still the menu's.
 
         chain:
             Chain is a tab with unusual behaviour. It shows an icon rather than
@@ -90,9 +96,9 @@ shape ChatInputShape:
             Ask. With Chain selected, Code, Spec, and the body are all purple.
             The colour transitions smoothly whenever the selected tab changes,
             straight from the old tab's colour to the new one's. The tabs wrap
-            around, so pressing <Tab> on Ask fades green straight to Code's red,
-            and <Shift+Tab> on Code fades red straight to Ask's green; neither
-            lights up Chain or Spec on the way.
+            around, so pressing <Ctrl+Tab> on Ask fades green straight to Code's
+            red, and <Ctrl+Shift+Tab> on Code fades red straight to Ask's green;
+            neither lights up Chain or Spec on the way.
 
     systemPrompt:
         The selected tab is the mode a prompt is sent in, and each mode gives
@@ -100,25 +106,18 @@ shape ChatInputShape:
         code location is `codeRoot` and the spec location is `root`, as set in
         the project's piton.config.pi.
 
-        code:
-            We're working on the code located in <code location>. Don't edit the
-            spec located in <spec location>.
+        defaults:
+            Each mode's default system prompt is the template saved for it in
+            this application's own repository, in its `.suspense/system-prompts`
+            directory, one Markdown file per mode: code.md, combined.md for
+            Chain, spec.md, and ask.md. They are the source of truth for the
+            defaults, and are baked into the application when it is built, so a
+            build always ships with whatever those files say, and changing them
+            changes the defaults the next build has. A build can't be made
+            without them.
 
-        spec:
-            We're working on the spec located in <spec location>. Don't edit the
-            code located in <code location>.
-
-        both:
-            We're working on both the code located in <code location> and the
-            spec located in <spec location>. Edit both of them.
-
-        ask:
-            We're only asking a question about the code located in <code
-            location> and the spec located in <spec location>. Don't edit either
-            of them.
-
-        These are the defaults; each is saved with the project and can be edited
-        in the @{SettingsWindowScope}.
+            The defaults are only where a project starts: each is saved with the
+            project and can be edited in the @{SettingsWindowScope}.
 
         A prompt keeps the mode it was sent in while it waits in the queue.
 
@@ -141,14 +140,14 @@ shape ChatInputShape:
 
         Once a question is complete, it opens onto a heading, with its status
         and first line, above its full task table, in the answer drawer, which
-        it fills, scrolling once it is taller, with a @{ScrollbarScope} and
-        its lock to the bottom. Only one question is open at a time: opening
-        another closes the one open back down to its row. An open question
-        leaves the stack for the drawer. Clicking an open question's heading
-        closes it down to its row in the stack, and clicking a finished
-        question's row opens it again. Each question has a close button, which
-        removes it and stops it if it is still running, leaving the others
-        running. A closed question becomes a previous answer.
+        it fills, scrolling once it is taller, with a @{ScrollbarScope} and its
+        lock to the bottom. Only one question is open at a time: opening another
+        closes the one open back down to its row. An open question leaves the
+        stack for the drawer. Clicking an open question's heading closes it down
+        to its row in the stack, and clicking a finished question's row opens it
+        again. Each question has a close button, which removes it and stops it
+        if it is still running, leaving the others running. A closed question
+        becomes a previous answer.
 
     answerSteps:
         For a question, only the answer matters, so the steps leading up to it

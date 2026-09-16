@@ -2,7 +2,8 @@
 //! button on the right, in the body of the Code, Chain, Spec, and Ask tabs.
 //! Enter adds a line; Ctrl/Cmd+Enter sends, or queues the prompt while the
 //! harness works.
-//! Tab and Shift+Tab cycle the tabs and Esc takes focus out of the input.
+//! Ctrl+Tab and Ctrl+Shift+Tab cycle the tabs, Tab and Shift+Tab move focus
+//! out of the input, and Esc takes focus out of it.
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -40,7 +41,19 @@ const SEND_SHORTCUT: &str = "⌘Enter";
 #[cfg(not(target_os = "macos"))]
 const SEND_SHORTCUT: &str = "Ctrl+Enter";
 
-/// The tabs the input sits in, in the order Tab cycles them.
+actions!(chat_input, [NextMode, PreviousMode]);
+
+const CONTEXT: &str = "ChatInput";
+
+/// Ctrl+Tab and Ctrl+Shift+Tab cycle the tabs: Ctrl on macOS too.
+pub fn bind_keys(cx: &mut App) {
+    cx.bind_keys([
+        KeyBinding::new("ctrl-tab", NextMode, Some(CONTEXT)),
+        KeyBinding::new("ctrl-shift-tab", PreviousMode, Some(CONTEXT)),
+    ]);
+}
+
+/// The tabs the input sits in, in the order Ctrl+Tab cycles them.
 const TABS: [SendMode; 4] = [
     SendMode::Code,
     SendMode::Both,
@@ -208,7 +221,7 @@ pub struct ChatInput {
     /// Index into `TABS`.
     selected_tab: usize,
     /// Where the tint is sliding to: the selected tab's index, counted on
-    /// past the last tab when Tab wraps around, so the tint moves straight
+    /// past the last tab when Ctrl+Tab wraps around, so the tint moves straight
     /// from Ask to Code instead of back across Spec.
     tint_target: f32,
     lsp: Option<Arc<PitonSession>>,
@@ -475,16 +488,26 @@ impl ChatInput {
         cx.notify();
     }
 
-    /// Moves `step` tabs along, wrapping around. An open completion menu
-    /// keeps its own Tab and Shift+Tab.
-    fn cycle_tab(&mut self, step: isize, cx: &mut Context<Self>) {
+    /// Tab and Shift+Tab: move focus to the next or previous control, as
+    /// anywhere else. An open completion menu keeps its own Tab.
+    fn move_focus(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.completion.read(cx).is_open() {
             return;
         }
         cx.stop_propagation();
+        if forward {
+            window.focus_next(cx);
+        } else {
+            window.focus_prev(cx);
+        }
+    }
+
+    /// Moves `step` tabs along, wrapping around.
+    fn cycle_tab(&mut self, step: isize, cx: &mut Context<Self>) {
+        cx.stop_propagation();
         let count = TABS.len() as isize;
         self.selected_tab = (self.selected_tab as isize + step).rem_euclid(count) as usize;
-        // Along the way Tab went, even when it wraps around.
+        // Along the way Ctrl+Tab went, even when it wraps around.
         self.tint_target += step as f32;
         cx.emit(TabChanged);
         cx.notify();
@@ -792,10 +815,20 @@ impl Render for ChatInput {
             .flex_col()
             .border_t_1()
             .border_color(cx.theme().border)
-            // Tab and Shift+Tab cycle the tabs rather than indenting, and the
-            // input keeps focus.
-            .capture_action(cx.listener(|this, _: &IndentInline, _, cx| this.cycle_tab(1, cx)))
-            .capture_action(cx.listener(|this, _: &OutdentInline, _, cx| this.cycle_tab(-1, cx)))
+            .key_context(CONTEXT)
+            // Ctrl+Tab and Ctrl+Shift+Tab cycle the tabs, and the input keeps
+            // focus.
+            .on_action(cx.listener(|this, _: &NextMode, _, cx| this.cycle_tab(1, cx)))
+            .on_action(cx.listener(|this, _: &PreviousMode, _, cx| this.cycle_tab(-1, cx)))
+            // Tab and Shift+Tab move focus on, rather than indenting.
+            .capture_action(
+                cx.listener(|this, _: &IndentInline, window, cx| this.move_focus(true, window, cx)),
+            )
+            .capture_action(
+                cx.listener(|this, _: &OutdentInline, window, cx| {
+                    this.move_focus(false, window, cx)
+                }),
+            )
             // Esc arrives as the window's FocusChat, which matches ahead of the
             // editor's own binding, or as the editor's Escape once it has
             // nothing to cancel. Handled here, neither reaches the window,
@@ -964,6 +997,7 @@ mod tests {
     async fn typing_a_reference_autocompletes_and_imports(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
+            super::bind_keys(cx);
             piton_syntax::init();
             ProjectDirectory::init(cx);
             ProjectDirectory::set(PathBuf::from(env!("CARGO_MANIFEST_DIR")), cx);
@@ -1070,6 +1104,7 @@ mod tests {
     async fn typing_a_mention_completes_skills_and_agents(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
+            super::bind_keys(cx);
             piton_syntax::init();
             ProjectDirectory::init(cx);
             ProjectDirectory::set(PathBuf::from(env!("CARGO_MANIFEST_DIR")), cx);
@@ -1123,6 +1158,7 @@ mod tests {
     async fn help_beside_the_tabs_says_what_the_tab_is_for(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
+            super::bind_keys(cx);
             piton_syntax::init();
             ProjectDirectory::init(cx);
         });
@@ -1171,13 +1207,15 @@ mod tests {
         }
     }
 
-    /// Tab in the input moves to the next tab, chain then Spec then Ask then
-    /// back to Code, and Shift+Tab back the other way, without indenting the
-    /// text or taking focus out of the input.
+    /// Ctrl+Tab in the input moves to the next tab, chain then Spec then Ask
+    /// then back to Code, and Ctrl+Shift+Tab back the other way, without
+    /// changing the text or taking focus out of the input. Plain Tab moves
+    /// focus out instead.
     #[gpui_kit::test]
-    async fn tab_cycles_the_tabs_and_keeps_focus(cx: &mut TestAppContext) {
+    async fn ctrl_tab_cycles_the_tabs_and_tab_moves_focus(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
+            super::bind_keys(cx);
             piton_syntax::init();
             ProjectDirectory::init(cx);
         });
@@ -1200,17 +1238,17 @@ mod tests {
         // With where the tint slides to: on past Ask to Code (4) and back
         // before Code to Ask (-1), rather than across the tabs between.
         let presses = [
-            ("tab", 1, 1.),
-            ("tab", 2, 2.),
-            ("tab", 3, 3.),
-            ("tab", 0, 4.),
-            ("tab", 1, 5.),
-            ("shift-tab", 0, 4.),
-            ("shift-tab", 3, 3.),
-            ("shift-tab", 2, 2.),
-            ("shift-tab", 1, 1.),
-            ("shift-tab", 0, 0.),
-            ("shift-tab", 3, -1.),
+            ("ctrl-tab", 1, 1.),
+            ("ctrl-tab", 2, 2.),
+            ("ctrl-tab", 3, 3.),
+            ("ctrl-tab", 0, 4.),
+            ("ctrl-tab", 1, 5.),
+            ("ctrl-shift-tab", 0, 4.),
+            ("ctrl-shift-tab", 3, 3.),
+            ("ctrl-shift-tab", 2, 2.),
+            ("ctrl-shift-tab", 1, 1.),
+            ("ctrl-shift-tab", 0, 0.),
+            ("ctrl-shift-tab", 3, -1.),
         ];
         for (key, expected, tint_target) in presses {
             cx.update_window(handle, |_, window, cx| window.press(key, cx))
@@ -1228,6 +1266,18 @@ mod tests {
             })
             .unwrap();
         }
+
+        // Plain Tab neither switches tabs nor indents: it moves focus on.
+        cx.update_window(handle, |_, window, cx| window.press("tab", cx))
+            .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            let input = chat_input.read(cx);
+            assert_eq!(input.selected_tab, 3, "Tab switched the tab");
+            assert_eq!(input.value(cx).as_ref(), "hi", "Tab changed the text");
+            assert!(!input.is_focused(window, cx), "Tab left focus in the input");
+        })
+        .unwrap();
     }
 
     /// Attachments are listed above the input, survive switching tabs, can be
@@ -1237,6 +1287,7 @@ mod tests {
     async fn attachments_are_listed_kept_across_tabs_and_sent(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
+            super::bind_keys(cx);
             piton_syntax::init();
             ProjectDirectory::init(cx);
         });
@@ -1285,8 +1336,8 @@ mod tests {
                 list.top() >= tabs.bottom() && list.bottom() <= editor.top(),
                 "the attachments {list:?} aren't between the tabs {tabs:?} and the input {editor:?}"
             );
-            window.press("tab", cx);
-            window.press("tab", cx);
+            window.press("ctrl-tab", cx);
+            window.press("ctrl-tab", cx);
             window.render_frame(cx);
             window.click(("remove-attachment", 2usize), cx);
         })
@@ -1369,6 +1420,7 @@ mod tests {
     async fn chain_is_an_evenly_spaced_tab(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
+            super::bind_keys(cx);
             piton_syntax::init();
             ProjectDirectory::init(cx);
         });
@@ -1401,8 +1453,8 @@ mod tests {
             "the chain {chain:?} is not narrower than Code {code:?} and Spec {spec:?}"
         );
 
-        // Tab moves to the chain, which selects Code and Spec with it.
-        cx.update_window(handle, |_, window, cx| window.press("tab", cx))
+        // Ctrl+Tab moves to the chain, which selects Code and Spec with it.
+        cx.update_window(handle, |_, window, cx| window.press("ctrl-tab", cx))
             .unwrap();
         let [code, chain, _, _] = settle_tabs(handle, true, cx);
         let edge = code.right();
@@ -1426,7 +1478,7 @@ mod tests {
         );
 
         // Tab again moves to Spec alone, and the chain opens up between them.
-        cx.update_window(handle, |_, window, cx| window.press("tab", cx))
+        cx.update_window(handle, |_, window, cx| window.press("ctrl-tab", cx))
             .unwrap();
         settle_tabs(handle, false, cx);
     }
@@ -1509,6 +1561,7 @@ mod tests {
     async fn single_line_input_lines_up_with_send_button(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
+            super::bind_keys(cx);
             piton_syntax::init();
             ProjectDirectory::init(cx);
         });
@@ -1595,6 +1648,7 @@ mod tests {
     ) -> (gpui_kit::Pixels, Vec<Vec<Frame>>) {
         cx.update(|cx| {
             gpui_kit::init(cx);
+            super::bind_keys(cx);
             piton_syntax::init();
             ProjectDirectory::init(cx);
         });
@@ -1743,6 +1797,7 @@ mod tests {
     async fn input_grows_and_shrinks_with_its_text(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
+            super::bind_keys(cx);
             piton_syntax::init();
             ProjectDirectory::init(cx);
         });

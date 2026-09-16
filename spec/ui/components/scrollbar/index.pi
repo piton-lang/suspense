@@ -32,6 +32,18 @@ shape ScrollbarShape:
         the pointer leaves the column, and pressing the track elsewhere moves
         the thumb there, from where it can be dragged straight away.
 
+    steadiness:
+        The thumb never jumps. Its size and place always reflect the whole
+        list's real height, including a list that only draws the rows in view:
+        every row is measured, even those never scrolled into view, so the
+        thumb doesn't grow, shrink, or leap as rows come into view. A row that
+        arrives, or changes, while out of view counts at its height as soon as
+        it does, and after the list's width changes, rewrapping its rows, the
+        height is known in full again by the next frame. Only what has changed
+        is measured again, so a long list stays as quick to scroll and to add to
+        as one that measures only what is in view; only a change of width
+        measures every row again.
+
     lockToBottom:
         A list that keeps receiving output, like a task's, adds one more square
         button below the others that locks the scroll to the bottom. While it is

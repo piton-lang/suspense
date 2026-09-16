@@ -1,0 +1,197 @@
+use /lib
+from /ui/components/inset-panel import InsetPanelScope
+from /ui/components/scrollbar import ScrollbarScope
+
+export scope DivergenceScope:
+    concept: {DivergenceConcept}
+
+concept DivergenceConcept:
+    pitch:
+        Shows how far the code and the spec have drifted apart: which parts of
+        the spec drove each source file, and how strongly, how far each side
+        diverges from the other, how well defined each file is, where the spec
+        has gaps and where the code filled in the blanks, and an overall
+        assessment and score for the whole project. Analyses are costly, so
+        each one is saved with the project and can be looked at again later.
+
+    shape: {DivergenceShape}
+
+shape DivergenceShape:
+    description:
+        An analysis of the open project, shown in an @{InsetPanelScope} titled
+        "Divergence", with a close button. Opening it shows the project's
+        latest saved report, or starts a fresh analysis straight away when
+        there is none. Closing the panel while it runs stops it. Whenever no
+        analysis is running, an "Analyze again" button in the panel's header
+        starts another.
+
+    minimizing:
+        Beside the close button, a minimize button, whose tooltip says the
+        analysis keeps running, hides the panel without stopping anything: the
+        analysis carries on out of sight, and the window beneath can be used
+        again. The panel comes back just as it was left, steps or results, from
+        the ribbon's activity list while it runs, or from the Analyze Divergence
+        command, which brings back a minimized panel rather than opening
+        another. Opening another inset panel, such as a file's diff, while the
+        divergence panel is showing minimizes it rather than closing it. Only
+        closing it stops it.
+
+    files:
+        The source files are every file under the code location, codeRoot in
+        piton.config.pi, leaving out what Git ignores and anything that isn't
+        text. The spec files are every .pi file under the spec location, root in
+        piton.config.pi. Paths are shown relative to the project. Each side is
+        capped at 400 files, and the panel says when a side was cut short.
+
+    analyzing:
+        steps:
+            The analysis first runs `piton build` in the project, so the
+            compiled spec is up to date. A build that fails doesn't stop the
+            analysis; the panel notes that the compiled spec may be out of date.
+            Then two agents run at the same time: one analyzes the code, one
+            analyzes the spec. While it runs, the panel shows
+            "Building the spec" along the top, with a spinner while it runs, a
+            tick once done, or a cross and why if it failed.
+
+        progress:
+            Beneath it, the two agents' progress side by side, each taking half
+            the panel's width and the rest of its height: "Analyzing the code"
+            on the left and "Analyzing the spec" on the right. Each is headed by
+            its name, with a spinner while its agent runs, a tick once done, or a
+            cross and why if it failed, and before its agent starts, muted.
+
+            Beneath its heading, each shows its agent's output as a task's is
+            shown, in the same table: a row for each piece of text, tool call,
+            and error, in order, with its kind as a badge, what it was, and a
+            tool call's state, and while it streams, its last row showing the
+            last few lines of the harness's raw JSON, reading
+            "Waiting for the harness…" until the first arrives. It fills in as
+            the agent streams, and scrolls with a @{ScrollbarScope} that locks
+            to the bottom, locked to start with, so each follows its agent's
+            latest output until scrolled away from the bottom. Once both agents
+            are over and there are results, the results take their place; when
+            neither agent got anywhere, the tables stay, with what went wrong.
+
+        agents:
+            Each agent is a one-off run of the harness in the project, which can
+            only read, glob, and search files, never change anything, and keeps
+            no session. It streams its output as JSON, a line per event, text
+            as it is written, and its reply is the result it finishes with. It is given both lists of
+            files, the code and spec locations, and that the compiled spec is in
+            the agent directory's reference folder, and replies with nothing but
+            JSON.
+
+            The code agent goes through every source file, and for each says:
+            - which spec files drove it or had influence on it, with how strong each influence is, from 0 for barely any to 1 for the file being written straight from it, how far the file diverges from that spec file in particular, from 0 to 1, and a short note on what it took from it
+            - how far the file diverges from the spec, from 0 for doing just what the spec describes to 1 for nothing in the spec accounting for it or the spec saying otherwise
+            - how well defined it is, from 0 for the implementation having filled in all of it with nothing in the spec saying how to 1 for the spec defining all of it
+            - the blanks the implementation filled in, each in a short phrase
+            - a sentence summing up how it diverges, or that it doesn't
+
+            The spec agent goes through every spec file the same way from the
+            other side:
+            - which source files implement it, how strongly, and how far each diverges from what the file describes
+            - how far the code diverges from what the file describes, from 0 for all of it being built as described to 1 for none of it being built or the code doing otherwise
+            - how well defined it is, from 0 for the file being too vague to build from to 1 for leaving nothing an implementation has to guess
+            - the gaps in it, each in a short phrase
+            - a sentence summing it up
+
+            Each agent also replies with an assessment of its side as a whole,
+            a few sentences long, and the areas of the project it found well
+            defined and less well defined, each an area's name and a sentence on
+            why.
+
+        failing:
+            An agent that fails, or replies with something that can't be read,
+            fails the analysis, and the panel says why. If only one agent fails,
+            what the other found is still shown.
+
+    results:
+        connections:
+            A connection joins a source file and a spec file. Its strength is
+            the average of what both agents said of it, or what one said when
+            only one mentioned it, from 0 to 1, and so is its divergence, which
+            is unknown when neither agent said. Connections to files that aren't
+            among the source or spec files are left out. A strength of two
+            thirds or more is strong, one third or more moderate, and anything
+            less weak.
+
+        measures:
+            Each file analyzed has:
+            - its influence: how strongly it is connected to the other side, 1 less the product of 1 less each connection's strength, so one strong connection or several weaker ones both count for a lot, and a file with no connections has none
+            - its divergence: what its agent said
+            - its definition: how well defined its agent said it is, with the gaps in the spec or the blanks the implementation filled in
+
+            A file its agent left out is "Not analyzed", and counts towards
+            none of the figures below. Each is shown as a whole percentage.
+
+        score:
+            The divergence score is the average divergence of every file
+            analyzed, source and spec alike, and the alignment is 100% less
+            it. The header reads as the alignment, after a thin divider beside
+            the panel's title, a little larger and bolder than the title: for a
+            divergence score of 8%, "92% aligned". It is coloured by what the
+            score means: green while the score is below 20%, aligned; amber
+            from 20% up to 50%, drifting; and red from 50%, diverged. Beside
+            it, muted, how long ago the report was made. The header is the same
+            height whether the analysis is running or its results are shown.
+
+        tabs:
+            Beneath the header, a row of tabs, "Report", "Source", and "Spec",
+            each its label alone: muted, brightening on hover, and while
+            selected, in the foreground colour and underlined in the theme's
+            primary colour, the underline sitting on the row's bottom border.
+            The labels line up with the content beneath. Once an analysis is
+            over, or a saved report is opened, "Report" is showing.
+
+        report:
+            The Report tab is an overall assessment, scrolling with a
+            @{ScrollbarScope}. Its sections are headed a little larger than its
+            text, and their parts by small, muted labels; everything lines up
+            along its left edge, and from the assessment on, it is laid out in
+            two columns of equal width, top aligned:
+            - a row of figures, each a bordered card with its value large above what it is: the alignment, coloured as the header's; the definition of the source files and of the spec files, each the average of their files', coloured green when well defined, amber, or red as the score would be for how poorly defined they are; the coverage of each side, the share of its analyzed files with at least one connection; and how many files are aligned, drifting, and diverged, by their divergence's percentage
+            - "Assessment": the code's on the left and the spec's on the right, each under its side's name, as the agents wrote them
+            - "Well defined" on the left and "Less well defined" on the right: the areas the agents named, each its name and why, muted
+            - beneath them, starting level with each other, the five best defined files on the left, highest first, and the five least well defined on the right, lowest first, each with its definition
+            - "Most diverged" on the left: the five files that diverge most, source and spec alike; and "Saved reports" on the right: each report saved for the project, newest first, with how long ago it was made and how aligned it was, the one showing marked; clicking another shows it
+            - "Notes", when there are any notes about the analysis
+
+            A file in any of these lists is a row of its path and its
+            percentage at the column's right, and opens that file in its tree
+            when clicked. Rows highlight on hover, and the highlight reaches a
+            little past the text, which stays in line with the headings.
+
+        trees:
+            "Source" and "Spec" show that side's files as a tree: a row per
+            folder and file, indented by depth, folders before files, each
+            sorted by name. A file's row shows its name, a small bar for its
+            divergence, coloured as the score is, and its divergence as a
+            percentage, or "Not analyzed". The tree scrolls with a
+            @{ScrollbarScope}.
+
+            Clicking a file selects it. Beside the tree, the selected file's
+            details: its path and summary, then its measures, each with a bar:
+            - influence, as "Influence"
+            - divergence, for a source file as "Diverges from the spec", and for a spec file as "Implementation diverges", coloured as the score is
+            - definition, as "Definition"
+
+            Then, for a source file, "Filled in by the implementation", and for
+            a spec file, "Gaps in the spec", listing them, or saying there are
+            none. Then its connections to files on the other side, strongest
+            first, each with the other file's path, a bar as long as the
+            connection is strong, its strength as a percentage, whether it is
+            strong, moderate, or weak, its divergence as a percentage when known,
+            coloured as the score is, and what the agents noted of it. Clicking
+            a connection switches to the other tree with that file selected and
+            scrolled into view. With nothing selected, the details say to select
+            a file. Once the results are in, the source file with the highest
+            divergence is selected.
+
+    saving:
+        Each analysis that gets results, even with one agent failed, is saved
+        as soon as it is over in the project's .suspense/divergence folder, a
+        JSON file per report named by when it was made, with everything the
+        report shows: its files and their measures, the connections, the
+        assessments and areas, and its notes. So they survive a restart of the
+        application. A saved report that can't be read is left out.

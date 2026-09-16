@@ -1,6 +1,7 @@
 // Hide the console window on Windows release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod activity;
 mod app;
 mod chat_input;
 mod checkbox;
@@ -8,6 +9,8 @@ mod commit_notes;
 mod completion_menu;
 mod diff;
 mod diff_view;
+mod divergence;
+mod divergence_view;
 mod file_link;
 mod file_view;
 mod folder_browser;

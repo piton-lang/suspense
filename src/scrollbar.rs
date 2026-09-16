@@ -79,6 +79,23 @@ impl Scroll {
     }
 }
 
+/// A virtualized list's state for a list with a scroll column, measuring every
+/// row. Left to itself, a list counts a row it hasn't laid out as no height at
+/// all, so how far it scrolls, and the thumb with it, would jump as rows come
+/// into view. This way, its next layout measures every row not yet measured,
+/// once each: rows already measured keep their height, so it costs only the
+/// rows that are new or changed, or every row once after the width changes.
+/// The list does so again by itself after a reset, a remeasure, or a change of
+/// width, but not after rows are spliced in: call [`measure_new_rows`] then.
+pub fn measured_list(alignment: ListAlignment, overdraw: Pixels) -> ListState {
+    ListState::new(0, alignment, overdraw).measure_all()
+}
+
+/// Has a [`measured_list`] measure the rows just spliced into it.
+pub fn measure_new_rows(state: &ListState) {
+    state.clone().measure_all();
+}
+
 /// Locks the scroll to the bottom (`true`) or unlocks it (`false`).
 pub type SetLock = Rc<dyn Fn(bool, &mut Window, &mut App)>;
 

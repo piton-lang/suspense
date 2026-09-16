@@ -10,8 +10,12 @@ use gpui_kit::component::resizable::{ResizableState, h_resizable, resizable_pane
 use gpui_kit::component::{ActiveTheme, Root, WindowExt as _};
 use gpui_kit::*;
 
+use crate::activity::{Job, JobKind, RevealJob};
 use crate::app::{APP_TITLE, Quit};
 use crate::diff_view::{CloseDiff, DiffView, OpenInEditor};
+use crate::divergence_view::{
+    AnalyzeDivergence, CloseDivergence, DivergenceView, MinimizeDivergence,
+};
 use crate::git_panel::GitPanel;
 use crate::inset_panel::inset_panel;
 use crate::new_project::{CloseNewProject, NewProject, NewProjectForm, ProjectCreated};
@@ -50,6 +54,7 @@ pub fn bind_keys(cx: &mut App) {
     crate::palette::bind_keys(cx);
     ribbon::bind_keys(cx);
     crate::diff_view::bind_keys(cx);
+    crate::chat_input::bind_keys(cx);
     crate::folder_browser::bind_keys(cx);
 }
 
@@ -66,6 +71,11 @@ pub struct MainWindow {
     /// window in an inset panel.
     diff: Option<Entity<DiffView>>,
     new_project: Option<Entity<NewProjectForm>>,
+    /// The divergence panel, which can be minimized while its analysis
+    /// carries on.
+    divergence: Option<Entity<DivergenceView>>,
+    divergence_minimized: bool,
+    _divergence_subscriptions: Vec<Subscription>,
     /// Tracks the inset panel, which keeps focus within it while open.
     panel_focus: FocusHandle,
     /// What was last focused within the panel, to go back to when something
@@ -102,7 +112,14 @@ impl MainWindow {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let ribbon = cx.new(Ribbon::new);
         let sidebar = cx.new(ProjectTree::new);
+        let prompt_mode = cx.new(|cx| PromptMode::new(window, cx));
         let mut subscriptions = vec![
+            // The ribbon's activity spinner follows whatever is running.
+            cx.observe(&prompt_mode, |this, _, cx| this.refresh_jobs(cx)),
+            cx.observe(&ribbon, |this, _, cx| this.refresh_jobs(cx)),
+            cx.subscribe_in(&ribbon, window, |this, _, RevealJob(kind), window, cx| {
+                this.reveal_job(*kind, window, cx)
+            }),
             cx.subscribe_in(&sidebar, window, |this, _, OpenFile(path), window, cx| {
                 this.prompt_mode.update(cx, |prompt_mode, cx| {
                     prompt_mode.open_file(path.clone(), window, cx)
@@ -158,12 +175,15 @@ impl MainWindow {
             ribbon,
             sidebar,
             git_panel: cx.new(|cx| GitPanel::new(window, cx)),
-            prompt_mode: cx.new(|cx| PromptMode::new(window, cx)),
+            prompt_mode,
             palette: None,
             _palette_subscription: None,
             sidebar_split: cx.new(|_| ResizableState::default()),
             diff: None,
             new_project: None,
+            divergence: None,
+            divergence_minimized: false,
+            _divergence_subscriptions: Vec::new(),
             panel_focus,
             panel_last_focus: None,
             _panel_subscriptions: Vec::new(),
@@ -176,6 +196,7 @@ impl MainWindow {
     pub fn open_diff(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         let diff = cx.new(|cx| DiffView::new(path, cx));
         self.new_project = None;
+        self.divergence_minimized = self.divergence.is_some();
         self._panel_subscriptions = vec![
             cx.subscribe_in(&diff, window, |this, _, _: &CloseDiff, window, cx| {
                 this.close_panel(window, cx)
@@ -195,9 +216,142 @@ impl MainWindow {
     }
 
     /// Opens the new project form in the panel, fresh, in place of any diff.
+    /// Opens the divergence panel, fresh, analyzing the open project, in place
+    /// of anything else in the panel.
+    pub fn open_divergence(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // A minimized panel comes back, rather than another starting.
+        if let Some(view) = self.divergence.clone() {
+            self.restore_divergence(&view, window, cx);
+            return;
+        }
+        let Some(project_dir) = ProjectDirectory::get(cx) else {
+            return;
+        };
+        self.show_divergence(
+            cx.new(|cx| DivergenceView::new(project_dir, cx)),
+            window,
+            cx,
+        );
+    }
+
+    /// Shows `view` in the panel, in place of anything else there.
+    pub fn show_divergence(
+        &mut self,
+        view: Entity<DivergenceView>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self._divergence_subscriptions = vec![
+            cx.subscribe_in(&view, window, |this, _, _: &CloseDivergence, window, cx| {
+                this.close_divergence(window, cx)
+            }),
+            cx.subscribe_in(
+                &view,
+                window,
+                |this, _, _: &MinimizeDivergence, window, cx| this.minimize_divergence(window, cx),
+            ),
+            cx.observe(&view, |this, _, cx| this.refresh_jobs(cx)),
+        ];
+        self.divergence = Some(view.clone());
+        self.restore_divergence(&view, window, cx);
+    }
+
+    /// Shows the divergence panel, in place of anything else in the panel.
+    fn restore_divergence(
+        &mut self,
+        view: &Entity<DivergenceView>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.diff = None;
+        self.new_project = None;
+        self._panel_subscriptions.clear();
+        self.divergence_minimized = false;
+        view.read(cx).focus_handle(cx).focus(window, cx);
+        self.refresh_jobs(cx);
+        cx.notify();
+    }
+
+    /// Hides the divergence panel, its analysis carrying on.
+    fn minimize_divergence(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.divergence_minimized = true;
+        self.panel_last_focus = None;
+        self.prompt_mode
+            .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx));
+        cx.notify();
+    }
+
+    /// Closes the divergence panel, stopping any analysis still running.
+    fn close_divergence(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let showing = self.showing_divergence();
+        self.divergence = None;
+        self.divergence_minimized = false;
+        self._divergence_subscriptions.clear();
+        self.refresh_jobs(cx);
+        if showing {
+            self.panel_last_focus = None;
+            self.prompt_mode
+                .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx));
+        }
+        cx.notify();
+    }
+
+    /// Whether the divergence panel is showing, rather than minimized.
+    fn showing_divergence(&self) -> bool {
+        self.divergence.is_some() && !self.divergence_minimized
+    }
+
+    /// Tells the ribbon everything running: a spec build, the task and
+    /// questions, and a divergence analysis.
+    fn refresh_jobs(&mut self, cx: &mut Context<Self>) {
+        let mut jobs = Vec::new();
+        if self.ribbon.read(cx).is_building() {
+            jobs.push(Job {
+                kind: JobKind::Build,
+                title: "Building the spec".into(),
+                detail: None,
+            });
+        }
+        jobs.extend(self.prompt_mode.read(cx).running_jobs());
+        if self
+            .divergence
+            .as_ref()
+            .is_some_and(|view| view.read(cx).is_running())
+        {
+            jobs.push(Job {
+                kind: JobKind::Divergence,
+                title: "Analyzing divergence".into(),
+                detail: None,
+            });
+        }
+        self.ribbon
+            .update(cx, |ribbon, cx| ribbon.set_jobs(jobs, cx));
+    }
+
+    /// Reveals a running job: the task or question behind any inset panel,
+    /// or the divergence panel.
+    pub fn reveal_job(&mut self, kind: JobKind, window: &mut Window, cx: &mut Context<Self>) {
+        match kind {
+            JobKind::Build => {}
+            JobKind::Divergence => self.open_divergence(window, cx),
+            JobKind::Task | JobKind::Question(_) => {
+                if self.showing_divergence() {
+                    self.minimize_divergence(window, cx);
+                } else if self.panel_open() {
+                    self.close_panel(window, cx);
+                }
+                self.prompt_mode.update(cx, |prompt_mode, cx| match kind {
+                    JobKind::Question(id) => prompt_mode.reveal_question(id, cx),
+                    _ => prompt_mode.reveal_task(cx),
+                });
+            }
+        }
+    }
+
     pub fn open_new_project(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let form = cx.new(|cx| NewProjectForm::new(window, cx));
         self.diff = None;
+        self.divergence_minimized = self.divergence.is_some();
         self._panel_subscriptions = vec![
             cx.subscribe_in(&form, window, |this, _, _: &CloseNewProject, window, cx| {
                 this.close_panel(window, cx)
@@ -230,10 +384,18 @@ impl MainWindow {
     /// Sends focus back into the open inset panel: to what was last focused
     /// there, or what it holds.
     fn refocus_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let content = match (&self.diff, &self.new_project) {
-            (Some(diff), _) => diff.read(cx).focus_handle(cx),
-            (None, Some(form)) => form.read(cx).focus_handle(cx),
-            (None, None) => return,
+        let content = if let Some(diff) = &self.diff {
+            diff.read(cx).focus_handle(cx)
+        } else if let Some(form) = &self.new_project {
+            form.read(cx).focus_handle(cx)
+        } else if let Some(view) = self
+            .divergence
+            .as_ref()
+            .filter(|_| !self.divergence_minimized)
+        {
+            view.read(cx).focus_handle(cx)
+        } else {
+            return;
         };
         let target = self
             .panel_last_focus
@@ -246,12 +408,17 @@ impl MainWindow {
 
     /// Whether the inset panel is open.
     fn panel_open(&self) -> bool {
-        self.diff.is_some() || self.new_project.is_some()
+        self.diff.is_some() || self.new_project.is_some() || self.showing_divergence()
     }
 
     /// Closes the inset panel, handing focus back to the chat input.
     fn close_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.panel_open() {
+            return;
+        }
+        if self.diff.is_none() && self.new_project.is_none() {
+            // Only the divergence panel is showing: closing it stops it.
+            self.close_divergence(window, cx);
             return;
         }
         self.diff = None;
@@ -267,6 +434,19 @@ impl MainWindow {
     /// clicking the dimmed window around it closes it.
     fn render_panel(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let close = cx.listener(|this, _, window, cx| this.close_panel(window, cx));
+        if let Some(view) = self
+            .divergence
+            .as_ref()
+            .filter(|_| self.showing_divergence())
+        {
+            return Some(inset_panel(
+                "divergence",
+                &self.panel_focus,
+                view.clone(),
+                close,
+                cx,
+            ));
+        }
         if let Some(diff) = &self.diff {
             return Some(inset_panel(
                 "diff",
@@ -405,6 +585,11 @@ impl Render for MainWindow {
                     window.close_dialog(cx);
                     return;
                 }
+                // Then the ribbon's list of what's running.
+                if this.ribbon.read(cx).jobs_open() {
+                    this.ribbon.update(cx, |ribbon, cx| ribbon.close_jobs(cx));
+                    return;
+                }
                 // Then the inset panel.
                 if this.panel_open() {
                     this.close_panel(window, cx);
@@ -423,6 +608,9 @@ impl Render for MainWindow {
             .on_action(
                 cx.listener(|this, _: &NewProject, window, cx| this.open_new_project(window, cx)),
             )
+            .on_action(cx.listener(|this, _: &AnalyzeDivergence, window, cx| {
+                this.open_divergence(window, cx)
+            }))
             .on_action(cx.listener(|this, _: &ribbon::ToggleRibbon, _, cx| {
                 // The ribbon is beneath the inset panel while it is open.
                 if !this.panel_open() {
@@ -1037,6 +1225,178 @@ mod tests {
         std::fs::remove_dir_all(&base).ok();
     }
 
+    /// While anything runs, a spinner beside the project's name lists it, and
+    /// picking something reveals it. The divergence panel can be minimized,
+    /// its analysis carrying on and listed there, and comes back from the
+    /// list; a running question is listed too, and revealed by closing the
+    /// panel over it. Once nothing runs, the spinner goes.
+    #[gpui_kit::test]
+    async fn running_jobs_are_listed_and_revealed(cx: &mut TestAppContext) {
+        use std::path::Path;
+
+        use crate::activity::JobKind;
+        use crate::divergence::Cancel;
+        use crate::divergence_view::DivergenceView;
+        use crate::piton_build::BuildOutcome;
+
+        fn built(_: &Path) -> anyhow::Result<BuildOutcome> {
+            Ok(BuildOutcome {
+                success: true,
+                files: Vec::new(),
+                report: String::new(),
+            })
+        }
+        fn answered(_: &Path, _: &str, _: &Cancel, _: &dyn Fn(String)) -> anyhow::Result<String> {
+            Ok(r#"{"files": []}"#.to_string())
+        }
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        let jobs = |cx: &mut TestAppContext| {
+            main.read_with(cx, |main, cx| {
+                main.ribbon
+                    .read(cx)
+                    .jobs()
+                    .iter()
+                    .map(|job| job.kind)
+                    .collect::<Vec<_>>()
+            })
+        };
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(
+                window.try_find("ribbon-activity").is_none(),
+                "a spinner with nothing running"
+            );
+            main.update(cx, |main, cx| {
+                let view = cx.new(|cx| {
+                    DivergenceView::with_runners(
+                        env!("CARGO_MANIFEST_DIR").into(),
+                        std::env::temp_dir()
+                            .join(format!("suspense-jobs-divergence-{}", std::process::id())),
+                        built,
+                        answered,
+                        cx,
+                    )
+                });
+                main.show_divergence(view, window, cx);
+            });
+        })
+        .unwrap();
+        // Its agents answer at once, so it is held running.
+        cx.run_until_parked();
+        let view = main.read_with(cx, |main, _| main.divergence.clone().unwrap());
+        view.update(cx, |view, cx| view.hold_running_for_test(true, cx));
+        cx.run_until_parked();
+        assert_eq!(jobs(cx), [JobKind::Divergence]);
+
+        // Minimized, the analysis carries on, listed beside the project name.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("divergence-panel").is_some());
+            window.click("divergence-minimize", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(
+                window.try_find("divergence-panel").is_none(),
+                "minimizing left the panel up"
+            );
+            assert!(
+                window.try_find("ribbon-activity").is_some(),
+                "no spinner while it runs"
+            );
+        })
+        .unwrap();
+        assert!(
+            main.read_with(cx, |main, _| main.divergence.is_some()),
+            "minimizing stopped it"
+        );
+
+        // A running question is listed after it; picking the analysis brings
+        // its panel back, and picking the question closes the panel again.
+        cx.update_window(handle, |_, _, cx| {
+            let prompt_mode = main.read(cx).prompt_mode.clone();
+            prompt_mode.update(cx, |prompt_mode, cx| {
+                prompt_mode.start_test_question("Still thinking?", cx);
+            });
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(jobs(cx), [JobKind::Question(1), JobKind::Divergence]);
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("ribbon-activity", cx);
+            window.render_frame(cx);
+            window.click(("ribbon-job", 1usize), cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(
+                window.try_find("divergence-panel").is_some(),
+                "the analysis wasn't revealed"
+            );
+            assert!(
+                window.try_find("ribbon-jobs").is_none(),
+                "the list stayed open"
+            );
+        })
+        .unwrap();
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| {
+                main.reveal_job(JobKind::Question(1), window, cx)
+            });
+            window.render_frame(cx);
+            assert!(
+                window.try_find("divergence-panel").is_none(),
+                "the panel stayed over the question"
+            );
+        })
+        .unwrap();
+
+        // Once the analysis is over and the question closed, the spinner goes.
+        view.update(cx, |view, cx| view.hold_running_for_test(false, cx));
+        cx.update_window(handle, |_, _, cx| {
+            let prompt_mode = main.read(cx).prompt_mode.clone();
+            prompt_mode.update(cx, |prompt_mode, cx| prompt_mode.close_test_question(1, cx));
+        })
+        .unwrap();
+        let start = std::time::Instant::now();
+        while !jobs(cx).is_empty() {
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "still running: {:?}",
+                jobs(cx)
+            );
+            cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(
+                window.try_find("ribbon-activity").is_none(),
+                "the spinner stayed"
+            );
+        })
+        .unwrap();
+    }
+
     /// Esc in an open file moves focus back to the chat input, where typing
     /// then lands.
     #[gpui_kit::test]
@@ -1145,7 +1505,7 @@ mod tests {
         }
 
         // Ctrl+click opens tabs alongside each other: their groups sit side by
-        // side in the order of the tabs, a divider between tabs; a plain click
+        // side in the order of the tabs, with no divider between; a plain click
         // opens one alone again.
         ribbon.update(cx, |ribbon, cx| {
             ribbon.tab_clicked(RibbonTab::Application, 1, false, cx);
@@ -1163,15 +1523,15 @@ mod tests {
                 assert!(window.try_find(control).is_some(), "{control} isn't shown");
             }
             assert!(window.try_find("build").is_none());
-            let project = window.find("project-directory").bounds();
-            let divider = window.find(("ribbon-tab-divider", RibbonTab::Application as usize)).bounds();
-            let dark_mode = window.find("dark-mode").bounds();
-            assert!(
-                project.right() <= divider.left() && divider.right() <= dark_mode.left(),
-                "Project's commands {project:?}, the divider {divider:?}, and Application's {dark_mode:?} are out of order"
+            // Project's groups come before Application's, with nothing between
+            // them but the gap: no divider.
+            let project = window.find("Project").bounds();
+            let appearance = window.find("Appearance").bounds();
+            assert_eq!(
+                appearance.left() - project.right(),
+                gpui_kit::px(12.),
+                "something sits between Project's group {project:?} and Application's {appearance:?}"
             );
-            // Code has no commands, so adds no divider of its own.
-            assert!(window.try_find(("ribbon-tab-divider", RibbonTab::Code as usize)).is_none());
         })
         .unwrap();
         ribbon.update(cx, |ribbon, cx| {

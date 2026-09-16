@@ -13,9 +13,13 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::component::{ActiveTheme, Icon, Selectable as _, Sizable as _, Size, h_flex, v_flex};
+use gpui_kit::component::{
+    ActiveTheme, Icon, Selectable as _, Sizable as _, Size, StyledExt as _, h_flex, v_flex,
+};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
+use crate::activity::{Job, RevealJob};
 use crate::project_directory::ProjectDirectory;
 
 mod application_tab;
@@ -78,10 +82,6 @@ impl RibbonTab {
         }
     }
 
-    fn index(self) -> usize {
-        Self::ALL.iter().position(|tab| *tab == self).unwrap_or(0)
-    }
-
     /// The tab's commands, in the order of its groups.
     fn commands(self) -> &'static [CommandPlace] {
         match self {
@@ -100,6 +100,7 @@ enum Command {
     NewProject,
     OpenProject,
     BuildSpec,
+    AnalyzeDivergence,
     DarkMode,
     Settings,
 }
@@ -121,7 +122,13 @@ pub struct Ribbon {
     /// launches.
     collapsed: bool,
     building: bool,
+    /// Everything running, shown as a spinner beside the project's name.
+    jobs: Vec<Job>,
+    /// Whether the list of what's running is open.
+    jobs_open: bool,
 }
+
+impl EventEmitter<RevealJob> for Ribbon {}
 
 impl Ribbon {
     pub fn new(cx: &mut Context<Self>) -> Self {
@@ -132,7 +139,136 @@ impl Ribbon {
             open_tabs: vec![RibbonTab::Project],
             collapsed: collapsed_preference::load(),
             building: false,
+            jobs: Vec::new(),
+            jobs_open: false,
         }
+    }
+
+    /// Everything running, as the spinner and its list show it. The list
+    /// closes once nothing is.
+    pub fn set_jobs(&mut self, jobs: Vec<Job>, cx: &mut Context<Self>) {
+        if self.jobs == jobs {
+            return;
+        }
+        self.jobs = jobs;
+        if self.jobs.is_empty() {
+            self.jobs_open = false;
+        }
+        cx.notify();
+    }
+
+    #[cfg(test)]
+    pub fn jobs(&self) -> &[Job] {
+        &self.jobs
+    }
+
+    pub fn jobs_open(&self) -> bool {
+        self.jobs_open
+    }
+
+    pub fn close_jobs(&mut self, cx: &mut Context<Self>) {
+        if self.jobs_open {
+            self.jobs_open = false;
+            cx.notify();
+        }
+    }
+
+    /// The spinner beside the project's name while anything is running, with
+    /// how many things are when more than one is; clicking it opens the list
+    /// of them, and clicking one reveals it.
+    fn render_activity(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.jobs.is_empty() {
+            return None;
+        }
+        let theme = cx.theme();
+        let count = self.jobs.len();
+        let tooltip: SharedString = if count == 1 {
+            let job = &self.jobs[0];
+            match &job.detail {
+                Some(detail) => format!("{}: {detail}", job.title).into(),
+                None => job.title.clone(),
+            }
+        } else {
+            format!("{count} things running").into()
+        };
+        let list = self.jobs_open.then(|| {
+            let rows = self.jobs.iter().enumerate().map(|(ix, job)| {
+                let kind = job.kind;
+                let row = h_flex()
+                    .id(("ribbon-job", ix))
+                    .gap_2()
+                    .px_3()
+                    .py_1p5()
+                    .rounded(theme.radius)
+                    .cursor_pointer()
+                    .hover(|row| row.bg(theme.list_hover))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.jobs_open = false;
+                        cx.emit(RevealJob(kind));
+                        cx.notify();
+                    }))
+                    .child(gpui_kit::component::spinner::Spinner::new().small())
+                    .child(div().flex_none().font_medium().child(job.title.clone()))
+                    .children(job.detail.clone().map(|detail| {
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_color(theme.muted_foreground)
+                            .child(detail)
+                    }));
+                // Lets UI tests find the row; inert in normal builds.
+                gpui_kit::TestSupportExt::test_support(row)
+            });
+            let list = v_flex()
+                .id("ribbon-jobs")
+                .w(px(360.))
+                .mt(px(28.))
+                .p_1()
+                .rounded(theme.radius)
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.popover)
+                .shadow_md()
+                .occlude()
+                .on_mouse_down_out(cx.listener(|this, _, _, cx| this.close_jobs(cx)))
+                .children(rows);
+            // Lets UI tests find the list; inert in normal builds.
+            deferred(
+                anchored()
+                    .snap_to_window()
+                    .child(gpui_kit::TestSupportExt::test_support(list)),
+            )
+            .with_priority(2)
+        });
+        let spinner = h_flex()
+            .id("ribbon-activity")
+            .flex_none()
+            .gap_1()
+            .px_1()
+            .py_0p5()
+            .rounded(theme.radius)
+            .cursor_pointer()
+            .hover(|spinner| spinner.bg(theme.list_hover))
+            .tooltip(move |window, cx| {
+                gpui_kit::component::tooltip::Tooltip::new(tooltip.clone()).build(window, cx)
+            })
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.jobs_open = !this.jobs_open;
+                cx.notify();
+            }))
+            .child(gpui_kit::component::spinner::Spinner::new().small())
+            .when(count > 1, |spinner| {
+                spinner.child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(count.to_string()),
+                )
+            })
+            .children(list);
+        // Lets UI tests find the spinner; inert in normal builds.
+        Some(gpui_kit::TestSupportExt::test_support(spinner).into_any_element())
     }
 
     /// Whether the ribbon is collapsed to its primary commands.
@@ -204,6 +340,7 @@ impl Ribbon {
             Command::NewProject => project_tab::new_project(button),
             Command::OpenProject => project_tab::open_project(button, cx),
             Command::BuildSpec => spec_tab::build_spec(self, button, cx),
+            Command::AnalyzeDivergence => spec_tab::analyze_divergence(button, cx),
             Command::DarkMode => application_tab::dark_mode(small, cx),
             Command::Settings => application_tab::settings(button),
         }
@@ -245,10 +382,9 @@ impl Render for Ribbon {
             // No tabs: every primary command, small, in one row, a divider
             // between one tab's commands and the next.
             // Led by the project's name, as beside the tabs.
-            let mut row = vec![
-                project_tab::project_name(cx),
-                div().w_px().h(px(16.)).bg(border).into_any_element(),
-            ];
+            let mut row = vec![project_tab::project_name(cx)];
+            row.extend(self.render_activity(cx));
+            row.push(div().w_px().h(px(16.)).bg(border).into_any_element());
             let mut last_tab = None;
             let primary = RibbonTab::ALL.into_iter().flat_map(|tab| {
                 tab.commands()
@@ -295,15 +431,16 @@ impl Render for Ribbon {
                 h_flex()
                     .h_full()
                     .items_center()
+                    .pr_1()
                     .border_r_1()
                     .border_color(border)
-                    .child(project_tab::project_name(cx)),
+                    .child(project_tab::project_name(cx))
+                    .children(self.render_activity(cx)),
             )
             .children(tabs)
             .suffix(div().px_2().child(collapse));
 
-        // Each open tab's commands, gathered into their groups in order, a
-        // divider between one tab's groups and the next.
+        // Each open tab's commands, gathered into their groups in order.
         let mut row = Vec::new();
         for tab in &self.open_tabs {
             let mut groups: Vec<(&'static str, Vec<AnyElement>)> = Vec::new();
@@ -317,22 +454,8 @@ impl Render for Ribbon {
             if groups.is_empty() {
                 continue;
             }
-            if !row.is_empty() {
-                row.push(
-                    // Lets UI tests find the divider; inert in normal builds.
-                    gpui_kit::TestSupportExt::test_support(
-                        div()
-                            .id(("ribbon-tab-divider", tab.index()))
-                            .flex_none()
-                            .w_px()
-                            .my_2()
-                            .bg(border),
-                    )
-                    .into_any_element(),
-                );
-            }
-            // No dividers within a tab: each group's title strip marks where it
-            // starts.
+            // No dividers, within a tab or between tabs: each group's title
+            // strip marks where it starts.
             for (label, commands) in groups {
                 row.push(group(label, commands, muted, title_background, &font));
             }

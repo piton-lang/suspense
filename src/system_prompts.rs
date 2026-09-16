@@ -21,22 +21,29 @@ pub const SPEC_LOCATION: &str = "${SPEC_LOCATION}";
 
 const DIR: &str = "system-prompts";
 
-/// The template a mode starts with, and is reset to.
+/// The template a mode starts with, and is reset to: this repository's own
+/// `.suspense/system-prompts`, baked in when the application is built, so
+/// editing those files changes the defaults the next build ships with.
 pub fn default_template(mode: SendMode) -> &'static str {
-    match mode {
-        SendMode::Code => {
-            "We're working on the code located in ${CODE_LOCATION}. Don't edit the spec located in ${SPEC_LOCATION}."
-        }
-        SendMode::Both => {
-            "We're working on both the code located in ${CODE_LOCATION} and the spec located in ${SPEC_LOCATION}. Edit both of them."
-        }
-        SendMode::Spec => {
-            "We're working on the spec located in ${SPEC_LOCATION}. Don't edit the code located in ${CODE_LOCATION}."
-        }
-        SendMode::Ask => {
-            "We're only asking a question about the code located in ${CODE_LOCATION} and the spec located in ${SPEC_LOCATION}. Don't edit either of them."
-        }
+    macro_rules! baked {
+        ($key:literal) => {
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/.suspense/system-prompts/",
+                $key,
+                ".md"
+            ))
+        };
     }
+    // Trimmed as a saved template is when it loads, so a template left as
+    // the default reads as the default.
+    match mode {
+        SendMode::Code => baked!("code"),
+        SendMode::Both => baked!("combined"),
+        SendMode::Spec => baked!("spec"),
+        SendMode::Ask => baked!("ask"),
+    }
+    .trim_end()
 }
 
 /// The directory the project's templates are saved in.
@@ -95,26 +102,23 @@ mod tests {
     use super::{default_template, file, fill, load, save, save_missing};
     use crate::chat_input::SendMode;
 
-    /// Each mode starts with its default, which fills in the configured
-    /// locations.
+    /// Each mode's default is this repository's own saved template for it,
+    /// and fills in the configured locations.
     #[test]
-    fn defaults_name_the_configured_locations() {
-        let filled = |mode| fill(default_template(mode), "./src", "./spec");
-        assert_eq!(
-            filled(SendMode::Code),
-            "We're working on the code located in ./src. Don't edit the spec located in ./spec."
-        );
-        assert_eq!(
-            filled(SendMode::Both),
-            "We're working on both the code located in ./src and the spec located in ./spec. Edit both of them."
-        );
-        assert_eq!(
-            filled(SendMode::Spec),
-            "We're working on the spec located in ./spec. Don't edit the code located in ./src."
-        );
-        assert_eq!(
-            filled(SendMode::Ask),
-            "We're only asking a question about the code located in ./src and the spec located in ./spec. Don't edit either of them."
+    fn defaults_are_this_repositorys_templates() {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+        for mode in SendMode::ALL {
+            let saved = fs::read_to_string(file(mode, manifest)).unwrap();
+            assert_eq!(default_template(mode), saved.trim_end(), "{mode:?}");
+            let filled = fill(default_template(mode), "./src", "./spec");
+            assert!(
+                !filled.contains("${"),
+                "{mode:?} left a placeholder: {filled}"
+            );
+        }
+        assert!(
+            fill(default_template(SendMode::Code), "./src", "./spec").contains("./src"),
+            "the code location isn't filled in"
         );
     }
 

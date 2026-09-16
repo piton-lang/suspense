@@ -31,16 +31,37 @@ shape RibbonShape:
         Every open tab shows as selected.
 
         The command area then holds the groups of every open tab side by side,
-        in the order of the tabs rather than the order they were opened, with a
-        thin vertical divider between one tab's groups and the next. An open tab
-        with no commands adds nothing, and "No commands yet" shows only when
-        none of the open tabs has any. When the groups are wider than the
+        in the order of the tabs rather than the order they were opened, with no
+        divider between one tab's groups and the next, as between any groups. An
+        open tab with no commands adds nothing, and "No commands yet" shows only
+        when none of the open tabs has any. When the groups are wider than the
         window, the command area scrolls sideways. The command area stays the
         same height however many tabs are open.
 
         Double-clicking a tab still collapses the ribbon, and expanding it again
         shows the same tabs open. Which tabs are open isn't kept between
         launches: the window always opens with only Project open.
+
+    activity:
+        While anything is running, a small spinner sits just to the right of the
+        project's name, as it is beside the tabs or leading the collapsed
+        ribbon, with how many things are running beside it when more than one
+        is. Its tooltip says what is running, or how many things are. While
+        nothing is, neither shows, and nothing takes their place.
+
+        Clicking the spinner opens a small list beneath it of everything
+        running, one row each, the newest last: the task the harness is working
+        on, headed "Task" with the first line of its prompt; each question still
+        running, headed "Question" with its first line; a spec build,
+        "Building the spec"; and a divergence analysis, "Analyzing divergence".
+        Each row has a small spinner of its own. Clicking a row closes the list
+        and reveals what it is: a task brings back the latest task's output,
+        closing the previous tasks and any inset panel over it, and scrolls it
+        to the end; a question closes the answer drawer and any inset panel, so
+        its row is in view; a divergence analysis brings its panel back. A spec
+        build has nothing to show, so its row only closes the list. Pressing the
+        mouse outside the list, or <Escape>, closes it too, as does everything
+        in it finishing.
 
     projectName:
         To the left of the tabs, in the same bar, sits the name of the open

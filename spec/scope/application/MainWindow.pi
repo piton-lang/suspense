@@ -10,6 +10,7 @@ from /ui/components/sidebar import SidebarScope
 from /ui/components/diff-view import DiffViewScope
 from /ui/components/inset-panel import InsetPanelScope
 from ../new-project import NewProjectScope
+from ../divergence import DivergenceScope
 
 export scope MainWindowScope:
     concept: {MainWindowConcept}
@@ -95,6 +96,11 @@ shape MainWindowShape:
             project is being set up. Opening the file from the diff closes the
             panel and opens the file in the split, as clicking it in the
             @{FileTreeScope} would.
+
+        analyzeDivergence:
+            The ribbon's Analyze Divergence command opens the @{DivergenceScope}
+            in an @{InsetPanelScope}, in place of whatever else is open there,
+            or brings back one that was minimized.
 
         newProject:
             The ribbon's New Project command opens the @{NewProjectScope} in an
