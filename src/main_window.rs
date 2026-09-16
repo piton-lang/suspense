@@ -13,7 +13,10 @@ use gpui_kit::*;
 use crate::app::{APP_TITLE, Quit};
 use crate::diff_view::{CloseDiff, DiffView, OpenInEditor};
 use crate::git_panel::GitPanel;
+use crate::inset_panel::inset_panel;
+use crate::new_project::{CloseNewProject, NewProject, NewProjectForm, ProjectCreated};
 use crate::palette::{Palette, Picked, SystemCommand, SystemState};
+use crate::project_directory::ProjectDirectory;
 use crate::project_tree::{OpenDiff, OpenFile, ProjectTree};
 use crate::prompt_mode::PromptMode;
 use crate::ribbon::{self, Ribbon};
@@ -29,9 +32,6 @@ const MIN_SPLIT_WIDTH: Pixels = px(240.);
 /// The sidebar's width until it is dragged, and the narrowest it can be.
 const SIDEBAR_WIDTH: Pixels = px(260.);
 const MIN_SIDEBAR_WIDTH: Pixels = px(160.);
-
-/// How far the diff's floating panel is inset from each edge of the window.
-const DIFF_INSET: Pixels = px(32.);
 
 actions!(suspense, [FocusChat, TogglePalette]);
 
@@ -50,6 +50,7 @@ pub fn bind_keys(cx: &mut App) {
     crate::palette::bind_keys(cx);
     ribbon::bind_keys(cx);
     crate::diff_view::bind_keys(cx);
+    crate::folder_browser::bind_keys(cx);
 }
 
 pub struct MainWindow {
@@ -61,9 +62,16 @@ pub struct MainWindow {
     palette: Option<Entity<Palette>>,
     _palette_subscription: Option<Subscription>,
     sidebar_split: Entity<ResizableState>,
-    /// A changed file's diff, floating over the window.
+    /// A changed file's diff, or the new project form, floating over the
+    /// window in an inset panel.
     diff: Option<Entity<DiffView>>,
-    _diff_subscriptions: Vec<Subscription>,
+    new_project: Option<Entity<NewProjectForm>>,
+    /// Tracks the inset panel, which keeps focus within it while open.
+    panel_focus: FocusHandle,
+    /// What was last focused within the panel, to go back to when something
+    /// takes focus beneath it.
+    panel_last_focus: Option<FocusHandle>,
+    _panel_subscriptions: Vec<Subscription>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -94,7 +102,7 @@ impl MainWindow {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let ribbon = cx.new(Ribbon::new);
         let sidebar = cx.new(ProjectTree::new);
-        let subscriptions = vec![
+        let mut subscriptions = vec![
             cx.subscribe_in(&sidebar, window, |this, _, OpenFile(path), window, cx| {
                 this.prompt_mode.update(cx, |prompt_mode, cx| {
                     prompt_mode.open_file(path.clone(), window, cx)
@@ -109,12 +117,30 @@ impl MainWindow {
                 theme_preference::apply(window, cx)
             }),
             // Focus left on nothing, as when a focused file is closed, would
-            // put Esc out of the window's reach; the chat input takes it.
+            // put Esc out of the window's reach; the chat input takes it, or
+            // the inset panel while it is open.
             cx.on_focus_lost(window, |this, window, cx| {
-                this.prompt_mode
-                    .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx))
+                if this.panel_open() {
+                    this.refocus_panel(window, cx);
+                } else {
+                    this.prompt_mode
+                        .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx))
+                }
             }),
         ];
+        // While the inset panel is open, nothing beneath it can take focus:
+        // focus that leaves it goes back to where it was within it.
+        let panel_focus = cx.focus_handle();
+        subscriptions.push(cx.on_focus_in(&panel_focus, window, |this, window, cx| {
+            this.panel_last_focus = window.focused(cx);
+        }));
+        subscriptions.push(
+            cx.on_focus_out(&panel_focus, window, |this, _, window, cx| {
+                if this.panel_open() {
+                    this.refocus_panel(window, cx);
+                }
+            }),
+        );
         // Closing the window ends the application, so it asks first too.
         let this = cx.weak_entity();
         window.on_window_should_close(cx, move |window, cx| {
@@ -137,7 +163,10 @@ impl MainWindow {
             _palette_subscription: None,
             sidebar_split: cx.new(|_| ResizableState::default()),
             diff: None,
-            _diff_subscriptions: Vec::new(),
+            new_project: None,
+            panel_focus,
+            panel_last_focus: None,
+            _panel_subscriptions: Vec::new(),
             _subscriptions: subscriptions,
         }
     }
@@ -146,14 +175,15 @@ impl MainWindow {
     /// already there. Any file open in the split is left as it is.
     pub fn open_diff(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         let diff = cx.new(|cx| DiffView::new(path, cx));
-        self._diff_subscriptions = vec![
+        self.new_project = None;
+        self._panel_subscriptions = vec![
             cx.subscribe_in(&diff, window, |this, _, _: &CloseDiff, window, cx| {
-                this.close_diff(window, cx)
+                this.close_panel(window, cx)
             }),
             // Opening the file closes the diff, and opens the file in the
             // split as clicking it in the tree would.
             cx.subscribe_in(&diff, window, |this, _, OpenInEditor(path), window, cx| {
-                this.close_diff(window, cx);
+                this.close_panel(window, cx);
                 this.prompt_mode.update(cx, |prompt_mode, cx| {
                     prompt_mode.open_file(path.clone(), window, cx)
                 })
@@ -164,45 +194,96 @@ impl MainWindow {
         cx.notify();
     }
 
-    fn close_diff(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.diff.take().is_none() {
+    /// Opens the new project form in the panel, fresh, in place of any diff.
+    pub fn open_new_project(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let form = cx.new(|cx| NewProjectForm::new(window, cx));
+        self.diff = None;
+        self._panel_subscriptions = vec![
+            cx.subscribe_in(&form, window, |this, _, _: &CloseNewProject, window, cx| {
+                this.close_panel(window, cx)
+            }),
+            // Once created, the project opens and the panel closes.
+            cx.subscribe_in(
+                &form,
+                window,
+                |this, _, ProjectCreated(folder, warning), window, cx| {
+                    ProjectDirectory::set(folder.clone(), cx);
+                    this.close_panel(window, cx);
+                    // Something that didn't stop the project opening, like
+                    // Git, still failed.
+                    if let Some(warning) = warning {
+                        window.push_notification(
+                            gpui_kit::component::notification::Notification::warning(
+                                warning.clone(),
+                            )
+                            .title("Project created"),
+                            cx,
+                        );
+                    }
+                },
+            ),
+        ];
+        self.new_project = Some(form);
+        cx.notify();
+    }
+
+    /// Sends focus back into the open inset panel: to what was last focused
+    /// there, or what it holds.
+    fn refocus_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let content = match (&self.diff, &self.new_project) {
+            (Some(diff), _) => diff.read(cx).focus_handle(cx),
+            (None, Some(form)) => form.read(cx).focus_handle(cx),
+            (None, None) => return,
+        };
+        let target = self
+            .panel_last_focus
+            .clone()
+            .filter(|last| last.contains(&content, window) || content.contains(last, window))
+            .unwrap_or(content);
+        // After this round of focus changes settles.
+        window.defer(cx, move |window, cx| target.focus(window, cx));
+    }
+
+    /// Whether the inset panel is open.
+    fn panel_open(&self) -> bool {
+        self.diff.is_some() || self.new_project.is_some()
+    }
+
+    /// Closes the inset panel, handing focus back to the chat input.
+    fn close_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.panel_open() {
             return;
         }
-        self._diff_subscriptions.clear();
+        self.diff = None;
+        self.new_project = None;
+        self.panel_last_focus = None;
+        self._panel_subscriptions.clear();
         self.prompt_mode
             .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx));
         cx.notify();
     }
 
-    /// The diff, floating over the whole window inset from its edges, with
-    /// the window dimmed behind it; clicking the dimmed window closes it.
-    fn render_diff(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
-        let diff = self.diff.clone()?;
-        let theme = cx.theme();
-        let panel = div()
-            .id("diff-panel")
-            .absolute()
-            .inset(DIFF_INSET)
-            // Clicks inside stay inside, rather than reaching the backdrop.
-            .occlude()
-            .overflow_hidden()
-            .rounded_lg()
-            .border_1()
-            .border_color(theme.border)
-            .bg(theme.background)
-            .shadow_2xl()
-            .child(diff);
-        let backdrop = div()
-            .id("diff-backdrop")
-            .absolute()
-            .inset_0()
-            // Nothing beneath takes the mouse while the diff is open.
-            .occlude()
-            .bg(black().opacity(0.4))
-            .on_click(cx.listener(|this, _, window, cx| this.close_diff(window, cx)))
-            .child(gpui_kit::TestSupportExt::test_support(panel));
-        // Lets UI tests find the panel and backdrop; inert in normal builds.
-        Some(gpui_kit::TestSupportExt::test_support(backdrop))
+    /// The diff or the new project form, in an inset panel over the window;
+    /// clicking the dimmed window around it closes it.
+    fn render_panel(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let close = cx.listener(|this, _, window, cx| this.close_panel(window, cx));
+        if let Some(diff) = &self.diff {
+            return Some(inset_panel(
+                "diff",
+                &self.panel_focus,
+                diff.clone(),
+                close,
+                cx,
+            ));
+        }
+        let form = self.new_project.clone()?;
+        Some(inset_panel(
+            "new-project",
+            &self.panel_focus,
+            form,
+            close,
+            cx,
+        ))
     }
 
     /// Quits, once confirmed if a task is running.
@@ -324,21 +405,30 @@ impl Render for MainWindow {
                     window.close_dialog(cx);
                     return;
                 }
-                // Then the diff's floating panel.
-                if this.diff.is_some() {
-                    this.close_diff(window, cx);
+                // Then the inset panel.
+                if this.panel_open() {
+                    this.close_panel(window, cx);
                     return;
                 }
                 this.prompt_mode
                     .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx))
             }))
-            .on_action(
-                cx.listener(|this, _: &TogglePalette, window, cx| this.toggle_palette(window, cx)),
-            )
+            .on_action(cx.listener(|this, _: &TogglePalette, window, cx| {
+                // The palette acts on what is beneath the inset panel.
+                if !this.panel_open() {
+                    this.toggle_palette(window, cx)
+                }
+            }))
             .on_action(cx.listener(|this, _: &Quit, window, cx| this.quit(window, cx)))
+            .on_action(
+                cx.listener(|this, _: &NewProject, window, cx| this.open_new_project(window, cx)),
+            )
             .on_action(cx.listener(|this, _: &ribbon::ToggleRibbon, _, cx| {
-                this.ribbon
-                    .update(cx, |ribbon, cx| ribbon.toggle_collapsed(cx))
+                // The ribbon is beneath the inset panel while it is open.
+                if !this.panel_open() {
+                    this.ribbon
+                        .update(cx, |ribbon, cx| ribbon.toggle_collapsed(cx))
+                }
             }))
             .child(self.ribbon.clone())
             .child(
@@ -364,7 +454,7 @@ impl Render for MainWindow {
                         ]),
                 ),
             )
-            .children(self.render_diff(cx))
+            .children(self.render_panel(cx))
             // Inside the window's element tree, so actions such as
             // TogglePalette reach it from a focused dialog.
             .children(Root::render_dialog_layer(window, cx))
@@ -664,12 +754,71 @@ mod tests {
         })
         .unwrap();
 
+        // Nothing beneath takes focus or input while it is open: Tab stays
+        // within it, focus taken beneath comes back, and the palette and
+        // ribbon shortcuts do nothing.
+        // Focus moving out of the panel is only seen in an active window.
+        cx.update_window(handle, |_, window, _| window.activate_window())
+            .unwrap();
+        // Focus listeners run as frames are drawn.
+        let in_panel = |cx: &mut TestAppContext| {
+            for _ in 0..2 {
+                cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                    .unwrap();
+                cx.run_until_parked();
+            }
+            cx.update_window(handle, |_, window, cx| {
+                main.read(cx).panel_focus.contains_focused(window, cx)
+            })
+            .unwrap()
+        };
+        cx.run_until_parked();
+        assert!(in_panel(cx), "opening the diff didn't focus it");
+        for _ in 0..6 {
+            cx.update_window(handle, |_, window, cx| window.press("tab", cx))
+                .unwrap();
+            cx.run_until_parked();
+            assert!(in_panel(cx), "Tab left the panel");
+        }
+        cx.update_window(handle, |_, window, cx| window.press("shift-tab", cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert!(in_panel(cx), "Shift+Tab left the panel");
+        cx.update_window(handle, |_, window, cx| {
+            let prompt_mode = main.read(cx).prompt_mode.clone();
+            prompt_mode.update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx));
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(in_panel(cx), "focus taken beneath stayed there");
+        #[cfg(target_os = "macos")]
+        const PALETTE: &str = "cmd-p";
+        #[cfg(not(target_os = "macos"))]
+        const PALETTE: &str = "ctrl-p";
+        cx.update_window(handle, |_, window, cx| {
+            window.press(PALETTE, cx);
+            window.press(TOGGLE_RIBBON, cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        main.read_with(cx, |main, cx| {
+            assert!(
+                main.palette.is_none(),
+                "the palette opened beneath the panel"
+            );
+            assert!(
+                !main.ribbon.read(cx).is_collapsed(),
+                "the ribbon collapsed beneath the panel"
+            );
+        });
+        assert!(main.read_with(cx, |main, _| main.panel_open()));
+
         // Esc closes it.
         cx.update_window(handle, |_, window, cx| window.press("escape", cx))
             .unwrap();
         cx.run_until_parked();
         assert!(
-            main.read_with(cx, |main, _| main.diff.is_none()),
+            main.read_with(cx, |main, _| !main.panel_open()),
             "Esc left the diff open"
         );
 
@@ -683,7 +832,7 @@ mod tests {
         .unwrap();
         cx.run_until_parked();
         assert!(
-            main.read_with(cx, |main, _| main.diff.is_some()),
+            main.read_with(cx, |main, _| main.panel_open()),
             "clicking the panel closed it"
         );
         cx.update_window(handle, |_, window, cx| {
@@ -696,7 +845,7 @@ mod tests {
         .unwrap();
         cx.run_until_parked();
         assert!(
-            main.read_with(cx, |main, _| main.diff.is_none()),
+            main.read_with(cx, |main, _| !main.panel_open()),
             "clicking the dimmed window left the diff open"
         );
 
@@ -710,7 +859,7 @@ mod tests {
             })
         });
         cx.run_until_parked();
-        assert!(main.read_with(cx, |main, _| main.diff.is_none()));
+        assert!(main.read_with(cx, |main, _| !main.panel_open()));
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             assert!(window.try_find("file-view").is_some());
@@ -718,6 +867,174 @@ mod tests {
         .unwrap();
 
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// New Project opens the form in the inset panel; browsing for a location
+    /// goes through the folder browser and back; and New creates the project,
+    /// opens it, and closes the panel.
+    #[gpui_kit::test]
+    async fn new_project_creates_and_opens_a_project(cx: &mut TestAppContext) {
+        let base =
+            std::env::temp_dir().join(format!("suspense-new-project-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("projects")).unwrap();
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("new-project", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let form = main.read_with(cx, |main, _| main.new_project.clone().expect("no form"));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let backdrop = window.find("new-project-backdrop").bounds();
+            let panel = window.find("new-project-panel").bounds();
+            assert_eq!(panel.left() - backdrop.left(), gpui_kit::px(32.));
+            assert_eq!(backdrop.bottom() - panel.bottom(), gpui_kit::px(32.));
+        })
+        .unwrap();
+        // In a window too short for the whole form, it scrolls rather than
+        // squeezing: each agent's checkbox sits wholly inside the group.
+        cx.simulate_window_resize(
+            handle,
+            gpui_kit::size(gpui_kit::px(1000.), gpui_kit::px(560.)),
+        );
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let agents = window.find("new-project-agents").bounds();
+            for ix in 0..5usize {
+                let row = window.find(("new-project-agent-row", ix)).bounds();
+                assert!(
+                    row.top() >= agents.top()
+                        && row.bottom() <= agents.bottom() + gpui_kit::px(0.5),
+                    "agent {ix} {row:?} spills out of the group {agents:?}"
+                );
+                assert!(
+                    row.size.height >= gpui_kit::px(16.),
+                    "agent {ix} {row:?} is squeezed"
+                );
+                // Its label has room below its baseline for p, y, and
+                // brackets, rather than being clipped to its font size.
+                let label = window
+                    .find(format!("new-project-agent-{ix}-label"))
+                    .bounds();
+                assert!(
+                    label.size.height >= gpui_kit::px(14. * 1.3),
+                    "agent {ix}'s label {label:?} is clipped to a single tight line"
+                );
+                assert!(
+                    label.bottom() <= row.bottom() + gpui_kit::px(0.5),
+                    "{label:?} spills out of {row:?}"
+                );
+            }
+            form.update(cx, |form, cx| {
+                form.set_name("demo", window, cx);
+                form.set_location(base.clone(), cx);
+            });
+        })
+        .unwrap();
+        cx.run_until_parked();
+
+        // Browsing: going into "projects" and choosing it.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("new-project-browse", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let browser = form.read_with(cx, |form, _| form.browser().expect("no browser"));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert_eq!(browser.read(cx).dir(), base.as_path());
+            window.double_click(("folder-row", 0usize), cx);
+            window.render_frame(cx);
+            assert_eq!(browser.read(cx).dir(), base.join("projects"));
+
+            // A new folder: Escape in its row closes only the row.
+            window.click("folder-new", cx);
+            window.render_frame(cx);
+            assert!(browser.read(cx).new_folder_open());
+            window.press("escape", cx);
+            assert!(
+                !browser.read(cx).new_folder_open(),
+                "Escape left the row open"
+            );
+            assert!(
+                window.try_find("folder-browser").is_some(),
+                "Escape closed the panel"
+            );
+
+            // Named, created, and selected, so Choose chooses it.
+            window.click("folder-new", cx);
+            window.render_frame(cx);
+            browser.update(cx, |browser, cx| {
+                browser.set_new_folder_name("apps", window, cx)
+            });
+            window.render_frame(cx);
+            window.click("folder-new-create", cx);
+            window.render_frame(cx);
+            assert!(
+                base.join("projects/apps").is_dir(),
+                "the folder wasn't created"
+            );
+            assert!(!browser.read(cx).new_folder_open());
+            assert_eq!(browser.read(cx).choice(), base.join("projects/apps"));
+            window.click("folder-choose", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let settings = form.read_with(cx, |form, cx| {
+            assert!(form.browser().is_none(), "choosing left the browser open");
+            form.settings(cx)
+        });
+        assert_eq!(settings.folder(), base.join("projects/apps/demo"));
+
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("new-project-create", cx);
+        })
+        .unwrap();
+        let start = std::time::Instant::now();
+        while cx.update(|cx| ProjectDirectory::get(cx)).is_none() {
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "the project never opened"
+            );
+            cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(
+            cx.update(|cx| ProjectDirectory::get(cx)),
+            Some(base.join("projects/apps/demo"))
+        );
+        assert!(base.join("projects/apps/demo/piton.config.pi").exists());
+        // Git is initialized unless unchecked.
+        assert!(
+            base.join("projects/apps/demo/.git").is_dir(),
+            "the new project isn't a Git repository"
+        );
+        assert!(
+            !main.read_with(cx, |main, _| main.panel_open()),
+            "the panel stayed open"
+        );
+        std::fs::remove_dir_all(&base).ok();
     }
 
     /// Esc in an open file moves focus back to the chat input, where typing
@@ -827,6 +1144,58 @@ mod tests {
             .unwrap();
         }
 
+        // Ctrl+click opens tabs alongside each other: their groups sit side by
+        // side in the order of the tabs, a divider between tabs; a plain click
+        // opens one alone again.
+        ribbon.update(cx, |ribbon, cx| {
+            ribbon.tab_clicked(RibbonTab::Application, 1, false, cx);
+            ribbon.tab_clicked(RibbonTab::Project, 1, true, cx);
+            ribbon.tab_clicked(RibbonTab::Code, 1, true, cx);
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            ribbon.read_with(cx, |ribbon, _| ribbon.open_tabs().to_vec()),
+            [RibbonTab::Project, RibbonTab::Code, RibbonTab::Application]
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            for control in controls.into_iter().filter(|control| *control != "build") {
+                assert!(window.try_find(control).is_some(), "{control} isn't shown");
+            }
+            assert!(window.try_find("build").is_none());
+            let project = window.find("project-directory").bounds();
+            let divider = window.find(("ribbon-tab-divider", RibbonTab::Application as usize)).bounds();
+            let dark_mode = window.find("dark-mode").bounds();
+            assert!(
+                project.right() <= divider.left() && divider.right() <= dark_mode.left(),
+                "Project's commands {project:?}, the divider {divider:?}, and Application's {dark_mode:?} are out of order"
+            );
+            // Code has no commands, so adds no divider of its own.
+            assert!(window.try_find(("ribbon-tab-divider", RibbonTab::Code as usize)).is_none());
+        })
+        .unwrap();
+        ribbon.update(cx, |ribbon, cx| {
+            ribbon.tab_clicked(RibbonTab::Application, 1, false, cx)
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            ribbon.read_with(cx, |ribbon, _| ribbon.open_tabs().to_vec()),
+            [RibbonTab::Application]
+        );
+
+        // The project's name sits at the left end of the tabs' bar.
+        cx.update_window(handle, |_, window, _| {
+            let bar = window.find("ribbon-tabs-row").bounds();
+            let name = window.find("ribbon-project-name").bounds();
+            assert!(
+                (name.left() - bar.left()).abs() <= gpui_kit::px(1.)
+                    && name.top() >= bar.top()
+                    && name.bottom() <= bar.bottom(),
+                "the project name {name:?} isn't at the left of the tabs {bar:?}"
+            );
+        })
+        .unwrap();
+
         // Groups sit side by side with nothing between them but the gap: the
         // title strip down each one's left edge marks where it starts.
         cx.update_window(handle, |_, window, _| {
@@ -853,6 +1222,16 @@ mod tests {
                 "the tabs still show"
             );
             assert!(window.try_find("ribbon-primary").is_some());
+            // Led by the project's name.
+            let row = window.find("ribbon-primary").bounds();
+            let name = window.find("ribbon-project-name").bounds();
+            for control in controls {
+                assert!(
+                    window.find(control).bounds().left() > name.right(),
+                    "{control} comes before the project name"
+                );
+            }
+            assert!(name.left() >= row.left());
             for control in controls {
                 assert!(
                     window.try_find(control).is_some(),
@@ -884,8 +1263,8 @@ mod tests {
         })
         .unwrap();
         ribbon.update(cx, |ribbon, cx| {
-            ribbon.tab_clicked(RibbonTab::Project, 1, cx);
-            ribbon.tab_clicked(RibbonTab::Project, 2, cx);
+            ribbon.tab_clicked(RibbonTab::Project, 1, false, cx);
+            ribbon.tab_clicked(RibbonTab::Project, 2, false, cx);
         });
         assert!(ribbon.read_with(cx, |ribbon, _| ribbon.is_collapsed()));
     }

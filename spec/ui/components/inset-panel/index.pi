@@ -1,0 +1,45 @@
+use /lib
+
+export scope InsetPanelScope:
+    concept: {InsetPanelConcept}
+
+concept InsetPanelConcept:
+    pitch:
+        A floating panel over the whole main window, for work that needs more
+        room than a popup and shouldn't disturb what is beneath it.
+
+    shape: {InsetPanelShape}
+
+shape InsetPanelShape:
+    description:
+        The panel floats over everything in the window, the ribbon and sidebar
+        included, inset 32 pixels from every edge of the window. It has rounded
+        corners, a border, and a shadow, and whatever it holds fills it. The
+        window behind it is dimmed, and nothing behind it takes the mouse while
+        it is open. Only one panel is open at a time.
+
+    modal:
+        While the panel is open, nothing beneath it can take focus or input;
+        only the panel and what it holds can.
+
+        The mouse can't reach anything beneath: no clicks, scrolling, hovering,
+        or tooltips, except that clicking the dimmed window closes the panel.
+
+        Focus moves into the panel when it opens and can't leave it. <Tab> and
+        <Shift+Tab> cycle through what can be focused within the panel, going
+        round from the last back to the first and the other way, rather than on
+        to anything beneath. Anything that would move focus beneath while it is
+        open, such as a task beneath finishing, sends focus back into the panel
+        instead.
+
+        The main window's shortcuts that act on what is beneath do nothing while
+        it is open: opening the palette with <Ctrl+P> (<Cmd+P> on macOS), and
+        collapsing or expanding the ribbon with <Ctrl+F1> (<Cmd+F1> on macOS).
+        Shortcuts that open something of their own, like the settings window, or
+        quitting, still work.
+
+    closing:
+        The panel closes with a close or cancel button in what it holds, with
+        <Escape>, or by clicking the dimmed window around it; clicking inside
+        the panel never closes it. Once it closes, focus goes back to the chat
+        input.

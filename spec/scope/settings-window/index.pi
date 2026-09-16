@@ -1,0 +1,63 @@
+use /lib
+from ../project-directory import ProjectDirectoryScope
+from ../prompt-mode/chat-input import ChatInputScope
+from /ui/components/scroll-column import ScrollColumnScope
+
+export scope SettingsWindowScope:
+    concept: {SettingsWindowConcept}
+
+concept SettingsWindowConcept:
+    pitch:
+        A window of its own for the application's settings, which for now are
+        the system prompts each tab of the @{ChatInputScope} sends.
+
+    shape: {SettingsWindowShape}
+
+shape SettingsWindowShape:
+    description:
+        A separate window, titled "Suspense Settings", 760 pixels square and
+        centred when it opens, in the same light or dark mode as the main
+        window. Its page scrolls with a @{ScrollColumnScope}. Closing it doesn't
+        quit the application.
+
+    opening:
+        It opens with Ctrl+, (Cmd+, on macOS) from anywhere in the application,
+        or from whatever command opens the settings. Opening it while it is
+        already open brings the open window forward rather than opening another.
+
+    systemPrompts:
+        The page is headed "System prompts", with a muted line beneath saying
+        that each tab gives a prompt sent from it this system prompt, that they
+        are saved with the project as they are edited, and that the
+        CODE_LOCATION and SPEC_LOCATION placeholders stand for codeRoot and root
+        in piton.config.pi.
+
+        Then, for each tab in order, Code, Chain, Spec, and Ask: its name, the
+        muted path of the file its prompt is saved in, and a "Reset to default"
+        button, disabled while the prompt is already the default, which puts the
+        default back and saves it. Beneath them, an editor for the prompt, 120
+        pixels tall before it scrolls, highlighting it as Piton, with soft
+        wrapping and no line numbers or folding. A prompt that can't be read or
+        saved says why beneath its editor.
+
+        Without a project open, in place of the prompts it reads
+        "Open a project to edit its system prompts."
+
+    saving:
+        The prompts belong to the project opened through the
+        @{ProjectDirectoryScope}, each saved as a Markdown file named after its
+        tab in the project's `.suspense/system-prompts` directory. Every edit is
+        saved straight away. When the window loads the prompts, any tab with no
+        file yet has its default saved, so every prompt can also be found and
+        edited by hand. The prompts are read again whenever the window is
+        brought forward and whenever another project is opened, so an edit made
+        by hand shows up; a prompt that already shows what was read is left
+        alone, so its cursor stays put.
+
+    templates:
+        A prompt is a template: the placeholders CODE_LOCATION and
+        SPEC_LOCATION, each written after a dollar sign and inside braces like a
+        Piton interpolation, are filled in with codeRoot and root from the
+        project's piton.config.pi before the prompt is compiled. Otherwise it is
+        Piton prose, like the prompt it is sent with, so it can reference the
+        spec. The defaults are the ones the @{ChatInputScope} gives each tab.

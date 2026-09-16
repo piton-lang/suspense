@@ -1,4 +1,5 @@
 use /lib
+from /scope/settings-window import SettingsWindowScope
 
 export scope RibbonApplicationTabScope:
     concept: {RibbonApplicationTabConcept}
@@ -32,9 +33,9 @@ shape RibbonApplicationTabShape:
             It is primary.
 
         settings:
-            A "Settings" button with a gear icon. Clicking it opens the settings
-            window, where the system prompt each chat tab sends is edited. Its
-            tooltip says so, and gives its keyboard shortcut, Ctrl+, (Cmd+, on
-            macOS).
+            A "Settings" button with a gear icon. Clicking it opens the
+            @{SettingsWindowScope}, where the system prompt each chat tab sends
+            is edited. Its tooltip says so, and gives its keyboard shortcut,
+            Ctrl+, (Cmd+, on macOS).
 
             It is primary.

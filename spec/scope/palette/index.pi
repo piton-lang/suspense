@@ -5,6 +5,7 @@ from /scope/editor import EditorScope
 from /ui/components/file-tree import FileTreeScope
 from /ui/components/scroll-column import ScrollColumnScope
 from /scope/prompt-mode/message-list import MessageList
+from /scope/settings-window import SettingsWindowScope
 
 export scope PaletteScope:
     concept: {PaletteConcept}
@@ -55,16 +56,17 @@ shape PaletteShape:
 
         fileSearch:
             On the Files tab, Ctrl+Enter (Cmd+Enter on macOS) sends the search
-            to a separate harness run that finds the file being described,
-            even when files match. Plain Enter does the same once the file list
-            has loaded and nothing matches; otherwise it picks the highlighted
-            file. While the search runs, the results area shows its task table,
-            as in the @{MessageList}, scrolling with a @{ScrollColumnScope}. When it finishes, a single file closes the
-            palette and opens that file, several files show a
-            "Multiple results were found" alert, and no files adds a
-            "No file matching the search was found." row. Changing the search
-            or switching tabs stops the run and brings back the normal results,
-            and if the palette closes while it runs, nothing opens.
+            to a separate harness run that finds the file being described, even
+            when files match. Plain Enter does the same once the file list has
+            loaded and nothing matches; otherwise it picks the highlighted file.
+            While the search runs, the results area shows its task table, as in
+            the @{MessageList}, scrolling with a @{ScrollColumnScope}. When it
+            finishes, a single file closes the palette and opens that file,
+            several files show a "Multiple results were found" alert, and no
+            files adds a "No file matching the search was found." row. Changing
+            the search or switching tabs stops the run and brings back the
+            normal results, and if the palette closes while it runs, nothing
+            opens.
 
         fileSearchSystemPrompt:
             The search's system prompt is appended to the harness's own. It
@@ -73,18 +75,19 @@ shape PaletteShape:
             asked for; to only read and never change anything; and to stop as
             soon as it is confident. It lists where to look, in this order of
             priority, preferring a match from an earlier place over an equally
-            good match from a later one: the spec, at `root` in
-            piton.config.pi; the code, at `codeRoot` in piton.config.pi;
-            `.suspense`; then `.claude`. A location missing from the config is
-            left out of the list. The harness's final reply is only JSON
-            listing the files by path relative to the project, and paths that
-            don't exist are dropped.
+            good match from a later one: the spec, at `root` in piton.config.pi;
+            the code, at `codeRoot` in piton.config.pi; `.suspense`; then
+            `.claude`. A location missing from the config is left out of the
+            list. The harness's final reply is only JSON listing the files by
+            path relative to the project, and paths that don't exist are
+            dropped.
 
         system:
             The application's own commands, each doing what its toolbar control
             or shortcut does: "Open Project…", "Build", "Dark mode" or
-            "Light mode" (whichever is not the current one), and "Quit". Build
-            is unavailable while there is no project or a build is running.
+            "Light mode" (whichever is not the current one), "Settings…", which
+            opens the @{SettingsWindowScope}, and "Quit". Build is unavailable
+            while there is no project or a build is running.
 
         commands:
             The harness's commands, the same ones the @{ChatInputScope} offers
@@ -106,14 +109,13 @@ shape PaletteShape:
             cursor follows other text. Focus then moves to the chat input.
 
     fuzzySearch:
-        A result matches when the search's characters all appear in it in
-        order, ignoring case, though not necessarily next to each other. The
-        best matches come first: runs of consecutive characters, and characters
-        at the start of a word or of a file's name, rank higher, then shorter
+        A result matches when the search's characters all appear in it in order,
+        ignoring case, though not necessarily next to each other. The best
+        matches come first: runs of consecutive characters, and characters at
+        the start of a word or of a file's name, rank higher, then shorter
         results. The matched characters are highlighted. With an empty search,
-        files are listed by path, the application's commands in the order
-        above, and the harness's by name. At most the 100 best results are
-        listed.
+        files are listed by path, the application's commands in the order above,
+        and the harness's by name. At most the 100 best results are listed.
 
     keyboard:
         Up and Down move the highlight, which starts on the first result, and

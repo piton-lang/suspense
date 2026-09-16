@@ -1,0 +1,18 @@
+from /scope/prompt-mode/chat-input import ChatInputScope
+
+anchor Prompt_eb7c7b65276e2f2d:
+    userPrompt:
+        When we're viewing an answer, we should be able to select text, and an inline popover will appear that allows up to copy, and attach to prompt.  That attachment is a new list item above the @{ChatInputScope} text input, and attachments will survive tab switches.  You can remove individual attachments, otherwise they'll be sent along with the prompt.  In the case of attached text, the attached text will be put into a list under the "attachedText" property in the prompt anchor.
+
+    mode: combined
+
+    systemPrompt:
+        We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec.
+        
+        You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec.
+        
+        Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other.
+        
+        Then build the spec and execute the prompt directly on the code using a unified plan.
+        
+        Make sure that you write both code and spec.

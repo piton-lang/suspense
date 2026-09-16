@@ -3,6 +3,7 @@ from /scope/harness-integration import HarnessIntegrationScope
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/lsp import LSP
 from /scope/prompt-mode/message-list import MessageList
+from /scope/settings-window import SettingsWindowScope
 from /ui/components/history-list import HistoryListScope
 from /ui/components/scroll-column import ScrollColumnScope
 
@@ -115,6 +116,9 @@ shape ChatInputShape:
             We're only asking a question about the code located in <code
             location> and the spec located in <spec location>. Don't edit either
             of them.
+
+        These are the defaults; each is saved with the project and can be edited
+        in the @{SettingsWindowScope}.
 
         A prompt keeps the mode it was sent in while it waits in the queue.
 

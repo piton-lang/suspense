@@ -1,5 +1,6 @@
 use /lib
 from /scope/project-directory import ProjectDirectoryScope
+from /scope/new-project import NewProjectScope
 
 export scope RibbonProjectTabScope:
     concept: {RibbonProjectTabConcept}
@@ -17,15 +18,22 @@ shape RibbonProjectTabShape:
 
     groups:
         project:
-            A "Project" group holds the Open Project command.
+            A "Project" group holds the New Project command, then the Open
+            Project command.
 
     commands:
+        newProject:
+            A "New Project" button with a folder-plus icon. Clicking it opens
+            the @{NewProjectScope}, and its tooltip says it creates a new
+            project and opens it.
+
+            It is primary.
+
         openProject:
-            A button with a folder icon. It reads "Open Project…" until a
-            project is open, then the project's name. Until a project is open,
-            its tooltip says to pick a piton.config.pi file, whose folder
-            becomes the project; once one is, the tooltip gives the project's
-            path and says the button opens a different piton.config.pi.
+            A button with a folder icon that always reads "Open Project…",
+            whether or not a project is open; the open project's name is shown
+            beside the ribbon's tabs instead. Its tooltip says to pick a
+            piton.config.pi file, whose folder becomes the project.
 
             Clicking it opens the @{ProjectDirectoryScope} picker, and the
             folder of the file picked becomes the project. Cancelling the picker

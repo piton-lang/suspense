@@ -856,7 +856,7 @@ fn show_document(document_path: PathBuf, file: WeakEntity<FileView>) -> ShowDocu
 
 /// `text` in Piton's canonical formatting, from `piton format` run in
 /// `project_dir`; an error if it could not be formatted.
-fn format_piton(text: &str, project_dir: &Path) -> anyhow::Result<String> {
+pub(crate) fn format_piton(text: &str, project_dir: &Path) -> anyhow::Result<String> {
     use std::io::Write as _;
     use std::process::{Command, Stdio};
 

@@ -1,0 +1,17 @@
+
+anchor Prompt_c4bacf4ea896c003:
+    userPrompt:
+        We need a new project button that allows us to indeed create a new project. When you hit new it will pop open a inset panel like what we have for diff view that will allow us to enter a name through the project and then select the agentic options for the belay configuration in a python.config.pi file and then it will also prompt us for a location for that project which opens a non-native file browser it's something that we'll have to build with crates available to Rust and then when you hit new it will create that python.config.pi file and open that project. 
+
+    mode: combined
+
+    systemPrompt:
+        We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec.
+        
+        You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec.
+        
+        Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other.
+        
+        Then build the spec and execute the prompt directly on the code using a unified plan.
+        
+        Make sure that you write both code and spec.

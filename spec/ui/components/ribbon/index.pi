@@ -23,6 +23,33 @@ shape RibbonShape:
         Project. Beneath the tabs, the selected tab's commands sit in groups.
         There is no raw output view and no toggle for one.
 
+    openingSeveralTabs:
+        Clicking a tab opens it alone, as usual. Ctrl+clicking one (Cmd+click on
+        macOS) opens it alongside whichever tabs are already open, or, if it is
+        already open, closes it, so any number of tabs can be open at once. The
+        last open tab can't be closed this way: Ctrl+clicking it leaves it open.
+        Every open tab shows as selected.
+
+        The command area then holds the groups of every open tab side by side,
+        in the order of the tabs rather than the order they were opened, with a
+        thin vertical divider between one tab's groups and the next. An open tab
+        with no commands adds nothing, and "No commands yet" shows only when
+        none of the open tabs has any. When the groups are wider than the
+        window, the command area scrolls sideways. The command area stays the
+        same height however many tabs are open.
+
+        Double-clicking a tab still collapses the ribbon, and expanding it again
+        shows the same tabs open. Which tabs are open isn't kept between
+        launches: the window always opens with only Project open.
+
+    projectName:
+        To the left of the tabs, in the same bar, sits the name of the open
+        project: its folder's name, in medium weight, after a small folder
+        icon, with a thin vertical divider between it and the first tab. Its
+        tooltip gives the project's full path. It is only a label, and does
+        nothing when clicked. While no project is open, it reads "No project",
+        muted. A name wider than 320 pixels is cut off with an ellipsis.
+
     groups:
         Each group has its title in muted text rotated -90deg (bottom to top)
         aligned along the left edge of the group naming what its commands have
@@ -71,10 +98,11 @@ shape RibbonShape:
         restored on the next launch.
 
         Collapsed, the tabs go away too. The ribbon becomes a single thin row
-        holding every primary command, from all of the tabs, as small buttons: a
-        small icon beside its label, and dark mode as a small switch. They keep
-        the order of their tabs, with a thin vertical divider between the
-        commands of one tab and the next, and keep their tooltips and disabled
-        states. The chevron sits at the right end of the row. Every control in
-        the row, the chevron and the dividers included, is vertically centred in
-        it.
+        led by the project's name, as it is beside the tabs and with the same
+        divider after it, and then holding every primary command, from all of
+        the tabs, as small buttons: a small icon beside its label, and dark mode
+        as a small switch. They keep the order of their tabs, with a thin
+        vertical divider between the commands of one tab and the next, and keep
+        their tooltips and disabled states. The chevron sits at the right end of
+        the row. Every control in the row, the chevron and the dividers
+        included, is vertically centred in it.

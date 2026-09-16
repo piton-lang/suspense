@@ -8,6 +8,8 @@ from /ui/components/ribbon import RibbonScope
 from /ui/components/file-tree import FileTreeScope
 from /ui/components/sidebar import SidebarScope
 from /ui/components/diff-view import DiffViewScope
+from /ui/components/inset-panel import InsetPanelScope
+from ../new-project import NewProjectScope
 
 export scope MainWindowScope:
     concept: {MainWindowConcept}
@@ -27,33 +29,32 @@ shape MainWindowShape:
         The whole window, including popups and notifications, supports a light
         and a dark theme.
 
-        A "Dark mode" switch in the ribbon's Application tab toggles between
-        the two.
+        A "Dark mode" switch in the ribbon's Application tab toggles between the
+        two.
 
-        The choice is persistent: it is saved for the user, across all
-        projects, and restored on the next launch. Until a choice has been
-        made, the window follows the operating system's light or dark
-        appearance.
+        The choice is persistent: it is saved for the user, across all projects,
+        and restored on the next launch. Until a choice has been made, the
+        window follows the operating system's light or dark appearance.
 
     escape:
-        Pressing Esc anywhere in the window, including in an @{EditorScope}, moves
-        focus to the @{ChatInputScope}. Esc first closes whatever it would
+        Pressing Esc anywhere in the window, including in an @{EditorScope},
+        moves focus to the @{ChatInputScope}. Esc first closes whatever it would
         otherwise dismiss, such as a completion menu or a popup.
 
     quitting:
-        Quitting while the harness is working on a task or a question, or
-        while a build is running, asks first. That goes for Ctrl+Q (Cmd+Q on
-        macOS), Quit in the @{PaletteScope}, and the window's close button. The
-        message is titled "Quit while a task is running?" and says what is
-        still running. "Quit" exits, and "Keep Running" or Esc dismisses it.
-        Asking to quit again while it is open doesn't open a second one, and an
-        open palette closes first. Prompts waiting in the queue don't count as
+        Quitting while the harness is working on a task or a question, or while
+        a build is running, asks first. That goes for Ctrl+Q (Cmd+Q on macOS),
+        Quit in the @{PaletteScope}, and the window's close button. The message
+        is titled "Quit while a task is running?" and says what is still
+        running. "Quit" exits, and "Keep Running" or Esc dismisses it. Asking to
+        quit again while it is open doesn't open a second one, and an open
+        palette closes first. Prompts waiting in the queue don't count as
         running work, since they are saved with the project.
 
     palette:
         Ctrl+P (Cmd+P on macOS) opens the @{PaletteScope} over the window, for
-        fuzzy searching the project's files, the application's own commands,
-        and the harness's commands, skills, and agents.
+        fuzzy searching the project's files, the application's own commands, and
+        the harness's commands, skills, and agents.
 
     header:
         ribbon: @{RibbonScope}
@@ -64,19 +65,19 @@ shape MainWindowShape:
         openFile:
             A file clicked in the @{FileTreeScope} opens in an @{EditorScope},
             in a split beside the chat history: the file on the left taking 50%
-            of the width, the chat history on the right taking the rest. The split
-            can be resized by dragging its edge. Closing the file closes the
-            split.
+            of the width, the chat history on the right taking the rest. The
+            split can be resized by dragging its edge. Closing the file closes
+            the split.
 
             When the split opens, it slides in from the sidebar, so it's clear
-            where it came from: the file's side grows out of the sidebar's
-            edge to its share of the width, the file sliding into view from
-            behind that edge as it does, while the chat history gives way
-            beside it. The slide is quick and settles without bouncing, and
-            only then can the split be dragged. A file opened in place of one
-            already showing doesn't slide, since the split is already
-            open. The @{ChatInputScope} is never split: it stays along the
-            bottom, across the full width of prompt mode.
+            where it came from: the file's side grows out of the sidebar's edge
+            to its share of the width, the file sliding into view from behind
+            that edge as it does, while the chat history gives way beside it.
+            The slide is quick and settles without bouncing, and only then can
+            the split be dragged. A file opened in place of one already showing
+            doesn't slide, since the split is already open. The
+            @{ChatInputScope} is never split: it stays along the bottom, across
+            the full width of prompt mode.
 
             Closing the file plays the slide in reverse, back into the
             sidebar: the file's side shrinks from whatever width it was
@@ -88,18 +89,19 @@ shape MainWindowShape:
 
         openDiff:
             A file's @{DiffViewScope}, opened from the @{FileTreeScope}, opens
-            in a floating panel over the whole window, the ribbon and sidebar
-            included, inset 32 pixels from every edge of the window. The panel
-            has rounded corners, a border, and a shadow, and the window behind
-            it is dimmed. It leaves the split alone: any file open there stays
-            open, unsaved changes and all. Opening another file's diff replaces
-            the one in the panel.
+            in an @{InsetPanelScope}. It leaves the split alone: any file open
+            there stays open, unsaved changes and all. Opening another file's
+            diff replaces the one in the panel, as does opening one while a new
+            project is being set up. Opening the file from the diff closes the
+            panel and opens the file in the split, as clicking it in the
+            @{FileTreeScope} would.
 
-            The panel closes with the diff's close button, with Esc, or by
-            clicking the dimmed window around it. Opening the file from the
-            diff closes the panel and opens the file in the split, as clicking
-            it in the @{FileTreeScope} would.
+        newProject:
+            The ribbon's New Project command opens the @{NewProjectScope} in an
+            @{InsetPanelScope}, fresh each time, in place of any diff open
+            there. Once the project is created, the panel closes and the new
+            project is open.
 
         promptMode:
-            The body displays the @{PromptEditor} and any splits, to the
-            right of the @{SidebarScope}.
+            The body displays the @{PromptEditor} and any splits, to the right
+            of the @{SidebarScope}.

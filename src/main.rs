@@ -3,20 +3,24 @@
 
 mod app;
 mod chat_input;
+mod checkbox;
 mod commit_notes;
 mod completion_menu;
 mod diff;
 mod diff_view;
 mod file_link;
 mod file_view;
+mod folder_browser;
 mod fuzzy;
 mod git_panel;
 mod git_status;
 mod harness;
 mod harness_mentions;
 mod hidden_anchor;
+mod inset_panel;
 mod main_window;
 mod markdown;
+mod new_project;
 mod palette;
 mod piton_build;
 mod piton_lsp;

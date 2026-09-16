@@ -1,0 +1,104 @@
+use /lib
+from /ui/components/folder-browser import FolderBrowserScope
+from /scope/project-directory import ProjectDirectoryScope
+
+export scope NewProjectScope:
+    concept: {NewProjectConcept}
+
+concept NewProjectConcept:
+    pitch:
+        Creates a new Piton project, with its piton.config.pi set up for Belay
+        and the agents it should write for, and opens it.
+
+    shape: {NewProjectShape}
+
+shape NewProjectShape:
+    description:
+        A form titled "New Project", with a close button, holding the project's
+        name, where it goes, and its Belay options, and along the bottom a
+        "Cancel" button and a primary "New" button that creates it. The name
+        field has focus when the form opens.
+
+    name:
+        A "Name" field for the project's name, which is also the name of its
+        folder. It can't be empty, contain a slash or backslash, or be "." or
+        "..".
+
+    location:
+        A "Location" row showing the folder the project's folder goes in, with a
+        "Browse…" button beside it. It starts in the folder holding the open
+        project, or the user's home folder when no project is open. Beneath it,
+        muted, the full path of the folder that will be created.
+
+        Browse opens a @{FolderBrowserScope} in place of the form, titled
+        "Choose where the project goes" and starting in the current location. A
+        new folder for the project to go in can be created from there. Choosing
+        a folder makes it the location, and choosing or cancelling goes back to
+        the form, just as it was left.
+
+    git:
+        Beneath the location, an "Initialize a Git repository" checkbox, checked
+        to start with. Its label is shown in full, like the agents' labels.
+
+    agents:
+        An "Agents" group of checkboxes, one per agent Belay writes for, each
+        with the directory it writes into: "Claude Code" (.claude), "OpenCode"
+        (.opencode), "Codex" (.codex), "Cursor" (.cursor), and "Agents"
+        (.agents). Only Claude Code starts checked. At least one must be
+        checked.
+
+        Each checkbox's label is shown in full beside it, vertically centred on
+        it, with room below its baseline so the bottoms of letters like p and y,
+        and of the brackets, are never cut off.
+
+    folders:
+        Three fields, each a path relative to the project folder: "Spec root",
+        starting as ./spec; "Code root", starting as ./src; and "Shape root",
+        starting as ./spec/shape, which can be left empty to go without one.
+        Spec root and code root can't be empty. A path is written with a leading
+        ./ whether or not it was typed with one, and none can be absolute or
+        climb out of the project with "..".
+
+    config:
+        The piton.config.pi written for the project uses @piton/config and
+        @piton/belay. It exports a piton-config anchor named after the project,
+        its name in PascalCase from its letters and digits, or "Project" when
+        that leaves nothing or starts with a digit, whose root is the spec root,
+        whose entry is index.pi in the spec root, and whose only framework is a
+        belay-config anchor named BelayConfiguration. That anchor has the code
+        root as its codeRoot, the shape root as its shapeRoot unless there is
+        none, and an adapter for each checked agent, in the order they are
+        listed. Claude Code and OpenCode use ClaudeAdapter and OpenCodeAdapter,
+        imported from @piton/belay; each of the others is a belay-agent-adapter
+        anchor of its own written into the file, named after the agent, such as
+        CodexAdapter, with a description saying the directory it writes into and
+        its tool's flag set to true. The file is written in Piton's canonical
+        formatting.
+
+    creating:
+        "New" is disabled, with a tooltip saying why, until the name is valid,
+        the paths are, and an agent is checked, and while a project is being
+        created. A field that isn't valid says why beneath it once something has
+        been typed in it.
+
+        Pressing it creates the project's folder, and any folders leading to it,
+        then writes piton.config.pi there, creates the spec root with an empty
+        index.pi in it, and creates the code root and any shape root. It never
+        overwrites anything: a folder that already holds a piton.config.pi is
+        refused, an index.pi already in the spec root is left as it is, and
+        folders that already exist are kept.
+
+        With "Initialize a Git repository" checked, once the rest is created the
+        project's folder is made a Git repository with `git init`, unless it
+        already is the top of one, and a .gitignore is written there ignoring
+        what Suspense keeps for this machine alone rather than for the project:
+        the harness report .suspense/harness.json, the send queue
+        .suspense/queue/, the commit notes .suspense/commit-notes.json, and the
+        draft .suspense-draft.pi wherever it is. The prompt history is kept. An
+        existing .gitignore is left as it is. Nothing is committed. If Git fails, the project still
+        opens, and a warning notification says the repository couldn't be
+        initialized, and why.
+
+        Once created, the project opens as if picked through the
+        @{ProjectDirectoryScope}, and the form closes. If anything fails, the
+        form stays open and says what went wrong above its buttons.

@@ -1,0 +1,2110 @@
+{
+  "userPrompt": "Let's move the [NewProjectScope](.claude/reference/scope/new-project/NewProjectScope.md) file picker into it's own scope in ui/components and reference that.",
+  "output": [
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "54d14c82-1f8a-4340-baa9-a90d9a64b3e2",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "4bb14ac5-c9ed-45d5-b811-3788f27918df",
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "07d3a301-c907-4564-9ff9-3cbf9fa37d4d",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "d882b70d-43e2-4e15-9085-e3186d265eb3",
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "54d14c82-1f8a-4340-baa9-a90d9a64b3e2",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "",
+      "stdout": "",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "f2e9be68-51c8-4138-ae59-6a478c87d036",
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "07d3a301-c907-4564-9ff9-3cbf9fa37d4d",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "{\"terminalSequence\":\"\\u001b]777;notify;warp://cli-agent;{\\\"v\\\":1,\\\"agent\\\":\\\"claude\\\",\\\"event\\\":\\\"session_start\\\",\\\"session_id\\\":\\\"44551386-80e4-4486-b2b8-1e79d4e1d1c2\\\",\\\"cwd\\\":\\\"/home/hyphyphyph/piton/repl\\\",\\\"project\\\":\\\"repl\\\",\\\"plugin_version\\\":\\\"2.2.0\\\"}\\u0007\"}\n",
+      "stdout": "{\"terminalSequence\":\"\\u001b]777;notify;warp://cli-agent;{\\\"v\\\":1,\\\"agent\\\":\\\"claude\\\",\\\"event\\\":\\\"session_start\\\",\\\"session_id\\\":\\\"44551386-80e4-4486-b2b8-1e79d4e1d1c2\\\",\\\"cwd\\\":\\\"/home/hyphyphyph/piton/repl\\\",\\\"project\\\":\\\"repl\\\",\\\"plugin_version\\\":\\\"2.2.0\\\"}\\u0007\"}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "c282ae41-f71c-492e-9454-0a1e8e296917",
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2"
+    },
+    {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "/home/hyphyphyph/piton/repl",
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "tools": [
+        "Task",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "ListAgents",
+        "ListMcpResourcesTool",
+        "Monitor",
+        "NotebookEdit",
+        "PushNotification",
+        "Read",
+        "ReadMcpResourceDirTool",
+        "ReadMcpResourceTool",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskOutput",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write"
+      ],
+      "mcp_servers": [
+        {
+          "name": "backlog",
+          "status": "connected"
+        },
+        {
+          "name": "claude.ai Google Drive",
+          "status": "needs-auth"
+        },
+        {
+          "name": "claude.ai Gmail",
+          "status": "needs-auth"
+        },
+        {
+          "name": "claude.ai Google Calendar",
+          "status": "needs-auth"
+        }
+      ],
+      "model": "claude-opus-5[1m]",
+      "permissionMode": "auto",
+      "slash_commands": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "build-ribbon",
+        "x-build-ribbon",
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "output-style",
+        "context",
+        "effort",
+        "fast",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "skill-doctor",
+        "goal",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding"
+      ],
+      "terminal_slash_commands": [
+        "doctor",
+        "color",
+        "reload-plugins"
+      ],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.273",
+      "output_style": "default",
+      "agents": [
+        "claude",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
+      "skills": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "build-ribbon",
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator"
+      ],
+      "plugins": [
+        {
+          "name": "gitkraken-hooks",
+          "path": "/home/hyphyphyph/.claude/plugins/marketplaces/gitkraken/plugins/gitkraken-hooks",
+          "source": "gitkraken-hooks@gitkraken",
+          "version": "3.1.73"
+        },
+        {
+          "name": "warp",
+          "path": "/home/hyphyphyph/.claude/plugins/cache/claude-code-warp/warp/2.2.0",
+          "source": "warp@claude-code-warp",
+          "version": "2.2.0"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "msg_lifecycle_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "61d87ffd-9f6e-4cfd-bb9b-f39173789cf3",
+      "memory_paths": {
+        "auto": "/home/hyphyphyph/.claude/projects/-home-hyphyphyph-piton-repl/memory/"
+      },
+      "messaging_socket_path": "/run/user/1000/cc-socks/1825137.sock",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "uuid": "24b3c652-a699-4137-8ec6-e21e64385110"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5",
+          "id": "msg_011Cf7EmugBSiKbPsuQc5j4p",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 375847,
+            "cache_read_input_tokens": 10412,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 375847
+            },
+            "output_tokens": 8,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "diagnostics": {
+            "cache_miss_reason": {
+              "type": "system_changed",
+              "cache_missed_input_tokens": 317362
+            }
+          },
+          "context_management": null
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "bbfa5598-f62e-459f-8458-7ec7af674b35",
+      "ttft_ms": 5449
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "fbbc40f4-e873-4dee-af9f-f19141fa90f1"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "uuid": "011b0992-ae48-4a85-aac0-827e6b95f543"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "13dfa44c-4a3b-461c-adb5-ba479bb234c2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "b37abe1a-9910-45ac-ac79-50209501173a"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 300,
+      "estimated_tokens_delta": 250,
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "uuid": "96cf6c0b-dbb9-490c-a8f0-06c98a976f52"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "CAQSpgkKEAgRGAI4AUIIdGhpbmtpbmcSDDdxTp9E765vWYxOtRoMhwHOB9WMhSetAoUIIjDeq3Ql2SBPluJmzztEO+b45ces2r+P5qmYgIB5/aZjci/qWua9uL3nQgMGf/zkGOQqwwgzA7bIO+ErzaYBZSLwtQsCiPnAi5MobsXiISgchfwo+85nxTYJ8Zl3XGWMe5LH9YFqXpEztqJiq9hzWV4KOvibeeQV8q3br2gSrybkUXav9bSh618FszeFwdiS28kJ6WYQ8QB+mB+0xQxpF113MSRFjzQANjJanQIb7csoY2yxtP/ydQKSCK/9VMLvIGh/C4Icu3l7LY3HQHkvLsyNBV+QrRHetRuwzAhdOd225e4nHzjyaECf5pd3skhb5BtX3Ib1ouon578o9iFTHKnvAv2QRB0H6gxNrcho30scT6ibeB20W/2KhehcmZjgcrCiSJP2xVPCEPe/7uwXivBch9X+cVqQbZzkFSQE0V6k+dfGfRZSmESBFeq+ClsJXYHHxMQca/1JtKxe9u3vMiBOreopvlRIWCv8bDlsi3Xoo8rbiYkt0Gxu8ZuaR9XcNFjiJO+cNl+Az2L2hDREcKK4pn/MPyWhIMeF6O9GDm9pFhjkymphtI5IFHmCjHjqUpMb1vLpkW8F6sFi/MQZ/3wDdcq1XyXJUMlfPDmwBQx1iVXr8m6t8i95AQi6rWHy1dWV5w9BjEhxkXBU6wJJrRrp9FraGfpF8C5zbyRV5hcS+alprUIFH0P3Ct8fafkbhsBzPOqY9dGtro/kP7je+ASv85RBbP5XUnSWZVtoloC+AWqpNDG7vHnXqXsA3QO7js1pQewjV/xxcC5CG9AVIwh7Um/If+YEUQG66U71LOWqAeAz3wOzf3zabb484dEC63YvqHe23hvpDz+fUimwrmuMOACrrAwnNtkjx3I3du1FjdCDNdDtJP91MWz6qrwTJ4kR/15euTN+PnQK/ecVsvYsc66m1Wp7JaA1tX7F9QSPzAPb9L59UWezJbcCnjdIcfw4EomW9iKE+SoG7VjVNeaP3VemXneTmlA3lIn4Yk0wxv9uhfAenphoTp/L20BnuRwU28Kv34ruL57BXjet2RevRFWEAFOCVL6nU4jLLrnlwjZDRc8QOOAPUY8UY3ZBE9jKK4ELYBvGt/4hqfj/dlvml+jXtXkEIUM6iMtIc2vnF6TbAxuU1VPmUp1iIptVOTVjzF7bDe7aCP3/eXIohXjzMsfY9z8CJmX4HCSLgnYyIt7n62Lot+vZk+9QactTFsnnBY+df1ssF79tKeMA/Q8qM0vfqDvogiFywGYmNQUArq5zxH73dk13yIW2LxGkoUBh/Xh98QVcGAth59bmH5894q3WgqXUXbhmv75RxX/p5UnXV60HWNLDV2XhbmoyCVnjUxQIQCvt30RGxmJySpNEXcIuq5GTEmzqVvNCBcB02x4lVMIjZvvXeSOleUtabTrWiIiJuSOyfg0Phb7dizu99miMwyX5Qtl0Kti0Y5ql/Y1N0iCi4JtiKo/7qMXANWn3mpiBTiZeHUz7/rQjTiWTj155IIrHadvIc7RFrWXo0h6Wx0F85BgB"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "48422387-3bd7-4c37-b50f-6f37f3581bc9"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5",
+        "id": "msg_011Cf7EmugBSiKbPsuQc5j4p",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAQSpgkKEAgRGAI4AUIIdGhpbmtpbmcSDDdxTp9E765vWYxOtRoMhwHOB9WMhSetAoUIIjDeq3Ql2SBPluJmzztEO+b45ces2r+P5qmYgIB5/aZjci/qWua9uL3nQgMGf/zkGOQqwwgzA7bIO+ErzaYBZSLwtQsCiPnAi5MobsXiISgchfwo+85nxTYJ8Zl3XGWMe5LH9YFqXpEztqJiq9hzWV4KOvibeeQV8q3br2gSrybkUXav9bSh618FszeFwdiS28kJ6WYQ8QB+mB+0xQxpF113MSRFjzQANjJanQIb7csoY2yxtP/ydQKSCK/9VMLvIGh/C4Icu3l7LY3HQHkvLsyNBV+QrRHetRuwzAhdOd225e4nHzjyaECf5pd3skhb5BtX3Ib1ouon578o9iFTHKnvAv2QRB0H6gxNrcho30scT6ibeB20W/2KhehcmZjgcrCiSJP2xVPCEPe/7uwXivBch9X+cVqQbZzkFSQE0V6k+dfGfRZSmESBFeq+ClsJXYHHxMQca/1JtKxe9u3vMiBOreopvlRIWCv8bDlsi3Xoo8rbiYkt0Gxu8ZuaR9XcNFjiJO+cNl+Az2L2hDREcKK4pn/MPyWhIMeF6O9GDm9pFhjkymphtI5IFHmCjHjqUpMb1vLpkW8F6sFi/MQZ/3wDdcq1XyXJUMlfPDmwBQx1iVXr8m6t8i95AQi6rWHy1dWV5w9BjEhxkXBU6wJJrRrp9FraGfpF8C5zbyRV5hcS+alprUIFH0P3Ct8fafkbhsBzPOqY9dGtro/kP7je+ASv85RBbP5XUnSWZVtoloC+AWqpNDG7vHnXqXsA3QO7js1pQewjV/xxcC5CG9AVIwh7Um/If+YEUQG66U71LOWqAeAz3wOzf3zabb484dEC63YvqHe23hvpDz+fUimwrmuMOACrrAwnNtkjx3I3du1FjdCDNdDtJP91MWz6qrwTJ4kR/15euTN+PnQK/ecVsvYsc66m1Wp7JaA1tX7F9QSPzAPb9L59UWezJbcCnjdIcfw4EomW9iKE+SoG7VjVNeaP3VemXneTmlA3lIn4Yk0wxv9uhfAenphoTp/L20BnuRwU28Kv34ruL57BXjet2RevRFWEAFOCVL6nU4jLLrnlwjZDRc8QOOAPUY8UY3ZBE9jKK4ELYBvGt/4hqfj/dlvml+jXtXkEIUM6iMtIc2vnF6TbAxuU1VPmUp1iIptVOTVjzF7bDe7aCP3/eXIohXjzMsfY9z8CJmX4HCSLgnYyIt7n62Lot+vZk+9QactTFsnnBY+df1ssF79tKeMA/Q8qM0vfqDvogiFywGYmNQUArq5zxH73dk13yIW2LxGkoUBh/Xh98QVcGAth59bmH5894q3WgqXUXbhmv75RxX/p5UnXV60HWNLDV2XhbmoyCVnjUxQIQCvt30RGxmJySpNEXcIuq5GTEmzqVvNCBcB02x4lVMIjZvvXeSOleUtabTrWiIiJuSOyfg0Phb7dizu99miMwyX5Qtl0Kti0Y5ql/Y1N0iCi4JtiKo/7qMXANWn3mpiBTiZeHUz7/rQjTiWTj155IIrHadvIc7RFrWXo0h6Wx0F85BgB"
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 375847,
+          "cache_read_input_tokens": 10412,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 375847
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "diagnostics": {
+          "cache_miss_reason": {
+            "type": "system_changed",
+            "cache_missed_input_tokens": 317362
+          }
+        },
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "uuid": "6ecd551d-4f90-43b0-9530-6c51e95fffdf",
+      "timestamp": "2026-09-16T13:59:43.437Z",
+      "request_id": "req_011Cf7EmsyVHS9J6RC8FkG5x"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "28b56f07-98e2-45b8-8fc6-3801978bacc9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "tool_use",
+          "id": "toolu_01WmNyg14MJeiHvr8K1YmB3A",
+          "name": "Bash",
+          "input": {},
+          "caller": {
+            "type": "direct"
+          }
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "cc66234b-47c8-47ed-8a76-20574567fd43"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ""
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "08005200-91c0-4c6d-b306-d90f88b78455"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "{\"command\": \"c"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "b21ec65e-9968-4f1c-8a2a-a057a49911ba"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "d /home/h"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "183bf169-abef-48bc-8068-9957f0f85817"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "y"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "e3de4749-dcea-480f-8ab7-2b7bc7e577d3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "phy"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "94993bc5-12c5-4504-bd99-52a2d53f4859"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "phy"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "5707f7f2-da88-4e74-b2ab-831764336c12"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ph"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "3f4f6c8e-2d74-46d3-987e-44ef526cff81"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/piton/repl && c"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "1dbd1962-e205-438f-b55b-9ed187d4718b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "at spec/scope/new"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "e282d4bd-ec83-4e13-8cd4-583330eac52c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "-project/index.pi |"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "212865fa-17e5-4008-a2ec-13108a116ae4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " sed -n 1,50"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "254fcfdf-8d2e-44e4-a892-77ed1bc6fc91"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "p; ls spec/"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "98b78f28-dced-4b06-b37e-a8661a003057"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ui/components/folder-brow"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "17eb0d55-2717-48d1-b0db-e3215bd14931"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ser; grep -n \\\""
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "daf11cbb-b64f-42f3-9bdb-01a01601750d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "FolderBrowser\\\""
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "4a211958-4024-4873-946e-bda3ec35b1ef"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " .claude/reference/sc"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "5e0d3fc9-b596-420c-90f8-bc439e26da0e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ope/new-project/New"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "16db1a50-3039-4500-bced-1155c4567ffe"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ProjectScope.md;"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "9e8cd323-0ad5-42bb-9aaa-020178c55f0f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " git status --short sp"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "1c5858df-6947-47bc-a491-215536d56042"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ec | head -20"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "517226e5-d255-4474-8a15-55d35f591ec3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\", \"description\": \"Check current new"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "20a383a9-58e3-4837-958b-004089396018"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "-"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "432f1840-fcdd-4359-a29c-b15f1af8f694"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "project sp"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "c02991fa-f0f0-4353-b2cd-555d18d55391"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ec and folder browser sc"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "902d5cf4-6989-411f-a756-dc9ce81fe507"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ope"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "529fc90e-5be5-4655-8777-28f5d53e4ef9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\"}"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "1996780f-20ff-4559-8275-24f018ad2e58"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5",
+        "id": "msg_011Cf7EmugBSiKbPsuQc5j4p",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "toolu_01WmNyg14MJeiHvr8K1YmB3A",
+            "name": "Bash",
+            "input": {
+              "command": "cat spec/scope/new-project/index.pi | sed -n 1,50p; ls spec/ui/components/folder-browser; grep -n \"FolderBrowser\" .claude/reference/scope/new-project/NewProjectScope.md; git status --short spec | head -20",
+              "description": "Check current new-project spec and folder browser scope"
+            },
+            "caller": {
+              "type": "direct"
+            }
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 375847,
+          "cache_read_input_tokens": 10412,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 375847
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "diagnostics": {
+          "cache_miss_reason": {
+            "type": "system_changed",
+            "cache_missed_input_tokens": 317362
+          }
+        },
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "uuid": "9363a9e3-ae01-47e9-9004-76e60b0ee9af",
+      "timestamp": "2026-09-16T13:59:44.258Z",
+      "request_id": "req_011Cf7EmsyVHS9J6RC8FkG5x",
+      "wire_tool_inputs": {
+        "toolu_01WmNyg14MJeiHvr8K1YmB3A": {
+          "command": "cd /home/hyphyphyph/piton/repl && cat spec/scope/new-project/index.pi | sed -n 1,50p; ls spec/ui/components/folder-browser; grep -n \"FolderBrowser\" .claude/reference/scope/new-project/NewProjectScope.md; git status --short spec | head -20",
+          "description": "Check current new-project spec and folder browser scope"
+        }
+      },
+      "wire_ingest_context": {
+        "toolu_01WmNyg14MJeiHvr8K1YmB3A": {
+          "cwd": "/home/hyphyphyph/piton/repl"
+        }
+      }
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "c1d46b69-2306-42fe-b0f0-c3a0ccaebf69"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 375847,
+          "cache_read_input_tokens": 10412,
+          "output_tokens": 281,
+          "output_tokens_details": {
+            "thinking_tokens": 90
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 281,
+              "cache_read_input_tokens": 10412,
+              "cache_creation_input_tokens": 375847,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 375847
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "66e0107a-803c-484d-9470-7f190654df75"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "a1e285ea-b065-44bd-8daf-2e8851cf65ec"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1789581000,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.09,
+            "resetsAt": 1789581000
+          },
+          "seven_day": {
+            "utilization": 0.08,
+            "resetsAt": 1790103600
+          }
+        }
+      },
+      "uuid": "08ca52da-5a68-4719-b9f2-29ebc39ed7ce",
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2"
+    },
+    {
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "tool_use_id": "toolu_01WmNyg14MJeiHvr8K1YmB3A",
+            "type": "tool_result",
+            "content": "use /lib\nfrom /ui/components/folder-browser import FolderBrowserScope\nfrom /scope/project-directory import ProjectDirectoryScope\n\nexport scope NewProjectScope:\n    concept: {NewProjectConcept}\n\nconcept NewProjectConcept:\n    pitch:\n        Creates a new Piton project, with its piton.config.pi set up for Belay\n        and the agents it should write for, and opens it.\n\n    shape: {NewProjectShape}\n\nshape NewProjectShape:\n    description:\n        A form titled \"New Project\", with a close button, holding the project's\n        name, where it goes, and its Belay options, and along the bottom a\n        \"Cancel\" button and a primary \"New\" button that creates it. The name\n        field has focus when the form opens.\n\n    name:\n        A \"Name\" field for the project's name, which is also the name of its\n        folder. It can't be empty, contain a slash or backslash, or be \".\" or\n        \"..\".\n\n    location:\n        A \"Location\" row showing the folder the project's folder goes in, with a\n        \"Browse…\" button beside it. It starts in the folder holding the open\n        project, or the user's home folder when no project is open. Beneath it,\n        muted, the full path of the folder that will be created.\n\n        Browse opens a @{FolderBrowserScope} in place of the form, titled\n        \"Choose where the project goes\" and starting in the current location. A\n        new folder for the project to go in can be created from there. Choosing\n        a folder makes it the location, and choosing or cancelling goes back to\n        the form, just as it was left.\n\n    agents:\n        An \"Agents\" group of checkboxes, one per agent Belay writes for, each\n        with the directory it writes into: \"Claude Code\" (.claude), \"OpenCode\"\n        (.opencode), \"Codex\" (.codex), \"Cursor\" (.cursor), and \"Agents\"\n        (.agents). Only Claude Code starts checked. At least one must be\n        checked.\n\n        Each checkbox's label is shown in full beside it, vertically centred on\n        it, with room below its baseline so the bottoms of letters like p and y,\n        and of the brackets, are never cut off.\n\n    folders:\nindex.pi\n22:Browse opens a [FolderBrowserScope](../../ui/components/folder-browser/FolderBrowserScope.md) in place of the form, titled \"Choose where the project goes\" and starting in the current location. A new folder for the project to go in can be created from there. Choosing a folder makes it the location, and choosing or cancelling goes back to the form, just as it was left.\n M spec/scope/application/MainWindow.pi\n M spec/ui/components/ribbon/project-tab/index.pi\n?? spec/scope/new-project/\n?? spec/ui/components/folder-browser/\n?? spec/ui/components/inset-panel/",
+            "is_error": false
+          }
+        ]
+      },
+      "parent_tool_use_id": null,
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "uuid": "280fad6c-deab-432d-900e-44541ecbefd3",
+      "timestamp": "2026-09-16T13:59:44.684Z",
+      "tool_use_result": {
+        "stdout": "use /lib\nfrom /ui/components/folder-browser import FolderBrowserScope\nfrom /scope/project-directory import ProjectDirectoryScope\n\nexport scope NewProjectScope:\n    concept: {NewProjectConcept}\n\nconcept NewProjectConcept:\n    pitch:\n        Creates a new Piton project, with its piton.config.pi set up for Belay\n        and the agents it should write for, and opens it.\n\n    shape: {NewProjectShape}\n\nshape NewProjectShape:\n    description:\n        A form titled \"New Project\", with a close button, holding the project's\n        name, where it goes, and its Belay options, and along the bottom a\n        \"Cancel\" button and a primary \"New\" button that creates it. The name\n        field has focus when the form opens.\n\n    name:\n        A \"Name\" field for the project's name, which is also the name of its\n        folder. It can't be empty, contain a slash or backslash, or be \".\" or\n        \"..\".\n\n    location:\n        A \"Location\" row showing the folder the project's folder goes in, with a\n        \"Browse…\" button beside it. It starts in the folder holding the open\n        project, or the user's home folder when no project is open. Beneath it,\n        muted, the full path of the folder that will be created.\n\n        Browse opens a @{FolderBrowserScope} in place of the form, titled\n        \"Choose where the project goes\" and starting in the current location. A\n        new folder for the project to go in can be created from there. Choosing\n        a folder makes it the location, and choosing or cancelling goes back to\n        the form, just as it was left.\n\n    agents:\n        An \"Agents\" group of checkboxes, one per agent Belay writes for, each\n        with the directory it writes into: \"Claude Code\" (.claude), \"OpenCode\"\n        (.opencode), \"Codex\" (.codex), \"Cursor\" (.cursor), and \"Agents\"\n        (.agents). Only Claude Code starts checked. At least one must be\n        checked.\n\n        Each checkbox's label is shown in full beside it, vertically centred on\n        it, with room below its baseline so the bottoms of letters like p and y,\n        and of the brackets, are never cut off.\n\n    folders:\nindex.pi\n22:Browse opens a [FolderBrowserScope](../../ui/components/folder-browser/FolderBrowserScope.md) in place of the form, titled \"Choose where the project goes\" and starting in the current location. A new folder for the project to go in can be created from there. Choosing a folder makes it the location, and choosing or cancelling goes back to the form, just as it was left.\n M spec/scope/application/MainWindow.pi\n M spec/ui/components/ribbon/project-tab/index.pi\n?? spec/scope/new-project/\n?? spec/ui/components/folder-browser/\n?? spec/ui/components/inset-panel/",
+        "stderr": "",
+        "interrupted": false,
+        "isImage": false,
+        "noOutputExpected": false
+      }
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "uuid": "945eddd1-d6a8-45e8-9766-31d4b91ebf8a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5",
+          "id": "msg_011Cf7EnVfbH8cY9DwyM1Fyf",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 1226,
+            "cache_read_input_tokens": 386259,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1226
+            },
+            "output_tokens": 334,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "e6fe6b38-461a-4b0c-987a-16d66a253be0",
+      "ttft_ms": 4750
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "e57aa7b1-94cb-456f-8b80-684c630d67dd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "I did"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "460e4ca3-ae6f-44cc-9f84-9e2033f70b51"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "n't change anything, because it"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "b0291fb7-33bd-4940-ad40-67502f333392"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "'s already set"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "47acab20-9c6e-4f75-aa96-cee4cad4c17b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " up that way. When"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "844445c3-22c9-41e8-ab37-98f58b1ab065"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " I built the fol"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "7b395683-55e8-44ad-899e-2ee34e6039f6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "der picker I g"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "703aff3c-ecc9-4ecf-b3cb-516ca45fdd39"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ave it its own scope, `"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "53ff9d68-1779-4cdb-bfcc-e3c45d909ed0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "FolderBrowserSc"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "58447338-05c3-41aa-9111-d83a208db646"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ope`, in `spec/"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "bc6dedc7-0e25-4fca-870d-d1cf00f4da07"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ui/components/folder-"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "647a7279-3d58-4161-b019-9eeed0d69cb6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "browser/index.pi`"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "1bf3a345-aa6c-4cb6-aca2-bab1d3ca7137"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ". That sc"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "292fe018-c8d9-42ac-8cd8-6b353d4a585f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ope hol"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "1878942a-8459-47c6-900c-e2606b4d75af"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ds everything about"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "1973e593-3bda-45e7-9a90-0827264d7ffc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " the picker: the bar with"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "45665b63-ab63-4f4c-89ec-0cd5c9264070"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " up, home, New"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "c7a75d60-9030-43ea-a0d5-438f167068c6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " Folder, the breadc"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "afa3aaee-a4e0-40f1-a246-645f9db89833"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "rumb and Show hid"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "cbb1faa3-2850-4c35-9b18-5328eaf882f5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "den, pl"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "bed01b84-f45c-4e51-b6ab-dab93a267424"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "us the folder list, cre"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "19231296-fc14-4c99-9ef5-9c973b7cbfd3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ating a new folder, and cho"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "798a9ff6-f60a-4f1a-b761-95b2d3ee6330"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "osing.\n\n`NewPro"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "4e84d8ef-0025-4103-b78b-14441783f6ee"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "jectScope` only references"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "41a6e381-6ac9-4fbe-83a7-1b7b43faedbf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " it, in its `location` section"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "d71343b3-2510-40af-9f7a-cd30f259302d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "."
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "bb135505-1942-46c3-99b3-88f8a8f42a9b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " All"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "e010745f-974a-48ec-b897-b76b1ab0b306"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " it ad"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "ca64a5d8-14e2-42f5-9ef5-df6bd3634e9d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ds is"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "b53ccdb1-df5c-4602-ba77-76a962975a6d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " what"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "90fd4758-14c2-430e-9ef7-43bac1c47c66"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "'s specific to New"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "68143e74-55e1-4b63-af04-7e553a093f61"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " Project: the \""
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "11263fc7-9b86-4a34-b38b-b8c3cae53ffb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "Choose where the project goes"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "2de3a983-79e7-45d1-a3ef-d97444804cff"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "\" title, starting from the current"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "291e710f-2ae6-4bc7-a700-4eda9b6b3e18"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " location, and retur"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "a6452d3d-9038-4a81-99c7-fc79e0f6b4be"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ning to the form af"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "c6b72f83-962e-41e1-ae6c-01827251118a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "terwards. The generated `"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "a86af375-cf1e-4a7f-a88d-b4c75b6207fe"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "NewProjectScope."
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "5fa10265-b50b-40b7-a75c-3729ce6b07a2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "md` links to `"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "554e560e-79ab-4bb4-82ac-f5185818ab3a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "FolderBrowserSc"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "40a4eeef-dffe-432f-bc05-f22cbd50ada5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ope.md` at that point"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "0d9cde78-3953-4914-aaf3-bbd9846a2ddf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n\nThe code is split"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "0f7762d5-900a-4750-8aaa-1bfa1af41eef"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " the same way: the"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "3a5956a0-6443-4300-9588-3a8cd4f45cd3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " picker is"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "be8a8968-3ea0-4b2f-91f3-62a08ebafd09"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " `src/folder_browser"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "d731b839-8d37-4cd6-bdc9-0468aa05bfb2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ".rs`, and `src"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "1f783ccb-f750-45f0-89ce-831462441599"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "/new_project.rs`"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "7df901e1-f0a4-467a-8e1f-ee3a772197e6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " just uses it.\n\nIf what"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "e28f0651-b922-4241-a1e5-c1c0f46cf74a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " you had"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "58cf694a-4dfb-4b84-ab47-b46ecbc18c33"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " in mind is different"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "659aedac-1426-4a6c-ae16-edda38b5454d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ","
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "830af642-2ec1-4c57-a673-d87e36d70115"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " say what"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "6522a433-89ae-4807-9d89-d8ef82cff33f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " should"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "f81f9ab0-1b53-4d10-b706-9b8be36b8585"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " move. For"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "f06ea5d8-780b-4a31-be41-610f97a43a0b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " example, the"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "1415f234-4ea9-4f72-9534-cb764d530c7d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " New Project-specific details"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "1969a060-000e-4e58-85ff-bb6518d4b20f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " could go into `FolderB"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "5536ac38-984a-4721-a6cc-276742f13a55"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "rowserScope` as options"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "12d54636-eacf-4a94-9087-599fb1b3ed08"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ", or the picker could get"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "efc04438-895a-4646-b7e7-9bb9c912cc82"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " a more"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "37130527-7966-4d2e-8266-77c53680da01"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " general"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "7d029a16-116a-49ae-a8c4-25729b33f01a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " name like `Fil"
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "06aed1f7-a379-461d-ac4b-b7f4f80687d6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ePickerScope`."
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "590ee677-2a97-48de-9428-9693044515fa"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5",
+        "id": "msg_011Cf7EnVfbH8cY9DwyM1Fyf",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "I didn't change anything, because it's already set up that way. When I built the folder picker I gave it its own scope, `FolderBrowserScope`, in `spec/ui/components/folder-browser/index.pi`. That scope holds everything about the picker: the bar with up, home, New Folder, the breadcrumb and Show hidden, plus the folder list, creating a new folder, and choosing.\n\n`NewProjectScope` only references it, in its `location` section. All it adds is what's specific to New Project: the \"Choose where the project goes\" title, starting from the current location, and returning to the form afterwards. The generated `NewProjectScope.md` links to `FolderBrowserScope.md` at that point.\n\nThe code is split the same way: the picker is `src/folder_browser.rs`, and `src/new_project.rs` just uses it.\n\nIf what you had in mind is different, say what should move. For example, the New Project-specific details could go into `FolderBrowserScope` as options, or the picker could get a more general name like `FilePickerScope`."
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1226,
+          "cache_read_input_tokens": 386259,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1226
+          },
+          "output_tokens": 334,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "uuid": "7b9775dc-91ef-4b05-a9df-679d905cd61b",
+      "timestamp": "2026-09-16T13:59:49.458Z",
+      "request_id": "req_011Cf7EnUjmuob1dALKn9htK"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "e77e2a3b-265f-4c3a-a799-b732e60314ba"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1226,
+          "cache_read_input_tokens": 386259,
+          "output_tokens": 334,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 334,
+              "cache_read_input_tokens": 386259,
+              "cache_creation_input_tokens": 1226,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 1226
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "e49671b3-b892-4a20-b035-8526f8771b4a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "parent_tool_use_id": null,
+      "uuid": "7e2c51d3-7214-4997-9066-98659f5201e9"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1789581000,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.1,
+            "resetsAt": 1789581000
+          },
+          "seven_day": {
+            "utilization": 0.08,
+            "resetsAt": 1790103600
+          }
+        }
+      },
+      "uuid": "0389708c-8bf4-4136-a783-4a107016c4cd",
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2"
+    },
+    {
+      "duration_api_ms": 12551,
+      "stop_reason": "end_turn",
+      "session_id": "44551386-80e4-4486-b2b8-1e79d4e1d1c2",
+      "total_cost_usd": 3.9844605,
+      "usage": {
+        "input_tokens": 4,
+        "cache_creation_input_tokens": 377073,
+        "cache_read_input_tokens": 396671,
+        "output_tokens": 615,
+        "output_tokens_details": {
+          "thinking_tokens": 90
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 377073,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 334,
+            "cache_read_input_tokens": 386259,
+            "cache_creation_input_tokens": 1226,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1226
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "modelUsage": {
+        "claude-opus-5[1m]": {
+          "inputTokens": 4,
+          "outputTokens": 615,
+          "cacheReadInputTokens": 396671,
+          "cacheCreationInputTokens": 377073,
+          "webSearchRequests": 0,
+          "costUSD": 3.9844605,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 90,
+          "canonicalModel": "claude-opus-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "is_error": false,
+      "num_turns": 2,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "I didn't change anything, because it's already set up that way. When I built the folder picker I gave it its own scope, `FolderBrowserScope`, in `spec/ui/components/folder-browser/index.pi`. That scope holds everything about the picker: the bar with up, home, New Folder, the breadcrumb and Show hidden, plus the folder list, creating a new folder, and choosing.\n\n`NewProjectScope` only references it, in its `location` section. All it adds is what's specific to New Project: the \"Choose where the project goes\" title, starting from the current location, and returning to the form afterwards. The generated `NewProjectScope.md` links to `FolderBrowserScope.md` at that point.\n\nThe code is split the same way: the picker is `src/folder_browser.rs`, and `src/new_project.rs` just uses it.\n\nIf what you had in mind is different, say what should move. For example, the New Project-specific details could go into `FolderBrowserScope` as options, or the picker could get a more general name like `FilePickerScope`.",
+      "ttft_ms": 7762,
+      "type": "result",
+      "duration_ms": 14253,
+      "uuid": "f5b5752e-1f02-49a5-96b5-3e1d5298f3d0",
+      "ttft_stream_ms": 6331,
+      "time_to_request_ms": 883,
+      "first_content_frame_ms": 6332,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  ]
+}

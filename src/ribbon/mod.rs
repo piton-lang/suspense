@@ -13,7 +13,7 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::component::{ActiveTheme, Icon, Sizable as _, Size, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme, Icon, Selectable as _, Sizable as _, Size, h_flex, v_flex};
 use gpui_kit::*;
 
 use crate::project_directory::ProjectDirectory;
@@ -97,6 +97,7 @@ impl RibbonTab {
 /// A command in the ribbon, from whichever tab holds it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Command {
+    NewProject,
     OpenProject,
     BuildSpec,
     DarkMode,
@@ -113,7 +114,9 @@ struct CommandPlace {
 }
 
 pub struct Ribbon {
-    selected_tab: RibbonTab,
+    /// The open tabs, in the order of the tabs; never empty. A click opens one
+    /// alone, and Ctrl/Cmd+click opens or closes one alongside the others.
+    open_tabs: Vec<RibbonTab>,
     /// Collapsed to a row of its primary commands; the choice is kept across
     /// launches.
     collapsed: bool,
@@ -126,7 +129,7 @@ impl Ribbon {
             .detach();
         Self {
             // Always Project at launch: which tab was last open isn't kept.
-            selected_tab: RibbonTab::Project,
+            open_tabs: vec![RibbonTab::Project],
             collapsed: collapsed_preference::load(),
             building: false,
         }
@@ -146,20 +149,37 @@ impl Ribbon {
         cx.notify();
     }
 
-    /// A tab was clicked: it is selected, and a double-click collapses the
-    /// ribbon. (Collapsed, there are no tabs to click.)
-    pub(crate) fn tab_clicked(&mut self, tab: RibbonTab, clicks: usize, cx: &mut Context<Self>) {
-        self.selected_tab = tab;
-        if clicks >= 2 && !self.collapsed {
-            self.toggle_collapsed(cx);
+    /// A tab was clicked: it opens alone, and a double-click collapses the
+    /// ribbon; with `add`, from Ctrl/Cmd+click, it opens alongside the others,
+    /// or closes if it was open, unless it is the only one. (Collapsed, there
+    /// are no tabs to click.)
+    pub(crate) fn tab_clicked(
+        &mut self,
+        tab: RibbonTab,
+        clicks: usize,
+        add: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if add {
+            self.open_tabs = toggle_open(&self.open_tabs, tab);
+        } else {
+            self.open_tabs = vec![tab];
+            if clicks >= 2 && !self.collapsed {
+                self.toggle_collapsed(cx);
+            }
         }
         cx.notify();
     }
 
     #[cfg(test)]
     pub fn select_tab(&mut self, tab: RibbonTab, cx: &mut Context<Self>) {
-        self.selected_tab = tab;
+        self.open_tabs = vec![tab];
         cx.notify();
+    }
+
+    #[cfg(test)]
+    pub fn open_tabs(&self) -> &[RibbonTab] {
+        &self.open_tabs
     }
 }
 
@@ -181,6 +201,7 @@ impl Ribbon {
             }
         };
         match command {
+            Command::NewProject => project_tab::new_project(button),
             Command::OpenProject => project_tab::open_project(button, cx),
             Command::BuildSpec => spec_tab::build_spec(self, button, cx),
             Command::DarkMode => application_tab::dark_mode(small, cx),
@@ -223,7 +244,11 @@ impl Render for Ribbon {
         if self.collapsed {
             // No tabs: every primary command, small, in one row, a divider
             // between one tab's commands and the next.
-            let mut row = Vec::new();
+            // Led by the project's name, as beside the tabs.
+            let mut row = vec![
+                project_tab::project_name(cx),
+                div().w_px().h(px(16.)).bg(border).into_any_element(),
+            ];
             let mut last_tab = None;
             let primary = RibbonTab::ALL.into_iter().flat_map(|tab| {
                 tab.commands()
@@ -257,28 +282,62 @@ impl Render for Ribbon {
         // Each tab handles its own clicks, so a double-click can be told
         // apart: it collapses the ribbon.
         let tabs = RibbonTab::ALL.map(|tab| {
-            Tab::new().label(tab.label()).on_click(cx.listener(
-                move |this, event: &ClickEvent, _, cx| {
-                    this.tab_clicked(tab, event.click_count(), cx)
-                },
-            ))
+            Tab::new()
+                .label(tab.label())
+                .selected(self.open_tabs.contains(&tab))
+                .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
+                    this.tab_clicked(tab, event.click_count(), event.modifiers().secondary(), cx)
+                }))
         });
         let tab_bar = TabBar::new("ribbon-tabs")
-            .selected_index(self.selected_tab.index())
+            // The open project's name, left of the tabs.
+            .prefix(
+                h_flex()
+                    .h_full()
+                    .items_center()
+                    .border_r_1()
+                    .border_color(border)
+                    .child(project_tab::project_name(cx)),
+            )
             .children(tabs)
             .suffix(div().px_2().child(collapse));
 
-        // The selected tab's commands, gathered into their groups in order.
-        let mut groups: Vec<(&'static str, Vec<AnyElement>)> = Vec::new();
-        for place in self.selected_tab.commands() {
-            let element = self.render_command(place.command, false, cx);
-            match groups.last_mut() {
-                Some((group, commands)) if *group == place.group => commands.push(element),
-                _ => groups.push((place.group, vec![element])),
+        // Each open tab's commands, gathered into their groups in order, a
+        // divider between one tab's groups and the next.
+        let mut row = Vec::new();
+        for tab in &self.open_tabs {
+            let mut groups: Vec<(&'static str, Vec<AnyElement>)> = Vec::new();
+            for place in tab.commands() {
+                let element = self.render_command(place.command, false, cx);
+                match groups.last_mut() {
+                    Some((group, commands)) if *group == place.group => commands.push(element),
+                    _ => groups.push((place.group, vec![element])),
+                }
+            }
+            if groups.is_empty() {
+                continue;
+            }
+            if !row.is_empty() {
+                row.push(
+                    // Lets UI tests find the divider; inert in normal builds.
+                    gpui_kit::TestSupportExt::test_support(
+                        div()
+                            .id(("ribbon-tab-divider", tab.index()))
+                            .flex_none()
+                            .w_px()
+                            .my_2()
+                            .bg(border),
+                    )
+                    .into_any_element(),
+                );
+            }
+            // No dividers within a tab: each group's title strip marks where it
+            // starts.
+            for (label, commands) in groups {
+                row.push(group(label, commands, muted, title_background, &font));
             }
         }
-        let mut row = Vec::new();
-        if groups.is_empty() {
+        if row.is_empty() {
             row.push(
                 div()
                     .flex()
@@ -288,10 +347,6 @@ impl Render for Ribbon {
                     .child("No commands yet")
                     .into_any_element(),
             );
-        }
-        // No dividers: each group's title strip marks where it starts.
-        for (label, commands) in groups {
-            row.push(group(label, commands, muted, title_background, &font));
         }
 
         // Lets UI tests find the tabs and the commands; inert in normal builds.
@@ -304,6 +359,9 @@ impl Render for Ribbon {
                     .id("ribbon-controls")
                     .flex()
                     .flex_row()
+                    // Scrolls sideways when the open tabs' groups are wider
+                    // than the window.
+                    .overflow_x_scroll()
                     .items_stretch()
                     .gap_3()
                     .pr_2()
@@ -313,6 +371,26 @@ impl Render for Ribbon {
                     .children(row),
             ))
     }
+}
+
+/// The open tabs once `tab` is Ctrl/Cmd+clicked: opened alongside `open`, or
+/// closed if it was open and isn't the only one; always in the order of the
+/// tabs.
+pub fn toggle_open(open: &[RibbonTab], tab: RibbonTab) -> Vec<RibbonTab> {
+    let was_open = open.contains(&tab);
+    if was_open && open.len() == 1 {
+        return open.to_vec();
+    }
+    RibbonTab::ALL
+        .into_iter()
+        .filter(|candidate| {
+            if *candidate == tab {
+                !was_open
+            } else {
+                open.contains(candidate)
+            }
+        })
+        .collect()
 }
 
 /// A group of related commands, titled along its left edge, reading bottom to
@@ -409,5 +487,24 @@ mod collapsed_preference {
         }
         #[cfg(test)]
         let _ = collapsed;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RibbonTab::{Application, Code, Project, Spec};
+    use super::toggle_open;
+
+    /// Ctrl/Cmd+click opens a tab alongside the others, in the order of the
+    /// tabs, or closes it, but never the last one open.
+    #[test]
+    fn ctrl_click_opens_and_closes_tabs_alongside_others() {
+        assert_eq!(toggle_open(&[Spec], Project), [Project, Spec]);
+        assert_eq!(
+            toggle_open(&[Project, Spec], Application),
+            [Project, Spec, Application]
+        );
+        assert_eq!(toggle_open(&[Project, Code, Spec], Code), [Project, Spec]);
+        assert_eq!(toggle_open(&[Spec], Spec), [Spec]);
     }
 }

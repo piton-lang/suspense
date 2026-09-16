@@ -1,0 +1,106 @@
+use /lib
+from /ui/components/scroll-column import ScrollColumnScope
+
+export scope FolderBrowserScope:
+    concept: {FolderBrowserConcept}
+
+concept FolderBrowserConcept:
+    pitch:
+        A folder picker drawn by the application itself rather than the
+        platform's native dialog, so it looks and behaves the same everywhere
+        and sits inside whatever panel needs it.
+
+    shape: {FolderBrowserShape}
+
+shape FolderBrowserShape:
+    description:
+        A title saying what the folder is being chosen for, a bar for getting
+        around, the folders in the current folder, and buttons to choose or
+        cancel along the bottom. It starts in whatever folder it is given, or
+        the user's home folder when that doesn't exist.
+
+    navigation:
+        The bar holds an up button, disabled at the top of the file system, and
+        a home button, each with a tooltip, then the current folder's path as a
+        breadcrumb, where clicking any folder along it goes straight there. At
+        the right end, a "Show hidden" checkbox, off by default, shows the
+        folders whose names start with a dot. Its label is shown in full, never
+        cut off below its baseline.
+
+    folders:
+        The current folder's folders, never its files, each a row with a folder
+        icon and its name, sorted by name ignoring case, with a
+        @{ScrollColumnScope}. Clicking a row selects it, highlighted; clicking
+        it twice goes into it. A folder with no folders in it reads
+        "No folders here", and one that can't be read says why in place of the
+        list. Going to another folder clears the selection and scrolls back to
+        the top.
+
+    newFolder:
+        The bar holds a "New Folder" button with a folder-plus icon, after the
+        home button, whose tooltip says it creates a folder in the current one.
+        Pressing it opens a row at the top of the list, above the folders: a
+        folder icon, a name field with focus, a "Create" button, and a cancel
+        button. <Enter> in the field creates the folder, as does Create; the
+        cancel button, or <Escape> in the field, closes the row without creating
+        anything, and <Escape> there doesn't close whatever the browser sits in.
+        Going to another folder closes the row too.
+
+        The name can't be empty, contain a slash or backslash, be "." or "..",
+        or be the name of something already in the current folder; while it is
+        one of those, once something has been typed, the row says why beneath
+        the field and Create is disabled. A folder that can't be created says
+        why the same way, and the row stays open.
+
+        Once created, the row closes and the new folder is listed in its place
+        among the others, selected and scrolled into view, so pressing Choose
+        chooses it straight away.
+
+    keyboard:
+        overview:
+            The browser can be used entirely from the keyboard, the way a
+            platform's own file dialog can. It takes focus when it opens, on its
+            list of folders, and the selected folder is always scrolled into
+            view. <Tab> and <Shift+Tab> move between its controls: the bar's
+            buttons, the breadcrumb, the checkbox, the list, and the footer's
+            buttons. The keys below work wherever focus is in the browser,
+            except while typing a new folder's name, where the name field has
+            the keys.
+
+        movingTheSelection:
+            <Down> selects the next folder and <Up> the previous one; with
+            nothing selected, <Down> selects the first and <Up> the last.
+            Neither goes past the ends. <Home> selects the first folder and
+            <End> the last. <Page Down> and <Page Up> move ten folders at a
+            time, stopping at the ends.
+
+        typeToSelect:
+            Typing letters, digits, or other characters selects the first folder
+            whose name starts with what has been typed, ignoring case. What is
+            typed builds up while the keys come less than a second apart, and
+            starts afresh after a longer pause. Typing that matches no folder
+            leaves the selection where it is.
+
+        going:
+            <Enter> or <Right> goes into the selected folder. <Backspace>,
+            <Left>, or <Alt+Up> (<Cmd+Up> on macOS) goes up to the folder
+            holding the current one, and selects the folder just left, so going
+            in and back out returns to where it was. <Alt+Home> (<Cmd+Shift+H>
+            on macOS) goes to the home folder.
+
+        choosingAndCancelling:
+            <Ctrl+Enter> (<Cmd+Enter> on macOS) chooses, as the Choose button
+            does. <Enter> with no folder selected chooses the current folder.
+            <Escape> leaves without choosing, as Cancel does, once there is no
+            new folder row open to close first.
+
+        otherCommands:
+            <Ctrl+H> (<Cmd+Shift+.> on macOS) switches Show hidden, keeping the
+            selected folder selected when it is still listed. <Ctrl+Shift+N>
+            (<Cmd+Shift+N> on macOS) opens the new folder row. Each button's
+            tooltip gives its shortcut.
+
+    choosing:
+        The footer shows the folder that will be chosen: the selected folder, or
+        the current folder when none is selected. "Choose" chooses it and
+        "Cancel" leaves without choosing.
