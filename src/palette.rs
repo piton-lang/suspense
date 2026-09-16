@@ -646,7 +646,7 @@ impl Palette {
         cx.emit(picked);
     }
 
-    fn empty_text(&self) -> &'static str {
+    pub(crate) fn empty_text(&self) -> &'static str {
         let loading = match self.tab {
             PaletteTab::Files if self.project.is_none() => return "No project open",
             PaletteTab::Files => self.files.is_none(),
@@ -655,6 +655,9 @@ impl Palette {
         };
         if loading {
             "Loading…"
+        } else if self.can_search_files() {
+            // Enter hands a search that matched nothing to the harness.
+            "No results. Press Enter to perform an agentic search."
         } else if !self.query.trim().is_empty() {
             "No matches"
         } else {

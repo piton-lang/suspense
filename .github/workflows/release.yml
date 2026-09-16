@@ -1,5 +1,6 @@
 # Builds Suspense for Linux, macOS, and Windows whenever something is merged
-# into the release branch, and publishes a zip for each as a GitHub release.
+# into the release branch, and publishes a zip for each as a GitHub release
+# named for the version and the build of the day: Suspense 0.1.0 (2026-09-17.2).
 name: Release
 
 on:
@@ -7,22 +8,47 @@ on:
     branches: [release]
   workflow_dispatch:
 
+# One release at a time, so two on the same day can't take the same number.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Names the build once, so every platform's zip carries the same name.
+  name:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.name.outputs.version }}
+      build: ${{ steps.name.outputs.build }}
+      bundle_version: ${{ steps.name.outputs.bundle_version }}
+      tag: ${{ steps.name.outputs.tag }}
+      title: ${{ steps.name.outputs.title }}
+      file: ${{ steps.name.outputs.file }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: name
+        run: |
+          .github/scripts/build-name.sh | tee -a "$GITHUB_OUTPUT"
+
   build:
+    needs: name
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: linux-x86_64
+          - platform: linux-x86_64
             os: ubuntu-22.04
-          - name: macos-universal
+          - platform: macos-universal
             os: macos-14
-          - name: windows-x86_64
+          - platform: windows-x86_64
             os: windows-latest
     runs-on: ${{ matrix.os }}
+    env:
+      # What the zip, and the folder inside it, are called.
+      PACKAGE: ${{ needs.name.outputs.file }}-${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
@@ -41,56 +67,55 @@ jobs:
           targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.name }}
+          key: ${{ matrix.platform }}
 
       - name: Build (Linux)
         if: runner.os == 'Linux'
         run: |
           cargo build --release --locked
-          mkdir -p dist/suspense
-          cp target/release/suspense LICENSE.md dist/suspense/
-          cd dist && zip -r ../suspense-${{ matrix.name }}.zip suspense
+          mkdir -p "dist/$PACKAGE"
+          cp target/release/suspense LICENSE.md "dist/$PACKAGE/"
+          cd dist && zip -r "../$PACKAGE.zip" "$PACKAGE"
 
       - name: Build (macOS)
         if: runner.os == 'macOS'
         run: |
           cargo build --release --locked --target aarch64-apple-darwin
           cargo build --release --locked --target x86_64-apple-darwin
-          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-          app=dist/Suspense.app
+          app="dist/$PACKAGE/Suspense.app"
           mkdir -p "$app/Contents/MacOS"
           lipo -create -output "$app/Contents/MacOS/suspense" \
             target/aarch64-apple-darwin/release/suspense \
             target/x86_64-apple-darwin/release/suspense
-          sed "s/@VERSION@/$version/g" packaging/macos/Info.plist > "$app/Contents/Info.plist"
-          cp LICENSE.md dist/
+          sed -e "s/@VERSION@/${{ needs.name.outputs.version }}/g" \
+            -e "s/@BUNDLE_VERSION@/${{ needs.name.outputs.bundle_version }}/g" \
+            packaging/macos/Info.plist > "$app/Contents/Info.plist"
+          cp LICENSE.md "dist/$PACKAGE/"
           # ditto keeps the bundle's permissions and structure intact.
-          cd dist && ditto -c -k --sequesterRsrc --keepParent Suspense.app ../suspense-${{ matrix.name }}.zip
-          zip -j ../suspense-${{ matrix.name }}.zip LICENSE.md
+          cd dist && ditto -c -k --sequesterRsrc --keepParent "$PACKAGE" "../$PACKAGE.zip"
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           cargo build --release --locked
-          New-Item -ItemType Directory -Force dist/suspense | Out-Null
-          Copy-Item target/release/suspense.exe, LICENSE.md dist/suspense/
-          Compress-Archive -Path dist/suspense -DestinationPath suspense-${{ matrix.name }}.zip
+          New-Item -ItemType Directory -Force "dist/$env:PACKAGE" | Out-Null
+          Copy-Item target/release/suspense.exe, LICENSE.md "dist/$env:PACKAGE/"
+          Compress-Archive -Path "dist/$env:PACKAGE" -DestinationPath "$env:PACKAGE.zip"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: suspense-${{ matrix.name }}
-          path: suspense-${{ matrix.name }}.zip
+          name: ${{ env.PACKAGE }}
+          path: ${{ env.PACKAGE }}.zip
           if-no-files-found: error
 
   # Once all three have built, they're published together as one release.
   publish:
-    needs: build
+    needs: [name, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -98,10 +123,11 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.name.outputs.tag }}
+          TITLE: ${{ needs.name.outputs.title }}
         run: |
-          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-          tag="v${version}-build.${{ github.run_number }}"
-          gh release create "$tag" dist/*.zip \
+          gh release create "$TAG" dist/*.zip \
+            --repo "${{ github.repository }}" \
             --target "${{ github.sha }}" \
-            --title "Suspense $version (build ${{ github.run_number }})" \
+            --title "$TITLE" \
             --notes "Built from ${{ github.sha }} on the release branch."

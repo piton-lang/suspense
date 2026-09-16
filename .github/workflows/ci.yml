@@ -12,7 +12,9 @@ env:
 
 jobs:
   test:
-    runs-on: ubuntu-22.04
+    # Its git is new enough for `git merge-tree --write-tree` (2.38+), which
+    # pulling uses.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 

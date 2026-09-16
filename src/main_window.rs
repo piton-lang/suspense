@@ -1994,6 +1994,14 @@ mod tests {
                 .unwrap();
             cx.run_until_parked();
         }
+        // Nothing matches, and it says Enter searches with the harness.
+        palette.read_with(cx, |palette, _| {
+            assert!(palette.result_labels().is_empty());
+            assert_eq!(
+                palette.empty_text(),
+                "No results. Press Enter to perform an agentic search."
+            );
+        });
         cx.update_window(handle, |_, window, cx| window.press("enter", cx))
             .unwrap();
         cx.wait_for(handle, TIMEOUT, |window, cx| {
