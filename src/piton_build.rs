@@ -14,17 +14,22 @@ pub struct BuildOutcome {
 }
 
 pub fn run(project_dir: PathBuf, cx: &App) -> Task<Result<BuildOutcome>> {
-    cx.background_spawn(async move {
+    cx.background_spawn(async move { build(&project_dir) })
+}
+
+/// Runs `piton build` in `project_dir`, waiting for it to finish.
+pub fn build(project_dir: &Path) -> Result<BuildOutcome> {
+    {
         let output = Command::new("piton")
             .arg("build")
-            .current_dir(&project_dir)
+            .current_dir(project_dir)
             .output()?;
 
         // `piton build` prints each written file on stdout, as an absolute
         // path, and everything else on stderr.
         let root = project_dir
             .canonicalize()
-            .unwrap_or_else(|_| project_dir.clone());
+            .unwrap_or_else(|_| project_dir.to_path_buf());
         let files = String::from_utf8_lossy(&output.stdout)
             .lines()
             .map(str::trim)
@@ -42,7 +47,7 @@ pub fn run(project_dir: PathBuf, cx: &App) -> Task<Result<BuildOutcome>> {
                 report
             },
         })
-    })
+    }
 }
 
 fn relative_to(path: &Path, root: &Path) -> String {

@@ -1,0 +1,18 @@
+from /ui/components/file-tree import FileTreeScope
+
+anchor Prompt_edb2cf14cb1963bb:
+    userPrompt:
+        Next to any new or modified file in the ${FileTreeScope} according to git status, We need a small button that allows us to open a diff view rather than the regular file editor, which also means you'll need to build the diff view. The Diff View should have the option to switch between side-by-side and unified. And it should be built according to the best standards and implementations of design that you can research on the internet. We should also move the concept of Git awareness into a separate spec that is then referenced where needed. 
+
+    mode: combined
+
+    systemPrompt:
+        We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec.
+        
+        You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec.
+        
+        Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other.
+        
+        Then build the spec and execute the prompt directly on the code using a unified plan.
+        
+        Make sure that you write both code and spec.

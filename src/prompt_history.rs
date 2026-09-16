@@ -68,7 +68,17 @@ pub fn save_record(prompt_file: &Path, record: &RunRecord) -> Result<()> {
 /// a hidden anchor are left out; a record that is missing or does not read
 /// back is `None`.
 pub fn load(project_dir: &Path) -> Vec<SavedPrompt> {
-    let Ok(entries) = fs::read_dir(hidden_anchor::history_dir(project_dir)) else {
+    load_dir(&hidden_anchor::history_dir(project_dir))
+}
+
+/// The questions asked in the project, oldest first, read back like the
+/// prompt history.
+pub fn load_asks(project_dir: &Path) -> Vec<SavedPrompt> {
+    load_dir(&hidden_anchor::asks_dir(project_dir))
+}
+
+fn load_dir(dir: &Path) -> Vec<SavedPrompt> {
+    let Ok(entries) = fs::read_dir(dir) else {
         return Vec::new();
     };
     let mut files: Vec<(u64, PathBuf)> = entries

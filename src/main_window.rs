@@ -1,5 +1,5 @@
 //! The main window of the application, from which all main functionality is
-//! reached: a toolbar on top, and below it the project tree in a sidebar on the
+//! reached: a ribbon on top, and below it the project tree in a sidebar on the
 //! left, then prompt mode.
 
 use gpui_kit::component::button::ButtonVariant;
@@ -9,12 +9,13 @@ use gpui_kit::component::{ActiveTheme, Root, WindowExt as _};
 use gpui_kit::*;
 
 use crate::app::{APP_TITLE, Quit};
+use crate::git_panel::GitPanel;
 use crate::palette::{Palette, Picked, SystemCommand, SystemState};
 use crate::project_tree::{OpenFile, ProjectTree};
 use crate::prompt_mode::PromptMode;
+use crate::ribbon::{self, Ribbon};
 use crate::settings_window;
 use crate::theme_preference;
-use crate::toolbar::{self, Toolbar};
 
 /// Size the window restores to when it is un-maximized.
 const RESTORE_SIZE: Size<Pixels> = size(px(1280.), px(800.));
@@ -41,11 +42,13 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-p", TogglePalette, None),
     ]);
     crate::palette::bind_keys(cx);
+    ribbon::bind_keys(cx);
 }
 
 pub struct MainWindow {
-    toolbar: Entity<Toolbar>,
+    ribbon: Entity<Ribbon>,
     sidebar: Entity<ProjectTree>,
+    git_panel: Entity<GitPanel>,
     prompt_mode: Entity<PromptMode>,
     /// The palette last opened, which may since have closed.
     palette: Option<Entity<Palette>>,
@@ -71,7 +74,7 @@ impl MainWindow {
 
         cx.open_window(options, |window, cx| {
             // Start in the saved light or dark mode, else the system's; the
-            // toolbar can switch.
+            // ribbon can switch.
             theme_preference::apply(window, cx);
             let view = cx.new(|cx| MainWindow::new(window, cx));
             cx.new(|cx| Root::new(view, window, cx))
@@ -79,7 +82,7 @@ impl MainWindow {
     }
 
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let toolbar = cx.new(Toolbar::new);
+        let ribbon = cx.new(Ribbon::new);
         let sidebar = cx.new(ProjectTree::new);
         let subscriptions = vec![
             cx.subscribe_in(&sidebar, window, |this, _, OpenFile(path), window, cx| {
@@ -113,8 +116,9 @@ impl MainWindow {
         });
 
         Self {
-            toolbar,
+            ribbon,
             sidebar,
+            git_panel: cx.new(|cx| GitPanel::new(window, cx)),
             prompt_mode: cx.new(|cx| PromptMode::new(window, cx)),
             palette: None,
             _palette_subscription: None,
@@ -134,12 +138,14 @@ impl MainWindow {
     /// prompt or a build is, it asks instead, quitting once confirmed.
     fn confirm_quit(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let working = self.prompt_mode.read(cx).is_working();
-        let building = self.toolbar.read(cx).is_building();
+        let building = self.ribbon.read(cx).is_building();
         let description = match (working, building) {
             (false, false) => return true,
             (true, false) => "The harness is still working on a prompt.",
             (false, true) => "piton build is still running.",
-            (true, true) => "The harness is still working on a prompt and piton build is still running.",
+            (true, true) => {
+                "The harness is still working on a prompt and piton build is still running."
+            }
         };
         // An open palette makes way; a confirmation already open stays the
         // only one.
@@ -177,9 +183,9 @@ impl MainWindow {
             window.close_dialog(cx);
             return;
         }
-        let toolbar = self.toolbar.read(cx);
+        let ribbon = self.ribbon.read(cx);
         let system = SystemState {
-            can_build: toolbar.can_build(cx),
+            can_build: ribbon.can_build(cx),
             dark: cx.theme().is_dark(),
         };
         let palette = cx.new(|cx| Palette::new(system, window, cx));
@@ -202,13 +208,13 @@ impl MainWindow {
             }),
             Picked::System(command) => match command {
                 SystemCommand::OpenProject => self
-                    .toolbar
-                    .update(cx, |toolbar, cx| toolbar.pick_project(window, cx)),
+                    .ribbon
+                    .update(cx, |ribbon, cx| ribbon.pick_project(window, cx)),
                 SystemCommand::Build => self
-                    .toolbar
-                    .update(cx, |toolbar, cx| toolbar.build(window, cx)),
+                    .ribbon
+                    .update(cx, |ribbon, cx| ribbon.build(window, cx)),
                 SystemCommand::ToggleDarkMode => {
-                    toolbar::set_dark_mode(!cx.theme().is_dark(), window, cx)
+                    ribbon::set_dark_mode(!cx.theme().is_dark(), window, cx)
                 }
                 SystemCommand::Settings => settings_window::open(cx),
                 SystemCommand::Quit => self.quit(window, cx),
@@ -246,7 +252,11 @@ impl Render for MainWindow {
                 cx.listener(|this, _: &TogglePalette, window, cx| this.toggle_palette(window, cx)),
             )
             .on_action(cx.listener(|this, _: &Quit, window, cx| this.quit(window, cx)))
-            .child(self.toolbar.clone())
+            .on_action(cx.listener(|this, _: &ribbon::ToggleRibbon, _, cx| {
+                this.ribbon
+                    .update(cx, |ribbon, cx| ribbon.toggle_collapsed(cx))
+            }))
+            .child(self.ribbon.clone())
             .child(
                 div().flex_1().min_h_0().child(
                     // One `children` call for every panel: the group's
@@ -257,7 +267,13 @@ impl Render for MainWindow {
                             resizable_panel()
                                 .size(SIDEBAR_WIDTH)
                                 .size_range(MIN_SIDEBAR_WIDTH..Pixels::MAX)
-                                .child(self.sidebar.clone()),
+                                .child(
+                                    // The file tree, with the git panel beneath it.
+                                    gpui_kit::component::v_flex()
+                                        .size_full()
+                                        .child(div().flex_1().min_h_0().child(self.sidebar.clone()))
+                                        .child(self.git_panel.clone()),
+                                ),
                             resizable_panel()
                                 .size_range(MIN_SPLIT_WIDTH..Pixels::MAX)
                                 .child(self.prompt_mode.clone()),
@@ -286,6 +302,11 @@ mod tests {
     use crate::project_directory::ProjectDirectory;
 
     const TIMEOUT: Duration = Duration::from_secs(2);
+
+    #[cfg(target_os = "macos")]
+    const TOGGLE_RIBBON: &str = "cmd-f1";
+    #[cfg(not(target_os = "macos"))]
+    const TOGGLE_RIBBON: &str = "ctrl-f1";
 
     /// The chat input has focus as soon as the window opens: a prompt typed
     /// and sent without clicking anywhere is sent, which without a project
@@ -457,6 +478,104 @@ mod tests {
 
     /// Esc in the chat input takes focus out of it, and the window's own Esc
     /// does not hand focus straight back: typing no longer lands in it.
+    /// The ribbon's tabs are Project, Code, Spec, Research, and Application,
+    /// each showing only its own controls: opening a project under Project,
+    /// Build Spec under Spec, dark mode and settings under Application, and
+    /// nothing under Code or Research.
+    #[gpui_kit::test]
+    async fn ribbon_tabs_hold_their_controls(cx: &mut TestAppContext) {
+        use crate::ribbon::RibbonTab;
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        let ribbon = main.read_with(cx, |main, _| main.ribbon.clone());
+        let controls = ["project-directory", "build", "dark-mode", "settings"];
+
+        for (tab, shown) in [
+            (RibbonTab::Project, Some("project-directory")),
+            (RibbonTab::Code, None),
+            (RibbonTab::Spec, Some("build")),
+            (RibbonTab::Research, None),
+            (RibbonTab::Application, Some("dark-mode")),
+        ] {
+            ribbon.update(cx, |ribbon, cx| ribbon.select_tab(tab, cx));
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, _| {
+                for control in controls {
+                    let expected = shown == Some(control)
+                        || (tab == RibbonTab::Application && control == "settings");
+                    assert_eq!(
+                        window.try_find(control).is_some(),
+                        expected,
+                        "{control} under {tab:?}"
+                    );
+                }
+            })
+            .unwrap();
+        }
+
+        // Ctrl+F1 collapses the ribbon: the tabs go, and every primary
+        // command shows in a single row, whichever tab was selected.
+        cx.update_window(handle, |_, window, cx| window.press(TOGGLE_RIBBON, cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert!(ribbon.read_with(cx, |ribbon, _| ribbon.is_collapsed()));
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find("ribbon-controls").is_none());
+            assert!(
+                window.try_find("ribbon-tabs-row").is_none(),
+                "the tabs still show"
+            );
+            assert!(window.try_find("ribbon-primary").is_some());
+            for control in controls {
+                assert!(
+                    window.try_find(control).is_some(),
+                    "{control} is not in the row"
+                );
+            }
+            // Every control, the chevron included, is vertically centred in
+            // the row.
+            let row = window.find("ribbon-primary").bounds();
+            let row_middle = row.origin.y + row.size.height / 2.;
+            for control in controls.into_iter().chain(["ribbon-collapse"]) {
+                let bounds = window.find(control).bounds();
+                let middle = bounds.origin.y + bounds.size.height / 2.;
+                assert!(
+                    (middle - row_middle).abs() <= gpui_kit::px(1.),
+                    "{control} is not centred: {bounds:?} in {row:?}"
+                );
+            }
+        })
+        .unwrap();
+
+        // Ctrl+F1 again brings the tabs back; double-clicking one collapses it.
+        cx.update_window(handle, |_, window, cx| window.press(TOGGLE_RIBBON, cx))
+            .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find("ribbon-tabs-row").is_some());
+            assert!(window.try_find("ribbon-primary").is_none());
+        })
+        .unwrap();
+        ribbon.update(cx, |ribbon, cx| {
+            ribbon.tab_clicked(RibbonTab::Project, 1, cx);
+            ribbon.tab_clicked(RibbonTab::Project, 2, cx);
+        });
+        assert!(ribbon.read_with(cx, |ribbon, _| ribbon.is_collapsed()));
+    }
+
     #[gpui_kit::test]
     async fn escape_in_the_chat_input_takes_focus_out(cx: &mut TestAppContext) {
         cx.update(|cx| {
@@ -713,7 +832,7 @@ mod tests {
     fn finds_notes(
         _: String,
         system_prompt: Option<String>,
-        _: Option<String>,
+        _: Option<crate::harness::Resume>,
         _: std::path::PathBuf,
     ) -> futures::channel::mpsc::UnboundedReceiver<crate::harness::HarnessEvent> {
         assert!(system_prompt.is_some_and(|prompt| prompt.contains("one file")));
@@ -737,7 +856,7 @@ mod tests {
     fn finds_both(
         _: String,
         _: Option<String>,
-        _: Option<String>,
+        _: Option<crate::harness::Resume>,
         _: std::path::PathBuf,
     ) -> futures::channel::mpsc::UnboundedReceiver<crate::harness::HarnessEvent> {
         let (tx, rx) = futures::channel::mpsc::unbounded();

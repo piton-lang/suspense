@@ -3,6 +3,8 @@ from /scope/harness-integration import HarnessIntegrationScope
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/lsp import LSP
 from /scope/prompt-mode/message-list import MessageList
+from /ui/components/history-list import HistoryListScope
+from /ui/components/scroll-column import ScrollColumnScope
 
 export scope ChatInputScope:
     concept: {ChatInputConcept}
@@ -34,8 +36,7 @@ shape ChatInputShape:
             Code, Chain, Spec, and Ask. Code, Spec, and Ask are ordinary tabs.
             Chain is also a tab, just a small one, because it only shows an
             icon. All four sit flush against each other with no extra gaps,
-            and no tab has more padding than a normal tab. Ask stretches to
-            the right edge of the bar.
+            and no tab has more padding than a normal tab.
 
             Pressing <Tab> while in the chat input cycles from Code to Chain
             to Spec to Ask and back to Code, <Shift+Tab> the other way, and
@@ -62,11 +63,33 @@ shape ChatInputShape:
             transparent background and no left or right borders, so the joined
             Code and Spec show through underneath it.
 
+        help:
+            To the right of the tabs, filling the rest of the bar, a line of
+            small, muted help text says what the selected tab is for, and
+            changes as soon as another tab is selected. It is cut off rather
+            than wrapped when the bar is too narrow.
+
+            code:
+                Changes the code, leaving the spec as it is.
+
+            chain:
+                Changes the code and the spec together.
+
+            spec:
+                Changes the spec, leaving the code as it is.
+
+            ask:
+                Asks a question about the code and the spec, changing neither.
+
         colour:
             The selected tab and the tab body holding the input are tinted: a
             subtle red for Code, a subtle blue for Spec, and a subtle green for
             Ask. With Chain selected, Code, Spec, and the body are all purple.
-            The colour transitions smoothly whenever the selected tab changes.
+            The colour transitions smoothly whenever the selected tab changes,
+            straight from the old tab's colour to the new one's. The tabs wrap
+            around, so pressing <Tab> on Ask fades green straight to Code's
+            red, and <Shift+Tab> on Code fades red straight to Ask's green;
+            neither lights up Chain or Spec on the way.
 
     systemPrompt:
         The selected tab is the mode a prompt is sent in, and each mode gives
@@ -96,18 +119,37 @@ shape ChatInputShape:
     ask:
         Ask is for simply asking a question. A question runs straight away,
         separately from any Code, Chain, or Spec task, even while the harness
-        is working on one. Only one question is open at a time: asking another
-        replaces it, stopping it if it is still running.
+        is working on one. Any number of questions can be asked, and they all
+        run at the same time; asking another never stops or waits for one
+        already running.
 
-        The question's progress and results are shown in a task table, as in
-        the @{MessageList}, in a panel that slides up out of the chat input
-        with an animation, over the bottom of the message list rather than
-        pushing it up. While the harness is working on the question, the panel
-        is a single row directly above the tabs, showing the latest thing the
-        harness did. Only once the question is complete does it expand into a
-        heading, with the question's status and first line, above the full
-        task table, which scrolls once it gets tall. A close button closes the
-        panel, and stops the question if it is still running.
+        Each question's progress and results are shown in a task table, as in
+        the @{MessageList}. The questions stack directly above the tabs, the
+        newest nearest them, over the bottom of the message list rather than
+        pushing it up, and each slides up out of the chat input with an
+        animation as it is asked. While the harness works on a question, it is
+        a single row showing the latest thing the harness did. A finished
+        question is a row with its status and first line.
+
+        Once a question is complete, it opens onto a heading, with its status
+        and first line, above its full task table, which scrolls once it gets
+        tall, with a @{ScrollColumnScope} and its lock to the bottom. Only one question is open at a time: opening another closes the
+        one open back down to its row. Clicking an open question's heading
+        closes it down to its row, and clicking a finished question's row opens
+        it again. Each question has a close button, which removes it and stops
+        it if it is still running, leaving the others running. A closed
+        question becomes a previous answer.
+
+    previousAnswers:
+        Previous answers are a @{HistoryListScope}, shown only while the Ask
+        tab is selected, at the top of the questions stacked above the tabs.
+        It lists every question asked before and closed: those saved with the
+        project and those closed since. Its row reads "No previous answers",
+        "1 previous answer", or "N previous answers", and while expanded,
+        "Back to the questions". Expanded, the list slides up out of the chat
+        input, as questions do, above any questions still open. The questions
+        asked from now on carry on the conversation the latest of them left
+        off.
 
     escape:
         Pressing <Escape> while in the chat input takes focus out of the chat

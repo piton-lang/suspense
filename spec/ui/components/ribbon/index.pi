@@ -1,0 +1,82 @@
+use /lib
+from /scope/project-directory import ProjectDirectoryScope
+
+export scope RibbonScope:
+    concept: {RibbonConcept}
+
+concept RibbonConcept:
+    pitch:
+        The ribbon along the top of the main window: tabs, each holding the
+        application's commands for one area of work in labelled groups.
+
+    shape: {RibbonShape}
+
+shape RibbonShape:
+    description:
+        A ribbon runs along the top of the window, using gpui-kit's Tab
+        component with its default styling. Its tabs are, in order: Project,
+        Code, Spec, Research, and Application. The window always opens on
+        Project. Beneath the tabs, the selected tab's commands sit in groups.
+        There is no raw output view and no toggle for one.
+
+    groups:
+        Each group has its title in small, muted text rotated -90deg (bottom to
+        top) aligned along the left edge of the group naming what its commands
+        have in common. Groups sit side by side, with a thin vertical divider
+        between each.  The group label has a slightly different background
+        color.
+
+        project:
+            A "Project" group holds the button for the @{ProjectDirectoryScope}.
+
+        code:
+            Nothing yet.
+
+        spec:
+            A "Build" group holds "Build Spec", which runs `piton build`.
+
+        research:
+            Nothing yet.
+
+        application:
+            An "Appearance" group holds the "Dark mode" switch, and a
+            "Preferences" group holds "Settings", which opens the settings
+            window.
+
+        A tab with no commands reads "No commands yet".
+
+    commands:
+        A command button shows a large icon above its label: a folder for the
+        project, a hammer for Build Spec, and a gear for Settings. The project
+        button reads "Open Project…" until a project is open, then the project's
+        name. An on or off setting, like dark mode, is a switch rather than a
+        button.
+
+        A command's tooltip explains what it does rather than repeating its
+        label, and gives its keyboard shortcut if it has one.
+
+        A command can be marked primary. For now, every command is primary:
+        Open Project, Build Spec, Dark mode, and Settings.
+
+        A command that can't run is disabled, not hidden, and its tooltip
+        says why: Build Spec is disabled until a project is open, and while the
+        spec is building.
+
+    height:
+        The command area is the same height on every tab, even one with no
+        commands, so the window beneath doesn't move when switching tabs.
+
+    collapsing:
+        The ribbon collapses, and expands again, with a chevron button at the
+        right end of the ribbon, by double-clicking a tab, or with Ctrl+F1
+        (Cmd+F1 on macOS). Whether it is collapsed is saved for the user and
+        restored on the next launch.
+
+        Collapsed, the tabs go away too. The ribbon becomes a single thin row
+        holding every primary command, from all of the tabs, as small buttons:
+        a small icon beside its label, and dark mode as a small switch. They
+        keep the order of their tabs, with a thin vertical divider between the
+        commands of one tab and the next, and keep their tooltips and disabled
+        states. The chevron sits at the right end of the row. Every control in
+        the row, the chevron and the dividers included, is vertically centred
+        in it.

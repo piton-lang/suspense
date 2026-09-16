@@ -1,0 +1,27 @@
+use /lib
+from /ui/components/file-tree import FileTreeScope
+from /ui/components/git-panel import GitPanelScope
+
+export scope SidebarScope:
+    concept: {SidebarConcept}
+
+concept SidebarConcept:
+    pitch:
+        A column along the left of the main window's body that holds the
+        tools for finding your way around the project.
+
+    shape: {SidebarShape}
+
+shape SidebarShape:
+    description:
+        Runs the full height of the body, beneath the ribbon, to the left of
+        everything else in it. It is resized by dragging its right edge: it
+        starts 260 pixels wide and can't be dragged narrower than 160.
+
+    contents:
+        fileTree: @{FileTreeScope}
+        gitPanel: @{GitPanelScope}
+
+    layout:
+        The file tree fills the sidebar from the top, and the git panel sits
+        along the bottom, underneath it, taking only the height it needs.

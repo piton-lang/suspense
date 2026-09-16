@@ -65,6 +65,13 @@ pub struct OpenDefinition {
     pub position: Position,
 }
 
+/// The editor is never narrower than this many columns of text.
+pub const MIN_COLUMNS: usize = 80;
+
+/// Columns beside the line numbers' digits: their margins, the fold icons,
+/// and the editor's padding and scrollbar.
+const GUTTER_EXTRA_COLUMNS: usize = 6;
+
 pub struct FileView {
     path: PathBuf,
     /// The file's path within the project, or in full outside of one.
@@ -243,22 +250,47 @@ impl FileView {
         cx.notify();
     }
 
-    fn save(&mut self, cx: &mut Context<Self>) {
+    /// Writes the file to disk. A Piton file is first formatted with
+    /// `piton format`, and the editor shows the formatted text; one that
+    /// cannot be formatted is saved as it is.
+    fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.saved.is_none() {
             return;
         }
-        let text = self.editor.read(cx).value().to_string();
+        let typed = self.editor.read(cx).value().to_string();
+        let is_piton = self.path.extension().is_some_and(|ext| ext == "pi");
+        let project_dir = ProjectDirectory::get(cx);
         let write = cx.background_spawn({
             let path = self.path.clone();
-            let text = text.clone();
-            async move { std::fs::write(path, text) }
+            let typed = typed.clone();
+            async move {
+                let text = if is_piton {
+                    let dir = project_dir
+                        .or_else(|| path.parent().map(Path::to_path_buf))
+                        .unwrap_or_default();
+                    format_piton(&typed, &dir).unwrap_or(typed)
+                } else {
+                    typed
+                };
+                std::fs::write(path, &text).map(|()| text)
+            }
         });
-        self._save = cx.spawn(async move |this, cx| {
+        self._save = cx.spawn_in(window, async move |this, cx| {
             let written = write.await;
-            this.update(cx, |this, cx| {
+            this.update_in(cx, |this, window, cx| {
                 match written {
-                    Ok(()) => {
+                    Ok(text) => {
                         this.save_error = None;
+                        // Shows the formatted text, unless the file was edited
+                        // again while it saved.
+                        if text != typed && this.editor.read(cx).value().as_ref() == typed {
+                            this.editor.update(cx, |editor, cx| {
+                                editor.set_value(text.clone(), window, cx)
+                            });
+                            if let Some(document) = &this.document {
+                                document.sync(&text);
+                            }
+                        }
                         this.dirty = this.editor.read(cx).value().as_ref() != text;
                         this.saved = Some(text);
                         if let Some(document) = &this.document {
@@ -387,8 +419,27 @@ impl FileView {
     }
 }
 
+impl FileView {
+    /// The narrowest the file can be shown: its editor fits 80 columns of
+    /// text beside its line numbers.
+    pub fn min_width(&self, window: &Window, cx: &App) -> Pixels {
+        let theme = cx.theme();
+        let text_system = window.text_system();
+        let font_id = text_system.resolve_font(&font(theme.mono_font_family.clone()));
+        let column = text_system
+            .advance(font_id, theme.mono_font_size, 'm')
+            .map_or(theme.mono_font_size * 0.6, |size| size.width);
+        // Room for the line numbers too, which widen as the file grows.
+        let lines = self.editor.read(cx).value().lines().count().max(1);
+        let digits = lines.to_string().len().max(3);
+        (column * (MIN_COLUMNS + digits + GUTTER_EXTRA_COLUMNS) as f32).ceil()
+    }
+}
+
 impl Render for FileView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let min_width = self.min_width(window, cx);
+
         let border = cx.theme().border;
         let muted = cx.theme().muted_foreground;
         let danger = cx.theme().danger;
@@ -426,7 +477,7 @@ impl Render for FileView {
                     .label("Save")
                     .tooltip(format!("Save ({SAVE_SHORTCUT})"))
                     .disabled(!self.dirty)
-                    .on_click(cx.listener(|this, _, _, cx| this.save(cx))),
+                    .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
             )
             .child(
                 Button::new("close-file")
@@ -441,7 +492,8 @@ impl Render for FileView {
             .id("file-view")
             .key_context(CONTEXT)
             .size_full()
-            .on_action(cx.listener(|this, _: &SaveFile, _, cx| this.save(cx)))
+            .min_w(min_width)
+            .on_action(cx.listener(|this, _: &SaveFile, window, cx| this.save(window, cx)))
             .capture_action(cx.listener(Self::route_enter_to_menus))
             .child(header)
             .when_some(self.save_error.clone(), |view, error| {
@@ -802,6 +854,38 @@ fn show_document(document_path: PathBuf, file: WeakEntity<FileView>) -> ShowDocu
     })
 }
 
+/// `text` in Piton's canonical formatting, from `piton format` run in
+/// `project_dir`; an error if it could not be formatted.
+fn format_piton(text: &str, project_dir: &Path) -> anyhow::Result<String> {
+    use std::io::Write as _;
+    use std::process::{Command, Stdio};
+
+    let mut child = Command::new("piton")
+        .args(["format", "-"])
+        .current_dir(project_dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    // Written from its own thread, so a large file can't fill both pipes.
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("no stdin"))?;
+    let input = text.to_string();
+    let writer = std::thread::spawn(move || stdin.write_all(input.as_bytes()));
+    let output = child.wait_with_output()?;
+    writer.join().ok();
+    if !output.status.success() {
+        anyhow::bail!("{}", String::from_utf8_lossy(&output.stderr).trim());
+    }
+    let formatted = String::from_utf8(output.stdout)?;
+    if formatted.trim().is_empty() && !text.trim().is_empty() {
+        anyhow::bail!("piton format printed nothing");
+    }
+    Ok(formatted)
+}
+
 #[cfg(test)]
 mod tests {
     use std::cell::Cell;
@@ -855,8 +939,7 @@ mod tests {
     }
 
     fn temp_file(name: &str, text: &str) -> PathBuf {
-        let file =
-            std::env::temp_dir().join(format!("suspense-{name}-{}.txt", std::process::id()));
+        let file = std::env::temp_dir().join(format!("suspense-{name}-{}.txt", std::process::id()));
         std::fs::write(&file, text).unwrap();
         file
     }
@@ -904,6 +987,80 @@ mod tests {
             .await;
         assert_eq!(std::fs::read_to_string(&file).unwrap(), "Hi # Notes\n");
 
+        std::fs::remove_file(&file).ok();
+    }
+
+    /// Saving a Piton file formats it with `piton format`, on disk and in
+    /// the editor.
+    #[gpui_kit::test]
+    async fn saving_a_piton_file_formats_it(cx: &mut TestAppContext) {
+        let file = std::env::temp_dir().join(format!(
+            "suspense-file-view-format-{}.pi",
+            std::process::id()
+        ));
+        std::fs::write(&file, "anchor A:\n    x: 1\n").unwrap();
+        init(cx, None);
+        let (view, handle) = open(cx, &file, None);
+        cx.wait_for(handle, TIMEOUT, |_, cx| {
+            view.read(cx).editor.read(cx).value().as_ref() == "anchor A:\n    x: 1\n"
+        })
+        .await;
+
+        cx.update_window(handle, |_, window, cx| {
+            let focus = view.read(cx).editor.read(cx).focus_handle(cx);
+            focus.focus(window, cx);
+        })
+        .unwrap();
+        type_keys(cx, handle, "anchor   B:\n");
+        cx.update_window(handle, |_, window, cx| window.press(SAVE, cx))
+            .unwrap();
+        cx.wait_for(handle, TIMEOUT, |_, cx| {
+            let view = view.read(cx);
+            !view.is_dirty() && view.editor.read(cx).value().starts_with("anchor B:")
+        })
+        .await;
+        let saved = std::fs::read_to_string(&file).unwrap();
+        assert!(saved.starts_with("anchor B:"), "{saved}");
+        assert_eq!(
+            view.read_with(cx, |view, cx| view.editor.read(cx).value().to_string()),
+            saved
+        );
+
+        std::fs::remove_file(&file).ok();
+    }
+
+    /// The file is never shown narrower than 80 columns of its editor's text,
+    /// even in a narrow window.
+    #[gpui_kit::test]
+    async fn editor_is_at_least_80_columns_wide(cx: &mut TestAppContext) {
+        let file = temp_file("file-view-width", "short\n");
+        init(cx, None);
+        let (view, handle) = open(cx, &file, None);
+        cx.update_window(handle, |_, window, cx| {
+            window.resize(gpui_kit::size(gpui_kit::px(300.), gpui_kit::px(400.)));
+            let _ = cx;
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            let min = view.read(cx).min_width(window, cx);
+            let theme = gpui_kit::component::ActiveTheme::theme(cx);
+            let font_id = window
+                .text_system()
+                .resolve_font(&gpui_kit::font(theme.mono_font_family.clone()));
+            let column = window
+                .text_system()
+                .advance(font_id, theme.mono_font_size, 'm')
+                .unwrap()
+                .width;
+            assert!(
+                min >= column * 80.,
+                "{min:?} is under 80 columns of {column:?}"
+            );
+            let shown = window.find("file-view").bounds().size.width;
+            assert!(shown >= min, "shown {shown:?} narrower than {min:?}");
+        })
+        .unwrap();
         std::fs::remove_file(&file).ok();
     }
 

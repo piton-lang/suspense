@@ -1,0 +1,36 @@
+use /lib
+
+export scope ScrollColumnScope:
+    concept: {ScrollColumnConcept}
+
+concept ScrollColumnConcept:
+    pitch:
+        A permanent scrollbar for any list that scrolls, laid out as a narrow
+        column of its own beside the list rather than over it.
+
+    shape: {ScrollColumnShape}
+
+shape ScrollColumnShape:
+    description:
+        A narrow column along the right of the list, with a thin border
+        between them, always shown, whether or not the list has anything to
+        scroll.
+
+    buttons:
+        A square button at the top of the column scrolls the list up a little,
+        and a square button at the bottom scrolls it down a little. The column
+        is as wide as the buttons are tall.
+
+    track:
+        Between the buttons, a track holds a thumb as tall as the share of the
+        list in view, and never too short to grab, placed as far down the track
+        as the list is scrolled. With nothing to scroll, the thumb fills the
+        track. Dragging the thumb scrolls the list with it, and pressing the
+        track elsewhere moves the thumb there.
+
+    lockToBottom:
+        A list that keeps receiving output, like a task's, adds one more square
+        button below the others that locks the scroll to the bottom. While it
+        is locked, the button shows as selected and the list stays scrolled to
+        the bottom as output arrives, even if it was scrolled away. Pressing it
+        again unlocks it. Its tooltip says which it will do.

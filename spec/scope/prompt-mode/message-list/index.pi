@@ -1,6 +1,7 @@
 use /lib
 from /scope/editor import EditorScope
 from /scope/prompt-mode/chat-input import ChatInputScope
+from /ui/components/scroll-column import ScrollColumnScope
 
 export scope MessageList:
     concept: {MessageListConcept}
@@ -24,8 +25,8 @@ shape MessageListShape:
         name of the hidden anchor it was compiled from.
 
     status:
-        A task's status is a coloured label that spells it out: "Compiling" in
-        cyan, "Running" in yellow, "Done" in green, "Failed" in red, and
+        A task's status is a coloured label that spells it out: "Building" in
+        blue, "Compiling" in cyan, "Running" in yellow, "Done" in green, "Failed" in red, and
         "Not recorded" in grey for a task from the history with no record of its
         run. The labels are readable in both light and dark mode.
 
@@ -97,10 +98,18 @@ shape MessageListShape:
         as the tab bar.
 
     askDimming:
-        While a question from the Ask tab is open, a dark shade fades in over
-        the message list to draw attention to it, and fades back out when the
-        question is closed. It covers only the message list, not a file open
-        beside it, and doesn't block clicks.
+        While a finished question from the Ask tab is open onto its full task
+        table, a dark shade fades in over the message list to draw attention
+        to it, and fades back out when it is closed or closed down to its row.
+        The shade also shows while the previous answers are expanded on the Ask
+        tab. Questions still running, each a single row, never dim the list.
+        It covers only the message list, not a file open beside it, and doesn't
+        block clicks.
+
+    scrolling:
+        The latest task's output scrolls with a @{ScrollColumnScope}, with its
+        lock to the bottom. Unlocked, it still follows new output while it is
+        already scrolled to the bottom. The lock is off until switched on.
 
     legibility:
         The output from a realtime agent should be readable and

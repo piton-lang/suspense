@@ -1,0 +1,17 @@
+
+anchor Prompt_75b894bcc435dd9a:
+    userPrompt:
+        We're then going to want to add to the sidebar at the bottom underneath the file tree a very basic git palette or panel that allows us to write a commit message and commit and push and also pull. It should show a summary of how many files have been added and deleted, changed, all that good stuff, the usual, but not listing the actual files themselves because we can see that in the tree. There should also be a button to generate the commit message based off what's actually changed. That should be something that's very quick to generate. 
+
+    mode: combined
+
+    systemPrompt:
+        We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec.
+        
+        You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec.
+        
+        Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other.
+        
+        Then build the spec and execute the prompt directly on the code using a unified plan.
+        
+        Make sure that you write both code and spec.

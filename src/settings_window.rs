@@ -84,6 +84,7 @@ pub struct SettingsWindow {
     prompts: Vec<PromptEditor>,
     /// Set while the editors are filled from disk, so doing so saves nothing.
     loading: bool,
+    scroll: ScrollHandle,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -130,6 +131,7 @@ impl SettingsWindow {
         let mut this = Self {
             prompts,
             loading: false,
+            scroll: ScrollHandle::new(),
             _subscriptions: subscriptions,
         };
         this.load(window, cx);
@@ -256,10 +258,11 @@ impl Render for SettingsWindow {
                 .into_any_element()
         };
 
-        div()
+        let page = div()
             .id("settings")
             .size_full()
             .overflow_y_scroll()
+            .track_scroll(&self.scroll)
             .bg(background)
             .text_color(foreground)
             .child(
@@ -274,7 +277,20 @@ impl Render for SettingsWindow {
                          root in piton.config.pi."
                     )))
                     .child(body),
-            )
+            );
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .bg(background)
+            .child(crate::scroll_column::with_scroll_column(
+                "settings",
+                &self.scroll,
+                page,
+                true,
+                None,
+                cx,
+            ))
             .children(Root::render_notification_layer(window, cx))
     }
 }

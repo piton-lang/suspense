@@ -2,6 +2,8 @@ use /lib
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/prompt-mode/chat-input import ChatInputScope
 from /scope/editor import EditorScope
+from /ui/components/file-tree import FileTreeScope
+from /ui/components/scroll-column import ScrollColumnScope
 from /scope/prompt-mode/message-list import MessageList
 
 export scope PaletteScope:
@@ -47,8 +49,9 @@ shape PaletteShape:
             Every file in the selected @{ProjectDirectoryScope}, at any depth,
             listed by its path in the project. `.git`, and whatever the
             project's `.gitignore` files ignore, are left out. Picking a file
-            opens it in the @{EditorScope}, as clicking it in the project tree
-            does. Until a project is picked the tab reads "No project open".
+            opens it in the @{EditorScope}, as clicking it in the
+            @{FileTreeScope} does. Until a project is picked the tab reads
+            "No project open".
 
         fileSearch:
             On the Files tab, Ctrl+Enter (Cmd+Enter on macOS) sends the search
@@ -56,7 +59,7 @@ shape PaletteShape:
             even when files match. Plain Enter does the same once the file list
             has loaded and nothing matches; otherwise it picks the highlighted
             file. While the search runs, the results area shows its task table,
-            as in the @{MessageList}. When it finishes, a single file closes the
+            as in the @{MessageList}, scrolling with a @{ScrollColumnScope}. When it finishes, a single file closes the
             palette and opens that file, several files show a
             "Multiple results were found" alert, and no files adds a
             "No file matching the search was found." row. Changing the search

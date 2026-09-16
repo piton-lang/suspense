@@ -18,6 +18,7 @@ use gpui_kit::*;
 use notify::event::ModifyKind;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as _};
 
+use crate::git_status::GitStatus;
 use crate::project_directory::ProjectDirectory;
 
 /// Names never listed.
@@ -25,6 +26,11 @@ const HIDDEN_NAMES: &[&str] = &[".git"];
 
 /// Indent added per level of depth.
 const INDENT: Pixels = px(12.);
+
+/// How often the git status is read again, which catches what the watcher
+/// doesn't see: edits in folders never expanded, staging, commits, and
+/// switching branches.
+const GIT_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
 
 /// How often the watcher's reports are collected. A burst of changes (a
 /// checkout, a build) within one interval costs one read per folder.
@@ -55,6 +61,10 @@ pub struct ProjectTree {
     watched: HashSet<PathBuf>,
     /// Re-reads folders the watcher reports; dropped with the watcher.
     _refresh: Option<Task<()>>,
+    /// The project's git status; `None` outside a repository.
+    git: Option<GitStatus>,
+    /// Reads the git status now and then; replaced with the project.
+    _git_refresh: Task<()>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -80,6 +90,8 @@ impl ProjectTree {
             watcher: None,
             watched: HashSet::new(),
             _refresh: None,
+            git: None,
+            _git_refresh: Task::ready(()),
             _subscriptions: subscriptions,
         };
         this.open(ProjectDirectory::get(cx), cx);
@@ -99,10 +111,40 @@ impl ProjectTree {
             None => (None, None),
         };
         self.rebuild(cx);
+        self.git = None;
+        self._git_refresh = match root.clone() {
+            Some(root) => self.watch_git(root, cx),
+            None => Task::ready(()),
+        };
         if let Some(root) = root {
             self.load(root, cx);
         }
         cx.notify();
+    }
+
+    /// Reads the project's git status straight away, then again every so
+    /// often, showing it whenever it changes.
+    fn watch_git(&self, root: PathBuf, cx: &mut Context<Self>) -> Task<()> {
+        cx.spawn(async move |this, cx| {
+            loop {
+                let status = cx
+                    .background_spawn({
+                        let root = root.clone();
+                        async move { GitStatus::read(&root) }
+                    })
+                    .await;
+                let updated = this.update(cx, |this, cx| {
+                    if this.root.as_ref() == Some(&root) && this.git != status {
+                        this.git = status;
+                        cx.notify();
+                    }
+                });
+                if updated.is_err() {
+                    break;
+                }
+                cx.background_executor().timer(GIT_REFRESH_INTERVAL).await;
+            }
+        })
     }
 
     fn on_tree_event(&mut self, event: &TreeEvent, cx: &mut Context<Self>) {
@@ -314,6 +356,14 @@ fn render_entry(
 ) -> ListItem {
     let muted = cx.theme().muted_foreground;
     let icon = |name: IconName| Icon::new(name).small().text_color(muted);
+    // Its git status, when the project is in a repository.
+    let status = (!entry.is_disabled())
+        .then(|| {
+            let tree = tree.upgrade()?;
+            let path = Path::new(entry.item().id.as_ref());
+            tree.read(cx).git.as_ref()?.of(path, entry.is_folder())
+        })
+        .flatten();
     let (chevron, kind) = if entry.is_disabled() {
         (None, None)
     } else if entry.is_folder() && entry.is_expanded() {
@@ -342,6 +392,9 @@ fn render_entry(
                 .when(entry.is_disabled(), |label| {
                     label.italic().text_color(muted)
                 })
+                .when_some(status.map(|status| status.color(cx)), |label, color| {
+                    label.text_color(color)
+                })
                 .child(entry.item().label.clone()),
         )
         // Folders expand in the tree itself; a file is opened elsewhere.
@@ -366,11 +419,29 @@ impl Render for ProjectTree {
         let sidebar = match self.root {
             Some(_) => {
                 let this = cx.entity().downgrade();
-                sidebar
+                // The tree's own scroll position, shown in a scroll column.
+                let scroll = self
+                    .tree
+                    .read(cx)
+                    .scroll_handle()
+                    .0
+                    .borrow()
+                    .base_handle
+                    .clone();
+                let tree = div()
+                    .size_full()
                     .py_1()
                     .child(tree(&self.tree, move |ix, entry, _, _, cx| {
                         render_entry(&this, ix, entry, cx)
-                    }))
+                    }));
+                sidebar.child(crate::scroll_column::with_scroll_column(
+                    "project-tree",
+                    &scroll,
+                    tree,
+                    true,
+                    None,
+                    cx,
+                ))
             }
             None => sidebar
                 .items_center()

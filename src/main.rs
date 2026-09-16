@@ -7,6 +7,8 @@ mod completion_menu;
 mod file_link;
 mod file_view;
 mod fuzzy;
+mod git_panel;
+mod git_status;
 mod harness;
 mod harness_mentions;
 mod hidden_anchor;
@@ -22,11 +24,12 @@ mod project_tree;
 mod prompt_history;
 mod prompt_mode;
 mod prompt_queue;
+mod ribbon;
+mod scroll_column;
 mod settings_window;
 mod shell_format;
 mod system_prompts;
 mod theme_preference;
-mod toolbar;
 
 fn main() {
     app::run();

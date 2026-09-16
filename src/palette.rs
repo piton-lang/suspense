@@ -90,13 +90,18 @@ nothing matches, reply {{\"files\": []}}."
 }
 
 /// Runs the harness: [`harness::send`], replaced in tests.
-type SendToHarness =
-    fn(String, Option<String>, Option<String>, PathBuf) -> mpsc::UnboundedReceiver<HarnessEvent>;
+type SendToHarness = fn(
+    String,
+    Option<String>,
+    Option<harness::Resume>,
+    PathBuf,
+) -> mpsc::UnboundedReceiver<HarnessEvent>;
 
 /// A search handed to the harness, and what the harness did with it.
 struct FileSearch {
     query: SharedString,
     reply: Reply,
+    scroll: ScrollHandle,
     _task: Task<()>,
 }
 
@@ -217,7 +222,7 @@ impl SystemState {
         let theme = if self.dark { "Light mode" } else { "Dark mode" };
         [
             (SystemCommand::OpenProject, "Open Project…", true),
-            (SystemCommand::Build, "Build", self.can_build),
+            (SystemCommand::Build, "Build Spec", self.can_build),
             (SystemCommand::ToggleDarkMode, theme, true),
             (SystemCommand::Settings, "Settings…", true),
             (SystemCommand::Quit, "Quit", true),
@@ -520,8 +525,12 @@ impl Palette {
 
         let query = self.query.clone();
         let prompt = format!("Find the file I'm looking for: {query}");
-        let mut events =
-            (self.send_to_harness)(prompt, Some(search_system_prompt(&root)), None, root.clone());
+        let mut events = (self.send_to_harness)(
+            prompt,
+            Some(search_system_prompt(&root)),
+            None,
+            root.clone(),
+        );
         let task = cx.spawn_in(window, async move |this, cx| {
             let mut answer = None;
             while let Some(event) = events.next().await {
@@ -593,6 +602,7 @@ impl Palette {
         self.search = Some(FileSearch {
             query,
             reply: Reply::default(),
+            scroll: ScrollHandle::new(),
             _task: task,
         });
         cx.notify();
@@ -799,9 +809,18 @@ impl Render for Palette {
                                 // Inside the list's padding.
                                 .max_h(MAX_LIST_HEIGHT - px(8.))
                                 .overflow_y_scroll()
+                                .track_scroll(&search.scroll)
                                 .child(output_table(0, &search.reply, None, cx));
                             // Lets UI tests find the search; inert in normal builds.
-                            gpui_kit::TestSupportExt::test_support(table).into_any_element()
+                            let table = gpui_kit::TestSupportExt::test_support(table);
+                            crate::scroll_column::with_scroll_column(
+                                "palette-search",
+                                &search.scroll,
+                                table,
+                                false,
+                                None,
+                                cx,
+                            )
                         }
                         None => div()
                             .py_6()

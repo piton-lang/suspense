@@ -1,0 +1,64 @@
+use /lib
+from /ui/components/file-tree import FileTreeScope
+from /scope/project-directory import ProjectDirectoryScope
+
+export scope GitPanelScope:
+    concept: {GitPanelConcept}
+
+concept GitPanelConcept:
+    pitch:
+        A very basic git panel for the repository the
+        ${ProjectDirectoryScope} is in: see what has changed at a glance,
+        write a commit message, commit, push, and pull.
+
+    shape: {GitPanelShape}
+
+shape GitPanelShape:
+    description:
+        A compact panel with a thin border along its top. It is shown only
+        while the project is inside a git repository.
+
+    branch:
+        The top row shows the current branch, or "Detached HEAD", beside how
+        many commits it is ahead of its upstream (↑) and behind it (↓), each
+        only when not zero. At the right end are a Pull button and a Push
+        button, icons with tooltips.
+
+    summary:
+        Below the branch, a line counts what has changed, leaving out any
+        kind with none: modified, added, deleted, renamed, untracked, and
+        conflicted, as "2 modified · 1 untracked", or "No changes". Beside it,
+        how many lines were added (+, in green) and removed (−, in red) in
+        tracked files. The files themselves are not listed, since the
+        @{FileTreeScope} shows them. The summary refreshes by itself every
+        couple of seconds, and straight after anything the panel does.
+
+    message:
+        A multi-line commit message box, a few lines tall, reading
+        "Commit message" while empty.
+
+    writingAMessage:
+        A "Write message" button, with a sparkles icon, has the harness write
+        the commit message from what has changed, and puts it in the message
+        box, replacing what was there. It is quick: a small, fast model, at
+        low effort, with no tools, handed only the list of changed files and
+        as much of the diff as fits in a small, fixed amount. The message is a
+        summary line of at most 72 characters in the imperative mood,
+        followed, only if it helps, by a few short bullet points. The button
+        is disabled while there are no changes.
+
+    committing:
+        A primary "Commit" button commits every change, new files included,
+        with the message, then clears the message box. It is disabled while
+        the message is empty or there are no changes.
+
+    pushingAndPulling:
+        Push pushes the branch, setting its upstream on origin first if it has
+        none. Pull only fast-forwards, so it never starts a merge, and is
+        disabled while the branch has no upstream.
+
+    feedback:
+        While the panel is committing, pushing, pulling, or writing a
+        message, that button shows a spinner and the others are disabled.
+        Committing, pushing, and pulling say so in a notification when they
+        succeed. Anything that fails says why in an error notification.

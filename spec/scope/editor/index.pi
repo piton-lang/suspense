@@ -1,12 +1,13 @@
 use /lib
 from /scope/lsp import LSP
+from /ui/components/file-tree import FileTreeScope
 
 export scope EditorScope:
     concept: {EditorConcept}
 
 concept EditorConcept:
     pitch:
-        An editor for a file opened from the project tree, with language
+        An editor for a file opened from the @{FileTreeScope}, with language
         support for Piton files.
 
     shape: {EditorShape}

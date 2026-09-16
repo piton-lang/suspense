@@ -4,6 +4,9 @@ from ../prompt-mode import PromptEditor
 from ../prompt-mode/chat-input import ChatInputScope
 from ../editor import EditorScope
 from ../palette import PaletteScope
+from /ui/components/ribbon import RibbonScope
+from /ui/components/file-tree import FileTreeScope
+from /ui/components/sidebar import SidebarScope
 
 export scope MainWindowScope:
     concept: {MainWindowConcept}
@@ -23,8 +26,8 @@ shape MainWindowShape:
         The whole window, including popups and notifications, supports a light
         and a dark theme.
 
-        A "Dark mode" switch at the far right of the toolbar toggles between the
-        two.
+        A "Dark mode" switch in the ribbon's Application tab toggles between
+        the two.
 
         The choice is persistent: it is saved for the user, across all
         projects, and restored on the next launch. Until a choice has been
@@ -52,43 +55,19 @@ shape MainWindowShape:
         and the harness's commands, skills, and agents.
 
     header:
-        toolbar:
-            Toolbar on top that contains a button for @{ProjectDirectoryScope}
-            As well as a Build button that will run `piton build`, with the
-            "Dark mode" switch at the far right. There is no raw output view
-            and no toggle for one.
+        ribbon: @{RibbonScope}
 
     body:
-        sidebar:
-            A sidebar along the left of the body displays a tree view of the
-            current @{ProjectDirectoryScope}. Folders are listed before files,
-            both by name, and a folder's contents are shown when it is
-            expanded. The tree refreshes by itself when files or folders are
-            added, removed, or renamed on disk, keeping expanded folders open
-            and the selection in place. The sidebar is resized by dragging its
-            edge. Until a project is picked it reads "No project open".
-
-        gitStatus:
-            When the project is inside a git repository, the tree colors each
-            name by its git status: modified, added, untracked, and conflicted
-            each have their own color, and ignored files and folders are
-            dimmed. Unchanged names keep the default color. A folder takes the
-            color of the most pressing status among its contents, conflicted
-            first, then modified, added, and untracked, so a change stays
-            visible while its folder is collapsed. The colors suit both the
-            light and the dark theme. The highlighting refreshes by itself when
-            files change on disk or the repository's state changes, such as
-            after staging, committing, or switching branches. Outside a git
-            repository the tree is not highlighted.
+        sidebar: @{SidebarScope}
 
         openFile:
-            Clicking a file in the tree opens it in an @{EditorScope}, in a
-            split beside the chat history: the file on the left taking 50% of
-            the width, the chat history on the right taking the rest. The split
+            A file clicked in the @{FileTreeScope} opens in an @{EditorScope},
+            in a split beside the chat history: the file on the left taking 50%
+            of the width, the chat history on the right taking the rest. The split
             can be resized by dragging its edge. Closing the file closes the
             split. The @{ChatInputScope} is never split: it stays along the
             bottom, across the full width of prompt mode.
 
         promptMode:
             The body displays the @{PromptEditor} and any splits, to the
-            right of the sidebar.
+            right of the @{SidebarScope}.

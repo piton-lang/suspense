@@ -1,0 +1,12 @@
+use @piton/belay
+
+from ../../Scope import Scope
+
+export abstract command BuildScopeCommand as build-scope-command:
+    description: build or change the ${self.scope} scope
+    prompt:
+        Build or change the ${self.scope} scope using the ${self} skill. The
+        spec is the source of truth: read it, compare it with what's already
+        built, and change the code to match.
+
+    scope:: extends Scope

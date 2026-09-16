@@ -28,8 +28,10 @@ shape HarnessIntegrationShape:
         fresh each time. Tasks share one ongoing conversation, and each task
         sent carries it on. When the project is opened, tasks carry on the
         latest conversation in its history. Questions from the Ask tab share a
-        separate conversation of their own, which lasts while the application
-        is open. A conversation is only carried on in the project it began in,
+        separate conversation of their own, and when the project is opened they
+        carry on the latest conversation among the questions saved with it. A question asked while another is running carries on a copy of
+        that conversation, so questions running at the same time never write
+        over each other. A conversation is only carried on in the project it began in,
         and if one can't be carried on, the next request starts a new one. Each
         run applies its own prompt's systemPrompt, even when it carries on a
         conversation begun in a different mode. The palette's file search

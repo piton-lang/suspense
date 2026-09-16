@@ -41,7 +41,12 @@ const SEND_SHORTCUT: &str = "⌘Enter";
 const SEND_SHORTCUT: &str = "Ctrl+Enter";
 
 /// The tabs the input sits in, in the order Tab cycles them.
-const TABS: [SendMode; 4] = [SendMode::Code, SendMode::Both, SendMode::Spec, SendMode::Ask];
+const TABS: [SendMode; 4] = [
+    SendMode::Code,
+    SendMode::Both,
+    SendMode::Spec,
+    SendMode::Ask,
+];
 
 /// Index of the chain tab in `TABS`.
 const BOTH_TAB: usize = 1;
@@ -66,9 +71,13 @@ const CHAIN_SPRING: SpringConfig = SpringConfig::new(400., 40., 1.);
 const TINT_OPACITY: f32 = 0.1;
 
 /// The tint at `position` between the tabs: red at Code (0), blue at Spec
-/// (2), purple for both (1), where they meet, and green at Ask (3).
+/// (2), purple for both (1), where they meet, and green at Ask (3). The tabs
+/// wrap around, so past Ask it blends straight back to Code's red at 4.
 fn tint(red: Hsla, blue: Hsla, green: Hsla, position: f32) -> Hsla {
-    if position > 2. {
+    let position = position.rem_euclid(TABS.len() as f32);
+    if position > 3. {
+        blend(green, red, position - 3.)
+    } else if position > 2. {
         blend(blue, green, position - 2.)
     } else {
         blend(red, blue, position / 2.)
@@ -105,7 +114,13 @@ fn tab_tint_shown(ix: usize, position: f32) -> f32 {
         SendMode::Spec => (1., 2.),
         SendMode::Both | SendMode::Ask => (ix as f32, ix as f32),
     };
-    let distance = (first - position).max(position - last).max(0.);
+    // The tabs wrap around, so Code is as near Ask as Chain is to Code.
+    let count = TABS.len() as f32;
+    let position = position.rem_euclid(count);
+    let distance = [position - count, position, position + count]
+        .into_iter()
+        .map(|position| (first - position).max(position - last).max(0.))
+        .fold(f32::MAX, f32::min);
     (1. - distance).clamp(0., 1.)
 }
 
@@ -148,6 +163,16 @@ impl SendMode {
         Self::ALL.into_iter().find(|mode| mode.key() == key)
     }
 
+    /// What sending in the mode is for, shown beside the tabs.
+    pub fn help(self) -> &'static str {
+        match self {
+            SendMode::Code => "Changes the code, leaving the spec as it is.",
+            SendMode::Both => "Changes the code and the spec together.",
+            SendMode::Spec => "Changes the spec, leaving the code as it is.",
+            SendMode::Ask => "Asks a question about the code and the spec, changing neither.",
+        }
+    }
+
     fn id(self) -> &'static str {
         match self {
             SendMode::Code => "code-tab",
@@ -173,6 +198,10 @@ pub struct ChatInput {
     focus_handle: FocusHandle,
     /// Index into `TABS`.
     selected_tab: usize,
+    /// Where the tint is sliding to: the selected tab's index, counted on
+    /// past the last tab when Tab wraps around, so the tint moves straight
+    /// from Ask to Code instead of back across Spec.
+    tint_target: f32,
     lsp: Option<Arc<PitonSession>>,
     busy: bool,
     /// Width the editor's text was last laid out in, which decides where long
@@ -188,6 +217,11 @@ pub struct ChatInput {
 }
 
 impl EventEmitter<Submit> for ChatInput {}
+
+/// Emitted when another tab is selected.
+pub struct TabChanged;
+
+impl EventEmitter<TabChanged> for ChatInput {}
 
 impl ChatInput {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -211,19 +245,23 @@ impl ChatInput {
         let completion = cx.new(|cx| CompletionMenu::new(editor.clone(), window, cx));
 
         let subscriptions = vec![
-            cx.subscribe_in(&editor, window, |this, editor, event: &InputEvent, window, cx| {
-                if matches!(event, InputEvent::Change) {
-                    // An edit may be an accepted completion, whose import the
-                    // hidden anchor then takes on.
-                    if let Some(lsp) = &this.lsp {
-                        lsp.note_edit(&editor.read(cx).value());
+            cx.subscribe_in(
+                &editor,
+                window,
+                |this, editor, event: &InputEvent, window, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        // An edit may be an accepted completion, whose import the
+                        // hidden anchor then takes on.
+                        if let Some(lsp) = &this.lsp {
+                            lsp.note_edit(&editor.read(cx).value());
+                        }
+                        this.completion
+                            .update(cx, |menu, cx| menu.on_edit(window, cx));
                     }
-                    this.completion
-                        .update(cx, |menu, cx| menu.on_edit(window, cx));
-                }
-                // Re-render on every edit so the input can grow to fit its text.
-                cx.notify();
-            }),
+                    // Re-render on every edit so the input can grow to fit its text.
+                    cx.notify();
+                },
+            ),
             cx.observe_global_in::<ProjectLsp>(window, |this, _, cx| this.connect_lsp(cx)),
         ];
 
@@ -232,6 +270,7 @@ impl ChatInput {
             completion,
             focus_handle: cx.focus_handle(),
             selected_tab: 0,
+            tint_target: 0.,
             lsp: None,
             busy: false,
             text_width: None,
@@ -320,7 +359,16 @@ impl ChatInput {
     }
 
     /// Selects a clicked tab and puts focus back in the input.
+    /// The mode of the selected tab.
+    pub fn mode(&self) -> SendMode {
+        TABS[self.selected_tab]
+    }
+
     fn select_tab(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.move_tint(ix as isize - self.selected_tab as isize);
+        if self.selected_tab != ix {
+            cx.emit(TabChanged);
+        }
         self.selected_tab = ix;
         self.focus(window, cx);
         cx.notify();
@@ -335,7 +383,25 @@ impl ChatInput {
         cx.stop_propagation();
         let count = TABS.len() as isize;
         self.selected_tab = (self.selected_tab as isize + step).rem_euclid(count) as usize;
+        // Along the way Tab went, even when it wraps around.
+        self.tint_target += step as f32;
+        cx.emit(TabChanged);
         cx.notify();
+    }
+
+    /// Slides the tint `step` tabs along the shorter way round, keeping to
+    /// the row, rather than wrapping, when the two ways are as long.
+    fn move_tint(&mut self, step: isize) {
+        let count = TABS.len() as isize;
+        let half = count / 2;
+        let step = if step > half {
+            step - count
+        } else if step < -half {
+            step + count
+        } else {
+            step
+        };
+        self.tint_target += step as f32;
     }
 
     /// Esc closes an open completion menu, and otherwise takes focus out of
@@ -437,7 +503,7 @@ impl Render for ChatInput {
         // The tint slides between the tabs, so going from Code to Spec passes
         // through purple. Its position is the selected tab's index: 0 for
         // Code, 1 for the chain, 2 for Spec, 3 for Ask.
-        let tint_slide = SpringAnimation::new(CHAIN_SPRING).to(selected as f32);
+        let tint_slide = SpringAnimation::new(CHAIN_SPRING).to(self.tint_target);
         let (red, blue, green) = (cx.theme().red, cx.theme().blue, cx.theme().green);
         let tint = move |position| tint(red, blue, green, position);
         // A joined chain once selected, and a broken one dimmed to half
@@ -513,7 +579,10 @@ impl Render for ChatInput {
                     let width = bounds.size.width;
                     chat_input
                         .update(cx, |this, cx| {
-                            if this.chain_width.is_none_or(|old| (old - width).abs() > px(0.01)) {
+                            if this
+                                .chain_width
+                                .is_none_or(|old| (old - width).abs() > px(0.01))
+                            {
                                 this.chain_width = Some(width);
                                 cx.notify();
                             }
@@ -559,18 +628,30 @@ impl Render for ChatInput {
                         .bottom_0()
                         .left(-gap - SEAM_COVER_REACH)
                         .w(SEAM_COVER_REACH * 2.)
-                        .when(unified && gap <= SEAM_COVER_REACH, |this| this.bg(seam_cover)),
+                        .when(unified && gap <= SEAM_COVER_REACH, |this| {
+                            this.bg(seam_cover)
+                        }),
                 );
                 this.ml(gap)
                     .child(seam)
                     .child(both.left(-gap - chain_width * 0.5 * joined))
             });
-        // Ask stretches to the right edge.
         let ask = div()
             .relative()
-            .flex_1()
-            .child(full_tab(ASK_TAB).w_full())
+            .child(full_tab(ASK_TAB))
             .child(tab_tint(ASK_TAB));
+        // What the selected tab is for, in the rest of the bar.
+        let help = gpui_kit::TestSupportExt::test_support(
+            div()
+                .id("tab-help")
+                .flex_1()
+                .min_w_0()
+                .px_3()
+                .truncate()
+                .text_sm()
+                .text_color(cx.theme().muted_foreground)
+                .child(TABS[selected].help()),
+        );
         let tabs = gpui_kit::TestSupportExt::test_support(
             div()
                 .id("chat-tabs")
@@ -589,7 +670,8 @@ impl Render for ChatInput {
                 )
                 .child(code)
                 .child(spec)
-                .child(ask),
+                .child(ask)
+                .child(help),
         );
 
         let body = div()
@@ -914,13 +996,71 @@ mod tests {
             }
             cx.wait_for(handle, TIMEOUT, |_, cx| {
                 let menu = completion.read(cx);
-                menu.is_open() && menu.items(cx).first().is_some_and(|item| item.label == first)
+                menu.is_open()
+                    && menu
+                        .items(cx)
+                        .first()
+                        .is_some_and(|item| item.label == first)
             })
             .await;
             cx.update_window(handle, |_, window, cx| window.press("enter", cx))
                 .unwrap();
             cx.wait_for(handle, TIMEOUT, |_, cx| editor.read(cx).value() == expected)
                 .await;
+        }
+    }
+
+    /// To the right of the tabs, filling the rest of the bar, a line of help
+    /// says what the selected tab is for, and changes with it.
+    #[gpui_kit::test]
+    async fn help_beside_the_tabs_says_what_the_tab_is_for(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut chat_input = None;
+        let window = cx.add_window(|window, cx| {
+            let input = cx.new(|cx| ChatInput::new(window, cx));
+            chat_input = Some(input.clone());
+            Root::new(input, window, cx)
+        });
+        let chat_input = chat_input.unwrap();
+        let handle = window.into();
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("tab-help").is_some()
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let (ask, help, bar) = (
+                window.within("ask-tab").find(0usize).bounds(),
+                window.find("tab-help").bounds(),
+                window.find("chat-tabs").bounds(),
+            );
+            assert!(
+                help.left() >= ask.right() - gpui_kit::px(0.5),
+                "{help:?} is not right of {ask:?}"
+            );
+            assert!(
+                (help.right() - bar.right()).abs() <= gpui_kit::px(1.),
+                "{help:?} does not fill {bar:?}"
+            );
+        })
+        .unwrap();
+
+        // Each tab has its own help.
+        let helps: Vec<&str> = super::TABS.iter().map(|mode| mode.help()).collect();
+        for (ix, help) in helps.iter().enumerate() {
+            assert!(!help.is_empty());
+            assert!(!helps[ix + 1..].contains(help), "{help} is repeated");
+        }
+        for ix in 0..super::TABS.len() {
+            cx.update_window(handle, |_, window, cx| {
+                chat_input.update(cx, |input, cx| input.select_tab(ix, window, cx));
+            })
+            .unwrap();
+            chat_input.read_with(cx, |input, _| assert_eq!(input.mode().help(), helps[ix]));
         }
     }
 
@@ -950,26 +1090,34 @@ mod tests {
         cx.update_window(handle, |_, window, cx| window.input("hi", cx))
             .unwrap();
         cx.run_until_parked();
+        // With where the tint slides to: on past Ask to Code (4) and back
+        // before Code to Ask (-1), rather than across the tabs between.
         let presses = [
-            ("tab", 1),
-            ("tab", 2),
-            ("tab", 3),
-            ("tab", 0),
-            ("tab", 1),
-            ("shift-tab", 0),
-            ("shift-tab", 3),
-            ("shift-tab", 2),
-            ("shift-tab", 1),
+            ("tab", 1, 1.),
+            ("tab", 2, 2.),
+            ("tab", 3, 3.),
+            ("tab", 0, 4.),
+            ("tab", 1, 5.),
+            ("shift-tab", 0, 4.),
+            ("shift-tab", 3, 3.),
+            ("shift-tab", 2, 2.),
+            ("shift-tab", 1, 1.),
+            ("shift-tab", 0, 0.),
+            ("shift-tab", 3, -1.),
         ];
-        for (key, expected) in presses {
+        for (key, expected, tint_target) in presses {
             cx.update_window(handle, |_, window, cx| window.press(key, cx))
                 .unwrap();
             cx.run_until_parked();
             cx.update_window(handle, |_, window, cx| {
                 let input = chat_input.read(cx);
                 assert_eq!(input.selected_tab, expected, "after {key}");
+                assert_eq!(input.tint_target, tint_target, "tint after {key}");
                 assert_eq!(input.value(cx).as_ref(), "hi");
-                assert!(input.is_focused(window, cx), "the input lost focus on {key}");
+                assert!(
+                    input.is_focused(window, cx),
+                    "the input lost focus on {key}"
+                );
             })
             .unwrap();
         }
@@ -1107,7 +1255,10 @@ mod tests {
             assert_eq!(color.a, super::TINT_OPACITY);
         }
         // Purple sits past blue, on the way round the hue circle to red.
-        assert!(both.h > blue.h, "{both:?} is not between {blue:?} and {red:?}");
+        assert!(
+            both.h > blue.h,
+            "{both:?} is not between {blue:?} and {red:?}"
+        );
 
         // Rows: Code, chain, Spec, Ask. Columns: the tint at each tab.
         let shown = [
@@ -1125,6 +1276,31 @@ mod tests {
                 );
             }
         }
+
+        // Wrapping from Ask on to Code blends green straight into red, and
+        // never lights up Spec or the chain on the way.
+        assert!(same(super::tint(red, blue, green, 4.), red));
+        for step in 1..10 {
+            let position = 3. + step as f32 / 10.;
+            let color = super::tint(red, blue, green, position);
+            let between = |a: f32, b: f32, x: f32| {
+                let (span, off) = ((b - a).rem_euclid(1.), (x - a).rem_euclid(1.));
+                off <= span + 1e-4
+            };
+            assert!(
+                between(green.h, red.h, color.h) || between(red.h, green.h, color.h),
+                "{color:?} at {position} is not between green and red"
+            );
+            for ix in [1, 2] {
+                assert_eq!(
+                    super::tab_tint_shown(ix, position),
+                    0.,
+                    "tab {ix} at {position}"
+                );
+            }
+        }
+        assert_eq!(super::tab_tint_shown(0, 4.), 1.);
+        assert_eq!(super::tab_tint_shown(3, 4.), 0.);
     }
 
     /// With one line of text, the input is as tall as the Send button and

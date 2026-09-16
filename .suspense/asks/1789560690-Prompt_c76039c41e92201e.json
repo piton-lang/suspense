@@ -1,0 +1,1394 @@
+{
+  "userPrompt": "What are you saying about Gmail, Google Calendar and Google Drive connectors?",
+  "output": [
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "e360ce4f-71e8-461d-9906-eedd215d94e0",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "730ab5db-351e-4561-ae02-e30fffedf7fd",
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "bfa672b7-6c2f-4505-a642-0f02dd670cd3",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "0eda240e-521c-4e02-9ffd-716b9c667824",
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "bfa672b7-6c2f-4505-a642-0f02dd670cd3",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "{\"terminalSequence\":\"\\u001b]777;notify;warp://cli-agent;{\\\"v\\\":1,\\\"agent\\\":\\\"claude\\\",\\\"event\\\":\\\"session_start\\\",\\\"session_id\\\":\\\"7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2\\\",\\\"cwd\\\":\\\"/home/hyphyphyph/piton/repl\\\",\\\"project\\\":\\\"repl\\\",\\\"plugin_version\\\":\\\"2.2.0\\\"}\\u0007\"}\n",
+      "stdout": "{\"terminalSequence\":\"\\u001b]777;notify;warp://cli-agent;{\\\"v\\\":1,\\\"agent\\\":\\\"claude\\\",\\\"event\\\":\\\"session_start\\\",\\\"session_id\\\":\\\"7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2\\\",\\\"cwd\\\":\\\"/home/hyphyphyph/piton/repl\\\",\\\"project\\\":\\\"repl\\\",\\\"plugin_version\\\":\\\"2.2.0\\\"}\\u0007\"}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "3fbe11de-7f98-4be9-8c6c-3ed75abe8835",
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "e360ce4f-71e8-461d-9906-eedd215d94e0",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "",
+      "stdout": "",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "d0c5f7dd-1dce-4c1f-b1dd-e3f3cb4d8982",
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2"
+    },
+    {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "/home/hyphyphyph/piton/repl",
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "tools": [
+        "Task",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "ListAgents",
+        "ListMcpResourcesTool",
+        "Monitor",
+        "NotebookEdit",
+        "PushNotification",
+        "Read",
+        "ReadMcpResourceDirTool",
+        "ReadMcpResourceTool",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskOutput",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write"
+      ],
+      "mcp_servers": [
+        {
+          "name": "backlog",
+          "status": "connected"
+        },
+        {
+          "name": "claude.ai Google Drive",
+          "status": "needs-auth"
+        },
+        {
+          "name": "claude.ai Gmail",
+          "status": "needs-auth"
+        },
+        {
+          "name": "claude.ai Google Calendar",
+          "status": "needs-auth"
+        }
+      ],
+      "model": "claude-opus-5[1m]",
+      "permissionMode": "auto",
+      "slash_commands": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "build-ribbon",
+        "x-build-ribbon",
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "output-style",
+        "context",
+        "effort",
+        "fast",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "skill-doctor",
+        "goal",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding"
+      ],
+      "terminal_slash_commands": [
+        "doctor",
+        "color",
+        "reload-plugins"
+      ],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.273",
+      "output_style": "default",
+      "agents": [
+        "claude",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
+      "skills": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "build-ribbon",
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator"
+      ],
+      "plugins": [
+        {
+          "name": "gitkraken-hooks",
+          "path": "/home/hyphyphyph/.claude/plugins/marketplaces/gitkraken/plugins/gitkraken-hooks",
+          "source": "gitkraken-hooks@gitkraken",
+          "version": "3.1.73"
+        },
+        {
+          "name": "warp",
+          "path": "/home/hyphyphyph/.claude/plugins/cache/claude-code-warp/warp/2.2.0",
+          "source": "warp@claude-code-warp",
+          "version": "2.2.0"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "msg_lifecycle_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "1c151596-882d-405e-81ed-d60c140a9702",
+      "memory_paths": {
+        "auto": "/home/hyphyphyph/.claude/projects/-home-hyphyphyph-piton-repl/memory/"
+      },
+      "messaging_socket_path": "/run/user/1000/cc-socks/1610583.sock",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "uuid": "b2499acc-dd66-4544-a56c-4fa5c12b0043"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5",
+          "id": "msg_011Cf76XsCYHCTwQeX8QfhpE",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 1641,
+            "cache_read_input_tokens": 28125,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1641
+            },
+            "output_tokens": 3,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "183d2930-16a6-46b3-93e0-0275f02b6e97",
+      "ttft_ms": 1927
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "dbeeed98-cb52-46df-b4bf-6cd890bd3347"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "uuid": "503e0482-2418-4050-a93b-eb34fedc9f54"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "d65814f1-f8ed-4a9f-92e1-8d635681d632"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "3ef0108d-dce8-4a28-a04b-874e49277582"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 276,
+      "estimated_tokens_delta": 226,
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "uuid": "334948af-89cf-4515-aeab-56945705706f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "CAQSxAgKEAgRGAI4AUIIdGhpbmtpbmcSDNgbMycdIbQfG3dGVRoMcwI8+23n3TfeqFZpIjAMis9kFz/lYSVEj1i4Z3LvauuJUKK89d+uGcRChZPdS4pAX5TAj+YAcbyGNTH6WL4q4Qe4beQyFGSzClHdA56ZFlJdUhXQpId6C0UtenzLwZMATt6/q3v8EwvfSn0n/xAo2Y/rpgQPEDXYKAB2m1z0G+CNvZZ+P8UIhyan2u3xe6rqGzIKwBJcxqqId6TsAXEG9zFAiBTKyWtepwFufj6I3VArW7sau2TnWSz3BVqmXCBp8AvaKVEowFmh7c3JoPplhAj0LSOFog3MX8wwOlNkuOYAqckhKZkpoacOTHX72V5p7r6DQTz3161kc+p8yd7D1Kqxp1VygfCRgmUxCAjD1hAXJkgO3wG+Ud1huyxC9IjyS5mLUguxe3Z3L3BAu1CxXNET+XFLVd11QrWpfMdJi8xJBkfQIZkBYxmSaTucAfDFmrmqiIFeu3gebW6vzWL1WwU8YZmxvw1PANY8voSAmH7UCZCksaVU/HYGK6aTRKJ9NtoWQfEUoYVn2p2iXIGwh61wzI3+mDIh0SH460jsJwlSs6vaRWLRz7ir7QNjPgsIXi9hnvYEopYHoRnh/RahvPyE6E+t4SZ8fKZdrGT8FmeKoexDNc1io5Cma2c9PnzePNPo0YUFgV5uG64DVJAwvZRmbf8QuzHO0oVX3eBm19BXVmGf8dVH/VP6PN4HcKZxWfEarQWx5hABpyh7nmTFGCGNJPr6h7qkXUkeCEYvj4ufX5YByMCAkd3RWz71WEPB2pMNJ//KMvnmhpat3/MNeVcwcQ4wv8zhI6dtTCmeNZmhtsMtz0teBtxmJ3LPawNTMC5aWWQ4AO6W4HYBsO6wrLYq+LtVbPgLjJAtmtdupdAI/6B7UWepe2iZ/1Yvl6CGGza49D8oCluEYIf6nuIc5AVC2ZTCLeaGviMOrGDon1NpFmoHz2sLCWPIfQ4YtmbKKphbAapzscPt6urk1u5jBmmc+XbU1Pmll8120k/X+E6p8FEwQ5nacH3utcYJSnjIGS4uLd6Vxerojfo4pA6NxMoHJ8adzJaoEXkhptl109WfSkhsQca8V3K1QlrsXFlCpy0m2YtTC6ArtSbASFif8SDcauadvut7dttRIRrgn4Wy9kvSxe2Q75MHmCI2hvrwrNaLGnv9+huMWUtzHhWLAEeidrKsQnG6Zl+pfK/pp5KL+IfuN+uOrGC0wYqrc3wKuwLabis0wg0bI3XE+xEIAtQ2E88sgUxeRh6Q5VVIDEr2ko/AF/SxHAfiPVtBV6FxvkE6DqyhpQmsBfs4ohK8c2psqrbPZLA7d28BucHE7PYsZDuk/vq3PkIjuhXdOzpdfrADMRIfjkhqqlLWWZHby6sRgJKi1MlXK6wO3eLI/s5jttfyiLW+4HZECmvVSc5pagEYAQ=="
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "0db968a1-a661-4089-a01c-60d7a7eee25d"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5",
+        "id": "msg_011Cf76XsCYHCTwQeX8QfhpE",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAQSxAgKEAgRGAI4AUIIdGhpbmtpbmcSDNgbMycdIbQfG3dGVRoMcwI8+23n3TfeqFZpIjAMis9kFz/lYSVEj1i4Z3LvauuJUKK89d+uGcRChZPdS4pAX5TAj+YAcbyGNTH6WL4q4Qe4beQyFGSzClHdA56ZFlJdUhXQpId6C0UtenzLwZMATt6/q3v8EwvfSn0n/xAo2Y/rpgQPEDXYKAB2m1z0G+CNvZZ+P8UIhyan2u3xe6rqGzIKwBJcxqqId6TsAXEG9zFAiBTKyWtepwFufj6I3VArW7sau2TnWSz3BVqmXCBp8AvaKVEowFmh7c3JoPplhAj0LSOFog3MX8wwOlNkuOYAqckhKZkpoacOTHX72V5p7r6DQTz3161kc+p8yd7D1Kqxp1VygfCRgmUxCAjD1hAXJkgO3wG+Ud1huyxC9IjyS5mLUguxe3Z3L3BAu1CxXNET+XFLVd11QrWpfMdJi8xJBkfQIZkBYxmSaTucAfDFmrmqiIFeu3gebW6vzWL1WwU8YZmxvw1PANY8voSAmH7UCZCksaVU/HYGK6aTRKJ9NtoWQfEUoYVn2p2iXIGwh61wzI3+mDIh0SH460jsJwlSs6vaRWLRz7ir7QNjPgsIXi9hnvYEopYHoRnh/RahvPyE6E+t4SZ8fKZdrGT8FmeKoexDNc1io5Cma2c9PnzePNPo0YUFgV5uG64DVJAwvZRmbf8QuzHO0oVX3eBm19BXVmGf8dVH/VP6PN4HcKZxWfEarQWx5hABpyh7nmTFGCGNJPr6h7qkXUkeCEYvj4ufX5YByMCAkd3RWz71WEPB2pMNJ//KMvnmhpat3/MNeVcwcQ4wv8zhI6dtTCmeNZmhtsMtz0teBtxmJ3LPawNTMC5aWWQ4AO6W4HYBsO6wrLYq+LtVbPgLjJAtmtdupdAI/6B7UWepe2iZ/1Yvl6CGGza49D8oCluEYIf6nuIc5AVC2ZTCLeaGviMOrGDon1NpFmoHz2sLCWPIfQ4YtmbKKphbAapzscPt6urk1u5jBmmc+XbU1Pmll8120k/X+E6p8FEwQ5nacH3utcYJSnjIGS4uLd6Vxerojfo4pA6NxMoHJ8adzJaoEXkhptl109WfSkhsQca8V3K1QlrsXFlCpy0m2YtTC6ArtSbASFif8SDcauadvut7dttRIRrgn4Wy9kvSxe2Q75MHmCI2hvrwrNaLGnv9+huMWUtzHhWLAEeidrKsQnG6Zl+pfK/pp5KL+IfuN+uOrGC0wYqrc3wKuwLabis0wg0bI3XE+xEIAtQ2E88sgUxeRh6Q5VVIDEr2ko/AF/SxHAfiPVtBV6FxvkE6DqyhpQmsBfs4ohK8c2psqrbPZLA7d28BucHE7PYsZDuk/vq3PkIjuhXdOzpdfrADMRIfjkhqqlLWWZHby6sRgJKi1MlXK6wO3eLI/s5jttfyiLW+4HZECmvVSc5pagEYAQ=="
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1641,
+          "cache_read_input_tokens": 28125,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1641
+          },
+          "output_tokens": 3,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "uuid": "f7e38d50-704e-4de7-adde-192e69f0435c",
+      "timestamp": "2026-09-16T12:11:34.381Z",
+      "request_id": "req_011Cf76Xr9n8JFcW3LzFdaoQ"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "8a1c39d8-e159-4ce6-8d58-a16ec733cc61"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "9b3941f9-dc17-4f53-b077-d16874f37df8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "I didn't"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "9649fb2e-8ad9-4395-8c3d-3db51f41b07f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " mention them in my ear"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "94cb3405-fb42-46b7-95b7-ab4178b79591"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "lier answers. The set"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "d1f7544a-3a08-4b75-9e63-58fd934448f4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "up info"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "0a66aebe-8c83-4d97-9690-4ec4e9656413"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " for this session says three"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "da1d4aa0-6c74-4515-84ab-a6c06ba393f0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " connectors from"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "8c2d239c-3276-42b0-ba68-019ed9fea723"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " your claude.ai account ("
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "f1578763-ac3b-46d3-a9fb-5bb02ab2484c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Gmail, Google"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "789b61d6-fb93-4c96-9163-e2f6c80cc714"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Calendar and Google Dr"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "e95c4dcb-9c22-4083-9918-e3081f0ec0fd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ive) are"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "cdda52e0-043b-4d32-a7d3-45166b337a84"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " set up but not sign"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "a42d0d84-7177-4074-aeca-607662f7bde6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ed in, and"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "3ba743d6-f25f-4678-bf2b-e939b3b09784"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " I'"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "57c5b70f-3f4b-40bc-911f-0e285e2326df"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "m supposed to tell you"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "07121391-5399-4a06-a7fc-172d0746fedf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "."
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "e4fb788f-adc4-40f4-9852-1d409985fcbe"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " I should have m"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "43cb8647-cb87-46ce-bd99-c90b26ac41ec"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "entioned it at the start."
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "e2e01c87-93d0-4e9b-aa46-4ee5ad112086"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\n- **"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "b33f3b5d-2afd-4b90-b643-75f72491621d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "What"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "c329d235-968c-41cb-a246-df5647d2b374"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it means:** their tools won"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "5980f80f-f232-49dc-8a59-912b5b3a2b66"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'t work in this session, so I"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "62c28ab2-8ad2-4f17-a607-9bcc484e9c46"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " can't read your"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "0b5461c8-dec0-4eb6-9e8d-78870f2658ed"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " email"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "b60c67d1-4be5-4a94-b07d-aee84251118b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", calendar or"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "d697329b-2953-4b65-8c76-e744dd050839"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Drive. That do"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "96a36355-4b57-472b-ba8b-68dce4445dcb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "esn't mat"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "eef51460-fce4-4111-9b83-7c574a487642"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ter for"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "3e0a85f7-b5c1-4cbd-b15f-9b2dbde9e23e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " anything we"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "8e2e1435-9f3d-4fe9-b585-39dc5d9d6ceb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'ve done here"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "76191a19-b3bb-48d0-80ba-43c6fda4e8d3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", since it"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "7b36c926-630b-4a55-b611-b337d4011b02"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'s all local"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "d1c9a6df-4fcf-493a-845e-057fd77e0cd6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " code and spec"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "df2b5ced-969a-4f50-aba3-df2eb93913cc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "s.\n- **How to f"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "6a43cce3-af82-4027-a730-3cca7b64929d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ix it:** if"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "d73aa11f-58c3-40a9-9a2e-29d195e85ad2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " you want them, sign in to"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "b1f42458-6853-46d2-b6ab-265bb7dd9932"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " each"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "f8ae4e47-7817-4ed0-a272-488667ee72e7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " one in the"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "cb05e00c-0e4f-46db-866e-2881f56ee6d3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " connector settings on claude."
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "5b819056-f942-49d4-9695-26c7fdc98663"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ai. This session is"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "bf4926a0-8267-45bc-a9f4-9f05d9dfac0e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " non-interactive, so the"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "9818fbe9-6d60-4efc-b5d2-b0f80d182c83"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " sign-in can't happ"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "fea4b9c7-3c48-4198-827e-c0959bbb0557"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "en here"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "4df9fe29-3915-4eb8-8349-f9c6dac6de19"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ","
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "184cd79c-3824-4cc6-b40f-cfeedab383c4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and you"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "550b3c6e-e7b6-4389-803a-ce67e3552f2a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " don"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "0bfe3aa0-ced8-42d8-a4a7-ed6462724fb1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'t need to give me any cod"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "6695b8cb-3e99-46fc-895c-c4d70a5e398f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "es or tokens.\n-"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "65ab0587-b123-4814-aec3-ff1729d83440"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " **If you don't use"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "9ce768e2-8ade-4690-95dd-390c9e9b4da3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " them:** "
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "db4e9a8d-e5ad-4330-a3e5-d6713ab889b9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ignore them, or rem"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "958270c6-2593-4c65-a846-970c9dcefddd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ove them in"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "12f06cf6-0a36-4b04-959d-911366be57c8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the same connector settings so the"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "64b0f38b-7496-4715-ba58-fc8373983ff0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " not"
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "48aaa57f-ee51-4253-9fee-e501c386fc81"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ice stops appearing."
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "185409b6-92f7-4815-bdbe-83d68e37110e"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5",
+        "id": "msg_011Cf76XsCYHCTwQeX8QfhpE",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "I didn't mention them in my earlier answers. The setup info for this session says three connectors from your claude.ai account (Gmail, Google Calendar and Google Drive) are set up but not signed in, and I'm supposed to tell you. I should have mentioned it at the start.\n\n- **What it means:** their tools won't work in this session, so I can't read your email, calendar or Drive. That doesn't matter for anything we've done here, since it's all local code and specs.\n- **How to fix it:** if you want them, sign in to each one in the connector settings on claude.ai. This session is non-interactive, so the sign-in can't happen here, and you don't need to give me any codes or tokens.\n- **If you don't use them:** ignore them, or remove them in the same connector settings so the notice stops appearing."
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1641,
+          "cache_read_input_tokens": 28125,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1641
+          },
+          "output_tokens": 3,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "uuid": "a3ad553e-5739-4470-b90e-b422b0ae8f04",
+      "timestamp": "2026-09-16T12:11:37.333Z",
+      "request_id": "req_011Cf76Xr9n8JFcW3LzFdaoQ"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "ec6fe277-e339-4541-8604-d9172007ff95"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1641,
+          "cache_read_input_tokens": 28125,
+          "output_tokens": 378,
+          "output_tokens_details": {
+            "thinking_tokens": 122
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 378,
+              "cache_read_input_tokens": 28125,
+              "cache_creation_input_tokens": 1641,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 1641
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "56d8dbbb-e9da-4185-9d98-eff6e1ff2c52"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "parent_tool_use_id": null,
+      "uuid": "bcd1e8fb-3eee-4fe3-9719-4e0373108e80"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1789563000,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.25,
+            "resetsAt": 1789563000
+          },
+          "seven_day": {
+            "utilization": 0.06,
+            "resetsAt": 1790103600
+          }
+        }
+      },
+      "uuid": "a4dce951-ef94-4bdb-b819-211f7bfdc2a7",
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2"
+    },
+    {
+      "duration_api_ms": 6152,
+      "stop_reason": "end_turn",
+      "session_id": "7ddcbca2-41be-4813-8c3b-c0d2fe5c09c2",
+      "total_cost_usd": 0.0399325,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 1641,
+        "cache_read_input_tokens": 28125,
+        "output_tokens": 378,
+        "output_tokens_details": {
+          "thinking_tokens": 122
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1641,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 378,
+            "cache_read_input_tokens": 28125,
+            "cache_creation_input_tokens": 1641,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1641
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "modelUsage": {
+        "claude-opus-5[1m]": {
+          "inputTokens": 2,
+          "outputTokens": 378,
+          "cacheReadInputTokens": 28125,
+          "cacheCreationInputTokens": 1641,
+          "webSearchRequests": 0,
+          "costUSD": 0.0399325,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 122,
+          "canonicalModel": "claude-opus-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "is_error": false,
+      "num_turns": 1,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "I didn't mention them in my earlier answers. The setup info for this session says three connectors from your claude.ai account (Gmail, Google Calendar and Google Drive) are set up but not signed in, and I'm supposed to tell you. I should have mentioned it at the start.\n\n- **What it means:** their tools won't work in this session, so I can't read your email, calendar or Drive. That doesn't matter for anything we've done here, since it's all local code and specs.\n- **How to fix it:** if you want them, sign in to each one in the connector settings on claude.ai. This session is non-interactive, so the sign-in can't happen here, and you don't need to give me any codes or tokens.\n- **If you don't use them:** ignore them, or remove them in the same connector settings so the notice stops appearing.",
+      "ttft_ms": 3132,
+      "type": "result",
+      "duration_ms": 6561,
+      "uuid": "a6f7c4ad-82f3-4c67-bad1-7cdaa7760b48",
+      "ttft_stream_ms": 1997,
+      "time_to_request_ms": 70,
+      "first_content_frame_ms": 1997,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  ]
+}

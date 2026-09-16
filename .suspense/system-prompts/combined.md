@@ -5,3 +5,5 @@ You should use the input prompt to modify the spec.  Simultaneously, in parallel
 Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other.
 
 Then build the spec and execute the prompt directly on the code using a unified plan.
+
+Make sure that you write both code and spec.

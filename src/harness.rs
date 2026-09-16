@@ -46,14 +46,22 @@ pub enum HarnessEvent {
     Failed(String),
 }
 
+/// A conversation an earlier run reported, for a run to carry on.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Resume {
+    pub session: String,
+    /// Carries it on as a copy with a session of its own, so runs that carry
+    /// on the same conversation at once don't write over each other.
+    pub fork: bool,
+}
+
 /// Runs the harness once with `prompt`, and `system_prompt` appended to its
-/// own system prompt, streaming its events. With `resume`, a session reported
-/// by an earlier run, the run continues that conversation. The run is stopped
-/// once the receiver is dropped.
+/// own system prompt, streaming its events. With `resume`, the run continues
+/// that conversation. The run is stopped once the receiver is dropped.
 pub fn send(
     prompt: String,
     system_prompt: Option<String>,
-    resume: Option<String>,
+    resume: Option<Resume>,
     project_dir: PathBuf,
 ) -> mpsc::UnboundedReceiver<HarnessEvent> {
     let (tx, rx) = mpsc::unbounded();
@@ -61,7 +69,7 @@ pub fn send(
         let result = run(
             &prompt,
             system_prompt.as_deref(),
-            resume.as_deref(),
+            resume.as_ref(),
             &project_dir,
             &tx,
         );
@@ -76,7 +84,7 @@ pub fn send(
 fn run(
     prompt: &str,
     system_prompt: Option<&str>,
-    resume: Option<&str>,
+    resume: Option<&Resume>,
     project_dir: &Path,
     tx: &mpsc::UnboundedSender<HarnessEvent>,
 ) -> Result<()> {
@@ -95,8 +103,11 @@ fn run(
         "--system-prompt-snapshot",
         "off",
     ]);
-    if let Some(session) = resume {
-        command.args(["--resume", session]);
+    if let Some(resume) = resume {
+        command.args(["--resume", &resume.session]);
+        if resume.fork {
+            command.arg("--fork-session");
+        }
     }
     if let Some(system_prompt) = system_prompt {
         command.args(["--append-system-prompt", system_prompt]);

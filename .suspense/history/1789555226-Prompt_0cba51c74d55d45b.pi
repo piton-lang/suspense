@@ -1,0 +1,17 @@
+from /scope/application import ApplicationScope
+from /scope/application/MainWindow import MainWindowScope
+
+anchor Prompt_0cba51c74d55d45b:
+    userPrompt:
+        Let's replace the @{MainWindowScope} plain header with a new Ribbon component.  You should use @{ApplicationScope.concept.shape.stack.components} Tab component with default styling, and you should have a Project tab, Code tab, Spec tab, Research tab, and an Application tab.  Open project goes in Project.  Nothing inside code for now.  Build Spec goes inside Spec tab, nothing inside research for now, and dark mode and settings go inside Application.
+
+    mode: combined
+
+    systemPrompt:
+        We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec.
+        
+        You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec.
+        
+        Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other.
+        
+        Then build the spec and execute the prompt directly on the code using a unified plan.

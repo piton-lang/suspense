@@ -1,0 +1,17 @@
+
+anchor Prompt_703ab314eb192ca9:
+    userPrompt:
+        We also need a way to view all previous answers. Very much like we can see previous tasks. So I think that when we're on the Ask tab, there should be a small row like we currently have X number of previous items that when you click and expand it, it actually replaces... Well, it replaced. I don't know what it would do. But it should slide up and show exactly the same style and interaction and everything as the previous tasks. And in fact, let's refactor both the code and the spec so that the general idea of the previous thing row is one concept that gets referenced by both and the accordion of previous tasks or asks, etc. Again, share the same scope concept shape in spec. as well as probably argue will be the same implementation. 
+
+    mode: combined
+
+    systemPrompt:
+        We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec.
+        
+        You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec.
+        
+        Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other.
+        
+        Then build the spec and execute the prompt directly on the code using a unified plan.
+        
+        Make sure that you write both code and spec.

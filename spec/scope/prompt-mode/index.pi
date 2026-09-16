@@ -1,6 +1,8 @@
 use /lib
 from ./chat-input import ChatInputScope
 from ./message-list import MessageList
+from /ui/components/history-list import HistoryListScope
+from /ui/components/scroll-column import ScrollColumnScope
 
 export scope PromptEditor:
     concept: {PromptEditorConcept}
@@ -32,13 +34,11 @@ shape PromptEditorShape:
     chatHistory: @{MessageList}
 
     previousTasks:
-        A small row along the top is always shown. It reads
-        "No previous tasks", "1 previous task", or "N previous tasks", and does
-        nothing until a task has been sent. Clicking it expands into a
-        scrollable accordion of every task, oldest first, each headed by its
-        status and the first line of its prompt. Opening one shows that task's
-        compiled prompt and output. While expanded, the row reads
-        "Back to the latest task".
+        Previous tasks are a @{HistoryListScope} along the top of the view,
+        listing every task sent. Its row counts every task but the latest,
+        which heads the view: "No previous tasks", "1 previous task", or
+        "N previous tasks". Expanded, the list takes the place of the latest
+        task and its output, and the row reads "Back to the latest task".
 
     header:
         The latest task heads the view whether or not the harness is working:
@@ -64,7 +64,8 @@ shape PromptEditorShape:
             with a chevron, expands to list each queued prompt in order, a line
             or two of each, with a button to cancel it. Each prompt in the list
             is numbered, with its number, text, and cancel button vertically
-            centred in its row, and the list scrolls once it gets tall. The
+            centred in its row, and the list scrolls once it gets tall, with a
+            @{ScrollColumnScope}. The
             same area holds the auto-send switch and the "Send next" button.
             The queue is shown only while it has anything in it.
 
@@ -92,6 +93,17 @@ shape PromptEditorShape:
             when it is sent, at which point it is saved to the prompt history
             like any other prompt.
 
+    buildingTheSpec:
+        Before a Code, Chain, or Spec prompt is sent, `piton build` runs in the
+        project, so the compiled spec the harness reads is up to date. It runs
+        when the prompt is actually sent, so a queued prompt builds when its
+        turn comes, not when it is queued. The task shows "Building" until the
+        build is over. A build that fails does not stop the prompt, since the
+        prompt may be the one to fix the spec: the task's output starts with
+        an error saying the build failed, so the compiled spec may be out of
+        date, with what the build reported. A question from the Ask tab is sent
+        without building.
+
     history:
         Every task sent is saved in the project's `.suspense/history` directory
         as its hidden anchor's source, named by the second it was sent and the
@@ -99,8 +111,14 @@ shape PromptEditorShape:
         in a `.json` file of the same name: the compiled userPrompt the harness
         received, each line the harness printed, and any error. Opening the
         project brings back every task in order, with its output replayed from
-        that record. A task with no record shows as "Not recorded". Questions
-        from the Ask tab are saved in `.suspense/asks` instead, so they never
-        come back as tasks.
+        that record. A task with no record shows as "Not recorded".
+
+        Every question asked from the Ask tab is logged the same way, but in
+        the project's `.suspense/asks` directory instead, so it never comes back
+        as a task: its hidden anchor's source, and beside it a `.json` record
+        of what came of it. The record is saved when the run is over, and also
+        when the question is closed or replaced while it runs, with as much as
+        the harness had done. A question that fails before it reaches the
+        harness is logged too, with the error in its record.
 
     chatInput: @{ChatInputScope}

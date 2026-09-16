@@ -1,0 +1,42 @@
+use /lib
+from /scope/project-directory import ProjectDirectoryScope
+from /ui/components/scroll-column import ScrollColumnScope
+
+export scope FileTreeScope:
+    concept: {FileTreeConcept}
+
+concept FileTreeConcept:
+    pitch:
+        A tree view of the files and folders in the current
+        @{ProjectDirectoryScope}, for finding a file and opening it.
+
+    shape: {FileTreeShape}
+
+shape FileTreeShape:
+    description:
+        Folders are listed before files, both by name, and a folder's contents
+        are shown when it is expanded. It scrolls with a @{ScrollColumnScope}.
+        Until a project is picked it reads "No project open".
+
+    refreshing:
+        The tree refreshes by itself when files or folders are added, removed,
+        or renamed on disk, keeping expanded folders open and the selection in
+        place.
+
+    gitStatus:
+        When the project is inside a git repository, the tree colors each name
+        by its git status: modified in amber, added in green, untracked in
+        teal, and conflicted in red, and ignored files and folders are dimmed,
+        as is everything inside an ignored folder. A renamed file counts as
+        modified. Unchanged names keep the default color. A folder takes the
+        color of the most pressing status among its contents, conflicted
+        first, then modified, added, and untracked, so a change stays visible
+        while its folder is collapsed. The colors suit both the light and the
+        dark theme. The highlighting refreshes by itself within a couple of
+        seconds when files change on disk or the repository's state changes,
+        such as after staging, committing, or switching branches. Outside a git
+        repository the tree is not highlighted.
+
+    opening:
+        Clicking a file opens it. Where it opens is up to whatever holds the
+        tree.

@@ -267,10 +267,15 @@ pub fn save(anchor: &HiddenAnchor, prompt: &str, project_dir: &Path) -> Result<P
     save_in(&history_dir(project_dir), anchor, prompt)
 }
 
+/// Where the project's questions are saved, apart from the history.
+pub fn asks_dir(project_dir: &Path) -> PathBuf {
+    project_dir.join(APP_DIR).join(ASKS_DIR)
+}
+
 /// Saves a question, as `anchor`'s source, where it can be compiled without
 /// joining the prompt history.
 pub fn save_ask(anchor: &HiddenAnchor, prompt: &str, project_dir: &Path) -> Result<PathBuf> {
-    save_in(&project_dir.join(APP_DIR).join(ASKS_DIR), anchor, prompt)
+    save_in(&asks_dir(project_dir), anchor, prompt)
 }
 
 fn save_in(dir: &Path, anchor: &HiddenAnchor, prompt: &str) -> Result<PathBuf> {
@@ -357,7 +362,8 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        HiddenAnchor, MODE_PREFIX, mode_of, Imports, PROMPT_INDENT, SYSTEM_PROMPT_LINE, compile, prose, system_prompt,
+        HiddenAnchor, Imports, MODE_PREFIX, PROMPT_INDENT, SYSTEM_PROMPT_LINE, compile, mode_of,
+        prose, system_prompt,
     };
     use crate::chat_input::SendMode;
     use crate::project_directory::CONFIG_FILE_NAME;
@@ -416,7 +422,9 @@ mod tests {
         anchor.mode = Some(SendMode::Both);
         let source = anchor.source(prompt);
         assert!(
-            source.contains(&format!("\n\n{MODE_PREFIX}combined\n\n{SYSTEM_PROMPT_LINE}\n")),
+            source.contains(&format!(
+                "\n\n{MODE_PREFIX}combined\n\n{SYSTEM_PROMPT_LINE}\n"
+            )),
             "{source}"
         );
         let (parsed, text) = HiddenAnchor::parse(&source).unwrap();
@@ -450,9 +458,16 @@ mod tests {
         }
         assert_eq!(mode_of("Something else."), None);
 
-        system_prompts::save(SendMode::Code, "Code in ${CODE_LOCATION} only.", &project_dir).unwrap();
+        system_prompts::save(
+            SendMode::Code,
+            "Code in ${CODE_LOCATION} only.",
+            &project_dir,
+        )
+        .unwrap();
         assert_eq!(
-            system_prompt(SendMode::Code, &project_dir).unwrap().as_deref(),
+            system_prompt(SendMode::Code, &project_dir)
+                .unwrap()
+                .as_deref(),
             Some("Code in ./src only.")
         );
         system_prompts::save(SendMode::Ask, "", &project_dir).unwrap();
