@@ -1162,6 +1162,7 @@ mod tests {
         );
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
+            crate::double_borders::assert_none(window);
             window.double_click(("folder-row", 0usize), cx)
         })
         .unwrap();

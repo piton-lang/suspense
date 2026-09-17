@@ -1,4 +1,5 @@
 use /lib
+use /ui
 from ../rescope import RescopeScope
 from ../project-directory import ProjectDirectoryScope
 from ../project/open-project import OpenProjectScope
@@ -20,8 +21,9 @@ from ../prompt-mode/sending import PromptSendingScope
 from ../running-activity import RunningActivityScope
 from ../user-preferences import UserPreferencesScope
 from /ui/components/minimizable-panel import MinimizablePanelScope
+from /ui/theme import ThemeScope
 
-export scope MainWindowScope:
+export ui-component MainWindowScope:
     concept: {MainWindowConcept}
 
 concept MainWindowConcept:
@@ -36,8 +38,8 @@ shape MainWindowShape:
         Maximized window.
 
     darkMode:
-        The whole window, including popups and notifications, supports a light
-        and a dark theme.
+        The whole window, including popups and notifications, is drawn in the
+        @{ThemeScope}, in its dark or its light mode.
 
         A "Dark mode" switch in the ribbon's Application tab toggles between the
         two.

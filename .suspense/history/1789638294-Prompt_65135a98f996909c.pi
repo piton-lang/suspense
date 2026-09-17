@@ -1,0 +1,29 @@
+from /ui/components/ribbon import RibbonScope
+
+anchor Prompt_65135a98f996909c:
+    userPrompt:
+        -
+            - @{RibbonScope}
+            - " should have a border at the top of the body that matches the tab's side border.  But the border should be far left to left tab edge, then right tab edge to far right; the tab and the body should connect without a line."
+
+    mode: combined
+
+    systemPrompt:
+        -
+            - "We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec."
+        -
+            - ""
+        -
+            - "You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec."
+        -
+            - ""
+        -
+            - "Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other."
+        -
+            - ""
+        -
+            - "Then build the spec and execute the prompt directly on the code using a unified plan."
+        -
+            - ""
+        -
+            - "Make sure that you write both code and spec."

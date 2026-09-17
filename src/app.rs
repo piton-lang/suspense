@@ -10,6 +10,7 @@ use crate::project_directory::ProjectDirectory;
 use crate::project_lsp::ProjectLsp;
 use crate::recent_projects;
 use crate::settings_window;
+use crate::theme;
 
 pub const APP_TITLE: &str = "Suspense";
 
@@ -22,6 +23,7 @@ pub fn run() {
 
     app.run(|cx| {
         gpui_kit::init(cx);
+        theme::init(cx);
         piton_syntax::init();
         ProjectDirectory::init(cx);
         ProjectLsp::init(cx);

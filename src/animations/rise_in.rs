@@ -9,9 +9,6 @@ use std::time::{Duration, Instant};
 
 use gpui_kit::*;
 
-/// How dark the window behind is, once in.
-const DIM: f32 = 0.4;
-
 /// How far below its place the surface starts, and sinks to.
 const DROP: Pixels = px(28.);
 
@@ -62,16 +59,19 @@ where
 }
 
 /// The dimming behind, filling whatever holds it, darkening in or fading away.
+/// How dark it gets, once in, is the theme's dimming for its mode.
 pub fn dimming(
     id: impl Into<SharedString>,
     run: usize,
     direction: Direction,
+    cx: &App,
 ) -> SpringAnimationElement<Div> {
     let id = format!("{}-dim-{direction:?}", id.into());
+    let dim = crate::theme::dimming(cx);
     div().absolute().inset_0().with_spring(
         ElementId::NamedInteger(id.into(), run as u64),
         spring(direction),
-        |dim, progress| dim.bg(black().opacity(DIM * progress.clamp(0., 1.))),
+        move |this, progress| this.bg(dim.opacity(dim.a * progress.clamp(0., 1.))),
     )
 }
 

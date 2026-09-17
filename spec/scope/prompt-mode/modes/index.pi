@@ -4,6 +4,7 @@ from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from /scope/prompt-mode/sending import PromptSendingScope
 from /scope/spec-build import SpecBuildScope
 from /ui/components/git-panel import GitPanelScope
+from /ui/theme import ThemeScope
 
 export scope PromptModesScope:
     concept: {PromptModesConcept}
@@ -28,7 +29,8 @@ shape PromptModesShape:
 
     colours:
         Whatever shows a mode, or something sent in it, takes the mode's
-        colour, readable in both light and dark mode. Chain is Code and Spec
+        colour, a tint of the @{ThemeScope}'s hue of that name, readable in
+        both light and dark mode. Chain is Code and Spec
         together, so wherever it shows Code and Spec as well, both are purple.
 
     tasks:

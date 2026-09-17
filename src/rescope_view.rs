@@ -739,6 +739,7 @@ pub mod tests {
         });
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
+            crate::double_borders::assert_none(window);
             assert!(window.try_find(("rescope-place", 1usize)).is_some());
             window.click("rescope-refactor", cx);
         })

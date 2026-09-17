@@ -6,9 +6,9 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use gpui_kit::component::ActiveTheme as _;
-use gpui_kit::component::ColorName;
 use gpui_kit::{App, Hsla};
+
+use crate::theme::{self, Hue};
 
 /// A file's or folder's git status, least pressing first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -21,17 +21,16 @@ pub enum Status {
 }
 
 impl Status {
-    /// The colour a name with this status is shown in, readable in both the
-    /// light and the dark theme.
+    /// The colour a name with this status is shown in: the theme's hue for
+    /// it, readable in both modes.
     pub fn color(self, cx: &App) -> Hsla {
-        let dark = cx.theme().is_dark();
-        let shade = |name: ColorName| name.scale(if dark { 400 } else { 700 });
+        let palette = theme::palette(cx);
         match self {
-            Status::Conflicted => shade(ColorName::Red),
-            Status::Modified => shade(ColorName::Amber),
-            Status::Added => shade(ColorName::Green),
-            Status::Untracked => shade(ColorName::Teal),
-            Status::Ignored => cx.theme().muted_foreground.opacity(0.6),
+            Status::Conflicted => Hue::Red.of(palette),
+            Status::Modified => Hue::Amber.of(palette),
+            Status::Added => Hue::Green.of(palette),
+            Status::Untracked => Hue::Cyan.of(palette),
+            Status::Ignored => theme::color(palette.text_tertiary),
         }
     }
 }

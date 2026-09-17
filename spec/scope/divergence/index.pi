@@ -1,4 +1,6 @@
 use /lib
+use /ui
+from /ui/theme import ThemeScope
 from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
 from /scope/harness-integration/one-off-run import OneOffAgentRunScope
 from /scope/project-data import ProjectDataScope
@@ -10,7 +12,7 @@ from /ui/components/ranked-selection-list import RankedSelectionListScope
 from /ui/components/scrollbar import ScrollbarScope
 from /ui/components/task-table import TaskTableScope
 
-export scope DivergenceScope:
+export ui-component DivergenceScope:
     concept: {DivergenceConcept}
 
 concept DivergenceConcept:
@@ -118,8 +120,9 @@ shape DivergenceShape:
             it. The header reads as the alignment, after a thin divider beside
             the panel's title, a little larger and bolder than the title: for a
             divergence score of 8%, "92% aligned". It is coloured by what the
-            score means: green while the score is below 20%, aligned; amber
-            from 20% up to 50%, drifting; and red from 50%, diverged. Beside
+            score means, in the @{ThemeScope}'s status colours: green while the
+            score is below 20%, aligned; amber from 20% up to 50%, drifting;
+            and red from 50%, diverged. Beside
             it, muted, how long ago the report was made. The header is the same
             height whether the analysis is running or its results are shown.
 

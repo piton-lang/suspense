@@ -1279,6 +1279,7 @@ mod tests {
             // From the chain, on to Spec.
             window.press("ctrl-tab", cx);
             window.render_frame(cx);
+            crate::double_borders::assert_none(window);
             window.click(("remove-attachment", 2usize), cx);
         })
         .unwrap();

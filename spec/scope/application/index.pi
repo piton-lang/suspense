@@ -3,6 +3,7 @@ from /scope/project-directory import ProjectDirectoryScope
 from ./MainWindow import MainWindowScope
 from /scope/project-data import ProjectDataScope
 from /scope/user-preferences import UserPreferencesScope
+from /ui/theme import ThemeScope
 
 export scope ApplicationScope:
     concept: {ApplicationConcept}
@@ -35,6 +36,8 @@ shape ApplicationShape:
     projectFiles: @{ProjectDataScope}
 
     userPreferences: @{UserPreferencesScope}
+
+    theme: @{ThemeScope}
 
     platforms:
         - windows

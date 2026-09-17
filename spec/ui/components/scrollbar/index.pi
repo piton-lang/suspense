@@ -1,6 +1,7 @@
 use /lib
+use /ui
 
-export scope ScrollbarScope:
+export ui-component ScrollbarScope:
     concept: {ScrollbarConcept}
 
 concept ScrollbarConcept:
@@ -19,19 +20,28 @@ shape ScrollbarShape:
     buttons:
         A square button at the top of the column scrolls the list up a little,
         and a square button at the bottom scrolls it down a little. The column
-        is as wide as the buttons are tall. Each button has a thin border, and
-        fills the column's full width, with nothing beside it.
+        is as wide as the buttons are tall. Each button fills the column's full
+        width, with nothing beside it, and is outlined by thin lines that are
+        never doubled: a button draws the line down its side against the list
+        and the line between it and the track, while its other sides are left
+        to whatever holds the column, which draws the lines around it. The
+        buttons have no background of their own: they are the colour of
+        whatever the column sits on, until hovered or pressed.
 
     track:
         Between the buttons, a track holds a thumb as tall as the share of the
         list in view, and never too short to grab, placed as far down the track
         as the list is scrolled. The thumb is a plain rectangle that fills the
-        column's full width, with no inset and no rounded corners. Its fill is
-        darker than the track it sits in, and it has a one pixel border of its
-        own that stands out from both, towards the theme's foreground colour:
-        in dark mode, brighter than the track. Where there is no thumb, the
-        track has a thin line down its side against the list, in the theme's
-        border colour. With nothing
+        column's full width, with no inset and no rounded corners. The track
+        has no background of its own either, so it is the colour of whatever
+        the column sits on. The thumb is flat, with no border or line of its
+        own, as scrollbar thumbs are in VS Code, JetBrains IDEs, and macOS: a
+        little darker than what it sits on, in both modes, as black laid over it
+        rather than a colour of its own, so it looks the same on any surface.
+        It darkens a step while the pointer is over it, and another step while
+        it is being dragged, and goes back as soon as neither is true.
+        Where there is no thumb, the track has a thin line down its side
+        against the list, in the theme's border colour. With nothing
         to scroll, the thumb fills the track. Pressing the thumb and dragging
         scrolls the list with it for as long as the button is held, even once
         the pointer leaves the column, and pressing the track elsewhere moves

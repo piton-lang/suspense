@@ -31,7 +31,23 @@ mod spec_tab;
 
 pub use application_tab::set_dark_mode;
 
-actions!(suspense, [ToggleRibbon]);
+actions!(
+    suspense,
+    [
+        ToggleRibbon,
+        ShowTab1,
+        ShowTab2,
+        ShowTab3,
+        ShowTab4,
+        ShowTab5
+    ]
+);
+
+/// The height of the row of tabs: gpui-kit's tab bar, less the line along its
+/// bottom and a pixel more, so that at a fractional display scale, where the
+/// clip falls between device pixels, no softened edge of that line shows as a
+/// faint seam between the tabs and the commands beneath them.
+const TAB_ROW_HEIGHT: Pixels = px(30.);
 
 /// The height of the commands beneath the tabs.
 const RIBBON_BODY_HEIGHT: Pixels = px(76.);
@@ -50,6 +66,12 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-f1", ToggleRibbon, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-f1", ToggleRibbon, None),
+        // Alt+1 to Alt+5 open the tabs in the order they are shown.
+        KeyBinding::new("alt-1", ShowTab1, None),
+        KeyBinding::new("alt-2", ShowTab2, None),
+        KeyBinding::new("alt-3", ShowTab3, None),
+        KeyBinding::new("alt-4", ShowTab4, None),
+        KeyBinding::new("alt-5", ShowTab5, None),
     ]);
 }
 
@@ -80,6 +102,16 @@ impl RibbonTab {
             RibbonTab::Spec => "Spec",
             RibbonTab::Research => "Research",
             RibbonTab::Application => "Application",
+        }
+    }
+
+    /// The chat input mode the tab works on, whose colour it takes while
+    /// open: Code and Spec have one; the others don't.
+    fn mode(self) -> Option<crate::chat_input::SendMode> {
+        match self {
+            RibbonTab::Code => Some(crate::chat_input::SendMode::Code),
+            RibbonTab::Spec => Some(crate::chat_input::SendMode::Spec),
+            RibbonTab::Project | RibbonTab::Research | RibbonTab::Application => None,
         }
     }
 
@@ -183,6 +215,19 @@ impl Ribbon {
             self.jobs_open = false;
             cx.notify();
         }
+    }
+
+    /// The project indicator, a solid block the full height of the row, with
+    /// no line between it and what follows. Lets UI tests find it; inert in
+    /// normal builds.
+    fn render_indicator(&self) -> impl IntoElement {
+        gpui_kit::TestSupportExt::test_support(
+            div()
+                .id("ribbon-prefix")
+                .flex()
+                .flex_none()
+                .child(self.project_indicator.clone()),
+        )
     }
 
     /// The spinner beside the project's name while anything is running, with
@@ -319,7 +364,20 @@ impl Ribbon {
         cx.notify();
     }
 
-    #[cfg(test)]
+    /// Opens the tab at `ix`, counting from 0 in the order the tabs are shown,
+    /// alone, as a click does, expanding the ribbon if it is collapsed. An
+    /// index past the last tab does nothing.
+    pub fn show_tab_at(&mut self, ix: usize, cx: &mut Context<Self>) {
+        let Some(&tab) = RibbonTab::ALL.get(ix) else {
+            return;
+        };
+        if self.collapsed {
+            self.toggle_collapsed(cx);
+        }
+        self.select_tab(tab, cx);
+    }
+
+    /// Opens `tab` alone.
     pub fn select_tab(&mut self, tab: RibbonTab, cx: &mut Context<Self>) {
         self.open_tabs = vec![tab];
         cx.notify();
@@ -395,11 +453,9 @@ impl Render for Ribbon {
 
         if self.collapsed {
             // No tabs: every primary command, small, in one row, a divider
-            // between one tab's commands and the next.
-            // Led by the project's name, as beside the tabs.
-            let mut row = vec![self.project_indicator.clone().into_any_element()];
-            row.extend(self.render_activity(cx));
-            row.push(div().w_px().h(px(16.)).bg(border).into_any_element());
+            // between one tab's commands and the next, led by the project's
+            // name, as beside the tabs.
+            let mut row = Vec::new();
             let mut last_tab = None;
             let primary = RibbonTab::ALL.into_iter().flat_map(|tab| {
                 tab.commands()
@@ -419,41 +475,111 @@ impl Render for Ribbon {
             return ribbon.child(gpui_kit::TestSupportExt::test_support(
                 h_flex()
                     .id("ribbon-primary")
-                    // Every control is vertically centred in the row.
-                    .items_center()
-                    .gap_2()
-                    .px_2()
-                    .py_1()
-                    .children(row)
-                    .child(div().flex_1())
-                    .child(collapse),
+                    .items_stretch()
+                    .child(self.render_indicator())
+                    .child(
+                        h_flex()
+                            .flex_1()
+                            // Every control is vertically centred in the row.
+                            .items_center()
+                            .gap_2()
+                            .px_2()
+                            .py_1()
+                            .children(self.render_activity(cx))
+                            .children(row)
+                            .child(div().flex_1())
+                            .child(collapse),
+                    ),
             ));
         }
 
         // Each tab handles its own clicks, so a double-click can be told
-        // apart: it collapses the ribbon.
+        // apart: it collapses the ribbon. The tabs are gpui-kit's own, with
+        // their default borders and spacing, in the theme's colours.
         let tabs = RibbonTab::ALL.map(|tab| {
-            Tab::new()
-                .label(tab.label())
-                .selected(self.open_tabs.contains(&tab))
+            let open = self.open_tabs.contains(&tab);
+            let tint = tab
+                .mode()
+                .map(|mode| crate::chat_input::mode_tint(mode, cx));
+            let tab_ui = match tint {
+                // A tab with a mode's colour shows it in its label while closed,
+                // the hue at full strength; open, its label is the tab's own
+                // colour. The label is the same text in the same place either
+                // way, only its colour changing, so it never moves.
+                Some(tint) => Tab::new().aria_label(tab.label()).child(
+                    div()
+                        .when(!open, |label| label.text_color(Hsla { a: 1., ..tint }))
+                        .child(tab.label()),
+                ),
+                None => Tab::new().label(tab.label()),
+            };
+            tab_ui
+                // An open Code or Spec tab is tinted as the chat input's tab of
+                // that mode is: the tint laid over it, taking no room, so the
+                // tab keeps its own size and its label stays put.
+                .when_some(tint.filter(|_| open), |this, tint| {
+                    this.child(div().absolute().inset_0().bg(tint))
+                })
+                .selected(open)
                 .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
                     this.tab_clicked(tab, event.click_count(), event.modifiers().secondary(), cx)
                 }))
         });
-        let tab_bar = TabBar::new("ribbon-tabs")
-            // The open project's name, left of the tabs.
-            .prefix(
-                h_flex()
-                    .h_full()
-                    .items_center()
-                    .pr_1()
-                    .border_r_1()
-                    .border_color(border)
-                    .child(self.project_indicator.clone())
-                    .children(self.render_activity(cx)),
+        // The open project's name, a block of its own left of the tab bar,
+        // with the activity spinner leading the bar after it. gpui-kit's tab
+        // bar draws a line along its bottom, which the tabs have none of here:
+        // the row is a pixel shorter than the bar, clipping that line away and
+        // leaving the tabs as they are.
+        //
+        // In its place, a line of the tabs' own border colour runs along the
+        // bottom of the row, across the indicator and the whole bar. It is
+        // drawn beneath the tabs, over a bar with no background of its own, so
+        // each open tab's background covers it: the line runs from the far
+        // left to an open tab's side border, and on from its other side
+        // border to the far right, and the open tab meets the commands
+        // beneath it with no line between them.
+        let tab_bar = h_flex()
+            .relative()
+            .w_full()
+            .h(TAB_ROW_HEIGHT)
+            .overflow_hidden()
+            .items_start()
+            .bg(cx.theme().tab_bar)
+            .child(
+                div()
+                    .flex()
+                    .h(TAB_ROW_HEIGHT)
+                    .child(self.render_indicator()),
             )
-            .children(tabs)
-            .suffix(div().px_2().child(collapse));
+            .child(gpui_kit::TestSupportExt::test_support(
+                div()
+                    .id("ribbon-tabs-line")
+                    .absolute()
+                    .left_0()
+                    .right_0()
+                    .bottom_0()
+                    .h(px(1.))
+                    .bg(border),
+            ))
+            .child(
+                TabBar::new("ribbon-tabs")
+                    .flex_1()
+                    .bg(cx.theme().transparent)
+                    .when_some(self.render_activity(cx), |bar, activity| {
+                        bar.prefix(h_flex().h_full().items_center().px_1().child(activity))
+                    })
+                    .children(tabs)
+                    .suffix(div().px_2().child(collapse)),
+            );
+
+        // With a Code or Spec tab open alone, the body is tinted as the chat
+        // input's is for that mode.
+        let body_tint = match self.open_tabs.as_slice() {
+            [tab] => tab
+                .mode()
+                .map(|mode| crate::chat_input::mode_tint(mode, cx)),
+            _ => None,
+        };
 
         // Each open tab's commands, gathered into their groups in order.
         let mut row = Vec::new();
@@ -506,6 +632,11 @@ impl Render for Ribbon {
                     // Every tab is as tall, so the window beneath doesn't jump
                     // when switching tabs.
                     .h(RIBBON_BODY_HEIGHT)
+                    // With the Code tab open alone, its body is tinted as the
+                    // chat input's body is for its mode.
+                    .when_some(body_tint, |this, tint| {
+                        this.bg(cx.theme().background.blend(tint))
+                    })
                     .children(row),
             ))
     }

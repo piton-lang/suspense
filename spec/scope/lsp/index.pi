@@ -20,12 +20,25 @@ shape LSPShape:
         One `piton lsp` is started as a child process in the selected
         ${ProjectDirectoryScope}, speaking JSON-RPC over stdio, shared by the
         chat input and the editor, and restarted whenever the project
-        directory changes. The client sends `initialize` and `initialized`,
+        directory changes. That includes the project opened as the application
+        starts, which gets its server straight away like any other. The client sends `initialize` and `initialized`,
         answers any request from the server with an empty result, and gives up
         on a request after 5 seconds. Diagnostics the server publishes are
         kept per file and passed on to whatever shows that file. If the server
         cannot be started, the input and the editor still work, without
         language support.
+
+    stopping:
+        A server that stops on its own while its project is still open, such
+        as when it crashes, is restarted a second later, and the chat input and
+        the editor take up the new one as they would after the project changed,
+        opening their documents in it again, so completions and language
+        support come back by themselves. Until then, they work without language
+        support. What the server wrote to its error output before it stopped is
+        logged, with how it stopped. A server that stops again within 10
+        seconds of starting counts towards a run of quick failures: after 3 in
+        a row it isn't restarted again, and language support stays off until
+        the project is opened again.
 
     document:
         The server never sees the input's text directly. It sees the hidden

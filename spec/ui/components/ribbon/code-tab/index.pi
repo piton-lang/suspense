@@ -1,6 +1,9 @@
 use /lib
+use /ui
+from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/prompt-mode/modes import PromptModesScope
 
-export scope RibbonCodeTabScope:
+export ui-component RibbonCodeTabScope:
     concept: {RibbonCodeTabConcept}
 
 concept RibbonCodeTabConcept:
@@ -13,6 +16,17 @@ shape RibbonCodeTabShape:
     description:
         The Code tab of the ribbon. With nothing in it, it reads
         "No commands yet".
+
+    colour:
+        While closed, the tab's label is in Code's colour, at full strength,
+        in the same place as ever. While open, the label is the tab's own colour,
+        and the tab and its body are tinted with Code's colour, of the
+        @{PromptModesScope}, just as the @{ChatInputScope}'s Code tab and the
+        body beneath it are: the same tint laid over the tab, and over the
+        command area while Code is the only tab open. The tint takes no room,
+        so the tab keeps the size and place it has closed, and its label never
+        moves. Open beside other tabs, the tab is tinted and the command area,
+        shared with them, is not.
 
     groups:
         It has no groups and no commands yet.

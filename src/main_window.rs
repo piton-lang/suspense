@@ -62,6 +62,7 @@ pub fn bind_keys(cx: &mut App) {
     crate::diff_view::bind_keys(cx);
     crate::chat_input::bind_keys(cx);
     crate::fs_browser::bind_keys(cx);
+    crate::project_indicator::bind_keys(cx);
 }
 
 pub struct MainWindow {
@@ -510,6 +511,15 @@ impl MainWindow {
         cx.notify();
     }
 
+    /// Opens the ribbon's tab at `ix`, in the order shown, from Alt+1 on. The
+    /// ribbon is beneath the inset panel while it is open.
+    fn show_ribbon_tab(&mut self, ix: usize, cx: &mut Context<Self>) {
+        if !self.panel_open() {
+            self.ribbon
+                .update(cx, |ribbon, cx| ribbon.show_tab_at(ix, cx));
+        }
+    }
+
     /// Closes the Rescope panel, stopping any search still running.
     fn close_rescope(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let showing = self.showing_rescope();
@@ -906,6 +916,16 @@ impl Render for MainWindow {
                 this.prompt_mode
                     .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx))
             }))
+            .on_action(cx.listener(
+                |this, _: &crate::project_indicator::ToggleProjectList, window, cx| {
+                    // Like the palette, it acts on what is beneath the inset
+                    // panel.
+                    if !this.panel_open() {
+                        let indicator = this.ribbon.read(cx).project_indicator().clone();
+                        indicator.update(cx, |indicator, cx| indicator.toggle(window, cx));
+                    }
+                },
+            ))
             .on_action(cx.listener(|this, _: &TogglePalette, window, cx| {
                 // The palette acts on what is beneath the inset panel.
                 if !this.panel_open() {
@@ -934,6 +954,11 @@ impl Render for MainWindow {
             .on_action(cx.listener(|this, _: &ViewDivergenceReports, window, cx| {
                 this.open_divergence(Opening::ViewReports, window, cx)
             }))
+            .on_action(cx.listener(|this, _: &ribbon::ShowTab1, _, cx| this.show_ribbon_tab(0, cx)))
+            .on_action(cx.listener(|this, _: &ribbon::ShowTab2, _, cx| this.show_ribbon_tab(1, cx)))
+            .on_action(cx.listener(|this, _: &ribbon::ShowTab3, _, cx| this.show_ribbon_tab(2, cx)))
+            .on_action(cx.listener(|this, _: &ribbon::ShowTab4, _, cx| this.show_ribbon_tab(3, cx)))
+            .on_action(cx.listener(|this, _: &ribbon::ShowTab5, _, cx| this.show_ribbon_tab(4, cx)))
             .on_action(cx.listener(|this, _: &ribbon::ToggleRibbon, _, cx| {
                 // The ribbon is beneath the inset panel while it is open.
                 if !this.panel_open() {
@@ -1030,6 +1055,400 @@ mod tests {
             window.try_find("notification").is_some()
         })
         .await;
+    }
+
+    /// In the theme, dark and light, the ribbon's tabs are drawn as gpui-kit
+    /// draws them: the Project tab, open when the window opens, shows as
+    /// selected straight after the project indicator, which sits on a text
+    /// input's background, the theme's well, with no border of its own. gpui-kit's
+    /// own line along the bottom of the tabs is clipped away; the ribbon's line
+    /// in its place runs beneath the indicator and closed tabs, but not beneath
+    /// the open one.
+    #[gpui_kit::test]
+    async fn ribbon_tabs_are_drawn_beside_the_project_indicator(cx: &mut TestAppContext) {
+        use gpui_kit::component::{Theme, ThemeMode};
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            Root::new(view, window, cx)
+        });
+        let handle = window.into();
+        for mode in [ThemeMode::Dark, ThemeMode::Light] {
+            cx.update(|cx| Theme::change(mode, None, cx));
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let scale = window.scale_factor();
+                let prefix = window.find("ribbon-prefix").bounds();
+                let (left, right) = (
+                    prefix.left().as_f32() * scale,
+                    prefix.right().as_f32() * scale,
+                );
+                let top = prefix.top().as_f32() * scale;
+                let quads = window.painted_quads();
+                let theme = Theme::global(cx);
+                let area = crate::theme::color(crate::theme::palette(cx).well);
+                let background = quads.iter().find(|quad| {
+                    (quad.bounds.origin.x.0 - left).abs() < 1.
+                        && (quad.bounds.size.width.0 - (right - left)).abs() < 1.
+                        && quad.background.as_solid() == Some(area)
+                });
+                let background = background.unwrap_or_else(|| {
+                    panic!("{mode:?}: the indicator isn't on a text input's background")
+                });
+                assert!(
+                    background.border_widths.right.0 == 0. && background.border_widths.left.0 == 0.,
+                    "{mode:?}: the indicator's area has a border"
+                );
+                let project_tab = quads.iter().find(|quad| {
+                    (quad.bounds.origin.x.0 - right).abs() < 1.
+                        && (quad.bounds.origin.y.0 - top).abs() < 4.
+                        && quad.bounds.size.width.0 > 40. * scale
+                        && quad.background.as_solid() == Some(theme.tab_active)
+                });
+                assert!(
+                    project_tab.is_some(),
+                    "{mode:?}: no selected tab drawn right after the indicator"
+                );
+                // The line along the bottom of the row shows beneath the
+                // indicator and beyond the tabs, but the open Project tab covers
+                // it, meeting the commands with no line between them.
+                let line = window.find("ribbon-tabs-line").bounds();
+                let line_y = (line.top().as_f32() + 0.5) * scale;
+                let top_at = |x: f32| {
+                    let mut covering: Vec<_> = quads
+                        .iter()
+                        .filter(|q| {
+                            let m = &q.content_mask.bounds;
+                            q.bounds.origin.x.0 <= x
+                                && q.bounds.origin.x.0 + q.bounds.size.width.0 > x
+                                && q.bounds.origin.y.0 <= line_y
+                                && q.bounds.origin.y.0 + q.bounds.size.height.0 > line_y
+                                && m.origin.x.0 <= x
+                                && m.origin.x.0 + m.size.width.0 > x
+                                && m.origin.y.0 <= line_y
+                                && m.origin.y.0 + m.size.height.0 > line_y
+                                && q.background.as_solid().is_some_and(|c| c.a > 0.)
+                        })
+                        .collect();
+                    covering.sort_by_key(|q| q.order);
+                    covering.last().and_then(|q| q.background.as_solid())
+                };
+                let project_tab = project_tab.unwrap();
+                let tab_middle = project_tab.bounds.origin.x.0 + project_tab.bounds.size.width.0 / 2.;
+                assert_eq!(
+                    top_at(tab_middle),
+                    Some(theme.tab_active),
+                    "{mode:?}: a line shows beneath the open tab"
+                );
+                assert_eq!(
+                    top_at((prefix.left().as_f32() + 4.) * scale),
+                    Some(theme.border),
+                    "{mode:?}: no line beneath the indicator"
+                );
+                let far_right = (line.right().as_f32() - 60.) * scale;
+                assert_eq!(
+                    top_at(far_right),
+                    Some(theme.border),
+                    "{mode:?}: no line at the far right"
+                );
+                // No line runs along the bottom of the tabs, not even faintly:
+                // whatever border gpui-kit's bar draws there is clipped out of
+                // sight with room to spare.
+                let bottom_line = quads.iter().find(|quad| {
+                    let bottom = quad.bounds.origin.y.0 + quad.bounds.size.height.0;
+                    let width = quad.border_widths.bottom.0;
+                    let mask = &quad.content_mask.bounds;
+                    width > 0.
+                        && quad.border_color.a > 0.
+                        && quad.bounds.origin.y.0 < 4.
+                        && quad.bounds.size.width.0 > 1000.
+                        && quad.bounds.size.height.0 < 80. * scale / 2.
+                        // At least a whole device pixel below what shows,
+                        // so no softened edge of it does either.
+                        && bottom - width < mask.origin.y.0 + mask.size.height.0 + 1.
+                });
+                assert!(
+                    bottom_line.is_none(),
+                    "{mode:?}: a line runs along the bottom of the tabs: {bottom_line:?}"
+                );
+            })
+            .unwrap();
+        }
+    }
+
+    /// The Code and Spec tabs, each open alone, and their body are tinted as
+    /// the chat input's tab and body of that mode are, in dark and light mode,
+    /// and the tint takes no room: the tab after it, open beside it, is where
+    /// it is beside the same tab untinted.
+    #[gpui_kit::test]
+    async fn ribbon_mode_tabs_are_tinted_like_the_chat_inputs(cx: &mut TestAppContext) {
+        use crate::ribbon::RibbonTab;
+        use gpui_kit::component::{Theme, ThemeMode};
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let handle = window.into();
+        let ribbon = main.unwrap().read_with(cx, |main, _| main.ribbon.clone());
+        // The open tabs, each as its left edge and width, from the quads
+        // painted.
+        let open_tabs = |window: &mut gpui_kit::Window| {
+            let mut tabs: Vec<(i32, i32)> = window
+                .painted_quads()
+                .into_iter()
+                .filter(|q| {
+                    q.bounds.origin.y.0 < 4.
+                        && (55. ..70.).contains(&q.bounds.size.height.0)
+                        && (60. ..400.).contains(&q.bounds.size.width.0)
+                        && q.border_widths.left.0 > 0.
+                })
+                .map(|q| (q.bounds.origin.x.0 as i32, q.bounds.size.width.0 as i32))
+                .collect();
+            tabs.sort();
+            tabs.dedup();
+            tabs
+        };
+        for (tab, mode_of_tab, after) in [
+            (
+                RibbonTab::Code,
+                crate::chat_input::SendMode::Code,
+                RibbonTab::Spec,
+            ),
+            (
+                RibbonTab::Spec,
+                crate::chat_input::SendMode::Spec,
+                RibbonTab::Research,
+            ),
+        ] {
+            for mode in [ThemeMode::Dark, ThemeMode::Light] {
+                cx.update(|cx| Theme::change(mode, None, cx));
+                let open = |tabs: &[RibbonTab], cx: &mut TestAppContext| {
+                    ribbon.update(cx, |r, cx| {
+                        r.tab_clicked(tabs[0], 1, false, cx);
+                        for &tab in &tabs[1..] {
+                            r.tab_clicked(tab, 1, true, cx);
+                        }
+                    });
+                    cx.run_until_parked();
+                    cx.update_window(handle, |_, window, cx| {
+                        window.render_frame(cx);
+                        open_tabs(window)
+                    })
+                    .unwrap()
+                };
+                let beside_plain = open(&[RibbonTab::Project, after], cx);
+                let beside_tinted = open(&[tab, after], cx);
+                assert_eq!(
+                    beside_plain.last(),
+                    beside_tinted.last(),
+                    "{tab:?} {mode:?}: {after:?} moved beside the tinted tab"
+                );
+
+                open(&[tab], cx);
+                cx.update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    let tint = crate::chat_input::mode_tint(mode_of_tab, cx);
+                    let body = Theme::global(cx).background.blend(tint);
+                    let quads = window.painted_quads();
+                    assert!(
+                        quads
+                            .iter()
+                            .any(|q| q.bounds.origin.y.0 < 4.
+                                && q.background.as_solid() == Some(tint)),
+                        "{tab:?} {mode:?}: the tab isn't tinted"
+                    );
+                    assert!(
+                        quads.iter().any(|q| q.background.as_solid() == Some(body)
+                            && q.bounds.size.width.0 > 1000.),
+                        "{tab:?} {mode:?}: the tab's body isn't tinted"
+                    );
+                })
+                .unwrap();
+            }
+        }
+    }
+
+    /// Ctrl+` (Cmd+` on macOS) opens the recent projects flush beneath the
+    /// project indicator, square, in its dark colour, over the dimmed window,
+    /// its rows reaching its edges; typing filters them fuzzily, Down and Enter
+    /// open the one highlighted, and Escape closes the list.
+    #[gpui_kit::test]
+    async fn project_list_opens_from_the_keyboard_and_filters(cx: &mut TestAppContext) {
+        use gpui_kit::component::{Theme, ThemeMode};
+        let base =
+            std::env::temp_dir().join(format!("suspense-project-list-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        for name in ["alpha", "beta-tools", "gamma"] {
+            std::fs::create_dir_all(base.join(name)).unwrap();
+            std::fs::write(base.join(name).join("piton.config.pi"), "").unwrap();
+        }
+        let file = base.join("recent.json");
+        let mut recent = crate::recent_projects::RecentProjects::default();
+        for name in ["alpha", "beta-tools", "gamma"] {
+            recent.note(&base.join(name));
+        }
+        recent.save(&file).unwrap();
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            Theme::change(ThemeMode::Dark, None, cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+            let last = crate::recent_projects::init(Some(file.clone()), cx);
+            ProjectDirectory::set(last.unwrap(), cx);
+        });
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            Root::new(view, window, cx)
+        });
+        let handle = window.into();
+        #[cfg(target_os = "macos")]
+        let toggle = "cmd-`";
+        #[cfg(not(target_os = "macos"))]
+        let toggle = "ctrl-`";
+
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.press(toggle, cx);
+            window.render_frame(cx);
+            window.render_frame(cx);
+            let indicator = window.find("ribbon-project-name").bounds();
+            let list = window.find("recent-projects").bounds();
+            assert!(
+                (list.top() - indicator.bottom()).abs() < gpui_kit::px(1.)
+                    && (list.left() - indicator.left()).abs() < gpui_kit::px(1.),
+                "the list {list:?} isn't flush beneath the indicator {indicator:?}"
+            );
+            let scale = window.scale_factor();
+            let quads = window.painted_quads();
+            let well = crate::theme::color(crate::theme::palette(cx).well);
+            let list_quad = quads
+                .iter()
+                .find(|q| {
+                    (q.bounds.origin.y.0 - list.top().as_f32() * scale).abs() < 1.
+                        && (q.bounds.size.width.0 - list.size.width.as_f32() * scale).abs() < 1.
+                        && q.background.as_solid() == Some(well)
+                })
+                .expect("the list isn't in the indicator's colour");
+            assert_eq!(list_quad.corner_radii.top_left.0, 0., "the list is rounded");
+            assert_eq!(
+                list_quad.corner_radii.bottom_right.0, 0.,
+                "the list is rounded"
+            );
+            let dim = crate::theme::dimming(cx);
+            assert!(
+                quads.iter().any(|q| q.background.as_solid() == Some(dim)
+                    && q.bounds.size.width.0 >= window.viewport_size().width.as_f32() * scale - 1.),
+                "the window isn't dimmed"
+            );
+            for ix in 0..3usize {
+                let row = window.find(("recent-project", ix)).bounds();
+                assert!(
+                    (row.left() - list.left()).abs() <= gpui_kit::px(1.)
+                        && (row.right() - list.right()).abs() <= gpui_kit::px(1.),
+                    "row {ix} {row:?} doesn't reach the list's edges {list:?}"
+                );
+            }
+
+            window.input("bta", cx);
+            window.render_frame(cx);
+            assert!(window.try_find(("recent-project", 0usize)).is_some());
+            assert!(
+                window.try_find(("recent-project", 1usize)).is_none(),
+                "the filter left more than beta-tools"
+            );
+            window.press("escape", cx);
+            window.render_frame(cx);
+            assert!(
+                window.try_find("recent-projects").is_none(),
+                "Escape left it open"
+            );
+
+            // Newest first: gamma, beta-tools, alpha. Down twice to alpha.
+            window.press(toggle, cx);
+            window.render_frame(cx);
+            window.press("down", cx);
+            window.press("down", cx);
+            window.press("enter", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(
+            cx.update(|cx| ProjectDirectory::get(cx)),
+            Some(base.join("alpha"))
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(
+                window.try_find("recent-projects").is_none(),
+                "picking left it open"
+            );
+        })
+        .unwrap();
+    }
+
+    /// Alt+1 to Alt+5 open the ribbon's tabs in the order they are shown,
+    /// each alone, expanding a collapsed ribbon; Alt+6 does nothing.
+    #[gpui_kit::test]
+    async fn alt_number_opens_the_ribbon_tabs_in_order(cx: &mut TestAppContext) {
+        use crate::ribbon::RibbonTab;
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let handle = window.into();
+        let ribbon = main.unwrap().read_with(cx, |main, _| main.ribbon.clone());
+        let press = |key: &str, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.press(key, cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        };
+        for (ix, tab) in RibbonTab::ALL.into_iter().enumerate() {
+            press(&format!("alt-{}", ix + 1), cx);
+            assert_eq!(ribbon.read_with(cx, |r, _| r.open_tabs().to_vec()), [tab]);
+        }
+        press("alt-6", cx);
+        assert_eq!(
+            ribbon.read_with(cx, |r, _| r.open_tabs().to_vec()),
+            [RibbonTab::Application]
+        );
+        ribbon.update(cx, |r, cx| {
+            if !r.is_collapsed() {
+                r.toggle_collapsed(cx)
+            }
+        });
+        press("alt-3", cx);
+        ribbon.read_with(cx, |r, _| {
+            assert!(!r.is_collapsed(), "the ribbon stayed collapsed");
+            assert_eq!(r.open_tabs(), [RibbonTab::Spec]);
+        });
     }
 
     /// Clicking a file in the project tree opens it beside the chat history,
@@ -1145,6 +1564,7 @@ mod tests {
             let found = cx
                 .update_window(handle, |_, window, cx| {
                     window.render_frame(cx);
+                    crate::double_borders::assert_none(window);
                     window
                         .try_find(("pane-slide-out", 1usize))
                         .map(|pane| pane.bounds())
@@ -1373,6 +1793,7 @@ mod tests {
         assert!(main.read_with(cx, |main, _| !main.panel_open()));
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
+            crate::double_borders::assert_none(window);
             assert!(window.try_find("file-view").is_some());
         })
         .unwrap();
@@ -1534,6 +1955,7 @@ mod tests {
             window.render_frame(cx);
             window.click("ribbon-project-name", cx);
             window.render_frame(cx);
+            crate::double_borders::assert_none(window);
             window.click("open-project-from-recent", cx);
         })
         .unwrap();
@@ -1618,6 +2040,7 @@ mod tests {
         prompt_mode.update(cx, |prompt_mode, _| prompt_mode.set_working(true));
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
+            crate::double_borders::assert_none(window);
             window.click("rescope-refactor", cx);
         })
         .unwrap();
@@ -1735,6 +2158,7 @@ mod tests {
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             window.render_frame(cx);
+            crate::double_borders::assert_none(window);
         })
         .unwrap();
         assert!(main.read_with(cx, |main, _| !main.panel_motion.is_leaving()));
@@ -1900,6 +2324,7 @@ mod tests {
             // The second template: scope, concept, and shape.
             window.click(("new-project-template", 1usize), cx);
             window.render_frame(cx);
+            crate::double_borders::assert_none(window);
             window.click("new-project-create", cx);
         })
         .unwrap();
@@ -2098,6 +2523,7 @@ mod tests {
         }
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
+            crate::double_borders::assert_none(window);
             assert!(
                 window.try_find("ribbon-activity").is_none(),
                 "the spinner stayed"
@@ -2419,6 +2845,7 @@ mod tests {
 
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
+            crate::double_borders::assert_none(window);
             let sidebar = window.find("project-tree").bounds();
             let send = window.find("send").bounds();
             assert!(

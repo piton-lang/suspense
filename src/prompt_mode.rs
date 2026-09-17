@@ -50,9 +50,7 @@ use gpui_kit::component::switch::Switch;
 use gpui_kit::component::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::text::{TextView, TextViewStyle};
-use gpui_kit::component::{
-    ActiveTheme as _, ColorName, Icon, Sizable as _, StyledExt as _, h_flex, v_flex,
-};
+use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::component::{Disableable as _, WindowExt as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -75,6 +73,7 @@ use crate::scrollbar::{self, Scroll, SetLock};
 use crate::selection_popover::{SelectionAction, selection_popover};
 use crate::shell_format;
 use crate::system_prompts;
+use crate::theme::Hue;
 
 /// The share of the width an opened file takes from the task view.
 const FILE_SHARE: f32 = 0.5;
@@ -131,7 +130,6 @@ const ASK_SPRING: SpringConfig = SpringConfig::new(400., 40., 1.);
 
 /// How dark the message list gets behind an open question, and how quickly
 /// it fades there and back: slower than the slide, so the dimming is seen.
-const ASK_DIM: f32 = 0.45;
 const ASK_DIM_SPRING: SpringConfig = SpringConfig::new(120., 22., 1.);
 
 /// Where a previous answer's task index starts in its element ids, apart
@@ -208,18 +206,20 @@ impl TaskStatus {
         matches!(self, Self::Building | Self::Compiling | Self::Running)
     }
 
-    /// A label in the status's colour, with the status spelled out. Uses the
-    /// palette colours, like the output badges, as the theme's solid status
-    /// colours are unreadable in dark mode.
-    fn tag(self) -> Tag {
-        Tag::color(match self {
-            Self::Building => ColorName::Blue,
-            Self::Compiling => ColorName::Cyan,
-            Self::Running => ColorName::Yellow,
-            Self::Done => ColorName::Green,
-            Self::Failed => ColorName::Red,
-            Self::Unrecorded => ColorName::Gray,
-        })
+    /// A label in the theme's hue for the status, with the status spelled
+    /// out.
+    fn tag(self, cx: &App) -> Tag {
+        crate::theme::tag(
+            match self {
+                Self::Building => Hue::Blue,
+                Self::Compiling => Hue::Cyan,
+                Self::Running => Hue::Amber,
+                Self::Done => Hue::Green,
+                Self::Failed => Hue::Red,
+                Self::Unrecorded => Hue::Grey,
+            },
+            cx,
+        )
         .text_sm()
         .child(self.label())
     }
@@ -418,14 +418,14 @@ impl ToolKind {
         }
     }
 
-    fn color(self) -> ColorName {
+    fn hue(self) -> Hue {
         match self {
-            Self::Read => ColorName::Sky,
-            Self::Edit => ColorName::Amber,
-            Self::Command => ColorName::Violet,
-            Self::Web => ColorName::Teal,
-            Self::Agent => ColorName::Pink,
-            Self::Other => ColorName::Gray,
+            Self::Read => Hue::Blue,
+            Self::Edit => Hue::Amber,
+            Self::Command => Hue::Purple,
+            Self::Web => Hue::Cyan,
+            Self::Agent => Hue::Green,
+            Self::Other => Hue::Grey,
         }
     }
 }
@@ -444,12 +444,12 @@ enum OutputRow<'a> {
 impl OutputRow<'_> {
     /// The kind of the row, as a badge in its own colour, or a skeleton while
     /// the kind is not yet known.
-    fn badge(&self) -> AnyElement {
+    fn badge(&self, cx: &App) -> AnyElement {
         let (tag, icon, label) = match self {
             Self::Text(_) => (Tag::secondary(), IconName::MessageSquare, "Reply"),
             Self::Tool(call) => {
                 let kind = ToolKind::of(&call.name);
-                (Tag::color(kind.color()), kind.icon(), kind.label())
+                (crate::theme::tag(kind.hue(), cx), kind.icon(), kind.label())
             }
             Self::Error(_) => (Tag::danger(), IconName::TriangleAlert, "Error"),
             Self::Pending => {
@@ -2188,7 +2188,10 @@ impl PromptMode {
             .asks
             .iter()
             .filter(|ask| expanded != Some(ask.id))
-            .map(|ask| self.render_ask_card(ask, false, cx))
+            .enumerate()
+            // The stack's own top border, or the previous answers row's
+            // bottom one, is the line above the first.
+            .map(|(ix, ask)| self.render_ask_card(ask, false, ix > 0, cx))
             .collect();
         if history_row.is_none() && cards.is_empty() {
             self.stack_rows_height.set(px(0.));
@@ -2198,6 +2201,9 @@ impl PromptMode {
         // The question rows are measured, so the previous answers can slide up
         // from on top of them.
         let rows_height = self.stack_rows_height.clone();
+        // Its top line shows once it holds more than nothing, so the line never
+        // lies on the chat input's own as the first question starts to rise.
+        let has_content = history_row.is_some() || rows_height.get() > px(0.5);
         let rows = v_flex()
             .on_prepaint(move |bounds, _, _| rows_height.set(bounds.size.height))
             .children(cards);
@@ -2205,7 +2211,7 @@ impl PromptMode {
             .id("ask")
             .flex_none()
             .bg(theme.tab_bar)
-            .border_t_1()
+            .when(has_content, |stack| stack.border_t_1())
             .border_color(theme.border)
             .children(history_row)
             .child(rows);
@@ -2267,7 +2273,8 @@ impl PromptMode {
         }
         let card = self
             .expanded()
-            .map(|ask| self.render_ask_card(ask, true, cx));
+            // The drawer's top border is the line above it.
+            .map(|ask| self.render_ask_card(ask, true, false, cx));
         let theme = cx.theme();
         let ring = theme.ring;
         let handle = div()
@@ -2384,7 +2391,15 @@ impl PromptMode {
         ))
     }
 
-    fn render_ask_card(&self, ask: &Ask, expanded: bool, cx: &mut Context<Self>) -> AnyElement {
+    /// With `line_above`, the card draws the line between it and the card
+    /// above it; otherwise whatever holds it draws that line.
+    fn render_ask_card(
+        &self,
+        ask: &Ask,
+        expanded: bool,
+        line_above: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let id = ask.id;
         let task = &ask.task;
         let done = task.reply.is_done();
@@ -2499,7 +2514,6 @@ impl PromptMode {
             // unrolling down onto it.
             .justify_end()
             .overflow_hidden()
-            .border_t_1()
             .border_color(cx.theme().border)
             .when(expanded, |card| {
                 let filled = self.drawer_fill_height.clone();
@@ -2512,8 +2526,13 @@ impl PromptMode {
             let height = SpringAnimation::new(ASK_SPRING)
                 .to(ASK_ROW_HEIGHT)
                 .from(px(0.));
+            // Its line appears once there is more to it than the line, so the
+            // line never lies on the chat input's own as it starts to rise.
             return card
-                .with_spring(("ask-slide", id), height, |this, height| this.max_h(height))
+                .with_spring(("ask-slide", id), height, move |this, height| {
+                    this.max_h(height)
+                        .when(line_above && height > px(1.5), |this| this.border_t_1())
+                })
                 .into_any_element();
         }
         // Open, it fills the drawer: sliding there from wherever its row is,
@@ -2531,10 +2550,11 @@ impl PromptMode {
     /// answer drawer is open over it, drawing the eye to the drawer, and back
     /// out once it closes. The stack of question rows pushes the list rather
     /// than covering it, so leaves it undimmed.
-    fn render_ask_dim(&self) -> AnyElement {
+    fn render_ask_dim(&self, cx: &App) -> AnyElement {
+        let dim = crate::theme::dimming(cx);
         let shade = SpringAnimation::new(ASK_DIM_SPRING)
             .to(if self.expanded().is_some() || self.ask_history_shown() {
-                ASK_DIM
+                dim.a
             } else {
                 0.
             })
@@ -3117,7 +3137,7 @@ impl Render for PromptMode {
                     .child(body)
                     .children(self.render_ask_stack(cx)),
             )
-            .child(self.render_ask_dim())
+            .child(self.render_ask_dim(cx))
             .children(self.render_ask_drawer(cx))
             .children(self.render_selection_popover(cx));
         // Lets UI tests find the space above the chat input; inert in normal
@@ -3322,7 +3342,7 @@ fn task_title(ix: usize, task: &PromptTask, cx: &App) -> Div {
     let status = div()
         .id(("task-status", ix))
         .flex_none()
-        .child(task.status.tag());
+        .child(task.status.tag(cx));
     h_flex()
         .min_w_0()
         .gap_2()
@@ -3523,7 +3543,7 @@ fn output_row(
                 .w(KIND_WIDTH)
                 .flex_none()
                 .items_start()
-                .child(row.badge()),
+                .child(row.badge(cx)),
         )
         .child(
             TableCell::new()
@@ -3805,7 +3825,7 @@ fn latest_row(id: usize, reply: &Reply, cx: &App) -> AnyElement {
                         TableCell::new()
                             .w(KIND_WIDTH)
                             .flex_none()
-                            .child(row.badge()),
+                            .child(row.badge(cx)),
                     )
                     .child(
                         TableCell::new()
@@ -4256,6 +4276,7 @@ mod tests {
 
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
+            crate::double_borders::assert_none(window);
             let viewport = window.viewport_size();
             let header = window.find("task-header").bounds();
             for id in ["task-status", "prompt-anchor", "compiled-prompt"] {
@@ -4681,6 +4702,7 @@ mod tests {
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             window.render_frame(cx);
+            crate::double_borders::assert_none(window);
             let list = window.find("ask-list-scroll").bounds();
             let panel = window
                 .find(("history-panel", super::ASK_HISTORY_IX + 1))
@@ -4792,6 +4814,7 @@ mod tests {
 
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
+            crate::double_borders::assert_none(window);
             let task = window.find("task-header").bounds();
             let queued = window.find(("queued-prompt", 0usize)).bounds();
             let output = window.find("task-output").bounds();
@@ -5719,6 +5742,7 @@ mod tests {
             window.drag(edge, to, cx);
             window.render_frame(cx);
             window.render_frame(cx);
+            crate::double_borders::assert_none(window);
         })
         .unwrap();
         let (panel, _) = settle(handle, "ask-drawer", |_, _| true, cx);
@@ -6002,6 +6026,7 @@ mod tests {
                     cx,
                 );
                 window.render_frame(cx);
+                crate::double_borders::assert_none(window);
             })
             .unwrap();
             cx.run_until_parked();

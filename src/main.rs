@@ -13,8 +13,12 @@ mod diff;
 mod diff_view;
 mod divergence;
 mod divergence_view;
+#[cfg(test)]
+mod double_borders;
 mod file_link;
 mod file_view;
+#[cfg(test)]
+mod frame_image;
 mod fs_browser;
 mod fuzzy;
 mod generate_skills;
@@ -51,6 +55,7 @@ mod selection_popover;
 mod settings_window;
 mod shell_format;
 mod system_prompts;
+mod theme;
 mod theme_preference;
 
 fn main() {

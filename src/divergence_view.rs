@@ -2131,6 +2131,7 @@ mod tests {
         }
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
+            crate::double_borders::assert_none(window);
             window.click("divergence-side-source", cx);
         })
         .unwrap();
@@ -2227,6 +2228,7 @@ mod tests {
         }
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
+            crate::double_borders::assert_none(window);
             // The least well defined file is src/main.rs.
             window.click(("divergence-least", 0usize), cx);
         })

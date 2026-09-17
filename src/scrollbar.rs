@@ -96,20 +96,32 @@ pub fn measure_new_rows(state: &ListState) {
     state.clone().measure_all();
 }
 
-/// The thumb's fill and border over a track of `track`: the fill darker than
-/// the track, and the border towards `foreground`, standing out from both:
-/// brighter than the track in dark mode.
-pub fn thumb_colors(track: Hsla, foreground: Hsla, dark: bool) -> (Hsla, Hsla) {
-    let towards = |color: Hsla, amount: f32| {
-        let mut blended = track.blend(color.opacity(amount));
-        blended.a = 1.;
-        blended
-    };
+/// The thumb's fill at rest, under the pointer, and while dragged: black laid
+/// over whatever the column sits on, rather than a colour of its own, so it is
+/// a little darker than what is beneath it on any surface, and darker again
+/// as it is hovered and grabbed. Flat, with no border, as scrollbar thumbs
+/// are in VS Code, JetBrains IDEs, and macOS.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ThumbColors {
+    pub rest: Hsla,
+    pub hover: Hsla,
+    pub pressed: Hsla,
+}
+
+pub fn thumb_colors(dark: bool) -> ThumbColors {
     let black = hsla(0., 0., 0., 1.);
     if dark {
-        (towards(black, 0.35), towards(foreground, 0.28))
+        ThumbColors {
+            rest: black.opacity(0.24),
+            hover: black.opacity(0.34),
+            pressed: black.opacity(0.44),
+        }
     } else {
-        (towards(black, 0.1), towards(foreground, 0.35))
+        ThumbColors {
+            rest: black.opacity(0.14),
+            hover: black.opacity(0.22),
+            pressed: black.opacity(0.3),
+        }
     }
 }
 
@@ -183,18 +195,20 @@ fn scrollbar(
     cx: &App,
 ) -> AnyElement {
     let theme = cx.theme();
-    let (border, track_color) = (theme.border, theme.tab_bar);
-    let (thumb_color, thumb_border) = thumb_colors(track_color, theme.foreground, theme.is_dark());
+    let border = theme.border;
+    let thumb_colors = thumb_colors(theme.is_dark());
+    // The full width of the column. A button draws only the line beside the
+    // list and the one between it and the track; whatever holds the column
+    // draws the lines around it, so no two lines ever lie side by side.
     let square = |name: &str, icon: IconName| {
         Button::new(SharedString::from(format!("{id}-{name}")))
             .ghost()
             .xsmall()
             .icon(icon)
-            // The full width of the column, bordered like the thumb.
             .w(COLUMN_WIDTH)
             .h(COLUMN_WIDTH)
             .rounded_none()
-            .border_1()
+            .border_l_1()
             .border_color(border)
     };
     let follow = follower(handle, &lock);
@@ -218,33 +232,60 @@ fn scrollbar(
         // with the track from frame to frame, since each mouse move redraws
         // the column.
         |_, window, cx| {
-            window.use_keyed_state("scroll-grab", cx, |_, _| Rc::new(Cell::new(None::<Pixels>)))
+            let grab = window
+                .use_keyed_state("scroll-grab", cx, |_, _| Rc::new(Cell::new(None::<Pixels>)));
+            // Whether the pointer was over the thumb when last drawn.
+            let hovered =
+                window.use_keyed_state("scroll-thumb-hover", cx, |_, _| Rc::new(Cell::new(false)));
+            (grab, hovered)
         },
         {
             let handle = handle.clone();
             let follow = follow.clone();
-            move |bounds, grab: Entity<Rc<Cell<Option<Pixels>>>>, window, cx| {
+            move |bounds,
+                  (grab, hovered): (Entity<Rc<Cell<Option<Pixels>>>>, Entity<Rc<Cell<bool>>>),
+                  window,
+                  cx| {
                 let grab = grab.read(cx).clone();
+                let hovered = hovered.read(cx).clone();
                 let geometry = Geometry::of(&handle, bounds);
-                // The track, with a line down the side against the list.
-                window.paint_quad(fill(bounds, track_color));
+                // The track, with no background of its own: only the line
+                // beside the list.
                 window.paint_quad(fill(
                     Bounds::new(bounds.origin, size(px(1.), bounds.size.height)),
                     border,
                 ));
-                // The thumb fills the track's width, square: only a little
-                // apart from the track, with a border that stands out more.
-                window.paint_quad(quad(
-                    Bounds::new(
-                        point(bounds.origin.x, geometry.thumb_top),
-                        size(bounds.size.width, geometry.thumb_height),
-                    ),
-                    px(0.),
-                    thumb_color,
-                    px(1.),
-                    thumb_border,
-                    BorderStyle::Solid,
-                ));
+                // The thumb fills the track's width, square and flat, with no
+                // lines of its own: a little darker than what is beneath it,
+                // and darker again while hovered or dragged.
+                let thumb = Bounds::new(
+                    point(bounds.origin.x, geometry.thumb_top),
+                    size(bounds.size.width, geometry.thumb_height),
+                );
+                let is_hovered = thumb.contains(&window.mouse_position());
+                hovered.set(is_hovered);
+                let color = if grab.get().is_some() {
+                    thumb_colors.pressed
+                } else if is_hovered {
+                    thumb_colors.hover
+                } else {
+                    thumb_colors.rest
+                };
+                window.paint_quad(fill(thumb, color));
+                // Moving on or off the thumb redraws it.
+                window.on_mouse_event({
+                    let (handle, hovered) = (handle.clone(), hovered.clone());
+                    move |event: &MouseMoveEvent, _, window, _| {
+                        let geometry = Geometry::of(&handle, bounds);
+                        let thumb = Bounds::new(
+                            point(bounds.origin.x, geometry.thumb_top),
+                            size(bounds.size.width, geometry.thumb_height),
+                        );
+                        if thumb.contains(&event.position) != hovered.get() {
+                            window.refresh();
+                        }
+                    }
+                });
 
                 window.on_mouse_event({
                     let (handle, grab, follow) = (handle.clone(), grab.clone(), follow.clone());
@@ -300,11 +341,10 @@ fn scrollbar(
     let column = v_flex()
         .id(SharedString::from(format!("{id}-scroll-column")))
         .flex_none()
-        // No border of its own: the buttons and the thumb each fill its width
-        // with theirs, and the track draws the line beside the list.
         .w(COLUMN_WIDTH)
         .child(
             square("scroll-up", IconName::ChevronUp)
+                .border_b_1()
                 .tooltip("Scroll up")
                 .on_click(scroll_by(STEP)),
         )
@@ -317,11 +357,13 @@ fn scrollbar(
         ))
         .child(
             square("scroll-down", IconName::ChevronDown)
+                .border_t_1()
                 .tooltip("Scroll down")
                 .on_click(scroll_by(-STEP)),
         )
         .when_some(lock, |column, (locked, set_lock)| {
             let button = square("scroll-lock", IconName::ArrowDownToLine)
+                .border_t_1()
                 .selected(locked)
                 .tooltip(if locked {
                     "Unlock the scroll from the bottom"
@@ -555,21 +597,36 @@ pub fn thumb_for_test(handle: &Scroll, track: Bounds<Pixels>) -> (Pixels, Pixels
 mod thumb_tests {
     use gpui_kit::{Hsla, hsla};
 
-    /// Darker than the track, with a border that stands out: brighter over a
-    /// dark track, darker over a light one.
+    /// Laid over dark and light surfaces alike, the thumb is a little darker
+    /// than what is beneath it, darker again hovered, and darker still while
+    /// dragged, and never so dark it loses the surface's character.
     #[test]
-    fn thumb_is_darker_than_the_track_with_a_brighter_border() {
-        let (track, foreground) = (hsla(0., 0., 0.2, 1.), hsla(0., 0., 0.95, 1.));
-        let (fill, border) = super::thumb_colors(track, foreground, true);
-        assert!(fill.l < track.l, "{fill:?} isn't darker than {track:?}");
-        assert!(
-            border.l > track.l,
-            "{border:?} isn't brighter than {track:?}"
-        );
-        let light: (Hsla, Hsla) = (hsla(0., 0., 0.97, 1.), hsla(0., 0., 0.05, 1.));
-        let (fill, border) = super::thumb_colors(light.0, light.1, false);
-        assert!(fill.l < light.0.l, "{fill:?}");
-        assert!(border.l < fill.l, "{border:?} over {fill:?}");
+    fn thumb_is_a_little_darker_and_darkens_as_it_is_used() {
+        let over = |surface: Hsla, color: Hsla| surface.blend(color);
+        for (dark, surfaces) in [
+            (true, [0.18, 0.22, 0.27, 0.31]),
+            (false, [0.74, 0.82, 0.91, 0.96]),
+        ] {
+            let colors = super::thumb_colors(dark);
+            for color in [colors.rest, colors.hover, colors.pressed] {
+                assert!(color.a < 1., "laid over, not opaque");
+            }
+            for l in surfaces {
+                let surface = hsla(0., 0., l, 1.);
+                let rest = over(surface, colors.rest);
+                let hover = over(surface, colors.hover);
+                let pressed = over(surface, colors.pressed);
+                assert!(rest.l < surface.l, "{rest:?} isn't darker than {surface:?}");
+                assert!(
+                    surface.l - rest.l < 0.2,
+                    "{rest:?} is more than a little darker"
+                );
+                assert!(
+                    hover.l < rest.l && pressed.l < hover.l,
+                    "{rest:?} {hover:?} {pressed:?}"
+                );
+            }
+        }
     }
 }
 

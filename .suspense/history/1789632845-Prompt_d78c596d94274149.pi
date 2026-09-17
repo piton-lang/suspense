@@ -1,0 +1,30 @@
+from /ui/components/project-indicator import ProjectIndicator
+
+anchor Prompt_d78c596d94274149:
+    userPrompt:
+        -
+            - "Something weird is going on with the ribbon tabs.  You seem to be adding a removing borders from them, and the end result is that the text is hopping left and right by a pixel.  Tabs should have their default gpui-kit behaviour, just with the colours changed.  And for the "
+            - @{ProjectIndicator}
+            - " let's make the whole background a darker colour and drop the right-side border."
+
+    mode: combined
+
+    systemPrompt:
+        -
+            - "We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec."
+        -
+            - ""
+        -
+            - "You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec."
+        -
+            - ""
+        -
+            - "Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other."
+        -
+            - ""
+        -
+            - "Then build the spec and execute the prompt directly on the code using a unified plan."
+        -
+            - ""
+        -
+            - "Make sure that you write both code and spec."

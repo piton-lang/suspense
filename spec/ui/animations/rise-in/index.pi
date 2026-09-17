@@ -1,4 +1,5 @@
 use /lib
+from /ui/theme import ThemeScope
 
 export scope RiseInAnimation:
     concept: {RiseInAnimationConcept}
@@ -22,7 +23,8 @@ shape RiseInAnimationShape:
         is its place from the start.
 
     comingIn:
-        The dimming darkens the window behind from not at all to 40% black. The
+        The dimming darkens the window behind from not at all to the
+        @{ThemeScope}'s dimming for its mode. The
         surface fades in from transparent as it rises into place from about 28
         pixels below, easing to a stop, as though tipping up towards the
         viewer. It comes in afresh each time what uses it opens.

@@ -1,0 +1,134 @@
+use /lib
+from /scope/application/MainWindow import MainWindowScope
+
+export scope ThemeScope:
+    concept: {ThemeConcept}
+
+concept ThemeConcept:
+    pitch:
+        The look every part of the application shares: a gentle, neutral grey
+        interface in the manner of Photoshop, Maya, or Houdini, where contrast
+        alone says what matters, and colour is kept for meaning.
+
+    shape: {ThemeShape}
+
+shape ThemeShape:
+    description:
+        The theme is defined by its dark mode, built around a base grey of
+        #444444. Dark mode is the reference: every colour below is chosen for
+        it first, and light mode is its reasonable interpretation on a light
+        base, keeping the same roles, the same order, and steps of about the
+        same size. The greys are true neutrals, with no hint of blue or warmth.
+        There are no gradients, and no texture. Everything that uses a colour
+        names its role here rather than a value of its own, so the two modes
+        stay coherent.
+
+    hierarchy:
+        How far a colour is from the base, in contrast, says how much it stands
+        out, and that holds everywhere. The base is the quiet ground of the
+        window. A step away is structure: panels, controls, and the lines
+        between them. Further away is what is worked on: text, content, and the
+        wells that hold it. Furthest away is state and meaning: what is
+        selected, focused, or needs attention. Nothing structural is ever
+        further from the base than the content it frames, and nothing decorative
+        is ever as far as state. A hover is always a smaller step than a
+        selection, and a selection a smaller step than focus.
+
+    surfaces:
+        Each surface in dark mode, then light mode:
+        - well, #2e2e2e, then #f5f5f5: where content is read or written, such as the editor, code blocks, answers, and task tables' bodies; the most contrast with the text it holds
+        - recessed, #383838, then #e8e8e8: text inputs, lists, trees, and scroll tracks, a step toward the well
+        - base, #444444, then #d0d0d0: the window, its panels, the sidebar, and the ribbon's command area
+        - raised, #4e4e4e, then #dadada: buttons, tab bars, headers, a group's title strip, and cards, a small step toward the viewer
+        - hover, #585858, then #e2e2e2: a raised or listed thing under the pointer, one step further along the way it is already raised
+        - pressed, #3c3c3c, then #c6c6c6: a control held down, a step back past the base
+        - selected, #5e5e5e, then #bcbcbc: a selected row or tab without focus, the neutral state furthest from its surface short of the accent
+        - overlay, #4a4a4a, then #dcdcdc: floating surfaces, such as menus, popovers, tooltips, the completion menu, and inset panels
+
+    lightMode:
+        Light mode reads the dark ladder on a light base of #d0d0d0. Wells and
+        inputs go lighter, toward white, so they keep the most contrast with the
+        dark text they hold, just as they are darker in dark mode for the same
+        reason. Raised controls and floating surfaces go a smaller step lighter
+        too, so they still come forward, and hover goes further the same way.
+        Pressed and selected go darker, and so do lines. Text is dark on light.
+
+    text:
+        Text in dark mode, then light mode:
+        - primary, #ebebeb, then #1e1e1e: the foreground, for anything read
+        - secondary, #c4c4c4, then #454545: what the spec calls muted, such as paths, counts, and descriptions
+        - tertiary, #9c9c9c, then #636363: dimmer than muted, such as help text and placeholders
+        - disabled, #7a7a7a, then #8c8c8c: what can't be used now
+
+    lines:
+        Lines are one pixel, and quieter than anything they separate:
+        - line, #3a3a3a, then #bdbdbd: dividers between areas, table rows, and list rows
+        - edge, #2a2a2a, then #a6a6a6: the border of controls, inputs, and floating surfaces, darker than the base in both modes, what the spec calls the border colour
+
+        A line is never doubled. Wherever two things that each have a border
+        meet, a single line is drawn between them, never two side by side:
+        one of them leaves that side out, or the two overlap so their lines lie
+        on the same pixels. A thing that fills what holds it leaves out the
+        sides the holder already draws, and a row in a stack draws only the
+        line between it and the row before. This holds while things move too,
+        such as a row sliding into a stack, apart from a frame or two. A focus
+        ring, or an accent bar marking what is current, isn't a border in this
+        sense, and may sit against one. A gpui-kit component used with its
+        default styling, such as tabs in a tab bar, keeps its own borders as
+        gpui-kit draws them; only its colours are the theme's.
+
+    accent:
+        One accent, a calm blue, is the only colour that means selection,
+        focus, or the primary action:
+        - accent, #7fb4ea, then #1f5fa6: focus rings, the underline of a selected tab, links, a selection's edge, and accent text
+        - accent fill, #3d6a98, then #2b68ad: primary buttons, with primary text in white in both modes, and a selected item in a focused list
+        - selection, the accent fill at 35% over its surface: selected text
+
+        What the spec calls the theme's primary colour, or its focus ring
+        colour, is the accent.
+
+    status:
+        Status colours are kept for what they mean, readable as text on the base
+        and every surface darker than it in dark mode, and on the base and every
+        surface lighter than it in light mode:
+        - success, #8fd095, then #2c6e31: done, added, aligned
+        - warning, #e6bb68, then #8a5a00: running out, modified, drifting
+        - error, #f0928a, then #b3261e: failed, removed, diverged
+        - information, the accent: running, informational notes
+
+        Two more hues, for telling kinds of things apart rather than for status:
+        - purple, #bba0e6, then #6b4aa6
+        - cyan, #78c8ce, then #1f6f78
+
+        Wherever the spec names a hue for what is shown, it means the theme's:
+        blue is the accent, green success, amber or yellow warning, red error,
+        purple and cyan the hues above, and grey tertiary text.
+
+        A tint of a colour, such as a prompt mode's or a changed line's, is that
+        colour laid over its surface at low strength, never enough to take the
+        text on it below its contrast.
+
+    elevation:
+        Floating surfaces sit on the overlay surface with an edge border, and
+        are the only things with a shadow: soft, short, and black, stronger in
+        dark mode than in light. Behind a modal surface, such as an inset panel,
+        the window is dimmed with black, 40% in dark mode and 25% in light mode.
+
+    contrast:
+        However the colours are used, primary and secondary text keep at least
+        4.5 to 1 against the base, recessed, well, and overlay surfaces, and
+        primary text at least 4 to 1 on controls in any state. Tertiary text,
+        status colours, and the accent keep at least 3 to 1 on the base. Edges
+        keep about 1.5 to 1 against the base, and lines less.
+
+    gpuiKit:
+        The application's gpui-kit theme is set from these roles in both
+        modes, so a component with gpui-kit's default styling follows the
+        theme with nothing of its own: its background is the base, its
+        foreground primary text, its muted foreground secondary text, its border
+        the edge, its input and list backgrounds recessed, its popover the
+        overlay, its primary and ring the accent, and its success, warning, and
+        danger the status colours.
+
+    modes:
+        Which mode shows is up to the application: see the @{MainWindowScope}.

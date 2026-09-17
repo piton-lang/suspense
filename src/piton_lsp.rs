@@ -2,11 +2,11 @@
 //! over it (completions, and auto-imports for the hidden anchor the input's
 //! text is typed into), and the helpers the editor shares with it.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
@@ -20,6 +20,10 @@ use serde_json::{Value, json};
 use crate::hidden_anchor::{self, HiddenAnchor, Imports};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// How many of the last lines the server wrote to its error output are kept,
+/// to say why it stopped.
+const STDERR_LINES: usize = 40;
 
 /// Most rounds of auto-importing per resolution; an import can bring further
 /// names into reach.
@@ -45,6 +49,10 @@ pub struct LspClient {
     published: Published,
     next_id: AtomicI64,
     project_dir: PathBuf,
+    /// Set once the server's output ends: it has stopped.
+    exited: Arc<AtomicBool>,
+    /// The last lines the server wrote to its error output.
+    stderr: Arc<Mutex<VecDeque<String>>>,
 }
 
 impl LspClient {
@@ -56,7 +64,7 @@ impl LspClient {
             .current_dir(project_dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
             .context("could not start `piton lsp`")?;
         let stdin: Stdin = Arc::new(Mutex::new(
@@ -69,14 +77,36 @@ impl LspClient {
             .stdout
             .take()
             .ok_or_else(|| anyhow!("`piton lsp` has no stdout"))?;
+        let stderr_pipe = child
+            .stderr
+            .take()
+            .ok_or_else(|| anyhow!("`piton lsp` has no stderr"))?;
         let pending = Pending::default();
         let published = Published::default();
+        let stderr = Arc::new(Mutex::new(VecDeque::new()));
+        let exited = Arc::new(AtomicBool::new(false));
 
         std::thread::spawn({
             let stdin = stdin.clone();
             let pending = pending.clone();
             let published = published.clone();
-            move || read_loop(BufReader::new(stdout), &stdin, &pending, &published)
+            let exited = exited.clone();
+            move || {
+                read_loop(BufReader::new(stdout), &stdin, &pending, &published);
+                exited.store(true, Ordering::Relaxed);
+            }
+        });
+        std::thread::spawn({
+            let stderr = stderr.clone();
+            move || {
+                for line in BufReader::new(stderr_pipe).lines().map_while(Result::ok) {
+                    let mut stderr = stderr.lock().unwrap();
+                    if stderr.len() == STDERR_LINES {
+                        stderr.pop_front();
+                    }
+                    stderr.push_back(line);
+                }
+            }
         });
 
         let client = Self {
@@ -86,6 +116,8 @@ impl LspClient {
             published,
             next_id: AtomicI64::new(1),
             project_dir: project_dir.to_path_buf(),
+            exited,
+            stderr,
         };
         client.request(
             "initialize",
@@ -102,6 +134,33 @@ impl LspClient {
     /// The project directory the server was started in.
     pub fn project_dir(&self) -> &Path {
         &self.project_dir
+    }
+
+    /// Whether the server has stopped.
+    pub fn has_exited(&self) -> bool {
+        self.exited.load(Ordering::Relaxed)
+    }
+
+    /// How the server stopped, and the last of what it wrote to its error
+    /// output, for the log.
+    pub fn exit_report(&self) -> String {
+        let status = match self.child.lock().unwrap().try_wait() {
+            Ok(Some(status)) => status.to_string(),
+            _ => "its output closed".to_string(),
+        };
+        let stderr = self.stderr.lock().unwrap();
+        if stderr.is_empty() {
+            status
+        } else {
+            let lines: Vec<&str> = stderr.iter().map(String::as_str).collect();
+            format!("{status}:\n{}", lines.join("\n"))
+        }
+    }
+
+    /// Kills the server, as a crash would.
+    #[cfg(test)]
+    pub fn kill(&self) {
+        self.child.lock().unwrap().kill().ok();
     }
 
     /// Sends a request and blocks until its response arrives.

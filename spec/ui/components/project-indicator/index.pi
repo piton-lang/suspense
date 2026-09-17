@@ -1,9 +1,10 @@
 use /lib
+use /ui
 from /scope/project/open-project import OpenProjectScope
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/no-project import NoProjectStateScope
 
-export scope ProjectIndicator:
+export ui-component ProjectIndicator:
     concept: {ProjectIndicatorConcept}
 
 concept ProjectIndicatorConcept:
@@ -14,9 +15,13 @@ concept ProjectIndicatorConcept:
 
 shape ProjectIndicatorShape:
     description:
-        A small label: a small folder icon, then the name of the project open
-        through the @{ProjectDirectoryScope}, which is its folder's name, in
-        medium weight. It highlights on hover.
+        A solid block, the full height of wherever it sits, on the same
+        background as a text input, the theme's well surface, darker than the
+        bar around it in dark mode, with no border and no rounded corners. In it, a small folder icon, then the name
+        of the project open through the @{ProjectDirectoryScope}, which is its
+        folder's name, in medium weight, vertically centred. The whole block is
+        what is clicked, filling it edge to edge, square, and it highlights on
+        hover.
 
     noProject:
         While no project is open, as the @{NoProjectStateScope} says, it reads
@@ -26,17 +31,38 @@ shape ProjectIndicatorShape:
         While a project is open, its tooltip gives the project's full path.
 
     recentProjects:
-        Clicking it opens a small list beneath it of the recent projects of the
-        @{ProjectDirectoryScope}, up to five, newest first, each a row with the
-        project's folder name in medium weight above its full path, muted, after
-        a folder icon, or a tick for the project open now. Clicking a row closes
-        the list and opens that project, or just closes it for the one already
-        open. Clicking the indicator again, pressing the mouse outside the
-        list, or <Escape>, closes it.
+        Clicking it, or pressing <Ctrl+`> (<Cmd+`> on macOS) anywhere in the
+        window, opens a list of the recent projects of the
+        @{ProjectDirectoryScope}, up to five, newest first; doing so again closes
+        it. Like the palette, the shortcut does nothing while an inset panel is
+        open.
 
-        The last row, beneath a thin divider and whether or not there are any
-        recent projects, reads "Open Project…" after a folder icon, and
-        closes the list and opens the @{OpenProjectScope}.
+        The list hangs flush from the indicator: its top edge is the
+        indicator's bottom edge and its left edge the indicator's, at least 360
+        pixels wide. It is a solid block in the indicator's own colour, with no
+        rounded corners, and a thin edge along its sides and bottom but none
+        along its top, where it meets the indicator. While it is open, the rest
+        of the window is dimmed as behind an inset panel, and the indicator
+        stays undimmed above the dimming, so the two read as one.
+
+        At the top of the list, a filter field with a search icon takes the
+        keyboard as the list opens. Typing filters the projects fuzzily, as the
+        palette matches, by folder name or full path, the best matches first;
+        with nothing typed, all of them show, newest first. <Up> and <Down> move
+        a highlight through the rows, wrapping around, starting on the first
+        row whenever the filter changes, and <Enter> picks the highlighted row.
+
+        Each project is a row with its folder name in medium weight above its
+        full path, muted, after a folder icon, or a tick for the project open
+        now. Rows reach the list's edges, with no rounded corners, and highlight
+        on hover. Picking a row, by clicking or <Enter>, closes the list and
+        opens that project, or just closes it for the one already open.
+        Clicking the indicator, clicking the dimmed window, or <Escape> closes
+        it.
+
+        The last row, beneath a thin divider, whatever the filter leaves, reads
+        "Open Project…" after a folder icon, and closes the list and opens the
+        @{OpenProjectScope}.
 
     width:
         A name wider than 320 pixels is cut off with an ellipsis.

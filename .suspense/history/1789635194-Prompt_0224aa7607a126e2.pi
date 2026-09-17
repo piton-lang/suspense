@@ -1,0 +1,32 @@
+from /ui/components/project-indicator import ProjectIndicator
+
+anchor Prompt_0224aa7607a126e2:
+    userPrompt:
+        -
+            - "The "
+            - @{ProjectIndicator}
+            - " popover should be flush with the indicator, should be the same dark colour, should not have rounded edges and should dim the background. The list items should also not be rounded, and should extend to the edges of the popover.  You can activate the "
+            - @{ProjectIndicator}
+            - " with Ctrl+` and when the popover is open, it supports keyboard navigation and fuzzy filtering."
+
+    mode: combined
+
+    systemPrompt:
+        -
+            - "We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec."
+        -
+            - ""
+        -
+            - "You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec."
+        -
+            - ""
+        -
+            - "Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other."
+        -
+            - ""
+        -
+            - "Then build the spec and execute the prompt directly on the code using a unified plan."
+        -
+            - ""
+        -
+            - "Make sure that you write both code and spec."

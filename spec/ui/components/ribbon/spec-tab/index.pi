@@ -1,4 +1,7 @@
 use /lib
+use /ui
+from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/prompt-mode/modes import PromptModesScope
 from /scope/rescope import RescopeScope
 from /scope/generate-skills import GenerateSkillsScope
 from /scope/divergence import DivergenceScope
@@ -6,7 +9,7 @@ from /scope/no-project import NoProjectStateScope
 from /scope/spec-build import SpecBuildScope
 from /ui/components/minimizable-panel import MinimizablePanelScope
 
-export scope RibbonSpecTabScope:
+export ui-component RibbonSpecTabScope:
     concept: {RibbonSpecTabConcept}
 
 concept RibbonSpecTabConcept:
@@ -18,6 +21,18 @@ concept RibbonSpecTabConcept:
 shape RibbonSpecTabShape:
     description:
         The Spec tab of the ribbon.
+
+    colour:
+        While closed, the tab's label is in Spec's colour, at full strength,
+        in the same place as ever. While open, the label is the tab's own colour,
+        and the tab and its body are tinted with Spec's colour, of the
+        @{PromptModesScope}, just as the @{ChatInputScope}'s Spec tab and the
+        body beneath it are: the same tint laid over the tab, and over the
+        command area while Spec is the only tab open. The tint takes no room,
+        so the tab keeps the size and place it has closed, and its label never
+        moves. Open beside other tabs, the tab is tinted and the command area,
+        shared with them, is not. The groups' title strips keep their own
+        colour.
 
     groups:
         build:

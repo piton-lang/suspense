@@ -1,4 +1,5 @@
 use /lib
+use /ui
 from ../project-directory import ProjectDirectoryScope
 from ../prompt-mode/chat-input import ChatInputScope
 from ../no-project import NoProjectStateScope
@@ -8,7 +9,7 @@ from ../prompt-mode/modes import PromptModesScope
 from /ui/components/inset-panel import InsetPanelScope
 from /ui/components/scrollbar import ScrollbarScope
 
-export scope SettingsWindowScope:
+export ui-component SettingsWindowScope:
     concept: {SettingsWindowConcept}
 
 concept SettingsWindowConcept:

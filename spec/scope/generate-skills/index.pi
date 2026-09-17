@@ -1,4 +1,5 @@
 use /lib
+use /ui
 from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
 from /scope/harness-integration/one-off-run import OneOffAgentRunScope
 from /scope/project-locations import ProjectLocationsScope
@@ -7,7 +8,7 @@ from /ui/components/minimizable-panel import MinimizablePanelScope
 from /ui/components/ranked-selection-list import RankedSelectionListScope
 from /ui/components/task-table import TaskTableScope
 
-export scope GenerateSkillsScope:
+export ui-component GenerateSkillsScope:
     concept: {GenerateSkillsConcept}
 
 concept GenerateSkillsConcept:

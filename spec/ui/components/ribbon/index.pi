@@ -1,4 +1,6 @@
 use /lib
+from /ui/theme import ThemeScope
+use /ui
 from /ui/components/project-indicator import ProjectIndicator
 from ./project-tab import RibbonProjectTabScope
 from ./code-tab import RibbonCodeTabScope
@@ -8,7 +10,7 @@ from ./application-tab import RibbonApplicationTabScope
 from /scope/running-activity import RunningActivityScope
 from /scope/user-preferences import UserPreferencesScope
 
-export scope RibbonScope:
+export ui-component RibbonScope:
     concept: {RibbonConcept}
 
 concept RibbonConcept:
@@ -21,10 +23,34 @@ concept RibbonConcept:
 shape RibbonShape:
     description:
         A ribbon runs along the top of the window, using gpui-kit's Tab
-        component with its default styling. Its tabs are, in order: Project,
+        component with its default styling, borders, and spacing, only in the
+        @{ThemeScope}'s colours. Nothing adds to or takes away from a tab's own
+        borders or margins, so a tab's label never shifts as tabs open and
+        close. Along the top of the commands, a line in the colour of the tabs'
+        own side borders runs from the far left, beneath the project indicator,
+        to the side border of the first open tab, and on from that tab's other
+        side border to the next open tab or the far right. An open tab meets
+        the commands beneath it with no line between them, its side borders
+        running straight down to where the line picks up again. There is no
+        other line there, not even a faint one at a fractional display scale.
+
+        A tab whose commands work on one of the chat input's modes, as the Code
+        and Spec tabs do, takes that mode's colour: its label is in the mode's
+        colour while the tab is closed, and while open, the tab is tinted with
+        it instead and its label is the tab's own colour. Each such tab says
+        more. Its tabs are, in order: Project,
         Code, Spec, Research, and Application. The window always opens on
         Project. Beneath the tabs, the selected tab's commands sit in groups.
         There is no raw output view and no toggle for one.
+
+    keyboard:
+        <Alt+1> opens the first tab, <Alt+2> the second, and so on, through
+        each tab in the order the tabs are shown, <Alt+5> opening Application.
+        Each opens its tab alone, as clicking it does, and expands the ribbon
+        first if it is collapsed. A number past the last tab does nothing. Like
+        the ribbon's other shortcuts, they do nothing while an inset panel is
+        open. A tab's tooltip doesn't give its shortcut, since a tab has no
+        tooltip.
 
     openingSeveralTabs:
         Clicking a tab opens it alone, as usual. Ctrl+clicking one (Cmd+click on
@@ -51,8 +77,12 @@ shape RibbonShape:
         collapsed ribbon.
 
     projectIndicator:
-        To the left of the tabs, in the same bar, sits the @{ProjectIndicator},
-        with a thin vertical divider between it and the first tab.
+        At the left end of the bar sits the @{ProjectIndicator}, a solid block
+        the full height of the bar, left of the tab bar itself rather than
+        inside it, so the tab bar's own padding and bottom line don't reach it.
+        There is no divider between it and what follows: the change of
+        background is the edge. The activity spinner leads the tab bar, just
+        after it.
 
     groups:
         Each group has its title in muted text rotated -90deg (bottom to top)
@@ -102,8 +132,9 @@ shape RibbonShape:
         @{UserPreferencesScope}.
 
         Collapsed, the tabs go away too. The ribbon becomes a single thin row
-        led by the project indicator, as it is beside the tabs and with the same
-        divider after it, and then holding every primary command, from all of
+        led by the project indicator, the same solid block as beside the tabs,
+        filling the row's height, with no divider after it, then the activity
+        spinner, and then every primary command, from all of
         the tabs, as small buttons: a small icon beside its label, and dark mode
         as a small switch. They keep the order of their tabs, with a thin
         vertical divider between the commands of one tab and the next, and keep

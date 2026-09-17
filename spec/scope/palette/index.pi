@@ -1,4 +1,5 @@
 use /lib
+use /ui
 from /scope/project/open-project import OpenProjectScope
 from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
 from /scope/harness-integration/catalog import HarnessCatalogScope
@@ -12,7 +13,7 @@ from /ui/components/scrollbar import ScrollbarScope
 from /ui/components/task-table import TaskTableScope
 from /scope/settings-window import SettingsWindowScope
 
-export scope PaletteScope:
+export ui-component PaletteScope:
     concept: {PaletteConcept}
 
 concept PaletteConcept:

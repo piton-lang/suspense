@@ -75,7 +75,7 @@ pub fn inset_panel(
         // Nothing beneath takes the mouse while the panel is open.
         .occlude()
         .on_click(close)
-        .child(rise_in::dimming("inset-panel", opened, Direction::In))
+        .child(rise_in::dimming("inset-panel", opened, Direction::In, cx))
         .child(panel);
     // Lets UI tests find the panel and backdrop; inert in normal builds.
     gpui_kit::TestSupportExt::test_support(backdrop).into_any_element()
@@ -93,7 +93,7 @@ pub fn closing_panel(content: AnyView, closed: usize, cx: &App) -> AnyElement {
     div()
         .absolute()
         .inset_0()
-        .child(rise_in::dimming("inset-panel", closed, Direction::Out))
+        .child(rise_in::dimming("inset-panel", closed, Direction::Out, cx))
         .child(div().absolute().inset(INSET).child(panel))
         .into_any_element()
 }

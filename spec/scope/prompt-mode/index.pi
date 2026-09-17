@@ -1,4 +1,5 @@
 use /lib
+use /ui
 from ./chat-input import ChatInputScope
 from ./message-list import MessageList
 from /ui/components/history-list import HistoryListScope
@@ -8,7 +9,7 @@ from /scope/project-data import ProjectDataScope
 from /scope/prompt-mode/modes import PromptModesScope
 from /scope/prompt-mode/sending import PromptSendingScope
 
-export scope PromptEditor:
+export ui-component PromptEditor:
     concept: {PromptEditorConcept}
 
 concept PromptEditorConcept:
