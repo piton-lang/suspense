@@ -591,7 +591,17 @@ impl MainWindow {
             self.close_rescope(window, cx);
         }
         self.close_panel(window, cx);
+        // A queued prompt of the project left is no longer edited.
+        self.prompt_mode.update(cx, |prompt_mode, cx| {
+            prompt_mode.cancel_queued_edit(window, cx)
+        });
         self.refresh_jobs(cx);
+        // The chat input takes the keyboard in the project switched to, once
+        // whatever switched it, such as the project list, has closed.
+        let prompt_mode = self.prompt_mode.clone();
+        window.defer(cx, move |window, cx| {
+            prompt_mode.update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx))
+        });
     }
 
     /// Tells the ribbon everything running: in the project on screen, the
@@ -3626,6 +3636,8 @@ mod tests {
             piton_syntax::init();
             ProjectDirectory::init(cx);
             super::bind_keys(cx);
+            crate::project_lsp::ProjectLsp::init(cx);
+            crate::file_view::bind_keys(cx);
             ProjectDirectory::set(a.clone(), cx);
         });
         let mut main = None;
@@ -3689,6 +3701,55 @@ mod tests {
         cx.update_window(handle, |_, window, cx| window.click("cancel", cx))
             .unwrap();
         cx.run_until_parked();
+
+        // Clicking alpha in the project list switches to it, and the chat
+        // input takes the keyboard from the list's filter.
+        let chat = prompt_mode.read_with(cx, |prompt_mode, _| prompt_mode.chat_input_view());
+        cx.update_window(handle, |_, window, cx| {
+            let indicator = ribbon.read(cx).project_indicator().clone();
+            indicator.update(cx, |indicator, cx| indicator.open(window, cx));
+            window.render_frame(cx);
+            assert!(!chat.read(cx).is_focused(window, cx));
+            window.click(("recent-project", 0usize), cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(cx.update(|cx| ProjectDirectory::get(cx)), Some(a.clone()));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(
+                chat.read(cx).is_focused(window, cx),
+                "the chat input isn't focused"
+            );
+        })
+        .unwrap();
+        // Switched some other way, with focus in the editor, the chat input
+        // takes it all the same.
+        std::fs::write(a.join("notes.md"), "notes").unwrap();
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |prompt_mode, cx| {
+                prompt_mode.open_file(a.join("notes.md"), window, cx)
+            });
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            let file = prompt_mode.read(cx).open_file_view().unwrap();
+            file.update(cx, |file, cx| file.focus_editor(window, cx));
+            window.render_frame(cx);
+            assert!(!chat.read(cx).is_focused(window, cx));
+        })
+        .unwrap();
+        cx.update(|cx| ProjectDirectory::set(b.clone(), cx));
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(
+                chat.read(cx).is_focused(window, cx),
+                "the editor kept focus"
+            );
+        })
+        .unwrap();
 
         // Revealing alpha's question switches back to alpha.
         cx.update_window(handle, |_, window, cx| {

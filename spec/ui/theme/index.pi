@@ -108,6 +108,25 @@ shape ThemeShape:
         colour laid over its surface at low strength, never enough to take the
         text on it below its contrast.
 
+    bevel:
+        A surface that should lift slightly off what it sits on, such as a
+        scrollbar's thumb or a table's header, can have the theme's bevel: a
+        very slight 1 pixel edge around it, just enough to lift it. Its top and
+        left edges are a touch lighter, as white laid faintly over the surface,
+        8% in dark mode and 55% in light mode; its bottom and right edges only
+        barely darker, as black laid very faintly over it, 6% in dark mode and
+        3% in light mode, far subtler than the light and never reading as a
+        line. Laid over rather than a colour of its own, it looks the same on
+        any surface, hovered, pressed, or tinted. The lit top runs the full
+        width, and the lit left side runs beneath it; the shaded bottom runs the
+        full width, and the shaded right side runs above it, so no two edges
+        overlap. It sits inside the surface, taking no room, and isn't a border
+        in the sense of lines never being doubled.
+
+        A surface being pressed in can have the bevel pressed instead: the same
+        edges, with the light and shade swapped, so its top and left edges are
+        barely darker and its bottom and right edges a touch lighter.
+
     elevation:
         Floating surfaces sit on the overlay surface with an edge border, and
         are the only things with a shadow: soft, short, and black, stronger in

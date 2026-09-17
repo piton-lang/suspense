@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /ui/theme import ThemeScope
 
 export ui-component ScrollbarScope:
     concept: {ScrollbarConcept}
@@ -20,34 +21,40 @@ shape ScrollbarShape:
     buttons:
         A square button at the top of the column scrolls the list up a little,
         and a square button at the bottom scrolls it down a little. The column
-        is as wide as the buttons are tall. Each button fills the column's full
-        width, with nothing beside it, and is outlined by thin lines that are
-        never doubled: a button draws the line down its side against the list
-        and the line between it and the track, while its other sides are left
-        to whatever holds the column, which draws the lines around it. The
-        buttons have no background of their own: they are the colour of
-        whatever the column sits on, until hovered or pressed.
+        is as wide as the buttons, with the track's line, are tall. Each button
+        sits just inside the track, as the thumb does, never over the track's
+        edges: the track's line runs down the column's side against the list
+        beside it too, unbroken from the top of the column to the bottom, the
+        button filling the width inside that line, and a pixel of the dark
+        track lies between the button and the rest of the track, and between
+        the down button and the lock button. The buttons draw no lines of their
+        own; whatever holds the column draws the lines around it. The buttons
+        have no background of their own: they are the colour of whatever the
+        column sits on, until hovered or pressed. While the pointer
+        is over the up or down button, it has the bevel of the @{ThemeScope},
+        and while it is pressed with the pointer still over it, its pressed
+        bevel instead; neither bevel shows otherwise, and neither takes the
+        mouse.
 
     track:
         Between the buttons, a track holds a thumb as tall as the share of the
         list in view, and never too short to grab, placed as far down the track
         as the list is scrolled. The thumb is a plain rectangle with no rounded
-        corners, taking the track's width inside the track's own line, never
-        covering it, so the line beside the list runs unbroken the track's full
-        height, beside the thumb too. It is drawn inset 1 pixel on every side
-        of the room it takes, so a pixel of the dark track shows all around it,
-        even with nothing to scroll; pressing or hovering anywhere in that room
-        is on the thumb. The track
+        corners, filling the track inside the track's own line, never covering
+        it, so the line beside the list runs unbroken the track's full height,
+        beside the thumb too. It has the bevel of the @{ThemeScope}, whether or
+        not it is hovered or dragged. The track
         is dark: black laid over whatever the column sits on, rather than a
         colour of its own, so it is clearly darker than that surface, in both
-        modes, and looks the same on any surface. The thumb is flat, with no
-        border or line of its own, and has no background of its own: it is the
+        modes, and looks the same on any surface. Beyond its bevel, the thumb
+        has no border or line of its own, and no background of its own: it is the
         colour of whatever the column sits on, the same as the buttons, so it
         reads as a gap of the surface in the dark track. It lightens a step
         while the pointer is over it, as white laid over it, and another step
         while it is being dragged, and goes back as soon as neither is true.
         The track has a thin line down its side against the list, in the
-        theme's border colour, from one button to the other. With nothing
+        theme's border colour, the column's full height, beside the buttons
+        as well as the thumb. With nothing
         to scroll, the thumb fills the track. Pressing the thumb and dragging
         scrolls the list with it for as long as the button is held, even once
         the pointer leaves the column, and pressing the track elsewhere moves

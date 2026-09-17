@@ -49,6 +49,9 @@ pub struct Palette {
     pub cyan: u32,
     /// How much black dims the window behind a modal surface.
     pub dim: f32,
+    /// How much white lights, and black shades, a bevel's edges.
+    pub bevel_light: f32,
+    pub bevel_shade: f32,
 }
 
 pub const DARK: Palette = Palette {
@@ -74,6 +77,8 @@ pub const DARK: Palette = Palette {
     purple: 0xbba0e6,
     cyan: 0x78c8ce,
     dim: 0.4,
+    bevel_light: 0.08,
+    bevel_shade: 0.06,
 };
 
 pub const LIGHT: Palette = Palette {
@@ -99,6 +104,8 @@ pub const LIGHT: Palette = Palette {
     purple: 0x6b4aa6,
     cyan: 0x1f6f78,
     dim: 0.25,
+    bevel_light: 0.55,
+    bevel_shade: 0.03,
 };
 
 /// How much of the accent fill selected text is laid over with.
@@ -151,6 +158,87 @@ pub fn tag(hue: Hue, cx: &App) -> Tag {
         foreground: color,
         border: color.opacity(0.45),
     })
+}
+
+/// How wide a bevel's edges are.
+pub const BEVEL: Pixels = px(1.);
+
+/// Which way a bevel faces: raised, lit along its top and left, or pressed in,
+/// the other way round.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Bevel {
+    Raised,
+    Pressed,
+}
+
+/// A bevel's lit and shaded edges' colours, laid over whatever they sit on.
+pub fn bevel_colors(palette: &Palette) -> (Hsla, Hsla) {
+    (
+        white().opacity(palette.bevel_light),
+        black().opacity(palette.bevel_shade),
+    )
+}
+
+/// The bevel of a surface at `bounds`, each edge with its colour. Raised, it is
+/// lit along the top, then down the left beneath that, and shaded along the
+/// bottom, then up the right above that, so no two overlap; pressed, the lit
+/// and shaded edges swap. None for a surface too small.
+pub fn bevel_edges(
+    bounds: Bounds<Pixels>,
+    bevel: Bevel,
+    palette: &Palette,
+) -> Vec<(Bounds<Pixels>, Hsla)> {
+    let (width, height) = (bounds.size.width, bounds.size.height);
+    if width < BEVEL * 2. || height < BEVEL * 2. {
+        return Vec::new();
+    }
+    let (light, shade) = match (bevel, bevel_colors(palette)) {
+        (Bevel::Raised, (light, shade)) => (light, shade),
+        (Bevel::Pressed, (light, shade)) => (shade, light),
+    };
+    let side = height - BEVEL * 2.;
+    vec![
+        (Bounds::new(bounds.origin, size(width, BEVEL)), light),
+        (
+            Bounds::new(
+                point(bounds.left(), bounds.top() + BEVEL),
+                size(BEVEL, side),
+            ),
+            light,
+        ),
+        (
+            Bounds::new(
+                point(bounds.left(), bounds.bottom() - BEVEL),
+                size(width, BEVEL),
+            ),
+            shade,
+        ),
+        (
+            Bounds::new(
+                point(bounds.right() - BEVEL, bounds.top() + BEVEL),
+                size(BEVEL, side),
+            ),
+            shade,
+        ),
+    ]
+}
+
+/// The bevel, laid over whatever positioned element it is put in, filling it
+/// and taking no room or mouse.
+pub fn bevel(bevel: Bevel, cx: &App) -> impl IntoElement {
+    let palette = *palette(cx);
+    canvas(
+        |_, _, _| {},
+        move |bounds, _, window, _| {
+            for (edge, color) in bevel_edges(bounds, bevel, &palette) {
+                window.paint_quad(fill(edge, color));
+            }
+        },
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
 }
 
 /// The black laid over the window behind a modal surface.
@@ -359,7 +447,62 @@ mod tests {
     use gpui_kit::component::{Theme, ThemeMode};
     use gpui_kit::{Hsla, TestAppContext};
 
-    use super::{DARK, LIGHT, Palette, color};
+    use super::{Bevel, DARK, LIGHT, Palette, bevel_colors, bevel_edges, color};
+
+    /// The bevel is a pixel wide, lit along the top and left, shaded along
+    /// the bottom and right, within the surface, with no edge over another;
+    /// and faint on dark and light surfaces alike, its shade fainter still.
+    #[test]
+    fn the_bevel_is_faint_and_a_pixel_wide() {
+        use gpui_kit::{Bounds, point, px, size};
+        let surface = Bounds::new(point(px(10.), px(100.)), size(px(17.), px(60.)));
+        for (palette, lightness) in [(&DARK, [0.18, 0.27]), (&LIGHT, [0.82, 0.91])] {
+            let (light, shade) = bevel_colors(palette);
+            let edges = bevel_edges(surface, Bevel::Raised, palette);
+            // Pressed, the same edges, lit and shaded the other way round.
+            let pressed = bevel_edges(surface, Bevel::Pressed, palette);
+            for ((edge, color), (pressed_edge, pressed_color)) in edges.iter().zip(&pressed) {
+                assert_eq!(edge, pressed_edge);
+                assert_eq!(*pressed_color, if *color == light { shade } else { light });
+            }
+            assert_eq!(edges.len(), 4);
+            let area: f32 = edges
+                .iter()
+                .map(|(edge, _)| edge.size.width.as_f32() * edge.size.height.as_f32())
+                .sum();
+            // Its outline, a pixel wide, counted once.
+            assert_eq!(area, 2. * 17. + 2. * 58.);
+            for (edge, color) in &edges {
+                assert!(
+                    edge.left() >= surface.left()
+                        && edge.right() <= surface.right()
+                        && edge.top() >= surface.top()
+                        && edge.bottom() <= surface.bottom()
+                );
+                assert!(edge.size.width == px(1.) || edge.size.height == px(1.));
+                if *color == light {
+                    assert!(edge.top() == surface.top() || edge.left() == surface.left());
+                } else {
+                    assert!(edge.bottom() == surface.bottom() || edge.right() == surface.right());
+                }
+            }
+            for l in lightness {
+                let under = Hsla {
+                    h: 0.,
+                    s: 0.,
+                    l,
+                    a: 1.,
+                };
+                let lit = under.blend(light).l - l;
+                let shaded = l - under.blend(shade).l;
+                assert!(lit > 0. && lit < 0.1, "light {lit}");
+                assert!(shaded > 0. && shaded < 0.03, "shade {shaded}");
+                assert!(shaded < lit, "shade {shaded} over light {lit}");
+            }
+        }
+        let tiny = Bounds::new(point(px(0.), px(0.)), size(px(1.), px(1.)));
+        assert!(bevel_edges(tiny, Bevel::Raised, &DARK).is_empty());
+    }
 
     /// WCAG's contrast ratio between two opaque colours.
     fn contrast(a: u32, b: u32) -> f32 {

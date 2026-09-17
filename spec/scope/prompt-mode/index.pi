@@ -79,6 +79,27 @@ shape PromptEditorShape:
             removes it from the queue for good. A prompt already sent is no
             longer in the queue.
 
+        editing:
+            Each queued prompt in the list also has a button with a pencil icon,
+            before its cancel button, whose tooltip says it edits the prompt.
+            Clicking it edits the prompt in the @{ChatInputScope}, as it says,
+            and its row is highlighted while it is being edited. While it is,
+            it is held where it is: it is never sent, and a queue waiting on it
+            waits, even with auto-send on. Saving the edit puts the new text,
+            in the mode and with the attachments it was saved with, in its
+            place in the queue, saved with the project in place of what it
+            held, then lets the queue go on as before. An edit that can't be
+            saved leaves the prompt as it was, and a notification titled
+            "Could not save the queued prompt" says why. Cancelling the edit, or
+            cancelling the prompt from the list meanwhile, leaves the queue as
+            it was, less that prompt when it was cancelled.
+
+        queueingOnPurpose:
+            A prompt queued on purpose from the chat input's send menu, while
+            the harness is free, waits at the end of the queue rather than
+            being sent at once: it goes when "Send next" is clicked, or when
+            the next task is over and auto-send is on.
+
         autoSend:
             A "Send next automatically" switch picks between sending the next
             queued prompt as soon as the harness is free, and waiting. It starts

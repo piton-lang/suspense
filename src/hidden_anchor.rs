@@ -526,6 +526,18 @@ pub fn save(anchor: &HiddenAnchor, prompt: &str, project_dir: &Path) -> Result<P
     save_in(&history_dir(project_dir), anchor, prompt)
 }
 
+/// Compiles `prompt`, as `anchor`'s source, without keeping it: saved only
+/// for as long as it takes to compile, out of the history.
+pub fn preview(anchor: &HiddenAnchor, prompt: &str, project_dir: &Path) -> Result<CompiledPrompt> {
+    let dir = project_dir.join(APP_DIR).join("preview");
+    let file = save_in(&dir, anchor, prompt)?;
+    let compiled = compile(anchor, &file, project_dir);
+    fs::remove_file(&file).ok();
+    // Gone too once nothing else is being previewed.
+    fs::remove_dir(&dir).ok();
+    compiled
+}
+
 /// Where the project's questions are saved, apart from the history.
 pub fn asks_dir(project_dir: &Path) -> PathBuf {
     project_dir.join(APP_DIR).join(ASKS_DIR)
@@ -874,6 +886,34 @@ mod tests {
 
         let old = "anchor Prompt_old:\n    userPrompt:\n        first\n\n        second\n";
         assert_eq!(HiddenAnchor::parse(old).unwrap().1, "first\n\nsecond");
+    }
+
+    /// A preview compiles the prompt as sending it would, and keeps nothing:
+    /// not in the history, nor where it was compiled.
+    #[test]
+    fn previews_compile_and_keep_nothing() {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        let project_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut anchor = HiddenAnchor::random();
+        anchor
+            .imports
+            .add_from_source("from /scope/application import ApplicationScope");
+        anchor.system_prompt = Some("Be brief.".into());
+        let history = super::history_dir(project_dir).join(format!("x-{}.pi", anchor.name));
+        let compiled = super::preview(&anchor, "Look at @{ApplicationScope}", project_dir).unwrap();
+        assert_eq!(
+            compiled.user_prompt,
+            "Look at [ApplicationScope](.claude/reference/scope/application/ApplicationScope.md)"
+        );
+        assert_eq!(compiled.system_prompt.as_deref(), Some("Be brief."));
+        let kept = project_dir.join(super::APP_DIR).join("preview");
+        assert!(
+            !kept.exists() || fs::read_dir(&kept).unwrap().next().is_none(),
+            "the preview's source was kept"
+        );
+        assert!(!history.exists());
     }
 
     /// Compiles a hidden anchor, from outside the spec root, against this

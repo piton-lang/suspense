@@ -51,12 +51,12 @@ use gpui_kit::component::table::{Table, TableBody, TableCell, TableHead, TableHe
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::text::{TextView, TextViewStyle};
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
-use gpui_kit::component::{Disableable as _, WindowExt as _};
+use gpui_kit::component::{Disableable as _, Selectable as _, WindowExt as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::activity::{Job, JobKind};
-use crate::chat_input::{self, ChatInput, SendMode, Submit, TabChanged};
+use crate::chat_input::{self, ChatInput, PreviewPrompt, QueuedEdit, SendMode, Submit, TabChanged};
 use crate::commit_notes;
 use crate::file_link::{self, OpenFile};
 use crate::file_view::{CloseFile, FileView, OpenDefinition, SendToPrompt};
@@ -146,6 +146,9 @@ struct QueueItem {
     id: usize,
     text: SharedString,
     saved: Option<QueuedPrompt>,
+    /// Queued on purpose: once saved, it waits rather than being sent at
+    /// once.
+    wait: bool,
 }
 
 /// A prompt on its way to the harness.
@@ -1059,6 +1062,8 @@ pub struct PromptMode {
     output_locked: bool,
     queue_scroll: ScrollHandle,
     chat_input: Entity<ChatInput>,
+    /// The queued prompt being edited in the chat input, by its id.
+    editing_queued: Option<usize>,
     /// The harness is working on the latest task.
     working: bool,
     /// The project changed while the harness worked; its history loads once
@@ -1127,6 +1132,8 @@ pub struct PromptMode {
     /// The conversation questions share, apart from the tasks'.
     ask_session: Option<Session>,
     _file_subscriptions: Vec<Subscription>,
+    /// Compiling the prompt for the chat input's preview.
+    _preview: Task<()>,
     /// Writes a finished task's commit note: [`commit_notes::summarize`],
     /// replaced in tests.
     summarize: Summarize,
@@ -1141,15 +1148,24 @@ impl PromptMode {
                 &chat_input,
                 window,
                 |this, _, submit: &Submit, window, cx| {
-                    this.send(
-                        submit.text.clone(),
-                        submit.mode,
-                        submit.attached_text.clone(),
-                        window,
-                        cx,
-                    )
+                    let (text, attached_text) = (submit.text.clone(), submit.attached_text.clone());
+                    // Queued on purpose, it waits in the queue even while the
+                    // harness is free; a question never queues.
+                    if submit.queue && submit.mode != SendMode::Ask && this.project_dir.is_some() {
+                        this.enqueue(text, true, submit.mode, attached_text, window, cx);
+                    } else {
+                        this.send(text, submit.mode, attached_text, window, cx)
+                    }
                 },
             ),
+            cx.subscribe_in(
+                &chat_input,
+                window,
+                |this, _, edit: &QueuedEdit, window, cx| this.queued_edit_over(edit, window, cx),
+            ),
+            cx.subscribe(&chat_input, |this, input, preview: &PreviewPrompt, cx| {
+                this.preview(input, preview, cx)
+            }),
             cx.subscribe(&chat_input, |this, input, _: &TabChanged, cx| {
                 this.on_ask_tab = input.read(cx).mode() == SendMode::Ask;
                 cx.notify();
@@ -1169,6 +1185,7 @@ impl PromptMode {
             output_locked: false,
             queue_scroll: ScrollHandle::new(),
             chat_input,
+            editing_queued: None,
             working: false,
             history_stale: false,
             _history_load: Task::ready(()),
@@ -1233,6 +1250,7 @@ impl PromptMode {
             on_ask_tab: false,
             ask_session: None,
             _file_subscriptions: Vec::new(),
+            _preview: Task::ready(()),
             summarize: commit_notes::summarize,
             _subscriptions: subscriptions,
         };
@@ -1668,6 +1686,40 @@ impl PromptMode {
         cx.notify();
     }
 
+    /// Compiles a prompt as it would be sent, without sending it or keeping
+    /// it, for the chat input to preview.
+    fn preview(
+        &mut self,
+        input: Entity<ChatInput>,
+        preview: &PreviewPrompt,
+        cx: &mut Context<Self>,
+    ) {
+        let id = preview.id;
+        let Some(project_dir) = self.project_dir.clone() else {
+            input.update(cx, |input, cx| {
+                input.set_preview(id, Err("Open a project to preview the prompt.".into()), cx)
+            });
+            return;
+        };
+        let lsp = input.read(cx).lsp();
+        let (text, mode, attached_text) = (
+            preview.text.clone(),
+            preview.mode,
+            preview.attached_text.clone(),
+        );
+        let compile = cx.background_spawn(async move {
+            let anchor = resolve_anchor(&text, mode, attached_text, lsp, &project_dir)?;
+            hidden_anchor::preview(&anchor, &text, &project_dir)
+        });
+        self._preview = cx.spawn(async move |_, cx| {
+            let compiled = compile
+                .await
+                .map(|compiled| compiled.user_prompt)
+                .map_err(|err| format!("{err:#}"));
+            input.update(cx, |input, cx| input.set_preview(id, compiled, cx));
+        });
+    }
+
     /// Sends `text` in `mode` now if the harness is free, or queues it. A
     /// question is always asked now.
     pub fn send(
@@ -1689,7 +1741,7 @@ impl PromptMode {
         if mode == SendMode::Ask {
             self.ask(text, attached_text, cx);
         } else if self.working {
-            self.enqueue(text, mode, attached_text, window, cx);
+            self.enqueue(text, false, mode, attached_text, window, cx);
         } else {
             self.start(text, Sending::Now(mode, attached_text), cx);
         }
@@ -1710,6 +1762,7 @@ impl PromptMode {
                 QueueItem {
                     id: self.next_queue_id,
                     text: saved.text.clone().into(),
+                    wait: false,
                     saved: Some(saved),
                 }
             })
@@ -1777,6 +1830,7 @@ impl PromptMode {
     fn enqueue(
         &mut self,
         text: String,
+        wait: bool,
         mode: SendMode,
         attached_text: Vec<String>,
         window: &mut Window,
@@ -1790,6 +1844,7 @@ impl PromptMode {
         self.queue.push(QueueItem {
             id,
             text: text.clone().into(),
+            wait,
             saved: None,
         });
         cx.notify();
@@ -1831,7 +1886,9 @@ impl PromptMode {
         match saved {
             Ok(saved) => {
                 self.queue[ix].saved = Some(saved);
-                self.auto_send_next(cx);
+                if !self.queue[ix].wait {
+                    self.auto_send_next(cx);
+                }
             }
             Err(err) => {
                 self.queue.remove(ix);
@@ -1844,12 +1901,134 @@ impl PromptMode {
         cx.notify();
     }
 
+    /// Edits the queued prompt `id` in the chat input, holding it in the queue
+    /// meanwhile.
+    fn edit_queued(&mut self, id: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((ix, item)) = self
+            .queue
+            .iter()
+            .enumerate()
+            .find(|(_, item)| item.id == id)
+        else {
+            return;
+        };
+        let Some(saved) = &item.saved else {
+            return;
+        };
+        let (text, attached_text) = (saved.text.clone(), saved.anchor.attached_text.clone());
+        let mode = anchor_mode(&saved.anchor).unwrap_or(SendMode::Both);
+        // Another edit in progress simply gives way: the chat input puts back
+        // what it set aside before setting it aside again.
+        self.editing_queued = Some(id);
+        self.chat_input.update(cx, |input, cx| {
+            input.begin_editing(ix + 1, text, mode, attached_text, window, cx)
+        });
+        cx.notify();
+    }
+
+    /// Cancels editing a queued prompt, as switching projects does.
+    pub fn cancel_queued_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.editing_queued.take().is_some() {
+            self.chat_input
+                .update(cx, |input, cx| input.cancel_editing(window, cx));
+            cx.notify();
+        }
+    }
+
+    /// Editing a queued prompt is over: saved, its new text takes its place
+    /// in the queue, saved with the project where it was; either way the
+    /// queue goes on.
+    fn queued_edit_over(&mut self, edit: &QueuedEdit, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(id) = self.editing_queued.take() else {
+            return;
+        };
+        let QueuedEdit::Saved {
+            text,
+            mode,
+            attached_text,
+        } = edit
+        else {
+            self.auto_send_next(cx);
+            cx.notify();
+            return;
+        };
+        let (Some(project_dir), Some(item)) = (
+            self.project_dir.clone(),
+            self.queue.iter_mut().find(|item| item.id == id),
+        ) else {
+            return;
+        };
+        let Some(old) = item.saved.take() else {
+            return;
+        };
+        let old_text = std::mem::replace(&mut item.text, text.clone().into());
+        cx.notify();
+        let lsp = self.chat_input.read(cx).lsp();
+        let (text, mode, attached_text) = (text.clone(), *mode, attached_text.clone());
+        let save = cx.background_spawn({
+            let project_dir = project_dir.clone();
+            async move {
+                match resolve_anchor(&text, mode, attached_text, lsp, &project_dir) {
+                    Ok(anchor) => prompt_queue::replace(old.file.clone(), anchor, text)
+                        .map_err(|err| (old, err)),
+                    Err(err) => Err((old, err)),
+                }
+            }
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let saved = save.await;
+            this.update_in(cx, |this, window, cx| {
+                this.in_project(&project_dir, cx, |this, cx| {
+                    let Some(item) = this.queue.iter_mut().find(|item| item.id == id) else {
+                        // Cancelled while it saved.
+                        if let Ok(saved) = &saved {
+                            prompt_queue::remove(&saved.file).ok();
+                        }
+                        return;
+                    };
+                    match saved {
+                        Ok(saved) => item.saved = Some(saved),
+                        Err((old, err)) => {
+                            // It stays as it was.
+                            item.text = old_text;
+                            item.saved = Some(old);
+                            window.push_notification(
+                                Notification::error(format!("{err:#}"))
+                                    .title("Could not save the queued prompt"),
+                                cx,
+                            );
+                        }
+                    }
+                    this.auto_send_next(cx);
+                    cx.notify();
+                });
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Keeps the chat input's note of where the prompt being edited is in the
+    /// queue current.
+    fn sync_editing_position(&self, cx: &mut Context<Self>) {
+        let Some(id) = self.editing_queued else {
+            return;
+        };
+        if let Some(ix) = self.queue.iter().position(|item| item.id == id) {
+            self.chat_input
+                .update(cx, |input, cx| input.set_editing_position(ix + 1, cx));
+        }
+    }
+
     /// Sends the first queued prompt, if the harness is free and it is saved.
     fn send_next(&mut self, cx: &mut Context<Self>) {
-        // Without a project it could not be sent, and must stay queued.
+        // Without a project it could not be sent, and must stay queued; nor
+        // while it is being edited.
         if self.working
             || self.project_dir.is_none()
-            || !self.queue.first().is_some_and(|item| item.saved.is_some())
+            || !self.queue.first().is_some_and(|item| {
+                item.saved.is_some() && (self.in_background || Some(item.id) != self.editing_queued)
+            })
         {
             return;
         }
@@ -1858,6 +2037,9 @@ impl PromptMode {
             self.queue_held = false;
         }
         let Some(saved) = item.saved else { return };
+        if !self.in_background {
+            self.sync_editing_position(cx);
+        }
         self.start(item.text.to_string(), Sending::Queued(saved), cx);
     }
 
@@ -1873,6 +2055,12 @@ impl PromptMode {
         let Some(ix) = self.queue.iter().position(|item| item.id == id) else {
             return;
         };
+        // Cancelled while it is being edited, the edit goes too.
+        if self.editing_queued == Some(id) {
+            self.editing_queued = None;
+            self.chat_input
+                .update(cx, |input, cx| input.cancel_editing(window, cx));
+        }
         let item = self.queue.remove(ix);
         if let Some(saved) = &item.saved
             && let Err(err) = prompt_queue::remove(&saved.file)
@@ -1887,6 +2075,7 @@ impl PromptMode {
         if self.queue.is_empty() {
             self.queue_held = false;
         }
+        self.sync_editing_position(cx);
         cx.notify();
     }
 
@@ -2987,9 +3176,11 @@ impl PromptMode {
                 .gap_1()
                 .children(self.queue.iter().enumerate().map(|(ix, item)| {
                     let id = item.id;
+                    let editing = self.editing_queued == Some(id);
                     let row = h_flex()
                         .id(("queued-prompt", ix))
                         .gap_2()
+                        .when(editing, |row| row.bg(theme.list_active))
                         .child(
                             div()
                                 .flex_none()
@@ -3007,6 +3198,18 @@ impl PromptMode {
                         .when(item.saved.is_none(), |row| {
                             row.child(div().flex_none().child(Spinner::new().small()))
                         })
+                        .child(
+                            Button::new(("edit-queued", ix))
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::Pencil)
+                                .tooltip("Edit this prompt")
+                                .selected(editing)
+                                .disabled(item.saved.is_none())
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.edit_queued(id, window, cx)
+                                })),
+                        )
                         .child(
                             Button::new(("cancel-queued", ix))
                                 .ghost()
@@ -3156,7 +3359,7 @@ impl PromptMode {
                 .border_1()
                 .border_color(theme.border)
                 .bg(theme.tokens.table)
-                .child(output_header())
+                .child(output_header(cx))
                 .child(div().flex_1().min_h_0().child(rows))
                 .into_any_element()
         };
@@ -3461,7 +3664,12 @@ impl Render for PromptMode {
 /// Markdown whose headings are sized from the window's base font size; left
 /// to its default, the smaller headings come out below the body text. With
 /// `open`, a link to a file opens it in the editor.
-fn markdown_view(key: MarkdownKey, text: &str, open: Option<&OpenFile>, cx: &App) -> TextView {
+pub(crate) fn markdown_view(
+    key: MarkdownKey,
+    text: &str,
+    open: Option<&OpenFile>,
+    cx: &App,
+) -> TextView {
     let text = markdown::without_inline_code(text);
     let view = cached_text_view(key, text, cx).style(TextViewStyle {
         heading_base_font_size: cx.theme().font_size,
@@ -3720,13 +3928,23 @@ fn task_summary(id: (&'static str, usize), ix: usize, task: &PromptTask, cx: &Ap
     gpui_kit::TestSupportExt::test_support(summary).into_any_element()
 }
 
-/// The header of a task's output table.
-fn output_header() -> TableHeader {
-    TableHeader::new().child(
+/// The header of a task's output table, with the theme's bevel.
+fn output_header(cx: &App) -> TableHeader {
+    TableHeader::new().relative().child(
         TableRow::new()
             .child(TableHead::new().w(KIND_WIDTH).flex_none().child("Type"))
             .child(TableHead::new().flex_1().min_w_0().child("Output"))
-            .child(TableHead::new().w(STATUS_WIDTH).flex_none().child("Status")),
+            .child(TableHead::new().w(STATUS_WIDTH).flex_none().child("Status"))
+            // Laid over the whole header, taking no room of the row's.
+            .child(
+                TableHead::new()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full()
+                    .p_0()
+                    .child(crate::theme::bevel(crate::theme::Bevel::Raised, cx)),
+            ),
     )
 }
 
@@ -3892,7 +4110,7 @@ pub(crate) fn output_table(
             .into_any_element();
     }
 
-    let header = output_header();
+    let header = output_header(cx);
     let project_dir = ProjectDirectory::get(cx);
     let render_row = |row_ix: usize, row: &OutputRow| {
         output_row(
@@ -4233,6 +4451,165 @@ mod tests {
             Root::new(view, window, cx)
         });
         (prompt_mode.unwrap(), window.into())
+    }
+
+    /// A queued prompt is edited in the chat input, held meanwhile, and saved
+    /// back in its place; a prompt queued on purpose while the harness is free
+    /// waits rather than being sent.
+    #[gpui_kit::test]
+    async fn queued_prompts_are_edited_in_place_and_queued_on_purpose(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-queue-edit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("piton.config.pi"),
+            "export piton-config Project:\n    root: ./spec\n\nbelay-config Belay:\n    codeRoot: ./src\n",
+        )
+        .unwrap();
+        let dir = std::fs::canonicalize(&dir).unwrap();
+        for text in ["first", "second"] {
+            prompt_queue::add(HiddenAnchor::random(), text.into(), &dir).unwrap();
+        }
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| {
+            crate::chat_input::bind_keys(cx);
+            ProjectDirectory::set(dir.clone(), cx)
+        });
+        cx.run_until_parked();
+        let chat = prompt_mode.read_with(cx, |this, _| this.chat_input_view());
+        let (first, second) = prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.queued_texts(), ["first", "second"]);
+            (this.queue[0].id, this.queue[1].id)
+        });
+
+        // Edited, the first prompt is held: Send next sends nothing.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.edit_queued(first, window, cx);
+                this.send_next_clicked(cx);
+                assert!(this.tasks.is_empty(), "an edited prompt was sent");
+                // Editing another cancels the first edit.
+                this.edit_queued(second, window, cx);
+            });
+            window.render_frame(cx);
+            assert_eq!(chat.read(cx).editor_text_for_test(cx), "second");
+        })
+        .unwrap();
+        cx.run_until_parked();
+        prompt_mode.update(cx, |this, _| {
+            assert_eq!(this.editing_queued, Some(second));
+            this.set_working(true);
+        });
+        cx.update_window(handle, |_, window, cx| {
+            chat.update(cx, |input, cx| {
+                input.set_text_for_test("second, edited", window, cx)
+            });
+            window.press("ctrl-enter", cx);
+        })
+        .unwrap();
+        let start = std::time::Instant::now();
+        loop {
+            cx.run_until_parked();
+            let saved = prompt_mode.read_with(cx, |this, _| {
+                this.queue[1].saved.as_ref().map(|saved| saved.text.clone())
+            });
+            if saved.as_deref() == Some("second, edited") {
+                break;
+            }
+            assert!(start.elapsed() < Duration::from_secs(10), "never saved");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let on_disk: Vec<String> = prompt_queue::load(&dir)
+            .into_iter()
+            .map(|queued| queued.text)
+            .collect();
+        assert_eq!(on_disk, ["first", "second, edited"]);
+        prompt_mode.read_with(cx, |this, _| assert_eq!(this.editing_queued, None));
+
+        // Queued on purpose with the harness free, it waits.
+        prompt_mode.update(cx, |this, cx| {
+            this.set_working(false);
+            this.queue.retain(|item| item.id == second);
+            this.auto_send = true;
+            this.queue_held = false;
+            cx.notify();
+        });
+        cx.update_window(handle, |_, window, cx| {
+            chat.update(cx, |input, cx| {
+                input.set_text_for_test("on purpose", window, cx);
+                input.pick_send_option(1, window, cx);
+            });
+        })
+        .unwrap();
+        let start = std::time::Instant::now();
+        loop {
+            cx.run_until_parked();
+            let queued = prompt_mode.read_with(cx, |this, _| {
+                this.queue
+                    .last()
+                    .is_some_and(|item| item.saved.is_some() && item.text.as_ref() == "on purpose")
+            });
+            if queued {
+                break;
+            }
+            assert!(start.elapsed() < Duration::from_secs(10), "never queued");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        prompt_mode.read_with(cx, |this, _| {
+            assert!(this.tasks.is_empty(), "queued on purpose, it was sent");
+        });
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Previewing from the chat input compiles the prompt against the project,
+    /// and shows what the harness would receive, sending nothing.
+    #[gpui_kit::test]
+    async fn the_chat_input_previews_a_compiled_prompt(cx: &mut TestAppContext) {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| {
+            crate::chat_input::bind_keys(cx);
+            ProjectDirectory::set(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")), cx)
+        });
+        cx.run_until_parked();
+        let history_files = || {
+            std::fs::read_dir(crate::hidden_anchor::history_dir(std::path::Path::new(
+                env!("CARGO_MANIFEST_DIR"),
+            )))
+            .map(|dir| dir.count())
+            .unwrap_or(0)
+        };
+        let before = history_files();
+        let chat = prompt_mode.read_with(cx, |this, _| this.chat_input_view());
+        cx.update_window(handle, |_, window, cx| {
+            chat.update(cx, |input, cx| {
+                input.set_text_for_test("Preview me", window, cx);
+                input.pick_send_option(0, window, cx);
+            });
+        })
+        .unwrap();
+        let start = std::time::Instant::now();
+        loop {
+            cx.run_until_parked();
+            let preview = chat.read_with(cx, |input, _| input.preview().cloned());
+            match preview {
+                Some(crate::chat_input::Preview::Compiled(markdown)) => {
+                    assert_eq!(markdown, "Preview me");
+                    break;
+                }
+                Some(crate::chat_input::Preview::Failed(error)) => panic!("{error}"),
+                _ => {}
+            }
+            assert!(start.elapsed() < Duration::from_secs(20), "never compiled");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(
+            history_files(),
+            before,
+            "the preview was saved to the history"
+        );
     }
 
     /// Two folders, each an empty project, named for a test.
@@ -6268,17 +6645,41 @@ mod tests {
                 column.left() >= output.right() - gpui_kit::px(1.),
                 "the column {column:?} is not right of the output {output:?}"
             );
-            // The track and every button span the column's full width.
+            // The table's header has the theme's bevel: a lit pixel along its
+            // top and a shaded one along its bottom, inside the output.
+            let (light, shade) = crate::theme::bevel_colors(crate::theme::palette(cx));
+            let scale = window.scale_factor();
+            let edges = |color: gpui_kit::Hsla| {
+                window
+                    .painted_quads()
+                    .into_iter()
+                    .filter(|quad| quad.background.as_solid() == Some(color))
+                    .filter(|quad| {
+                        let b = &quad.bounds;
+                        // Not the scroll column's thumb, which has one too.
+                        b.origin.x.0 >= output.left().as_f32() * scale
+                            && b.origin.x.0 < column.left().as_f32() * scale
+                            && b.origin.y.0 >= output.top().as_f32() * scale
+                            && b.origin.y.0 < (output.top().as_f32() + 80.) * scale
+                    })
+                    .count()
+            };
+            assert_eq!(edges(light), 2, "the header's lit edges");
+            assert_eq!(edges(shade), 2, "the header's shaded edges");
+            // The track spans the column's full width, and every button sits
+            // just inside the track's line.
+            let track = window.find("task-output-scroll-track").bounds();
+            assert!(track.left() == column.left() && track.right() == column.right());
             for id in [
-                "task-output-scroll-track",
                 "task-output-scroll-up",
                 "task-output-scroll-down",
                 "task-output-scroll-lock",
             ] {
                 let part = window.find(id).bounds();
                 assert!(
-                    part.left() == column.left() && part.right() == column.right(),
-                    "{id} {part:?} doesn't span the column {column:?}"
+                    part.left() == column.left() + gpui_kit::px(1.)
+                        && part.right() == column.right(),
+                    "{id} {part:?} doesn't sit inside the track's line in {column:?}"
                 );
             }
             assert!(

@@ -15,6 +15,7 @@ use gpui_kit::component::input::{
     CompletionProvider, Editor, EditorState, Enter, Escape, IndentInline, InputEvent, MoveDown,
     MoveUp, OutdentInline, Rope,
 };
+use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme, Disableable, Icon, Sizable as _, h_flex, v_flex};
@@ -31,6 +32,9 @@ use crate::piton_syntax;
 use crate::project_directory::ProjectDirectory;
 use crate::project_lsp::ProjectLsp;
 
+/// Keys the preview's markdown apart from any task's.
+const PREVIEW_TABLE: usize = usize::MAX;
+
 /// The input grows with its text up to this many rows, then scrolls.
 const MAX_ROWS: usize = 12;
 
@@ -39,7 +43,99 @@ const SEND_SHORTCUT: &str = "⌘Enter";
 #[cfg(not(target_os = "macos"))]
 const SEND_SHORTCUT: &str = "Ctrl+Enter";
 
-actions!(chat_input, [NextMode, PreviousMode]);
+#[cfg(target_os = "macos")]
+const SEND_MENU_SHORTCUT: &str = "⌘⇧Enter";
+#[cfg(not(target_os = "macos"))]
+const SEND_MENU_SHORTCUT: &str = "Ctrl+Shift+Enter";
+
+actions!(
+    chat_input,
+    [NextMode, PreviousMode, ToggleSendMenu, SendPreviewed]
+);
+
+#[cfg(target_os = "macos")]
+const PREVIEW_HINT: &str = "⌘Enter to send · Esc to edit";
+#[cfg(not(target_os = "macos"))]
+const PREVIEW_HINT: &str = "Ctrl+Enter to send · Esc to edit";
+
+#[cfg(target_os = "macos")]
+const EDITING_HINT: &str = "⌘Enter to save · Esc to cancel";
+#[cfg(not(target_os = "macos"))]
+const EDITING_HINT: &str = "Ctrl+Enter to save · Esc to cancel";
+
+/// The other ways to send a prompt, in the send button's menu, in order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SendOption {
+    PreviewCompiled,
+    Queue,
+}
+
+impl SendOption {
+    pub const ALL: [SendOption; 2] = [SendOption::PreviewCompiled, SendOption::Queue];
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::PreviewCompiled => "Preview Compiled Prompt",
+            Self::Queue => "Queue",
+        }
+    }
+
+    fn icon(self) -> IconName {
+        match self {
+            Self::PreviewCompiled => IconName::Eye,
+            Self::Queue => IconName::ListEnd,
+        }
+    }
+
+    /// Whether it can be picked in `mode`: a question is never queued.
+    fn enabled(self, mode: SendMode) -> bool {
+        !(self == Self::Queue && mode == SendMode::Ask)
+    }
+}
+
+/// What editing a queued prompt set aside, to bring back after.
+struct SetAside {
+    text: String,
+    attachments: Vec<Attachment>,
+    tab: usize,
+}
+
+/// A queued prompt being edited in the input.
+struct Editing {
+    /// Its place in the queue, counted from 1.
+    position: usize,
+    set_aside: SetAside,
+}
+
+/// Emitted when editing a queued prompt is over: saved, with what it now
+/// holds, or cancelled.
+pub enum QueuedEdit {
+    Saved {
+        text: String,
+        mode: SendMode,
+        attached_text: Vec<String>,
+    },
+    Cancelled,
+}
+
+/// The prompt as it would be sent, shown in place of the text input.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Preview {
+    Compiling,
+    /// The markdown the harness would receive.
+    Compiled(String),
+    /// Why it could not be compiled.
+    Failed(String),
+}
+
+/// Emitted to compile the prompt for a preview; its result comes back to
+/// [`ChatInput::set_preview`] with the same `id`.
+pub struct PreviewPrompt {
+    pub id: usize,
+    pub text: String,
+    pub mode: SendMode,
+    pub attached_text: Vec<String>,
+}
 
 const CONTEXT: &str = "ChatInput";
 
@@ -48,6 +144,10 @@ pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("ctrl-tab", NextMode, Some(CONTEXT)),
         KeyBinding::new("ctrl-shift-tab", PreviousMode, Some(CONTEXT)),
+        // Ctrl/Cmd+Shift+Enter opens the send button's menu.
+        KeyBinding::new("secondary-shift-enter", ToggleSendMenu, Some(CONTEXT)),
+        // Sends a previewed prompt, when the text input isn't there to.
+        KeyBinding::new("secondary-enter", SendPreviewed, Some(CONTEXT)),
     ]);
 }
 
@@ -204,6 +304,8 @@ pub struct Submit {
     pub mode: SendMode,
     /// The text attached to the prompt, in the order it was attached.
     pub attached_text: Vec<String>,
+    /// Queued on purpose, rather than sent if the harness is free.
+    pub queue: bool,
 }
 
 /// Something attached to the prompt being written, sent along with it.
@@ -236,10 +338,22 @@ pub struct ChatInput {
     /// then cleared, with the prompt.
     attachments: Vec<Attachment>,
     next_attachment_id: usize,
+    /// The send button's menu, while open: the option highlighted.
+    send_menu: Option<usize>,
+    /// The compiled prompt shown in place of the text input, and which
+    /// request for it is the latest.
+    preview: Option<Preview>,
+    preview_id: usize,
+    preview_scroll: ScrollHandle,
+    /// The queued prompt being edited, while one is.
+    editing: Option<Editing>,
     _subscriptions: Vec<Subscription>,
 }
 
+impl EventEmitter<QueuedEdit> for ChatInput {}
+
 impl EventEmitter<Submit> for ChatInput {}
+impl EventEmitter<PreviewPrompt> for ChatInput {}
 
 /// Emitted when another tab is selected.
 pub struct TabChanged;
@@ -300,6 +414,11 @@ impl ChatInput {
             chain_width: None,
             attachments: Vec::new(),
             next_attachment_id: 0,
+            send_menu: None,
+            preview: None,
+            preview_id: 0,
+            preview_scroll: ScrollHandle::new(),
+            editing: None,
             _subscriptions: subscriptions,
         };
         this.connect_lsp(cx);
@@ -393,7 +512,264 @@ impl ChatInput {
 
     /// Moves keyboard focus into the input.
     pub fn focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.editor.read(cx).focus_handle(cx).focus(window, cx);
+        if self.preview.is_some() {
+            self.focus_handle.focus(window, cx);
+        } else {
+            self.editor.read(cx).focus_handle(cx).focus(window, cx);
+        }
+    }
+
+    /// Opens the send button's menu on its first option, or closes it. Not
+    /// while the input is empty, or a preview shows.
+    pub fn toggle_send_menu(&mut self, cx: &mut Context<Self>) {
+        if self.send_menu.take().is_none()
+            && !self.editor.read(cx).value().is_empty()
+            && self.preview.is_none()
+            && self.editing.is_none()
+        {
+            self.completion.update(cx, |menu, cx| menu.hide(cx));
+            let mode = TABS[self.selected_tab];
+            self.send_menu = SendOption::ALL
+                .iter()
+                .position(|option| option.enabled(mode));
+        }
+        cx.notify();
+    }
+
+    /// Whether the send button's menu is open.
+    #[cfg(test)]
+    pub fn send_menu_open(&self) -> bool {
+        self.send_menu.is_some()
+    }
+
+    /// Moves the menu's highlight `step` options along, wrapping around.
+    fn step_send_menu(&mut self, step: isize, cx: &mut Context<Self>) {
+        let mode = TABS[self.selected_tab];
+        if let Some(highlight) = &mut self.send_menu {
+            let count = SendOption::ALL.len() as isize;
+            // Over any option that can't be picked.
+            for _ in 0..count {
+                *highlight = (*highlight as isize + step).rem_euclid(count) as usize;
+                if SendOption::ALL[*highlight].enabled(mode) {
+                    break;
+                }
+            }
+            cx.notify();
+        }
+    }
+
+    /// Picks the menu's option at `ix`, closing it.
+    pub fn pick_send_option(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let mode = TABS[self.selected_tab];
+        match SendOption::ALL
+            .get(ix)
+            .filter(|option| option.enabled(mode))
+        {
+            Some(SendOption::PreviewCompiled) => {
+                self.send_menu = None;
+                self.start_preview(window, cx)
+            }
+            Some(SendOption::Queue) => {
+                self.send_menu = None;
+                self.send(true, window, cx)
+            }
+            None => cx.notify(),
+        }
+    }
+
+    /// Asks for the prompt compiled as it would be sent from the selected tab,
+    /// and shows it in place of the text input, which keeps its text.
+    fn start_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let text = self.editor.read(cx).value().to_string();
+        if text.is_empty() {
+            return;
+        }
+        self.preview_id += 1;
+        self.preview = Some(Preview::Compiling);
+        self.preview_scroll = ScrollHandle::new();
+        self.focus_handle.focus(window, cx);
+        cx.emit(PreviewPrompt {
+            id: self.preview_id,
+            text,
+            mode: TABS[self.selected_tab],
+            attached_text: self
+                .attachments
+                .iter()
+                .map(|attachment| attachment.text.clone())
+                .collect(),
+        });
+        cx.notify();
+    }
+
+    /// Shows the compiled prompt, or why it couldn't compile, for the latest
+    /// preview asked for, if it still shows.
+    pub fn set_preview(
+        &mut self,
+        id: usize,
+        compiled: Result<String, String>,
+        cx: &mut Context<Self>,
+    ) {
+        if id != self.preview_id || self.preview.is_none() {
+            return;
+        }
+        self.preview = Some(match compiled {
+            Ok(markdown) => Preview::Compiled(markdown),
+            Err(error) => Preview::Failed(error),
+        });
+        cx.notify();
+    }
+
+    #[cfg(test)]
+    pub fn editor_text_for_test(&self, cx: &App) -> String {
+        self.editor.read(cx).value().to_string()
+    }
+
+    #[cfg(test)]
+    pub fn set_text_for_test(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor.update(cx, |editor, cx| {
+            editor.set_value(text.to_string(), window, cx)
+        });
+    }
+
+    /// The preview showing, if one is.
+    #[cfg(test)]
+    pub fn preview(&self) -> Option<&Preview> {
+        self.preview.as_ref()
+    }
+
+    /// Goes back from the preview to the text input, as it was.
+    fn close_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.preview.take().is_some() {
+            self.editor.read(cx).focus_handle(cx).focus(window, cx);
+            cx.notify();
+        }
+    }
+
+    /// The send button's menu, above the button, its right edge on the
+    /// button's.
+    fn render_send_menu(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let highlight = self.send_menu?;
+        let theme = cx.theme();
+        let mode = TABS[self.selected_tab];
+        let rows = SendOption::ALL.iter().enumerate().map(|(ix, option)| {
+            let enabled = option.enabled(mode);
+            let row = h_flex()
+                .id(("send-option", ix))
+                .gap_2()
+                .px_3()
+                .py_1p5()
+                .when(!enabled, |row| row.opacity(0.5))
+                .when(enabled, |row| {
+                    row.cursor_pointer().hover(|row| row.bg(theme.list_hover))
+                })
+                .when(ix == highlight && enabled, |row| row.bg(theme.list_active))
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_click(
+                    cx.listener(move |this, _, window, cx| this.pick_send_option(ix, window, cx)),
+                )
+                .child(
+                    Icon::new(option.icon())
+                        .small()
+                        .text_color(theme.muted_foreground),
+                )
+                .child(div().whitespace_nowrap().child(option.label()));
+            // Lets UI tests find the option; inert in normal builds.
+            gpui_kit::TestSupportExt::test_support(row)
+        });
+        let menu = v_flex()
+            .id("send-menu")
+            .absolute()
+            .bottom_full()
+            .right_0()
+            .mb_1()
+            .py_1()
+            .min_w(px(220.))
+            .bg(theme.popover)
+            .border_1()
+            .border_color(theme.border)
+            .rounded(theme.radius)
+            .shadow_md()
+            .occlude()
+            .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                this.send_menu = None;
+                cx.notify();
+            }))
+            .children(rows);
+        // Lets UI tests find the menu; inert in normal builds.
+        Some(
+            deferred(gpui_kit::TestSupportExt::test_support(menu))
+                .with_priority(1)
+                .into_any_element(),
+        )
+    }
+
+    /// The compiled prompt in place of the text input: a row saying what it is
+    /// and how to go on, above what the harness would receive.
+    fn render_preview(
+        &self,
+        preview: &Preview,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = cx.theme();
+        let heading = h_flex()
+            .gap_2()
+            .text_xs()
+            .map(|row| match preview {
+                Preview::Compiling => row
+                    .child(Spinner::new().xsmall().color(theme.muted_foreground))
+                    .child(div().text_color(theme.muted_foreground).child("Compiling…")),
+                _ => row.child(
+                    div()
+                        .font_weight(FontWeight::MEDIUM)
+                        .child("Compiled prompt"),
+                ),
+            })
+            .child(div().flex_1())
+            .child(
+                div()
+                    .text_color(theme.muted_foreground)
+                    .whitespace_nowrap()
+                    .child(PREVIEW_HINT),
+            );
+        let content = match preview {
+            Preview::Compiling => None,
+            Preview::Compiled(markdown) => Some(
+                crate::prompt_mode::markdown_view(
+                    crate::markdown::MarkdownKey {
+                        kind: crate::markdown::MarkdownKind::Prompt,
+                        table: PREVIEW_TABLE,
+                        row: self.preview_id,
+                    },
+                    markdown,
+                    None,
+                    cx,
+                )
+                .into_any_element(),
+            ),
+            Preview::Failed(error) => Some(
+                div()
+                    .text_sm()
+                    .text_color(theme.danger)
+                    .child(error.clone())
+                    .into_any_element(),
+            ),
+        };
+        let body = div()
+            .id("prompt-preview-body")
+            .max_h(window.viewport_size().height * 0.4)
+            .overflow_y_scroll()
+            .track_scroll(&self.preview_scroll)
+            .children(content);
+        let preview = v_flex()
+            .id("prompt-preview")
+            .flex_1()
+            .min_w_0()
+            .gap_1()
+            .child(heading)
+            .child(body);
+        // Lets UI tests find the preview; inert in normal builds.
+        gpui_kit::TestSupportExt::test_support(preview).into_any_element()
     }
 
     /// Inserts a harness mention at the cursor, after a space when the cursor
@@ -450,9 +826,126 @@ impl ChatInput {
     }
 
     fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.send(false, window, cx)
+    }
+
+    /// Edits the queued prompt at `position` in the queue, counted from 1, in
+    /// the input: what is being written is set aside, and the prompt's text,
+    /// attachments, and mode take its place.
+    pub fn begin_editing(
+        &mut self,
+        position: usize,
+        text: String,
+        mode: SendMode,
+        attached_text: Vec<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.end_editing(window, cx);
+        self.send_menu = None;
+        self.preview = None;
+        let set_aside = SetAside {
+            text: self.editor.read(cx).value().to_string(),
+            attachments: std::mem::take(&mut self.attachments),
+            tab: self.selected_tab,
+        };
+        for text in attached_text {
+            self.attach_text(text, cx);
+        }
+        let tab = TABS
+            .iter()
+            .position(|tab| *tab == mode)
+            .unwrap_or(DEFAULT_TAB);
+        self.put_back(text, tab, window, cx);
+        self.editing = Some(Editing {
+            position,
+            set_aside,
+        });
+        cx.notify();
+    }
+
+    /// Cancels editing a queued prompt, if one is being edited, bringing back
+    /// what was set aside.
+    pub fn cancel_editing(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.end_editing(window, cx) {
+            cx.emit(QueuedEdit::Cancelled);
+        }
+    }
+
+    /// Brings back what editing set aside; whether a prompt was being edited.
+    fn end_editing(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let Some(editing) = self.editing.take() else {
+            return false;
+        };
+        let SetAside {
+            text,
+            attachments,
+            tab,
+        } = editing.set_aside;
+        self.attachments = attachments;
+        self.put_back(text, tab, window, cx);
+        cx.notify();
+        true
+    }
+
+    /// Puts `text` in the input, the cursor at its end, in the tab at `tab`,
+    /// with focus.
+    fn put_back(&mut self, text: String, tab: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if tab != self.selected_tab {
+            self.move_tint(tab as isize - self.selected_tab as isize);
+            self.selected_tab = tab;
+            cx.emit(TabChanged);
+        }
+        self.editor.update(cx, |editor, cx| {
+            use gpui_kit::component::input::RopeExt as _;
+            editor.set_value(text, window, cx);
+            let end = editor.text().offset_to_position(editor.text().len());
+            editor.set_cursor_position(end, window, cx);
+        });
+        self.editor.read(cx).focus_handle(cx).focus(window, cx);
+    }
+
+    /// Where in the queue the prompt being edited is, counted from 1.
+    pub fn set_editing_position(&mut self, position: usize, cx: &mut Context<Self>) {
+        if let Some(editing) = &mut self.editing
+            && editing.position != position
+        {
+            editing.position = position;
+            cx.notify();
+        }
+    }
+
+    /// Whether a queued prompt is being edited.
+    #[cfg(test)]
+    pub fn is_editing(&self) -> bool {
+        self.editing.is_some()
+    }
+
+    /// Sends the prompt, or queues it on purpose when `queue`; while a queued
+    /// prompt is being edited, saves the edit instead.
+    fn send(&mut self, queue: bool, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.editor.read(cx).value().to_string();
         if text.is_empty() {
             return;
+        }
+        if self.editing.is_some() {
+            let attached_text = std::mem::take(&mut self.attachments)
+                .into_iter()
+                .map(|attachment| attachment.text)
+                .collect();
+            let mode = TABS[self.selected_tab];
+            self.end_editing(window, cx);
+            cx.emit(QueuedEdit::Saved {
+                text,
+                mode,
+                attached_text,
+            });
+            return;
+        }
+        // Sent from the preview, the text input comes back, empty.
+        self.send_menu = None;
+        if self.preview.take().is_some() {
+            self.editor.read(cx).focus_handle(cx).focus(window, cx);
         }
         self.editor
             .update(cx, |editor, cx| editor.set_value("", window, cx));
@@ -465,6 +958,7 @@ impl ChatInput {
             text,
             mode: TABS[self.selected_tab],
             attached_text,
+            queue,
         });
     }
 
@@ -475,6 +969,11 @@ impl ChatInput {
     }
 
     fn select_tab(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+        // The prompt would compile differently in another mode.
+        if ix != self.selected_tab {
+            self.preview = None;
+        }
+        self.send_menu = None;
         self.move_tint(ix as isize - self.selected_tab as isize);
         if self.selected_tab != ix {
             cx.emit(TabChanged);
@@ -499,8 +998,11 @@ impl ChatInput {
     }
 
     /// Moves `step` tabs along, wrapping around.
-    fn cycle_tab(&mut self, step: isize, cx: &mut Context<Self>) {
+    fn cycle_tab(&mut self, step: isize, window: &mut Window, cx: &mut Context<Self>) {
         cx.stop_propagation();
+        self.send_menu = None;
+        // The prompt would compile differently in another mode.
+        self.close_preview(window, cx);
         let count = TABS.len() as isize;
         self.selected_tab = (self.selected_tab as isize + step).rem_euclid(count) as usize;
         // Along the way Ctrl+Tab went, even when it wraps around.
@@ -527,8 +1029,14 @@ impl ChatInput {
     /// Esc closes an open completion menu, and otherwise takes focus out of
     /// the input.
     fn escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.completion.read(cx).is_open() {
+        if self.send_menu.take().is_some() {
+            cx.notify();
+        } else if self.preview.is_some() {
+            self.close_preview(window, cx);
+        } else if self.completion.read(cx).is_open() {
             self.completion.update(cx, |menu, cx| menu.hide(cx));
+        } else if self.editing.is_some() {
+            self.cancel_editing(window, cx);
         } else {
             self.focus_handle.focus(window, cx);
         }
@@ -659,7 +1167,7 @@ impl Render for ChatInput {
         // both Code and Spec once they slide beneath it. Its bar is
         // transparent, and clipped above the bottom border every bar draws,
         // so Code and Spec show through beneath it; in the gap between them,
-        // the row's own background and border show instead.
+        // the row's own background and bottom line show instead.
         let both = div()
             .absolute()
             .top_0()
@@ -722,6 +1230,9 @@ impl Render for ChatInput {
                 .flex()
                 .items_center()
                 .bg(cx.theme().tab_bar)
+                // The bar's bottom line, beneath every tab: under the chain it
+                // shows only while Code and Spec are apart, as the selected
+                // tabs cover it once they join beneath the chain.
                 .child(
                     div()
                         .absolute()
@@ -739,12 +1250,105 @@ impl Render for ChatInput {
 
         // Anything attached is listed above the input.
         let attachments = self.render_attachments(cx);
+        // While a queued prompt is edited, a row above says which, and how to
+        // save or cancel it.
+        let editing_row = self.editing.as_ref().map(|editing| {
+            let theme = cx.theme();
+            let row = h_flex()
+                .id("editing-queued")
+                .gap_2()
+                .text_xs()
+                .child(
+                    Icon::new(IconName::Pencil)
+                        .xsmall()
+                        .text_color(theme.muted_foreground),
+                )
+                .child(
+                    div()
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(format!("Editing queued prompt {}", editing.position)),
+                )
+                .child(div().flex_1())
+                .child(
+                    div()
+                        .text_color(theme.muted_foreground)
+                        .whitespace_nowrap()
+                        .child(EDITING_HINT),
+                );
+            // Lets UI tests find the row; inert in normal builds.
+            gpui_kit::TestSupportExt::test_support(row)
+        });
         let body = div().flex().flex_col().gap_2().p_3().with_spring(
             "body-tint",
             tint_slide,
             move |this, position| this.bg(tint(position)),
         );
         let input_row = div().flex().flex_row().items_end().gap_2();
+        let previewing = self.preview.is_some();
+        let editing = self.editing.is_some();
+        let send_tooltip = if queues {
+            format!("Queue until the harness is free ({SEND_SHORTCUT})")
+        } else {
+            format!("Send ({SEND_SHORTCUT})")
+        };
+        // The send button, and joined to its right, the chevron opening its
+        // menu of other ways to send; the menu hangs above them.
+        let send = h_flex()
+            .id("send-split")
+            .relative()
+            .flex_none()
+            .child(
+                Button::new("send")
+                    .primary()
+                    // While the harness works, sending queues the prompt; while a
+                    // queued prompt is edited, it saves the edit.
+                    .label(if editing {
+                        "Save"
+                    } else if queues {
+                        "Queue"
+                    } else {
+                        "Send"
+                    })
+                    // As tall as the input's single line, so the two line up.
+                    .h(one_row)
+                    .rounded_r_none()
+                    .tooltip(if editing {
+                        format!("Save the queued prompt ({SEND_SHORTCUT})")
+                    } else {
+                        send_tooltip
+                    })
+                    .disabled(empty)
+                    .on_click(cx.listener(|this, _, window, cx| this.submit(window, cx))),
+            )
+            .child(
+                Button::new("send-options")
+                    .primary()
+                    .icon(IconName::ChevronDown)
+                    .h(one_row)
+                    .px_1p5()
+                    .rounded_l_none()
+                    .border_l_1()
+                    .border_color(cx.theme().primary_hover)
+                    .tooltip(format!("More ways to send ({SEND_MENU_SHORTCUT})"))
+                    .disabled(empty || previewing || editing)
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_send_menu(cx))),
+            )
+            .children(self.render_send_menu(cx));
+        let send = gpui_kit::TestSupportExt::test_support(send);
+        let input_area = match &self.preview {
+            Some(preview) => self.render_preview(&preview.clone(), window, cx),
+            None => gpui_kit::TestSupportExt::test_support(
+                div()
+                    .id("prompt-editor")
+                    .relative()
+                    .flex_1()
+                    .min_w_0()
+                    .child(Editor::new(&self.editor).h(height))
+                    .child(track_layout)
+                    .child(self.completion.clone()),
+            )
+            .into_any_element(),
+        };
 
         div()
             .track_focus(&self.focus_handle)
@@ -755,8 +1359,16 @@ impl Render for ChatInput {
             .key_context(CONTEXT)
             // Ctrl+Tab and Ctrl+Shift+Tab cycle the tabs, and the input keeps
             // focus.
-            .on_action(cx.listener(|this, _: &NextMode, _, cx| this.cycle_tab(1, cx)))
-            .on_action(cx.listener(|this, _: &PreviousMode, _, cx| this.cycle_tab(-1, cx)))
+            .on_action(cx.listener(|this, _: &NextMode, window, cx| this.cycle_tab(1, window, cx)))
+            .on_action(
+                cx.listener(|this, _: &PreviousMode, window, cx| this.cycle_tab(-1, window, cx)),
+            )
+            .on_action(cx.listener(|this, _: &ToggleSendMenu, _, cx| this.toggle_send_menu(cx)))
+            .on_action(cx.listener(|this, _: &SendPreviewed, window, cx| {
+                if this.preview.is_some() {
+                    this.submit(window, cx);
+                }
+            }))
             // Tab and Shift+Tab move focus on, rather than indenting.
             .capture_action(
                 cx.listener(|this, _: &IndentInline, window, cx| this.move_focus(true, window, cx)),
@@ -773,6 +1385,12 @@ impl Render for ChatInput {
             .on_action(cx.listener(|this, _: &FocusChat, window, cx| this.escape(window, cx)))
             .on_action(cx.listener(|this, _: &Escape, window, cx| this.escape(window, cx)))
             .capture_action(cx.listener(|this, action: &Enter, window, cx| {
+                // The send button's menu takes Enter while it is open.
+                if let Some(highlight) = this.send_menu.filter(|_| !action.secondary) {
+                    cx.stop_propagation();
+                    this.pick_send_option(highlight, window, cx);
+                    return;
+                }
                 // Catch Ctrl/Cmd+Enter before the editor turns it into a newline.
                 if action.secondary {
                     cx.stop_propagation();
@@ -787,14 +1405,20 @@ impl Render for ChatInput {
             // Up and Down move through an open completion menu instead of
             // the text.
             .capture_action(cx.listener(|this, _: &MoveUp, window, cx| {
-                if this.completion.read(cx).is_open() {
+                if this.send_menu.is_some() {
+                    cx.stop_propagation();
+                    this.step_send_menu(-1, cx);
+                } else if this.completion.read(cx).is_open() {
                     cx.stop_propagation();
                     this.completion
                         .update(cx, |menu, cx| menu.select_next(-1, window, cx));
                 }
             }))
             .capture_action(cx.listener(|this, _: &MoveDown, window, cx| {
-                if this.completion.read(cx).is_open() {
+                if this.send_menu.is_some() {
+                    cx.stop_propagation();
+                    this.step_send_menu(1, cx);
+                } else if this.completion.read(cx).is_open() {
                     cx.stop_propagation();
                     this.completion
                         .update(cx, |menu, cx| menu.select_next(1, window, cx));
@@ -802,36 +1426,9 @@ impl Render for ChatInput {
             }))
             .child(tabs)
             .child(
-                body.children(attachments).child(
-                    input_row
-                        .child(gpui_kit::TestSupportExt::test_support(
-                            div()
-                                .id("prompt-editor")
-                                .relative()
-                                .flex_1()
-                                .min_w_0()
-                                .child(Editor::new(&self.editor).h(height))
-                                .child(track_layout)
-                                .child(self.completion.clone()),
-                        ))
-                        .child(
-                            Button::new("send")
-                                .primary()
-                                // While the harness works, sending queues the prompt.
-                                .label(if queues { "Queue" } else { "Send" })
-                                // As tall as the input's single line, so the two line up.
-                                .h(one_row)
-                                .tooltip(if queues {
-                                    format!("Queue until the harness is free ({SEND_SHORTCUT})")
-                                } else {
-                                    format!("Send ({SEND_SHORTCUT})")
-                                })
-                                .disabled(empty)
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.submit(window, cx)),
-                                ),
-                        ),
-                ),
+                body.children(editing_row)
+                    .children(attachments)
+                    .child(input_row.child(input_area).child(send)),
             )
     }
 }
@@ -1139,6 +1736,97 @@ mod tests {
         }
     }
 
+    /// The chain has no line along its bottom while it is joined over Code
+    /// and Spec, in combined mode, and has one, like any other tab, while it
+    /// sits between them unselected, in separate mode.
+    #[gpui_kit::test]
+    async fn the_chain_has_a_bottom_line_only_apart(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            super::bind_keys(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut chat_input = None;
+        let window = cx.add_window(|window, cx| {
+            let input = cx.new(|cx| ChatInput::new(window, cx));
+            chat_input = Some(input.clone());
+            Root::new(input, window, cx)
+        });
+        let chat_input = chat_input.unwrap();
+        let handle = window.into();
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("tab-help").is_some()
+        })
+        .await;
+        for (tab, joined) in [(0, false), (1, true), (2, false), (3, false)] {
+            cx.update_window(handle, |_, window, cx| {
+                chat_input.update(cx, |input, cx| input.select_tab(tab, window, cx));
+            })
+            .unwrap();
+            let [_, chain, _, _] = settle_tabs(handle, joined, cx);
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let scale = window.scale_factor();
+                let help = window.find("tab-help").bounds();
+                let bar = window.find("chat-tabs").bounds();
+                // Whether a visible horizontal line lies along `bottom`, over
+                // the middle of the span from `left` to `right`.
+                let line_at = |left: f32, right: f32, bottom: f32| {
+                    let (x, y) = ((left + right) / 2. * scale, bottom * scale - 0.5);
+                    let quads = window.painted_quads();
+                    // Whether an opaque quad drawn after `order` covers the point.
+                    let covered = |order| {
+                        quads.iter().any(|q| {
+                            let (b, m) = (&q.bounds, &q.content_mask.bounds);
+                            q.order > order
+                                && q.background.as_solid().is_some_and(|c| c.a >= 0.99)
+                                && x >= b.origin.x.0.max(m.origin.x.0)
+                                && x < (b.origin.x.0 + b.size.width.0)
+                                    .min(m.origin.x.0 + m.size.width.0)
+                                && y >= b.origin.y.0.max(m.origin.y.0)
+                                && y < (b.origin.y.0 + b.size.height.0)
+                                    .min(m.origin.y.0 + m.size.height.0)
+                        })
+                    };
+                    quads.iter().any(|q| {
+                        let b = &q.bounds;
+                        let m = &q.content_mask.bounds;
+                        let visible = |x: f32, y: f32| {
+                            x >= m.origin.x.0
+                                && x < m.origin.x.0 + m.size.width.0
+                                && y >= m.origin.y.0
+                                && y < m.origin.y.0 + m.size.height.0
+                        };
+                        let border = q.border_widths.bottom.0 > 0.
+                            && q.border_color.a > 0.
+                            && x >= b.origin.x.0
+                            && x < b.origin.x.0 + b.size.width.0
+                            && y >= b.origin.y.0 + b.size.height.0 - q.border_widths.bottom.0
+                            && y < b.origin.y.0 + b.size.height.0;
+                        border && visible(x, y) && !covered(q.order)
+                    })
+                };
+                // Clear of Code's and Spec's own edges.
+                let (left, right) = (chain.left().as_f32() + 8., chain.right().as_f32() - 8.);
+                assert_eq!(
+                    line_at(left, right, chain.bottom().as_f32()),
+                    !joined,
+                    "tab {tab}: the line under the chain {chain:?}"
+                );
+                assert!(
+                    line_at(
+                        help.left().as_f32(),
+                        help.right().as_f32(),
+                        bar.bottom().as_f32()
+                    ),
+                    "tab {tab}: no line under the help text"
+                );
+            })
+            .unwrap();
+        }
+    }
+
     /// Ctrl+Tab in the input moves to the next tab, chain then Spec then Ask
     /// then back to Code, and Ctrl+Shift+Tab back the other way, without
     /// changing the text or taking focus out of the input. Plain Tab moves
@@ -1218,6 +1906,292 @@ mod tests {
             assert!(!input.is_focused(window, cx), "Tab left focus in the input");
         })
         .unwrap();
+    }
+
+    /// The send button is split: Ctrl+Shift+Enter opens its menu over the
+    /// button, arrows move through it and Esc closes it, keeping the text;
+    /// Enter picks Preview Compiled Prompt, which asks for the prompt
+    /// compiled and shows it in place of the input. Esc goes back to the
+    /// input as it was, and Ctrl+Enter from the preview sends it.
+    #[gpui_kit::test]
+    async fn the_send_menu_previews_the_compiled_prompt(cx: &mut TestAppContext) {
+        use super::{Preview, PreviewPrompt, SendMode, Submit};
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            super::bind_keys(cx);
+            crate::main_window::bind_keys(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut chat_input = None;
+        let window = cx.add_window(|window, cx| {
+            let input = cx.new(|cx| ChatInput::new(window, cx));
+            chat_input = Some(input.clone());
+            Root::new(cx.new(|_| AtBottom(input)), window, cx)
+        });
+        let chat_input = chat_input.unwrap();
+        let handle = window.into();
+        let previews = Rc::new(std::cell::RefCell::new(Vec::new()));
+        let submitted = Rc::new(std::cell::RefCell::new(Vec::new()));
+        let _subscriptions = cx.update(|cx| {
+            let (previews, submitted) = (previews.clone(), submitted.clone());
+            (
+                cx.subscribe(&chat_input, move |_, preview: &PreviewPrompt, _| {
+                    previews
+                        .borrow_mut()
+                        .push((preview.id, preview.text.clone(), preview.mode))
+                }),
+                cx.subscribe(&chat_input, move |_, submit: &Submit, _| {
+                    submitted.borrow_mut().push(submit.text.clone())
+                }),
+            )
+        });
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("prompt-editor").is_some()
+        })
+        .await;
+        let editor_focused = |window: &Window, cx: &gpui_kit::App| {
+            chat_input
+                .read(cx)
+                .editor
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window)
+        };
+
+        // Nothing to send, nothing to open.
+        cx.update_window(handle, |_, window, cx| {
+            window.press("ctrl-shift-enter", cx);
+            assert!(!chat_input.read(cx).send_menu_open());
+        })
+        .unwrap();
+
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| {
+                input
+                    .editor
+                    .update(cx, |editor, cx| editor.set_value("Fix it", window, cx))
+            });
+            window.render_frame(cx);
+            window.press("ctrl-shift-enter", cx);
+            window.render_frame(cx);
+            assert!(chat_input.read(cx).send_menu_open());
+            let menu = window.find("send-menu").bounds();
+            let split = window.find("send-split").bounds();
+            assert!(
+                menu.bottom() <= split.top(),
+                "{menu:?} isn't above {split:?}"
+            );
+            assert!((menu.right() - split.right()).abs() <= gpui_kit::px(0.5));
+            window.find(("send-option", 0usize));
+            window.press("down", cx);
+            window.press("up", cx);
+            assert_eq!(chat_input.read(cx).send_menu, Some(0));
+            window.press("escape", cx);
+            assert!(!chat_input.read(cx).send_menu_open());
+            assert_eq!(
+                chat_input.read(cx).editor.read(cx).value().as_ref(),
+                "Fix it"
+            );
+            assert!(editor_focused(window, cx), "Esc took the input's focus");
+
+            window.press("ctrl-shift-enter", cx);
+            window.press("enter", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(previews.borrow().len(), 1);
+        let (id, text, mode) = previews.borrow()[0].clone();
+        assert_eq!((text.as_str(), mode), ("Fix it", SendMode::Both));
+        cx.update_window(handle, |_, window, cx| {
+            assert_eq!(chat_input.read(cx).preview(), Some(&Preview::Compiling));
+            assert!(!chat_input.read(cx).send_menu_open());
+            chat_input.update(cx, |input, cx| {
+                input.set_preview(id, Ok("Fix **it**, compiled.".into()), cx)
+            });
+            window.render_frame(cx);
+            assert!(window.try_find("prompt-editor").is_none());
+            window.find("prompt-preview");
+            assert!(chat_input.read(cx).focus_handle.is_focused(window));
+
+            // Esc goes back to the input, as it was.
+            window.press("escape", cx);
+            window.render_frame(cx);
+            assert!(chat_input.read(cx).preview().is_none());
+            window.find("prompt-editor");
+            assert_eq!(
+                chat_input.read(cx).editor.read(cx).value().as_ref(),
+                "Fix it"
+            );
+            assert!(editor_focused(window, cx));
+
+            // A result for a preview no longer showing is ignored.
+            chat_input.update(cx, |input, cx| input.set_preview(id, Ok("late".into()), cx));
+            assert!(chat_input.read(cx).preview().is_none());
+
+            window.press("ctrl-shift-enter", cx);
+            window.press("enter", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let (id, _, _) = previews.borrow()[1].clone();
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| {
+                input.set_preview(id, Err("could not compile".into()), cx)
+            });
+            window.render_frame(cx);
+            assert_eq!(
+                chat_input.read(cx).preview(),
+                Some(&Preview::Failed("could not compile".into()))
+            );
+            // Ctrl+Enter sends from the preview.
+            window.press("ctrl-enter", cx);
+            window.render_frame(cx);
+            assert!(chat_input.read(cx).preview().is_none());
+            assert_eq!(chat_input.read(cx).editor.read(cx).value().as_ref(), "");
+            assert!(editor_focused(window, cx));
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(submitted.borrow().as_slice(), ["Fix it"]);
+    }
+
+    /// The send menu's Queue option queues the prompt on purpose, and can't be
+    /// picked on the Ask tab. Editing a queued prompt sets the prompt being
+    /// written aside for the queued one; Esc cancels and Ctrl+Enter saves,
+    /// and either way what was set aside comes back.
+    #[gpui_kit::test]
+    async fn queue_option_and_editing_a_queued_prompt(cx: &mut TestAppContext) {
+        use super::{QueuedEdit, SendMode, Submit};
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            super::bind_keys(cx);
+            crate::main_window::bind_keys(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut chat_input = None;
+        let window = cx.add_window(|window, cx| {
+            let input = cx.new(|cx| ChatInput::new(window, cx));
+            chat_input = Some(input.clone());
+            Root::new(cx.new(|_| AtBottom(input)), window, cx)
+        });
+        let chat_input = chat_input.unwrap();
+        let handle = window.into();
+        let submitted = Rc::new(std::cell::RefCell::new(Vec::new()));
+        let edits = Rc::new(std::cell::RefCell::new(Vec::new()));
+        let _subscriptions = cx.update(|cx| {
+            let (submitted, edits) = (submitted.clone(), edits.clone());
+            (
+                cx.subscribe(&chat_input, move |_, submit: &Submit, _| {
+                    submitted
+                        .borrow_mut()
+                        .push((submit.text.clone(), submit.mode, submit.queue))
+                }),
+                cx.subscribe(&chat_input, move |_, edit: &QueuedEdit, _| {
+                    edits.borrow_mut().push(match edit {
+                        QueuedEdit::Saved {
+                            text,
+                            mode,
+                            attached_text,
+                        } => Some((text.clone(), *mode, attached_text.clone())),
+                        QueuedEdit::Cancelled => None,
+                    })
+                }),
+            )
+        });
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("prompt-editor").is_some()
+        })
+        .await;
+        let text = |cx: &gpui_kit::App| chat_input.read(cx).editor.read(cx).value().to_string();
+
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| input.set_text_for_test("Later", window, cx));
+            window.press("ctrl-shift-enter", cx);
+            window.press("down", cx);
+            window.render_frame(cx);
+            window.find(("send-option", 1usize));
+            window.press("enter", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(
+            submitted.borrow().as_slice(),
+            [("Later".to_string(), SendMode::Both, true)]
+        );
+
+        // On the Ask tab, Queue is passed over.
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| {
+                input.select_tab(super::ASK_TAB, window, cx);
+                input.set_text_for_test("Why?", window, cx);
+            });
+            window.press("ctrl-shift-enter", cx);
+            window.press("down", cx);
+            assert_eq!(chat_input.read(cx).send_menu, Some(0));
+            chat_input.update(cx, |input, cx| input.pick_send_option(1, window, cx));
+            assert!(
+                chat_input.read(cx).send_menu_open(),
+                "Queue was picked on Ask"
+            );
+            window.press("escape", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(submitted.borrow().len(), 1);
+
+        // Editing a queued prompt sets what is written aside.
+        chat_input.update(cx, |input, cx| input.attach_text("mine".into(), cx));
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| {
+                input.begin_editing(
+                    2,
+                    "Queued".into(),
+                    SendMode::Code,
+                    vec!["theirs".into()],
+                    window,
+                    cx,
+                )
+            });
+            window.render_frame(cx);
+            window.find("editing-queued");
+            assert_eq!(text(cx), "Queued");
+            assert_eq!(chat_input.read(cx).mode(), SendMode::Code);
+            assert_eq!(chat_input.read(cx).attachments()[0].text, "theirs");
+            window.press("ctrl-shift-enter", cx);
+            assert!(
+                !chat_input.read(cx).send_menu_open(),
+                "the menu opened while editing"
+            );
+            window.press("escape", cx);
+            window.render_frame(cx);
+            assert!(!chat_input.read(cx).is_editing());
+            assert!(window.try_find("editing-queued").is_none());
+            assert_eq!(text(cx), "Why?");
+            assert_eq!(chat_input.read(cx).mode(), SendMode::Ask);
+            assert_eq!(chat_input.read(cx).attachments()[0].text, "mine");
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(edits.borrow().as_slice(), [None]);
+
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| {
+                input.begin_editing(1, "Queued".into(), SendMode::Spec, Vec::new(), window, cx);
+                input.set_text_for_test("Queued, edited", window, cx);
+            });
+            window.press("ctrl-enter", cx);
+            assert!(!chat_input.read(cx).is_editing());
+            assert_eq!(text(cx), "Why?");
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(
+            edits.borrow()[1],
+            Some(("Queued, edited".to_string(), SendMode::Spec, Vec::new()))
+        );
+        assert_eq!(submitted.borrow().len(), 1, "saving an edit sent a prompt");
     }
 
     /// Attachments are listed above the input, survive switching tabs, can be

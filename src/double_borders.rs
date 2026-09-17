@@ -67,8 +67,8 @@ fn lines(quads: &[Quad]) -> Vec<Line> {
                 None
             };
             // A thin strip sharing an edge with a fill of the same colour, as
-            // the track shows around a scrollbar's thumb, is part of that fill
-            // rather than a line.
+            // the lit or shaded edges of a scrollbar thumb's bevel do, is part
+            // of that shading rather than a line.
             let joined = |_: &Line| {
                 quads.iter().enumerate().any(|(other_ix, other)| {
                     if other_ix == ix || other.background != quad.background {

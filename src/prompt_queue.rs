@@ -39,6 +39,14 @@ pub fn add(anchor: HiddenAnchor, text: String, project_dir: &Path) -> Result<Que
     Ok(QueuedPrompt { file, anchor, text })
 }
 
+/// Saves `text`, as `anchor`'s source, in place of the queued prompt in
+/// `file`, keeping its place in the queue.
+pub fn replace(file: PathBuf, anchor: HiddenAnchor, text: String) -> Result<QueuedPrompt> {
+    fs::write(&file, anchor.source(&text))
+        .with_context(|| format!("could not save {}", file.display()))?;
+    Ok(QueuedPrompt { file, anchor, text })
+}
+
 /// The project's queued prompts, in the order they were queued. Files that do
 /// not read back as a hidden anchor are left out.
 pub fn load(project_dir: &Path) -> Vec<QueuedPrompt> {
@@ -74,7 +82,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    use super::{add, load, remove};
+    use super::{add, load, remove, replace};
     use crate::hidden_anchor::HiddenAnchor;
 
     /// Queued prompts load back in the order they were queued, imports and
@@ -110,12 +118,21 @@ mod tests {
             fs::read_to_string(&first.file).unwrap()
         );
 
+        // Edited, a prompt keeps its place.
+        let second = load(&project_dir).remove(1);
+        replace(second.file, HiddenAnchor::random(), "second, edited".into()).unwrap();
+        let texts: Vec<String> = load(&project_dir)
+            .into_iter()
+            .map(|queued| queued.text)
+            .collect();
+        assert_eq!(texts[1], "second, edited");
+
         remove(&first.file).unwrap();
         remove(&first.file).unwrap();
         let texts: Vec<String> = load(&project_dir)
             .into_iter()
             .map(|queued| queued.text)
             .collect();
-        assert_eq!(texts, ["second", ""]);
+        assert_eq!(texts, ["second, edited", ""]);
     }
 }

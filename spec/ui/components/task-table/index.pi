@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /ui/theme import ThemeScope
 from /ui/components/scrollbar import ScrollbarScope
 
 export ui-component TaskTableScope:
@@ -68,6 +69,10 @@ shape TaskTableShape:
         A skeleton stands in for a running row only while there is nothing
         meaningful to show for it. As soon as there is, no skeleton is shown for
         it at all.
+
+    header:
+        The header row, reading Type, Output, and Status, has the bevel of the
+        @{ThemeScope}, lifting it slightly off the rows beneath.
 
     scrolling:
         The rows scroll beneath the table's header, which stays at the top,

@@ -12,7 +12,9 @@ from /scope/prompt-mode/modes import PromptModesScope
 from /scope/prompt-mode/sending import PromptSendingScope
 from /ui/components/history-list import HistoryListScope
 from /ui/components/task-table import TaskTableScope
+from /scope/prompt-mode import PromptEditor
 from /scope/open-projects import OpenProjectsScope
+from /shape/ChatInput import ChatInputInstruction
 
 export ui-component ChatInputScope:
     concept: {ChatInputConcept}
@@ -33,10 +35,76 @@ shape ChatInputShape:
 
         Sending sends the prompt in the selected tab's mode, as the
         @{PromptSendingScope} says. While the harness is working, the send
-        button on the Code, Chain, and Spec tabs reads "Queue", since the
-        prompt will queue. On the Ask tab it always reads "Send", because a
-        question is never queued. The button is only disabled while the input
-        is empty.
+        button on the Code, Chain, and Spec tabs reads "Queue", since the prompt
+        will queue. On the Ask tab it always reads "Send", because a question is
+        never queued. The button is only disabled while the input is empty.
+
+    instructions:
+        - @{ChatInputInstruction}
+
+    sendOptions:
+        splitButton:
+            The send button is a split button: the send or queue button itself,
+            and joined to its right, a narrow half with a chevron that opens a
+            menu of other ways to send the prompt, above the button, its right
+            edge lined up with the button's. The chevron half is disabled
+            whenever the send half is, and while a preview shows, and its
+            tooltip says it shows more ways to send, with its shortcut.
+
+        keyboard:
+            <Ctrl+Shift+Enter> (<Cmd+Shift+Enter> on macOS) in the chat input
+            opens the menu with its first option highlighted, and does nothing
+            while the input is empty or a preview shows. While it is open, the
+            text keeps focus, <Up> and <Down> move the highlight, wrapping
+            around, <Enter> picks the highlighted option, and <Escape> closes
+            the menu, as does pressing <Ctrl+Shift+Enter> again or the mouse
+            anywhere outside it. Each option highlights on hover, and clicking
+            one picks it.
+
+        options:
+            The menu's options, in order:
+            - "Preview Compiled Prompt", with an eye icon
+            - "Queue", with a list icon, which queues the prompt rather than sending it, even while the harness is free, as the queue of the @{PromptEditor} says; like the send button, it clears the input. On the Ask tab it is disabled, since a question never queues, and the highlight passes over it
+
+    editingQueued:
+        Editing a queued prompt, from the queue of the @{PromptEditor}, sets
+        aside the prompt being written, its attachments, and the selected tab,
+        and puts the queued prompt's text in the input, its attachments above
+        it, and its mode's tab selected, with the cursor at the end of the text.
+        Above the attachments, a row with a pencil icon reads
+        "Editing queued prompt N", its place in the queue, and at its right,
+        muted, "Ctrl+Enter to save · Esc to cancel" (with ⌘ on macOS). The send
+        button reads "Save", its tooltip saying it saves the queued prompt, and
+        the send menu isn't offered.
+
+        Everything in the input works as ever while editing, tabs included.
+        <Ctrl+Enter> (<Cmd+Enter> on macOS), or Save, saves the edit, in the tab
+        selected then, and <Escape>, when nothing else in the input takes it,
+        cancels it. Either way, the prompt that was set aside comes back just as
+        it was. Saving an empty prompt isn't possible, just as sending one
+        isn't. Editing another queued prompt meanwhile first cancels the edit in
+        progress; so does switching projects.
+
+    preview:
+        Preview Compiled Prompt compiles the prompt as it would be sent from the
+        selected tab, its hidden anchor, attachments, and mode's system prompt
+        included, without sending it, saving it to the history, or building the
+        spec first. In place of the text input, the chat input then shows what
+        the harness would receive: the compiled prompt, as a sent task's
+        compiled prompt is shown, beneath a row reading "Compiled prompt" with,
+        at its right, muted, "Ctrl+Enter to send · Esc to edit" (with ⌘ on
+        macOS). While it compiles, the row shows a spinner and "Compiling…"; a
+        prompt that fails to compile shows why, in the theme's error colour, in
+        place of the compiled prompt. The preview grows with what it shows, up
+        to 40% of the window's height, and scrolls beyond that. The tabs,
+        attachments, and send button stay as they are.
+
+        The preview has keyboard focus. <Ctrl+Enter> (<Cmd+Enter> on macOS), or
+        the send button, sends the prompt just as sending from the text input
+        would, and the chat input goes back to an empty text input. <Escape>
+        goes back to the text input with the prompt and attachments as they
+        were, the cursor where it was. Switching tabs while previewing goes back
+        to the text input too, since the prompt would compile differently.
 
     tabs:
         overview:
@@ -44,8 +112,9 @@ shape ChatInputShape:
             gpui-kit's default tab styling. There is a tab for each of the
             @{PromptModesScope}, in their order: Code, Chain, Spec, and Ask.
             Code, Spec, and Ask are ordinary tabs. Chain is also a tab, just a
-            small one, because it only shows an icon. All four sit flush against each other with no extra gaps, and no tab has
-            more padding than a normal tab.
+            small one, because it only shows an icon. All four sit flush against
+            each other with no extra gaps, and no tab has more padding than a
+            normal tab.
 
             The chat input starts in the combined mode: Chain is selected, so
             Code and Spec are selected together, and a prompt sent before
@@ -71,6 +140,11 @@ shape ChatInputShape:
             Unselected, it shows a broken chain dimmed to 50% opacity, and sits
             between Code and Spec like any other tab, overlapping neither of
             them.
+
+            In combined mode, with Chain selected, Chain has no line along its
+            bottom, just as the joined Code and Spec beneath it have none. In
+            separate mode, unselected, it has one, like any other unselected
+            tab: the tab bar's bottom line runs beneath it.
 
             Selected, it shows a joined chain at full opacity. Selecting it
             animates as though it took a margin of -50% of its own width on both
@@ -113,15 +187,14 @@ shape ChatInputShape:
         all run at the same time; asking another never stops or waits for one
         already running.
 
-        Each question's progress and results are shown in a
-        @{TaskTableScope}. The questions stack directly above the tabs, the
-        newest nearest them, in a column that pushes the message list up to make
-        room rather than covering it, so none of a running task's progress is
-        ever hidden behind them. Each slides up out of the chat input with an
-        animation as it is asked, the message list giving way above it. While
-        the harness works on a question, it is a single row showing the latest
-        thing the harness did. A finished question is a row with its status and
-        first line.
+        Each question's progress and results are shown in a @{TaskTableScope}.
+        The questions stack directly above the tabs, the newest nearest them, in
+        a column that pushes the message list up to make room rather than
+        covering it, so none of a running task's progress is ever hidden behind
+        them. Each slides up out of the chat input with an animation as it is
+        asked, the message list giving way above it. While the harness works on
+        a question, it is a single row showing the latest thing the harness did.
+        A finished question is a row with its status and first line.
 
         Once a question is complete, it opens onto a heading, with its status
         and first line, above its full task table, in the @{AnswerDrawerScope},
@@ -186,16 +259,16 @@ shape ChatInputShape:
         answers belong to their project, as the @{OpenProjectsScope} says:
         switching projects shows those of the project switched to, while the
         questions of other projects carry on running in the background. The
-        prompt being written, its attachments, and the selected tab stay as
-        they are across a switch, and are sent to the project on screen.
+        prompt being written, its attachments, and the selected tab stay as they
+        are across a switch, and are sent to the project on screen.
 
     escape:
         Pressing <Escape> while in the chat input takes focus out of the chat
         input.
 
     growToFit:
-        The text input is a @{GrowingTextInputScope} growing to 12 rows at
-        most. Its single row lines up with the send button.
+        The text input is a @{GrowingTextInputScope} growing to 12 rows at most.
+        Its single row lines up with the send button.
 
     autoFocus:
         The chat input should be auto-focused.
@@ -225,14 +298,13 @@ shape ChatInputShape:
             The skills, commands, and agents offered are the
             @{HarnessCatalogScope}'s. Each shows whether it is a skill, command,
             or agent, and its description as documentation when it has one.
-            Results are narrowed and ordered
-            like Piton completions: matches at the start of a name before
-            matches anywhere in it, then by name.
+            Results are narrowed and ordered like Piton completions: matches at
+            the start of a name before matches anywhere in it, then by name.
 
         accepting:
-            Accepting one inserts it as a mention, as the
-            @{HarnessCatalogScope} says, in place of what was typed of it.
-            Mentions work without the @{LSP}.
+            Accepting one inserts it as a mention, as the @{HarnessCatalogScope}
+            says, in place of what was typed of it. Mentions work without the
+            @{LSP}.
 
     hiddenAnchor:
         While the user will be able to type plain text, behind the scenes,

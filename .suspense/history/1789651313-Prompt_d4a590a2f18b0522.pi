@@ -1,0 +1,33 @@
+from /scope/prompt-mode/chat-input import ChatInputScope
+
+anchor Prompt_d4a590a2f18b0522:
+    userPrompt:
+        -
+            - @{ChatInputScope}
+            - " The send/queue button should actually be a split button (dropdown additional options) and ctrl-shift-enter should open the split and allow for arrow navigation."
+        -
+            - ""
+        -
+            - "The only option for now is a \"Preview Compiled Prompt\" option that shows the compiled prompt without sending it.  From there we have the option to send with ctrl-enter or Esc to go back to the prompt editor."
+
+    mode: combined
+
+    systemPrompt:
+        -
+            - "We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec."
+        -
+            - ""
+        -
+            - "You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec."
+        -
+            - ""
+        -
+            - "Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other."
+        -
+            - ""
+        -
+            - "Then build the spec and execute the prompt directly on the code using a unified plan."
+        -
+            - ""
+        -
+            - "Make sure that you write both code and spec."

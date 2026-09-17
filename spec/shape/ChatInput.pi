@@ -1,0 +1,9 @@
+use @piton/belay
+from /scope/prompt-mode/chat-input import ChatInputScope
+
+export instruction ChatInputInstruction:
+    description: Instructions for src/chat_input.rs
+    prompt:
+        @{ChatInputScope} chain button absolutely must not have a bottom border
+        on it when the ${ChatInputScope} is in combined mode.  In separate mode,
+        it should.
