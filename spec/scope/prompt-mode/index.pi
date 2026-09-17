@@ -8,6 +8,7 @@ from /scope/no-project import NoProjectStateScope
 from /scope/project-data import ProjectDataScope
 from /scope/prompt-mode/modes import PromptModesScope
 from /scope/prompt-mode/sending import PromptSendingScope
+from /scope/open-projects import OpenProjectsScope
 
 export ui-component PromptEditor:
     concept: {PromptEditorConcept}
@@ -88,11 +89,17 @@ shape PromptEditorShape:
 
         persistence:
             Queued prompts are saved with the project's data as they are queued,
-            as the @{ProjectDataScope} says. The queue is restored whenever the
-            project is opened; a restored queue waits for "Send next" rather
+            as the @{ProjectDataScope} says. The queue is restored the first time
+            the project is opened in a launch; a restored queue waits for "Send next" rather
             than sending on its own. A queued prompt's file is removed when it
             is cancelled, or when it is sent, at which point it is saved to the
             prompt history like any other prompt.
+
+    projects:
+        Tasks, the queue, and the auto-send switch belong to their project, as
+        the @{OpenProjectsScope} says: the view shows the tasks and queue of the
+        project on screen, while those of other open projects carry on in the
+        background. A project's queue only ever sends into that project.
 
     buildingTheSpec:
         A task builds the spec before it is sent, as the @{PromptModesScope}
@@ -102,7 +109,8 @@ shape PromptEditorShape:
     history:
         Every task sent is saved in the prompt history with the project's data,
         as the @{ProjectDataScope} says, and its record once its run is over.
-        Opening the project brings back every task in order, with its output
+        Opening the project, the first time in a launch, brings back every
+        task in order, with its output
         replayed from that record. A task with no record shows as
         "Not recorded".
 

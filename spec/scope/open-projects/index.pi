@@ -1,0 +1,65 @@
+use /lib
+from /scope/project-directory import ProjectDirectoryScope
+from /scope/prompt-mode import PromptEditor
+from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/project-data import ProjectDataScope
+from /scope/running-activity import RunningActivityScope
+from /ui/components/project-indicator import ProjectIndicator
+
+export scope OpenProjectsScope:
+    concept: {OpenProjectsConcept}
+
+concept OpenProjectsConcept:
+    pitch:
+        Every project opened since the application started stays open behind
+        the one on screen, so switching projects never stops or loses the work
+        running in another.
+
+    shape: {OpenProjectsShape}
+
+shape OpenProjectsShape:
+    description:
+        Only one project is on screen at a time, the one of the
+        @{ProjectDirectoryScope}. Every other project opened since the
+        application started stays open in the background until it quits, each
+        with its own work, which carries on running there and is shown live as
+        soon as that project is on screen again.
+
+    belongsToAProject:
+        What a project's work is, kept apart for each open project:
+        - its tasks, from the @{PromptEditor}: the latest task and its output, the previous tasks, whether the harness is working on one, and the conversation tasks carry on
+        - its queue, whether it is expanded, and its auto-send switch
+        - its questions, from the @{ChatInputScope}'s Ask tab: those stacked above the tabs, the one open in the answer drawer, the previous answers, and the conversation questions carry on
+        - a spec build run on its own in it
+
+        Whatever a run does is written to the project it was started in, never
+        to the one on screen. A project's queue only ever sends into that
+        project, and sends on its own there while it is in the background, just
+        as it would on screen.
+
+    followsTheScreen:
+        Everything else follows the project on screen and starts afresh for it
+        on a switch: the file tree, the Git panel, the file open in the editor,
+        the palette, the language server, the settings, and the chat input's
+        prompt being written with its attachments, which stay with the person
+        writing rather than a project. Scrolling, and whether the latest task's
+        output is locked to the bottom, start afresh too.
+
+    switching:
+        A project's history, answers, and queue are loaded from its data, as the
+        @{ProjectDataScope} says, the first time it is opened in a launch, and
+        kept from then on, so switching back to it loads nothing again and
+        shows it just as it was left, with whatever has happened since.
+
+        Switching projects stops, and closes, a divergence analysis or a
+        rescope search, and closes any inset panel; they belong to the screen.
+
+    sameProject:
+        A project is the same project however its folder was reached, so it is
+        never open twice.
+
+    busy:
+        A project is busy while the harness is working on one of its tasks or
+        questions, or a spec build runs on its own in it. The
+        @{ProjectIndicator} marks the busy projects, and the
+        @{RunningActivityScope} lists their work.

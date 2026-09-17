@@ -1,4 +1,5 @@
 use /lib
+
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/project-locations import ProjectLocationsScope
 
@@ -7,8 +8,8 @@ export scope ProjectDataScope:
 
 concept ProjectDataConcept:
     pitch:
-        What the application keeps for a project, kept in the project itself
-        so it survives a restart and travels with the project.
+        What the application keeps for a project, kept in the project itself so
+        it survives a restart and travels with the project.
 
     shape: {ProjectDataShape}
 
@@ -37,11 +38,16 @@ shape ProjectDataShape:
         harness report `.suspense/harness.json`, the queue `.suspense/queue/`,
         the commit notes `.suspense/commit-notes.json`, and the draft
         `.suspense-draft.pi` wherever it is, should it ever be written. Git
-        ignores these, so they are
-        never committed. Everything else, the prompt history, the questions,
-        the divergence reports, and the system prompts, is kept with the
-        project.
+        ignores these, so they are never committed. Everything else, the prompt
+        history, the questions, the divergence reports, and the system prompts,
+        is kept with the project.
 
     reading:
         What can't be read is left out, or shown as missing, rather than
         stopping the rest from being read.
+
+    lastProject:
+        When the application starts, it opens the project that was opened most
+        recently, the first of the @{ProjectDirectoryScope}'s recent projects
+        that still holds its piton.config.pi. With none, it starts with no
+        project open.

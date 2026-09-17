@@ -27,7 +27,7 @@
 //! does the message list dim behind it.
 
 use std::cell::Cell;
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -948,7 +948,106 @@ struct DrawerResize;
 /// which expanding of the previous answers is showing.
 type DrawerContents = (Option<usize>, Option<usize>);
 
+/// The work that belongs to one open project (see the OpenProjectsScope):
+/// swapped into [`PromptMode`] while the project is on screen, or while a run
+/// of it writes back from the background, and kept aside otherwise.
+struct ProjectSession {
+    project_dir: Option<PathBuf>,
+    tasks: Vec<PromptTask>,
+    working: bool,
+    history_stale: bool,
+    _history_load: Task<()>,
+    task_history: HistoryList,
+    queue: Vec<QueueItem>,
+    queue_expanded: bool,
+    auto_send: bool,
+    queue_held: bool,
+    _pending: Task<()>,
+    session: Option<Session>,
+    asks: Vec<Ask>,
+    expanded_ask: Option<usize>,
+    steps_shown: HashSet<usize>,
+    answers: Vec<PromptTask>,
+    ask_history: HistoryList,
+    _ask_history_load: Task<()>,
+    ask_session: Option<Session>,
+}
+
+impl ProjectSession {
+    fn new(project_dir: Option<PathBuf>) -> Self {
+        Self {
+            project_dir,
+            tasks: Vec::new(),
+            working: false,
+            history_stale: false,
+            _history_load: Task::ready(()),
+            task_history: HistoryList {
+                toggle: "history-toggle",
+                list: "task-list",
+                item: "history-task",
+                singular: "previous task",
+                plural: "previous tasks",
+                back: "Back to the latest task",
+                collapse_steps: false,
+                id_base: 0,
+                expanded: false,
+                open: None,
+                scroll: scrollbar::measured_list(ListAlignment::Top, OUTPUT_OVERDRAW),
+                laid_out: Cell::new((0, None)),
+                opened: 0,
+                scroll_to_latest: Cell::new(false),
+            },
+            queue: Vec::new(),
+            queue_expanded: false,
+            auto_send: true,
+            queue_held: false,
+            _pending: Task::ready(()),
+            session: None,
+            asks: Vec::new(),
+            expanded_ask: None,
+            steps_shown: HashSet::new(),
+            answers: Vec::new(),
+            ask_history: HistoryList {
+                toggle: "ask-history-toggle",
+                list: "ask-list",
+                item: "ask-history-task",
+                singular: "previous answer",
+                plural: "previous answers",
+                back: "Back to the questions",
+                collapse_steps: true,
+                id_base: ASK_HISTORY_IX,
+                expanded: false,
+                open: None,
+                scroll: scrollbar::measured_list(ListAlignment::Top, OUTPUT_OVERDRAW),
+                laid_out: Cell::new((0, None)),
+                opened: 0,
+                scroll_to_latest: Cell::new(false),
+            },
+            _ask_history_load: Task::ready(()),
+            ask_session: None,
+        }
+    }
+}
+
+/// What is running in an open project, for showing it busy.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProjectActivity {
+    pub project_dir: PathBuf,
+    /// The first line of the task the harness is working on, if it is.
+    pub task: Option<SharedString>,
+    /// Each question still running, by its id, with its first line.
+    pub questions: Vec<(usize, SharedString)>,
+}
+
 pub struct PromptMode {
+    /// The open project on screen. Its work is held in the fields marked as a
+    /// project's in [`ProjectSession`], swapped in here.
+    project_dir: Option<PathBuf>,
+    /// The work of every other open project, by its folder.
+    background: HashMap<PathBuf, ProjectSession>,
+    /// A background project's work is swapped in, for a run of it to write
+    /// back; nothing on screen is touched meanwhile.
+    in_background: bool,
     /// Every task sent, oldest first; the last heads the view.
     tasks: Vec<PromptTask>,
     /// The latest task's output, which follows new rows while scrolled to
@@ -1057,14 +1156,13 @@ impl PromptMode {
             }),
             // A row whose markdown finished parsing is measured again.
             cx.observe_global::<MarkdownStates>(|_, cx| cx.notify()),
-            cx.observe_global::<ProjectDirectory>(|this, cx| {
-                this.load_queue(cx);
-                this.load_history(cx);
-                this.load_answers(cx);
-            }),
+            cx.observe_global::<ProjectDirectory>(|this, cx| this.project_changed(cx)),
         ];
 
         let mut this = Self {
+            project_dir: None,
+            background: HashMap::new(),
+            in_background: false,
             tasks: Vec::new(),
             output_list: scrollbar::measured_list(ListAlignment::Top, OUTPUT_OVERDRAW),
             output_list_for: Cell::new((0, 0, 0)),
@@ -1138,16 +1236,146 @@ impl PromptMode {
             summarize: commit_notes::summarize,
             _subscriptions: subscriptions,
         };
-        this.load_queue(cx);
-        this.load_history(cx);
-        this.load_answers(cx);
+        this.project_changed(cx);
         this
     }
 
-    /// Whether the harness is working on a prompt or a question, compiling or
-    /// running it.
+    /// Swaps the work of the project on screen with `other`'s.
+    fn swap_session(&mut self, other: &mut ProjectSession) {
+        use std::mem::swap;
+        swap(&mut self.project_dir, &mut other.project_dir);
+        swap(&mut self.tasks, &mut other.tasks);
+        swap(&mut self.working, &mut other.working);
+        swap(&mut self.history_stale, &mut other.history_stale);
+        swap(&mut self._history_load, &mut other._history_load);
+        swap(&mut self.task_history, &mut other.task_history);
+        swap(&mut self.queue, &mut other.queue);
+        swap(&mut self.queue_expanded, &mut other.queue_expanded);
+        swap(&mut self.auto_send, &mut other.auto_send);
+        swap(&mut self.queue_held, &mut other.queue_held);
+        swap(&mut self._pending, &mut other._pending);
+        swap(&mut self.session, &mut other.session);
+        swap(&mut self.asks, &mut other.asks);
+        swap(&mut self.expanded_ask, &mut other.expanded_ask);
+        swap(&mut self.steps_shown, &mut other.steps_shown);
+        swap(&mut self.answers, &mut other.answers);
+        swap(&mut self.ask_history, &mut other.ask_history);
+        swap(&mut self._ask_history_load, &mut other._ask_history_load);
+        swap(&mut self.ask_session, &mut other.ask_session);
+    }
+
+    /// Follows the project on screen: the work of the one left keeps running
+    /// in the background, and the one switched to comes back as it was left,
+    /// or, the first time it is opened, is loaded from its data.
+    fn project_changed(&mut self, cx: &mut Context<Self>) {
+        let dir = ProjectDirectory::get(cx);
+        if dir == self.project_dir {
+            return;
+        }
+        let mut left = ProjectSession::new(None);
+        self.swap_session(&mut left);
+        if let Some(left_dir) = left.project_dir.clone() {
+            self.background.insert(left_dir, left);
+        }
+        match dir.as_ref().and_then(|dir| self.background.remove(dir)) {
+            Some(mut back) => self.swap_session(&mut back),
+            None => {
+                self.project_dir = dir;
+                self.load_queue(cx);
+                self.load_history(cx);
+                self.load_answers(cx);
+            }
+        }
+        // Nothing on screen carries over from the project left.
+        self.output_locked = false;
+        self.selection_popover = None;
+        self.output_list_for.set((0, 0, 0));
+        self.scroll_output_to_top();
+        let working = self.working;
+        self.chat_input
+            .update(cx, |input, cx| input.set_busy(working, cx));
+        cx.notify();
+    }
+
+    /// Runs `f` with the work of the project at `dir` in place: straight away
+    /// while it is on screen, or with its work swapped in from the background,
+    /// touching nothing on screen, and swapped back after. Nothing runs for a
+    /// project that isn't open.
+    fn in_project<R>(
+        &mut self,
+        dir: &Path,
+        cx: &mut Context<Self>,
+        f: impl FnOnce(&mut Self, &mut Context<Self>) -> R,
+    ) -> Option<R> {
+        if self.project_dir.as_deref() == Some(dir) {
+            return Some(f(self, cx));
+        }
+        let mut session = self.background.remove(dir)?;
+        self.swap_session(&mut session);
+        let was_background = std::mem::replace(&mut self.in_background, true);
+        let result = f(self, cx);
+        self.in_background = was_background;
+        self.swap_session(&mut session);
+        self.background.insert(dir.to_path_buf(), session);
+        cx.notify();
+        Some(result)
+    }
+
+    /// What is running in each open project, the one on screen first, then
+    /// the others; a project with nothing running is left out.
+    pub fn busy_projects(&self) -> Vec<ProjectActivity> {
+        fn activity(
+            project_dir: Option<&PathBuf>,
+            tasks: &[PromptTask],
+            working: bool,
+            asks: &[Ask],
+        ) -> Option<ProjectActivity> {
+            let task = tasks
+                .last()
+                .filter(|task| working && task.status.is_active())
+                .map(|task| first_line(&task.text));
+            let questions: Vec<(usize, SharedString)> = asks
+                .iter()
+                .filter(|ask| ask.task.status.is_active())
+                .map(|ask| (ask.id, first_line(&ask.task.text)))
+                .collect();
+            if task.is_none() && questions.is_empty() {
+                return None;
+            }
+            Some(ProjectActivity {
+                project_dir: project_dir?.clone(),
+                task,
+                questions,
+            })
+        }
+        let mut busy: Vec<ProjectActivity> = activity(
+            self.project_dir.as_ref(),
+            &self.tasks,
+            self.working,
+            &self.asks,
+        )
+        .into_iter()
+        .collect();
+        let mut others: Vec<ProjectActivity> = self
+            .background
+            .values()
+            .filter_map(|session| {
+                activity(
+                    session.project_dir.as_ref(),
+                    &session.tasks,
+                    session.working,
+                    &session.asks,
+                )
+            })
+            .collect();
+        others.sort_by(|a, b| a.project_dir.cmp(&b.project_dir));
+        busy.extend(others);
+        busy
+    }
+
     /// What is running: the task the harness is working on, then each
-    /// question still running.
+    /// question still running, in the project on screen, then in each other
+    /// open project, headed with its name.
     pub fn running_jobs(&self) -> Vec<Job> {
         let task = self
             .tasks
@@ -1157,6 +1385,7 @@ impl PromptMode {
                 kind: JobKind::Task,
                 title: "Task".into(),
                 detail: Some(first_line(&task.text)),
+                project: None,
             });
         let questions = self
             .asks
@@ -1166,8 +1395,29 @@ impl PromptMode {
                 kind: JobKind::Question(ask.id),
                 title: "Question".into(),
                 detail: Some(first_line(&ask.task.text)),
+                project: None,
             });
-        task.into_iter().chain(questions).collect()
+        let mut jobs: Vec<Job> = task.into_iter().chain(questions).collect();
+        for busy in self
+            .busy_projects()
+            .into_iter()
+            .filter(|busy| Some(&busy.project_dir) != self.project_dir.as_ref())
+        {
+            let project = Some(busy.project_dir.clone());
+            jobs.extend(busy.task.map(|task| Job {
+                kind: JobKind::Task,
+                title: crate::activity::title_in("Task", project.as_deref()),
+                detail: Some(task),
+                project: project.clone(),
+            }));
+            jobs.extend(busy.questions.into_iter().map(|(id, text)| Job {
+                kind: JobKind::Question(id),
+                title: crate::activity::title_in("Question", project.as_deref()),
+                detail: Some(text),
+                project: project.clone(),
+            }));
+        }
+        jobs
     }
 
     /// Starts a question that stays running, for tests elsewhere.
@@ -1206,8 +1456,12 @@ impl PromptMode {
         }
     }
 
+    /// Whether the harness is working on a task or a question in any open
+    /// project.
     pub fn is_working(&self) -> bool {
-        self.working || self.asks.iter().any(|ask| ask.task.status.is_active())
+        self.working
+            || self.asks.iter().any(|ask| ask.task.status.is_active())
+            || !self.busy_projects().is_empty()
     }
 
     /// The prompts queued, oldest first.
@@ -1237,7 +1491,7 @@ impl PromptMode {
         });
     }
 
-    #[cfg(test)]
+    /// The file open beside the chat, if any.
     pub fn open_file_view(&self) -> Option<Entity<FileView>> {
         self.file.clone()
     }
@@ -1348,6 +1602,10 @@ impl PromptMode {
         if ix >= self.tasks.len() {
             return;
         }
+        if self.in_background {
+            self.tasks[ix].apply(event);
+            return;
+        }
         let latest = ix + 1 == self.tasks.len();
         // A raw output line only changes the raw tail at the end of the
         // output, so there is nothing to redraw while that is out of sight.
@@ -1382,6 +1640,10 @@ impl PromptMode {
     }
 
     fn scroll_output_to_top(&self) {
+        // The output list is the screen's, not a background project's.
+        if self.in_background {
+            return;
+        }
         self.output_list.scroll_to(ListOffset {
             item_ix: 0,
             offset_in_item: px(0.),
@@ -1416,7 +1678,7 @@ impl PromptMode {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if ProjectDirectory::get(cx).is_none() {
+        if self.project_dir.is_none() {
             window.push_notification(
                 Notification::error("Open a project before sending a prompt.")
                     .title("No project open"),
@@ -1436,8 +1698,10 @@ impl PromptMode {
     /// Replaces the queue with the one saved for the current project. A
     /// restored queue waits to be sent.
     fn load_queue(&mut self, cx: &mut Context<Self>) {
-        let saved = ProjectDirectory::get(cx)
-            .map(|project_dir| prompt_queue::load(&project_dir))
+        let saved = self
+            .project_dir
+            .as_ref()
+            .map(|project_dir| prompt_queue::load(project_dir))
             .unwrap_or_default();
         self.queue = saved
             .into_iter()
@@ -1464,11 +1728,13 @@ impl PromptMode {
             return;
         }
         self.history_stale = false;
-        let Some(project_dir) = ProjectDirectory::get(cx) else {
+        let Some(project_dir) = self.project_dir.clone() else {
             self._history_load = Task::ready(());
             return;
         };
+        let load_dir = project_dir.clone();
         let load = cx.background_spawn(async move {
+            let project_dir = load_dir;
             let history = prompt_history::load(&project_dir);
             // Tasks sent now carry on the conversation the history left off.
             let session = Session::latest(&history, &project_dir);
@@ -1481,15 +1747,17 @@ impl PromptMode {
         self._history_load = cx.spawn(async move |this, cx| {
             let (tasks, session) = load.await;
             this.update(cx, |this, cx| {
-                if this.working {
-                    this.history_stale = true;
-                    return;
-                }
-                this.tasks = tasks;
-                this.session = session;
-                this.task_history.open = None;
-                this.scroll_output_to_top();
-                cx.notify();
+                this.in_project(&project_dir, cx, |this, cx| {
+                    if this.working {
+                        this.history_stale = true;
+                        return;
+                    }
+                    this.tasks = tasks;
+                    this.session = session;
+                    this.task_history.open = None;
+                    this.scroll_output_to_top();
+                    cx.notify();
+                });
             })
             .ok();
         });
@@ -1514,7 +1782,7 @@ impl PromptMode {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(project_dir) = ProjectDirectory::get(cx) else {
+        let Some(project_dir) = self.project_dir.clone() else {
             return;
         };
         self.next_queue_id += 1;
@@ -1537,7 +1805,9 @@ impl PromptMode {
         cx.spawn_in(window, async move |this, cx| {
             let saved = save.await;
             this.update_in(cx, |this, window, cx| {
-                this.queue_saved(id, saved, &project_dir, window, cx)
+                this.in_project(&project_dir, cx, |this, cx| {
+                    this.queue_saved(id, saved, window, cx)
+                });
             })
             .ok();
         })
@@ -1548,16 +1818,12 @@ impl PromptMode {
         &mut self,
         id: usize,
         saved: Result<QueuedPrompt>,
-        project_dir: &std::path::Path,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(ix) = self.queue.iter().position(|item| item.id == id) else {
-            // Cancelled while it was saved. A queue left behind by switching
-            // projects keeps it, for when that project is opened again.
-            if let Ok(saved) = saved
-                && ProjectDirectory::get(cx).as_deref() == Some(project_dir)
-            {
+            // Cancelled while it was saved.
+            if let Ok(saved) = saved {
                 prompt_queue::remove(&saved.file).ok();
             }
             return;
@@ -1582,7 +1848,7 @@ impl PromptMode {
     fn send_next(&mut self, cx: &mut Context<Self>) {
         // Without a project it could not be sent, and must stay queued.
         if self.working
-            || ProjectDirectory::get(cx).is_none()
+            || self.project_dir.is_none()
             || !self.queue.first().is_some_and(|item| item.saved.is_some())
         {
             return;
@@ -1650,12 +1916,14 @@ impl PromptMode {
     /// conversation the last of them left off, unless one has been asked
     /// since.
     fn load_answers(&mut self, cx: &mut Context<Self>) {
-        let Some(project_dir) = ProjectDirectory::get(cx) else {
+        let Some(project_dir) = self.project_dir.clone() else {
             self.answers.clear();
             self._ask_history_load = Task::ready(());
             return;
         };
+        let load_dir = project_dir.clone();
         let load = cx.background_spawn(async move {
+            let project_dir = load_dir;
             let saved = prompt_history::load_asks(&project_dir);
             let session = Session::latest(&saved, &project_dir);
             let answers = saved
@@ -1667,26 +1935,28 @@ impl PromptMode {
         self._ask_history_load = cx.spawn(async move |this, cx| {
             let (answers, session) = load.await;
             this.update(cx, |this, cx| {
-                // Those still open are not previous answers yet.
-                let open: Vec<SharedString> = this
-                    .asks
-                    .iter()
-                    .filter_map(|ask| Some(ask.task.compiled.as_ref()?.anchor.clone()))
-                    .collect();
-                this.answers = answers
-                    .into_iter()
-                    .filter(|answer| {
-                        answer
-                            .compiled
-                            .as_ref()
-                            .is_none_or(|compiled| !open.contains(&compiled.anchor))
-                    })
-                    .collect();
-                if this.ask_session.is_none() {
-                    this.ask_session = session;
-                }
-                this.ask_history.open = None;
-                cx.notify();
+                this.in_project(&project_dir, cx, |this, cx| {
+                    // Those still open are not previous answers yet.
+                    let open: Vec<SharedString> = this
+                        .asks
+                        .iter()
+                        .filter_map(|ask| Some(ask.task.compiled.as_ref()?.anchor.clone()))
+                        .collect();
+                    this.answers = answers
+                        .into_iter()
+                        .filter(|answer| {
+                            answer
+                                .compiled
+                                .as_ref()
+                                .is_none_or(|compiled| !open.contains(&compiled.anchor))
+                        })
+                        .collect();
+                    if this.ask_session.is_none() {
+                        this.ask_session = session;
+                    }
+                    this.ask_history.open = None;
+                    cx.notify();
+                });
             })
             .ok();
         });
@@ -1695,7 +1965,7 @@ impl PromptMode {
     /// Sends `text` to the harness as a new task: a queued prompt with the
     /// anchor it was saved with, else with a freshly resolved one.
     fn start(&mut self, text: String, sending: Sending, cx: &mut Context<Self>) {
-        let Some(project_dir) = ProjectDirectory::get(cx) else {
+        let Some(project_dir) = self.project_dir.clone() else {
             return;
         };
         let task_ix = self.push_task(text.clone().into(), cx);
@@ -1704,8 +1974,10 @@ impl PromptMode {
             Sending::Queued(queued) => anchor_mode(&queued.anchor),
         };
         self.working = true;
-        self.chat_input
-            .update(cx, |input, cx| input.set_busy(true, cx));
+        if !self.in_background {
+            self.chat_input
+                .update(cx, |input, cx| input.set_busy(true, cx));
+        }
 
         let resume = Session::resume(&self.session, &project_dir);
         let lsp = self.chat_input.read(cx).lsp();
@@ -1754,17 +2026,19 @@ impl PromptMode {
                     Err(err) => Some(format!("could not run piton build: {err:#}")),
                 };
                 let updated = this.update(cx, |this, cx| {
-                    if let Some(task) = this.tasks.get_mut(task_ix) {
-                        if task.status == TaskStatus::Building {
-                            task.status = TaskStatus::Compiling;
+                    this.in_project(&project_dir, cx, |this, cx| {
+                        if let Some(task) = this.tasks.get_mut(task_ix) {
+                            if task.status == TaskStatus::Building {
+                                task.status = TaskStatus::Compiling;
+                            }
+                            if let Some(report) = failure {
+                                task.reply.push_error(format!(
+                                    "piton build failed, so the compiled spec may be out of date:\n{report}"
+                                ));
+                            }
                         }
-                        if let Some(report) = failure {
-                            task.reply.push_error(format!(
-                                "piton build failed, so the compiled spec may be out of date:\n{report}"
-                            ));
-                        }
-                    }
-                    cx.notify();
+                        cx.notify();
+                    });
                 });
                 if updated.is_err() {
                     return;
@@ -1796,7 +2070,9 @@ impl PromptMode {
                     );
                     if this
                         .update(cx, |this, cx| {
-                            this.show_compiled(task_ix, anchor, prompt, cx)
+                            this.in_project(&project_dir, cx, |this, cx| {
+                                this.show_compiled(task_ix, anchor, prompt, cx)
+                            });
                         })
                         .is_err()
                     {
@@ -1814,14 +2090,17 @@ impl PromptMode {
                         }
                         if this
                             .update(cx, |this, cx| {
-                                if let HarnessEvent::Session(id) = &event {
-                                    started = true;
-                                    this.session = Some(Session {
-                                        project_dir: project_dir.clone(),
-                                        id: id.clone(),
-                                    });
-                                }
-                                this.apply_event(task_ix, event, cx)
+                                let dir = project_dir.clone();
+                                this.in_project(&dir, cx, |this, cx| {
+                                    if let HarnessEvent::Session(id) = &event {
+                                        started = true;
+                                        this.session = Some(Session {
+                                            project_dir: project_dir.clone(),
+                                            id: id.clone(),
+                                        });
+                                    }
+                                    this.apply_event(task_ix, event, cx)
+                                });
                             })
                             .is_err()
                         {
@@ -1829,17 +2108,23 @@ impl PromptMode {
                         }
                     }
                     if let Some(resume) = resume.filter(|_| !started) {
-                        this.update(cx, |this, _| Session::forget(&mut this.session, &resume))
-                            .ok();
+                        this.update(cx, |this, cx| {
+                            this.in_project(&project_dir, cx, |this, _| {
+                                Session::forget(&mut this.session, &resume)
+                            });
+                        })
+                        .ok();
                     }
                 }
                 Err(err) => {
                     let error = format!("{err:#}");
                     record.error = Some(error.clone());
-                    this.update(cx, |this, _| {
-                        if let Some(task) = this.tasks.get_mut(task_ix) {
-                            task.fail(error);
-                        }
+                    this.update(cx, |this, cx| {
+                        this.in_project(&project_dir, cx, |this, _| {
+                            if let Some(task) = this.tasks.get_mut(task_ix) {
+                                task.fail(error);
+                            }
+                        });
                     })
                     .ok();
                 }
@@ -1856,6 +2141,8 @@ impl PromptMode {
             };
 
             this.update(cx, |this, cx| {
+                let dir = project_dir.clone();
+                this.in_project(&dir, cx, |this, cx| {
                 if let Some(task) = this.tasks.get_mut(task_ix) {
                     task.end();
                     if let Err(err) = saved {
@@ -1870,8 +2157,10 @@ impl PromptMode {
                 if this.history_stale {
                     this.load_history(cx);
                 }
-                this.chat_input
-                    .update(cx, |input, cx| input.set_busy(false, cx));
+                if !this.in_background {
+                    this.chat_input
+                        .update(cx, |input, cx| input.set_busy(false, cx));
+                }
                 // A Code, Chain, or Spec task that finished well adds a note to
                 // the next commit, written in the background.
                 if builds
@@ -1883,10 +2172,17 @@ impl PromptMode {
                 {
                     add_commit_note(summarize, project_dir.clone(), asked, result, cx);
                 }
-                // Deferred: starting the next run replaces this task.
+                // Deferred: starting the next run replaces this task. Only this
+                // project's queue sends, whichever project is on screen.
                 let prompt_mode = cx.entity();
-                cx.defer(move |cx| prompt_mode.update(cx, |this, cx| this.auto_send_next(cx)));
+                let dir = project_dir.clone();
+                cx.defer(move |cx| {
+                    prompt_mode.update(cx, |this, cx| {
+                        this.in_project(&dir, cx, |this, cx| this.auto_send_next(cx));
+                    })
+                });
                 cx.notify();
+                });
             })
             .ok();
         });
@@ -1896,7 +2192,7 @@ impl PromptMode {
     /// in place of any question still open. It is saved apart from the
     /// history, so it never becomes one of the tasks.
     fn ask(&mut self, text: String, attached_text: Vec<String>, cx: &mut Context<Self>) {
-        let Some(project_dir) = ProjectDirectory::get(cx) else {
+        let Some(project_dir) = self.project_dir.clone() else {
             return;
         };
         let run = self.push_ask(text.clone().into(), cx);
@@ -1974,7 +2270,9 @@ impl PromptMode {
                     };
                     if this
                         .update(cx, |this, cx| {
-                            this.update_ask(run, |ask| ask.set_compiled(compiled), cx)
+                            this.in_project(&project_dir, cx, |this, cx| {
+                                this.update_ask(run, |ask| ask.set_compiled(compiled), cx)
+                            });
                         })
                         .is_err()
                     {
@@ -1985,14 +2283,17 @@ impl PromptMode {
                         log.record.note(&event);
                         if this
                             .update(cx, |this, cx| {
-                                if let HarnessEvent::Session(id) = &event {
-                                    started = true;
-                                    this.ask_session = Some(Session {
-                                        project_dir: project_dir.clone(),
-                                        id: id.clone(),
-                                    });
-                                }
-                                this.update_ask(run, |ask| ask.apply(event), cx)
+                                let dir = project_dir.clone();
+                                this.in_project(&dir, cx, |this, cx| {
+                                    if let HarnessEvent::Session(id) = &event {
+                                        started = true;
+                                        this.ask_session = Some(Session {
+                                            project_dir: project_dir.clone(),
+                                            id: id.clone(),
+                                        });
+                                    }
+                                    this.update_ask(run, |ask| ask.apply(event), cx)
+                                });
                             })
                             .is_err()
                         {
@@ -2000,8 +2301,10 @@ impl PromptMode {
                         }
                     }
                     if let Some(resume) = resume.filter(|_| !started && !fork) {
-                        this.update(cx, |this, _| {
-                            Session::forget(&mut this.ask_session, &resume)
+                        this.update(cx, |this, cx| {
+                            this.in_project(&project_dir, cx, |this, _| {
+                                Session::forget(&mut this.ask_session, &resume)
+                            });
                         })
                         .ok();
                     }
@@ -2010,7 +2313,9 @@ impl PromptMode {
                     let error = format!("{err:#}");
                     log.record.error = Some(error.clone());
                     this.update(cx, |this, cx| {
-                        this.update_ask(run, |ask| ask.fail(error), cx)
+                        this.in_project(&project_dir, cx, |this, cx| {
+                            this.update_ask(run, |ask| ask.fail(error), cx)
+                        });
                     })
                     .ok();
                 }
@@ -2018,10 +2323,12 @@ impl PromptMode {
             // Once over, it opens onto its whole task table, in place of any
             // other.
             this.update(cx, |this, cx| {
-                this.update_ask(run, PromptTask::end, cx);
-                if this.asks.iter().any(|ask| ask.id == run) {
-                    this.expand_ask(run, cx);
-                }
+                this.in_project(&project_dir, cx, |this, cx| {
+                    this.update_ask(run, PromptTask::end, cx);
+                    if this.asks.iter().any(|ask| ask.id == run) {
+                        this.expand_ask(run, cx);
+                    }
+                });
             })
             .ok();
         });
@@ -3926,6 +4233,91 @@ mod tests {
             Root::new(view, window, cx)
         });
         (prompt_mode.unwrap(), window.into())
+    }
+
+    /// Two folders, each an empty project, named for a test.
+    fn two_projects(name: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        let base = std::env::temp_dir().join(format!("suspense-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let dirs = [base.join("alpha"), base.join("beta")];
+        for dir in &dirs {
+            std::fs::create_dir_all(dir).unwrap();
+            std::fs::write(dir.join("piton.config.pi"), "").unwrap();
+        }
+        let [a, b] = dirs.map(|dir| std::fs::canonicalize(dir).unwrap());
+        (a, b)
+    }
+
+    /// Switching projects leaves the work of the one left running in the
+    /// background: its run still writes into it, never into the project on
+    /// screen, and switching back shows it just as it is, loading nothing
+    /// again.
+    #[gpui_kit::test]
+    async fn a_project_left_keeps_its_work_running(cx: &mut TestAppContext) {
+        let (a, b) = two_projects("background-work");
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(a.clone(), cx));
+        cx.run_until_parked();
+        let (task, question) = cx
+            .update_window(handle, |_, _, cx| {
+                prompt_mode.update(cx, |this, cx| {
+                    let ix = this.push_task("Work in alpha".into(), cx);
+                    this.working = true;
+                    this.apply_event(ix, HarnessEvent::TextStarted, cx);
+                    let question = this.start_test_question("Ask in alpha", cx);
+                    (ix, question)
+                })
+            })
+            .unwrap();
+
+        cx.update(|cx| ProjectDirectory::set(b.clone(), cx));
+        cx.run_until_parked();
+        prompt_mode.update(cx, |this, cx| {
+            assert!(this.tasks.is_empty() && this.asks.is_empty() && !this.working);
+            assert!(this.is_working(), "alpha's work stopped counting");
+            let busy = this.busy_projects();
+            assert_eq!(busy.len(), 1);
+            assert_eq!(busy[0].project_dir, a);
+            assert_eq!(busy[0].task.as_deref(), Some("Work in alpha"));
+            assert_eq!(busy[0].questions, [(question, "Ask in alpha".into())]);
+            let jobs = this.running_jobs();
+            assert_eq!(
+                jobs.iter()
+                    .map(|job| job.title.to_string())
+                    .collect::<Vec<_>>(),
+                ["Task · alpha", "Question · alpha"]
+            );
+            assert!(jobs.iter().all(|job| job.project.as_ref() == Some(&a)));
+
+            // Alpha's run writes back into alpha, not beta on screen.
+            this.in_project(&a, cx, |this, cx| {
+                this.apply_event(task, HarnessEvent::TextDelta("Still going.".into()), cx);
+                this.update_ask(question, |ask| ask.end(), cx);
+            });
+            assert!(this.tasks.is_empty() && this.asks.is_empty());
+            assert_eq!(this.project_dir.as_ref(), Some(&b));
+        });
+
+        cx.update(|cx| ProjectDirectory::set(a.clone(), cx));
+        cx.run_until_parked();
+        prompt_mode.update(cx, |this, _| {
+            assert_eq!(this.tasks.len(), 1, "alpha's tasks were loaded again");
+            assert!(this.working);
+            assert!(this.tasks[0].reply.parts.iter().any(
+                |part| matches!(part, ReplyPart::Text(text) if text.contains("Still going."))
+            ));
+            assert_eq!(this.asks.len(), 1);
+            assert!(!this.asks[0].task.status.is_active());
+            // Now on screen, alpha's jobs are no longer headed with its name.
+            assert_eq!(
+                this.running_jobs()
+                    .iter()
+                    .map(|job| job.title.to_string())
+                    .collect::<Vec<_>>(),
+                ["Task"]
+            );
+        });
+        std::fs::remove_dir_all(a.parent().unwrap()).ok();
     }
 
     /// A reply is a row per piece of text and per tool call, in the order they

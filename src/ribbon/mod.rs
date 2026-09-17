@@ -11,7 +11,7 @@
 //! commands marked primary (for now, all of them) sit small in a single row.
 
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonRounded, ButtonVariants};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{
     ActiveTheme, Icon, Selectable as _, Sizable as _, Size, StyledExt as _, h_flex, v_flex,
@@ -50,7 +50,18 @@ actions!(
 const TAB_ROW_HEIGHT: Pixels = px(30.);
 
 /// The height of the commands beneath the tabs.
-const RIBBON_BODY_HEIGHT: Pixels = px(76.);
+const RIBBON_BODY_HEIGHT: Pixels = px(98.);
+
+/// The padding at the right end of the commands, and above and below the buttons,
+/// though not the groups' title strips, which run the body's full height; and
+/// the gap between one command and the next, across and down.
+const BODY_PADDING: Pixels = px(8.);
+
+/// A slim button's height.
+const SLIM_HEIGHT: Pixels = px(22.);
+
+/// Slim buttons stacked in one column, at most.
+const SLIM_STACK: usize = 3;
 
 /// The width of the strip down a group's left edge that holds its title,
 /// leaving room either side of the title.
@@ -133,6 +144,10 @@ enum Command {
     NewProject,
     OpenProject,
     BuildSpec,
+    NewScope,
+    NewConcept,
+    NewShape,
+    NewInstruction,
     AnalyzeDivergence,
     ViewDivergenceReports,
     GenerateSkills,
@@ -146,8 +161,20 @@ enum Command {
 struct CommandPlace {
     command: Command,
     group: &'static str,
+    /// Full or slim.
+    size: CommandSize,
     /// Shown, small, in the collapsed ribbon.
     primary: bool,
+}
+
+/// How a command's button is laid out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CommandSize {
+    /// The full height of the body, its icon large above its label.
+    Full,
+    /// A third of that, near enough, its small icon left of its label; slim
+    /// buttons side by side stack down, three to a column.
+    Slim,
 }
 
 pub struct Ribbon {
@@ -157,7 +184,8 @@ pub struct Ribbon {
     /// Collapsed to a row of its primary commands; the choice is kept across
     /// launches.
     collapsed: bool,
-    building: bool,
+    /// The projects a spec build runs in, on its own.
+    building: Vec<std::path::PathBuf>,
     /// Everything running, shown as a spinner beside the project's name.
     jobs: Vec<Job>,
     /// Whether the list of what's running is open.
@@ -176,7 +204,7 @@ impl Ribbon {
             // Always Project at launch: which tab was last open isn't kept.
             open_tabs: vec![RibbonTab::Project],
             collapsed: collapsed_preference::load(),
-            building: false,
+            building: Vec::new(),
             jobs: Vec::new(),
             jobs_open: false,
             project_indicator: cx.new(ProjectIndicator::new),
@@ -250,7 +278,7 @@ impl Ribbon {
         };
         let list = self.jobs_open.then(|| {
             let rows = self.jobs.iter().enumerate().map(|(ix, job)| {
-                let kind = job.kind;
+                let (kind, project) = (job.kind, job.project.clone());
                 let row = h_flex()
                     .id(("ribbon-job", ix))
                     .gap_2()
@@ -261,7 +289,7 @@ impl Ribbon {
                     .hover(|row| row.bg(theme.list_hover))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.jobs_open = false;
-                        cx.emit(RevealJob(kind));
+                        cx.emit(RevealJob(kind, project.clone()));
                         cx.notify();
                     }))
                     .child(gpui_kit::component::spinner::Spinner::new().small())
@@ -392,29 +420,52 @@ impl Ribbon {
 impl Ribbon {
     /// `command`'s control: large, with its icon above its label, or small,
     /// with its icon beside it, for the collapsed ribbon.
-    fn render_command(&self, command: Command, small: bool, cx: &mut Context<Self>) -> AnyElement {
+    fn render_command(
+        &self,
+        command: Command,
+        size: CommandSize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let colors = command_colors(cx);
+        let rest = command_shades(cx).0;
         let button = |id: &'static str, icon: IconName, label: SharedString| {
-            if small {
-                Button::new(id).ghost().small().icon(icon).label(label)
-            } else {
-                Button::new(id).ghost().h(px(52.)).px_3().child(
+            // gpui-kit keeps only a fifth of a custom button's resting colour,
+            // so the colour is given to the button itself; its hover and
+            // pressed colours are taken whole.
+            let button = Button::new(id)
+                .custom(colors)
+                .rounded(ButtonRounded::None)
+                .bg(rest);
+            match size {
+                CommandSize::Slim => button
+                    .small()
+                    .h(SLIM_HEIGHT)
+                    .w_full()
+                    .px_2()
+                    .icon(Icon::new(icon).with_size(Size::Small))
+                    .label(label),
+                CommandSize::Full => button.h_full().px_3().child(
                     v_flex()
                         .items_center()
                         .gap_1()
                         .child(Icon::new(icon).with_size(Size::Large))
                         .child(div().text_xs().child(label)),
-                )
+                ),
             }
         };
         match command {
             Command::NewProject => project_tab::new_project(button),
             Command::OpenProject => project_tab::open_project(button),
             Command::BuildSpec => spec_tab::build_spec(self, button, cx),
+            Command::NewScope => spec_tab::new_scope(button, cx),
+            Command::NewConcept => spec_tab::new_concept(button, cx),
+            Command::NewShape => spec_tab::new_shape(button, cx),
+            Command::NewInstruction => spec_tab::new_instruction(button, cx),
             Command::AnalyzeDivergence => spec_tab::analyze_divergence(button, cx),
             Command::ViewDivergenceReports => spec_tab::view_divergence_reports(button, cx),
             Command::GenerateSkills => spec_tab::generate_skills(button, cx),
             Command::Rescope => spec_tab::rescope(button, cx),
-            Command::DarkMode => application_tab::dark_mode(small, cx),
+            Command::DarkMode => application_tab::dark_mode(size, command_shades(cx).0, cx),
             Command::Settings => application_tab::settings(button),
         }
     }
@@ -469,7 +520,7 @@ impl Render for Ribbon {
                     row.push(div().w_px().h(px(16.)).bg(border).into_any_element());
                 }
                 last_tab = Some(tab);
-                row.push(self.render_command(place.command, true, cx));
+                row.push(self.render_command(place.command, CommandSize::Slim, cx));
             }
             // Lets UI tests find the row; inert in normal builds.
             return ribbon.child(gpui_kit::TestSupportExt::test_support(
@@ -584,9 +635,12 @@ impl Render for Ribbon {
         // Each open tab's commands, gathered into their groups in order.
         let mut row = Vec::new();
         for tab in &self.open_tabs {
-            let mut groups: Vec<(&'static str, Vec<AnyElement>)> = Vec::new();
+            let mut groups: Vec<(&'static str, Vec<(CommandSize, AnyElement)>)> = Vec::new();
             for place in tab.commands() {
-                let element = self.render_command(place.command, false, cx);
+                let element = (
+                    place.size,
+                    self.render_command(place.command, place.size, cx),
+                );
                 match groups.last_mut() {
                     Some((group, commands)) if *group == place.group => commands.push(element),
                     _ => groups.push((place.group, vec![element])),
@@ -607,6 +661,7 @@ impl Render for Ribbon {
                     .flex()
                     .items_center()
                     .text_sm()
+                    .pl(BODY_PADDING)
                     .text_color(muted)
                     .child("No commands yet")
                     .into_any_element(),
@@ -627,8 +682,12 @@ impl Render for Ribbon {
                     // than the window.
                     .overflow_x_scroll()
                     .items_stretch()
-                    .gap_3()
-                    .pr_2()
+                    // Padding at the right only, so the first group's title
+                    // strip starts at the body's left edge; the buttons are
+                    // padded above and below within their groups, so the
+                    // groups' title strips run the body's full height.
+                    .pr(BODY_PADDING)
+                    .gap(BODY_PADDING)
                     // Every tab is as tall, so the window beneath doesn't jump
                     // when switching tabs.
                     .h(RIBBON_BODY_HEIGHT)
@@ -666,15 +725,47 @@ pub fn toggle_open(open: &[RibbonTab], tab: RibbonTab) -> Vec<RibbonTab> {
 /// top, on a strip of its own.
 fn group(
     label: &'static str,
-    commands: Vec<AnyElement>,
+    commands: Vec<(CommandSize, AnyElement)>,
     muted: Hsla,
     title_background: Hsla,
     font: &str,
 ) -> AnyElement {
+    // Full buttons stand alone; slim ones side by side stack down, three to a
+    // column, top aligned.
+    let mut columns: Vec<AnyElement> = Vec::new();
+    let mut stack: Vec<AnyElement> = Vec::new();
+    let flush = |stack: &mut Vec<AnyElement>, columns: &mut Vec<AnyElement>| {
+        if !stack.is_empty() {
+            columns.push(
+                v_flex()
+                    .flex_none()
+                    .h_full()
+                    .gap(BODY_PADDING)
+                    .children(stack.drain(..))
+                    .into_any_element(),
+            );
+        }
+    };
+    for (size, element) in commands {
+        match size {
+            CommandSize::Full => {
+                flush(&mut stack, &mut columns);
+                columns.push(element);
+            }
+            CommandSize::Slim => {
+                if stack.len() == SLIM_STACK {
+                    flush(&mut stack, &mut columns);
+                }
+                stack.push(element);
+            }
+        }
+    }
+    flush(&mut stack, &mut columns);
     // Lets UI tests find the group; inert in normal builds.
     gpui_kit::TestSupportExt::test_support(h_flex().id(label))
         .h_full()
-        .gap_2()
+        .items_stretch()
+        .gap(BODY_PADDING)
         .child(
             div()
                 .relative()
@@ -684,8 +775,38 @@ fn group(
                 .bg(title_background)
                 .child(group_title(label, muted, font)),
         )
-        .child(h_flex().flex_1().items_center().gap_2().children(commands))
+        .child(
+            h_flex()
+                .h_full()
+                .items_stretch()
+                .py(BODY_PADDING)
+                .gap(BODY_PADDING)
+                .children(columns),
+        )
         .into_any_element()
+}
+
+/// A ribbon command's background at rest, hovered, and pressed.
+fn command_shades(cx: &App) -> (Hsla, Hsla, Hsla) {
+    let (white, black) = (hsla(0., 0., 1., 1.), hsla(0., 0., 0., 1.));
+    if cx.theme().is_dark() {
+        (white.opacity(0.14), white.opacity(0.22), black.opacity(0.2))
+    } else {
+        (white.opacity(0.45), white.opacity(0.7), black.opacity(0.12))
+    }
+}
+
+/// The colours of a ribbon command: its background laid over the body rather
+/// than a colour of its own, so it contrasts a little with the body whatever
+/// tint the body has, more while hovered, and more again while pressed.
+fn command_colors(cx: &App) -> ButtonCustomVariant {
+    let theme = cx.theme();
+    let (rest, hover, active) = command_shades(cx);
+    ButtonCustomVariant::new(cx)
+        .color(rest)
+        .hover(hover)
+        .active(active)
+        .foreground(theme.foreground)
 }
 
 /// A group's title, turned -90deg. gpui can only turn an SVG, so the title is
@@ -775,5 +896,88 @@ mod tests {
         );
         assert_eq!(toggle_open(&[Project, Code, Spec], Code), [Project, Spec]);
         assert_eq!(toggle_open(&[Spec], Spec), [Spec]);
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use gpui_kit::{AppContext as _, TestAppContext, div};
+
+    use super::{CommandSize, group};
+
+    /// Four slim buttons in a row stack into a column of three, then a column
+    /// of one; a full button between slim ones stands alone.
+    #[gpui_kit::test]
+    fn slim_buttons_stack_three_to_a_column(cx: &mut TestAppContext) {
+        use gpui_kit::component::Root;
+        use gpui_kit::test::TestWindowExt as _;
+        use gpui_kit::{
+            Context, InteractiveElement as _, IntoElement, ParentElement as _, Render, Styled as _,
+            Window, px,
+        };
+
+        struct View;
+        impl Render for View {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                let slim = |id: &'static str| {
+                    (
+                        CommandSize::Slim,
+                        gpui_kit::TestSupportExt::test_support(
+                            div().id(id).h(super::SLIM_HEIGHT).w(px(60.)),
+                        )
+                        .into_any_element(),
+                    )
+                };
+                let full = |id: &'static str| {
+                    (
+                        CommandSize::Full,
+                        gpui_kit::TestSupportExt::test_support(div().id(id).h_full().w(px(60.)))
+                            .into_any_element(),
+                    )
+                };
+                div().h(super::RIBBON_BODY_HEIGHT).flex().child(group(
+                    "Group",
+                    vec![
+                        slim("a"),
+                        slim("b"),
+                        slim("c"),
+                        slim("d"),
+                        full("e"),
+                        slim("f"),
+                    ],
+                    gpui_kit::black(),
+                    gpui_kit::black(),
+                    "sans-serif",
+                ))
+            }
+        }
+        cx.update(gpui_kit::init);
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|_| View);
+            Root::new(view, window, cx)
+        });
+        cx.update_window(window.into(), |_, window, cx| {
+            window.render_frame(cx);
+            let at = |id: &'static str| window.find(id).bounds();
+            let (a, b, c, d, e, f) = (at("a"), at("b"), at("c"), at("d"), at("e"), at("f"));
+            let gap = super::BODY_PADDING;
+            assert_eq!(
+                (a.left(), b.left(), c.left()),
+                (a.left(), a.left(), a.left()),
+                "a, b, c aren't one column"
+            );
+            assert_eq!(b.top() - a.bottom(), gap);
+            assert_eq!(c.top() - b.bottom(), gap);
+            assert_eq!(d.top(), a.top(), "the fourth doesn't start a new column");
+            assert_eq!(d.left() - a.right(), gap);
+            assert_eq!(e.left() - d.right(), gap);
+            assert_eq!(
+                e.size.height,
+                super::RIBBON_BODY_HEIGHT - super::BODY_PADDING * 2.,
+                "the full button isn't full height"
+            );
+            assert_eq!((f.top(), f.left() - e.right()), (a.top(), gap));
+        })
+        .unwrap();
     }
 }

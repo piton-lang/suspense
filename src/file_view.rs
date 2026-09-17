@@ -191,6 +191,35 @@ impl FileView {
         }
     }
 
+    /// Shows a file that isn't on disk yet, starting with `text`, the cursor
+    /// at `cursor`: unsaved from the start, and written, folders and all,
+    /// when saved.
+    pub fn unwritten(
+        path: PathBuf,
+        text: String,
+        cursor: Position,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut this = Self::new(path, None, window, cx);
+        // There is nothing to read: dropping the load stops it.
+        this._load = Task::ready(());
+        this.editor.update(cx, |editor, cx| {
+            editor.set_value(text, window, cx);
+            editor.set_cursor_position(cursor, window, cx);
+        });
+        // Nothing is saved yet, so everything in it is a change.
+        this.saved = Some(String::new());
+        this.dirty = true;
+        this.attach_lsp(cx);
+        this
+    }
+
+    /// The file shown.
+    pub fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+
     pub fn title(&self) -> SharedString {
         self.title.clone()
     }
@@ -229,7 +258,7 @@ impl FileView {
         });
     }
 
-    #[cfg(test)]
+    /// Moves keyboard focus into the editor.
     pub fn focus_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         use gpui_kit::Focusable as _;
         self.editor.read(cx).focus_handle(cx).focus(window, cx);
@@ -278,6 +307,10 @@ impl FileView {
                 } else {
                     typed
                 };
+                // A file not yet on disk may need its folders made.
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
                 std::fs::write(path, &text).map(|()| text)
             }
         });

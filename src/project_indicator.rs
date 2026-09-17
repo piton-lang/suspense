@@ -70,6 +70,9 @@ pub struct ProjectIndicator {
     /// Where the indicator was last laid out, for the list to sit flush
     /// beneath it.
     bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
+    /// The busy open projects, each with what runs in it, such as
+    /// "Task running".
+    busy: Vec<(PathBuf, Vec<String>)>,
     _subscription: Subscription,
 }
 
@@ -78,9 +81,35 @@ impl ProjectIndicator {
         Self {
             list: None,
             bounds: Rc::default(),
+            busy: Vec::new(),
             // Always the project open now.
             _subscription: cx.observe_global::<ProjectDirectory>(|_, cx| cx.notify()),
         }
+    }
+
+    /// Tells it which open projects are busy, and what runs in each.
+    pub fn set_busy(&mut self, busy: Vec<(PathBuf, Vec<String>)>, cx: &mut Context<Self>) {
+        if self.busy != busy {
+            self.busy = busy;
+            cx.notify();
+        }
+    }
+
+    /// What runs in the project at `dir`, if it is busy.
+    fn busy_in(&self, dir: &std::path::Path) -> Option<&[String]> {
+        self.busy
+            .iter()
+            .find(|(busy, _)| busy == dir)
+            .map(|(_, what)| what.as_slice())
+    }
+
+    /// How many open projects but the one on screen are busy.
+    fn busy_elsewhere(&self, cx: &App) -> usize {
+        let current = ProjectDirectory::get(cx);
+        self.busy
+            .iter()
+            .filter(|(dir, _)| Some(dir) != current.as_ref())
+            .count()
     }
 
     /// Whether the list of recent projects is open.
@@ -136,7 +165,14 @@ impl ProjectIndicator {
             .as_ref()
             .map(|list| list.filter.read(cx).value().to_string())
             .unwrap_or_default();
-        let recent = recent_projects::get(cx).openable();
+        let mut recent = recent_projects::get(cx).openable();
+        // A busy project is listed even once it is no longer recent, after
+        // the recent ones.
+        for (dir, _) in &self.busy {
+            if !recent.contains(dir) {
+                recent.push(dir.clone());
+            }
+        }
         let mut items: Vec<Item> = if query.trim().is_empty() {
             recent.into_iter().map(Item::Recent).collect()
         } else {
@@ -191,8 +227,9 @@ impl ProjectIndicator {
         }
     }
 
-    /// The indicator's contents: the folder icon and the project's name.
-    fn label_contents(label: Stateful<Div>, cx: &App) -> Stateful<Div> {
+    /// The indicator's contents: the folder icon and the project's name, and
+    /// a dot while another open project is busy.
+    fn label_contents(&self, label: Stateful<Div>, cx: &App) -> Stateful<Div> {
         let theme = cx.theme();
         let project = ProjectDirectory::get(cx);
         let label = label.child(
@@ -200,10 +237,20 @@ impl ProjectIndicator {
                 .small()
                 .text_color(theme.muted_foreground),
         );
-        match project.as_deref().map(folder_name) {
+        let label = match project.as_deref().map(folder_name) {
             Some(name) => label.child(div().min_w_0().truncate().font_medium().child(name)),
             None => label.child(div().text_color(theme.muted_foreground).child("No project")),
-        }
+        };
+        label.when(self.busy_elsewhere(cx) > 0, |label| {
+            label.child(gpui_kit::TestSupportExt::test_support(
+                div()
+                    .id("project-busy-elsewhere")
+                    .flex_none()
+                    .size(px(6.))
+                    .rounded_full()
+                    .bg(theme.ring),
+            ))
+        })
     }
 
     /// The list, over the dimmed window, flush beneath the indicator, which is
@@ -239,6 +286,7 @@ impl ProjectIndicator {
             match item {
                 Item::Recent(dir) => {
                     let is_current = current.as_deref() == Some(dir.as_path());
+                    let busy = self.busy_in(dir).map(|what| what.join(" · "));
                     let row = row
                         .child(
                             Icon::new(if is_current {
@@ -251,6 +299,7 @@ impl ProjectIndicator {
                         )
                         .child(
                             v_flex()
+                                .flex_1()
                                 .min_w_0()
                                 .child(div().truncate().font_medium().child(folder_name(dir)))
                                 .child(
@@ -259,8 +308,25 @@ impl ProjectIndicator {
                                         .text_xs()
                                         .text_color(theme.muted_foreground)
                                         .child(dir.display().to_string()),
-                                ),
-                        );
+                                )
+                                .children(busy.clone().map(|busy| {
+                                    gpui_kit::TestSupportExt::test_support(
+                                        div()
+                                            .id(("recent-project-busy", ix))
+                                            .truncate()
+                                            .text_xs()
+                                            .text_color(theme.muted_foreground)
+                                            .child(busy),
+                                    )
+                                })),
+                        )
+                        .when(busy.is_some(), |row| {
+                            row.child(
+                                gpui_kit::component::spinner::Spinner::new()
+                                    .small()
+                                    .color(theme.muted_foreground),
+                            )
+                        });
                     // Lets UI tests find the row; inert in normal builds.
                     gpui_kit::TestSupportExt::test_support(row).into_any_element()
                 }
@@ -346,7 +412,7 @@ impl ProjectIndicator {
             .cursor_pointer()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(|this, _, _, cx| this.close(cx)));
-        let cap = Self::label_contents(cap, cx);
+        let cap = self.label_contents(cap, cx);
 
         let viewport = window.viewport_size();
         let overlay = div()
@@ -384,10 +450,15 @@ impl Render for ProjectIndicator {
             .hover(|label| label.bg(theme.list_hover))
             .on_click(cx.listener(|this, _, window, cx| this.toggle(window, cx)))
             .when_some(project, |label, dir| {
-                let path = SharedString::from(dir.display().to_string());
+                let busy = match self.busy_elsewhere(cx) {
+                    0 => String::new(),
+                    1 => "\n1 other project is busy".to_string(),
+                    count => format!("\n{count} other projects are busy"),
+                };
+                let path = SharedString::from(format!("{}{busy}", dir.display()));
                 label.tooltip(move |window, cx| Tooltip::new(path.clone()).build(window, cx))
             });
-        let label = Self::label_contents(label, cx);
+        let label = self.label_contents(label, cx);
         // The same background as a text input's.
         let block = crate::theme::color(crate::theme::palette(cx).well);
         let list = self.render_list(window, cx);

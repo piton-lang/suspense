@@ -12,6 +12,7 @@ from /scope/prompt-mode/modes import PromptModesScope
 from /scope/prompt-mode/sending import PromptSendingScope
 from /ui/components/history-list import HistoryListScope
 from /ui/components/task-table import TaskTableScope
+from /scope/open-projects import OpenProjectsScope
 
 export ui-component ChatInputScope:
     concept: {ChatInputConcept}
@@ -179,6 +180,14 @@ shape ChatInputShape:
         sent from. When the prompt is sent, its attachments are sent along with
         it and the list empties, as the text input does. A queued prompt keeps
         the attachments it was sent with.
+
+    projects:
+        The questions stacked above the tabs, the open answer, and the previous
+        answers belong to their project, as the @{OpenProjectsScope} says:
+        switching projects shows those of the project switched to, while the
+        questions of other projects carry on running in the background. The
+        prompt being written, its attachments, and the selected tab stay as
+        they are across a switch, and are sent to the project on screen.
 
     escape:
         Pressing <Escape> while in the chat input takes focus out of the chat

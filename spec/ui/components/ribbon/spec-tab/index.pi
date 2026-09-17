@@ -7,6 +7,10 @@ from /scope/generate-skills import GenerateSkillsScope
 from /scope/divergence import DivergenceScope
 from /scope/no-project import NoProjectStateScope
 from /scope/spec-build import SpecBuildScope
+from /scope/spec-components/new-scope import NewScopeScope
+from /scope/spec-components/new-concept import NewConceptScope
+from /scope/spec-components/new-shape import NewShapeScope
+from /scope/spec-components/new-instruction import NewInstructionScope
 from /ui/components/minimizable-panel import MinimizablePanelScope
 
 export ui-component RibbonSpecTabScope:
@@ -38,8 +42,13 @@ shape RibbonSpecTabShape:
         build:
             A "Build" group holds the Build Spec command.
 
+        components:
+            A "Components" group, after Build, holds the New Scope command,
+            then the New Concept, New Shape, and New Instruction commands,
+            stacked.
+
         analysis:
-            An "Analysis" group, after Build, holds the Analyze Divergence
+            An "Analysis" group, after Components, holds the Analyze Divergence
             command, then the View Divergence Reports command.
 
         skills:
@@ -54,6 +63,38 @@ shape RibbonSpecTabShape:
             is disabled as the @{NoProjectStateScope} says, with the tooltip
             each gives.
 
+        newScope:
+            A "New Scope" button with a box icon. Clicking it opens the
+            @{NewScopeScope}, and its tooltip says it creates a scope, with its
+            concept and shape. Without a project, its tooltip says to open a
+            project to add a scope to its spec.
+
+            It isn't primary, and a full button.
+
+        newConcept:
+            A "New Concept" button with a lightbulb icon. Clicking it opens the
+            @{NewConceptScope}, and its tooltip says it creates a concept in a
+            spec file. Without a project, its tooltip says to open a project to
+            add a concept to its spec.
+
+            It isn't primary, and a slim button.
+
+        newShape:
+            A "New Shape" button with a shapes icon. Clicking it opens the
+            @{NewShapeScope}, and its tooltip says it creates a shape in a spec
+            file. Without a project, its tooltip says to open a project to add
+            a shape to its spec.
+
+            It isn't primary, and a slim button.
+
+        newInstruction:
+            A "New Instruction" button with a scroll icon. Clicking it opens the
+            @{NewInstructionScope}, and its tooltip says it writes an instruction
+            for a folder or file of the code. Without a project, its tooltip
+            says to open a project to add an instruction to its spec.
+
+            It isn't primary, and a slim button.
+
         rescope:
             A "Rescope" button with a shapes icon. Clicking it opens the
             @{RescopeScope} and starts looking for repeated concepts, or brings
@@ -62,7 +103,7 @@ shape RibbonSpecTabShape:
             of their own. Without a project, its tooltip says to open a project
             to rescope its spec.
 
-            It isn't primary.
+            It isn't primary, and a full button.
 
         generateSkills:
             A "Generate Skills" button with a sparkles icon. Clicking it opens
@@ -71,7 +112,7 @@ shape RibbonSpecTabShape:
             built for. Without a project, its tooltip says to open a project to
             generate skills for it.
 
-            It isn't primary.
+            It isn't primary, and a full button.
 
         analyzeDivergence:
             An "Analyze Divergence" button with a compare-arrows icon. Clicking
@@ -80,7 +121,7 @@ shape RibbonSpecTabShape:
             Without a project, its tooltip says to open a project to analyze
             it.
 
-            It is primary.
+            It is primary, and a full button.
 
         viewDivergenceReports:
             A "View Divergence Reports" button with a document icon. Clicking
@@ -90,7 +131,7 @@ shape RibbonSpecTabShape:
             analyses. Without a project, its tooltip says to open a project to
             view its reports.
 
-            It isn't primary.
+            It isn't primary, and a slim button.
 
         buildSpec:
             A "Build Spec" button with a hammer icon. Clicking it builds the
@@ -98,4 +139,4 @@ shape RibbonSpecTabShape:
             it runs `piton build` in the project to compile the spec. Without a
             project, its tooltip says to open a project to build its spec.
 
-            It is primary.
+            It is primary, and a full button.

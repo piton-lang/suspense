@@ -1,0 +1,33 @@
+use /lib
+use /ui
+from /scope/spec-components import SpecComponentsScope
+
+export ui-component NewConceptScope:
+    concept: {NewConceptConcept}
+
+concept NewConceptConcept:
+    pitch:
+        The form that creates a new concept in a spec file.
+
+    shape: {NewConceptShape}
+
+shape NewConceptShape:
+    description:
+        A form of the @{SpecComponentsScope}, titled "New Concept".
+
+    fields:
+        name:
+            A "Name" field, whose name ends with Concept.
+
+        file:
+            A "File" dropdown, the spec file the concept goes in. It must be
+            chosen.
+
+        shape:
+            A "Shape" dropdown of the shapes declared in the chosen file, and
+            "None", which it starts on.
+
+    writing:
+        Create adds the concept to the end of the chosen file, after a blank
+        line: its pitch the description, and its shape the chosen shape, or no
+        shape with None.

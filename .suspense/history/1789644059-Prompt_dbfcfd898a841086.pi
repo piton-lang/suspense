@@ -1,0 +1,58 @@
+from /ui/components/project-indicator import ProjectIndicator
+
+anchor Prompt_dbfcfd898a841086:
+    userPrompt:
+        -
+            - "We want to be able to switch between projects with the "
+            - @{ProjectIndicator}
+            - " (as well as just opening an existing project or creating a new one) While any running tasks continue in the background. "
+
+    mode: combined
+
+    attachedText:
+        -
+            - "background projects (recommended)"
+            - "Only one project is on screen, but each open project keeps its own running work, and switching back shows it live."
+            - "Code changes"
+            - "The core change is in PromptMode (src/prompt_mode.rs, about 6,150 lines). About 20 of its roughly 45 fields belong to a project, not to the screen:"
+            - "tasks, working, session, _pending"
+            - "queue, auto_send, queue_held"
+            - "asks, answers, ask_session, expanded_ask"
+            - "history state and steps_shown"
+            - "Move these into a per-project session object kept in an app-wide map keyed by project folder, and have PromptMode render whichever session is current. Background runs update their own session, never the screen directly. This is a mechanical change, but it touches most of the file. I'd estimate 1,000–2,000 lines changed, mostly self.tasks becoming session.tasks."
+            - "Switching stops reloading history when you switch. It only loads a session the first time that project is opened, and keeps it in memory after that."
+            - "Quitting (confirm_quit, src/main_window.rs:793) has to count running work in every session, not just the current one."
+            - "Builds (piton build from the ribbon) track which project they belong to."
+            - "Divergence analysis either becomes per-session too, or gets stopped when you switch. Stopping is simpler, since it's an inset panel."
+            - "The project indicator and recent projects show which projects are busy."
+            - "No change needed: the language server (restarting per switch is fine), file tree, git panel, editor, palette and settings. They should keep following the current project."
+            - "Spec changes"
+            - "ProjectDirectoryScope: switching changes the project on screen; other projects keep their running work until it finishes."
+            - "PromptEditor: tasks, queue and auto-send belong to their project. A project's queue only ever sends into that project."
+            - "ChatInputScope: the Ask stack and answer drawer belong to their project. Decide whether the draft text and attachments stay with the project or with you."
+            - "HarnessIntegrationScope: already says a conversation is only continued in the project it began in, so it barely changes."
+            - "ProjectIndicator and recent projects: a busy marker, and possibly a count of running tasks and questions."
+            - "Quitting: the confirmation lists running work across all projects."
+            - "DivergenceScope and the ribbon's build: say what happens to a running analysis or build when you switch."
+            - "That's about 6–8 scopes, mostly new sections, not rewrites."
+            - ""
+
+    systemPrompt:
+        -
+            - "We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec."
+        -
+            - ""
+        -
+            - "You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec."
+        -
+            - ""
+        -
+            - "Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other."
+        -
+            - ""
+        -
+            - "Then build the spec and execute the prompt directly on the code using a unified plan."
+        -
+            - ""
+        -
+            - "Make sure that you write both code and spec."

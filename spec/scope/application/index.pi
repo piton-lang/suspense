@@ -1,5 +1,4 @@
 use /lib
-from /scope/project-directory import ProjectDirectoryScope
 from ./MainWindow import MainWindowScope
 from /scope/project-data import ProjectDataScope
 from /scope/user-preferences import UserPreferencesScope
@@ -24,24 +23,17 @@ shape ApplicationShape:
         gui: gpui
         components: [gpui-kit](https://gpui-kit.com/)
 
-    name:
-        The application is called Suspense.
-
-    lastProject:
-        When the application starts, it opens the project that was opened most
-        recently, the first of the @{ProjectDirectoryScope}'s recent projects
-        that still holds its piton.config.pi. With none, it starts with no
-        project open.
-
-    projectFiles: @{ProjectDataScope}
-
-    userPreferences: @{UserPreferencesScope}
-
-    theme: @{ThemeScope}
-
     platforms:
         - windows
         - mac
         - linux
 
+    name:
+        The application is called Suspense.
+
+    projectFiles: @{ProjectDataScope}
+
+    theme: @{ThemeScope}
+
     mainWindow: @{MainWindowScope}
+    userPreferences: @{UserPreferencesScope}

@@ -1,0 +1,35 @@
+from /scope/editor import EditorScope
+from /scope/lsp import LSP
+from /ui/components/ribbon/spec-tab import RibbonSpecTabScope
+
+anchor Prompt_d1dab31c640660c7:
+    userPrompt:
+        -
+            - @{RibbonSpecTabScope}
+            - " we want an additional Components button (small kind) \"New Instruction\" that allows us to select a directory or file under src, and it will create a new matching location under piton.config.pi's specRoot that contains a new instruction anchor.  No prompting or AI processing on this one -- we write the prompt directory.  The editor allows the full editing experience, including "
+            - @{LSP}
+            - " and should in fact reuse the "
+            - @{EditorScope}
+            - " component both in spec reference and in code."
+
+    mode: combined
+
+    systemPrompt:
+        -
+            - "We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec."
+        -
+            - ""
+        -
+            - "You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec."
+        -
+            - ""
+        -
+            - "Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other."
+        -
+            - ""
+        -
+            - "Then build the spec and execute the prompt directly on the code using a unified plan."
+        -
+            - ""
+        -
+            - "Make sure that you write both code and spec."

@@ -3,6 +3,7 @@ from /ui/components/project-indicator import ProjectIndicator
 from /scope/project/open-project import OpenProjectScope
 from /scope/new-project import NewProjectScope
 from /scope/user-preferences import UserPreferencesScope
+from /scope/open-projects import OpenProjectsScope
 
 export scope ProjectDirectoryScope:
     concept: {ProjectDirectoryConcept}
@@ -20,7 +21,9 @@ shape ProjectDirectoryShape:
         as the project directory, set when a project is opened with the
         @{OpenProjectScope}, created with the @{NewProjectScope}, or picked
         from the recent projects of the @{ProjectIndicator}. Setting it again
-        replaces the project for the whole application.
+        switches the project on screen for the whole application, while the
+        project it was keeps its running work in the background, as the
+        @{OpenProjectsScope} says.
 
     recentProjects:
         Every project opened, however it was opened, is remembered among the

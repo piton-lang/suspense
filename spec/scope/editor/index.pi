@@ -52,6 +52,11 @@ shape EditorShape:
         can't be edited yet. After any of them the editor keeps focus. The
         popover also closes when the text changes, or when the file closes.
 
+    newFiles:
+        The editor can also show a file that isn't on disk yet, starting with
+        the text it is given. It has unsaved changes from the start, and saving
+        it writes it, making its folders as needed.
+
     saving:
         Ctrl+S (Cmd+S on macOS) or the save button writes the file to disk. A
         file that cannot be saved keeps its changes and says why beneath the

@@ -8,6 +8,7 @@ from /scope/project-locations import ProjectLocationsScope
 from /scope/running-activity import RunningActivityScope
 from /scope/spec-build import SpecBuildScope
 from /ui/components/minimizable-panel import MinimizablePanelScope
+from /scope/open-projects import OpenProjectsScope
 from /ui/components/ranked-selection-list import RankedSelectionListScope
 from /ui/components/scrollbar import ScrollbarScope
 from /ui/components/task-table import TaskTableScope
@@ -38,6 +39,11 @@ shape DivergenceShape:
         once it's over, and an "Analyze" button that starts one. Whenever no
         analysis is running, an "Analyze again" button in the panel's header
         starts another.
+
+    switchingProjects:
+        An analysis belongs to the screen rather than its project, so switching
+        to another project, as the @{OpenProjectsScope} says, stops it and
+        closes the panel, minimized or not.
 
     minimizing:
         Its minimize button's tooltip says the analysis keeps running. While it

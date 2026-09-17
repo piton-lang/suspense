@@ -6,7 +6,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::Button;
 use gpui_kit::*;
 
-use super::{Command, CommandPlace};
+use super::{Command, CommandPlace, CommandSize};
 use crate::new_project::NewProject;
 use crate::project::open_project::OpenProject;
 
@@ -14,11 +14,13 @@ pub(super) const COMMANDS: &[CommandPlace] = &[
     CommandPlace {
         command: Command::NewProject,
         group: "Project",
+        size: CommandSize::Slim,
         primary: true,
     },
     CommandPlace {
         command: Command::OpenProject,
         group: "Project",
+        size: CommandSize::Slim,
         primary: true,
     },
 ];

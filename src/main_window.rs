@@ -22,6 +22,7 @@ use crate::fs_browser::{CancelBrowse, ChoosePath, FsBrowser};
 use crate::generate_skills_view::{CloseGenerateSkills, GenerateSkills, GenerateSkillsView};
 use crate::git_panel::GitPanel;
 use crate::inset_panel::{closing_panel, inset_panel};
+use crate::new_instruction::{CloseInstruction, NewInstruction, NewInstructionForm};
 use crate::new_project::{CloseNewProject, NewProject, NewProjectForm, ProjectCreated};
 use crate::palette::{Palette, Picked, SystemCommand, SystemState};
 use crate::project::open_project::{self, OpenProject};
@@ -31,6 +32,10 @@ use crate::prompt_mode::PromptMode;
 use crate::rescope_view::{CloseRescope, MinimizeRescope, RefactorConcepts, Rescope, RescopeView};
 use crate::ribbon::{self, Ribbon};
 use crate::settings_window::{CloseSettings, OpenSettings, SettingsWindow};
+use crate::spec_component_form::{
+    CloseSpecComponent, ComponentCreated, RunComponentSkill, SpecComponentForm,
+};
+use crate::spec_components::{ComponentKind, NewConcept, NewScope, NewShape};
 use crate::theme_preference;
 
 /// Size the window restores to when it is un-maximized.
@@ -78,6 +83,10 @@ pub struct MainWindow {
     /// window in an inset panel.
     diff: Option<Entity<DiffView>>,
     new_project: Option<Entity<NewProjectForm>>,
+    /// The form creating a scope, concept, or shape.
+    spec_component: Option<Entity<SpecComponentForm>>,
+    /// The panel writing a new instruction.
+    new_instruction: Option<Entity<NewInstructionForm>>,
     settings: Option<Entity<SettingsWindow>>,
     /// The Generate Skills panel.
     generate_skills: Option<Entity<GenerateSkillsView>>,
@@ -98,6 +107,8 @@ pub struct MainWindow {
     /// takes focus beneath it.
     panel_last_focus: Option<FocusHandle>,
     _panel_subscriptions: Vec<Subscription>,
+    /// The project last on screen, to tell a switch from setting it again.
+    shown_project: Option<PathBuf>,
     /// What the inset panel shows, to know when it comes in and goes away.
     panel_motion: Leaving<AnyView>,
     _subscriptions: Vec<Subscription>,
@@ -141,8 +152,16 @@ impl MainWindow {
                 window,
                 |this, _, _: &OpenProject, window, cx| this.open_project_picker(window, cx),
             ),
-            cx.subscribe_in(&ribbon, window, |this, _, RevealJob(kind), window, cx| {
-                this.reveal_job(*kind, window, cx)
+            cx.subscribe_in(
+                &ribbon,
+                window,
+                |this, _, RevealJob(kind, project), window, cx| {
+                    this.reveal_job(*kind, project.clone(), window, cx)
+                },
+            ),
+            // Switching projects closes what belongs to the screen.
+            cx.observe_global_in::<ProjectDirectory>(window, |this, window, cx| {
+                this.project_changed(window, cx)
             }),
             cx.subscribe_in(&sidebar, window, |this, _, OpenFile(path), window, cx| {
                 this.prompt_mode.update(cx, |prompt_mode, cx| {
@@ -205,6 +224,8 @@ impl MainWindow {
             sidebar_split: cx.new(|_| ResizableState::default()),
             diff: None,
             new_project: None,
+            spec_component: None,
+            new_instruction: None,
             settings: None,
             generate_skills: None,
             project_picker: None,
@@ -217,6 +238,7 @@ impl MainWindow {
             panel_focus,
             panel_last_focus: None,
             _panel_subscriptions: Vec::new(),
+            shown_project: ProjectDirectory::get(cx),
             panel_motion: Leaving::default(),
             _subscriptions: subscriptions,
         }
@@ -254,6 +276,8 @@ impl MainWindow {
     fn clear_panel(&mut self) {
         self.diff = None;
         self.new_project = None;
+        self.spec_component = None;
+        self.new_instruction = None;
         self.settings = None;
         self.generate_skills = None;
         self.project_picker = None;
@@ -315,6 +339,8 @@ impl MainWindow {
     pub fn open_diff(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         let diff = cx.new(|cx| DiffView::new(path, cx));
         self.new_project = None;
+        self.spec_component = None;
+        self.new_instruction = None;
         self.settings = None;
         self.generate_skills = None;
         self.project_picker = None;
@@ -394,6 +420,8 @@ impl MainWindow {
     ) {
         self.diff = None;
         self.new_project = None;
+        self.spec_component = None;
+        self.new_instruction = None;
         self.settings = None;
         self.generate_skills = None;
         self.project_picker = None;
@@ -491,6 +519,8 @@ impl MainWindow {
     ) {
         self.diff = None;
         self.new_project = None;
+        self.spec_component = None;
+        self.new_instruction = None;
         self.settings = None;
         self.generate_skills = None;
         self.project_picker = None;
@@ -545,18 +575,69 @@ impl MainWindow {
         self.divergence.is_some() && !self.divergence_minimized
     }
 
-    /// Tells the ribbon everything running: a spec build, the task and
-    /// questions, and a divergence analysis.
+    /// Switched to another project: a divergence analysis or a rescope
+    /// search stops, and any inset panel closes, since they belong to the
+    /// screen rather than a project; what runs in the project left carries on.
+    fn project_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let project = ProjectDirectory::get(cx);
+        if project == self.shown_project {
+            return;
+        }
+        self.shown_project = project;
+        if self.divergence.is_some() {
+            self.close_divergence(window, cx);
+        }
+        if self.rescope.is_some() {
+            self.close_rescope(window, cx);
+        }
+        self.close_panel(window, cx);
+        self.refresh_jobs(cx);
+    }
+
+    /// Tells the ribbon everything running: in the project on screen, the
+    /// task and questions, a spec build, a divergence analysis, and a rescope
+    /// search; then in each other open project, its task, questions, and spec
+    /// build. The project indicator is told which projects are busy.
     fn refresh_jobs(&mut self, cx: &mut Context<Self>) {
-        let mut jobs = Vec::new();
-        if self.ribbon.read(cx).is_building() {
+        let here = ProjectDirectory::get(cx);
+        let building: Vec<PathBuf> = self.ribbon.read(cx).building_projects().to_vec();
+        let prompt_mode = self.prompt_mode.read(cx);
+        let running = prompt_mode.running_jobs();
+        let mut busy: Vec<(PathBuf, Vec<String>)> = prompt_mode
+            .busy_projects()
+            .into_iter()
+            .map(|busy| {
+                let mut what = Vec::new();
+                if busy.task.is_some() {
+                    what.push("Task running".to_string());
+                }
+                match busy.questions.len() {
+                    0 => {}
+                    1 => what.push("1 question running".to_string()),
+                    count => what.push(format!("{count} questions running")),
+                }
+                (busy.project_dir, what)
+            })
+            .collect();
+        for dir in &building {
+            match busy.iter_mut().find(|(busy, _)| busy == dir) {
+                Some((_, what)) => what.push("Building the spec".to_string()),
+                None => busy.push((dir.clone(), vec!["Building the spec".to_string()])),
+            }
+        }
+        let mut jobs: Vec<Job> = running
+            .iter()
+            .filter(|job| job.project.is_none())
+            .cloned()
+            .collect();
+        if here.as_ref().is_some_and(|here| building.contains(here)) {
             jobs.push(Job {
                 kind: JobKind::Build,
                 title: "Building the spec".into(),
                 detail: None,
+                project: None,
             });
         }
-        jobs.extend(self.prompt_mode.read(cx).running_jobs());
         if self
             .divergence
             .as_ref()
@@ -566,6 +647,7 @@ impl MainWindow {
                 kind: JobKind::Divergence,
                 title: "Analyzing divergence".into(),
                 detail: None,
+                project: None,
             });
         }
         if self
@@ -577,15 +659,63 @@ impl MainWindow {
                 kind: JobKind::Rescope,
                 title: "Finding scopes to extract".into(),
                 detail: None,
+                project: None,
             });
         }
-        self.ribbon
-            .update(cx, |ribbon, cx| ribbon.set_jobs(jobs, cx));
+        // Then each other project's, in the order the projects are listed.
+        let mut others: Vec<PathBuf> = running
+            .iter()
+            .filter_map(|job| job.project.clone())
+            .chain(
+                building
+                    .iter()
+                    .filter(|dir| Some(*dir) != here.as_ref())
+                    .cloned(),
+            )
+            .collect();
+        others.sort();
+        others.dedup();
+        for project in others {
+            jobs.extend(
+                running
+                    .iter()
+                    .filter(|job| job.project.as_ref() == Some(&project))
+                    .cloned(),
+            );
+            if building.contains(&project) {
+                jobs.push(Job {
+                    kind: JobKind::Build,
+                    title: crate::activity::title_in("Building the spec", Some(&project)),
+                    detail: None,
+                    project: Some(project.clone()),
+                });
+            }
+        }
+        self.ribbon.update(cx, |ribbon, cx| {
+            ribbon.set_jobs(jobs, cx);
+            ribbon
+                .project_indicator()
+                .clone()
+                .update(cx, |indicator, cx| indicator.set_busy(busy, cx));
+        });
     }
 
     /// Reveals a running job: the task or question behind any inset panel,
     /// or the divergence panel.
-    pub fn reveal_job(&mut self, kind: JobKind, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn reveal_job(
+        &mut self,
+        kind: JobKind,
+        project: Option<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // A job of another project is revealed there.
+        if let Some(project) = project
+            && ProjectDirectory::get(cx).as_ref() != Some(&project)
+        {
+            ProjectDirectory::set(project, cx);
+            self.project_changed(window, cx);
+        }
         match kind {
             JobKind::Build => {}
             JobKind::Divergence => {
@@ -617,6 +747,8 @@ impl MainWindow {
     pub fn open_new_project(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let form = cx.new(|cx| NewProjectForm::new(window, cx));
         self.diff = None;
+        self.spec_component = None;
+        self.new_instruction = None;
         self.settings = None;
         self.generate_skills = None;
         self.project_picker = None;
@@ -651,12 +783,122 @@ impl MainWindow {
         cx.notify();
     }
 
+    /// Opens the panel for writing a new instruction, fresh, in place of
+    /// anything else there.
+    pub fn open_new_instruction(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.new_instruction.is_some() {
+            return;
+        }
+        let Some(project_dir) = ProjectDirectory::get(cx) else {
+            return;
+        };
+        let form = cx.new(|cx| NewInstructionForm::new(project_dir, window, cx));
+        self.clear_panel();
+        self._panel_subscriptions = vec![cx.subscribe_in(
+            &form,
+            window,
+            |this, _, CloseInstruction(written), window, cx| {
+                let written = written.clone();
+                // The editor has already asked about anything not saved.
+                this.new_instruction = None;
+                if this.panel_open() {
+                    this.close_panel(window, cx);
+                } else {
+                    this.panel_last_focus = None;
+                    this._panel_subscriptions.clear();
+                    this.prompt_mode
+                        .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx));
+                    cx.notify();
+                }
+                // Once written, it opens beside the chat.
+                if let Some(file) = written {
+                    this.prompt_mode.update(cx, |prompt_mode, cx| {
+                        prompt_mode.open_file(file, window, cx)
+                    });
+                }
+            },
+        )];
+        self.new_instruction = Some(form);
+        cx.notify();
+    }
+
+    /// Opens the form creating a `kind` of spec component in the panel, fresh,
+    /// in place of anything else there.
+    pub fn open_spec_component(
+        &mut self,
+        kind: ComponentKind,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self
+            .spec_component
+            .as_ref()
+            .is_some_and(|form| form.read(cx).kind() == kind)
+        {
+            return;
+        }
+        let Some(project_dir) = ProjectDirectory::get(cx) else {
+            return;
+        };
+        let open_file = self
+            .prompt_mode
+            .read(cx)
+            .open_file_view()
+            .map(|file| file.read(cx).path().to_path_buf());
+        let form = cx.new(|cx| SpecComponentForm::new(kind, project_dir, open_file, window, cx));
+        self.clear_panel();
+        self._panel_subscriptions = vec![
+            cx.subscribe_in(
+                &form,
+                window,
+                |this, _, _: &CloseSpecComponent, window, cx| this.close_panel(window, cx),
+            ),
+            // Once written, the panel closes and the file opens.
+            cx.subscribe_in(
+                &form,
+                window,
+                |this, _, ComponentCreated(file), window, cx| {
+                    let file = file.clone();
+                    this.close_panel(window, cx);
+                    this.prompt_mode.update(cx, |prompt_mode, cx| {
+                        prompt_mode.open_file(file, window, cx)
+                    });
+                },
+            ),
+            // Handing it to a skill closes the panel and sends the prompt from
+            // the Spec tab, as if written there.
+            cx.subscribe_in(
+                &form,
+                window,
+                |this, _, RunComponentSkill(prompt), window, cx| {
+                    let prompt = prompt.clone();
+                    this.close_panel(window, cx);
+                    this.prompt_mode.update(cx, |prompt_mode, cx| {
+                        prompt_mode.send(
+                            prompt,
+                            crate::chat_input::SendMode::Spec,
+                            Vec::new(),
+                            window,
+                            cx,
+                        )
+                    });
+                },
+            ),
+        ];
+        self.spec_component = Some(form);
+        cx.notify();
+    }
+
     /// Sends focus back into the open inset panel: to what was last focused
     /// there, or what it holds.
     fn refocus_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let content = if let Some(diff) = &self.diff {
             diff.read(cx).focus_handle(cx)
         } else if let Some(form) = &self.new_project {
+            form.read(cx).focus_handle(cx)
+        } else if let Some(form) = &self.spec_component {
+            form.read(cx).focus_handle(cx)
+        } else if let Some(form) = &self.new_instruction {
             form.read(cx).focus_handle(cx)
         } else if let Some(settings) = &self.settings {
             settings.read(cx).focus_handle(cx)
@@ -688,6 +930,8 @@ impl MainWindow {
     fn panel_open(&self) -> bool {
         self.diff.is_some()
             || self.new_project.is_some()
+            || self.spec_component.is_some()
+            || self.new_instruction.is_some()
             || self.settings.is_some()
             || self.generate_skills.is_some()
             || self.project_picker.is_some()
@@ -700,8 +944,27 @@ impl MainWindow {
         if !self.panel_open() {
             return;
         }
+        // An instruction being written asks before its changes go.
+        if let Some(form) = self.new_instruction.clone()
+            && form.read(cx).is_dirty(cx)
+        {
+            let this = cx.entity().downgrade();
+            let title = form.read(cx).title(cx);
+            crate::file_view::FileView::confirm_discard(title, window, cx, move |window, cx| {
+                this.update(cx, |this, cx| {
+                    if this.new_instruction.as_ref() == Some(&form) {
+                        this.new_instruction = None;
+                        this.close_panel(window, cx);
+                    }
+                })
+                .ok();
+            });
+            return;
+        }
         if self.diff.is_none()
             && self.new_project.is_none()
+            && self.spec_component.is_none()
+            && self.new_instruction.is_none()
             && self.settings.is_none()
             && self.generate_skills.is_none()
             && self.project_picker.is_none()
@@ -717,6 +980,8 @@ impl MainWindow {
         }
         self.diff = None;
         self.new_project = None;
+        self.spec_component = None;
+        self.new_instruction = None;
         self.settings = None;
         self.generate_skills = None;
         self.project_picker = None;
@@ -752,6 +1017,12 @@ impl MainWindow {
         }
         if let Some(settings) = &self.settings {
             return Some(("settings", settings.clone().into()));
+        }
+        if let Some(form) = &self.spec_component {
+            return Some(("spec-component", form.clone().into()));
+        }
+        if let Some(form) = &self.new_instruction {
+            return Some(("new-instruction", form.clone().into()));
         }
         let form = self.new_project.clone()?;
         Some(("new-project", form.into()))
@@ -790,15 +1061,29 @@ impl MainWindow {
     /// Whether the application can end now: nothing is running. While a
     /// prompt or a build is, it asks instead, quitting once confirmed.
     fn confirm_quit(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        let working = self.prompt_mode.read(cx).is_working();
-        let building = self.ribbon.read(cx).is_building();
+        let prompt_mode = self.prompt_mode.read(cx);
+        let working = prompt_mode.is_working();
+        let ribbon = self.ribbon.read(cx);
+        let building = ribbon.is_building();
+        let mut projects: Vec<PathBuf> = prompt_mode
+            .busy_projects()
+            .into_iter()
+            .map(|busy| busy.project_dir)
+            .chain(ribbon.building_projects().iter().cloned())
+            .collect();
+        projects.sort();
+        projects.dedup();
         let description = match (working, building) {
             (false, false) => return true,
-            (true, false) => "The harness is still working on a prompt.",
-            (false, true) => "piton build is still running.",
+            (true, false) => "The harness is still working on a prompt",
+            (false, true) => "piton build is still running",
             (true, true) => {
-                "The harness is still working on a prompt and piton build is still running."
+                "The harness is still working on a prompt and piton build is still running"
             }
+        };
+        let description = match projects.len() {
+            0 | 1 => format!("{description}."),
+            count => format!("{description}, in {count} projects."),
         };
         // An open palette makes way; a confirmation already open stays the
         // only one.
@@ -811,7 +1096,7 @@ impl MainWindow {
             window.open_alert_dialog(cx, move |alert, _, _| {
                 alert
                     .title("Quit while a task is running?")
-                    .description(description)
+                    .description(description.clone())
                     .button_props(
                         DialogButtonProps::default()
                             .show_cancel(true)
@@ -940,6 +1225,18 @@ impl Render for MainWindow {
                 cx.listener(|this, _: &OpenSettings, window, cx| this.open_settings(window, cx)),
             )
             .on_action(cx.listener(|this, _: &Rescope, window, cx| this.open_rescope(window, cx)))
+            .on_action(cx.listener(|this, _: &NewScope, window, cx| {
+                this.open_spec_component(ComponentKind::Scope, window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &NewConcept, window, cx| {
+                this.open_spec_component(ComponentKind::Concept, window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &NewShape, window, cx| {
+                this.open_spec_component(ComponentKind::Shape, window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &NewInstruction, window, cx| {
+                this.open_new_instruction(window, cx)
+            }))
             .on_action(cx.listener(|this, _: &GenerateSkills, window, cx| {
                 this.open_generate_skills(window, cx)
             }))
@@ -1140,7 +1437,8 @@ mod tests {
                     covering.last().and_then(|q| q.background.as_solid())
                 };
                 let project_tab = project_tab.unwrap();
-                let tab_middle = project_tab.bounds.origin.x.0 + project_tab.bounds.size.width.0 / 2.;
+                let tab_middle =
+                    project_tab.bounds.origin.x.0 + project_tab.bounds.size.width.0 / 2.;
                 assert_eq!(
                     top_at(tab_middle),
                     Some(theme.tab_active),
@@ -1449,6 +1747,152 @@ mod tests {
             assert!(!r.is_collapsed(), "the ribbon stayed collapsed");
             assert_eq!(r.open_tabs(), [RibbonTab::Spec]);
         });
+    }
+
+    /// The ribbon's buttons: full ones the height of the body inside 8px of
+    /// padding, slim ones 22px tall at the top of their column, 8px apart,
+    /// square, each on a background of its own apart from the body's; the
+    /// groups' title strips run the body's full height.
+    #[gpui_kit::test]
+    async fn ribbon_buttons_are_full_or_slim_and_square(cx: &mut TestAppContext) {
+        use gpui_kit::component::{Theme, ThemeMode};
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            ProjectDirectory::set(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")), cx);
+        });
+        // Each button is square, with a background of its own laid over the
+        // body, clearly apart from it, though not starkly.
+        fn square_and_apart(
+            window: &gpui_kit::Window,
+            button: gpui_kit::Bounds<gpui_kit::Pixels>,
+            mode: ThemeMode,
+            cx: &gpui_kit::App,
+        ) {
+            let scale = window.scale_factor();
+            let quad = window
+                .painted_quads()
+                .into_iter()
+                .find(|q| {
+                    (q.bounds.origin.x.0 - button.left().as_f32() * scale).abs() < 1.
+                        && (q.bounds.origin.y.0 - button.top().as_f32() * scale).abs() < 1.
+                        && (q.bounds.size.height.0 - button.size.height.as_f32() * scale).abs() < 1.
+                        && q.background.as_solid().is_some_and(|c| c.a > 0.)
+                })
+                .unwrap_or_else(|| panic!("{mode:?}: {button:?} has no background of its own"));
+            let radii = quad.corner_radii;
+            assert!(
+                radii.top_left.0 == 0.
+                    && radii.top_right.0 == 0.
+                    && radii.bottom_left.0 == 0.
+                    && radii.bottom_right.0 == 0.,
+                "{mode:?}: {button:?} has rounded corners"
+            );
+            let color = quad.background.as_solid().unwrap();
+            assert!(
+                color.a < 0.9,
+                "{mode:?}: the background isn't laid over the body"
+            );
+            // Clearly apart from the body, though not starkly.
+            let body_color = Theme::global(cx).background;
+            let apart = (body_color.blend(color).l - body_color.l).abs();
+            assert!(
+                (0.06..0.16).contains(&apart),
+                "{mode:?}: {button:?} is {apart} apart from the body"
+            );
+        }
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let handle = window.into();
+        let ribbon = main.unwrap().read_with(cx, |main, _| main.ribbon.clone());
+        for mode in [ThemeMode::Dark, ThemeMode::Light] {
+            ribbon.update(cx, |r, cx| {
+                r.select_tab(crate::ribbon::RibbonTab::Project, cx)
+            });
+            cx.update(|cx| Theme::change(mode, None, cx));
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.simulate_mouse_move(
+                    gpui_kit::point(gpui_kit::px(900.), gpui_kit::px(600.)),
+                    cx,
+                );
+                window.render_frame(cx);
+                let px = gpui_kit::px;
+                let body = window.find("ribbon-controls").bounds();
+                let group = window.find("Project").bounds();
+                assert_eq!(
+                    group.left(),
+                    body.left(),
+                    "{mode:?}: space before the first group's title strip"
+                );
+                // The group, and its title strip, run the body's full height;
+                // its buttons are padded 8px above and below.
+                assert_eq!(
+                    group.top(),
+                    body.top(),
+                    "{mode:?}: the group doesn't reach the top"
+                );
+                assert_eq!(
+                    group.bottom(),
+                    body.bottom(),
+                    "{mode:?}: the group doesn't reach the bottom"
+                );
+                // Project's two commands are slim, stacked from the top.
+                let slim = window.find("new-project").bounds();
+                let below = window.find("project-directory").bounds();
+                assert_eq!(
+                    slim.top() - body.top(),
+                    px(8.),
+                    "{mode:?}: no 8px padding above the buttons"
+                );
+                for button in [slim, below] {
+                    assert_eq!(
+                        button.size.height,
+                        px(22.),
+                        "{mode:?}: {button:?} isn't slim"
+                    );
+                }
+                assert_eq!(
+                    (below.left(), below.top() - slim.bottom()),
+                    (slim.left(), px(8.)),
+                    "{mode:?}: Open Project isn't stacked 8px under New Project"
+                );
+                square_and_apart(window, slim, mode, cx);
+            })
+            .unwrap();
+
+            // Settings, on the Application tab, is a full button.
+            ribbon.update(cx, |r, cx| {
+                r.select_tab(crate::ribbon::RibbonTab::Application, cx)
+            });
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let px = gpui_kit::px;
+                let body = window.find("ribbon-controls").bounds();
+                let full = window.find("settings").bounds();
+                assert_eq!(
+                    full.top() - body.top(),
+                    px(8.),
+                    "{mode:?}: no 8px padding above the buttons"
+                );
+                assert_eq!(
+                    body.bottom() - full.bottom(),
+                    px(8.),
+                    "{mode:?}: no 8px padding below the buttons"
+                );
+
+                square_and_apart(window, full, mode, cx);
+            })
+            .unwrap();
+        }
     }
 
     /// Clicking a file in the project tree opens it beside the chat history,
@@ -2014,7 +2458,9 @@ mod tests {
         );
         assert!(main.read_with(cx, |main, _| main.rescope.is_some()));
         cx.update_window(handle, |_, window, cx| {
-            main.update(cx, |main, cx| main.reveal_job(JobKind::Rescope, window, cx));
+            main.update(cx, |main, cx| {
+                main.reveal_job(JobKind::Rescope, None, window, cx)
+            });
         })
         .unwrap();
         assert!(main.read_with(cx, |main, _| main.showing_rescope()));
@@ -2052,6 +2498,304 @@ mod tests {
         let queued = prompt_mode.read_with(cx, |prompt_mode, _| prompt_mode.queued_texts());
         assert_eq!(queued.len(), 1);
         assert!(queued[0].contains("TooltipScope"), "{queued:?}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The Spec tab's Components group, after Build, opens a form for each
+    /// component: Create writes it into the spec and opens the file, and Run
+    /// Skill hands it to the chosen skill from the Spec tab instead.
+    #[gpui_kit::test]
+    async fn spec_components_are_created_or_handed_to_a_skill(cx: &mut TestAppContext) {
+        let dir =
+            std::env::temp_dir().join(format!("suspense-spec-components-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("spec")).unwrap();
+        std::fs::write(
+            dir.join("piton.config.pi"),
+            "use @piton/config\n\nexport piton-config Project:\n    root: ./spec\n    entry: ./spec/index.pi\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("spec/index.pi"),
+            "shape BaseShape:\n    description: base\n",
+        )
+        .unwrap();
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        let ribbon = main.read_with(cx, |main, _| main.ribbon.clone());
+        ribbon.update(cx, |r, cx| r.select_tab(crate::ribbon::RibbonTab::Spec, cx));
+        cx.run_until_parked();
+
+        // New Scope, full, then New Concept and New Shape stacked, after Build.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let build = window.find("Build").bounds();
+            let group = window.find("Components").bounds();
+            let analysis = window.find("Analysis").bounds();
+            assert!(group.left() > build.right() && analysis.left() > group.right());
+            let scope = window.find("new-scope").bounds();
+            let concept = window.find("new-concept").bounds();
+            let shape = window.find("new-shape").bounds();
+            assert!(concept.left() > scope.right());
+            assert_eq!(concept.left(), shape.left());
+            assert!(shape.top() > concept.bottom());
+            window.click("new-scope", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let form = main.read_with(cx, |main, _| main.spec_component.clone().expect("no form"));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.find("spec-component-panel");
+            crate::double_borders::assert_none(window);
+            // Nothing is written without a description.
+            form.update(cx, |form, cx| {
+                form.fill("Parser", "", window, cx);
+                form.create(window, cx);
+            });
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let written = dir.join("spec/scope/parser/index.pi");
+        assert!(!written.exists());
+        cx.update_window(handle, |_, window, cx| {
+            form.update(cx, |form, cx| {
+                form.fill("Parser", "Reads {things}: all of them.", window, cx)
+            });
+            assert_eq!(form.read(cx).creating_problem(cx), None);
+            window.render_frame(cx);
+            window.click("spec-component-create", cx);
+        })
+        .unwrap();
+        cx.wait_for(handle, TIMEOUT, |_, cx| {
+            main.read(cx).spec_component.is_none()
+        })
+        .await;
+        let text = std::fs::read_to_string(&written).unwrap();
+        assert!(text.contains("export scope ParserScope:"), "{text}");
+        assert!(
+            text.contains("Reads \\{things\\}\\: all of them."),
+            "{text}"
+        );
+        let open = main.read_with(cx, |main, cx| {
+            main.prompt_mode
+                .read(cx)
+                .open_file_view()
+                .map(|file| file.read(cx).path().to_path_buf())
+        });
+        assert_eq!(open, Some(written.clone()));
+
+        // A shape, added to the end of a file.
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| {
+                main.open_spec_component(crate::spec_components::ComponentKind::Shape, window, cx)
+            });
+        })
+        .unwrap();
+        let form = main.read_with(cx, |main, _| main.spec_component.clone().expect("no form"));
+        cx.update_window(handle, |_, window, cx| {
+            form.update(cx, |form, cx| {
+                form.choose_file("index.pi", window, cx);
+                form.fill("Base", "Taken.", window, cx);
+                form.create(window, cx);
+            });
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(
+            main.read_with(cx, |main, _| main.spec_component.is_some()),
+            "a name already declared was created"
+        );
+        cx.update_window(handle, |_, window, cx| {
+            form.update(cx, |form, cx| {
+                form.fill("Leaf", "A leaf.", window, cx);
+                form.create(window, cx);
+            });
+        })
+        .unwrap();
+        cx.wait_for(handle, TIMEOUT, |_, cx| {
+            main.read(cx).spec_component.is_none()
+        })
+        .await;
+        assert_eq!(
+            std::fs::read_to_string(dir.join("spec/index.pi")).unwrap(),
+            "shape BaseShape:\n    description: base\n\nshape LeafShape:\n    description:\n        A leaf.\n"
+        );
+
+        // A concept, handed to a skill.
+        let prompt_mode = main.read_with(cx, |main, _| main.prompt_mode.clone());
+        prompt_mode.update(cx, |prompt_mode, _| prompt_mode.set_working(true));
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| {
+                main.open_spec_component(crate::spec_components::ComponentKind::Concept, window, cx)
+            });
+        })
+        .unwrap();
+        let form = main.read_with(cx, |main, _| main.spec_component.clone().expect("no form"));
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            form.update(cx, |form, cx| {
+                form.choose_file("index.pi", window, cx);
+                form.fill("Idea", "", window, cx);
+                form.set_skills(vec!["build-scope".into()], window, cx);
+            });
+            assert_eq!(form.read(cx).running_problem(cx), None);
+            window.render_frame(cx);
+            let run = window.find("spec-component-run-skill").bounds();
+            let panel = window.find("spec-component-panel").bounds();
+            assert!(panel.contains(&run.center()), "{run:?} outside {panel:?}");
+            window.click("spec-component-run-skill", cx);
+        })
+        .unwrap();
+        // Read as soon as it is sent, before anything more runs: this bare
+        // project can't compile the prompt's hidden anchor, so it leaves the
+        // queue again once that is tried.
+        assert!(main.read_with(cx, |main, _| main.spec_component.is_none()));
+        let queued = prompt_mode.read_with(cx, |prompt_mode, _| prompt_mode.queued_texts());
+        assert_eq!(queued.len(), 1, "{queued:?}");
+        assert!(
+            queued[0].starts_with(
+                "/build-scope Create a new concept named IdeaConcept.\n\nName: IdeaConcept\nFile: index.pi\nShape: None"
+            ),
+            "{queued:?}"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// New Instruction, a slim button in Components, asks which folder or file
+    /// of the code, names the instruction after it, and shows the file it
+    /// will be, mirrored under the shape location, in the editor before it is
+    /// on disk. Closing the panel with it unsaved asks first; saving writes
+    /// it, and closing the editor then opens it beside the chat.
+    #[gpui_kit::test]
+    async fn new_instruction_is_written_in_the_editor(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-instruction-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("spec/shape")).unwrap();
+        std::fs::create_dir_all(dir.join("src/ribbon")).unwrap();
+        std::fs::write(dir.join("src/ribbon/spec_tab.rs"), "").unwrap();
+        std::fs::write(
+            dir.join("piton.config.pi"),
+            "use @piton/config\nuse @piton/belay\n\nexport piton-config Project:\n    root: ./spec\n    entry: ./spec/index.pi\n\n    frameworks:\n        - {Belay}\n\nbelay-config Belay:\n    codeRoot: ./src\n    shapeRoot: ./spec/shape\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("spec/index.pi"), "").unwrap();
+        let dir = std::fs::canonicalize(&dir).unwrap();
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+            ProjectDirectory::set(dir.clone(), cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        let ribbon = main.read_with(cx, |main, _| main.ribbon.clone());
+        ribbon.update(cx, |r, cx| r.select_tab(crate::ribbon::RibbonTab::Spec, cx));
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let shape = window.find("new-shape").bounds();
+            let instruction = window.find("new-instruction").bounds();
+            assert!(instruction.size.height < shape.size.height + gpui_kit::px(1.));
+            window.click("new-instruction", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let form = main.read_with(cx, |main, _| {
+            main.new_instruction.clone().expect("no panel")
+        });
+        cx.update_window(handle, |_, window, cx| {
+            form.update(cx, |form, cx| {
+                form.choose("src/ribbon/spec_tab.rs", window, cx)
+            });
+            window.render_frame(cx);
+            crate::double_borders::assert_none(window);
+            window.find("new-instruction-location");
+            assert_eq!(
+                form.read(cx).file(cx).as_deref(),
+                Some("spec/shape/ribbon/SpecTab.pi")
+            );
+            window.click("new-instruction-continue", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let file = form.read_with(cx, |form, _| form.file_view().expect("not writing"));
+        let written = dir.join("spec/shape/ribbon/SpecTab.pi");
+        file.read_with(cx, |file, _| {
+            assert_eq!(file.path(), written.as_path());
+            assert!(file.is_dirty());
+        });
+        assert!(!written.exists(), "written before it was saved");
+
+        // Closing the panel with it unsaved asks first, and keeps it.
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| main.close_panel(window, cx));
+            window.render_frame(cx);
+        })
+        .unwrap();
+        assert!(main.read_with(cx, |main, _| main.new_instruction.is_some()));
+        cx.update_window(handle, |_, window, cx| {
+            use gpui_kit::component::WindowExt as _;
+            assert!(window.has_active_dialog(cx));
+            window.close_dialog(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("save-file", cx);
+        })
+        .unwrap();
+        let start = std::time::Instant::now();
+        while !written.exists() {
+            assert!(start.elapsed() < TIMEOUT, "never saved");
+            cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        cx.run_until_parked();
+        let text = std::fs::read_to_string(&written).unwrap();
+        assert!(text.contains("export instruction SpecTab:"), "{text}");
+        assert!(
+            text.contains("Instructions for src/ribbon/spec_tab.rs"),
+            "{text}"
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("close-file", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(main.read_with(cx, |main, _| main.new_instruction.is_none()));
+        let open = main.read_with(cx, |main, cx| {
+            main.prompt_mode
+                .read(cx)
+                .open_file_view()
+                .map(|file| file.read(cx).path().to_path_buf())
+        });
+        assert_eq!(open, Some(written));
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -2494,7 +3238,7 @@ mod tests {
         .unwrap();
         cx.update_window(handle, |_, window, cx| {
             main.update(cx, |main, cx| {
-                main.reveal_job(JobKind::Question(1), window, cx)
+                main.reveal_job(JobKind::Question(1), None, window, cx)
             });
             window.render_frame(cx);
             assert!(
@@ -2678,7 +3422,7 @@ mod tests {
             let appearance = window.find("Appearance").bounds();
             assert_eq!(
                 appearance.left() - project.right(),
-                gpui_kit::px(12.),
+                gpui_kit::px(8.),
                 "something sits between Project's group {project:?} and Application's {appearance:?}"
             );
         })
@@ -2712,7 +3456,7 @@ mod tests {
             let preferences = window.find("Preferences").bounds();
             assert_eq!(
                 preferences.left() - appearance.right(),
-                gpui_kit::px(12.),
+                gpui_kit::px(8.),
                 "something sits between {appearance:?} and {preferences:?}"
             );
         })
@@ -2858,6 +3602,108 @@ mod tests {
             );
         })
         .unwrap();
+    }
+
+    /// Switching projects stops a rescope search and closes its panel; the
+    /// project indicator marks the busy project left, and quitting still asks
+    /// while only it is working. Its task is listed with its name, and
+    /// revealing it switches back to it; a build in it leaves Build free in
+    /// the project on screen.
+    #[gpui_kit::test]
+    async fn switching_projects_keeps_the_one_left_running(cx: &mut TestAppContext) {
+        let base = std::env::temp_dir().join(format!("suspense-switching-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        for name in ["alpha", "beta"] {
+            std::fs::create_dir_all(base.join(name).join("spec")).unwrap();
+            std::fs::write(base.join(name).join("piton.config.pi"), "").unwrap();
+        }
+        let (a, b) = (
+            std::fs::canonicalize(base.join("alpha")).unwrap(),
+            std::fs::canonicalize(base.join("beta")).unwrap(),
+        );
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+            ProjectDirectory::set(a.clone(), cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        cx.run_until_parked();
+        let (prompt_mode, ribbon) = main.read_with(cx, |main, _| {
+            (main.prompt_mode.clone(), main.ribbon.clone())
+        });
+        prompt_mode.update(cx, |prompt_mode, cx| {
+            prompt_mode.start_test_question("Still thinking in alpha", cx);
+        });
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| main.open_rescope(window, cx));
+        })
+        .unwrap();
+        assert!(main.read_with(cx, |main, _| main.rescope.is_some()));
+
+        cx.update(|cx| ProjectDirectory::set(b.clone(), cx));
+        cx.run_until_parked();
+        assert!(
+            main.read_with(cx, |main, _| main.rescope.is_none() && !main.panel_open()),
+            "the rescope search outlived the switch"
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("project-busy-elsewhere").is_some());
+            // Alpha is listed, busy, though it was never among the recent
+            // projects kept.
+            let indicator = ribbon.read(cx).project_indicator().clone();
+            indicator.update(cx, |indicator, cx| indicator.open(window, cx));
+            window.render_frame(cx);
+            window.render_frame(cx);
+            assert!(window.try_find(("recent-project-busy", 0usize)).is_some());
+            indicator.update(cx, |indicator, cx| indicator.close(cx));
+        })
+        .unwrap();
+        let jobs = ribbon.read_with(cx, |ribbon, _| ribbon.jobs().to_vec());
+        assert_eq!(jobs.len(), 1, "{jobs:?}");
+        assert_eq!(jobs[0].title.as_ref(), "Question · alpha");
+        assert_eq!(jobs[0].project.as_ref(), Some(&a));
+
+        // A build in alpha doesn't hold up Build in beta.
+        ribbon.update(cx, |ribbon, cx| ribbon.set_building_in(a.clone(), cx));
+        assert!(ribbon.read_with(cx, |ribbon, cx| ribbon.can_build(cx)));
+
+        // Quitting asks, though nothing runs in beta.
+        cx.update_window(handle, |_, window, cx| {
+            window.dispatch_action(Box::new(crate::app::Quit), cx)
+        })
+        .unwrap();
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("cancel").is_some()
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| window.click("cancel", cx))
+            .unwrap();
+        cx.run_until_parked();
+
+        // Revealing alpha's question switches back to alpha.
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| {
+                main.reveal_job(jobs[0].kind, jobs[0].project.clone(), window, cx)
+            });
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(cx.update(|cx| ProjectDirectory::get(cx)), Some(a.clone()));
+        prompt_mode.read_with(cx, |prompt_mode, _| {
+            assert_eq!(prompt_mode.running_jobs().len(), 1);
+            assert!(prompt_mode.running_jobs()[0].project.is_none());
+        });
+        std::fs::remove_dir_all(&base).ok();
     }
 
     /// While a prompt runs, quitting or closing the window asks first: Keep

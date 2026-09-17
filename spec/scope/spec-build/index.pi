@@ -1,6 +1,7 @@
 use /lib
 from /scope/no-project import NoProjectStateScope
 from /scope/running-activity import RunningActivityScope
+from /scope/open-projects import OpenProjectsScope
 
 export scope SpecBuildScope:
     concept: {SpecBuildConcept}
@@ -33,6 +34,14 @@ shape SpecBuildShape:
         titled "Build failed", with what the build reported. When
         `piton build` can't be run at all, the notification is titled
         "Could not run piton build", with why.
+
+    projects:
+        A build run on its own belongs to the project it started in, as the
+        @{OpenProjectsScope} says, and carries on when switching to another
+        project. The command shows it running only while that project is on
+        screen; another project can build at the same time. When it is over
+        while another project is on screen, its notification's title ends with
+        the name of the project it built, such as "Built 3 files in my-project".
 
     aheadOfWork:
         A build ahead of other work runs when that work actually starts, not

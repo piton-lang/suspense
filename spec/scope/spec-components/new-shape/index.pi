@@ -1,0 +1,28 @@
+use /lib
+use /ui
+from /scope/spec-components import SpecComponentsScope
+
+export ui-component NewShapeScope:
+    concept: {NewShapeConcept}
+
+concept NewShapeConcept:
+    pitch:
+        The form that creates a new shape in a spec file.
+
+    shape: {NewShapeShape}
+
+shape NewShapeShape:
+    description:
+        A form of the @{SpecComponentsScope}, titled "New Shape".
+
+    fields:
+        name:
+            A "Name" field, whose name ends with Shape.
+
+        file:
+            A "File" dropdown, the spec file the shape goes in. It must be
+            chosen.
+
+    writing:
+        Create adds the shape to the end of the chosen file, after a blank
+        line, its description the description.

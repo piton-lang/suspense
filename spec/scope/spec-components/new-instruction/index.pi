@@ -1,0 +1,70 @@
+use /lib
+use /ui
+from /scope/editor import EditorScope
+from /scope/lsp import LSP
+from /scope/open-file import OpenFileScope
+from /scope/project-locations import ProjectLocationsScope
+from /ui/components/inset-panel import InsetPanelScope
+
+export ui-component NewInstructionScope:
+    concept: {NewInstructionConcept}
+
+concept NewInstructionConcept:
+    pitch:
+        Writes a new Belay instruction for a folder or file of the code, in the
+        place of the spec that mirrors it, so it compiles into the instructions
+        beside that code. What it says is written by hand, in the editor, with
+        nothing handed to the harness.
+
+    shape: {NewInstructionShape}
+
+shape NewInstructionShape:
+    description:
+        Shown in an @{InsetPanelScope}, titled "New Instruction", with a close
+        button, in two steps: choosing where the instruction goes, then writing
+        it.
+
+    choosing:
+        code:
+            A "Code" dropdown, searchable, of every folder and file under the
+            code location of the @{ProjectLocationsScope}, the code location
+            itself first, then each by its path relative to the project, folders
+            ending with a slash, sorted by path. It has focus when the panel
+            opens, and nothing is chosen to start with.
+
+        name:
+            A "Name" field for the instruction anchor's name, which follows the
+            chosen folder or file until it is edited: its name, without any
+            extension, in Pascal case, so src/ribbon/spec_tab.rs gives SpecTab.
+            It can't be empty, must start with a capital letter, and holds only
+            letters and digits.
+
+        location:
+            Beneath the fields, muted, the file that will be written: the name
+            with .pi, in the folder under the shape location that mirrors the
+            chosen one, the chosen folder itself, or a file's folder. So
+            src/ribbon/spec_tab.rs, with shape location spec/shape, is written
+            to spec/shape/ribbon/SpecTab.pi. Without a shape location, the spec
+            location is mirrored instead, and the panel says so. A file already
+            there can't be written over, and the panel says so.
+
+        continuing:
+            Along the bottom, "Cancel" closes the panel, and a primary
+            "Continue" button, enabled once a folder or file is chosen and the
+            name and location can be used, goes on to writing it. A disabled
+            Continue's tooltip says what is missing.
+
+    writing:
+        The panel then shows the file to be written in the @{EditorScope}, the
+        same editor a file opened from the project tree is shown in, with all
+        it does, the language support of the @{LSP} included, filling the
+        panel. The file isn't on disk yet: it starts with, in order:
+        - `use @piton/belay`
+        - an exported instruction anchor with the name, its description saying it is the instructions for the chosen path, such as "Instructions for src/ribbon/spec_tab.rs"
+        - its prompt, empty but for a line to write over, which the cursor starts on
+
+        Saving it writes the file, making its folders as needed, and it is then
+        a file like any other. Closing the editor closes the panel, first asking
+        to discard any changes not yet saved, as the editor always does;
+        closing the panel any other way asks the same. Once saved and closed,
+        the file opens beside the chat, as the @{OpenFileScope} says.

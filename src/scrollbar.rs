@@ -96,31 +96,31 @@ pub fn measure_new_rows(state: &ListState) {
     state.clone().measure_all();
 }
 
-/// The thumb's fill at rest, under the pointer, and while dragged: black laid
-/// over whatever the column sits on, rather than a colour of its own, so it is
-/// a little darker than what is beneath it on any surface, and darker again
-/// as it is hovered and grabbed. Flat, with no border, as scrollbar thumbs
-/// are in VS Code, JetBrains IDEs, and macOS.
+/// The track's fill, and the thumb's under the pointer and while dragged. The
+/// track is black laid over whatever the column sits on, so it is darker than
+/// what is beneath it on any surface. The thumb at rest has no fill at all, so
+/// it is the colour of that surface, as the buttons are, and white is laid over
+/// it as it is hovered and grabbed.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ThumbColors {
-    pub rest: Hsla,
+pub struct ScrollColors {
+    pub track: Hsla,
     pub hover: Hsla,
     pub pressed: Hsla,
 }
 
-pub fn thumb_colors(dark: bool) -> ThumbColors {
-    let black = hsla(0., 0., 0., 1.);
+pub fn scroll_colors(dark: bool) -> ScrollColors {
+    let (black, white) = (hsla(0., 0., 0., 1.), hsla(0., 0., 1., 1.));
     if dark {
-        ThumbColors {
-            rest: black.opacity(0.24),
-            hover: black.opacity(0.34),
-            pressed: black.opacity(0.44),
+        ScrollColors {
+            track: black.opacity(0.4),
+            hover: white.opacity(0.035),
+            pressed: white.opacity(0.07),
         }
     } else {
-        ThumbColors {
-            rest: black.opacity(0.14),
-            hover: black.opacity(0.22),
-            pressed: black.opacity(0.3),
+        ScrollColors {
+            track: black.opacity(0.16),
+            hover: white.opacity(0.18),
+            pressed: white.opacity(0.35),
         }
     }
 }
@@ -196,7 +196,7 @@ fn scrollbar(
 ) -> AnyElement {
     let theme = cx.theme();
     let border = theme.border;
-    let thumb_colors = thumb_colors(theme.is_dark());
+    let colors = scroll_colors(theme.is_dark());
     // The full width of the column. A button draws only the line beside the
     // list and the one between it and the track; whatever holds the column
     // draws the lines around it, so no two lines ever lie side by side.
@@ -249,38 +249,50 @@ fn scrollbar(
                 let grab = grab.read(cx).clone();
                 let hovered = hovered.read(cx).clone();
                 let geometry = Geometry::of(&handle, bounds);
-                // The track, with no background of its own: only the line
-                // beside the list.
+                let thumb = thumb_bounds(&geometry, bounds);
+                let drawn = thumb_drawn(thumb);
+                // The track is dark all around the thumb, inside its line,
+                // the thumb inset from it on every side, while the thumb is
+                // left the colour of what the column sits on.
+                let (left, right) = (bounds.origin.x + TRACK_LINE, bounds.right());
+                for rect in [
+                    // Above and below, the track's full width.
+                    (left, bounds.top(), right, drawn.top()),
+                    (left, drawn.bottom(), right, bounds.bottom()),
+                    // Either side of it.
+                    (left, drawn.top(), drawn.left(), drawn.bottom()),
+                    (drawn.right(), drawn.top(), right, drawn.bottom()),
+                ] {
+                    let (x0, y0, x1, y1) = rect;
+                    if x1 > x0 && y1 > y0 {
+                        window.paint_quad(fill(
+                            Bounds::new(point(x0, y0), size(x1 - x0, y1 - y0)),
+                            colors.track,
+                        ));
+                    }
+                }
+                // The line beside the list runs the track's full height, the
+                // thumb never covering it.
                 window.paint_quad(fill(
-                    Bounds::new(bounds.origin, size(px(1.), bounds.size.height)),
+                    Bounds::new(bounds.origin, size(TRACK_LINE, bounds.size.height)),
                     border,
                 ));
-                // The thumb fills the track's width, square and flat, with no
-                // lines of its own: a little darker than what is beneath it,
-                // and darker again while hovered or dragged.
-                let thumb = Bounds::new(
-                    point(bounds.origin.x, geometry.thumb_top),
-                    size(bounds.size.width, geometry.thumb_height),
-                );
+                // The thumb, inset in the track, square and flat, with no lines
+                // of its own, lightening while hovered or dragged; the pointer
+                // is on it anywhere in the room it takes.
                 let is_hovered = thumb.contains(&window.mouse_position());
                 hovered.set(is_hovered);
-                let color = if grab.get().is_some() {
-                    thumb_colors.pressed
+                if grab.get().is_some() {
+                    window.paint_quad(fill(drawn, colors.pressed));
                 } else if is_hovered {
-                    thumb_colors.hover
-                } else {
-                    thumb_colors.rest
-                };
-                window.paint_quad(fill(thumb, color));
+                    window.paint_quad(fill(drawn, colors.hover));
+                }
                 // Moving on or off the thumb redraws it.
                 window.on_mouse_event({
                     let (handle, hovered) = (handle.clone(), hovered.clone());
                     move |event: &MouseMoveEvent, _, window, _| {
                         let geometry = Geometry::of(&handle, bounds);
-                        let thumb = Bounds::new(
-                            point(bounds.origin.x, geometry.thumb_top),
-                            size(bounds.size.width, geometry.thumb_height),
-                        );
+                        let thumb = thumb_bounds(&geometry, bounds);
                         if thumb.contains(&event.position) != hovered.get() {
                             window.refresh();
                         }
@@ -538,6 +550,36 @@ fn ease_out_cubic(t: f32) -> f32 {
     1. - (1. - t.clamp(0., 1.)).powi(3)
 }
 
+/// The width of the line down the track's side against the list.
+const TRACK_LINE: Pixels = px(1.);
+
+/// The thumb in a track at `track`: inside the track's line, never over it.
+fn thumb_bounds(geometry: &Geometry, track: Bounds<Pixels>) -> Bounds<Pixels> {
+    Bounds::new(
+        point(track.origin.x + TRACK_LINE, geometry.thumb_top),
+        size(
+            (track.size.width - TRACK_LINE).max(px(0.)),
+            geometry.thumb_height,
+        ),
+    )
+}
+
+/// How far the thumb is drawn in from every side of the room it takes in the
+/// track, the dark track showing around it.
+const THUMB_INSET: Pixels = px(1.);
+
+/// The thumb as drawn: `slot`, the room it takes in the track, less
+/// [`THUMB_INSET`] on every side.
+fn thumb_drawn(slot: Bounds<Pixels>) -> Bounds<Pixels> {
+    Bounds::new(
+        point(slot.origin.x + THUMB_INSET, slot.origin.y + THUMB_INSET),
+        size(
+            (slot.size.width - THUMB_INSET * 2.).max(px(0.)),
+            (slot.size.height - THUMB_INSET * 2.).max(px(0.)),
+        ),
+    )
+}
+
 /// Where the thumb sits in a track, for a list scrolled as `handle` is.
 struct Geometry {
     track: Bounds<Pixels>,
@@ -597,34 +639,35 @@ pub fn thumb_for_test(handle: &Scroll, track: Bounds<Pixels>) -> (Pixels, Pixels
 mod thumb_tests {
     use gpui_kit::{Hsla, hsla};
 
-    /// Laid over dark and light surfaces alike, the thumb is a little darker
-    /// than what is beneath it, darker again hovered, and darker still while
-    /// dragged, and never so dark it loses the surface's character.
+    /// Laid over dark and light surfaces alike, the track is clearly darker
+    /// than what is beneath it without losing the surface's character, and
+    /// the thumb, the surface itself at rest, lightens hovered, and lightens
+    /// again while dragged.
     #[test]
-    fn thumb_is_a_little_darker_and_darkens_as_it_is_used() {
+    fn track_is_dark_and_thumb_lightens_as_it_is_used() {
         let over = |surface: Hsla, color: Hsla| surface.blend(color);
         for (dark, surfaces) in [
             (true, [0.18, 0.22, 0.27, 0.31]),
             (false, [0.74, 0.82, 0.91, 0.96]),
         ] {
-            let colors = super::thumb_colors(dark);
-            for color in [colors.rest, colors.hover, colors.pressed] {
+            let colors = super::scroll_colors(dark);
+            for color in [colors.track, colors.hover, colors.pressed] {
                 assert!(color.a < 1., "laid over, not opaque");
             }
             for l in surfaces {
                 let surface = hsla(0., 0., l, 1.);
-                let rest = over(surface, colors.rest);
+                let track = over(surface, colors.track);
                 let hover = over(surface, colors.hover);
                 let pressed = over(surface, colors.pressed);
-                assert!(rest.l < surface.l, "{rest:?} isn't darker than {surface:?}");
                 assert!(
-                    surface.l - rest.l < 0.2,
-                    "{rest:?} is more than a little darker"
+                    (0.05..0.25).contains(&(surface.l - track.l)),
+                    "{track:?} isn't clearly but modestly darker than {surface:?}"
                 );
                 assert!(
-                    hover.l < rest.l && pressed.l < hover.l,
-                    "{rest:?} {hover:?} {pressed:?}"
+                    hover.l > surface.l && pressed.l > hover.l,
+                    "{surface:?} {hover:?} {pressed:?}"
                 );
+                assert!(pressed.l - surface.l < surface.l - track.l);
             }
         }
     }
@@ -753,6 +796,133 @@ mod tests {
             (offset + max).abs() <= px(1.),
             "dragging the thumb to the bottom left the list at {offset:?} of {max:?}"
         );
+    }
+
+    /// The thumb sits inside the track's line: the line beside the list runs
+    /// unbroken down the track's full height, and nothing is drawn over it.
+    #[gpui_kit::test]
+    async fn thumb_keeps_inside_the_track_line(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|_| TallList {
+                scroll: ScrollHandle::new(),
+            });
+            Root::new(view, window, cx)
+        });
+        let handle = window.into();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.render_frame(cx);
+            let scale = window.scale_factor();
+            let track = window.find("tall-scroll-track").bounds();
+            let (left, top, bottom, right) = (
+                track.left().as_f32() * scale,
+                track.top().as_f32() * scale,
+                track.bottom().as_f32() * scale,
+                track.right().as_f32() * scale,
+            );
+            let within = |q: &gpui_kit::Quad| {
+                let b = &q.bounds;
+                b.origin.x.0 >= left - 0.01
+                    && b.origin.x.0 + b.size.width.0 <= right + 0.01
+                    && b.origin.y.0 >= top - 0.01
+                    && b.origin.y.0 + b.size.height.0 <= bottom + 0.01
+            };
+            let quads: Vec<_> = window.painted_quads().into_iter().filter(within).collect();
+            let line = quads
+                .iter()
+                .position(|q| {
+                    (q.bounds.origin.x.0 - left).abs() < 0.01
+                        && (q.bounds.size.width.0 - scale).abs() < 0.01
+                        && (q.bounds.origin.y.0 - top).abs() < 0.01
+                        && (q.bounds.size.height.0 - (bottom - top)).abs() < 0.01
+                })
+                .expect("no line down the track's full height");
+            for (ix, q) in quads.iter().enumerate() {
+                if ix != line && q.order >= quads[line].order {
+                    assert!(
+                        q.bounds.origin.x.0 >= left + scale - 0.01,
+                        "{:?} covers the track's line",
+                        q.bounds
+                    );
+                }
+            }
+            // Whatever the thumb, and the dark track around it, stays right of
+            // the line.
+            for q in &quads {
+                if q.background.as_solid().is_some_and(|c| c.l < 0.05) {
+                    assert!(q.bounds.origin.x.0 >= left + scale - 0.01, "{:?}", q.bounds);
+                }
+            }
+        })
+        .unwrap();
+    }
+
+    /// The thumb is inset a pixel on every side: the dark track shows all
+    /// around it, and not over it.
+    #[gpui_kit::test]
+    async fn thumb_is_inset_a_pixel_all_round(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let scroll = ScrollHandle::new();
+        let window = cx.add_window({
+            let scroll = scroll.clone();
+            |window, cx| {
+                let view = cx.new(|_| TallList { scroll });
+                Root::new(view, window, cx)
+            }
+        });
+        let handle = window.into();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.render_frame(cx);
+            let scale = window.scale_factor();
+            let track = window.find("tall-scroll-track").bounds();
+            let (top, height) = super::thumb_for_test(&(&scroll).into(), track);
+            assert!(height < track.size.height, "nothing to scroll");
+            let dark: Vec<_> = window
+                .painted_quads()
+                .into_iter()
+                .filter(|q| {
+                    q.background
+                        .as_solid()
+                        .is_some_and(|c| c.l < 0.05 && c.a > 0.)
+                })
+                .map(|q| q.bounds)
+                .collect();
+            // Whether a dark quad covers the point, in logical pixels.
+            let covered = |x: f32, y: f32| {
+                let (x, y) = (x * scale, y * scale);
+                dark.iter().any(|b| {
+                    x >= b.origin.x.0
+                        && x < b.origin.x.0 + b.size.width.0
+                        && y >= b.origin.y.0
+                        && y < b.origin.y.0 + b.size.height.0
+                })
+            };
+            let (left, right) = (track.left().as_f32() + 1., track.right().as_f32());
+            let (thumb_top, thumb_bottom) = (top.as_f32(), (top + height).as_f32());
+            let middle_y = (thumb_top + thumb_bottom) / 2.;
+            let middle_x = (left + right) / 2.;
+            assert!(
+                covered(middle_x, thumb_top + 0.5),
+                "no track above the thumb"
+            );
+            assert!(
+                covered(middle_x, thumb_bottom - 0.5),
+                "no track below the thumb"
+            );
+            assert!(covered(left + 0.5, middle_y), "no track left of the thumb");
+            assert!(
+                covered(right - 0.5, middle_y),
+                "no track right of the thumb"
+            );
+            assert!(!covered(middle_x, middle_y), "the track covers the thumb");
+            assert!(
+                !covered(left + 1.5, thumb_top + 1.5),
+                "the inset is more than a pixel"
+            );
+        })
+        .unwrap();
     }
 
     /// With nothing to scroll, the thumb fills the track; otherwise it is as

@@ -16,7 +16,7 @@ use serde_json::{Map, Value, json};
 pub struct Palette {
     /// Where content is read or written: the editor, code, answers.
     pub well: u32,
-    /// Text inputs, lists, trees, scroll tracks.
+    /// Text inputs, lists, trees.
     pub recessed: u32,
     /// The window and its panels.
     pub base: u32,

@@ -7,6 +7,7 @@ from /scope/prompt-mode/modes import PromptModesScope
 from /scope/prompt-mode/sending import PromptSendingScope
 from /scope/running-activity import RunningActivityScope
 from /ui/components/minimizable-panel import MinimizablePanelScope
+from /scope/open-projects import OpenProjectsScope
 from /ui/components/ranked-selection-list import RankedSelectionListScope
 from /ui/components/task-table import TaskTableScope
 
@@ -26,6 +27,11 @@ shape RescopeShape:
         A @{MinimizablePanelScope} titled "Rescope". Opening it starts looking
         straight away. Once it is over, a "Look again" button in the header
         starts afresh.
+
+    switchingProjects:
+        A search belongs to the screen rather than its project, so switching to
+        another project, as the @{OpenProjectsScope} says, stops it and closes
+        the panel, minimized or not.
 
     minimizing:
         Its minimize button's tooltip says the search keeps running. While it

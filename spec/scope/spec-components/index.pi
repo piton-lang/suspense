@@ -1,0 +1,91 @@
+use /lib
+use /ui
+from /scope/harness-integration/catalog import HarnessCatalogScope
+from /scope/open-file import OpenFileScope
+from /scope/project-locations import ProjectLocationsScope
+from /scope/prompt-mode/modes import PromptModesScope
+from /scope/prompt-mode/sending import PromptSendingScope
+from /ui/components/growing-text-input import GrowingTextInputScope
+from /ui/components/inset-panel import InsetPanelScope
+from ./new-scope import NewScopeScope
+from ./new-concept import NewConceptScope
+from ./new-shape import NewShapeScope
+from ./new-instruction import NewInstructionScope
+
+export ui-component SpecComponentsScope:
+    concept: {SpecComponentsConcept}
+
+concept SpecComponentsConcept:
+    pitch:
+        Creates the parts a spec is written with, a scope, a concept, or a
+        shape, from a short form: either written straight into the spec, or
+        handed with a description to a skill to write.
+
+    shape: {SpecComponentsShape}
+
+shape SpecComponentsShape:
+    description:
+        Each component has a form of its own, shown in an @{InsetPanelScope},
+        and each form says what it asks for and what it writes. Every form is
+        laid out alike: a title with a close button, the component's own
+        fields, a description, and along the bottom the actions. The first
+        field has focus when the form opens.
+
+    components:
+        scope: @{NewScopeScope}
+
+        concept: @{NewConceptScope}
+
+        shape: @{NewShapeScope}
+
+        instruction: @{NewInstructionScope}, which is laid out as it says
+        instead, with no description or skill: it is written by hand
+
+    names:
+        A component's name is what the spec calls it, such as ParserScope. It
+        can't be empty, must start with a capital letter, and holds only
+        letters and digits. Each form gives the word its name ends with, such
+        as Scope, and adds that word when the name doesn't already end with it,
+        showing the full name beneath the field, muted. A name already declared
+        in the file it would go in can't be used, and the field says so.
+
+    files:
+        Where a form asks for a spec file, it offers the spec files, as the
+        @{ProjectLocationsScope} lists them, in a searchable dropdown showing
+        each by its path relative to the spec location. The spec file open in
+        the editor, if there is one, is chosen to start with.
+
+    describing:
+        Beneath the fields, a "Description" area, a @{GrowingTextInputScope}
+        growing to at most 8 rows, where what the component is for is
+        described in plain words. Its placeholder says so.
+
+        Written into the spec, the description is plain prose, broken over
+        lines indented beneath its key: braces, colons, and a line starting
+        with a dash or two slashes are escaped with a backslash, so nothing in
+        it is read as an interpolation, a key, a list item, or a comment.
+
+    actions:
+        Along the bottom, from left to right:
+        - a "Cancel" button, which closes the panel
+        - a "Skill" dropdown, listing the skills of the @{HarnessCatalogScope} by name, searchable, starting with none chosen
+        - a "Run Skill" button, enabled once a skill is chosen and the fields are valid
+        - a primary "Create" button, enabled once the fields are valid and the description isn't empty
+
+        A disabled action's tooltip says what is missing.
+
+    creating:
+        Create writes the component into the spec just as its form says, its
+        description as its text, closes the panel, and opens the file written,
+        as the @{OpenFileScope} says. Nothing else in the file changes. If it
+        can't be written, the form stays open, and says why beneath the
+        fields.
+
+    runningASkill:
+        Run Skill closes the panel and sends a prompt in Spec mode, of the
+        @{PromptModesScope}, on the application's behalf, as the
+        @{PromptSendingScope} says. The prompt starts with the skill, as
+        `/name `, then asks for the component to be created, giving what kind
+        of component it is, its full name, every field of the form as it was
+        filled in, and then the description. Nothing is written by the
+        application itself.

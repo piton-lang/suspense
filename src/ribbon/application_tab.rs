@@ -5,10 +5,10 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::switch::Switch;
-use gpui_kit::component::{ActiveTheme as _, Sizable as _, WindowExt as _};
+use gpui_kit::component::{ActiveTheme as _, Sizable as _, WindowExt as _, h_flex};
 use gpui_kit::*;
 
-use super::{Command, CommandPlace, Ribbon};
+use super::{Command, CommandPlace, CommandSize, Ribbon};
 use crate::settings_window::OpenSettings;
 use crate::theme_preference;
 
@@ -16,22 +16,34 @@ pub(super) const COMMANDS: &[CommandPlace] = &[
     CommandPlace {
         command: Command::DarkMode,
         group: "Appearance",
+        size: CommandSize::Slim,
         primary: true,
     },
     CommandPlace {
         command: Command::Settings,
         group: "Preferences",
+        size: CommandSize::Full,
         primary: true,
     },
 ];
 
-/// Dark mode: a switch rather than a button, since it is on or off.
-pub(super) fn dark_mode(small: bool, cx: &mut Context<Ribbon>) -> AnyElement {
+/// Dark mode: a switch rather than a button, since it is on or off, sitting in
+/// a block the size and colour of a button of `size`, square.
+pub(super) fn dark_mode(
+    size: CommandSize,
+    background: Hsla,
+    cx: &mut Context<Ribbon>,
+) -> AnyElement {
     let switch = Switch::new("dark-mode")
         .label("Dark mode")
         .checked(cx.theme().is_dark())
         .on_click(|dark, window, cx| set_dark_mode(*dark, window, cx));
-    if small { switch.small() } else { switch }.into_any_element()
+    let block = h_flex().items_center().px_2().bg(background);
+    match size {
+        CommandSize::Slim => block.h(super::SLIM_HEIGHT).w_full().child(switch.small()),
+        CommandSize::Full => block.h_full().child(switch),
+    }
+    .into_any_element()
 }
 
 /// Settings: opens the settings in the inset panel.

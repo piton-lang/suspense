@@ -1,0 +1,29 @@
+from /ui/components/ribbon import RibbonScope
+
+anchor Prompt_14c04fbc8ccd4f0b:
+    userPrompt:
+        -
+            - @{RibbonScope}
+            - " toolbar buttons should be of two types; full or slim.  Slim buttons should have a smaller icon, and it should | icon | label | orientation with the icon on the left.  Buttons should stack vertically up to 3.  Regular buttons should be the full height of the toolbar body.  All buttons should have square corners.  Their background colour should be by default slightly contrasting to the body background.  The body should have 8px padding, and the gap between buttons should also be 8px."
+
+    mode: combined
+
+    systemPrompt:
+        -
+            - "We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec."
+        -
+            - ""
+        -
+            - "You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec."
+        -
+            - ""
+        -
+            - "Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other."
+        -
+            - ""
+        -
+            - "Then build the spec and execute the prompt directly on the code using a unified plan."
+        -
+            - ""
+        -
+            - "Make sure that you write both code and spec."

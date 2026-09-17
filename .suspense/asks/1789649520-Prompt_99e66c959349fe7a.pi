@@ -1,0 +1,14 @@
+from /shape/Src import Src
+
+anchor Prompt_99e66c959349fe7a:
+    userPrompt:
+        -
+            - "Shouldn't "
+            - @{Src}
+            - " export to src as a CLAUDE.md and AGENTS.md ?"
+
+    mode: ask
+
+    systemPrompt:
+        -
+            - "We're only asking a question about the code located in ./src and the spec located in ./spec. Don't edit either of them."

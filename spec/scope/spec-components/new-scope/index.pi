@@ -1,0 +1,44 @@
+use /lib
+use /ui
+from /scope/spec-components import SpecComponentsScope
+from /scope/project-locations import ProjectLocationsScope
+
+export ui-component NewScopeScope:
+    concept: {NewScopeConcept}
+
+concept NewScopeConcept:
+    pitch:
+        The form that creates a new scope, with a concept and a shape of its
+        own, in a folder of its own in the spec.
+
+    shape: {NewScopeShape}
+
+shape NewScopeShape:
+    description:
+        A form of the @{SpecComponentsScope}, titled "New Scope".
+
+    fields:
+        name:
+            A "Name" field, whose name ends with Scope.
+
+        kind:
+            A "Kind" dropdown of the keywords a scope is declared with: "scope",
+            and "ui-component" for a scope that is part of the interface. It
+            starts on "scope".
+
+        location:
+            A "Folder" field, the folder the scope goes in, relative to the
+            spec location of the @{ProjectLocationsScope}. Until it is edited,
+            it follows the name: the name without Scope, in kebab case, under
+            `scope/` for a scope or `ui/components/` for a ui-component, so
+            ParserScope goes in `scope/parser`. Beneath it, muted, the file
+            that will be written, `index.pi` in that folder. A folder that
+            already holds an index.pi can't be used, and the field says so.
+
+    writing:
+        Create writes the folder's index.pi, making the folder if need be,
+        holding, in order:
+        - `use /lib`, and `use /ui` too for a ui-component
+        - the scope, exported, declared with its kind, its concept the concept below
+        - a concept, named as the scope with Concept in place of Scope, its pitch the description, and its shape the shape below
+        - a shape, named as the scope with Shape in place of Scope, its description the description's first sentence

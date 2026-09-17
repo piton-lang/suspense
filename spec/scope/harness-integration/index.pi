@@ -36,7 +36,9 @@ shape HarnessIntegrationShape:
         the latest conversation among the questions saved with it. A question
         asked while another is running carries on a copy of that conversation,
         so questions running at the same time never write over each other. A
-        conversation is only carried on in the project it began in, and if one
+        conversation is only carried on in the project it began in, each open
+        project keeping its own tasks' and questions' conversations while it is
+        in the background, and if one
         can't be carried on, the next request starts a new one. Each run applies
         its own prompt's systemPrompt, even when it carries on a conversation
         begun in a different mode. The palette's file search always starts

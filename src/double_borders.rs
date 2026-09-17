@@ -66,7 +66,23 @@ fn lines(quads: &[Quad]) -> Vec<Line> {
             } else {
                 None
             };
-            if let Some(line) = strip.filter(|_| solid) {
+            // A thin strip sharing an edge with a fill of the same colour, as
+            // the track shows around a scrollbar's thumb, is part of that fill
+            // rather than a line.
+            let joined = |_: &Line| {
+                quads.iter().enumerate().any(|(other_ix, other)| {
+                    if other_ix == ix || other.background != quad.background {
+                        return false;
+                    }
+                    let ob = &other.bounds;
+                    let (ox0, oy0) = (ob.origin.x.0, ob.origin.y.0);
+                    let (ox1, oy1) = (ox0 + ob.size.width.0, oy0 + ob.size.height.0);
+                    let across = (ox1 - x0).abs() < 0.5 || (ox0 - x1).abs() < 0.5;
+                    let down = (oy1 - y0).abs() < 0.5 || (oy0 - y1).abs() < 0.5;
+                    (across && oy0 < y1 && oy1 > y0) || (down && ox0 < x1 && ox1 > x0)
+                })
+            };
+            if let Some(line) = strip.filter(|line| solid && !joined(line)) {
                 let mask = &quad.content_mask.bounds;
                 if visible(&quad.bounds, mask).is_some() {
                     lines.push(line);

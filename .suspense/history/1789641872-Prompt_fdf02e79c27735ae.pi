@@ -1,0 +1,36 @@
+from /ui/components/inset-panel import InsetPanelScope
+from /ui/components/ribbon/spec-tab import RibbonSpecTabScope
+
+anchor Prompt_fdf02e79c27735ae:
+    userPrompt:
+        -
+            - @{RibbonSpecTabScope}
+            - " let's add a new section \"Components\" that allows us to create a new Scope, new Concept, new Shape.  Each one of these should get their own sub-scope in a new scope you'll have to create spec-components."
+        -
+            - ""
+        -
+            - "Each of the actions will pop a "
+            - @{InsetPanelScope}
+            - " that asks for appropriate input for each of the scopes.  There should also be a prompting area where you can describe it, and you can then either just create it or select a skill to run."
+
+    mode: combined
+
+    systemPrompt:
+        -
+            - "We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec."
+        -
+            - ""
+        -
+            - "You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec."
+        -
+            - ""
+        -
+            - "Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other."
+        -
+            - ""
+        -
+            - "Then build the spec and execute the prompt directly on the code using a unified plan."
+        -
+            - ""
+        -
+            - "Make sure that you write both code and spec."

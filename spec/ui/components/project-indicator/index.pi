@@ -3,6 +3,7 @@ use /ui
 from /scope/project/open-project import OpenProjectScope
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/no-project import NoProjectStateScope
+from /scope/open-projects import OpenProjectsScope
 
 export ui-component ProjectIndicator:
     concept: {ProjectIndicatorConcept}
@@ -54,9 +55,14 @@ shape ProjectIndicatorShape:
 
         Each project is a row with its folder name in medium weight above its
         full path, muted, after a folder icon, or a tick for the project open
-        now. Rows reach the list's edges, with no rounded corners, and highlight
+        now. A busy project, of the @{OpenProjectsScope}, shows a small spinner
+        at the right end of its row, and beneath its path, muted, what is
+        running in it, such as "Task running", "2 questions running", or
+        "Building the spec", joined with a middle dot. A busy project is listed
+        even when it is no longer among the five most recent, after them. Rows reach the list's edges, with no rounded corners, and highlight
         on hover. Picking a row, by clicking or <Enter>, closes the list and
-        opens that project, or just closes it for the one already open.
+        switches to that project, or just closes it for the one already open.
+        Switching never stops what is running in the project switched from.
         Clicking the indicator, clicking the dimmed window, or <Escape> closes
         it.
 
@@ -68,5 +74,10 @@ shape ProjectIndicatorShape:
         A name wider than 320 pixels is cut off with an ellipsis.
 
     following:
-        It always shows the project open now: opening or creating another
-        project changes it straight away.
+        It always shows the project open now: opening, creating, or switching
+        to another project changes it straight away.
+
+    busyElsewhere:
+        While another open project is busy, a small dot in the accent colour
+        sits after the name, and the tooltip adds how many other projects are
+        busy.
