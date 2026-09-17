@@ -1,0 +1,4185 @@
+{
+  "made": 1789597123,
+  "report": {
+    "sources": [
+      {
+        "path": "src/activity.rs",
+        "divergence": 0.08,
+        "definition": 0.8,
+        "summary": "Models the running jobs exactly as the RunningActivityScope lists them; it doesn't diverge.",
+        "gaps": [
+          "job kind enum shape",
+          "reveal event type"
+        ]
+      },
+      {
+        "path": "src/animations/mod.rs",
+        "divergence": 0.05,
+        "definition": 0.5,
+        "summary": "Only a module holding the rise-in animation; nothing diverges.",
+        "gaps": [
+          "grouping animations into their own module"
+        ]
+      },
+      {
+        "path": "src/animations/rise_in.rs",
+        "divergence": 0.05,
+        "definition": 0.85,
+        "summary": "Implements the rise-in surface and dimming on one spring, with 40% dim and a 28px rise, as specified.",
+        "gaps": [
+          "spring stiffness and damping values",
+          "260ms leave time",
+          "Leaving tracker keeping the closed content"
+        ]
+      },
+      {
+        "path": "src/app.rs",
+        "divergence": 0.1,
+        "definition": 0.65,
+        "summary": "Boots the app named Suspense, reopens the last project, and binds Ctrl/Cmd+Q, all per spec.",
+        "gaps": [
+          "full icon asset bundle",
+          "quitting when the last window closes",
+          "global initialization order"
+        ]
+      },
+      {
+        "path": "src/baked_prompts.rs",
+        "divergence": 0.05,
+        "definition": 0.8,
+        "summary": "Includes the prompts compiled at build time and fills angle-bracket placeholders, as BakedSystemPromptsScope says.",
+        "gaps": [
+          "fill() replacement helper",
+          "generated module and constant layout"
+        ]
+      },
+      {
+        "path": "src/chat_input.rs",
+        "divergence": 0.1,
+        "definition": 0.8,
+        "summary": "A faithful chat input: the Code/Chain/Spec/Ask tabs with the Chain join animation, tint transitions, help text, attachments, Queue/Send labels, and mention and LSP completions.",
+        "gaps": [
+          "tint spring constants and 10% opacity",
+          "chain width estimate and seam cover",
+          "placeholder wording",
+          "send button tooltips",
+          "attachment row shows first non-blank line",
+          "harness catalog re-discovered on each mention completion"
+        ]
+      },
+      {
+        "path": "src/checkbox.rs",
+        "divergence": 0.05,
+        "definition": 0.65,
+        "summary": "A checkbox whose label has room for descenders, as the specs ask of labels; no divergence.",
+        "gaps": [
+          "1.4 line-height ratio"
+        ]
+      },
+      {
+        "path": "src/commit_notes.rs",
+        "divergence": 0.1,
+        "definition": 0.7,
+        "summary": "Saves, edits, and removes commit notes, builds the commit message from them, and has the harness write a note quickly, as the Git panel spec says.",
+        "gaps": [
+          "haiku model, low effort, no-tools CLI flags",
+          "4000-character input cap",
+          "NONE sentinel for no note",
+          "note id numbering",
+          "file removed once no notes are left",
+          "reply cleanup rules"
+        ]
+      },
+      {
+        "path": "src/completion_menu.rs",
+        "divergence": 0.1,
+        "definition": 0.65,
+        "summary": "A location-aware completion popup that opens above or below the cursor and stays inside the window, as the LSP scope asks.",
+        "gaps": [
+          "240px maximum height and 320px maximum width",
+          "8px window margin",
+          "documentation cut to its first line when stacked",
+          "a cursor move without an edit closes the menu",
+          "typed-prefix highlight in labels"
+        ]
+      },
+      {
+        "path": "src/diff.rs",
+        "divergence": 0.05,
+        "definition": 0.8,
+        "summary": "Computes line and word diffs, three lines of context, collapses runs of four or more, and pairs lines side by side, per DiffViewScope.",
+        "gaps": [
+          "the similar crate's inline diff",
+          "the rule for when a line is changed through and through",
+          "pairing removed and added lines in order"
+        ]
+      },
+      {
+        "path": "src/diff_view.rs",
+        "divergence": 0.12,
+        "definition": 0.7,
+        "summary": "Implements the diff view's header, both layouts, markers, collapsing, F7 navigation, and states; its doc comment still describes the old placement beside the task view.",
+        "gaps": [
+          "2-second polling to follow the file on disk",
+          "reads the committed file with git show HEAD:./name",
+          "binary detection by NUL byte",
+          "20px fixed row height",
+          "tint opacities",
+          "layout preference file name"
+        ]
+      },
+      {
+        "path": "src/divergence.rs",
+        "divergence": 0.06,
+        "definition": 0.85,
+        "summary": "Merges agent replies into connections, measures, score, alignment, coverage, and verdicts, and saves reports, exactly per DivergenceScope.",
+        "gaps": [
+          "normalizing agent paths",
+          "-N suffix for reports made in the same second",
+          "binary detection over the first 8000 bytes",
+          "'ago' time units",
+          "JSON taken between the first { and last }",
+          "run_agent 50ms polling loop"
+        ]
+      },
+      {
+        "path": "src/divergence_view.rs",
+        "divergence": 0.12,
+        "definition": 0.8,
+        "summary": "Closely implements the Divergence panel, but the build step always shows a tick and only the notes mention a failed build.",
+        "gaps": [
+          "40/60 split between tree and details",
+          "tooltip wording and 280px width",
+          "44px header height",
+          "figure card sizes",
+          "file-listing error message",
+          "empty-state icon"
+        ]
+      },
+      {
+        "path": "src/file_link.rs",
+        "divergence": 0.15,
+        "definition": 0.45,
+        "summary": "Resolves and opens file links, sends web links to the browser, and notifies when a file is missing; how links are resolved is mostly the implementation's own.",
+        "gaps": [
+          "stripping :line:col suffixes",
+          "resolving ../ links by a unique path suffix",
+          "file:// URLs and #fragments",
+          "mailto handling"
+        ]
+      },
+      {
+        "path": "src/file_view.rs",
+        "divergence": 0.18,
+        "definition": 0.7,
+        "summary": "Implements the editor, its selection popover, saving, and LSP support as specified, but also formats Piton files with piton format on save and enforces an 80-column minimum width.",
+        "gaps": [
+          "formats .pi files with piton format on save",
+          "80-column minimum width",
+          "extra name and extension mappings (Pipfile, Podfile, json5, kts, …)",
+          "Enter routed to the completion and code-action menus",
+          "read-only until loaded",
+          "diagnostics collected every 100ms"
+        ]
+      },
+      {
+        "path": "src/fs_browser.rs",
+        "divergence": 0.07,
+        "definition": 0.85,
+        "summary": "Implements the shared file system browser for folders and files with every keyboard shortcut, New Folder, and footer behaviour in the spec.",
+        "gaps": [
+          "error message wording",
+          "type-ahead ignores a leading space",
+          "New Folder disabled for an unreadable folder",
+          "breadcrumb separators"
+        ]
+      },
+      {
+        "path": "src/fuzzy.rs",
+        "divergence": 0.05,
+        "definition": 0.5,
+        "summary": "In-order, case-insensitive fuzzy matching that ranks runs and word or name starts higher, as the palette spec describes; the scoring details are its own.",
+        "gaps": [
+          "scoring weights",
+          "separators skipped for free",
+          "camelCase word starts",
+          "whitespace in the query ignored"
+        ]
+      },
+      {
+        "path": "src/generate_skills.rs",
+        "divergence": 0.08,
+        "definition": 0.8,
+        "summary": "Maps scopes and their references, detects existing skills, ranks candidates, and writes skills and index exports as GenerateSkillsScope says.",
+        "gaps": [
+          "line-prefix parsing of exports and references",
+          "wording of a skill that isn't a build-scope",
+          "check for BuildScope.pi's path",
+          "index export line format",
+          "written-but-not-exported error",
+          "JSON extraction from the reply"
+        ]
+      },
+      {
+        "path": "src/generate_skills_view.rs",
+        "divergence": 0.1,
+        "definition": 0.75,
+        "summary": "The Generate Skills panel with steps, streamed output, a ranked list, details, and Create Skills, matching the spec.",
+        "gaps": [
+          "used-by and uses counts shown as arrows",
+          "50/50 list and details split",
+          "notes styled as warnings",
+          "details empty-state text",
+          "output lock starts on"
+        ]
+      },
+      {
+        "path": "src/git_panel.rs",
+        "divergence": 0.08,
+        "definition": 0.72,
+        "summary": "The Git panel's branch row, summary, notes, growing message box, Write message, commit, push, and conflict-safe pull, as specified.",
+        "gaps": [
+          "12,000-character diff cap",
+          "notification titles",
+          "Push disabled on detached HEAD",
+          "commit leaves out commit-notes.json",
+          "trial merge with git merge-tree",
+          "2-second summary polling",
+          "note saved on every keystroke"
+        ]
+      },
+      {
+        "path": "src/git_status.rs",
+        "divergence": 0.08,
+        "definition": 0.7,
+        "summary": "Reads per-path git statuses and folder roll-ups with the specified colours, for the file tree.",
+        "gaps": [
+          "porcelain -z parsing",
+          "ignored shown at 0.6 opacity",
+          "shade 400 in dark and 700 in light",
+          "repository top found with rev-parse --show-cdup"
+        ]
+      },
+      {
+        "path": "src/growing_input.rs",
+        "divergence": 0.05,
+        "definition": 0.8,
+        "summary": "Grows to fit soft-wrapped rows, up to a maximum, rounded to device pixels, per GrowingTextInputScope.",
+        "gaps": [
+          "10px wrap right margin",
+          "padding and border estimate before first paint",
+          "float tolerance when rounding"
+        ]
+      },
+      {
+        "path": "src/harness.rs",
+        "divergence": 0.08,
+        "definition": 0.65,
+        "summary": "Runs claude -p in auto mode with the prompt on stdin, appended system prompt, resume and fork, and streams events, as the harness scope says.",
+        "gaps": [
+          "stream-json and partial-message flags",
+          "--system-prompt-snapshot off",
+          "--fork-session for concurrent questions",
+          "key order for a tool call's most telling argument",
+          "120-character cap on non-command arguments",
+          "stderr surfaced as the error"
+        ]
+      },
+      {
+        "path": "src/harness_mentions.rs",
+        "divergence": 0.1,
+        "definition": 0.6,
+        "summary": "Detects / and @ mentions, discovers project, user, plugin, and built-in invocables plus the saved report, and completes them per the catalog and chat input specs.",
+        "gaps": [
+          "built-in agent list and descriptions",
+          "YAML frontmatter parsing",
+          "plugin enablement from settings.json and installed_plugins.json",
+          "subfolder commands namespaced with ':'",
+          "first-found wins when de-duplicating"
+        ]
+      },
+      {
+        "path": "src/hidden_anchor.rs",
+        "divergence": 0.12,
+        "definition": 0.72,
+        "summary": "Writes, parses, and compiles the hidden anchor with the specified per-line escaping, attached text, and draft blanking, but adds a mode property the spec doesn't describe.",
+        "gaps": [
+          "mode property written into the anchor",
+          "legacy mode inferred from system prompt text",
+          "an empty template gives no system prompt",
+          "config values read by a naive line scan",
+          "files named by timestamp",
+          "fallback conversion of old prose prompts"
+        ]
+      },
+      {
+        "path": "src/inset_panel.rs",
+        "divergence": 0.05,
+        "definition": 0.85,
+        "summary": "A floating panel inset 32px, with dimmed backdrop, focus trap, and rise-in animation, as specified.",
+        "gaps": [
+          "rounded_lg and shadow_2xl styling",
+          "focus return left to the caller"
+        ]
+      },
+      {
+        "path": "src/main.rs",
+        "divergence": 0.05,
+        "definition": 0.35,
+        "summary": "Declares the modules and starts the app; nothing diverges.",
+        "gaps": [
+          "module list",
+          "Windows release console hidden"
+        ]
+      },
+      {
+        "path": "src/main_window.rs",
+        "divergence": 0.12,
+        "definition": 0.68,
+        "summary": "Lays out the ribbon, resizable sidebar, and prompt mode, and orchestrates inset and minimizable panels, the palette, quitting, and activity reveal largely per MainWindowScope, adding Esc precedence and a Generate Skills panel the scope doesn't describe.",
+        "gaps": [
+          "Esc precedence (palette, dialog, activity list, recent projects, panel)",
+          "opening the Generate Skills panel",
+          "1280×800 restore size",
+          "240px split minimum",
+          "\"Project created\" warning title",
+          "focus restoration into the panel"
+        ]
+      },
+      {
+        "path": "src/markdown.rs",
+        "divergence": 0.15,
+        "definition": 0.4,
+        "summary": "Keeps parsed markdown states for steady row heights as the scrollbar spec asks, plus an unspecified workaround that turns inline code into plain text.",
+        "gaps": [
+          "inline code stripped to escaped text (gpui-kit workaround)",
+          "4 KiB background-parse threshold",
+          "50ms polls, up to 100",
+          "4096 changed-key cap"
+        ]
+      },
+      {
+        "path": "src/new_project.rs",
+        "divergence": 0.07,
+        "definition": 0.85,
+        "summary": "The New Project form, validation, config generation, template writing, and git init with .gitignore, matching the spec closely.",
+        "gaps": [
+          "validation message wording",
+          "\"Creates …\" path preview wording",
+          "New button tooltips",
+          "custom adapter description text",
+          "shape root placeholder \"None\"",
+          "falls back to the unformatted config if piton format fails"
+        ]
+      },
+      {
+        "path": "src/palette.rs",
+        "divergence": 0.12,
+        "definition": 0.72,
+        "summary": "Implements the palette's tabs, fuzzy ranking, system commands, mentions, and agentic file search, but labels the build command \"Build Spec\" rather than \"Build\".",
+        "gaps": [
+          "100,000-file cap",
+          "640px width and 420px list height",
+          "file-search prompt wording",
+          "per-tab placeholders and icons",
+          "empty-list texts per tab"
+        ]
+      },
+      {
+        "path": "src/piton_build.rs",
+        "divergence": 0.05,
+        "definition": 0.55,
+        "summary": "Runs piton build and gathers the written files and report for the notifications the spec build scope describes.",
+        "gaps": [
+          "stdout lines taken as written files, stderr as the report",
+          "exit-status message when the report is empty",
+          "test skip helper"
+        ]
+      },
+      {
+        "path": "src/piton_lsp.rs",
+        "divergence": 0.05,
+        "definition": 0.8,
+        "summary": "The JSON-RPC client and chat input session: 5s timeouts, empty answers to server requests, draft document, UTF-16 positions, narrowing, and three rounds of auto-import, all per spec.",
+        "gaps": [
+          "Content-Length framing",
+          "diagnostic listener channels",
+          "match ranking shared with the editor",
+          "URI percent-encoding"
+        ]
+      },
+      {
+        "path": "src/piton_syntax.rs",
+        "divergence": 0.05,
+        "definition": 0.55,
+        "summary": "Registers the Tree-sitter Piton grammar for highlighting, as the chat input and editor specs ask.",
+        "gaps": [
+          "vendored grammar path",
+          "registration name \"piton\""
+        ]
+      },
+      {
+        "path": "src/project/mod.rs",
+        "divergence": 0.05,
+        "definition": 0.3,
+        "summary": "Groups the open-project module; nothing diverges.",
+        "gaps": [
+          "module grouping"
+        ]
+      },
+      {
+        "path": "src/project/open_project.rs",
+        "divergence": 0.05,
+        "definition": 0.9,
+        "summary": "Builds the piton.config.pi file browser starting where the spec says, and opens the chosen project, remembering the folder.",
+        "gaps": [
+          "OpenProject action name"
+        ]
+      },
+      {
+        "path": "src/project_directory.rs",
+        "divergence": 0.1,
+        "definition": 0.7,
+        "summary": "A global holding the project directory; its comment still calls it session-only, though recent projects persist it elsewhere.",
+        "gaps": [
+          "global storage",
+          "config file name constant"
+        ]
+      },
+      {
+        "path": "src/project_indicator.rs",
+        "divergence": 0.05,
+        "definition": 0.85,
+        "summary": "The project indicator label, tooltip, 320px truncation, and recent projects list with Open Project…, as specified.",
+        "gaps": [
+          "360px list width",
+          "28px list offset",
+          "row truncation"
+        ]
+      },
+      {
+        "path": "src/project_lsp.rs",
+        "divergence": 0.05,
+        "definition": 0.85,
+        "summary": "One shared piton lsp per project, restarted when the directory changes, with language support degrading quietly if it can't start.",
+        "gaps": [
+          "failure logged to stderr",
+          "server for a project left behind is dropped"
+        ]
+      },
+      {
+        "path": "src/project_templates.rs",
+        "divergence": 0.05,
+        "definition": 0.85,
+        "summary": "Loads built-in templates ordered by template.json and writes their spec files without overwriting, per NewProjectScope.",
+        "gaps": [
+          "tie-break by folder key",
+          "panics on an invalid template.json"
+        ]
+      },
+      {
+        "path": "src/project_tree.rs",
+        "divergence": 0.1,
+        "definition": 0.68,
+        "summary": "The file tree with folders first, watching the disk, git colouring, diff buttons, and a no-project message, per FileTreeScope.",
+        "gaps": [
+          "Loading…, Empty, and Unreadable placeholders",
+          "150ms watcher batching",
+          "2-second git status polling",
+          "only .git hidden, ignored files shown dimmed",
+          "12px indent per level",
+          "case-insensitive name sort"
+        ]
+      },
+      {
+        "path": "src/prompt_history.rs",
+        "divergence": 0.05,
+        "definition": 0.8,
+        "summary": "Saves run records beside history and ask files and loads them in order, as ProjectDataScope describes.",
+        "gaps": [
+          "record JSON field names",
+          "numeric sort by leading seconds",
+          "non-JSON lines stored as strings"
+        ]
+      },
+      {
+        "path": "src/prompt_mode.rs",
+        "divergence": 0.12,
+        "definition": 0.72,
+        "summary": "A very thorough implementation of prompt mode (tasks, queue, history lists, task tables, Ask stack and drawer, file split slide, commit notes); its one departure is an error notification when sending with no project open.",
+        "gaps": [
+          "80px question row height",
+          "spring constants and 0.45 dim level",
+          "160px prompt and 240px queue max heights",
+          "130px and 110px table column widths",
+          "400-character raw line cap",
+          "pending-input labels per tool kind",
+          "error notification when sending without a project",
+          "spinner on a queued prompt while it saves",
+          "450ms pane slide timing"
+        ]
+      },
+      {
+        "path": "src/prompt_queue.rs",
+        "divergence": 0.05,
+        "definition": 0.85,
+        "summary": "Saves queued anchors in .suspense/queue, named so they list in order, and removes them on send or cancel.",
+        "gaps": [
+          "zero-padded nanosecond file names"
+        ]
+      },
+      {
+        "path": "src/recent_projects.rs",
+        "divergence": 0.05,
+        "definition": 0.85,
+        "summary": "Keeps the five most recent projects and the last browsed folder in the per-user config directory, reopening the last project that still has its config.",
+        "gaps": [
+          "JSON file name and camelCase fields",
+          "save failures ignored silently"
+        ]
+      },
+      {
+        "path": "src/rescope.rs",
+        "divergence": 0.05,
+        "definition": 0.8,
+        "summary": "Parses and ranks concepts and builds the search and refactor prompts from rescope.pi, per RescopeScope.",
+        "gaps": [
+          "ties broken by name",
+          "concepts with empty names dropped",
+          "layout of places in the refactor prompt"
+        ]
+      },
+      {
+        "path": "src/rescope_view.rs",
+        "divergence": 0.07,
+        "definition": 0.8,
+        "summary": "The Rescope panel with steps, output, ranked list, details, minimize, Look again, and Refactor, as specified.",
+        "gaps": [
+          "\"N places · M scopes\" label",
+          "details empty-state text",
+          "50/50 list and details split",
+          "why shown muted"
+        ]
+      },
+      {
+        "path": "src/ribbon/application_tab.rs",
+        "divergence": 0.08,
+        "definition": 0.88,
+        "summary": "The Appearance and Preferences groups with the Dark mode switch and Settings button; the switch has no explanatory tooltip.",
+        "gaps": [
+          "tooltip wording"
+        ]
+      },
+      {
+        "path": "src/ribbon/code_tab.rs",
+        "divergence": 0.0,
+        "definition": 1.0,
+        "summary": "An empty Code tab, exactly as specified.",
+        "gaps": []
+      },
+      {
+        "path": "src/ribbon/mod.rs",
+        "divergence": 0.08,
+        "definition": 0.8,
+        "summary": "The ribbon's tabs, Ctrl+click multi-open, groups with rotated titles, collapsing to primary commands, activity spinner, and project indicator, per RibbonScope; one comment is stale about all commands being primary.",
+        "gaps": [
+          "76px command area height",
+          "28px title strip",
+          "SVG text rotated for titles",
+          "360px activity list width",
+          "collapsed state saved to a \"ribbon\" file",
+          "activity tooltip wording"
+        ]
+      },
+      {
+        "path": "src/ribbon/project_tab.rs",
+        "divergence": 0.03,
+        "definition": 0.9,
+        "summary": "New Project and Open Project… buttons in the Project group, both primary, per the tab scope.",
+        "gaps": [
+          "exact tooltip wording"
+        ]
+      },
+      {
+        "path": "src/ribbon/research_tab.rs",
+        "divergence": 0.0,
+        "definition": 1.0,
+        "summary": "An empty Research tab, exactly as specified.",
+        "gaps": []
+      },
+      {
+        "path": "src/ribbon/spec_tab.rs",
+        "divergence": 0.05,
+        "definition": 0.85,
+        "summary": "The Build, Analysis, Skills, and Refactor groups with the right icons, primary flags, no-project tooltips, and build notifications.",
+        "gaps": [
+          "build-file notification rows truncated",
+          "View Divergence Reports uses a FileText icon"
+        ]
+      },
+      {
+        "path": "src/scrollbar.rs",
+        "divergence": 0.08,
+        "definition": 0.78,
+        "summary": "The permanent scroll column with buttons, thumb, drag and track press, lock button with glow and ring pulse, and a measured list for steadiness.",
+        "gaps": [
+          "18px column width",
+          "48px scroll step",
+          "16px minimum thumb",
+          "900ms pulse timing and ring easing",
+          "thumb colour blend ratios",
+          "track press centres the thumb on the pointer"
+        ]
+      },
+      {
+        "path": "src/selection_popover.rs",
+        "divergence": 0.05,
+        "definition": 0.85,
+        "summary": "A bordered, shadowed popover of small icon buttons below and right of the release point, kept in the window and closing on outside press.",
+        "gaps": [
+          "6×10px offset",
+          "deferred layer priority"
+        ]
+      },
+      {
+        "path": "src/settings_window.rs",
+        "divergence": 0.07,
+        "definition": 0.85,
+        "summary": "The Settings page with the System prompts heading and per-mode Piton editors, reset, saving on edit, reloading, and a no-project message, as specified.",
+        "gaps": [
+          "muted line names codeRoot and root in piton.config.pi",
+          "reset button styling",
+          "error text styling"
+        ]
+      },
+      {
+        "path": "src/shell_format.rs",
+        "divergence": 0.05,
+        "definition": 0.55,
+        "summary": "Splits long commands at top-level &&, ||, | and ; without breaking quotes, substitutions, brackets, comments, or heredocs, per the task table spec.",
+        "gaps": [
+          "60-character threshold for splitting",
+          "two-space indent",
+          ";; kept together",
+          "line before a heredoc body kept whole"
+        ]
+      },
+      {
+        "path": "src/system_prompts.rs",
+        "divergence": 0.05,
+        "definition": 0.85,
+        "summary": "Per-project mode templates in .suspense/system-prompts with defaults baked in from this repository and placeholders filled in, per ModeSystemPromptsScope.",
+        "gaps": [
+          "templates trimmed of trailing whitespace",
+          "saved with a trailing newline"
+        ]
+      },
+      {
+        "path": "src/theme_preference.rs",
+        "divergence": 0.05,
+        "definition": 0.8,
+        "summary": "Saves light or dark mode per user and follows the system appearance until a choice is made.",
+        "gaps": [
+          "plain \"theme\" file holding light or dark"
+        ]
+      }
+    ],
+    "specs": [
+      {
+        "path": "spec/agent/commands/BuildRibbon.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A command wrapper that points the build-scope command at the ribbon; nothing in src implements it, though the ribbon it targets is built closely.",
+        "gaps": [
+          "no arguments or usage described beyond the abstract command"
+        ]
+      },
+      {
+        "path": "spec/agent/commands/index.pi",
+        "divergence": 0.2,
+        "definition": 0.9,
+        "summary": "Only re-exports the commands; there is nothing in src to build from it.",
+        "gaps": []
+      },
+      {
+        "path": "spec/agent/index.pi",
+        "divergence": 0.2,
+        "definition": 0.9,
+        "summary": "Only re-exports skills and commands; nothing in the code corresponds to it.",
+        "gaps": []
+      },
+      {
+        "path": "spec/agent/skills/BuildApplication.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill for the application scope, in the exact form Generate Skills writes; the app itself isn't built from it.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildChatInput.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the chat input; it matches the generated skill format, and its target scope is implemented closely.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildDiffView.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the diff view, in the generated format.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildDivergence.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the divergence scope.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildEditor.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the editor scope.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildFileTree.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the file tree.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildFsBrowser.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the fs browser.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildGenerateSkills.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the Generate Skills scope.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildGit.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the git scope.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildGitPanel.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the git panel.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildHarnessIntegration.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for harness integration.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildInsetPanel.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the inset panel.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildLSP.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the LSP scope, named by the no-trailing-Scope rule.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildMainWindow.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the main window.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildMessageList.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the message list.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildNewProject.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for New Project.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildOpenProject.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for Open Project.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildPalette.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the palette.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildProjectDirectory.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the project directory.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildPromptEditor.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the prompt editor.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildRibbon.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the ribbon.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildScrollbar.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the scrollbar.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/BuildSettingsWindow.pi",
+        "divergence": 0.3,
+        "definition": 0.8,
+        "summary": "A build-scope skill wrapper for the settings window.",
+        "gaps": [
+          "relies entirely on the abstract build-scope prompt"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/ChangeRibbon.pi",
+        "divergence": 0.1,
+        "definition": 0.85,
+        "summary": "An agent skill for changing the ribbon. Its code rule of one module per tab, with the tab list and layout in the ribbon module, is exactly how src/ribbon is organized.",
+        "gaps": [
+          "doesn't say what the per-tab module must expose",
+          "check commands named but not their expected output"
+        ]
+      },
+      {
+        "path": "spec/agent/skills/index.pi",
+        "divergence": 0.2,
+        "definition": 0.9,
+        "summary": "Only re-exports the skills; Generate Skills maintains this index form.",
+        "gaps": []
+      },
+      {
+        "path": "spec/index.pi",
+        "divergence": 0.2,
+        "definition": 0.9,
+        "summary": "The spec's entry point, re-exporting the agent folder; Generate Skills keeps this export when it creates the agent folder.",
+        "gaps": []
+      },
+      {
+        "path": "spec/lib/Concept.pi",
+        "divergence": 0.25,
+        "definition": 0.6,
+        "summary": "An abstract concept anchor with no behaviour to build; the app only reflects it through the scope/concept/shape project template.",
+        "gaps": [
+          "no semantics for pitch or shape beyond their types"
+        ]
+      },
+      {
+        "path": "spec/lib/Scope.pi",
+        "divergence": 0.25,
+        "definition": 0.6,
+        "summary": "An abstract scope anchor; Generate Skills and Rescope work in terms of the scopes it defines.",
+        "gaps": [
+          "no semantics beyond requiring a concept"
+        ]
+      },
+      {
+        "path": "spec/lib/Shape.pi",
+        "divergence": 0.25,
+        "definition": 0.55,
+        "summary": "An abstract shape anchor holding only a description; nothing in src implements it beyond the template that seeds it.",
+        "gaps": [
+          "no rules for shape properties beyond description"
+        ]
+      },
+      {
+        "path": "spec/lib/agent/commands/BuildScope.pi",
+        "divergence": 0.3,
+        "definition": 0.7,
+        "summary": "An abstract build-scope command for agents; no application code uses or writes commands.",
+        "gaps": [
+          "how it differs in use from the build-scope skill"
+        ]
+      },
+      {
+        "path": "spec/lib/agent/skills/BuildScope.pi",
+        "divergence": 0.2,
+        "definition": 0.7,
+        "summary": "The abstract build-scope skill. Generate Skills detects its keyword and writes build-scope skills from it, as described.",
+        "gaps": [
+          "__BELAY_SHAPE__ meaning left to Belay",
+          "no guidance on what counts as 'necessary skills and specs'"
+        ]
+      },
+      {
+        "path": "spec/lib/index.pi",
+        "divergence": 0.2,
+        "definition": 0.9,
+        "summary": "Only re-exports the lib anchors; the project template seeds a matching lib index.",
+        "gaps": []
+      },
+      {
+        "path": "spec/scope/application/MainWindow.pi",
+        "divergence": 0.12,
+        "definition": 0.8,
+        "summary": "Largely built as described: a maximized window, Esc to the chat input, quitting, the palette, the sliding file split, and diffs and panels in the inset panel. Timings and some precedence are the implementation's own.",
+        "gaps": [
+          "slide duration not given",
+          "narrowest the split can be dragged",
+          "the order Esc dismisses popups, lists and panels in",
+          "what happens to open panels when the project changes"
+        ]
+      },
+      {
+        "path": "spec/scope/application/index.pi",
+        "divergence": 0.1,
+        "definition": 0.55,
+        "summary": "The stack, the Suspense name, reopening the last project and the main window are all as described; platforms and packaging are left open.",
+        "gaps": [
+          "per-platform differences beyond shortcuts",
+          "window title and icon",
+          "what 'REPL and notebook' means for behaviour"
+        ]
+      },
+      {
+        "path": "spec/scope/divergence/index.pi",
+        "divergence": 0.08,
+        "definition": 0.92,
+        "summary": "Built almost exactly as described: build first, two read-only agents, merged connections and measures, the report, trees, tooltips and saved reports.",
+        "gaps": [
+          "exact tooltip wording",
+          "how 'text' source files are detected",
+          "bar widths and card sizes"
+        ]
+      },
+      {
+        "path": "spec/scope/editor/index.pi",
+        "divergence": 0.1,
+        "definition": 0.85,
+        "summary": "The editor is built as described, with LSP support, the selection popover, saving and discard prompts. The language map drifts a little: .scss isn't mapped to CSS, and some unlisted names are added.",
+        "gaps": [
+          "header layout details",
+          "how quick-fix list is shown",
+          "cursor placement when opening at a definition"
+        ]
+      },
+      {
+        "path": "spec/scope/generate-skills/index.pi",
+        "divergence": 0.1,
+        "definition": 0.85,
+        "summary": "Mapping, ranking, fallback ranking, the list and details, and writing skills are all built as described.",
+        "gaps": [
+          "exact note wording after creating",
+          "how ties are broken in the ranking",
+          "index.pi formatting when appended"
+        ]
+      },
+      {
+        "path": "spec/scope/git/index.pi",
+        "divergence": 0.12,
+        "definition": 0.75,
+        "summary": "Statuses, colours, branch, change counts and the committed file are all built. Refreshing is done by polling every 2 seconds rather than by watching the repository.",
+        "gaps": [
+          "how refreshes are triggered",
+          "what a deleted file shows",
+          "submodules and nested repositories",
+          "exact shades of each colour"
+        ]
+      },
+      {
+        "path": "spec/scope/harness-integration/baked-prompts/index.pi",
+        "divergence": 0.05,
+        "definition": 0.8,
+        "summary": "The prompts are Piton files compiled at build time into constants, with angle-bracket placeholders, as described.",
+        "gaps": [
+          "the compiled.json format",
+          "how pieces map to constant names"
+        ]
+      },
+      {
+        "path": "spec/scope/harness-integration/catalog/index.pi",
+        "divergence": 0.12,
+        "definition": 0.65,
+        "summary": "Mentions and the saved harness.json report are implemented. The code also hardcodes a few built-in agents as a fallback, and how project, user and plugin sources are found isn't spelled out.",
+        "gaps": [
+          "where project, user and plugin skills are read from",
+          "name clashes between sources",
+          "description format"
+        ]
+      },
+      {
+        "path": "spec/scope/harness-integration/index.pi",
+        "divergence": 0.12,
+        "definition": 0.65,
+        "summary": "claude -p runs in auto mode, with the system prompt appended, the prompt on stdin and streamed output. Tasks and questions keep separate resumed or forked sessions; the harness is hardcoded rather than chosen.",
+        "gaps": [
+          "which harnesses are supported",
+          "flags for auto mode",
+          "behaviour when the harness is missing",
+          "how the latest conversation is found on reopen"
+        ]
+      },
+      {
+        "path": "spec/scope/harness-integration/one-off-run/index.pi",
+        "divergence": 0.12,
+        "definition": 0.7,
+        "summary": "A read-only, sessionless streaming run that returns its final result is implemented, but inside divergence.rs rather than as a shared module.",
+        "gaps": [
+          "exact tool allowlist",
+          "timeout behaviour",
+          "how the reply JSON is located in extra text"
+        ]
+      },
+      {
+        "path": "spec/scope/lsp/index.pi",
+        "divergence": 0.07,
+        "definition": 0.85,
+        "summary": "One shared piton lsp per project, restarted on change: draft document, UTF-16 positions, completions, auto-imports and the placement-aware popup are all built.",
+        "gaps": [
+          "what happens to in-flight requests on restart",
+          "documentation panel sizing"
+        ]
+      },
+      {
+        "path": "spec/scope/new-project/index.pi",
+        "divergence": 0.08,
+        "definition": 0.9,
+        "summary": "The form, validation, templates, config writing, Git setup and opening are built as described. The Git warning notification is titled 'Project created'.",
+        "gaps": [
+          "exact .gitignore contents",
+          "warning notification title",
+          "tooltip wording for disabled New"
+        ]
+      },
+      {
+        "path": "spec/scope/no-project/index.pi",
+        "divergence": 0.15,
+        "definition": 0.5,
+        "summary": "Views and commands mostly behave quietly without a project. Sending a prompt without one, though, shows a 'No project open' error notification rather than nothing failing.",
+        "gaps": [
+          "wording is left to each use",
+          "whether sending a prompt without a project should notify",
+          "which commands need a project"
+        ]
+      },
+      {
+        "path": "spec/scope/open-file/index.pi",
+        "divergence": 0.1,
+        "definition": 0.8,
+        "summary": "Files open in the one split from the tree, the palette, links, the diff header and definitions, with an error notification for a missing file.",
+        "gaps": [
+          "how link targets are resolved (relative to what)",
+          "position handling for links with line numbers"
+        ]
+      },
+      {
+        "path": "spec/scope/palette/index.pi",
+        "divergence": 0.1,
+        "definition": 0.88,
+        "summary": "The tabs, fuzzy search, agentic file search and mention insertion are implemented as described. The Build command is labelled 'Build Spec' rather than 'Build'.",
+        "gaps": [
+          "popover size and position",
+          "how highlighting of matches looks"
+        ]
+      },
+      {
+        "path": "spec/scope/project-data/index.pi",
+        "divergence": 0.08,
+        "definition": 0.85,
+        "summary": "Everything is kept under .suspense as listed: history, asks, queue, divergence, system prompts, commit notes and harness.json. New projects gitignore the machine-only files.",
+        "gaps": [
+          "record JSON schema",
+          "file naming format details"
+        ]
+      },
+      {
+        "path": "spec/scope/project-directory/index.pi",
+        "divergence": 0.08,
+        "definition": 0.8,
+        "summary": "A global project directory with five recent projects remembered in user preferences, as described. Its module comment still claims it lasts only for the session.",
+        "gaps": [
+          "whether symlinked paths count as the same project"
+        ]
+      },
+      {
+        "path": "spec/scope/project-locations/index.pi",
+        "divergence": 0.12,
+        "definition": 0.7,
+        "summary": "The spec and code locations are read from piton.config.pi, and files are listed respecting .gitignore. But the listing is written separately in the palette and divergence modules rather than as one shared piece.",
+        "gaps": [
+          "how the config is parsed",
+          "symlink handling",
+          "behaviour when root is outside the project"
+        ]
+      },
+      {
+        "path": "spec/scope/project/open-project/index.pi",
+        "divergence": 0.05,
+        "definition": 0.9,
+        "summary": "A file browser in the inset panel, limited to piton.config.pi and starting in the last browsed folder, as described.",
+        "gaps": [
+          "what happens choosing the already open project"
+        ]
+      },
+      {
+        "path": "spec/scope/prompt-mode/answer-drawer/index.pi",
+        "divergence": 0.1,
+        "definition": 0.85,
+        "summary": "The drawer opens to 80% by default, resizes between 20% and 95%, dims what it covers, and slides previous answers up from the stack, all inside prompt_mode.rs.",
+        "gaps": [
+          "slide and fade durations",
+          "shade opacity"
+        ]
+      },
+      {
+        "path": "spec/scope/prompt-mode/chat-input/index.pi",
+        "divergence": 0.1,
+        "definition": 0.8,
+        "summary": "Tabs including the Chain animation, help text, colours, Ask questions, attachments, escaping in the hidden anchor, mentions and growing to fit are all implemented closely.",
+        "gaps": [
+          "garbled sentence about Enter and Ctrl/Cmd+Enter",
+          "exact mode colour values",
+          "Chain icon names",
+          "animation durations"
+        ]
+      },
+      {
+        "path": "spec/scope/prompt-mode/index.pi",
+        "divergence": 0.1,
+        "definition": 0.8,
+        "summary": "The task view, previous tasks, header, queue with auto-send and persistence, building before sending and replayed history are built as described.",
+        "gaps": [
+          "typo 'compiled-on-depand'",
+          "queue list maximum height",
+          "header scroll height"
+        ]
+      },
+      {
+        "path": "spec/scope/prompt-mode/message-list/index.pi",
+        "divergence": 0.1,
+        "definition": 0.8,
+        "summary": "Task headers with the compiled markdown, coloured status labels, output tables, clickable links and mode-coloured backgrounds are implemented within prompt_mode.rs.",
+        "gaps": [
+          "exact colour values for statuses",
+          "virtualization approach"
+        ]
+      },
+      {
+        "path": "spec/scope/prompt-mode/mode-system-prompts/index.pi",
+        "divergence": 0.05,
+        "definition": 0.85,
+        "summary": "Per-project templates per mode, with CODE_LOCATION and SPEC_LOCATION placeholders and defaults baked from the repository's .suspense/system-prompts, exactly as described.",
+        "gaps": [
+          "what happens if a template doesn't compile"
+        ]
+      },
+      {
+        "path": "spec/scope/prompt-mode/modes/index.pi",
+        "divergence": 0.08,
+        "definition": 0.75,
+        "summary": "Four modes in order, with their colours, tasks versus questions, and commit notes after tasks. Internally Chain is SendMode::Both labelled 'Code and Spec'.",
+        "gaps": [
+          "colour values",
+          "what counts as 'having changed files'"
+        ]
+      },
+      {
+        "path": "spec/scope/prompt-mode/sending/index.pi",
+        "divergence": 0.1,
+        "definition": 0.75,
+        "summary": "Tasks send or queue with their mode and attachments, show 'Building' while the spec builds, then compile and run. Questions run straight away, and Rescope sends on the app's behalf.",
+        "gaps": [
+          "behaviour without a project",
+          "whether a failed save to history blocks sending"
+        ]
+      },
+      {
+        "path": "spec/scope/rescope/index.pi",
+        "divergence": 0.07,
+        "definition": 0.85,
+        "summary": "A minimizable Rescope panel with its steps, ranked concepts (half or more checked), details and Refactor sending a Spec prompt, as described.",
+        "gaps": [
+          "excerpt length",
+          "reply JSON schema only implied"
+        ]
+      },
+      {
+        "path": "spec/scope/running-activity/index.pi",
+        "divergence": 0.08,
+        "definition": 0.85,
+        "summary": "The spinner with a count, the list of jobs with reveal actions, and quit confirmation for tasks, questions and builds are built as described.",
+        "gaps": [
+          "list width and position",
+          "exact tooltip when several run"
+        ]
+      },
+      {
+        "path": "spec/scope/settings-window/index.pi",
+        "divergence": 0.07,
+        "definition": 0.88,
+        "summary": "Settings in the inset panel: a Piton editor per mode, reset, immediate saving, reloading and the no-project message, as described.",
+        "gaps": [
+          "exact wording of the muted explanatory line"
+        ]
+      },
+      {
+        "path": "spec/scope/spec-build/index.pi",
+        "divergence": 0.06,
+        "definition": 0.85,
+        "summary": "piton build runs on its own, with a spinner and notifications, or ahead of work without blocking it, as described.",
+        "gaps": [
+          "how written files are parsed from output"
+        ]
+      },
+      {
+        "path": "spec/scope/user-preferences/index.pi",
+        "divergence": 0.08,
+        "definition": 0.75,
+        "summary": "All five preferences persist in the per-user config directory, spread over separate files, and only dark mode reports a failed save.",
+        "gaps": [
+          "storage format and file names",
+          "behaviour when the config directory is missing"
+        ]
+      },
+      {
+        "path": "spec/ui/animations/rise-in/index.pi",
+        "divergence": 0.05,
+        "definition": 0.8,
+        "summary": "One spring drives a 40% dim and a 28px rise with fade, reversed on the way out and swapped in place without animating, as described.",
+        "gaps": [
+          "spring parameters only as 'about a quarter second'"
+        ]
+      },
+      {
+        "path": "spec/ui/components/diff-view/index.pi",
+        "divergence": 0.07,
+        "definition": 0.9,
+        "summary": "The header, both layouts, word-level highlights, collapsed context, F7 navigation and the loading, binary, empty and failed states are built. The file is followed by polling every 2 seconds.",
+        "gaps": [
+          "row height and colours",
+          "how 'similar' lines are judged"
+        ]
+      },
+      {
+        "path": "spec/ui/components/file-browser/index.pi",
+        "divergence": 0.08,
+        "definition": 0.85,
+        "summary": "A file mode of the shared browser, with a name filter, empty messages, a 'Select a <name>' footer and Choose disabled until a file is selected.",
+        "gaps": [
+          "whether hidden files match the name filter"
+        ]
+      },
+      {
+        "path": "spec/ui/components/file-tree/index.pi",
+        "divergence": 0.1,
+        "definition": 0.85,
+        "summary": "The tree sorts folders first, watches for changes, colours names by git status, has a diff button and shows 'No project open'. Git status is polled rather than watched.",
+        "gaps": [
+          "whether .gitignored files are listed",
+          "loading and empty placeholders"
+        ]
+      },
+      {
+        "path": "spec/ui/components/folder-browser/index.pi",
+        "divergence": 0.05,
+        "definition": 0.88,
+        "summary": "The folder mode lists only folders, chooses the selected or current folder and selects a newly created folder, as described.",
+        "gaps": []
+      },
+      {
+        "path": "spec/ui/components/fs-browser/index.pi",
+        "divergence": 0.08,
+        "definition": 0.9,
+        "summary": "The navigation bar, breadcrumb, Show hidden, entries, new folder row and full keyboard control are implemented as described.",
+        "gaps": [
+          "breadcrumb overflow behaviour",
+          "icon choices beyond folder and file"
+        ]
+      },
+      {
+        "path": "spec/ui/components/git-panel/index.pi",
+        "divergence": 0.07,
+        "definition": 0.88,
+        "summary": "Branch, summary, commit notes, a growing message box, Write message, commit, push, conflict-safe pull and feedback are all built as described.",
+        "gaps": [
+          "notification wording",
+          "how much diff counts as 'a small, fixed amount'"
+        ]
+      },
+      {
+        "path": "spec/ui/components/growing-text-input/index.pi",
+        "divergence": 0.05,
+        "definition": 0.85,
+        "summary": "It grows per visual line up to a limit, refits on width changes and rounds to device pixels, as described.",
+        "gaps": [
+          "padding values"
+        ]
+      },
+      {
+        "path": "spec/ui/components/history-list/index.pi",
+        "divergence": 0.1,
+        "definition": 0.8,
+        "summary": "One row-and-accordion pattern is shared by previous tasks and previous answers, as described, though it lives inside prompt_mode.rs rather than as its own component.",
+        "gaps": [
+          "margin sizes",
+          "accordion animation"
+        ]
+      },
+      {
+        "path": "spec/ui/components/inset-panel/index.pi",
+        "divergence": 0.08,
+        "definition": 0.9,
+        "summary": "It is inset 32px with a dimmed, click-to-close backdrop, a focus trap, the rise-in animation, and the palette and ribbon shortcuts blocked, as described.",
+        "gaps": [
+          "border radius and shadow size"
+        ]
+      },
+      {
+        "path": "spec/ui/components/minimizable-panel/index.pi",
+        "divergence": 0.12,
+        "definition": 0.8,
+        "summary": "Minimizing, restoring and closing to stop work are implemented, but written out separately for divergence and rescope in the main window rather than as a reusable component.",
+        "gaps": [
+          "where the minimize button sits exactly",
+          "icon for minimize"
+        ]
+      },
+      {
+        "path": "spec/ui/components/project-indicator/index.pi",
+        "divergence": 0.05,
+        "definition": 0.9,
+        "summary": "Folder icon and name, 'No project', a path tooltip, a recent projects list with a tick, 'Open Project…' and a 320px cap, as described.",
+        "gaps": [
+          "list width"
+        ]
+      },
+      {
+        "path": "spec/ui/components/ranked-selection-list/index.pi",
+        "divergence": 0.18,
+        "definition": 0.75,
+        "summary": "The list, details and action bar behave as described in both uses, but are copied into each view rather than built as one component.",
+        "gaps": [
+          "bar and percentage layout",
+          "list and details width split"
+        ]
+      },
+      {
+        "path": "spec/ui/components/ribbon/application-tab/index.pi",
+        "divergence": 0.03,
+        "definition": 0.95,
+        "summary": "The Appearance and Preferences groups, with the Dark mode switch and Settings button, are exactly as specified.",
+        "gaps": []
+      },
+      {
+        "path": "spec/ui/components/ribbon/code-tab/index.pi",
+        "divergence": 0.02,
+        "definition": 0.95,
+        "summary": "An empty Code tab, as described.",
+        "gaps": []
+      },
+      {
+        "path": "spec/ui/components/ribbon/index.pi",
+        "divergence": 0.07,
+        "definition": 0.88,
+        "summary": "Tabs in order, Ctrl+click to open several, rotated group titles, a fixed body height, collapsing into a primary-commands row and the activity spinner are built as described. One module comment is stale about all commands being primary.",
+        "gaps": [
+          "strip colour",
+          "button sizes",
+          "scroll behaviour details"
+        ]
+      },
+      {
+        "path": "spec/ui/components/ribbon/project-tab/index.pi",
+        "divergence": 0.03,
+        "definition": 0.92,
+        "summary": "The Project group's New Project and Open Project… buttons are built as specified.",
+        "gaps": []
+      },
+      {
+        "path": "spec/ui/components/ribbon/research-tab/index.pi",
+        "divergence": 0.02,
+        "definition": 0.95,
+        "summary": "An empty Research tab, as described.",
+        "gaps": []
+      },
+      {
+        "path": "spec/ui/components/ribbon/spec-tab/index.pi",
+        "divergence": 0.05,
+        "definition": 0.92,
+        "summary": "The Build, Analysis, Skills and Refactor groups, with icons, tooltips, primary flags and no-project states, as specified.",
+        "gaps": [
+          "icon names are descriptive, not exact"
+        ]
+      },
+      {
+        "path": "spec/ui/components/scrollbar/index.pi",
+        "divergence": 0.08,
+        "definition": 0.88,
+        "summary": "A permanent column with buttons, a bordered thumb, lock-to-bottom with a pulse, and measure-all lists, as described.",
+        "gaps": [
+          "column width and step distance",
+          "pulse ring counts and timings only approximate"
+        ]
+      },
+      {
+        "path": "spec/ui/components/selection-popover/index.pi",
+        "divergence": 0.05,
+        "definition": 0.85,
+        "summary": "An occluding popover anchored just below and right of the release point, closing on an outside press, as described.",
+        "gaps": [
+          "offset distance"
+        ]
+      },
+      {
+        "path": "spec/ui/components/sidebar/index.pi",
+        "divergence": 0.05,
+        "definition": 0.85,
+        "summary": "A resizable column, 260px to start with a 160px minimum, with the file tree over the git panel, as described.",
+        "gaps": []
+      },
+      {
+        "path": "spec/ui/components/task-table/index.pi",
+        "divergence": 0.08,
+        "definition": 0.85,
+        "summary": "Type, Output and Status columns with badges, skeletons, raw JSON tails, split shell commands, collapsed steps and virtualization are implemented, though inside prompt_mode.rs rather than as a separate component.",
+        "gaps": [
+          "badge colours",
+          "font size for legibility"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "source": "src/activity.rs",
+        "spec": "spec/scope/rescope/index.pi",
+        "strength": 0.25,
+        "divergence": 0.03,
+        "notes": [
+          "The Rescope job kind."
+        ]
+      },
+      {
+        "source": "src/activity.rs",
+        "spec": "spec/scope/running-activity/index.pi",
+        "strength": 0.875,
+        "divergence": 0.055,
+        "notes": [
+          "The task, question, build, divergence, and rescope job kinds, with their titles and first-line details.",
+          "Job kinds for Task, Question, Build, Divergence and Rescope, with titles and details."
+        ]
+      },
+      {
+        "source": "src/animations/mod.rs",
+        "spec": "spec/ui/animations/rise-in/index.pi",
+        "strength": 0.3,
+        "divergence": 0.05,
+        "notes": [
+          "Exists to expose the RiseInAnimation as something anything can use."
+        ]
+      },
+      {
+        "source": "src/animations/rise_in.rs",
+        "spec": "spec/ui/animations/rise-in/index.pi",
+        "strength": 0.95,
+        "divergence": 0.04,
+        "notes": [
+          "40% black dimming, 28px rise, fade, one spring, played backwards to go away, and swaps don't animate.",
+          "DIM 0.4, DROP 28px, spring, LEAVE_TIME 260ms, Leaving tracker."
+        ]
+      },
+      {
+        "source": "src/animations/rise_in.rs",
+        "spec": "spec/ui/components/inset-panel/index.pi",
+        "strength": 0.3,
+        "divergence": 0.05,
+        "notes": [
+          "The panel is the surface and the dimmed window is the dimming."
+        ]
+      },
+      {
+        "source": "src/app.rs",
+        "spec": "spec/agent/skills/BuildApplication.pi",
+        "strength": 0.1,
+        "divergence": 0.1,
+        "notes": [
+          "Bootstrap of the application scope this skill targets."
+        ]
+      },
+      {
+        "source": "src/app.rs",
+        "spec": "spec/scope/application/MainWindow.pi",
+        "strength": 0.325,
+        "divergence": 0.075,
+        "notes": [
+          "The Ctrl+Q/Cmd+Q quit binding and opening the main window.",
+          "Ctrl/Cmd+Q binding and quitting when the window closes."
+        ]
+      },
+      {
+        "source": "src/app.rs",
+        "spec": "spec/scope/application/index.pi",
+        "strength": 0.7,
+        "divergence": 0.08,
+        "notes": [
+          "The name Suspense and reopening the most recent openable project at startup.",
+          "Boots gpui-kit, names the app Suspense, reopens the most recent openable project, opens the main window."
+        ]
+      },
+      {
+        "source": "src/app.rs",
+        "spec": "spec/scope/project-directory/index.pi",
+        "strength": 0.3,
+        "divergence": 0.05,
+        "notes": [
+          "Setting the project directory from the recent projects."
+        ]
+      },
+      {
+        "source": "src/baked_prompts.rs",
+        "spec": "spec/scope/divergence/index.pi",
+        "strength": 0.3,
+        "divergence": 0.05,
+        "notes": [
+          "Supplies divergence.pi's pieces."
+        ]
+      },
+      {
+        "source": "src/baked_prompts.rs",
+        "spec": "spec/scope/harness-integration/baked-prompts/index.pi",
+        "strength": 0.9,
+        "divergence": 0.05,
+        "notes": [
+          "Piton prompts compiled into the build, with names in angle brackets such as <codeRoot> filled in.",
+          "Includes the build-generated prompt modules and fills <name> placeholders."
+        ]
+      },
+      {
+        "source": "src/chat_input.rs",
+        "spec": "spec/agent/skills/BuildChatInput.pi",
+        "strength": 0.1,
+        "divergence": 0.1,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/chat_input.rs",
+        "spec": "spec/scope/harness-integration/catalog/index.pi",
+        "strength": 0.35000002,
+        "divergence": 0.065,
+        "notes": [
+          "/ and @ mentions, and inserting them at the cursor.",
+          "Offers mentions while typing."
+        ]
+      },
+      {
+        "source": "src/chat_input.rs",
+        "spec": "spec/scope/lsp/index.pi",
+        "strength": 0.425,
+        "divergence": 0.065,
+        "notes": [
+          "Completion trigger characters, and slash and hyphen only inside mentions.",
+          "Trigger characters, narrowing and ordering, applying additionalTextEdits to the anchor."
+        ]
+      },
+      {
+        "source": "src/chat_input.rs",
+        "spec": "spec/scope/prompt-mode/chat-input/index.pi",
+        "strength": 0.95,
+        "divergence": 0.1,
+        "notes": [
+          "Tabs, Chain behaviour, Ctrl+Tab cycling, Tab moving focus, help line, colour transitions, attachments, Esc, 12-row growth, auto-focus.",
+          "Tab bar with Code, Chain (Both), Spec and Ask; Ctrl+Tab cycling; Queue or Send label; help text; attachments list; mention and LSP triggers."
+        ]
+      },
+      {
+        "source": "src/chat_input.rs",
+        "spec": "spec/scope/prompt-mode/modes/index.pi",
+        "strength": 0.65,
+        "divergence": 0.065,
+        "notes": [
+          "Mode order, red/purple/blue/green colours, and each mode's help text.",
+          "SendMode with order, labels, help text and colours."
+        ]
+      },
+      {
+        "source": "src/chat_input.rs",
+        "spec": "spec/scope/prompt-mode/sending/index.pi",
+        "strength": 0.3,
+        "divergence": 0.05,
+        "notes": [
+          "Submits with the mode and attachments, and Ask never queues."
+        ]
+      },
+      {
+        "source": "src/chat_input.rs",
+        "spec": "spec/ui/components/growing-text-input/index.pi",
+        "strength": 0.375,
+        "divergence": 0.04,
+        "notes": [
+          "The input grows to 12 rows and lines up with the send button.",
+          "Grows to 12 rows."
+        ]
+      },
+      {
+        "source": "src/checkbox.rs",
+        "spec": "spec/scope/new-project/index.pi",
+        "strength": 0.475,
+        "divergence": 0.04,
+        "notes": [
+          "Agent and Git labels shown in full with room below the baseline.",
+          "Checkbox labels with room for descenders."
+        ]
+      },
+      {
+        "source": "src/checkbox.rs",
+        "spec": "spec/ui/components/fs-browser/index.pi",
+        "strength": 0.325,
+        "divergence": 0.04,
+        "notes": [
+          "The Show hidden label is never cut off below its baseline.",
+          "Show hidden label with room for descenders."
+        ]
+      },
+      {
+        "source": "src/checkbox.rs",
+        "spec": "spec/ui/components/ranked-selection-list/index.pi",
+        "strength": 0.15,
+        "divergence": 0.05,
+        "notes": [
+          "Row checkboxes."
+        ]
+      },
+      {
+        "source": "src/commit_notes.rs",
+        "spec": "spec/scope/harness-integration/baked-prompts/index.pi",
+        "strength": 0.325,
+        "divergence": 0.05,
+        "notes": [
+          "Uses the commit-note.pi prompt.",
+          "Uses commit-note.pi."
+        ]
+      },
+      {
+        "source": "src/commit_notes.rs",
+        "spec": "spec/scope/project-data/index.pi",
+        "strength": 0.475,
+        "divergence": 0.04,
+        "notes": [
+          ".suspense/commit-notes.json.",
+          "commit-notes.json."
+        ]
+      },
+      {
+        "source": "src/commit_notes.rs",
+        "spec": "spec/scope/prompt-mode/modes/index.pi",
+        "strength": 0.3,
+        "divergence": 0.075,
+        "notes": [
+          "Tasks add a note once they finish without error.",
+          "Commit notes after tasks finish."
+        ]
+      },
+      {
+        "source": "src/commit_notes.rs",
+        "spec": "spec/ui/components/git-panel/index.pi",
+        "strength": 0.85,
+        "divergence": 0.055,
+        "notes": [
+          "Commit notes, the message as typed text then \"- \" lines, and quick summarizing.",
+          "Notes saved, edited and removed; message assembly; note summarizing with commit-note.pi."
+        ]
+      },
+      {
+        "source": "src/completion_menu.rs",
+        "spec": "spec/scope/lsp/index.pi",
+        "strength": 0.775,
+        "divergence": 0.09,
+        "notes": [
+          "Opens below or above the cursor, shifts left, and places docs beside the list or stacked away from the cursor.",
+          "Popup that stays in the window, opens above or below, and places documentation beside or stacked."
+        ]
+      },
+      {
+        "source": "src/completion_menu.rs",
+        "spec": "spec/scope/prompt-mode/chat-input/index.pi",
+        "strength": 0.45,
+        "divergence": 0.05,
+        "notes": [
+          "Tab and Enter belong to the menu while it is open.",
+          "The completion menu the input shows."
+        ]
+      },
+      {
+        "source": "src/diff.rs",
+        "spec": "spec/ui/components/diff-view/index.pi",
+        "strength": 0.9,
+        "divergence": 0.04,
+        "notes": [
+          "Unified and side-by-side rows, filler, word marking, tabs as four spaces, collapsed unchanged runs.",
+          "Line diff, inline word changes, 3 context lines, collapsing runs of 4 or more, unified and side-by-side rows."
+        ]
+      },
+      {
+        "source": "src/diff_view.rs",
+        "spec": "spec/agent/skills/BuildDiffView.pi",
+        "strength": 0.1,
+        "divergence": 0.08,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/diff_view.rs",
+        "spec": "spec/scope/git/index.pi",
+        "strength": 0.375,
+        "divergence": 0.09,
+        "notes": [
+          "The committed version, or empty for a new file.",
+          "Reads what a file was at the last commit via git show HEAD."
+        ]
+      },
+      {
+        "source": "src/diff_view.rs",
+        "spec": "spec/scope/open-file/index.pi",
+        "strength": 0.3,
+        "divergence": 0.05,
+        "notes": [
+          "The open-file button in the header."
+        ]
+      },
+      {
+        "source": "src/diff_view.rs",
+        "spec": "spec/scope/user-preferences/index.pi",
+        "strength": 0.375,
+        "divergence": 0.05,
+        "notes": [
+          "The layout choice is remembered and starts side by side.",
+          "Diff layout preference."
+        ]
+      },
+      {
+        "source": "src/diff_view.rs",
+        "spec": "spec/ui/components/diff-view/index.pi",
+        "strength": 0.92499995,
+        "divergence": 0.09,
+        "notes": [
+          "Header controls, layouts, +/− markers, Show N unchanged lines, F7/Shift+F7 with an accent bar, Loading/binary/empty states.",
+          "Header buttons, layout switch saved as a preference, F7 and Shift+F7, collapsed rows, states, 2s refresh."
+        ]
+      },
+      {
+        "source": "src/diff_view.rs",
+        "spec": "spec/ui/components/scrollbar/index.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "The changes scroll with the scroll column."
+        ]
+      },
+      {
+        "source": "src/divergence.rs",
+        "spec": "spec/scope/divergence/index.pi",
+        "strength": 0.95,
+        "divergence": 0.05,
+        "notes": [
+          "Averaged connections, influence as 1 − ∏(1 − s), score, 20/50 thresholds, the 400-file cap, saved reports.",
+          "Agent reply model, merge into connections, influence, score, coverage, verdicts, 400-file caps, prompts, saving and loading reports, and the read-only agent run."
+        ]
+      },
+      {
+        "source": "src/divergence.rs",
+        "spec": "spec/scope/generate-skills/index.pi",
+        "strength": 0.2,
+        "divergence": 0.1,
+        "notes": [
+          "Its read-only agent run is reused for the ranking."
+        ]
+      },
+      {
+        "source": "src/divergence.rs",
+        "spec": "spec/scope/harness-integration/baked-prompts/index.pi",
+        "strength": 0.4,
+        "divergence": 0.05,
+        "notes": [
+          "Builds each agent's prompt from divergence.pi.",
+          "Uses divergence.pi."
+        ]
+      },
+      {
+        "source": "src/divergence.rs",
+        "spec": "spec/scope/harness-integration/one-off-run/index.pi",
+        "strength": 0.75,
+        "divergence": 0.085,
+        "notes": [
+          "Read/Glob/Grep only, no session, stdin prompt, stream-json, reply is the result.",
+          "run_agent: claude -p with Read, Glob and Grep tools, --no-session-persistence, stream-json lines, result extraction and cancelling."
+        ]
+      },
+      {
+        "source": "src/divergence.rs",
+        "spec": "spec/scope/project-data/index.pi",
+        "strength": 0.35000002,
+        "divergence": 0.04,
+        "notes": [
+          "Reports saved as JSON in .suspense/divergence.",
+          "divergence/ reports named by time."
+        ]
+      },
+      {
+        "source": "src/divergence.rs",
+        "spec": "spec/scope/project-locations/index.pi",
+        "strength": 0.57500005,
+        "divergence": 0.075,
+        "notes": [
+          "Lists files under codeRoot and root, respecting gitignore.",
+          "list_files and list_spec_files walk code and spec locations, skipping .git and ignored files."
+        ]
+      },
+      {
+        "source": "src/divergence_view.rs",
+        "spec": "spec/agent/skills/BuildDivergence.pi",
+        "strength": 0.1,
+        "divergence": 0.08,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/divergence_view.rs",
+        "spec": "spec/scope/divergence/index.pi",
+        "strength": 0.95,
+        "divergence": 0.099999994,
+        "notes": [
+          "Steps, side-by-side agent tables, header alignment, Report/Source/Spec tabs, figures, trees, details, and tooltips; a failed build isn't shown as a cross.",
+          "The panel's steps, header alignment, tabs, report columns and figures, trees, details, tooltips and empty state."
+        ]
+      },
+      {
+        "source": "src/divergence_view.rs",
+        "spec": "spec/scope/spec-build/index.pi",
+        "strength": 0.325,
+        "divergence": 0.1,
+        "notes": [
+          "Builds ahead of the work without stopping it; the step state ignores failure.",
+          "The 'Building the spec' step."
+        ]
+      },
+      {
+        "source": "src/divergence_view.rs",
+        "spec": "spec/ui/components/minimizable-panel/index.pi",
+        "strength": 0.5,
+        "divergence": 0.05,
+        "notes": [
+          "Minimize button tooltip, and closing stops the analysis.",
+          "Minimize button with the keeps-running tooltip."
+        ]
+      },
+      {
+        "source": "src/divergence_view.rs",
+        "spec": "spec/ui/components/ranked-selection-list/index.pi",
+        "strength": 0.275,
+        "divergence": 0.1,
+        "notes": [
+          "Tree plus details layout, without checkboxes.",
+          "Tree details shown beside the list, as in this component."
+        ]
+      },
+      {
+        "source": "src/divergence_view.rs",
+        "spec": "spec/ui/components/scrollbar/index.pi",
+        "strength": 0.3,
+        "divergence": 0.05,
+        "notes": [
+          "Report, tree, and details scroll with scroll columns."
+        ]
+      },
+      {
+        "source": "src/divergence_view.rs",
+        "spec": "spec/ui/components/task-table/index.pi",
+        "strength": 0.4,
+        "divergence": 0.05,
+        "notes": [
+          "Agent output tables with lock to bottom on."
+        ]
+      },
+      {
+        "source": "src/file_link.rs",
+        "spec": "spec/scope/open-file/index.pi",
+        "strength": 0.65,
+        "divergence": 0.1,
+        "notes": [
+          "A link to a missing file shows an error notification and opens nothing.",
+          "Resolves links in compiled prompts and replies to project files."
+        ]
+      },
+      {
+        "source": "src/file_link.rs",
+        "spec": "spec/scope/prompt-mode/message-list/index.pi",
+        "strength": 0.5,
+        "divergence": 0.1,
+        "notes": [
+          "File links open the file, and web links open in the browser.",
+          "Clickable file links in prompts and replies."
+        ]
+      },
+      {
+        "source": "src/file_view.rs",
+        "spec": "spec/agent/skills/BuildEditor.pi",
+        "strength": 0.1,
+        "divergence": 0.1,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/file_view.rs",
+        "spec": "spec/scope/editor/index.pi",
+        "strength": 0.92499995,
+        "divergence": 0.125,
+        "notes": [
+          "Header with dot, save and close; language by extension or name; Ctrl+S; discard prompt; Piton LSP features.",
+          "Editor header, save, discard dialogs, language by extension or name, LSP didOpen, didChange, didSave and didClose, completion, hover, definition, diagnostics, code actions, and the Cut/Copy/Paste/Send popover."
+        ]
+      },
+      {
+        "source": "src/file_view.rs",
+        "spec": "spec/scope/lsp/index.pi",
+        "strength": 0.5,
+        "divergence": 0.05,
+        "notes": [
+          "didOpen/didChange/didSave/didClose, completions with imports, hover, definition, code actions."
+        ]
+      },
+      {
+        "source": "src/file_view.rs",
+        "spec": "spec/scope/open-file/index.pi",
+        "strength": 0.35,
+        "divergence": 0.05,
+        "notes": [
+          "A definition in another file opens that file at the definition.",
+          "Opens definitions in other files at a position."
+        ]
+      },
+      {
+        "source": "src/file_view.rs",
+        "spec": "spec/ui/components/selection-popover/index.pi",
+        "strength": 0.45,
+        "divergence": 0.05,
+        "notes": [
+          "Cut, Copy, Paste, and Send to Prompt with icons; Cut and Paste disabled until loaded.",
+          "The editor's Cut, Copy, Paste and Send to Prompt."
+        ]
+      },
+      {
+        "source": "src/fs_browser.rs",
+        "spec": "spec/agent/skills/BuildFsBrowser.pi",
+        "strength": 0.1,
+        "divergence": 0.08,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/fs_browser.rs",
+        "spec": "spec/scope/new-project/index.pi",
+        "strength": 0.35,
+        "divergence": 0.05,
+        "notes": [
+          "Folder browser for Browse."
+        ]
+      },
+      {
+        "source": "src/fs_browser.rs",
+        "spec": "spec/scope/project/open-project/index.pi",
+        "strength": 0.5,
+        "divergence": 0.05,
+        "notes": [
+          "The file browser filtered to piton.config.pi."
+        ]
+      },
+      {
+        "source": "src/fs_browser.rs",
+        "spec": "spec/ui/components/file-browser/index.pi",
+        "strength": 0.85,
+        "divergence": 0.065,
+        "notes": [
+          "Files filtered by name, \"No folders or X here\", \"Select a piton.config.pi\".",
+          "Browse::File with an optional name, footer text and the 'Choose this file' tooltip."
+        ]
+      },
+      {
+        "source": "src/fs_browser.rs",
+        "spec": "spec/ui/components/folder-browser/index.pi",
+        "strength": 0.85,
+        "divergence": 0.05,
+        "notes": [
+          "Folders only, \"No folders here\", current folder chosen when nothing is selected.",
+          "Browse::Folder, 'No folders here', the 'Choose this folder' tooltip."
+        ]
+      },
+      {
+        "source": "src/fs_browser.rs",
+        "spec": "spec/ui/components/fs-browser/index.pi",
+        "strength": 0.95,
+        "divergence": 0.075,
+        "notes": [
+          "Navigation bar, entries, New Folder row, the full keyboard map, Choose and Cancel.",
+          "Up and home buttons, New Folder validation, type-to-select, keyboard shortcuts, Choose and Cancel."
+        ]
+      },
+      {
+        "source": "src/fs_browser.rs",
+        "spec": "spec/ui/components/scrollbar/index.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "The entry list scrolls with the scroll column."
+        ]
+      },
+      {
+        "source": "src/fuzzy.rs",
+        "spec": "spec/scope/palette/index.pi",
+        "strength": 0.85,
+        "divergence": 0.04,
+        "notes": [
+          "Characters in order ignoring case; runs and word or name starts rank higher; matched positions for highlighting.",
+          "In-order, case-insensitive matching that rewards consecutive runs and word or name starts."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildApplication.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Writes and recognizes skill files of exactly this Build<Scope> build-scope form."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildChatInput.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Recognizes this file as the chat input's existing skill."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildDiffView.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildDivergence.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildEditor.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildFileTree.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildFsBrowser.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildGenerateSkills.pi",
+        "strength": 0.3,
+        "divergence": 0.05,
+        "notes": [
+          "Both the scope this builds and the writer of this file form."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildGit.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildGitPanel.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildHarnessIntegration.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildInsetPanel.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildLSP.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildMainWindow.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildMessageList.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildNewProject.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildOpenProject.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildPalette.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildProjectDirectory.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildPromptEditor.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildRibbon.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildScrollbar.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/BuildSettingsWindow.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Skill file form it writes and detects."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/agent/skills/index.pi",
+        "strength": 0.2,
+        "divergence": 0.05,
+        "notes": [
+          "Adds exports for new skills to this index."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/index.pi",
+        "strength": 0.15,
+        "divergence": 0.05,
+        "notes": [
+          "Exports a new agent folder from the spec's index."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/lib/Scope.pi",
+        "strength": 0.2,
+        "divergence": 0.05,
+        "notes": [
+          "Maps the scopes each file exports."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/lib/agent/skills/BuildScope.pi",
+        "strength": 0.325,
+        "divergence": 0.05,
+        "notes": [
+          "The build-scope keyword the written skills use.",
+          "Checks for this file's build-scope keyword and writes build-scope skills when it is there."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/scope/generate-skills/index.pi",
+        "strength": 0.95,
+        "divergence": 0.08,
+        "notes": [
+          "Scope map, used-by and uses counts, has-skill rules, ranking order, the Build<Name>.pi skill, index exports.",
+          "Maps scopes, references, used-by and uses, existing skills, the ranking prompt and reply, and writes Build<Name>.pi files and indexes."
+        ]
+      },
+      {
+        "source": "src/generate_skills.rs",
+        "spec": "spec/scope/harness-integration/baked-prompts/index.pi",
+        "strength": 0.325,
+        "divergence": 0.05,
+        "notes": [
+          "The prompt comes from generate-skills.pi.",
+          "Uses generate-skills.pi."
+        ]
+      },
+      {
+        "source": "src/generate_skills_view.rs",
+        "spec": "spec/agent/skills/BuildGenerateSkills.pi",
+        "strength": 0.1,
+        "divergence": 0.1,
+        "notes": [
+          "The panel of the scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/generate_skills_view.rs",
+        "spec": "spec/scope/generate-skills/index.pi",
+        "strength": 0.92499995,
+        "divergence": 0.1,
+        "notes": [
+          "Steps, the fallback ranking note, Should/Could/Has a skill, Used by and Uses bars, Rank again, created-skills note.",
+          "The panel with its steps, Rank again, ranked list with Should, Could or Has a skill, details and Create Skills."
+        ]
+      },
+      {
+        "source": "src/generate_skills_view.rs",
+        "spec": "spec/scope/harness-integration/one-off-run/index.pi",
+        "strength": 0.39999998,
+        "divergence": 0.075,
+        "notes": [
+          "A one-off ranking run whose streamed output shows in a task table.",
+          "Uses a one-off run to rank scopes."
+        ]
+      },
+      {
+        "source": "src/generate_skills_view.rs",
+        "spec": "spec/ui/components/inset-panel/index.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Not minimizable, and closing stops the run."
+        ]
+      },
+      {
+        "source": "src/generate_skills_view.rs",
+        "spec": "spec/ui/components/ranked-selection-list/index.pi",
+        "strength": 0.67499995,
+        "divergence": 0.125,
+        "notes": [
+          "Rows with checkbox, bar and percentage, details beside, \"N scopes checked\" with a primary action.",
+          "Its own ranked rows with checkboxes, details, 'No scopes checked' and Create Skills."
+        ]
+      },
+      {
+        "source": "src/git_panel.rs",
+        "spec": "spec/agent/skills/BuildGitPanel.pi",
+        "strength": 0.1,
+        "divergence": 0.08,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/git_panel.rs",
+        "spec": "spec/scope/git/index.pi",
+        "strength": 0.57500005,
+        "divergence": 0.075,
+        "notes": [
+          "Counts of each kind of change, branch, ahead and behind, refreshing.",
+          "Branch, detached HEAD, ahead and behind, counts per kind, and lines added and removed against HEAD."
+        ]
+      },
+      {
+        "source": "src/git_panel.rs",
+        "spec": "spec/scope/harness-integration/baked-prompts/index.pi",
+        "strength": 0.275,
+        "divergence": 0.05,
+        "notes": [
+          "commit-message.pi.",
+          "Uses commit-message.pi."
+        ]
+      },
+      {
+        "source": "src/git_panel.rs",
+        "spec": "spec/ui/components/git-panel/index.pi",
+        "strength": 0.95,
+        "divergence": 0.075,
+        "notes": [
+          "Branch with ↑/↓, change counts and +/− lines, notes, 10-row message box, Write message, Commit rules, push with upstream, cancelled conflicting pull, spinners.",
+          "Summary parsing, commit with notes, push setting upstream, pull via merge-tree trial, haiku low-effort message, 10-row box, spinners."
+        ]
+      },
+      {
+        "source": "src/git_panel.rs",
+        "spec": "spec/ui/components/growing-text-input/index.pi",
+        "strength": 0.375,
+        "divergence": 0.04,
+        "notes": [
+          "Commit message box grows to 10 rows.",
+          "Grows to 10 rows."
+        ]
+      },
+      {
+        "source": "src/git_panel.rs",
+        "spec": "spec/ui/components/sidebar/index.pi",
+        "strength": 0.3,
+        "divergence": 0.03,
+        "notes": [
+          "The git panel at the bottom."
+        ]
+      },
+      {
+        "source": "src/git_status.rs",
+        "spec": "spec/agent/skills/BuildGit.pi",
+        "strength": 0.1,
+        "divergence": 0.12,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/git_status.rs",
+        "spec": "spec/scope/git/index.pi",
+        "strength": 0.85,
+        "divergence": 0.09,
+        "notes": [
+          "Statuses, renames counting as modified, ignored folders, folder precedence, amber/green/teal/red colours.",
+          "Statuses, folders taking the most pressing, ignored folders, renames as modified, and amber, green, teal, red or dimmed colours."
+        ]
+      },
+      {
+        "source": "src/git_status.rs",
+        "spec": "spec/ui/components/file-tree/index.pi",
+        "strength": 0.475,
+        "divergence": 0.05,
+        "notes": [
+          "Names coloured by status, with folders taking their contents' status.",
+          "Status and colour per path."
+        ]
+      },
+      {
+        "source": "src/growing_input.rs",
+        "spec": "spec/scope/prompt-mode/chat-input/index.pi",
+        "strength": 0.45,
+        "divergence": 0.03,
+        "notes": [
+          "Grows to 12 rows."
+        ]
+      },
+      {
+        "source": "src/growing_input.rs",
+        "spec": "spec/ui/components/git-panel/index.pi",
+        "strength": 0.35,
+        "divergence": 0.03,
+        "notes": [
+          "The message box grows to fit."
+        ]
+      },
+      {
+        "source": "src/growing_input.rs",
+        "spec": "spec/ui/components/growing-text-input/index.pi",
+        "strength": 0.95,
+        "divergence": 0.04,
+        "notes": [
+          "Row per visual line, no empty row below, refits on width change, rounds up to a device pixel.",
+          "GrowToFit with wrapped row count, tracker and ceil_to_device_pixel."
+        ]
+      },
+      {
+        "source": "src/harness.rs",
+        "spec": "spec/agent/skills/BuildHarnessIntegration.pi",
+        "strength": 0.1,
+        "divergence": 0.12,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/harness.rs",
+        "spec": "spec/scope/harness-integration/catalog/index.pi",
+        "strength": 0.325,
+        "divergence": 0.05,
+        "notes": [
+          "Remembers each run's reported skills and agents.",
+          "Hands each run's init event to the catalog."
+        ]
+      },
+      {
+        "source": "src/harness.rs",
+        "spec": "spec/scope/harness-integration/index.pi",
+        "strength": 0.9,
+        "divergence": 0.09,
+        "notes": [
+          "Auto mode, --append-system-prompt, stdin, streaming, carrying on conversations, per-run system prompt.",
+          "Spawns claude -p with auto permission mode, stream-json, --append-system-prompt, --resume and --fork-session; the prompt goes over stdin."
+        ]
+      },
+      {
+        "source": "src/harness.rs",
+        "spec": "spec/ui/components/task-table/index.pi",
+        "strength": 0.375,
+        "divergence": 0.05,
+        "notes": [
+          "Leaves out subagent events; commands kept whole.",
+          "Parses stream events, skipping subagent events and summarizing tool arguments."
+        ]
+      },
+      {
+        "source": "src/harness_mentions.rs",
+        "spec": "spec/scope/harness-integration/catalog/index.pi",
+        "strength": 0.9,
+        "divergence": 0.11,
+        "notes": [
+          "Sources, plugin:name naming, /name and @agent-name mentions, harness.json report.",
+          "Collects skills, commands and agents, saves harness.json, builds / and @agent- completions, and hardcodes the built-in agents."
+        ]
+      },
+      {
+        "source": "src/harness_mentions.rs",
+        "spec": "spec/scope/palette/index.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Source of the commands, skills and agents."
+        ]
+      },
+      {
+        "source": "src/harness_mentions.rs",
+        "spec": "spec/scope/project-data/index.pi",
+        "strength": 0.3,
+        "divergence": 0.05,
+        "notes": [
+          ".suspense/harness.json."
+        ]
+      },
+      {
+        "source": "src/harness_mentions.rs",
+        "spec": "spec/scope/prompt-mode/chat-input/index.pi",
+        "strength": 0.6,
+        "divergence": 0.065,
+        "notes": [
+          "Mentions start at the text's start or after whitespace; start-of-name matches first, then by name.",
+          "/ and @ mention completions."
+        ]
+      },
+      {
+        "source": "src/hidden_anchor.rs",
+        "spec": "spec/scope/lsp/index.pi",
+        "strength": 0.4,
+        "divergence": 0.05,
+        "notes": [
+          ".suspense-draft.pi document in the spec root.",
+          "Imports added to the hidden anchor and the blanked prose shown to the server."
+        ]
+      },
+      {
+        "source": "src/hidden_anchor.rs",
+        "spec": "spec/scope/project-data/index.pi",
+        "strength": 0.525,
+        "divergence": 0.05,
+        "notes": [
+          "history/ and asks/ files named by second and anchor, and the draft path in the spec root.",
+          "The .suspense directory and history and asks paths."
+        ]
+      },
+      {
+        "source": "src/hidden_anchor.rs",
+        "spec": "spec/scope/project-locations/index.pi",
+        "strength": 0.5,
+        "divergence": 0.1,
+        "notes": [
+          "config_value reads root and codeRoot from piton.config.pi."
+        ]
+      },
+      {
+        "source": "src/hidden_anchor.rs",
+        "spec": "spec/scope/prompt-mode/chat-input/index.pi",
+        "strength": 0.85,
+        "divergence": 0.075,
+        "notes": [
+          "Random anchor with userPrompt as quoted pieces and references, blanking for piton lsp, attachedText with fenced output.",
+          "userPrompt as a list of quoted pieces and references, attachedText, blanked prose for the LSP, reading legacy prose."
+        ]
+      },
+      {
+        "source": "src/hidden_anchor.rs",
+        "spec": "spec/scope/prompt-mode/mode-system-prompts/index.pi",
+        "strength": 0.525,
+        "divergence": 0.075,
+        "notes": [
+          "systemPrompt from the mode's template with locations filled in.",
+          "Writes systemPrompt into the anchor alongside userPrompt."
+        ]
+      },
+      {
+        "source": "src/inset_panel.rs",
+        "spec": "spec/agent/skills/BuildInsetPanel.pi",
+        "strength": 0.1,
+        "divergence": 0.08,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/inset_panel.rs",
+        "spec": "spec/scope/application/MainWindow.pi",
+        "strength": 0.35,
+        "divergence": 0.08,
+        "notes": [
+          "The inset panel used for diffs, settings and forms."
+        ]
+      },
+      {
+        "source": "src/inset_panel.rs",
+        "spec": "spec/ui/animations/rise-in/index.pi",
+        "strength": 0.525,
+        "divergence": 0.04,
+        "notes": [
+          "The panel as surface and the backdrop as dimming, both coming in and going away.",
+          "Applies it to the panel surface and backdrop."
+        ]
+      },
+      {
+        "source": "src/inset_panel.rs",
+        "spec": "spec/ui/components/inset-panel/index.pi",
+        "strength": 0.92499995,
+        "divergence": 0.05,
+        "notes": [
+          "32px inset, border, shadow, occluded backdrop that closes on click, Tab cycling within.",
+          "INSET 32px, occluding backdrop, focus trap, rise-in surface and dimming."
+        ]
+      },
+      {
+        "source": "src/main.rs",
+        "spec": "spec/scope/application/index.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Desktop application entry point.",
+          "Rust entry point declaring every module."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/agent/skills/BuildMainWindow.pi",
+        "strength": 0.1,
+        "divergence": 0.12,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/scope/application/MainWindow.pi",
+        "strength": 0.9,
+        "divergence": 0.12,
+        "notes": [
+          "Maximized window, Esc to the chat input, quitting, palette, and diff, new project, open project, settings, divergence, and rescope panels.",
+          "Lays out the ribbon, sidebar and prompt mode; handles Esc, quit confirmation, palette toggling, diff, settings, new project, open project, divergence and rescope panels."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/scope/divergence/index.pi",
+        "strength": 0.375,
+        "divergence": 0.065,
+        "notes": [
+          "Analyze and View Reports openings and bringing back a minimized panel.",
+          "Opens to analyze or view reports, minimizes and restores, lists it as running."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/scope/generate-skills/index.pi",
+        "strength": 0.3,
+        "divergence": 0.075,
+        "notes": [
+          "Shows the Generate Skills inset panel.",
+          "Opens it as a non-minimizable inset panel; closing stops it."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/scope/new-project/index.pi",
+        "strength": 0.3,
+        "divergence": 0.08,
+        "notes": [
+          "Opens the form fresh, and on creation sets the project, closes the panel and shows a Git warning."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/scope/open-file/index.pi",
+        "strength": 0.45,
+        "divergence": 0.05,
+        "notes": [
+          "Routes opens from the tree, palette and diff to prompt mode."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/scope/palette/index.pi",
+        "strength": 0.4,
+        "divergence": 0.05,
+        "notes": [
+          "Ctrl+P toggle and running picked commands.",
+          "Toggles the palette and runs what was picked."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/scope/project/open-project/index.pi",
+        "strength": 0.45,
+        "divergence": 0.05,
+        "notes": [
+          "Shows it in the inset panel in place of others; leaves it as is when already open."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/scope/prompt-mode/sending/index.pi",
+        "strength": 0.3,
+        "divergence": 0.05,
+        "notes": [
+          "Rescope's Refactor sends a Spec-mode prompt on the app's behalf."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/scope/rescope/index.pi",
+        "strength": 0.4,
+        "divergence": 0.05,
+        "notes": [
+          "Refactor closes the panel and sends in Spec mode.",
+          "Opens, minimizes and restores; Refactor closes and sends in Spec mode."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/scope/running-activity/index.pi",
+        "strength": 0.675,
+        "divergence": 0.09,
+        "notes": [
+          "Collects jobs, reveals them, asks before quitting, closes the palette first.",
+          "Gathers jobs in order, reveals each kind, and confirms quitting with 'Quit while a task is running?'."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/scope/settings-window/index.pi",
+        "strength": 0.35,
+        "divergence": 0.03,
+        "notes": [
+          "Opens in the inset panel, once."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/ui/animations/rise-in/index.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Keeps the panel going away while it animates out."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/ui/components/diff-view/index.pi",
+        "strength": 0.3,
+        "divergence": 0.03,
+        "notes": [
+          "Shows it in the inset panel."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/ui/components/inset-panel/index.pi",
+        "strength": 0.675,
+        "divergence": 0.075,
+        "notes": [
+          "One panel at a time; focus kept in it; Ctrl+P and Ctrl+F1 inert while open.",
+          "One panel at a time, refocusing into the panel, blocking Ctrl+P and Ctrl+F1, focus back to chat on close."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/ui/components/minimizable-panel/index.pi",
+        "strength": 0.70000005,
+        "divergence": 0.1,
+        "notes": [
+          "Opening another panel minimizes; commands bring minimized panels back.",
+          "Separate minimized flags and restore, minimize and close paths for divergence and rescope; opening another panel minimizes them."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/ui/components/ribbon/index.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Routes the ribbon's actions and blocks the toggle under a panel."
+        ]
+      },
+      {
+        "source": "src/main_window.rs",
+        "spec": "spec/ui/components/sidebar/index.pi",
+        "strength": 0.75,
+        "divergence": 0.05,
+        "notes": [
+          "Starts 260px wide with a 160px minimum; file tree above the git panel.",
+          "SIDEBAR_WIDTH 260, MIN 160, a v_flex with the tree filling and the git panel below."
+        ]
+      },
+      {
+        "source": "src/markdown.rs",
+        "spec": "spec/scope/prompt-mode/message-list/index.pi",
+        "strength": 0.45,
+        "divergence": 0.05,
+        "notes": [
+          "Renders the compiled prompt and replies as markdown."
+        ]
+      },
+      {
+        "source": "src/markdown.rs",
+        "spec": "spec/ui/components/scrollbar/index.pi",
+        "strength": 0.47500002,
+        "divergence": 0.065,
+        "notes": [
+          "Parsed once and kept; long text parsed in the background and re-measured every fraction of a second.",
+          "Parsed markdown kept so rows keep their height."
+        ]
+      },
+      {
+        "source": "src/markdown.rs",
+        "spec": "spec/ui/components/task-table/index.pi",
+        "strength": 0.325,
+        "divergence": 0.14,
+        "notes": [
+          "Replies rendered as markdown, but inline code loses its styling.",
+          "Renders reply text."
+        ]
+      },
+      {
+        "source": "src/new_project.rs",
+        "spec": "spec/agent/skills/BuildNewProject.pi",
+        "strength": 0.1,
+        "divergence": 0.08,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/new_project.rs",
+        "spec": "spec/scope/new-project/index.pi",
+        "strength": 0.95,
+        "divergence": 0.075,
+        "notes": [
+          "Two-column layout, name and path rules, agents, templates, PascalCase anchor, belay adapters, no overwrite, git init with .gitignore.",
+          "Name, location with Browse, Git checkbox, templates, agents, roots, PascalCase config, canonical formatting, git init and .gitignore, refusal to overwrite."
+        ]
+      },
+      {
+        "source": "src/new_project.rs",
+        "spec": "spec/scope/project-data/index.pi",
+        "strength": 0.3,
+        "divergence": 0.05,
+        "notes": [
+          ".gitignore lists the machine-only files.",
+          "The .gitignore of machine-only data."
+        ]
+      },
+      {
+        "source": "src/new_project.rs",
+        "spec": "spec/ui/components/folder-browser/index.pi",
+        "strength": 0.425,
+        "divergence": 0.04,
+        "notes": [
+          "Browse opens \"Choose where the project goes\" in place of the form.",
+          "Uses it to choose the location."
+        ]
+      },
+      {
+        "source": "src/palette.rs",
+        "spec": "spec/agent/skills/BuildPalette.pi",
+        "strength": 0.1,
+        "divergence": 0.1,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/palette.rs",
+        "spec": "spec/scope/harness-integration/baked-prompts/index.pi",
+        "strength": 0.275,
+        "divergence": 0.05,
+        "notes": [
+          "file-search.pi with the ordered places to look.",
+          "Uses file-search.pi."
+        ]
+      },
+      {
+        "source": "src/palette.rs",
+        "spec": "spec/scope/harness-integration/catalog/index.pi",
+        "strength": 0.375,
+        "divergence": 0.065,
+        "notes": [
+          "Commands, Skills, and Agents tabs with descriptions.",
+          "Commands, Skills and Agents tabs from the catalog."
+        ]
+      },
+      {
+        "source": "src/palette.rs",
+        "spec": "spec/scope/harness-integration/index.pi",
+        "strength": 0.2,
+        "divergence": 0.05,
+        "notes": [
+          "File search runs fresh without resuming."
+        ]
+      },
+      {
+        "source": "src/palette.rs",
+        "spec": "spec/scope/no-project/index.pi",
+        "strength": 0.25,
+        "divergence": 0.04,
+        "notes": [
+          "\"No project open\" on the Files tab.",
+          "The Files tab reads 'No project open'."
+        ]
+      },
+      {
+        "source": "src/palette.rs",
+        "spec": "spec/scope/palette/index.pi",
+        "strength": 0.92499995,
+        "divergence": 0.11,
+        "notes": [
+          "Tabs, Tab cycling, Esc clears then closes, file search on Ctrl+Enter or Enter with no matches, alerts and rows, system commands (Build mislabelled).",
+          "Five tabs, Tab and Shift+Tab switching, 100-result cap, gitignore-aware file listing, agentic search with a task table, 'No results. Press Enter…', system commands."
+        ]
+      },
+      {
+        "source": "src/palette.rs",
+        "spec": "spec/scope/project-locations/index.pi",
+        "strength": 0.375,
+        "divergence": 0.075,
+        "notes": [
+          "Files listed ignoring .git and gitignored paths, sorted by path.",
+          "Its own gitignore-aware walk of the whole project."
+        ]
+      },
+      {
+        "source": "src/palette.rs",
+        "spec": "spec/ui/components/task-table/index.pi",
+        "strength": 0.25,
+        "divergence": 0.04,
+        "notes": [
+          "The search's output table, with no lock.",
+          "Reuses the table for the file search."
+        ]
+      },
+      {
+        "source": "src/piton_build.rs",
+        "spec": "spec/scope/divergence/index.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "The spec build run ahead of the analysis."
+        ]
+      },
+      {
+        "source": "src/piton_build.rs",
+        "spec": "spec/scope/prompt-mode/sending/index.pi",
+        "strength": 0.35,
+        "divergence": 0.03,
+        "notes": [
+          "The build ahead of the task."
+        ]
+      },
+      {
+        "source": "src/piton_build.rs",
+        "spec": "spec/scope/spec-build/index.pi",
+        "strength": 0.79999995,
+        "divergence": 0.04,
+        "notes": [
+          "piton build in the project directory, with files written and what the build reported.",
+          "Runs piton build, collecting written files and the report."
+        ]
+      },
+      {
+        "source": "src/piton_lsp.rs",
+        "spec": "spec/agent/skills/BuildLSP.pi",
+        "strength": 0.1,
+        "divergence": 0.05,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/piton_lsp.rs",
+        "spec": "spec/scope/editor/index.pi",
+        "strength": 0.4,
+        "divergence": 0.05,
+        "notes": [
+          "Helpers shared with the editor's language support.",
+          "The shared LSP client the editor's Piton files use."
+        ]
+      },
+      {
+        "source": "src/piton_lsp.rs",
+        "spec": "spec/scope/lsp/index.pi",
+        "strength": 0.95,
+        "divergence": 0.05,
+        "notes": [
+          "initialize/initialized, 5s timeout, diagnostics per file, draft anchor, completion narrowing, own anchor never offered, import edits, 3 auto-import rounds.",
+          "JSON-RPC over stdio, initialize, empty answers to server requests, 5s timeouts, the draft document, completion and code actions."
+        ]
+      },
+      {
+        "source": "src/piton_lsp.rs",
+        "spec": "spec/scope/prompt-mode/chat-input/index.pi",
+        "strength": 0.4,
+        "divergence": 0.05,
+        "notes": [
+          "Auto-imports for typed, completed, or pasted names."
+        ]
+      },
+      {
+        "source": "src/piton_syntax.rs",
+        "spec": "spec/scope/editor/index.pi",
+        "strength": 0.375,
+        "divergence": 0.05,
+        "notes": [
+          "Piton highlighting in the editor.",
+          "Registers the Piton grammar for highlighting."
+        ]
+      },
+      {
+        "source": "src/piton_syntax.rs",
+        "spec": "spec/scope/prompt-mode/chat-input/index.pi",
+        "strength": 0.425,
+        "divergence": 0.04,
+        "notes": [
+          "Highlighting via the tree-sitter-piton grammar.",
+          "Tree-sitter Piton highlighting."
+        ]
+      },
+      {
+        "source": "src/project/mod.rs",
+        "spec": "spec/scope/project/open-project/index.pi",
+        "strength": 0.15,
+        "divergence": 0.05,
+        "notes": [
+          "Mirrors where the scope sits in the spec."
+        ]
+      },
+      {
+        "source": "src/project/open_project.rs",
+        "spec": "spec/agent/skills/BuildOpenProject.pi",
+        "strength": 0.1,
+        "divergence": 0.05,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/project/open_project.rs",
+        "spec": "spec/scope/project-directory/index.pi",
+        "strength": 0.4,
+        "divergence": 0.05,
+        "notes": [
+          "The chosen file's folder becomes the project directory."
+        ]
+      },
+      {
+        "source": "src/project/open_project.rs",
+        "spec": "spec/scope/project/open-project/index.pi",
+        "strength": 0.95,
+        "divergence": 0.04,
+        "notes": [
+          "Title, config-only listing, start folder fallbacks, remembering the folder it was opened from.",
+          "The picker's start-folder fallbacks, the title, and opening while remembering the folder."
+        ]
+      },
+      {
+        "source": "src/project/open_project.rs",
+        "spec": "spec/scope/user-preferences/index.pi",
+        "strength": 0.3,
+        "divergence": 0.05,
+        "notes": [
+          "The last folder a project was opened from."
+        ]
+      },
+      {
+        "source": "src/project/open_project.rs",
+        "spec": "spec/ui/components/file-browser/index.pi",
+        "strength": 0.425,
+        "divergence": 0.04,
+        "notes": [
+          "A file browser named for piton.config.pi.",
+          "Uses it filtered to piton.config.pi."
+        ]
+      },
+      {
+        "source": "src/project_directory.rs",
+        "spec": "spec/agent/skills/BuildProjectDirectory.pi",
+        "strength": 0.1,
+        "divergence": 0.1,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/project_directory.rs",
+        "spec": "spec/scope/project-directory/index.pi",
+        "strength": 0.8,
+        "divergence": 0.1,
+        "notes": [
+          "Stores the folder holding piton.config.pi, replaced for the whole app when set again.",
+          "A global holding the folder with piton.config.pi; setting it replaces the project app-wide."
+        ]
+      },
+      {
+        "source": "src/project_indicator.rs",
+        "spec": "spec/scope/no-project/index.pi",
+        "strength": 0.3,
+        "divergence": 0.03,
+        "notes": [
+          "Reads a muted 'No project'."
+        ]
+      },
+      {
+        "source": "src/project_indicator.rs",
+        "spec": "spec/scope/project-directory/index.pi",
+        "strength": 0.375,
+        "divergence": 0.04,
+        "notes": [
+          "Recent projects that still hold a config.",
+          "Picks from recent projects."
+        ]
+      },
+      {
+        "source": "src/project_indicator.rs",
+        "spec": "spec/ui/components/project-indicator/index.pi",
+        "strength": 0.95,
+        "divergence": 0.04,
+        "notes": [
+          "Folder icon and name, \"No project\" with no tooltip, path tooltip, recent list with tick, Open Project… row, closing rules.",
+          "Implements the label, list rows, closing on outside press or Escape, and the Open Project… row."
+        ]
+      },
+      {
+        "source": "src/project_indicator.rs",
+        "spec": "spec/ui/components/ribbon/index.pi",
+        "strength": 0.3,
+        "divergence": 0.03,
+        "notes": [
+          "The indicator it hosts."
+        ]
+      },
+      {
+        "source": "src/project_lsp.rs",
+        "spec": "spec/scope/lsp/index.pi",
+        "strength": 0.9,
+        "divergence": 0.04,
+        "notes": [
+          "Started in the project directory, shared, restarted on change, inputs still work without it.",
+          "One server shared by the input and editor, restarted when the project directory changes."
+        ]
+      },
+      {
+        "source": "src/project_templates.rs",
+        "spec": "spec/lib/Concept.pi",
+        "strength": 0.15,
+        "divergence": 0.05,
+        "notes": [
+          "The Scope, concept, and shape template seeds a lib holding this anchor."
+        ]
+      },
+      {
+        "source": "src/project_templates.rs",
+        "spec": "spec/lib/Scope.pi",
+        "strength": 0.15,
+        "divergence": 0.05,
+        "notes": [
+          "Seeds this anchor in the template's lib."
+        ]
+      },
+      {
+        "source": "src/project_templates.rs",
+        "spec": "spec/lib/Shape.pi",
+        "strength": 0.15,
+        "divergence": 0.05,
+        "notes": [
+          "Seeds this anchor in the template's lib."
+        ]
+      },
+      {
+        "source": "src/project_templates.rs",
+        "spec": "spec/lib/index.pi",
+        "strength": 0.1,
+        "divergence": 0.05,
+        "notes": [
+          "The template seeds a lib/index.pi of this form."
+        ]
+      },
+      {
+        "source": "src/project_templates.rs",
+        "spec": "spec/scope/new-project/index.pi",
+        "strength": 0.875,
+        "divergence": 0.04,
+        "notes": [
+          "Templates from project-templates with name, description, and order; spec files seeded; empty index.pi otherwise.",
+          "Templates baked from project-templates with template.json order; writes files without overwriting."
+        ]
+      },
+      {
+        "source": "src/project_tree.rs",
+        "spec": "spec/agent/skills/BuildFileTree.pi",
+        "strength": 0.1,
+        "divergence": 0.1,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/project_tree.rs",
+        "spec": "spec/scope/git/index.pi",
+        "strength": 0.35000002,
+        "divergence": 0.085,
+        "notes": [
+          "Refreshes within a couple of seconds.",
+          "Polls git status every 2 seconds."
+        ]
+      },
+      {
+        "source": "src/project_tree.rs",
+        "spec": "spec/scope/no-project/index.pi",
+        "strength": 0.3,
+        "divergence": 0.04,
+        "notes": [
+          "\"No project open\".",
+          "Reads 'No project open'."
+        ]
+      },
+      {
+        "source": "src/project_tree.rs",
+        "spec": "spec/ui/components/file-tree/index.pi",
+        "strength": 0.92499995,
+        "divergence": 0.09,
+        "notes": [
+          "Folders first, refresh keeping expansion and selection, status colours, diff button with tooltip, opening files.",
+          "notify watcher, expanded state kept, git colours, 'Show the changes' diff button, open on click, scroll column."
+        ]
+      },
+      {
+        "source": "src/project_tree.rs",
+        "spec": "spec/ui/components/scrollbar/index.pi",
+        "strength": 0.3,
+        "divergence": 0.05,
+        "notes": [
+          "Uses the base tree so the scroll column is the only scrollbar."
+        ]
+      },
+      {
+        "source": "src/project_tree.rs",
+        "spec": "spec/ui/components/sidebar/index.pi",
+        "strength": 0.35,
+        "divergence": 0.03,
+        "notes": [
+          "The file tree it holds."
+        ]
+      },
+      {
+        "source": "src/prompt_history.rs",
+        "spec": "spec/scope/project-data/index.pi",
+        "strength": 0.82500005,
+        "divergence": 0.05,
+        "notes": [
+          ".json record with compiled userPrompt, output lines, and error, for history/ and asks/.",
+          "history/ and asks/ with .json run records beside each prompt."
+        ]
+      },
+      {
+        "source": "src/prompt_history.rs",
+        "spec": "spec/scope/prompt-mode/index.pi",
+        "strength": 0.625,
+        "divergence": 0.05,
+        "notes": [
+          "Tasks replayed from records; no record means Not recorded.",
+          "Saves and replays tasks and questions with records."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/agent/skills/BuildMessageList.pi",
+        "strength": 0.1,
+        "divergence": 0.1,
+        "notes": [
+          "Where the message list this skill builds lives."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/agent/skills/BuildPromptEditor.pi",
+        "strength": 0.1,
+        "divergence": 0.1,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/scope/application/MainWindow.pi",
+        "strength": 0.5,
+        "divergence": 0.11,
+        "notes": [
+          "50% file split sliding from the sidebar and back, never splitting the chat input.",
+          "The file split beside the chat history, with the slide in and out from the sidebar (450ms)."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/scope/editor/index.pi",
+        "strength": 0.3,
+        "divergence": 0.1,
+        "notes": [
+          "Hosts the editor in the split and replaces the file on open."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/scope/harness-integration/index.pi",
+        "strength": 0.6,
+        "divergence": 0.085,
+        "notes": [
+          "Separate task and question conversations, forking concurrent questions, forgetting sessions that won't resume.",
+          "Task and ask sessions, restricted to the project they began in, forgotten when they can't be resumed, forked for concurrent questions."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/scope/harness-integration/one-off-run/index.pi",
+        "strength": 0.25,
+        "divergence": 0.1,
+        "notes": [
+          "Its output table shows the run's stream."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/scope/no-project/index.pi",
+        "strength": 0.325,
+        "divergence": 0.275,
+        "notes": [
+          "Hint shown without a project, but sending shows an error notification.",
+          "Shows 'Open a project to start prompting.' but pushes a 'No project open' error when sending."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/scope/open-file/index.pi",
+        "strength": 0.7,
+        "divergence": 0.1,
+        "notes": [
+          "open_file shows the editor in the split, replacing the current file after the discard prompt."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/scope/project-data/index.pi",
+        "strength": 0.45,
+        "divergence": 0.05,
+        "notes": [
+          "Loads the queue, history, and asks when the project opens."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/scope/prompt-mode/answer-drawer/index.pi",
+        "strength": 0.9,
+        "divergence": 0.1,
+        "notes": [
+          "80% drawer, 20–95% drag, kept size, previous answers rising above the rows, dimming.",
+          "DRAWER_SHARE 0.8, MIN 0.2, MAX 0.95, top-edge resize handle, dimming shade, previous answers sliding from on top of the rows."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/scope/prompt-mode/chat-input/index.pi",
+        "strength": 0.57500005,
+        "divergence": 0.09,
+        "notes": [
+          "Ask stack, open and close rules, answer text selection with Copy and Attach, previous answers on the Ask tab.",
+          "Question stack, open questions, previous answers and 'Attach to prompt' in the drawer."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/scope/prompt-mode/index.pi",
+        "strength": 0.95,
+        "divergence": 0.1,
+        "notes": [
+          "Hint text, previous tasks row, latest task header, queue with cancel, auto-send and Send next, held restored queue, build before send, history.",
+          "Hint text, previous tasks row, latest task header, queue with Send next and auto-send, replaying history and 'Not recorded'."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/scope/prompt-mode/message-list/index.pi",
+        "strength": 0.9,
+        "divergence": 0.09,
+        "notes": [
+          "Status labels and colours, header tint by mode, links, lock off to start, virtualized rows.",
+          "Building, Compiling, Running, Done, Failed and Not recorded labels; output table; header tinted by mode; virtualized list."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/scope/prompt-mode/modes/index.pi",
+        "strength": 0.55,
+        "divergence": 0.065,
+        "notes": [
+          "Ask doesn't build, queue, or add notes; tasks add a commit note on success.",
+          "Tasks queue and build first; questions run at once without building."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/scope/prompt-mode/sending/index.pi",
+        "strength": 0.875,
+        "divergence": 0.11,
+        "notes": [
+          "Tasks queue while busy, questions run at once, sending on the app's behalf, failures don't stop the queue.",
+          "send, start and queue handling, build before compile, failure not stopping the queue, questions not queued."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/scope/running-activity/index.pi",
+        "strength": 0.4,
+        "divergence": 0.05,
+        "notes": [
+          "Task and Question jobs and revealing them.",
+          "running_jobs and is_working including questions."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/scope/spec-build/index.pi",
+        "strength": 0.425,
+        "divergence": 0.05,
+        "notes": [
+          "Building status, and a failed build noted without stopping the task.",
+          "Builds ahead of tasks and notes a failed build in the output."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/ui/components/git-panel/index.pi",
+        "strength": 0.25,
+        "divergence": 0.05,
+        "notes": [
+          "Adds a note after a task finishes."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/ui/components/history-list/index.pi",
+        "strength": 0.85,
+        "divergence": 0.09,
+        "notes": [
+          "No/1/N row, Back to…, accordion scrolled to the end each time, one item open.",
+          "A generic history list with singular, plural and back labels, opening scrolled to the bottom, one item open, collapsing answer steps."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/ui/components/scrollbar/index.pi",
+        "strength": 0.45,
+        "divergence": 0.08,
+        "notes": [
+          "Measured lists and remeasuring rows while their markdown parses."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/ui/components/selection-popover/index.pi",
+        "strength": 0.35,
+        "divergence": 0.05,
+        "notes": [
+          "Popover over selected answer text.",
+          "The answer drawer's Copy and Attach to prompt."
+        ]
+      },
+      {
+        "source": "src/prompt_mode.rs",
+        "spec": "spec/ui/components/task-table/index.pi",
+        "strength": 0.9,
+        "divergence": 0.08,
+        "notes": [
+          "Type/Output/Status columns, badges, skeletons, raw JSON tail, No output., collapsed steps.",
+          "Reply, OutputRow and tool kinds mapping, 'Waiting for the harness…', 'No output.', collapsed Show or Hide N steps, output_table."
+        ]
+      },
+      {
+        "source": "src/prompt_queue.rs",
+        "spec": "spec/scope/project-data/index.pi",
+        "strength": 0.8,
+        "divergence": 0.04,
+        "notes": [
+          "queue/ holds each prompt's anchor source, imports included, named in queue order.",
+          "queue/ files named to sort in queue order."
+        ]
+      },
+      {
+        "source": "src/prompt_queue.rs",
+        "spec": "spec/scope/prompt-mode/index.pi",
+        "strength": 0.7,
+        "divergence": 0.04,
+        "notes": [
+          "Saved as queued, restored on open, file removed on cancel or send.",
+          "Saves, restores and removes queued prompts."
+        ]
+      },
+      {
+        "source": "src/prompt_queue.rs",
+        "spec": "spec/scope/prompt-mode/sending/index.pi",
+        "strength": 0.45,
+        "divergence": 0.03,
+        "notes": [
+          "Queued prompts keep their anchor, and so their mode."
+        ]
+      },
+      {
+        "source": "src/recent_projects.rs",
+        "spec": "spec/scope/application/index.pi",
+        "strength": 0.55,
+        "divergence": 0.05,
+        "notes": [
+          "Last project reopened on start.",
+          "Picks the first recent project still holding piton.config.pi at startup."
+        ]
+      },
+      {
+        "source": "src/recent_projects.rs",
+        "spec": "spec/scope/project-directory/index.pi",
+        "strength": 0.9,
+        "divergence": 0.04,
+        "notes": [
+          "Five newest first, moved to the front, openable only while the config exists.",
+          "Five newest first, deduplicated, openable ones filtered, saved per user."
+        ]
+      },
+      {
+        "source": "src/recent_projects.rs",
+        "spec": "spec/scope/project/open-project/index.pi",
+        "strength": 0.35,
+        "divergence": 0.03,
+        "notes": [
+          "Stores last_browsed."
+        ]
+      },
+      {
+        "source": "src/recent_projects.rs",
+        "spec": "spec/scope/user-preferences/index.pi",
+        "strength": 0.65,
+        "divergence": 0.04,
+        "notes": [
+          "Saved per user and failing quietly.",
+          "Recent projects and the last browsed folder."
+        ]
+      },
+      {
+        "source": "src/recent_projects.rs",
+        "spec": "spec/ui/components/project-indicator/index.pi",
+        "strength": 0.35,
+        "divergence": 0.03,
+        "notes": [
+          "Supplies the openable recent projects."
+        ]
+      },
+      {
+        "source": "src/rescope.rs",
+        "spec": "spec/scope/harness-integration/baked-prompts/index.pi",
+        "strength": 0.4,
+        "divergence": 0.05,
+        "notes": [
+          "Prompt paragraphs from rescope.pi.",
+          "Uses rescope.pi for search and refactor."
+        ]
+      },
+      {
+        "source": "src/rescope.rs",
+        "spec": "spec/scope/rescope/index.pi",
+        "strength": 0.92499995,
+        "divergence": 0.04,
+        "notes": [
+          "Worth, places with file, scope, and excerpt; ranking; refactor request listing each concept's places.",
+          "Parses and ranks concepts; builds the search and refactor prompts from rescope.pi."
+        ]
+      },
+      {
+        "source": "src/rescope_view.rs",
+        "spec": "spec/scope/harness-integration/one-off-run/index.pi",
+        "strength": 0.375,
+        "divergence": 0.075,
+        "notes": [
+          "Streamed one-off run in a task table.",
+          "Uses a one-off run to find concepts."
+        ]
+      },
+      {
+        "source": "src/rescope_view.rs",
+        "spec": "spec/scope/rescope/index.pi",
+        "strength": 0.95,
+        "divergence": 0.075,
+        "notes": [
+          "Step names, concepts worth ≥0.5 start checked, no-concepts message, details with monospace excerpts, Refactor.",
+          "Look again, minimize tooltip, steps, list and details, 'The spec repeats no concepts…', Refactor."
+        ]
+      },
+      {
+        "source": "src/rescope_view.rs",
+        "spec": "spec/ui/components/minimizable-panel/index.pi",
+        "strength": 0.5,
+        "divergence": 0.05,
+        "notes": [
+          "Minimize tooltip says the search keeps running.",
+          "Minimize button with the keeps-running tooltip."
+        ]
+      },
+      {
+        "source": "src/rescope_view.rs",
+        "spec": "spec/ui/components/ranked-selection-list/index.pi",
+        "strength": 0.67499995,
+        "divergence": 0.125,
+        "notes": [
+          "List, details, and checked-count footer.",
+          "Its own ranked rows with checkboxes, details, 'No concepts checked' and Refactor."
+        ]
+      },
+      {
+        "source": "src/ribbon/application_tab.rs",
+        "spec": "spec/agent/skills/ChangeRibbon.pi",
+        "strength": 0.3,
+        "divergence": 0.05,
+        "notes": [
+          "One module per tab scope."
+        ]
+      },
+      {
+        "source": "src/ribbon/application_tab.rs",
+        "spec": "spec/scope/user-preferences/index.pi",
+        "strength": 0.3,
+        "divergence": 0.05,
+        "notes": [
+          "Dark mode saved as a preference."
+        ]
+      },
+      {
+        "source": "src/ribbon/application_tab.rs",
+        "spec": "spec/ui/components/ribbon/application-tab/index.pi",
+        "strength": 0.95,
+        "divergence": 0.055,
+        "notes": [
+          "Groups, primary commands, \"Could not save dark mode\" notification, Settings with Ctrl+, in its tooltip.",
+          "Both primary; 'Could not save dark mode' notification; Settings tooltip with its shortcut."
+        ]
+      },
+      {
+        "source": "src/ribbon/code_tab.rs",
+        "spec": "spec/agent/skills/ChangeRibbon.pi",
+        "strength": 0.275,
+        "divergence": 0.025,
+        "notes": [
+          "A module of its own for the tab.",
+          "An empty tab module, as a tab with no commands."
+        ]
+      },
+      {
+        "source": "src/ribbon/code_tab.rs",
+        "spec": "spec/ui/components/ribbon/code-tab/index.pi",
+        "strength": 0.95,
+        "divergence": 0.01,
+        "notes": [
+          "No groups or commands yet.",
+          "An empty command list."
+        ]
+      },
+      {
+        "source": "src/ribbon/mod.rs",
+        "spec": "spec/agent/commands/BuildRibbon.pi",
+        "strength": 0.1,
+        "divergence": 0.08,
+        "notes": [
+          "The ribbon scope this command builds; the command itself is agent tooling, not app code."
+        ]
+      },
+      {
+        "source": "src/ribbon/mod.rs",
+        "spec": "spec/agent/skills/BuildRibbon.pi",
+        "strength": 0.1,
+        "divergence": 0.08,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/ribbon/mod.rs",
+        "spec": "spec/agent/skills/ChangeRibbon.pi",
+        "strength": 0.5,
+        "divergence": 0.05,
+        "notes": [
+          "Ribbon module holds tab list and layout; a module per tab.",
+          "Holds the list of tabs, their order and the layout, delegating commands to per-tab modules as the skill says."
+        ]
+      },
+      {
+        "source": "src/ribbon/mod.rs",
+        "spec": "spec/scope/running-activity/index.pi",
+        "strength": 0.6,
+        "divergence": 0.05,
+        "notes": [
+          "Spinner with count, tooltip, list of rows that reveal, closing rules.",
+          "Spinner, count, tooltip and list that closes when empty."
+        ]
+      },
+      {
+        "source": "src/ribbon/mod.rs",
+        "spec": "spec/scope/user-preferences/index.pi",
+        "strength": 0.35000002,
+        "divergence": 0.05,
+        "notes": [
+          "Collapsed state remembered, failing quietly.",
+          "Collapsed preference, saved quietly."
+        ]
+      },
+      {
+        "source": "src/ribbon/mod.rs",
+        "spec": "spec/ui/components/project-indicator/index.pi",
+        "strength": 0.375,
+        "divergence": 0.04,
+        "notes": [
+          "Indicator left of the tabs with a divider.",
+          "Places it left of the tabs and leading the collapsed row."
+        ]
+      },
+      {
+        "source": "src/ribbon/mod.rs",
+        "spec": "spec/ui/components/ribbon/index.pi",
+        "strength": 0.95,
+        "divergence": 0.075,
+        "notes": [
+          "Tab order, Project on launch, Ctrl+click, No commands yet, fixed height, collapse by chevron, double-click, or Ctrl+F1, collapsed row with dividers.",
+          "RibbonTab ALL order, toggle_open, groups with SVG-rotated 12px titles, 76px body, collapsed row with dividers, Ctrl+F1, collapsed preference."
+        ]
+      },
+      {
+        "source": "src/ribbon/project_tab.rs",
+        "spec": "spec/agent/skills/ChangeRibbon.pi",
+        "strength": 0.3,
+        "divergence": 0.025,
+        "notes": [
+          "A module of its own for the tab.",
+          "One module per tab scope."
+        ]
+      },
+      {
+        "source": "src/ribbon/project_tab.rs",
+        "spec": "spec/ui/components/ribbon/project-tab/index.pi",
+        "strength": 0.95,
+        "divergence": 0.03,
+        "notes": [
+          "Folder-plus New Project, folder Open Project… always labelled so, with the specified tooltips.",
+          "Folder-plus and folder icons, tooltips, both primary."
+        ]
+      },
+      {
+        "source": "src/ribbon/research_tab.rs",
+        "spec": "spec/agent/skills/ChangeRibbon.pi",
+        "strength": 0.275,
+        "divergence": 0.025,
+        "notes": [
+          "A module of its own for the tab.",
+          "An empty tab module, as a tab with no commands."
+        ]
+      },
+      {
+        "source": "src/ribbon/research_tab.rs",
+        "spec": "spec/ui/components/ribbon/research-tab/index.pi",
+        "strength": 0.95,
+        "divergence": 0.01,
+        "notes": [
+          "No groups or commands yet.",
+          "An empty command list."
+        ]
+      },
+      {
+        "source": "src/ribbon/spec_tab.rs",
+        "spec": "spec/agent/skills/ChangeRibbon.pi",
+        "strength": 0.3,
+        "divergence": 0.025,
+        "notes": [
+          "A module of its own for the tab.",
+          "One module per tab scope, holding that tab's commands."
+        ]
+      },
+      {
+        "source": "src/ribbon/spec_tab.rs",
+        "spec": "spec/scope/no-project/index.pi",
+        "strength": 0.4,
+        "divergence": 0.05,
+        "notes": [
+          "Disabled, not hidden, with a tooltip.",
+          "Spec tab commands are disabled with 'Open a project to…' tooltips."
+        ]
+      },
+      {
+        "source": "src/ribbon/spec_tab.rs",
+        "spec": "spec/scope/spec-build/index.pi",
+        "strength": 0.8,
+        "divergence": 0.05,
+        "notes": [
+          "Spinner and \"spec is building\" tooltip; Built N files, Build failed, Could not run piton build.",
+          "Build Spec: disabled states, tooltips, 'Built N files', 'Build failed', 'Could not run piton build'."
+        ]
+      },
+      {
+        "source": "src/ribbon/spec_tab.rs",
+        "spec": "spec/ui/components/ribbon/spec-tab/index.pi",
+        "strength": 0.95,
+        "divergence": 0.05,
+        "notes": [
+          "Group order, each command's icon, tooltip, disabled-without-project text, primary flags.",
+          "Hammer, compare-arrows, file-text, sparkles and shapes icons; primary flags; tooltips with and without a project; the build flow."
+        ]
+      },
+      {
+        "source": "src/scrollbar.rs",
+        "spec": "spec/agent/skills/BuildScrollbar.pi",
+        "strength": 0.1,
+        "divergence": 0.08,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/scrollbar.rs",
+        "spec": "spec/ui/components/fs-browser/index.pi",
+        "strength": 0.2,
+        "divergence": 0.03,
+        "notes": [
+          "The entries' scroll column."
+        ]
+      },
+      {
+        "source": "src/scrollbar.rs",
+        "spec": "spec/ui/components/scrollbar/index.pi",
+        "strength": 0.95,
+        "divergence": 0.08,
+        "notes": [
+          "Square bordered buttons, full-width square thumb darker with a standout border, track line, hand-scroll locking and unlocking, single pulse in focus ring colour, every row measured.",
+          "with_scrollbar, thumb_colors, measured_list, lock follower, 900ms pulse in the ring colour."
+        ]
+      },
+      {
+        "source": "src/selection_popover.rs",
+        "spec": "spec/scope/editor/index.pi",
+        "strength": 0.35,
+        "divergence": 0.05,
+        "notes": [
+          "The popover shown after selecting text."
+        ]
+      },
+      {
+        "source": "src/selection_popover.rs",
+        "spec": "spec/ui/components/selection-popover/index.pi",
+        "strength": 0.95,
+        "divergence": 0.04,
+        "notes": [
+          "Placement, styling, presses kept from the text beneath, closing on outside press.",
+          "SelectionAction buttons, occlude, on_mouse_down_out, snap to window."
+        ]
+      },
+      {
+        "source": "src/settings_window.rs",
+        "spec": "spec/agent/skills/BuildSettingsWindow.pi",
+        "strength": 0.1,
+        "divergence": 0.07,
+        "notes": [
+          "The scope this skill builds."
+        ]
+      },
+      {
+        "source": "src/settings_window.rs",
+        "spec": "spec/scope/no-project/index.pi",
+        "strength": 0.3,
+        "divergence": 0.015,
+        "notes": [
+          "\"Open a project to edit its system prompts.\"",
+          "Reads 'Open a project to edit its system prompts.'"
+        ]
+      },
+      {
+        "source": "src/settings_window.rs",
+        "spec": "spec/scope/prompt-mode/mode-system-prompts/index.pi",
+        "strength": 0.5,
+        "divergence": 0.05,
+        "notes": [
+          "Templates per mode saved with the project, placeholders.",
+          "Edits the templates."
+        ]
+      },
+      {
+        "source": "src/settings_window.rs",
+        "spec": "spec/scope/settings-window/index.pi",
+        "strength": 0.95,
+        "divergence": 0.07,
+        "notes": [
+          "Heading and close tooltip, 120px editors with soft wrap and no line numbers, Reset to default disabled at default, defaults saved on load, reload keeps cursors.",
+          "Heading, close tooltip, System prompts page, 120px editors without line numbers or folding, Reset to default, load leaving unchanged editors alone."
+        ]
+      },
+      {
+        "source": "src/settings_window.rs",
+        "spec": "spec/ui/components/scrollbar/index.pi",
+        "strength": 0.2,
+        "divergence": 0.05,
+        "notes": [
+          "Page scrolls with the scroll column."
+        ]
+      },
+      {
+        "source": "src/shell_format.rs",
+        "spec": "spec/ui/components/task-table/index.pi",
+        "strength": 0.8,
+        "divergence": 0.04,
+        "notes": [
+          "Long commands split one per line with chained ones indented, never inside quotes, substitutions, brackets, comments, or heredocs.",
+          "Splits commands at && || | ; outside quotes, substitutions and heredocs."
+        ]
+      },
+      {
+        "source": "src/system_prompts.rs",
+        "spec": "spec/scope/project-data/index.pi",
+        "strength": 0.475,
+        "divergence": 0.04,
+        "notes": [
+          "system-prompts/ file naming.",
+          "system-prompts/<mode>.md."
+        ]
+      },
+      {
+        "source": "src/system_prompts.rs",
+        "spec": "spec/scope/project-locations/index.pi",
+        "strength": 0.2,
+        "divergence": 0.05,
+        "notes": [
+          "Fills in the locations in templates."
+        ]
+      },
+      {
+        "source": "src/system_prompts.rs",
+        "spec": "spec/scope/prompt-mode/mode-system-prompts/index.pi",
+        "strength": 0.95,
+        "divergence": 0.04,
+        "notes": [
+          "${CODE_LOCATION} and ${SPEC_LOCATION}, code/combined/spec/ask.md, defaults from .suspense/system-prompts baked at build.",
+          "include_str! defaults, load, save, save_missing, and fill for the placeholders."
+        ]
+      },
+      {
+        "source": "src/system_prompts.rs",
+        "spec": "spec/scope/settings-window/index.pi",
+        "strength": 0.375,
+        "divergence": 0.04,
+        "notes": [
+          "Missing defaults saved so they can be edited by hand.",
+          "Loads, saves and fills in missing defaults."
+        ]
+      },
+      {
+        "source": "src/theme_preference.rs",
+        "spec": "spec/scope/application/MainWindow.pi",
+        "strength": 0.4,
+        "divergence": 0.05,
+        "notes": [
+          "Light and dark theme following the system's appearance.",
+          "Dark mode follows the system until chosen."
+        ]
+      },
+      {
+        "source": "src/theme_preference.rs",
+        "spec": "spec/scope/user-preferences/index.pi",
+        "strength": 0.8,
+        "divergence": 0.04,
+        "notes": [
+          "Saved in the per-user config directory, follows the OS until chosen.",
+          "Light or dark choice, following the system until chosen."
+        ]
+      },
+      {
+        "source": "src/theme_preference.rs",
+        "spec": "spec/ui/components/ribbon/application-tab/index.pi",
+        "strength": 0.3,
+        "divergence": 0.03,
+        "notes": [
+          "Saves the dark mode choice."
+        ]
+      }
+    ],
+    "code_assessment": "The code follows the spec very closely: nearly every source file maps onto one or two scopes, uses their wording, and matches their behaviour down to labels, tooltips, ordering, and colours, and the comments often restate the spec's sentences. The few real departures are small. The divergence panel's build step shows a tick even when the build fails, and only mentions the failure in its notes. The palette labels Build as \"Build Spec\". The editor runs `piton format` when saving a Piton file. The hidden anchor gains a `mode` property. Sending a prompt with no project open shows an error notification. Where the code goes beyond the spec, it is mostly filling in concrete numbers (sizes, spring constants, timeouts, polling intervals), the exact CLI flags for the harness, git plumbing, and rendering workarounds for gpui-kit. There are also a few stale doc comments, such as the diff view's comment saying it sits beside the task view and the project directory's comment saying it lasts only for the session.",
+    "spec_assessment": "The spec is broad and unusually precise. Most scopes pin down labels, tooltips, keyboard shortcuts, sizes, colours, order and edge cases. Nearly every behavioural scope has a clearly matching Rust module that was plainly written from it, often using the spec's own wording in comments and tests. Where the code drifts, the drift is small: a few labels differ, some things refresh by polling where the spec implies they react to changes, a few file extensions are missing, and shared components the spec treats as scopes of their own (the ranked selection list, the minimizable panel, the task table, the history list) are copied into each view or folded into bigger modules. The parts that say little on purpose are the index files that only re-export, the abstract lib anchors, the thin build-scope skill wrappers and the no-project scope, which leaves its wording to each place that uses it. Harness discovery and the exact claude flags are also left open.",
+    "well_defined": [
+      {
+        "name": "Divergence analysis",
+        "why": "The spec pins down the steps, the agent prompts, how results merge, the formulas for every measure, colour thresholds, tabs, report sections, and every tooltip, so the model and view are almost pure transcription."
+      },
+      {
+        "name": "Chat input, hidden anchor and LSP",
+        "why": "Tab order, Chain behaviour, tint transitions, escaping rules, auto-imports, blanking for the draft, attachments, and completion triggers and ranking are all spelled out precisely."
+      },
+      {
+        "name": "Ribbon and its tabs",
+        "why": "Each tab scope lists its groups, commands, icons, tooltips, primary flags, and disabled states, and the ChangeRibbon skill even dictates one code module per tab."
+      },
+      {
+        "name": "File system browsers",
+        "why": "The shared FsBrowser scope and its folder and file variants define the navigation bar, keyboard shortcuts on both platforms, type-to-select, new-folder validation, and footer behaviour."
+      },
+      {
+        "name": "New Project",
+        "why": "The layout, validation rules, templates, config generation (including anchor naming and adapters), git initialization, and the .gitignore contents are all specified."
+      },
+      {
+        "name": "Scrollbar and task table",
+        "why": "Thumb geometry and colours, lock-to-bottom semantics, the pulse, measurement steadiness, badge kinds, streaming rows, and collapsed steps are described in detail."
+      },
+      {
+        "name": "New project creation",
+        "why": "The field rules, the two-column layout, the templates, the exact piton.config.pi to write, the Git setup and the no-overwrite rules are all stated."
+      },
+      {
+        "name": "Scrollbar",
+        "why": "It fixes the geometry, the thumb colours, measuring rows that aren't in view, lock-to-bottom behaviour and the timing and look of the lock pulse."
+      },
+      {
+        "name": "Git panel and diff view",
+        "why": "The summary format, commit message assembly, pull merge rules, diff layouts, context lines, collapsing and navigation keys are all concrete."
+      },
+      {
+        "name": "Chat input and hidden anchor",
+        "why": "It gives exact rules for escaping userPrompt, the attachedText format, mention triggers, tab cycling and the Chain tab's animation and colours."
+      }
+    ],
+    "less_defined": [
+      {
+        "name": "Visual metrics and animation tuning",
+        "why": "Sizes, paddings, max heights, spring stiffness and damping, dim levels, and slide durations are nearly all chosen by the implementation, with the spec only saying things like \"quick\" or \"settles without bouncing\"."
+      },
+      {
+        "name": "Harness and CLI invocation",
+        "why": "The spec says auto mode, stdin, appended system prompts, and carrying on conversations, but the exact claude flags (stream-json, fork-session, system-prompt-snapshot, haiku with low effort for notes) and the output parsing are left to the code."
+      },
+      {
+        "name": "Git plumbing",
+        "why": "GitScope and GitPanelScope describe outcomes, but porcelain parsing, reading the committed file, trial merges with merge-tree, diff size caps, and polling intervals are the implementation's own choices."
+      },
+      {
+        "name": "Main window panel orchestration",
+        "why": "The precedence of Esc across the palette, dialogs, lists, and panels, how focus is trapped and restored, and how Generate Skills opens are not described in MainWindowScope."
+      },
+      {
+        "name": "Markdown rendering and link resolution",
+        "why": "The inline-code workaround, the markdown state cache thresholds, and resolving relative links by path suffix have no spec behind them beyond \"links are clickable\" and the scrollbar's steadiness requirements."
+      },
+      {
+        "name": "Error wording and edge handling",
+        "why": "Many error, empty-state, and notification texts, and what happens with no project or unreadable config, are filled in by the code where the spec only says to \"say why\"."
+      },
+      {
+        "name": "Spec scaffolding (index files, lib anchors, build-scope skills)",
+        "why": "These files only re-export or declare abstract shapes and thin skill wrappers, so they say little about behaviour, and only the skill generator's file format traces back to them."
+      },
+      {
+        "name": "Harness integration and catalog",
+        "why": "It names claude -p only as an example and says 'auto mode' without the flags. It doesn't say how user, project and plugin skills and agents are found, or what happens when the harness is missing."
+      },
+      {
+        "name": "No-project state",
+        "why": "It deliberately leaves the wording to each use and doesn't say whether sending a prompt without a project should fail quietly or notify, which the code does."
+      },
+      {
+        "name": "Project locations",
+        "why": "It defines the locations and the file-listing rules but no single owner. As a result the code walks files separately in the palette, divergence and rescope, each slightly differently."
+      },
+      {
+        "name": "Prompt modes' colours",
+        "why": "Colours are given only as 'a subtle red', 'purple' and so on, with no values or contrast targets."
+      }
+    ]
+  },
+  "notes": []
+}
