@@ -32,6 +32,7 @@ mod hidden_anchor;
 mod inset_panel;
 mod main_window;
 mod markdown;
+mod measured_list;
 mod new_instruction;
 mod new_project;
 mod palette;
@@ -58,6 +59,7 @@ mod shell_format;
 mod spec_component_form;
 mod spec_components;
 mod system_prompts;
+mod task_table;
 mod theme;
 mod theme_preference;
 

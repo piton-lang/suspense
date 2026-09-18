@@ -32,7 +32,7 @@ use crate::harness::{self, HarnessEvent};
 use crate::harness_mentions::{self, Invocable, MentionKind};
 use crate::hidden_anchor;
 use crate::project_directory::ProjectDirectory;
-use crate::prompt_mode::{Reply, output_table};
+use crate::task_table::{self, Reply, TableView, TaskTable};
 
 actions!(palette, [SearchFiles]);
 
@@ -90,7 +90,7 @@ type SendToHarness = fn(
 struct FileSearch {
     query: SharedString,
     reply: Reply,
-    scroll: ScrollHandle,
+    table: TaskTable,
     _task: Task<()>,
 }
 
@@ -591,7 +591,7 @@ impl Palette {
         self.search = Some(FileSearch {
             query,
             reply: Reply::default(),
-            scroll: ScrollHandle::new(),
+            table: TaskTable::new(),
             _task: task,
         });
         cx.notify();
@@ -795,22 +795,27 @@ impl Render for Palette {
                         .and_then(|palette| palette.read(cx).search.as_ref());
                     match search {
                         Some(search) => {
-                            let table = div()
-                                .id("palette-search")
-                                .w_full()
-                                // Inside the list's padding.
-                                .max_h(MAX_LIST_HEIGHT - px(8.))
-                                .overflow_y_scroll()
-                                .track_scroll(&search.scroll)
-                                .child(output_table(0, &search.reply, None, None, cx));
-                            // Lets UI tests find the search; inert in normal builds.
-                            let table = gpui_kit::TestSupportExt::test_support(table);
-                            crate::scrollbar::with_scrollbar(
-                                "palette-search",
-                                &search.scroll,
-                                table,
-                                false,
-                                None,
+                            let reply_of = task_table::reply_of({
+                                let this = this.clone();
+                                move |cx| {
+                                    let search = this.upgrade()?.read(cx).search.as_ref()?;
+                                    Some(&search.reply)
+                                }
+                            });
+                            search.table.render(
+                                &search.reply,
+                                reply_of,
+                                TableView {
+                                    id: "palette-search".into(),
+                                    scrollbar: "palette-search".into(),
+                                    table: 0,
+                                    open: None,
+                                    steps: None,
+                                    lock: None,
+                                    padding: Edges::default(),
+                                    // Inside the list's padding.
+                                    max_height: Some(MAX_LIST_HEIGHT - px(8.)),
+                                },
                                 cx,
                             )
                         }

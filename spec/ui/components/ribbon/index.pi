@@ -115,14 +115,23 @@ shape RibbonShape:
     commands:
         A command button is one of two sizes, and each tab says which of its
         commands are which:
-        - full: as tall as the buttons' room inside their padding, its large icon above its label
+        - full: as tall as its large icon above its label need, but never shorter than two slim buttons stacked, nor taller than three
         - slim: 22 pixels tall, its small icon to the left of its label
+        - small: only in the collapsed ribbon: 22 pixels tall, its small icon to the left of its label, and only as wide as they are
 
         Buttons side by side are 8 pixels apart. Slim buttons side by side
         stack down instead, top aligned, three to a column, each column as wide
         as its widest button and each button as wide as its column; a fourth
         starts the next column, 8 pixels along. A full button always stands
-        alone.
+        alone. A slim button fills only its column's width: nowhere does a
+        button stretch to fill a row.
+
+        Every command takes the height it needs, within what its size allows,
+        from the top of its group: a full button beside a taller column of slim
+        buttons keeps its own height rather than stretching to the group's, and
+        the commands of a tab all start at the same line. A full button is
+        between two and three slim buttons tall, so it is always taller than a
+        single slim button and never taller than a full column of them.
 
         Every button is square, with no rounded corners. Its background is
         clearly apart from the commands' area behind it, though still quiet:
@@ -130,8 +139,9 @@ shape RibbonShape:
         quite half way in light mode, rather than a colour of its own, so it
         stays as far apart from a tinted body too, lighter in both modes, and more so while hovered; while
         pressed it darkens instead. An on or off setting, like dark mode, is a
-        switch rather than a button, sitting in a block the size and colour of
-        a button of its size.
+        switch rather than a button, sitting in a block with a button's
+        colour, as wide as a button of its size and as tall as the switch and
+        its label need.
 
         A command's tooltip explains what it does rather than repeating its
         label, and gives its keyboard shortcut if it has one.
@@ -143,14 +153,26 @@ shape RibbonShape:
         why.
 
     height:
-        The command area is the same height on every tab, even one with no
-        commands, so the window beneath doesn't move when switching tabs: 98
-        pixels, with 8 pixels of padding at the right end but none at the left:
+        The commands drive the height: the command area is as tall as the
+        tallest column of the open tabs, padded 8 pixels above and below, and
+        nothing more. Since no column holds more than three slim buttons, and no
+        full button is taller than three, the tallest the command area gets is
+        three slim buttons with 8 pixels between each, padded: 98 pixels; a tab
+        of full buttons alone is at least two slim buttons tall, padded: 68
+        pixels. A tab whose tallest column is three
+        slim buttons is taller than one of two, and a tab with no commands,
+        which is only its "No commands yet" padded the same way, is the
+        shortest of all. So switching tabs can change the command area's
+        height, and the window beneath moves with it.
+
+        Every group is as tall as the command area, so the groups' title strips
+        run its full height whichever tab is open.
+
+        There are 8 pixels of padding at the right end but none at the left:
         the first group's title strip starts right at the command area's left
-        edge. "No commands yet" keeps 8 pixels from that edge. The buttons are padded 8
-        pixels above and below, leaving them 82 pixels, room for a full button
-        or three slim buttons with 8 pixels between each; the groups' title
-        strips are not padded, and run the full 98 pixels.
+        edge. "No commands yet" keeps 8 pixels from that edge. The groups'
+        title strips are not padded, and run the command area's full height,
+        with each title centred down its strip whatever that height is.
 
     collapsing:
         The ribbon collapses, and expands again, with a chevron button at the
@@ -163,8 +185,17 @@ shape RibbonShape:
         filling the row's height, with no divider after it, then the activity
         spinner, and then every primary command, from all of
         the tabs, as small buttons: a small icon beside its label, and dark mode
-        as a small switch. They keep the order of their tabs, with a thin
-        vertical divider between the commands of one tab and the next, and keep
-        their tooltips and disabled states. The chevron sits at the right end of
-        the row. Every control in the row, the chevron and the dividers
-        included, is vertically centred in it.
+        as a small switch in a block only as wide as the switch and its label.
+        Every one is only as wide as its own icon and label, 8 pixels from the
+        next, whatever the tab it comes from calls it; a command that is slim
+        in its tab doesn't grow to fill the row. They keep the order of their
+        tabs, with a thin vertical divider between the commands of one tab and
+        the next, and keep their tooltips and disabled states. The chevron sits
+        at the right end of the row. Every control in the row, the chevron and
+        the dividers included, is vertically centred in it.
+
+        When the spinner, commands, and dividers are wider than the room
+        between the project indicator and the chevron, that stretch of the row
+        scrolls sideways, as the expanded command area does. The project
+        indicator and the chevron stay where they are, never scrolled away or
+        squeezed, and nothing in the row shrinks to fit.

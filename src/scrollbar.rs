@@ -14,6 +14,8 @@ use gpui_kit::component::{ActiveTheme as _, Selectable as _, Sizable as _, h_fle
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
+use crate::measured_list::MeasuredList;
+
 /// How wide the column is, which is also each button's width and height.
 pub const COLUMN_WIDTH: Pixels = px(18.);
 
@@ -27,11 +29,11 @@ const MIN_THUMB: Pixels = px(16.);
 const PULSE_TIME: Duration = Duration::from_millis(900);
 
 /// What a scroll column scrolls: an element tracking a [`ScrollHandle`], or a
-/// virtualized [`list`] with its [`ListState`].
+/// virtualized list that knows its rows' heights.
 #[derive(Clone)]
 pub enum Scroll {
     Handle(ScrollHandle),
-    List(ListState),
+    Measured(MeasuredList),
 }
 
 impl From<&ScrollHandle> for Scroll {
@@ -40,9 +42,9 @@ impl From<&ScrollHandle> for Scroll {
     }
 }
 
-impl From<&ListState> for Scroll {
-    fn from(state: &ListState) -> Self {
-        Scroll::List(state.clone())
+impl From<&MeasuredList> for Scroll {
+    fn from(list: &MeasuredList) -> Self {
+        list.scroll()
     }
 }
 
@@ -51,7 +53,7 @@ impl Scroll {
     pub fn offset(&self) -> Point<Pixels> {
         match self {
             Scroll::Handle(handle) => handle.offset(),
-            Scroll::List(state) => state.scroll_px_offset_for_scrollbar(),
+            Scroll::Measured(list) => list.offset(),
         }
     }
 
@@ -59,14 +61,14 @@ impl Scroll {
     pub fn max_offset(&self) -> Point<Pixels> {
         match self {
             Scroll::Handle(handle) => handle.max_offset(),
-            Scroll::List(state) => state.max_offset_for_scrollbar(),
+            Scroll::Measured(list) => list.max_offset(),
         }
     }
 
     pub fn set_offset(&self, offset: Point<Pixels>) {
         match self {
             Scroll::Handle(handle) => handle.set_offset(offset),
-            Scroll::List(state) => state.set_offset_from_scrollbar(offset),
+            Scroll::Measured(list) => list.set_offset(offset),
         }
     }
 
@@ -74,26 +76,9 @@ impl Scroll {
     fn viewport(&self) -> Bounds<Pixels> {
         match self {
             Scroll::Handle(handle) => handle.bounds(),
-            Scroll::List(state) => state.viewport_bounds(),
+            Scroll::Measured(list) => list.viewport(),
         }
     }
-}
-
-/// A virtualized list's state for a list with a scroll column, measuring every
-/// row. Left to itself, a list counts a row it hasn't laid out as no height at
-/// all, so how far it scrolls, and the thumb with it, would jump as rows come
-/// into view. This way, its next layout measures every row not yet measured,
-/// once each: rows already measured keep their height, so it costs only the
-/// rows that are new or changed, or every row once after the width changes.
-/// The list does so again by itself after a reset, a remeasure, or a change of
-/// width, but not after rows are spliced in: call [`measure_new_rows`] then.
-pub fn measured_list(alignment: ListAlignment, overdraw: Pixels) -> ListState {
-    ListState::new(0, alignment, overdraw).measure_all()
-}
-
-/// Has a [`measured_list`] measure the rows just spliced into it.
-pub fn measure_new_rows(state: &ListState) {
-    state.clone().measure_all();
 }
 
 /// The track's fill, and the thumb's under the pointer and while dragged. The

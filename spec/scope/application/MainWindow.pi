@@ -80,7 +80,10 @@ shape MainWindowShape:
             When the split opens, it slides in from the sidebar, so it's clear
             where it came from: the file's side grows out of the sidebar's edge
             to its share of the width, the file sliding into view from behind
-            that edge as it does, while the chat history gives way beside it.
+            that edge as it does, over the chat history. The chat history keeps
+            its width while the file slides over it, so nothing in it is laid
+            out anew each frame, and takes the rest of the width once the slide
+            settles.
             The slide is quick and settles without bouncing, and only then can
             the split be dragged. A file opened in place of one already showing
             doesn't slide, since the split is already open. The
@@ -90,8 +93,9 @@ shape MainWindowShape:
             Closing the file plays the slide in reverse, back into the
             sidebar: the file's side shrinks from whatever width it was
             dragged to down to nothing at the sidebar's edge, the file sliding
-            out of view behind that edge as it does, while the chat history
-            grows back across the full width. It is as quick as the slide in,
+            out of view behind that edge as it does, uncovering the chat
+            history, which is back across the full width beneath it from the
+            start of the slide. It is as quick as the slide in,
             and settles without bouncing. Opening a file while one is still
             sliding out slides the new one in straight away.
 

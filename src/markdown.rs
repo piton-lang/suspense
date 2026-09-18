@@ -154,11 +154,16 @@ pub enum MarkdownKind {
 /// first measure short. While any is still parsing, its key is noted as
 /// changed every [`POLL_INTERVAL`], for whatever lists it to measure it
 /// again, until it has been laid out with the blocks it parsed into, or
-/// [`POLL_LIMIT`] polls have passed.
+/// [`POLL_LIMIT`] polls have passed. Each list keeps its own place in the
+/// changes (see [`MarkdownStates::changed_since`]), so no list takes a change
+/// another needed.
 #[derive(Default)]
 pub struct MarkdownStates {
     states: std::collections::HashMap<MarkdownKey, MarkdownState>,
-    changed: Vec<MarkdownKey>,
+    /// Each change, numbered, oldest first.
+    changed: std::collections::VecDeque<(u64, MarkdownKey)>,
+    /// The number of the latest change.
+    latest: u64,
     polling: bool,
 }
 
@@ -271,7 +276,8 @@ impl MarkdownStates {
                         cx.global_mut::<MarkdownStates>().polling = false;
                         return false;
                     }
-                    cx.update_global::<MarkdownStates, _>(|states, _| {
+                    let noted = cx.update_global::<MarkdownStates, _>(|states, _| {
+                        let mut noted = false;
                         for (key, laid_out) in laid_out {
                             let Some(entry) = states.states.get_mut(&key) else {
                                 continue;
@@ -281,12 +287,19 @@ impl MarkdownStates {
                             } else {
                                 entry.parsing -= 1;
                                 if states.changed.len() >= MAX_CHANGED {
-                                    states.changed.remove(0);
+                                    states.changed.pop_front();
                                 }
-                                states.changed.push(key);
+                                states.latest += 1;
+                                states.changed.push_back((states.latest, key));
+                                noted = true;
                             }
                         }
+                        noted
                     });
+                    // Whatever lists the rows draws again, to measure them.
+                    if noted {
+                        cx.refresh_windows();
+                    }
                     true
                 });
                 if !more {
@@ -297,16 +310,24 @@ impl MarkdownStates {
         .detach();
     }
 
-    /// The keys whose parsed markdown may have changed since last taken.
-    pub fn take_changed(cx: &mut gpui_kit::App) -> Vec<MarkdownKey> {
-        match cx.try_global::<MarkdownStates>() {
-            Some(states) if !states.changed.is_empty() => {
-                let mut changed = std::mem::take(&mut cx.global_mut::<MarkdownStates>().changed);
-                changed.sort_by_key(|key| (key.kind as u8, key.table, key.row));
-                changed.dedup();
-                changed
-            }
-            _ => Vec::new(),
-        }
+    /// The keys whose parsed markdown may have changed since `seen`, which
+    /// is moved on past them.
+    pub fn changed_since(seen: &mut u64, cx: &gpui_kit::App) -> Vec<MarkdownKey> {
+        let Some(states) = cx.try_global::<MarkdownStates>() else {
+            return Vec::new();
+        };
+        let start = states.changed.partition_point(|(n, _)| *n <= *seen);
+        *seen = states.latest;
+        let mut changed: Vec<MarkdownKey> =
+            states.changed.range(start..).map(|(_, key)| *key).collect();
+        changed.sort_by_key(|key| (key.kind as u8, key.table, key.row));
+        changed.dedup();
+        changed
+    }
+
+    /// The number of the latest change, for a list starting out.
+    pub fn latest(cx: &gpui_kit::App) -> u64 {
+        cx.try_global::<MarkdownStates>()
+            .map_or(0, |states| states.latest)
     }
 }

@@ -735,7 +735,7 @@ impl ChatInput {
         let content = match preview {
             Preview::Compiling => None,
             Preview::Compiled(markdown) => Some(
-                crate::prompt_mode::markdown_view(
+                crate::task_table::markdown_view(
                     crate::markdown::MarkdownKey {
                         kind: crate::markdown::MarkdownKind::Prompt,
                         table: PREVIEW_TABLE,
@@ -968,7 +968,7 @@ impl ChatInput {
         TABS[self.selected_tab]
     }
 
-    fn select_tab(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn select_tab(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
         // The prompt would compile differently in another mode.
         if ix != self.selected_tab {
             self.preview = None;
@@ -1164,22 +1164,34 @@ impl Render for ChatInput {
         };
         let code = div().relative().child(full_tab(0)).child(tab_tint(0));
         // The chain is laid over the start of Spec, so that it paints above
-        // both Code and Spec once they slide beneath it. Its bar is
-        // transparent, and clipped above the bottom border every bar draws,
-        // so Code and Spec show through beneath it; in the gap between them,
-        // the row's own background and bottom line show instead.
+        // both Code and Spec once they slide beneath it. It is a tab on its
+        // own, with no bar, since a bar draws a line along its bottom that
+        // would show beneath the joined tabs: hiding it with a clip a pixel
+        // above the bottom fails wherever the clip's edge rounds down onto
+        // the line. With nothing of its own drawn there, Code and Spec show
+        // through beneath it; in the gap between them, the gap's own line
+        // shows instead.
         let both = div()
             .absolute()
             .top_0()
-            .bottom(px(1.))
-            .overflow_hidden()
-            .child(full_tab(BOTH_TAB).bg(cx.theme().transparent))
+            .bottom_0()
+            .child({
+                let chat_input = chat_input.clone();
+                gpui_kit::TestSupportExt::test_support(div().id(TABS[BOTH_TAB].id())).child(
+                    tab(BOTH_TAB).on_click(move |_, window, cx| {
+                        chat_input
+                            .update(cx, |this, cx| this.select_tab(BOTH_TAB, window, cx))
+                            .ok();
+                    }),
+                )
+            })
             .child(measure_chain);
         // Once Code and Spec meet, Code's facing border is covered, in their
         // purple, so the joined tab shows no outline beneath the chain. The
         // cover reaches past the border so that, at fractional display scales,
         // no sliver of it is left showing at its edges.
         let seam_cover = cx.theme().tab_active.blend(tint(BOTH_TAB as f32));
+        let border = cx.theme().border;
         let spec = div()
             .relative()
             .child(full_tab(2))
@@ -1201,7 +1213,25 @@ impl Render for ChatInput {
                             this.bg(seam_cover)
                         }),
                 );
+                // The line along the bottom of the gap, beneath the chain while
+                // it sits apart, as wide as what is left of the gap, so there is
+                // none once Code and Spec meet. Drawn as every tab bar draws its
+                // line, the bottom border of a box the bar's full height: a box
+                // no taller than its own border has no inside, and the renderer
+                // draws nothing of it.
+                let gap_line = gpui_kit::TestSupportExt::test_support(
+                    div()
+                        .id("chain-gap-line")
+                        .absolute()
+                        .top_0()
+                        .bottom_0()
+                        .left(-gap)
+                        .w(gap)
+                        .border_b_1()
+                        .border_color(border),
+                );
                 this.ml(gap)
+                    .child(gap_line)
                     .child(seam)
                     .child(both.left(-gap - chain_width * 0.5 * joined))
             });
@@ -1212,16 +1242,23 @@ impl Render for ChatInput {
         // What the selected tab is for, in the rest of the bar: smaller and
         // fainter than the tab labels, so it reads as a note about the tab
         // rather than another tab.
+        // Each tab bar draws the line along its own bottom, and the gap
+        // between Code and Spec its own; the rest of the bar, beside the help,
+        // has its line here. Nothing draws a line beneath the joined tabs.
         let help = gpui_kit::TestSupportExt::test_support(
             div()
                 .id("tab-help")
                 .flex_1()
                 .min_w_0()
+                .self_stretch()
+                .flex()
+                .items_center()
                 .px_4()
-                .truncate()
+                .border_b_1()
+                .border_color(cx.theme().border)
                 .text_xs()
                 .text_color(cx.theme().muted_foreground.opacity(0.7))
-                .child(TABS[selected].help()),
+                .child(div().min_w_0().truncate().child(TABS[selected].help())),
         );
         let tabs = gpui_kit::TestSupportExt::test_support(
             div()
@@ -1230,18 +1267,6 @@ impl Render for ChatInput {
                 .flex()
                 .items_center()
                 .bg(cx.theme().tab_bar)
-                // The bar's bottom line, beneath every tab: under the chain it
-                // shows only while Code and Spec are apart, as the selected
-                // tabs cover it once they join beneath the chain.
-                .child(
-                    div()
-                        .absolute()
-                        .left_0()
-                        .bottom_0()
-                        .size_full()
-                        .border_b_1()
-                        .border_color(cx.theme().border),
-                )
                 .child(code)
                 .child(spec)
                 .child(ask)
@@ -1738,7 +1763,7 @@ mod tests {
 
     /// The chain has no line along its bottom while it is joined over Code
     /// and Spec, in combined mode, and has one, like any other tab, while it
-    /// sits between them unselected, in separate mode.
+    /// sits between them unselected, in separate mode, at any display scale.
     #[gpui_kit::test]
     async fn the_chain_has_a_bottom_line_only_apart(cx: &mut TestAppContext) {
         cx.update(|cx| {
@@ -1759,71 +1784,76 @@ mod tests {
             window.try_find("tab-help").is_some()
         })
         .await;
-        for (tab, joined) in [(0, false), (1, true), (2, false), (3, false)] {
-            cx.update_window(handle, |_, window, cx| {
-                chat_input.update(cx, |input, cx| input.select_tab(tab, window, cx));
-            })
-            .unwrap();
-            let [_, chain, _, _] = settle_tabs(handle, joined, cx);
-            cx.update_window(handle, |_, window, cx| {
-                window.render_frame(cx);
-                let scale = window.scale_factor();
-                let help = window.find("tab-help").bounds();
-                let bar = window.find("chat-tabs").bounds();
-                // Whether a visible horizontal line lies along `bottom`, over
-                // the middle of the span from `left` to `right`.
-                let line_at = |left: f32, right: f32, bottom: f32| {
-                    let (x, y) = ((left + right) / 2. * scale, bottom * scale - 0.5);
-                    let quads = window.painted_quads();
-                    // Whether an opaque quad drawn after `order` covers the point.
-                    let covered = |order| {
+        for scale in [1., 1.25, 1.5, 1.75, 2.] {
+            gpui_kit::VisualTestContext::from_window(handle, cx)
+                .simulate_scale_factor_change(scale);
+            for (tab, joined) in [(0, false), (1, true), (2, false), (3, false)] {
+                cx.update_window(handle, |_, window, cx| {
+                    chat_input.update(cx, |input, cx| input.select_tab(tab, window, cx));
+                })
+                .unwrap();
+                let [_, chain, _, _] = settle_tabs(handle, joined, cx);
+                cx.update_window(handle, |_, window, cx| {
+                    window.refresh();
+                    window.render_frame(cx);
+                    let scale = window.scale_factor();
+                    let help = window.find("tab-help").bounds();
+                    let bar = window.find("chat-tabs").bounds();
+                    // Whether a visible horizontal line lies along `bottom`, over
+                    // the middle of the span from `left` to `right`.
+                    let line_at = |left: f32, right: f32, bottom: f32| {
+                        let (x, y) = ((left + right) / 2. * scale, bottom * scale - 0.5);
+                        let quads = window.painted_quads();
+                        // Whether an opaque quad drawn after `order` covers the point.
+                        let covered = |order| {
+                            quads.iter().any(|q| {
+                                let (b, m) = (&q.bounds, &q.content_mask.bounds);
+                                q.order > order
+                                    && q.background.as_solid().is_some_and(|c| c.a >= 0.99)
+                                    && x >= b.origin.x.0.max(m.origin.x.0)
+                                    && x < (b.origin.x.0 + b.size.width.0)
+                                        .min(m.origin.x.0 + m.size.width.0)
+                                    && y >= b.origin.y.0.max(m.origin.y.0)
+                                    && y < (b.origin.y.0 + b.size.height.0)
+                                        .min(m.origin.y.0 + m.size.height.0)
+                            })
+                        };
                         quads.iter().any(|q| {
-                            let (b, m) = (&q.bounds, &q.content_mask.bounds);
-                            q.order > order
-                                && q.background.as_solid().is_some_and(|c| c.a >= 0.99)
-                                && x >= b.origin.x.0.max(m.origin.x.0)
-                                && x < (b.origin.x.0 + b.size.width.0)
-                                    .min(m.origin.x.0 + m.size.width.0)
-                                && y >= b.origin.y.0.max(m.origin.y.0)
-                                && y < (b.origin.y.0 + b.size.height.0)
-                                    .min(m.origin.y.0 + m.size.height.0)
+                            let b = &q.bounds;
+                            let m = &q.content_mask.bounds;
+                            let visible = |x: f32, y: f32| {
+                                x >= m.origin.x.0
+                                    && x < m.origin.x.0 + m.size.width.0
+                                    && y >= m.origin.y.0
+                                    && y < m.origin.y.0 + m.size.height.0
+                            };
+                            let border = q.border_widths.bottom.0 > 0.
+                                && q.border_color.a > 0.
+                                && x >= b.origin.x.0
+                                && x < b.origin.x.0 + b.size.width.0
+                                && y >= b.origin.y.0 + b.size.height.0 - q.border_widths.bottom.0
+                                && y < b.origin.y.0 + b.size.height.0;
+                            border && visible(x, y) && !covered(q.order)
                         })
                     };
-                    quads.iter().any(|q| {
-                        let b = &q.bounds;
-                        let m = &q.content_mask.bounds;
-                        let visible = |x: f32, y: f32| {
-                            x >= m.origin.x.0
-                                && x < m.origin.x.0 + m.size.width.0
-                                && y >= m.origin.y.0
-                                && y < m.origin.y.0 + m.size.height.0
-                        };
-                        let border = q.border_widths.bottom.0 > 0.
-                            && q.border_color.a > 0.
-                            && x >= b.origin.x.0
-                            && x < b.origin.x.0 + b.size.width.0
-                            && y >= b.origin.y.0 + b.size.height.0 - q.border_widths.bottom.0
-                            && y < b.origin.y.0 + b.size.height.0;
-                        border && visible(x, y) && !covered(q.order)
-                    })
-                };
-                // Clear of Code's and Spec's own edges.
-                let (left, right) = (chain.left().as_f32() + 8., chain.right().as_f32() - 8.);
-                assert_eq!(
-                    line_at(left, right, chain.bottom().as_f32()),
-                    !joined,
-                    "tab {tab}: the line under the chain {chain:?}"
-                );
-                assert!(
-                    line_at(
-                        help.left().as_f32(),
-                        help.right().as_f32(),
-                        bar.bottom().as_f32()
-                    ),
-                    "tab {tab}: no line under the help text"
-                );
-            })
-            .unwrap();
+                    // Clear of Code's and Spec's own edges.
+                    let (left, right) = (chain.left().as_f32() + 8., chain.right().as_f32() - 8.);
+                    assert_eq!(
+                        line_at(left, right, chain.bottom().as_f32()),
+                        !joined,
+                        "tab {tab} at {scale}x: the line under the chain {chain:?}"
+                    );
+                    assert!(
+                        line_at(
+                            help.left().as_f32(),
+                            help.right().as_f32(),
+                            bar.bottom().as_f32()
+                        ),
+                        "tab {tab} at {scale}x: no line under the help text"
+                    );
+                })
+                .unwrap();
+            }
         }
     }
 

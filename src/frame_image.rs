@@ -8,6 +8,19 @@ use gpui_kit::{Hsla, Rgba, Window};
 
 /// Writes the window's last frame as a binary PPM at `path`.
 pub fn save(window: &Window, path: &std::path::Path) {
+    let (w, h, px) = pixels(window);
+    let mut out = format!("P6\n{w} {h}\n255\n").into_bytes();
+    for p in px {
+        for c in p {
+            out.push((c.clamp(0., 1.) * 255.).round() as u8);
+        }
+    }
+    std::fs::write(path, out).unwrap();
+}
+
+/// The window's last frame, drawn: its width and height in device pixels, and
+/// each pixel's red, green, and blue, row by row.
+pub fn pixels(window: &Window) -> (usize, usize, Vec<[f32; 3]>) {
     let mut quads = window.painted_quads();
     quads.sort_by_key(|quad| quad.order);
     let (w, h) = quads.iter().fold((1usize, 1usize), |(w, h), q| {
@@ -44,10 +57,20 @@ pub fn save(window: &Window, path: &std::path::Path) {
         for y in (y0.floor() as usize)..(y1.ceil().max(0.) as usize) {
             for x in (x0.floor() as usize)..(x1.ceil().max(0.) as usize) {
                 let (fx, fy) = (x as f32 + 0.5, y as f32 + 0.5);
-                let border = fy < by0 + bw.top.0
-                    || fy > by1 - bw.bottom.0
-                    || fx < bx0 + bw.left.0
-                    || fx > bx1 - bw.right.0;
+                // As the renderer does for a quad without rounded corners: a
+                // pixel is border by the edges of the half of the quad it lies
+                // in, so a quad no taller than its bottom border draws that
+                // border in its lower half only.
+                let (cx, cy) = ((bx0 + bx1) / 2., (by0 + by1) / 2.);
+                let border = if fy < cy {
+                    fy < by0 + bw.top.0
+                } else {
+                    fy > by1 - bw.bottom.0
+                } || if fx < cx {
+                    fx < bx0 + bw.left.0
+                } else {
+                    fx > bx1 - bw.right.0
+                };
                 if border {
                     blend(x, y, q.border_color);
                 } else if let Some(fill) = fill {
@@ -56,11 +79,5 @@ pub fn save(window: &Window, path: &std::path::Path) {
             }
         }
     }
-    let mut out = format!("P6\n{w} {h}\n255\n").into_bytes();
-    for p in px {
-        for c in p {
-            out.push((c.clamp(0., 1.) * 255.).round() as u8);
-        }
-    }
-    std::fs::write(path, out).unwrap();
+    (w, h, px)
 }

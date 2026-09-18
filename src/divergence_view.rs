@@ -27,8 +27,8 @@ use crate::divergence::{
     Verdict, percent, tree_rows,
 };
 use crate::harness::{self, HarnessEvent};
-use crate::prompt_mode::{Reply, output_table};
 use crate::scrollbar::{self, SetLock};
+use crate::task_table::{self, Reply, TableView, TaskTable};
 
 actions!(suspense, [AnalyzeDivergence, ViewDivergenceReports]);
 
@@ -112,7 +112,7 @@ pub struct DivergenceView {
     /// What each agent has streamed, as a task's reply, code agent first.
     replies: [Reply; 2],
     /// Each agent's output table's scroll, and whether it follows the output.
-    output_scrolls: [ScrollHandle; 2],
+    output_tables: [TaskTable; 2],
     output_locked: [bool; 2],
     /// The saved reports, newest first, and which of them is showing.
     reports: Vec<SavedReport>,
@@ -184,7 +184,7 @@ impl DivergenceView {
             error: None,
             files: None,
             replies: Default::default(),
-            output_scrolls: Default::default(),
+            output_tables: [TaskTable::new(), TaskTable::new()],
             output_locked: [true; 2],
             reports,
             shown: None,
@@ -361,7 +361,7 @@ impl DivergenceView {
         self.error = None;
         self.files = None;
         self.replies = Default::default();
-        self.output_scrolls = Default::default();
+        self.output_tables = [TaskTable::new(), TaskTable::new()];
         self.output_locked = [true; 2];
         self.shown = None;
         self.selected = None;
@@ -795,40 +795,44 @@ impl DivergenceView {
     fn render_agent(&self, step: Step, cx: &mut Context<Self>) -> AnyElement {
         let ix = step.agent().unwrap_or_default();
         let theme = cx.theme();
-        let scroll = &self.output_scrolls[ix];
         let locked = self.output_locked[ix];
-        if locked {
-            scroll.scroll_to_bottom();
-        }
-        let output = div()
-            .id(("divergence-output", ix))
-            .size_full()
-            .overflow_y_scroll()
-            .track_scroll(scroll)
-            .px_4()
-            .pb_3()
-            .child(output_table(
-                OUTPUT_IX - ix,
-                &self.replies[ix],
-                None,
-                None,
-                cx,
-            ));
-        // Lets UI tests find the output; inert in normal builds.
-        let output = gpui_kit::TestSupportExt::test_support(output);
         let this = cx.entity().downgrade();
+        let reply_of = task_table::reply_of({
+            let this = this.clone();
+            move |cx| Some(&this.upgrade()?.read(cx).replies[ix])
+        });
         let toggle: SetLock = Rc::new(move |locked, _, cx| {
             this.update(cx, |this, cx| {
                 if this.output_locked[ix] != locked {
                     this.output_locked[ix] = locked;
                     if locked {
-                        this.output_scrolls[ix].scroll_to_bottom();
+                        this.output_tables[ix].scroll_to_end();
                     }
                     cx.notify();
                 }
             })
             .ok();
         });
+        let output = self.output_tables[ix].render(
+            &self.replies[ix],
+            reply_of,
+            TableView {
+                id: ("divergence-output", ix).into(),
+                scrollbar: format!("divergence-output-{ix}").into(),
+                table: OUTPUT_IX - ix,
+                open: None,
+                steps: None,
+                lock: Some((locked, toggle)),
+                padding: Edges {
+                    top: px(0.),
+                    right: px(16.),
+                    bottom: px(12.),
+                    left: px(16.),
+                },
+                max_height: None,
+            },
+            cx,
+        );
         let column = v_flex()
             .id(("divergence-agent", ix))
             .w(relative(0.5))
@@ -838,14 +842,7 @@ impl DivergenceView {
                 column.border_r_1().border_color(theme.border)
             })
             .child(self.step_heading(step, cx).flex_none().px_4().py_2())
-            .child(div().flex_1().min_h_0().child(scrollbar::with_scrollbar(
-                format!("divergence-output-{ix}"),
-                scroll,
-                output,
-                true,
-                Some((locked, toggle)),
-                cx,
-            )));
+            .child(div().flex_1().min_h_0().child(output));
         // Lets UI tests find the column; inert in normal builds.
         gpui_kit::TestSupportExt::test_support(column).into_any_element()
     }

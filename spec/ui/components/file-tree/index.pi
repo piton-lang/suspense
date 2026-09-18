@@ -43,3 +43,56 @@ shape FileTreeShape:
 
     opening:
         Clicking a file opens it, as the @{OpenFileScope} says.
+
+    contextMenu:
+        Right-clicking a file or folder, or the empty space beneath the rows,
+        opens a menu there, with, in order:
+        - "New File…", with a file-plus icon, and "New Folder…", with a folder-plus icon: in a folder right-clicked, in the folder holding a file right-clicked, or at the top of the project for the empty space
+        - a separator, then "Rename…", with a pencil icon, and "Delete", with a trash icon, for a file or folder only, not the empty space
+
+        Right-clicking a row doesn't open the file or expand the folder.
+
+        The tree has one menu: a right-click opens exactly one, in place of any
+        already open, never a row's menu and the empty space's together.
+        Choosing from it closes it, and the name then being given keeps the
+        focus, rather than the focus going back to whatever had it before the
+        menu opened. Closing the menu without choosing gives the focus back.
+
+    naming:
+        New File, New Folder, and Rename name what they make or rename in the
+        tree itself, inline, where a row's name is: the name is typed over the
+        row's label, in the same text size and at the same place, with no box
+        of its own taking room, only a thin outline in the theme's ring colour
+        just outside it. A row being named is exactly as tall and wide as it
+        was, and no other row moves: renaming moves nothing at all, and a new
+        file or folder only adds its own row, as tall as any other, at the top
+        of its folder, pushing the rows beneath it down by that one row. The
+        input has focus, with the name selected for Rename, or empty with a
+        placeholder for a new file or folder, the folder expanding to show its
+        row. <Enter> makes it so, and <Escape>, or focus moving elsewhere,
+        leaves everything as it was.
+
+        A name can't be empty, contain a slash or backslash, be "." or "..", or
+        be the name of something already in that folder, other than what is
+        being renamed; while it is, the outline is in the theme's error colour,
+        a small note just below the row says why, laid over the rows beneath
+        rather than moving them, and <Enter> does nothing. If the file system
+        refuses, the input stays, saying why the same way.
+
+        A new file is created empty and opens, as the @{OpenFileScope} says. A
+        new folder is created, and shown selected. A renamed file or folder
+        keeps its place in the tree's order by its new name, stays selected,
+        and a folder stays expanded if it was. A file open in the editor that
+        is renamed, or is inside a renamed folder, opens again at its new path,
+        unless it has unsaved changes, when it stays as it is.
+
+    deleting:
+        Delete first asks, in a dialog titled "Delete notes.md?" with the name
+        of what is deleted, saying it can't be undone, and for a folder, that
+        everything in it goes too, with a "Delete" button in the theme's error
+        colour and "Cancel". Deleting removes it from disk for good. A file open
+        in the editor that is deleted, or is inside a deleted folder, closes,
+        without asking about unsaved changes. If the file system refuses, a
+        notification titled "Could not delete" says why.
+
+        The tree then refreshes as it does for any change on disk.

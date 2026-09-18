@@ -21,8 +21,8 @@ use crate::checkbox::checkbox;
 use crate::divergence::{self, Cancel, RunAgent, percent};
 use crate::generate_skills::{self, Candidate, SpecMap};
 use crate::harness::{self, HarnessEvent};
-use crate::prompt_mode::{Reply, output_table};
 use crate::scrollbar::{self, SetLock};
+use crate::task_table::{self, Reply, TableView, TaskTable};
 
 actions!(suspense, [GenerateSkills]);
 
@@ -48,7 +48,7 @@ pub struct GenerateSkillsView {
     steps: [StepState; 2],
     map: Option<SpecMap>,
     reply: Reply,
-    output_scroll: ScrollHandle,
+    output_table: TaskTable,
     output_locked: bool,
     /// The scopes offered, once ranked, and which are checked and selected.
     candidates: Option<Vec<Candidate>>,
@@ -91,7 +91,7 @@ impl GenerateSkillsView {
             steps: [StepState::Pending, StepState::Pending],
             map: None,
             reply: Reply::default(),
-            output_scroll: ScrollHandle::new(),
+            output_table: TaskTable::new(),
             output_locked: true,
             candidates: None,
             checked: BTreeSet::new(),
@@ -403,29 +403,41 @@ impl GenerateSkillsView {
 
     fn render_running(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
-        if self.output_locked {
-            self.output_scroll.scroll_to_bottom();
-        }
-        let output = div()
-            .id("generate-skills-output")
-            .size_full()
-            .overflow_y_scroll()
-            .track_scroll(&self.output_scroll)
-            .px_4()
-            .pb_3()
-            .child(output_table(OUTPUT_IX, &self.reply, None, None, cx))
-            .map(gpui_kit::TestSupportExt::test_support);
         let this = cx.entity().downgrade();
+        let reply_of = task_table::reply_of({
+            let this = this.clone();
+            move |cx| Some(&this.upgrade()?.read(cx).reply)
+        });
         let toggle: SetLock = Rc::new(move |locked, _, cx| {
             this.update(cx, |this, cx| {
                 this.output_locked = locked;
                 if locked {
-                    this.output_scroll.scroll_to_bottom();
+                    this.output_table.scroll_to_end();
                 }
                 cx.notify();
             })
             .ok();
         });
+        let output = self.output_table.render(
+            &self.reply,
+            reply_of,
+            TableView {
+                id: "generate-skills-output".into(),
+                scrollbar: "generate-skills-output".into(),
+                table: OUTPUT_IX,
+                open: None,
+                steps: None,
+                lock: Some((self.output_locked, toggle)),
+                padding: Edges {
+                    top: px(0.),
+                    right: px(16.),
+                    bottom: px(12.),
+                    left: px(16.),
+                },
+                max_height: None,
+            },
+            cx,
+        );
         v_flex()
             .size_full()
             .child(
@@ -439,14 +451,7 @@ impl GenerateSkillsView {
                     .child(self.step_heading(0, "Mapping the spec", cx))
                     .child(self.step_heading(1, "Ranking scopes for skills", cx)),
             )
-            .child(div().flex_1().min_h_0().child(scrollbar::with_scrollbar(
-                "generate-skills-output",
-                &self.output_scroll,
-                output,
-                true,
-                Some((self.output_locked, toggle)),
-                cx,
-            )))
+            .child(div().flex_1().min_h_0().child(output))
             .into_any_element()
     }
 

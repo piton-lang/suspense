@@ -260,7 +260,7 @@ impl ProjectIndicator {
         let bounds = self.bounds.get()?;
         let theme = cx.theme();
         let palette = crate::theme::palette(cx);
-        let block = crate::theme::color(palette.well);
+        let block = block(cx);
         let line = crate::theme::color(palette.line);
         let edge = theme.border;
         let current = ProjectDirectory::get(cx);
@@ -432,6 +432,17 @@ impl ProjectIndicator {
     }
 }
 
+/// The indicator's own colour, which its list of recent projects takes too:
+/// pure black in dark mode, so it reads as a window of its own cut into the
+/// bar; a text input's background, the theme's well, in light mode.
+pub(crate) fn block(cx: &App) -> Hsla {
+    if cx.theme().is_dark() {
+        gpui_kit::black()
+    } else {
+        crate::theme::color(crate::theme::palette(cx).well)
+    }
+}
+
 impl Render for ProjectIndicator {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
@@ -459,12 +470,11 @@ impl Render for ProjectIndicator {
                 label.tooltip(move |window, cx| Tooltip::new(path.clone()).build(window, cx))
             });
         let label = self.label_contents(label, cx);
-        // The same background as a text input's.
-        let block = crate::theme::color(crate::theme::palette(cx).well);
+        let block = block(cx);
         let list = self.render_list(window, cx);
         let bounds = self.bounds.clone();
-        // A solid block, the full height of wherever it sits, on a text
-        // input's background. Lets UI tests find the name; inert in normal builds.
+        // A solid block, the full height of wherever it sits. Lets UI tests
+        // find the name; inert in normal builds.
         div()
             .flex_none()
             .h_full()

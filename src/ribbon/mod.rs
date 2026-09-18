@@ -49,8 +49,11 @@ actions!(
 /// faint seam between the tabs and the commands beneath them.
 const TAB_ROW_HEIGHT: Pixels = px(30.);
 
-/// The height of the commands beneath the tabs.
-const RIBBON_BODY_HEIGHT: Pixels = px(98.);
+/// How long the box a group's title is drawn across is before it is turned:
+/// longer than any group is tall, so the title is centred in its strip
+/// whatever the group's height, and clipped by the strip if a group is ever
+/// shorter than its title is long.
+const GROUP_TITLE_LENGTH: Pixels = px(240.);
 
 /// The padding at the right end of the commands, and above and below the buttons,
 /// though not the groups' title strips, which run the body's full height; and
@@ -62,6 +65,22 @@ const SLIM_HEIGHT: Pixels = px(22.);
 
 /// Slim buttons stacked in one column, at most.
 const SLIM_STACK: usize = 3;
+
+/// How tall a column of `slim` slim buttons is, with the gaps between them.
+fn stacked(slim: usize) -> Pixels {
+    SLIM_HEIGHT * slim as f32 + BODY_PADDING * (slim as f32 - 1.)
+}
+
+/// A full button is at least two slim buttons tall and at most three: as tall
+/// as its icon and label need, and taller if its group leaves the room, up to
+/// three.
+fn full_min() -> Pixels {
+    stacked(2)
+}
+
+fn full_max() -> Pixels {
+    stacked(SLIM_STACK)
+}
 
 /// The width of the strip down a group's left edge that holds its title,
 /// leaving room either side of the title.
@@ -175,6 +194,9 @@ enum CommandSize {
     /// A third of that, near enough, its small icon left of its label; slim
     /// buttons side by side stack down, three to a column.
     Slim,
+    /// As tall as slim but only as wide as its icon and label, for the
+    /// collapsed ribbon's row.
+    Small,
 }
 
 pub struct Ribbon {
@@ -437,14 +459,20 @@ impl Ribbon {
                 .rounded(ButtonRounded::None)
                 .bg(rest);
             match size {
-                CommandSize::Slim => button
+                // Slim fills its column; small, in a row, never stretches.
+                CommandSize::Slim | CommandSize::Small => button
                     .small()
                     .h(SLIM_HEIGHT)
-                    .w_full()
+                    .map(|button| match size {
+                        CommandSize::Small => button.flex_none(),
+                        _ => button.w_full(),
+                    })
                     .px_2()
                     .icon(Icon::new(icon).with_size(Size::Small))
                     .label(label),
-                CommandSize::Full => button.h_full().px_3().child(
+                // As tall as its own icon and label need, rather than the
+                // height a button takes by default.
+                CommandSize::Full => button.flex_none().h_auto().px_3().py_1p5().child(
                     v_flex()
                         .items_center()
                         .gap_1()
@@ -517,30 +545,44 @@ impl Render for Ribbon {
             for (tab, place) in primary {
                 if last_tab.is_some_and(|last| last != tab) {
                     // Centred like the controls, rather than stretched.
-                    row.push(div().w_px().h(px(16.)).bg(border).into_any_element());
+                    row.push(
+                        div()
+                            .flex_none()
+                            .w_px()
+                            .h(px(16.))
+                            .bg(border)
+                            .into_any_element(),
+                    );
                 }
                 last_tab = Some(tab);
-                row.push(self.render_command(place.command, CommandSize::Slim, cx));
+                row.push(self.render_command(place.command, CommandSize::Small, cx));
             }
-            // Lets UI tests find the row; inert in normal builds.
+            // Lets UI tests find the row; inert in normal builds. The
+            // indicator and chevron stay put; what's between them scrolls
+            // sideways when it's wider than the room left.
             return ribbon.child(gpui_kit::TestSupportExt::test_support(
                 h_flex()
                     .id("ribbon-primary")
                     .items_stretch()
-                    .child(self.render_indicator())
-                    .child(
+                    .child(div().flex().flex_none().child(self.render_indicator()))
+                    .child(gpui_kit::TestSupportExt::test_support(
                         h_flex()
+                            .id("ribbon-primary-commands")
                             .flex_1()
+                            .min_w_0()
+                            .overflow_x_scroll()
                             // Every control is vertically centred in the row.
                             .items_center()
                             .gap_2()
                             .px_2()
                             .py_1()
-                            .children(self.render_activity(cx))
-                            .children(row)
-                            .child(div().flex_1())
-                            .child(collapse),
-                    ),
+                            .children(
+                                self.render_activity(cx)
+                                    .map(|activity| div().flex_none().child(activity)),
+                            )
+                            .children(row),
+                    ))
+                    .child(h_flex().flex_none().items_center().pr_2().child(collapse)),
             ));
         }
 
@@ -662,6 +704,7 @@ impl Render for Ribbon {
                     .items_center()
                     .text_sm()
                     .pl(BODY_PADDING)
+                    .py(BODY_PADDING)
                     .text_color(muted)
                     .child("No commands yet")
                     .into_any_element(),
@@ -688,9 +731,8 @@ impl Render for Ribbon {
                     // groups' title strips run the body's full height.
                     .pr(BODY_PADDING)
                     .gap(BODY_PADDING)
-                    // Every tab is as tall, so the window beneath doesn't jump
-                    // when switching tabs.
-                    .h(RIBBON_BODY_HEIGHT)
+                    // No taller than its commands need.
+                    .flex_none()
                     // With the Code tab open alone, its body is tinted as the
                     // chat input's body is for its mode.
                     .when_some(body_tint, |this, tint| {
@@ -739,7 +781,6 @@ fn group(
             columns.push(
                 v_flex()
                     .flex_none()
-                    .h_full()
                     .gap(BODY_PADDING)
                     .children(stack.drain(..))
                     .into_any_element(),
@@ -750,9 +791,21 @@ fn group(
         match size {
             CommandSize::Full => {
                 flush(&mut stack, &mut columns);
-                columns.push(element);
+                // As tall as its content needs, and as tall as its group where
+                // that leaves the room, within two and three slim buttons; the
+                // button itself fills that.
+                columns.push(
+                    h_flex()
+                        .flex_none()
+                        .items_stretch()
+                        .overflow_hidden()
+                        .min_h(full_min())
+                        .max_h(full_max())
+                        .child(element)
+                        .into_any_element(),
+                );
             }
-            CommandSize::Slim => {
+            CommandSize::Slim | CommandSize::Small => {
                 if stack.len() == SLIM_STACK {
                     flush(&mut stack, &mut columns);
                 }
@@ -763,21 +816,24 @@ fn group(
     flush(&mut stack, &mut columns);
     // Lets UI tests find the group; inert in normal builds.
     gpui_kit::TestSupportExt::test_support(h_flex().id(label))
-        .h_full()
         .items_stretch()
         .gap(BODY_PADDING)
         .child(
             div()
                 .relative()
+                .flex()
                 .flex_none()
-                .h_full()
+                .items_center()
+                .overflow_hidden()
                 .w(GROUP_TITLE_WIDTH)
                 .bg(title_background)
                 .child(group_title(label, muted, font)),
         )
         .child(
+            // Each command takes the height it needs; a full button grows into
+            // its group's height where there is more of it, up to its own
+            // limit.
             h_flex()
-                .h_full()
                 .items_stretch()
                 .py(BODY_PADDING)
                 .gap(BODY_PADDING)
@@ -810,10 +866,11 @@ fn command_colors(cx: &App) -> ButtonCustomVariant {
 }
 
 /// A group's title, turned -90deg. gpui can only turn an SVG, so the title is
-/// drawn as SVG text: laid out across a box as long as the strip is tall, then
-/// turned about its centre, which is the strip's centre.
+/// drawn as SVG text: laid out across a long box, centred in it, then turned
+/// about its own centre. The box is centred in the strip, so the title is
+/// centred whatever the group's height.
 fn group_title(label: &str, color: Hsla, font: &str) -> impl IntoElement {
-    let (long, short) = (RIBBON_BODY_HEIGHT, GROUP_TITLE_WIDTH);
+    let (long, short) = (GROUP_TITLE_LENGTH, GROUP_TITLE_WIDTH);
     let escape = |text: &str| {
         text.replace('&', "&amp;")
             .replace('<', "&lt;")
@@ -837,9 +894,8 @@ fn group_title(label: &str, color: Hsla, font: &str) -> impl IntoElement {
     );
     svg()
         .data(source.as_bytes())
-        .absolute()
-        .top((long - short) / 2.)
-        .left((short - long) / 2.)
+        .flex_none()
+        .ml((short - long) / 2.)
         .w(long)
         .h(short)
         .text_color(color)
@@ -905,6 +961,69 @@ mod layout_tests {
 
     use super::{CommandSize, group};
 
+    /// A full command alone in its group is as tall as its content needs, but
+    /// never shorter than two slim buttons stacked, nor taller than three.
+    #[gpui_kit::test]
+    fn a_full_button_is_two_to_three_slim_buttons_tall(cx: &mut TestAppContext) {
+        use gpui_kit::component::Root;
+        use gpui_kit::test::TestWindowExt as _;
+        use gpui_kit::{
+            Context, InteractiveElement as _, IntoElement, ParentElement as _, Render, Styled as _,
+            Window, px,
+        };
+
+        struct View;
+        impl Render for View {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                // A command with hardly any content, and one with far more
+                // than three slim buttons' worth.
+                let full = |id: &'static str, content: gpui_kit::Pixels| {
+                    (
+                        CommandSize::Full,
+                        gpui_kit::TestSupportExt::test_support(
+                            div().id(id).w(px(60.)).child(div().h(content)),
+                        )
+                        .into_any_element(),
+                    )
+                };
+                // Each in a row of its own, so neither stretches the other.
+                let row = |id: &'static str, content: gpui_kit::Pixels| {
+                    div().flex().child(group(
+                        "Group",
+                        vec![full(id, content)],
+                        gpui_kit::black(),
+                        gpui_kit::black(),
+                        "sans-serif",
+                    ))
+                };
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(row("small", px(4.)))
+                    .child(row("large", px(200.)))
+            }
+        }
+        cx.update(gpui_kit::init);
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|_| View);
+            Root::new(view, window, cx)
+        });
+        cx.update_window(window.into(), |_, window, cx| {
+            window.render_frame(cx);
+            assert_eq!(
+                window.find("small").bounds().size.height,
+                super::stacked(2),
+                "a short command isn't two slim buttons tall"
+            );
+            assert_eq!(
+                window.find("large").bounds().size.height,
+                super::stacked(super::SLIM_STACK),
+                "a tall command isn't held to three slim buttons"
+            );
+        })
+        .unwrap();
+    }
+
     /// Four slim buttons in a row stack into a column of three, then a column
     /// of one; a full button between slim ones stands alone.
     #[gpui_kit::test]
@@ -931,11 +1050,12 @@ mod layout_tests {
                 let full = |id: &'static str| {
                     (
                         CommandSize::Full,
-                        gpui_kit::TestSupportExt::test_support(div().id(id).h_full().w(px(60.)))
+                        gpui_kit::TestSupportExt::test_support(div().id(id).w(px(60.)).h(px(44.)))
                             .into_any_element(),
                     )
                 };
-                div().h(super::RIBBON_BODY_HEIGHT).flex().child(group(
+                // No height of its own: the group is as tall as its commands.
+                div().flex().child(group(
                     "Group",
                     vec![
                         slim("a"),
@@ -971,10 +1091,12 @@ mod layout_tests {
             assert_eq!(d.top(), a.top(), "the fourth doesn't start a new column");
             assert_eq!(d.left() - a.right(), gap);
             assert_eq!(e.left() - d.right(), gap);
+            // A full button grows to the height of the tallest column beside
+            // it: here, three slim buttons and the gaps between them.
             assert_eq!(
                 e.size.height,
-                super::RIBBON_BODY_HEIGHT - super::BODY_PADDING * 2.,
-                "the full button isn't full height"
+                super::stacked(super::SLIM_STACK),
+                "the full button didn't grow to its group's height"
             );
             assert_eq!((f.top(), f.left() - e.right()), (a.top(), gap));
         })

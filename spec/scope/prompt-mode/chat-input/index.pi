@@ -144,7 +144,13 @@ shape ChatInputShape:
             In combined mode, with Chain selected, Chain has no line along its
             bottom, just as the joined Code and Spec beneath it have none. In
             separate mode, unselected, it has one, like any other unselected
-            tab: the tab bar's bottom line runs beneath it.
+            tab: the tab bar's bottom line runs beneath it, the same colour and
+            thickness, in the same place, as beneath any other unselected tab,
+            at any display scale. This holds at every
+            window size and display scale, in light and dark mode: in combined
+            mode nothing draws a line beneath Chain at all, rather than a line
+            being drawn and then hidden, since a hidden line can show again
+            wherever rounding to the display's pixels uncovers it.
 
             Selected, it shows a joined chain at full opacity. Selecting it
             animates as though it took a margin of -50% of its own width on both

@@ -27,7 +27,7 @@ use crate::new_project::{CloseNewProject, NewProject, NewProjectForm, ProjectCre
 use crate::palette::{Palette, Picked, SystemCommand, SystemState};
 use crate::project::open_project::{self, OpenProject};
 use crate::project_directory::ProjectDirectory;
-use crate::project_tree::{OpenDiff, OpenFile, ProjectTree};
+use crate::project_tree::{EntryMoved, OpenDiff, OpenFile, ProjectTree};
 use crate::prompt_mode::PromptMode;
 use crate::rescope_view::{CloseRescope, MinimizeRescope, RefactorConcepts, Rescope, RescopeView};
 use crate::ribbon::{self, Ribbon};
@@ -168,6 +168,17 @@ impl MainWindow {
                     prompt_mode.open_file(path.clone(), window, cx)
                 })
             }),
+            // A file or folder renamed or deleted in the tree takes the file
+            // open in the editor with it.
+            cx.subscribe_in(
+                &sidebar,
+                window,
+                |this, _, moved: &EntryMoved, window, cx| {
+                    this.prompt_mode.update(cx, |prompt_mode, cx| {
+                        prompt_mode.file_moved(&moved.from, moved.to.as_deref(), window, cx)
+                    })
+                },
+            ),
             cx.subscribe_in(&sidebar, window, |this, _, OpenDiff(path), window, cx| {
                 this.open_diff(path.clone(), window, cx)
             }),
@@ -1321,6 +1332,100 @@ mod tests {
 
     const TIMEOUT: Duration = Duration::from_secs(2);
 
+    /// The ribbon's body is only as tall as its commands need, and each
+    /// command only as tall as it needs: the body is the tallest column on the
+    /// open tab, padded 8 pixels above and below, so a tab of three stacked
+    /// slim buttons is taller than one of two, a tab with no commands is
+    /// shorter than any with them, and a full button beside a taller column
+    /// keeps its own height rather than stretching to the body's.
+    #[gpui_kit::test]
+    async fn the_ribbon_body_fits_its_commands(cx: &mut TestAppContext) {
+        use crate::ribbon::RibbonTab;
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let ribbon = main.unwrap().read_with(cx, |main, _| main.ribbon.clone());
+        let handle: gpui_kit::AnyWindowHandle = window.into();
+        let padding = gpui_kit::px(8.);
+        let body_of = |tab: RibbonTab, commands: &[&'static str], cx: &mut TestAppContext| {
+            ribbon.update(cx, |ribbon, cx| ribbon.select_tab(tab, cx));
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let body = window.find("ribbon-controls").bounds();
+                let (mut top, mut bottom) = (body.bottom(), body.top());
+                for command in commands {
+                    let bounds = window.find(*command).bounds();
+                    top = top.min(bounds.top());
+                    bottom = bottom.max(bounds.bottom());
+                }
+                if !commands.is_empty() {
+                    assert_eq!(top - body.top(), padding, "{tab:?}: above the commands");
+                    assert_eq!(body.bottom() - bottom, padding, "{tab:?}: below them");
+                }
+                body.size.height
+            })
+            .unwrap()
+        };
+        // Two slim buttons stacked, three slim buttons stacked, and no
+        // commands at all.
+        let project = body_of(
+            RibbonTab::Project,
+            &["new-project", "project-directory"],
+            cx,
+        );
+        let spec = body_of(
+            RibbonTab::Spec,
+            &[
+                "build",
+                "analyze-divergence",
+                "view-divergence-reports",
+                "generate-skills",
+                "rescope",
+                "new-scope",
+                "new-concept",
+                "new-shape",
+                "new-instruction",
+            ],
+            cx,
+        );
+        let empty = body_of(RibbonTab::Code, &[], cx);
+        assert!(
+            empty < project && project < spec,
+            "the tabs' bodies don't fit their commands: \
+             empty {empty:?}, two stacked {project:?}, three {spec:?}"
+        );
+
+        // On Spec, whose tallest column is three slim buttons, a full button
+        // is only as tall as its own icon and label.
+        ribbon.update(cx, |ribbon, cx| ribbon.select_tab(RibbonTab::Spec, cx));
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let body = window.find("ribbon-controls").bounds();
+            let full = window.find("build").bounds();
+            assert!(
+                full.size.height < body.size.height - padding * 2.,
+                "the full button {:?} stretched to its group {:?}",
+                full.size.height,
+                body.size.height
+            );
+            assert_eq!(full.top() - body.top(), padding, "it isn't at the top");
+        })
+        .unwrap();
+    }
+
     #[cfg(target_os = "macos")]
     const TOGGLE_RIBBON: &str = "cmd-f1";
     #[cfg(not(target_os = "macos"))]
@@ -1364,6 +1469,113 @@ mod tests {
         .await;
     }
 
+    /// Drawn as the window would draw it, the chat input's chain has no line
+    /// beneath it while joined over Code and Spec, and while apart has one
+    /// just like any other unselected tab's, the same colour, thickness, and
+    /// place, wherever the window's size and display scale put the chat input,
+    /// in dark and light mode alike. A line hidden by clipping, rather than
+    /// never drawn, shows at some of these, where the clip's edge rounds onto
+    /// it, and a line drawn unlike the tabs' own can come out thinner.
+    #[gpui_kit::test]
+    async fn the_chain_has_a_line_beneath_it_only_apart_at_any_size(cx: &mut TestAppContext) {
+        use gpui_kit::component::{ActiveTheme as _, Theme, ThemeMode};
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let chat_input = main
+            .unwrap()
+            .read_with(cx, |main, cx| main.prompt_mode.read(cx).chat_input_view());
+        let handle: gpui_kit::AnyWindowHandle = window.into();
+        let mut wrong = Vec::new();
+        for (tab, joined) in [(1, true), (0, false)] {
+            cx.update_window(handle, |_, window, cx| {
+                chat_input.update(cx, |input, cx| input.select_tab(tab, window, cx))
+            })
+            .unwrap();
+            for mode in [ThemeMode::Dark, ThemeMode::Light] {
+                cx.update(|cx| Theme::change(mode, None, cx));
+                for scale in [1., 1.25, 1.5, 1.75, 2.] {
+                    gpui_kit::VisualTestContext::from_window(handle, cx)
+                        .simulate_scale_factor_change(scale);
+                    for height in 600..612 {
+                        let size =
+                            gpui_kit::size(gpui_kit::px(1000.), gpui_kit::px(height as f32 + 0.3));
+                        gpui_kit::VisualTestContext::from_window(handle, cx).simulate_resize(size);
+                        cx.run_until_parked();
+                        // Lets the chain finish sliding into place.
+                        std::thread::sleep(Duration::from_millis(if height == 600 {
+                            400
+                        } else {
+                            5
+                        }));
+                        cx.update_window(handle, |_, window, cx| {
+                            window.render_frame(cx);
+                            window.render_frame(cx);
+                            let scale = window.scale_factor();
+                            let chain = window.within("both-tab").find(0usize).bounds();
+                            let border: gpui_kit::Rgba = cx.theme().border.into();
+                            let (width, rows, pixels) = crate::frame_image::pixels(window);
+                            // Clear of Code's and Spec's own edges.
+                            let columns = ((chain.left().as_f32() + 8.) * scale) as usize
+                                ..((chain.right().as_f32() - 8.) * scale) as usize;
+                            let bottom = (chain.bottom().as_f32() * scale).round() as usize;
+                            // A row under the chain mostly in the line's colour.
+                            let line =
+                                (bottom.saturating_sub(3)..(bottom + 1).min(rows)).any(|y| {
+                                    let lined = columns
+                                        .clone()
+                                        .filter(|x| {
+                                            let p = pixels[y * width + x.min(&(width - 1))];
+                                            (p[0] - border.r).abs() < 0.01
+                                                && (p[1] - border.g).abs() < 0.01
+                                                && (p[2] - border.b).abs() < 0.01
+                                        })
+                                        .count();
+                                    lined > columns.len() / 2
+                                });
+                            // Apart, the line beneath the chain is Ask's.
+                            if !joined {
+                                let ask = window.within("ask-tab").find(0usize).bounds();
+                                let (chain_x, ask_x) = (
+                                    (chain.center().x.as_f32() * scale) as usize,
+                                    (ask.center().x.as_f32() * scale) as usize,
+                                );
+                                let differs = (bottom.saturating_sub(4)..(bottom + 2).min(rows))
+                                    .any(|y| pixels[y * width + chain_x] != pixels[y * width + ask_x]);
+                                if differs {
+                                    wrong.push(format!(
+                                        "apart, a line unlike Ask's at {scale}x, {mode:?}, {height}px tall"
+                                    ));
+                                }
+                            }
+                            if line == joined {
+                                wrong.push(format!(
+                                    "{} at {scale}x, {mode:?}, {height}px tall: chain {chain:?}",
+                                    if joined {
+                                        "joined, a line"
+                                    } else {
+                                        "apart, no line"
+                                    }
+                                ));
+                            }
+                        })
+                        .unwrap();
+                    }
+                }
+            }
+        }
+        assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    }
+
     /// In the theme, dark and light, the ribbon's tabs are drawn as gpui-kit
     /// draws them: the Project tab, open when the window opens, shows as
     /// selected straight after the project indicator, which sits on a text
@@ -1399,15 +1611,20 @@ mod tests {
                 let top = prefix.top().as_f32() * scale;
                 let quads = window.painted_quads();
                 let theme = Theme::global(cx);
-                let area = crate::theme::color(crate::theme::palette(cx).well);
+                let area = crate::project_indicator::block(cx);
+                // Pure black in dark mode; a text input's background in light.
+                let expected = match mode {
+                    ThemeMode::Dark => gpui_kit::black(),
+                    _ => crate::theme::color(crate::theme::palette(cx).well),
+                };
+                assert_eq!(area, expected, "{mode:?}: the indicator's colour");
                 let background = quads.iter().find(|quad| {
                     (quad.bounds.origin.x.0 - left).abs() < 1.
                         && (quad.bounds.size.width.0 - (right - left)).abs() < 1.
                         && quad.background.as_solid() == Some(area)
                 });
-                let background = background.unwrap_or_else(|| {
-                    panic!("{mode:?}: the indicator isn't on a text input's background")
-                });
+                let background = background
+                    .unwrap_or_else(|| panic!("{mode:?}: the indicator isn't in its own colour"));
                 assert!(
                     background.border_widths.right.0 == 0. && background.border_widths.left.0 == 0.,
                     "{mode:?}: the indicator's area has a border"
@@ -1645,7 +1862,7 @@ mod tests {
             );
             let scale = window.scale_factor();
             let quads = window.painted_quads();
-            let well = crate::theme::color(crate::theme::palette(cx).well);
+            let well = crate::project_indicator::block(cx);
             let list_quad = quads
                 .iter()
                 .find(|q| {
@@ -1941,19 +2158,22 @@ mod tests {
 
         // The file slides in from the sidebar: its pane grows from the
         // sidebar's edge, through widths in between, and the file sits at the
-        // pane's right edge as it does.
+        // pane's right edge as it does. It slides over the chat history, which
+        // keeps its width meanwhile, so its rows aren't laid out anew.
         let sidebar = cx
             .update_window(handle, |_, window, _| window.find("project-tree").bounds())
             .unwrap();
         let mut widths = Vec::new();
+        let mut history_widths = Vec::new();
         let start = std::time::Instant::now();
         while start.elapsed() < Duration::from_millis(350) {
             let found = cx
                 .update_window(handle, |_, window, cx| {
                     window.render_frame(cx);
-                    window
-                        .try_find(("pane-slide", 1usize))
-                        .map(|pane| pane.bounds())
+                    window.try_find(("pane-slide", 1usize)).map(|pane| {
+                        history_widths.push(window.find("history").bounds().size.width);
+                        pane.bounds()
+                    })
                 })
                 .unwrap();
             if let Some(pane) = found {
@@ -1974,6 +2194,12 @@ mod tests {
                 .iter()
                 .any(|width| *width > gpui_kit::px(1.) && *width < widest - gpui_kit::px(1.)),
             "the pane {widths:?} appeared without sliding in"
+        );
+        assert!(
+            history_widths
+                .windows(2)
+                .all(|pair| (pair[1] - pair[0]).abs() < gpui_kit::px(0.5)),
+            "the chat history {history_widths:?} changed width as the file slid in"
         );
 
         // Once it has, the split settles at its share of the width.
@@ -2013,15 +2239,17 @@ mod tests {
         cx.update_window(handle, |_, window, cx| window.click("close-file", cx))
             .unwrap();
         let mut widths = Vec::new();
+        let mut history_widths = Vec::new();
         let start = std::time::Instant::now();
         while start.elapsed() < Duration::from_millis(350) {
             let found = cx
                 .update_window(handle, |_, window, cx| {
                     window.render_frame(cx);
                     crate::double_borders::assert_none(window);
-                    window
-                        .try_find(("pane-slide-out", 1usize))
-                        .map(|pane| pane.bounds())
+                    window.try_find(("pane-slide-out", 1usize)).map(|pane| {
+                        history_widths.push(window.find("history").bounds().size.width);
+                        pane.bounds()
+                    })
                 })
                 .unwrap();
             if let Some(pane) = found {
@@ -2039,6 +2267,12 @@ mod tests {
                     .iter()
                     .any(|width| *width > gpui_kit::px(1.) && *width < widths[0] - gpui_kit::px(1.)),
             "the pane {widths:?} closed without sliding out"
+        );
+        assert!(
+            history_widths
+                .windows(2)
+                .all(|pair| (pair[1] - pair[0]).abs() < gpui_kit::px(0.5)),
+            "the chat history {history_widths:?} changed width as the file slid out"
         );
         std::thread::sleep(Duration::from_millis(200));
         cx.update_window(handle, |_, window, cx| window.render_frame(cx))
@@ -3513,8 +3747,83 @@ mod tests {
                     "{control} is not centred: {bounds:?} in {row:?}"
                 );
             }
+            // Each command is only as wide as its icon and label, in the
+            // order of the tabs, rather than the first filling the row.
+            let small = [
+                "new-project",
+                "project-directory",
+                "build",
+                "dark-mode",
+                "settings",
+            ];
+            for pair in small.windows(2) {
+                let (a, b) = (window.find(pair[0]).bounds(), window.find(pair[1]).bounds());
+                assert!(
+                    b.left() - a.right() >= gpui_kit::px(8.),
+                    "{pair:?} overlap or touch"
+                );
+            }
+            for control in small {
+                let bounds = window.find(control).bounds();
+                assert!(
+                    bounds.size.width < gpui_kit::px(160.),
+                    "{control} stretches: {bounds:?} in {row:?}"
+                );
+            }
         })
         .unwrap();
+
+        // Too narrow for its commands, the row scrolls them sideways: the
+        // project indicator and chevron stay whole and in the window.
+        let wide = cx
+            .update_window(handle, |_, window, _| window.bounds().size)
+            .unwrap();
+        cx.simulate_window_resize(handle, gpui_kit::size(gpui_kit::px(360.), wide.height));
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let row = window.find("ribbon-primary").bounds();
+            let commands = window.find("ribbon-primary-commands").bounds();
+            let chevron = window.find("ribbon-collapse").bounds();
+            let name = window.find("ribbon-project-name").bounds();
+            let settings = window.find("settings").bounds();
+            assert!(
+                row.right() <= gpui_kit::px(360.),
+                "the row overflows: {row:?}"
+            );
+            assert!(chevron.right() <= row.right() && chevron.left() >= commands.right());
+            assert!(name.left() >= row.left() && name.right() <= commands.left());
+            assert!(
+                settings.right() > commands.right(),
+                "the commands squeeze to fit rather than scroll: {settings:?} in {commands:?}"
+            );
+            assert!(window.find("new-project").bounds().size.width < gpui_kit::px(160.));
+        })
+        .unwrap();
+        cx.update_window(handle, |_, window, cx| {
+            window.scroll(
+                "ribbon-primary-commands",
+                gpui_kit::ScrollDelta::Pixels(gpui_kit::point(
+                    gpui_kit::px(-2000.),
+                    gpui_kit::px(0.),
+                )),
+                cx,
+            )
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let commands = window.find("ribbon-primary-commands").bounds();
+            let settings = window.find("settings").bounds();
+            assert!(
+                settings.right() <= commands.right(),
+                "scrolling doesn't reach the last command: {settings:?} in {commands:?}"
+            );
+        })
+        .unwrap();
+        cx.simulate_window_resize(handle, wide);
+        cx.run_until_parked();
 
         // Ctrl+F1 again brings the tabs back; double-clicking one collapses it.
         cx.update_window(handle, |_, window, cx| window.press(TOGGLE_RIBBON, cx))

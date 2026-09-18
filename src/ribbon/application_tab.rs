@@ -41,7 +41,12 @@ pub(super) fn dark_mode(
     let block = h_flex().items_center().px_2().bg(background);
     match size {
         CommandSize::Slim => block.h(super::SLIM_HEIGHT).w_full().child(switch.small()),
-        CommandSize::Full => block.h_full().child(switch),
+        CommandSize::Small => block
+            .h(super::SLIM_HEIGHT)
+            .flex_none()
+            .child(switch.small()),
+        // As tall as its switch and label need, as a full button is.
+        CommandSize::Full => block.py_1().child(switch),
     }
     .into_any_element()
 }

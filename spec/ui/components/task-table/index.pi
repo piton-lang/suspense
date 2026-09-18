@@ -84,8 +84,27 @@ shape TaskTableShape:
 
         However long the output grows, drawing it costs no more than drawing
         the rows in view, so scrolling, animations, and new output stay smooth.
-        While the end of the table is scrolled out of view, raw output that
-        would only change the waiting row redraws nothing.
+        This holds wherever the table is used: every use shows it the same
+        way, with only the rows in view laid out. While the end of the table
+        is scrolled out of view, raw output that would only change the waiting
+        row redraws nothing.
+
+        Drawing a row takes the same little work whichever row it is and
+        however many rows there are. Only rows that are new, or whose content
+        changed, are laid out again; what a row shows that never changes once
+        known, such as a command laid out across lines or a line of raw output
+        highlighted, is worked out once.
+
+        The rows out of view are measured a few at a time over the frames
+        after they arrive, so the scrollbar comes to know the table's full
+        height without any one frame laying out every row. Until a row has been
+        measured, it counts as tall as it last was, or as the rows measured so
+        far on average. When the table's width changes, only the rows in view
+        are laid out anew straight away, staying where they are, and the rest
+        are measured again the same way. Once measured, the scrollbar's thumb
+        holds still: it never jumps as rows come into view while scrolling, and
+        rows added below while scrolled away from the end leave it where it
+        is.
 
     collapsedSteps:
         A use can say its table collapses the steps leading up to the answer,

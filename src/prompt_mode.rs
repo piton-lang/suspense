@@ -26,8 +26,8 @@
 //! with the others. Once over, it opens onto its whole table, and only then
 //! does the message list dim behind it.
 
-use std::cell::Cell;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -39,17 +39,13 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::ElementExt as _;
 use gpui_kit::base::TextSelection;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::highlighter::{HighlightTheme, SyntaxHighlighter};
-use gpui_kit::component::input::Rope;
 use gpui_kit::component::label::Label;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::resizable::{ResizableState, h_resizable, resizable_panel};
-use gpui_kit::component::skeleton::Skeleton;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::switch::Switch;
-use gpui_kit::component::table::{Table, TableBody, TableCell, TableHead, TableHeader, TableRow};
+use gpui_kit::component::table::{Table, TableBody, TableCell, TableRow};
 use gpui_kit::component::tag::Tag;
-use gpui_kit::component::text::{TextView, TextViewStyle};
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::component::{Disableable as _, Selectable as _, WindowExt as _};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -58,21 +54,25 @@ use gpui_kit::*;
 use crate::activity::{Job, JobKind};
 use crate::chat_input::{self, ChatInput, PreviewPrompt, QueuedEdit, SendMode, Submit, TabChanged};
 use crate::commit_notes;
-use crate::file_link::{self, OpenFile};
+use crate::file_link::OpenFile;
 use crate::file_view::{CloseFile, FileView, OpenDefinition, SendToPrompt};
 use crate::harness::{self, HarnessEvent};
 use crate::hidden_anchor::{self, HiddenAnchor};
 use crate::markdown;
 use crate::markdown::{MarkdownKey, MarkdownKind, MarkdownStates};
+use crate::measured_list::{MeasuredList, RenderRow};
 use crate::piton_build;
 use crate::piton_lsp::PitonSession;
 use crate::project_directory::ProjectDirectory;
 use crate::prompt_history::{self, RunRecord, SavedPrompt};
 use crate::prompt_queue::{self, QueuedPrompt};
-use crate::scrollbar::{self, Scroll, SetLock};
+use crate::scrollbar::{self, SetLock};
 use crate::selection_popover::{SelectionAction, selection_popover};
-use crate::shell_format;
 use crate::system_prompts;
+use crate::task_table::{
+    self, KIND_WIDTH, Layout as TableLayout, OutputRow, Reply, STATUS_WIDTH, Steps, TableSync,
+    TableView, TaskTable, ToolKind, relative_to_project, row_status, shown_markdown_view,
+};
 use crate::theme::Hue;
 
 /// The share of the width an opened file takes from the task view.
@@ -87,25 +87,11 @@ const PANE_SPRING: SpringConfig = SpringConfig::new(300., 35., 1.);
 /// The narrowest either side of the file split can be dragged.
 const MIN_SPLIT_WIDTH: Pixels = px(160.);
 
-/// How far beyond the output in view its rows are laid out, so scrolling
-/// doesn't show them popping in.
-const OUTPUT_OVERDRAW: Pixels = px(600.);
-
 /// The tallest the expanded queue gets before it scrolls.
 const MAX_QUEUE_HEIGHT: Pixels = px(240.);
 
 /// The tallest the compiled prompt in the header gets before it scrolls.
 const MAX_PROMPT_HEIGHT: Pixels = px(160.);
-
-/// The widths of the output table's badge and status columns; the detail
-/// column takes the rest.
-const KIND_WIDTH: Pixels = px(130.);
-const STATUS_WIDTH: Pixels = px(110.);
-
-/// How many lines of the harness's latest raw output stand in for output
-/// that has yet to arrive, and how much of each line is kept.
-const RAW_TAIL_LINES: usize = 3;
-const RAW_LINE_CHARS: usize = 400;
 
 /// How far a question slides up out of the chat input while it is a single
 /// row.
@@ -168,9 +154,6 @@ struct PromptTask {
     status: TaskStatus,
     /// The mode it was sent in, when known, which tints its header.
     mode: Option<SendMode>,
-    /// Unique among tasks, so a view laid out for one knows when it is shown
-    /// another.
-    uid: u64,
 }
 
 /// A sent prompt once compiled.
@@ -178,6 +161,25 @@ struct Compiled {
     /// The name of the hidden anchor it was compiled from.
     anchor: SharedString,
     markdown: String,
+    /// The markdown as it is shown, once worked out.
+    shown: std::cell::OnceCell<SharedString>,
+}
+
+impl Compiled {
+    fn new(anchor: SharedString, markdown: String) -> Self {
+        Self {
+            anchor,
+            markdown,
+            shown: std::cell::OnceCell::new(),
+        }
+    }
+
+    /// The markdown as it is shown.
+    fn shown(&self) -> SharedString {
+        self.shown
+            .get_or_init(|| markdown::without_inline_code(&self.markdown).into())
+            .clone()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -236,10 +238,6 @@ impl PromptTask {
             reply: Reply::default(),
             status: TaskStatus::Compiling,
             mode: None,
-            uid: {
-                static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-                NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-            },
         }
     }
 
@@ -249,15 +247,15 @@ impl PromptTask {
         let mut task = Self::new(saved.text.into());
         task.mode = anchor_mode(&saved.anchor);
         let Some(record) = saved.record else {
-            task.reply.done = true;
+            task.reply.stop();
             task.status = TaskStatus::Unrecorded;
             return task;
         };
         if let Some(markdown) = record.user_prompt {
-            task.set_compiled(Compiled {
-                anchor: saved.anchor.name().to_string().into(),
+            task.set_compiled(Compiled::new(
+                saved.anchor.name().to_string().into(),
                 markdown,
-            });
+            ));
         }
         for event in record.output.iter().flat_map(harness::parse) {
             task.apply(event);
@@ -286,7 +284,7 @@ impl PromptTask {
     }
 
     fn fail(&mut self, error: String) {
-        self.reply.parts.push(ReplyPart::Error(error));
+        self.reply.push_error(error);
         self.status = TaskStatus::Failed;
     }
 
@@ -296,329 +294,10 @@ impl PromptTask {
         if self.reply.done {
             return;
         }
-        self.reply.done = true;
-        self.reply.settle_tools(ToolState::Failed);
+        self.reply.stop();
         if self.status != TaskStatus::Failed {
             self.fail("The harness stopped without a result.".into());
         }
-    }
-}
-
-/// A harness reply as it streams in.
-#[derive(Default)]
-pub(crate) struct Reply {
-    parts: Vec<ReplyPart>,
-    /// The harness's last few raw output lines, newest last, each cut short.
-    raw_tail: VecDeque<String>,
-    done: bool,
-}
-
-enum ReplyPart {
-    Text(String),
-    Tool(ToolCall),
-    Error(String),
-}
-
-#[derive(Debug, PartialEq)]
-struct ToolCall {
-    id: String,
-    name: String,
-    summary: Option<String>,
-    state: ToolState,
-}
-
-impl ToolCall {
-    /// The tool's name, for the output column. Left out when the badge already
-    /// says what the tool is and there is a summary to show instead; a tool
-    /// the badge only calls "Tool" keeps its name.
-    fn shown_name(&self) -> Option<&str> {
-        let named_by_badge = ToolKind::of(&self.name) != ToolKind::Other;
-        (!named_by_badge || self.summary.is_none()).then_some(self.name.as_str())
-    }
-
-    /// Whether the call reads or edits one file, which its summary names.
-    fn works_on_a_file(&self) -> bool {
-        matches!(
-            self.name.as_str(),
-            "Read" | "Edit" | "MultiEdit" | "Write" | "NotebookRead" | "NotebookEdit"
-        )
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum ToolState {
-    Running,
-    Done,
-    Failed,
-}
-
-impl ToolState {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Running => "running",
-            Self::Done => "done",
-            Self::Failed => "failed",
-        }
-    }
-}
-
-/// The general type of a tool call, shown as its badge.
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum ToolKind {
-    Read,
-    Edit,
-    Command,
-    Web,
-    Agent,
-    Other,
-}
-
-impl ToolKind {
-    fn of(tool_name: &str) -> Self {
-        match tool_name {
-            "Read" | "Glob" | "Grep" | "LS" | "NotebookRead" => Self::Read,
-            "Edit" | "MultiEdit" | "Write" | "NotebookEdit" => Self::Edit,
-            "Bash" | "BashOutput" | "KillShell" | "KillBash" => Self::Command,
-            "WebFetch" | "WebSearch" => Self::Web,
-            "Task" | "Agent" => Self::Agent,
-            _ => Self::Other,
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::Read => "Files",
-            Self::Edit => "Edit",
-            Self::Command => "Command",
-            Self::Web => "Web",
-            Self::Agent => "Agent",
-            Self::Other => "Tool",
-        }
-    }
-
-    fn icon(self) -> IconName {
-        match self {
-            Self::Read => IconName::BookOpen,
-            Self::Edit => IconName::FilePenLine,
-            Self::Command => IconName::SquareTerminal,
-            Self::Web => IconName::Globe,
-            Self::Agent => IconName::Bot,
-            Self::Other => IconName::Wrench,
-        }
-    }
-
-    /// What stands in for a call's input while it streams in, for a kind whose
-    /// raw output would only be noise until the input is known. A tool of no
-    /// known kind has none, and shows the raw output instead.
-    fn pending_input(self) -> Option<&'static str> {
-        match self {
-            Self::Read => Some("Choosing what to read…"),
-            Self::Edit => Some("Writing the edit…"),
-            Self::Command => Some("Writing the command…"),
-            Self::Web => Some("Preparing the request…"),
-            Self::Agent => Some("Briefing the agent…"),
-            Self::Other => None,
-        }
-    }
-
-    fn hue(self) -> Hue {
-        match self {
-            Self::Read => Hue::Blue,
-            Self::Edit => Hue::Amber,
-            Self::Command => Hue::Purple,
-            Self::Web => Hue::Cyan,
-            Self::Agent => Hue::Green,
-            Self::Other => Hue::Grey,
-        }
-    }
-}
-
-/// A row of a task's output table.
-#[derive(Debug, PartialEq)]
-enum OutputRow<'a> {
-    /// Reply text; empty while its first words are on their way.
-    Text(&'a str),
-    Tool(&'a ToolCall),
-    Error(&'a str),
-    /// The harness is still at work, and nothing is known of what comes next.
-    Pending,
-}
-
-impl OutputRow<'_> {
-    /// The kind of the row, as a badge in its own colour, or a skeleton while
-    /// the kind is not yet known.
-    fn badge(&self, cx: &App) -> AnyElement {
-        let (tag, icon, label) = match self {
-            Self::Text(_) => (Tag::secondary(), IconName::MessageSquare, "Reply"),
-            Self::Tool(call) => {
-                let kind = ToolKind::of(&call.name);
-                (crate::theme::tag(kind.hue(), cx), kind.icon(), kind.label())
-            }
-            Self::Error(_) => (Tag::danger(), IconName::TriangleAlert, "Error"),
-            Self::Pending => {
-                return Skeleton::new()
-                    .w(px(84.))
-                    .h_6()
-                    .rounded_md()
-                    .into_any_element();
-            }
-        };
-        tag.text_sm()
-            .child(
-                h_flex()
-                    .gap_1()
-                    .child(Icon::new(icon).xsmall())
-                    .child(label),
-            )
-            .into_any_element()
-    }
-
-    /// Whether the row is still waiting on part of what it shows: text with no
-    /// words yet, or a running tool call whose input is not yet known.
-    fn is_partial(&self) -> bool {
-        match self {
-            Self::Text(text) => text.trim().is_empty(),
-            Self::Tool(call) => call.summary.is_none() && call.state == ToolState::Running,
-            Self::Error(_) => false,
-            Self::Pending => true,
-        }
-    }
-}
-
-impl Reply {
-    /// How many rows its table has.
-    #[cfg(test)]
-    pub(crate) fn row_count(&self) -> usize {
-        self.rows().len()
-    }
-
-    /// Folds a harness event into the reply. Returns an error to show when the
-    /// run failed.
-    pub(crate) fn apply(&mut self, event: HarnessEvent) -> Option<String> {
-        match event {
-            HarnessEvent::Output(mut line) => {
-                if let Some((end, _)) = line.char_indices().nth(RAW_LINE_CHARS) {
-                    line.truncate(end);
-                }
-                if self.raw_tail.len() == RAW_TAIL_LINES {
-                    self.raw_tail.pop_front();
-                }
-                self.raw_tail.push_back(line);
-            }
-            HarnessEvent::TextStarted => self.parts.push(ReplyPart::Text(String::new())),
-            HarnessEvent::TextDelta(delta) => match self.parts.last_mut() {
-                Some(ReplyPart::Text(text)) => text.push_str(&delta),
-                _ => self.parts.push(ReplyPart::Text(delta)),
-            },
-            HarnessEvent::ToolStarted { id, name } => self.parts.push(ReplyPart::Tool(ToolCall {
-                id,
-                name,
-                summary: None,
-                state: ToolState::Running,
-            })),
-            HarnessEvent::ToolInput { id, summary } => {
-                if let Some(call) = self.tool_mut(&id) {
-                    call.summary = Some(summary);
-                }
-            }
-            HarnessEvent::ToolFinished { id, is_error } => {
-                if let Some(call) = self.tool_mut(&id) {
-                    call.state = if is_error {
-                        ToolState::Failed
-                    } else {
-                        ToolState::Done
-                    };
-                }
-            }
-            HarnessEvent::Finished { is_error, result } => {
-                self.done = true;
-                self.settle_tools(if is_error {
-                    ToolState::Failed
-                } else {
-                    ToolState::Done
-                });
-                if is_error {
-                    return Some(if result.is_empty() {
-                        "The harness reported an error.".into()
-                    } else {
-                        result
-                    });
-                }
-                // Nothing streamed (e.g. an older harness): show the result.
-                if !self.has_text() && !result.is_empty() {
-                    self.parts.push(ReplyPart::Text(result));
-                }
-            }
-            HarnessEvent::Failed(error) => {
-                self.done = true;
-                self.settle_tools(ToolState::Failed);
-                return Some(error);
-            }
-            HarnessEvent::Session(_) => {}
-        }
-        None
-    }
-
-    /// Gives tool calls still running when the run ended the state they ended
-    /// in, so none is left reading "running".
-    fn settle_tools(&mut self, state: ToolState) {
-        for part in &mut self.parts {
-            if let ReplyPart::Tool(call) = part
-                && call.state == ToolState::Running
-            {
-                call.state = state;
-            }
-        }
-    }
-
-    fn tool_mut(&mut self, tool_id: &str) -> Option<&mut ToolCall> {
-        self.parts.iter_mut().rev().find_map(|part| match part {
-            ReplyPart::Tool(call) if call.id == tool_id => Some(call),
-            _ => None,
-        })
-    }
-
-    /// Whether the run has ended, with a result or without.
-    pub(crate) fn is_done(&self) -> bool {
-        self.done
-    }
-
-    /// Adds an error row to the end of the output.
-    pub(crate) fn push_error(&mut self, error: String) {
-        self.parts.push(ReplyPart::Error(error));
-    }
-
-    fn has_text(&self) -> bool {
-        self.parts
-            .iter()
-            .any(|part| matches!(part, ReplyPart::Text(text) if !text.trim().is_empty()))
-    }
-
-    /// The rows of the output table, in the order they happened. Text with
-    /// nothing in it is left out, unless it is the last thing in a reply still
-    /// streaming. Until the reply is done, it ends in a row that is still
-    /// filling in, adding a pending row if the last is already complete. Rows
-    /// only change or are added at the end as the reply streams, so a row
-    /// keeps its index.
-    fn rows(&self) -> Vec<OutputRow<'_>> {
-        let last = self.parts.len().saturating_sub(1);
-        let mut rows: Vec<_> = self
-            .parts
-            .iter()
-            .enumerate()
-            .filter_map(|(ix, part)| match part {
-                ReplyPart::Text(text) if text.trim().is_empty() && (self.done || ix != last) => {
-                    None
-                }
-                ReplyPart::Text(text) => Some(OutputRow::Text(text)),
-                ReplyPart::Tool(call) => Some(OutputRow::Tool(call)),
-                ReplyPart::Error(error) => Some(OutputRow::Error(error)),
-            })
-            .collect();
-        if !self.done && !rows.last().is_some_and(OutputRow::is_partial) {
-            rows.push(OutputRow::Pending);
-        }
-        rows
     }
 }
 
@@ -626,6 +305,11 @@ impl Reply {
 /// scrollable accordion of every one of them, oldest first, each headed by
 /// its status and prompt and opening onto its prompt and output. Previous
 /// tasks and previous answers are each one of these.
+///
+/// The accordion is one virtualized list: each item's heading is a row of it,
+/// and so, while an item is open, are its prompt, its table's header, each of
+/// its table's rows, and its end. However long an open item's output, only
+/// the rows in view are laid out.
 struct HistoryList {
     /// Element ids: the row's toggle, the accordion, and each item's heading.
     toggle: &'static str,
@@ -642,11 +326,9 @@ struct HistoryList {
     expanded: bool,
     /// The item opened in the accordion.
     open: Option<usize>,
-    /// Only the items in view are laid out, so a long history costs no more
-    /// to draw than a short one.
-    scroll: ListState,
-    /// How many items, and which open, the list was last laid out with.
-    laid_out: Cell<(usize, Option<usize>)>,
+    rows: MeasuredList,
+    /// What the list was last laid out for.
+    laid_out: RefCell<HistoryLaidOut>,
     /// Counts the times it was expanded.
     opened: usize,
     /// Just expanded, so its next layout scrolls it to the latest items.
@@ -655,7 +337,82 @@ struct HistoryList {
     collapse_steps: bool,
 }
 
+/// How many items a history list was laid out with, which was open, and what
+/// of the open one's prompt and table.
+#[derive(Default)]
+struct HistoryLaidOut {
+    count: usize,
+    open: Option<usize>,
+    compiled: bool,
+    table: TableSync,
+    markdown: u64,
+}
+
+/// What a row of a history list shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HistoryRow {
+    /// An item's heading.
+    Heading(usize),
+    /// The open item's prompt.
+    Prompt(usize),
+    /// The open item's table header, or "No output." for a finished item
+    /// with none.
+    TableHeader(usize),
+    /// A row of the open item's table.
+    TableRow(usize, usize),
+    /// The margin ending the open item.
+    End(usize),
+}
+
 impl HistoryList {
+    fn new(
+        ids: (&'static str, &'static str, &'static str),
+        (singular, plural, back): (&'static str, &'static str, &'static str),
+        id_base: usize,
+        collapse_steps: bool,
+    ) -> Self {
+        Self {
+            toggle: ids.0,
+            list: ids.1,
+            item: ids.2,
+            singular,
+            plural,
+            back,
+            id_base,
+            expanded: false,
+            open: None,
+            rows: MeasuredList::new(task_table::OVERDRAW),
+            laid_out: RefCell::default(),
+            opened: 0,
+            scroll_to_latest: Cell::new(false),
+            collapse_steps,
+        }
+    }
+
+    /// The previous tasks, whose tables show whole.
+    fn tasks() -> Self {
+        Self::new(
+            ("history-toggle", "task-list", "history-task"),
+            ("previous task", "previous tasks", "Back to the latest task"),
+            0,
+            false,
+        )
+    }
+
+    /// The previous answers, whose tables collapse their steps.
+    fn answers() -> Self {
+        Self::new(
+            ("ask-history-toggle", "ask-list", "ask-history-task"),
+            (
+                "previous answer",
+                "previous answers",
+                "Back to the questions",
+            ),
+            ASK_HISTORY_IX,
+            true,
+        )
+    }
+
     fn toggle(&mut self) {
         self.expanded = !self.expanded;
         if self.expanded {
@@ -711,113 +468,279 @@ impl HistoryList {
             .into_any_element()
     }
 
+    /// How many rows the open item's block takes: its prompt, table header,
+    /// table rows, and end.
+    fn block(table: usize) -> usize {
+        table + 3
+    }
+
+    /// What row `ix` of the list shows, with `open` open and its table `table`
+    /// rows long.
+    fn row_at(ix: usize, open: Option<(usize, usize)>) -> HistoryRow {
+        let Some((open, table)) = open else {
+            return HistoryRow::Heading(ix);
+        };
+        if ix <= open {
+            return HistoryRow::Heading(ix);
+        }
+        let at = ix - open - 1;
+        if at >= Self::block(table) {
+            return HistoryRow::Heading(ix - Self::block(table));
+        }
+        match at {
+            0 => HistoryRow::Prompt(open),
+            1 => HistoryRow::TableHeader(open),
+            at if at == table + 2 => HistoryRow::End(open),
+            at => HistoryRow::TableRow(open, at - 2),
+        }
+    }
+
     /// Every item, oldest first, as an accordion that scrolls: each headed by
     /// its status and prompt, and the one open showing its prompt and output.
+    #[allow(clippy::too_many_arguments)]
     fn render_list(
         &self,
+        tasks: &[PromptTask],
         tasks_of: fn(&PromptMode) -> &Vec<PromptTask>,
-        count: usize,
         select: fn(&mut PromptMode) -> &mut HistoryList,
+        steps_shown: &HashSet<usize>,
         open_file: &OpenFile,
         cx: &mut Context<PromptMode>,
     ) -> AnyElement {
-        // The list is told when items come or go, and that the open item,
-        // and any just closed, may have changed height.
-        let (laid_out_count, laid_out_open) = self.laid_out.get();
-        if laid_out_count != count {
-            self.scroll.reset(count);
-        } else {
-            for ix in [laid_out_open, self.open].into_iter().flatten() {
-                if ix < count {
-                    self.scroll.remeasure_items(ix..ix + 1);
+        let count = tasks.len();
+        let (id_base, collapse_steps) = (self.id_base, self.collapse_steps);
+        let open = self.open.filter(|open| *open < count);
+        let table_layout = open.map(|open| {
+            let task_ix = id_base + open;
+            let reply = &tasks[open].reply;
+            let steps = collapse_steps.then(|| steps_shown.contains(&task_ix));
+            (task_ix, reply, TableLayout::of(reply, steps))
+        });
+
+        // The list is told when items come or go, when an item opens or
+        // closes, and what of the open item's prompt and table changed.
+        {
+            let mut laid_out = self.laid_out.borrow_mut();
+            if laid_out.count != count {
+                self.rows.reset(count);
+                *laid_out = HistoryLaidOut {
+                    count,
+                    markdown: MarkdownStates::latest(cx),
+                    ..HistoryLaidOut::default()
+                };
+            }
+            if laid_out.open != open {
+                if let Some(was) = laid_out.open {
+                    let table = laid_out.table.layout().map_or(0, |layout| layout.items());
+                    self.rows.splice(was + 1..was + 1 + Self::block(table), 0);
+                    self.rows.remeasure(was..was + 1);
                 }
+                if let Some(open) = open {
+                    self.rows.splice(open + 1..open + 1, Self::block(0));
+                    self.rows.remeasure(open..open + 1);
+                }
+                laid_out.open = open;
+                laid_out.compiled = open.is_some_and(|open| tasks[open].compiled.is_some());
+                laid_out.table = TableSync::default();
+            }
+            if let (Some(open), Some((task_ix, reply, layout))) = (open, table_layout) {
+                let compiled = tasks[open].compiled.is_some();
+                let prompt_changed = MarkdownStates::changed_since(&mut laid_out.markdown, cx)
+                    .into_iter()
+                    .any(|key| key.kind == MarkdownKind::Prompt && key.table == task_ix);
+                if compiled != laid_out.compiled || prompt_changed {
+                    self.rows.remeasure(open + 1..open + 2);
+                    laid_out.compiled = compiled;
+                }
+                // "No output." stands in the header's place, for as long as
+                // there is none.
+                let empty = reply.row_count() == 0;
+                if laid_out.table.layout().is_some_and(|was| was.items() == 0) != empty {
+                    self.rows.remeasure(open + 2..open + 3);
+                }
+                laid_out
+                    .table
+                    .update(&self.rows, open + 3, task_ix, reply, layout, cx);
             }
         }
-        self.laid_out.set((count, self.open));
         if self.scroll_to_latest.take() {
-            self.scroll.scroll_to_end();
+            self.rows.scroll_to_end();
         }
 
         let theme = cx.theme();
         let (border, hover, muted) = (theme.border, theme.list_hover, theme.muted_foreground);
-        let (open, item_id, id_base, collapse_steps) =
-            (self.open, self.item, self.id_base, self.collapse_steps);
+        let (table_background, radius) = (theme.tokens.table, theme.radius);
+        let item_id = self.item;
         let this = cx.entity().downgrade();
         let open_file = open_file.clone();
-        let items = list(self.scroll.clone(), move |ix, _, cx| {
+        let table = table_layout.map(|(task_ix, _, layout)| {
+            let reply_of = task_table::reply_of({
+                let this = this.clone();
+                move |cx| {
+                    let prompt_mode = this.upgrade()?.read(cx);
+                    tasks_of(prompt_mode)
+                        .get(task_ix - id_base)
+                        .map(|task| &task.reply)
+                }
+            });
+            let steps = collapse_steps.then(|| steps(task_ix, steps_shown, &cx.entity()));
+            let rows = task_table::table_rows(
+                task_ix,
+                reply_of,
+                layout,
+                Some(open_file.clone()),
+                steps,
+                cx,
+            );
+            (layout.items(), rows)
+        });
+        let open_rows = open.zip(table.as_ref().map(|(items, _)| *items));
+        let render: RenderRow = Rc::new(move |ix, window, cx| {
             let Some(entity) = this.upgrade() else {
                 return div().into_any_element();
             };
-            let prompt_mode = entity.read(cx);
-            let Some(task) = tasks_of(prompt_mode).get(ix) else {
-                return div().into_any_element();
-            };
-            let is_open = open == Some(ix);
-            let task_ix = id_base + ix;
-            let this = this.clone();
-            let trigger = h_flex()
-                .id(("history-trigger", task_ix))
-                .justify_between()
-                .gap_3()
-                .py_2()
-                .px_3()
-                .font_medium()
-                .cursor_pointer()
-                .hover(move |style| style.bg(hover))
-                .on_click(move |_, _, cx| {
-                    this.update(cx, |this, cx| {
-                        let history = select(this);
-                        history.open = if history.open == Some(ix) {
-                            None
-                        } else {
-                            Some(ix)
-                        };
-                        cx.notify();
-                    })
-                    .ok();
-                })
-                .child(task_summary((item_id, ix), task_ix, task, cx))
-                .child(
-                    Icon::new(if is_open {
-                        IconName::ChevronDown
-                    } else {
-                        IconName::ChevronRight
-                    })
-                    .xsmall()
-                    .flex_none()
-                    .text_color(muted),
-                );
-            // As wide as the list, however long its lines, so they wrap and it
+            let row = Self::row_at(ix, open_rows);
+            // Everything an open item shows is set in from the list's edges,
+            // as wide as the list, however long its lines, so they wrap and it
             // is laid out as tall as it is measured.
-            v_flex()
-                .w_full()
-                .border_b_1()
-                .border_color(border)
-                .child(trigger)
-                // Closed items are not laid out.
-                .when(is_open, |item| {
+            let inset = || div().w_full().px_3();
+            match row {
+                HistoryRow::Heading(item) => {
+                    let Some(task) = tasks_of(entity.read(cx)).get(item) else {
+                        return div().into_any_element();
+                    };
+                    let is_open = open == Some(item);
+                    let task_ix = id_base + item;
+                    let this = this.clone();
+                    let trigger = h_flex()
+                        .id(("history-trigger", task_ix))
+                        .justify_between()
+                        .gap_3()
+                        .py_2()
+                        .px_3()
+                        .font_medium()
+                        .cursor_pointer()
+                        .hover(move |style| style.bg(hover))
+                        .on_click(move |_, _, cx| {
+                            this.update(cx, |this, cx| {
+                                let history = select(this);
+                                history.open = if history.open == Some(item) {
+                                    None
+                                } else {
+                                    Some(item)
+                                };
+                                cx.notify();
+                            })
+                            .ok();
+                        })
+                        .child(task_summary((item_id, item), task_ix, task, cx))
+                        .child(
+                            Icon::new(if is_open {
+                                IconName::ChevronDown
+                            } else {
+                                IconName::ChevronRight
+                            })
+                            .xsmall()
+                            .flex_none()
+                            .text_color(muted),
+                        );
+                    // An open item's line is below its end instead.
+                    div()
+                        .w_full()
+                        .when(!is_open, |item| item.border_b_1().border_color(border))
+                        .child(trigger)
+                        .into_any_element()
+                }
+                HistoryRow::Prompt(item) => {
+                    let task_ix = id_base + item;
+                    let shown = tasks_of(entity.read(cx))
+                        .get(item)
+                        .and_then(|task| task.compiled.as_ref())
+                        .map(Compiled::shown);
+                    // Its markdown's state is kept, so it's parsed once.
+                    if let Some(shown) = shown {
+                        MarkdownStates::prepare(prompt_key(task_ix), &shown, cx);
+                    }
+                    let Some(task) = tasks_of(entity.read(cx)).get(item) else {
+                        return div().into_any_element();
+                    };
                     // Lets UI tests find the panel; inert in normal builds.
-                    item.child(gpui_kit::TestSupportExt::test_support(
-                        v_flex()
+                    gpui_kit::TestSupportExt::test_support(
+                        inset()
                             .id(("history-panel", task_ix))
-                            .gap_3()
                             .pt_1()
+                            .pb_3()
+                            .child(task_prompt(task_ix, task, &open_file, cx)),
+                    )
+                    .into_any_element()
+                }
+                HistoryRow::TableHeader(item) => {
+                    let empty = tasks_of(entity.read(cx))
+                        .get(item)
+                        .is_none_or(|task| task.reply.row_count() == 0);
+                    if empty {
+                        return inset()
+                            .text_color(muted)
+                            .child("No output.")
+                            .into_any_element();
+                    }
+                    inset()
+                        .child(
+                            div()
+                                .overflow_hidden()
+                                .text_base()
+                                .line_height(relative(1.5))
+                                .rounded_t(radius)
+                                .border_t_1()
+                                .border_x_1()
+                                .border_color(border)
+                                .bg(table_background)
+                                .child(task_table::output_header(cx)),
+                        )
+                        .into_any_element()
+                }
+                HistoryRow::TableRow(_, row) => {
+                    let Some((_, rows)) = &table else {
+                        return div().into_any_element();
+                    };
+                    inset()
+                        .child(
+                            div()
+                                .text_base()
+                                .line_height(relative(1.5))
+                                .border_x_1()
+                                .border_color(border)
+                                .bg(table_background)
+                                .child(rows(row, window, cx)),
+                        )
+                        .into_any_element()
+                }
+                HistoryRow::End(item) => {
+                    let has_table = open_rows.is_some_and(|(_, rows)| rows > 0);
+                    // Lets UI tests find the end; inert in normal builds.
+                    gpui_kit::TestSupportExt::test_support(
+                        inset()
+                            .id(("history-panel-end", id_base + item))
                             .pb_2()
-                            .px_3()
-                            .child(task_prompt(task_ix, task, &open_file, cx))
-                            .child(output_table(
-                                task_ix,
-                                &task.reply,
-                                Some(&open_file),
-                                collapse_steps
-                                    .then(|| steps(task_ix, &prompt_mode.steps_shown, &entity)),
-                                cx,
-                            )),
-                    ))
-                })
-                .into_any_element()
-        })
-        .size_full();
+                            .border_b_1()
+                            .border_color(border)
+                            .when(has_table, |end| {
+                                end.child(
+                                    div()
+                                        .h(radius.max(px(1.)))
+                                        .rounded_b(radius)
+                                        .border_b_1()
+                                        .border_x_1()
+                                        .border_color(border)
+                                        .bg(table_background),
+                                )
+                            }),
+                    )
+                    .into_any_element()
+                }
+            }
+        });
+        let items = self.rows.element(render);
         let list = div()
             .id(SharedString::from(format!("{}-scroll", self.list)))
             .size_full()
@@ -825,7 +748,45 @@ impl HistoryList {
             .child(items);
         // Lets UI tests find the list; inert in normal builds.
         let list = gpui_kit::TestSupportExt::test_support(list);
-        scrollbar::with_scrollbar(self.list, &self.scroll, list, true, None, cx)
+        scrollbar::with_scrollbar(self.list, &self.rows, list, true, None, cx)
+    }
+}
+
+/// The task view at `width`, its right edge at the body's, with a sliding
+/// `pane` laid over its left. The task view's width doesn't change as the pane
+/// slides, so nothing in it is laid out anew.
+fn covered(history: Div, pane: impl IntoElement, width: Pixels, cx: &App) -> Div {
+    div()
+        .relative()
+        .size_full()
+        .overflow_hidden()
+        .child(
+            div()
+                .absolute()
+                .top_0()
+                .bottom_0()
+                .right_0()
+                .w(width)
+                .child(history),
+        )
+        .child(
+            div()
+                .absolute()
+                .top_0()
+                .bottom_0()
+                .left_0()
+                .occlude()
+                .bg(cx.theme().background)
+                .child(pane),
+        )
+}
+
+/// Where a task's compiled prompt's markdown is kept.
+fn prompt_key(task_ix: usize) -> MarkdownKey {
+    MarkdownKey {
+        kind: MarkdownKind::Prompt,
+        table: task_ix,
+        row: 0,
     }
 }
 
@@ -861,7 +822,7 @@ fn add_commit_note(
 struct Ask {
     id: usize,
     task: PromptTask,
-    scroll: ScrollHandle,
+    table: TaskTable,
     /// Its output stays scrolled to the bottom.
     locked: bool,
     /// Its run, stopped when the question is closed.
@@ -984,22 +945,7 @@ impl ProjectSession {
             working: false,
             history_stale: false,
             _history_load: Task::ready(()),
-            task_history: HistoryList {
-                toggle: "history-toggle",
-                list: "task-list",
-                item: "history-task",
-                singular: "previous task",
-                plural: "previous tasks",
-                back: "Back to the latest task",
-                collapse_steps: false,
-                id_base: 0,
-                expanded: false,
-                open: None,
-                scroll: scrollbar::measured_list(ListAlignment::Top, OUTPUT_OVERDRAW),
-                laid_out: Cell::new((0, None)),
-                opened: 0,
-                scroll_to_latest: Cell::new(false),
-            },
+            task_history: HistoryList::tasks(),
             queue: Vec::new(),
             queue_expanded: false,
             auto_send: true,
@@ -1010,22 +956,7 @@ impl ProjectSession {
             expanded_ask: None,
             steps_shown: HashSet::new(),
             answers: Vec::new(),
-            ask_history: HistoryList {
-                toggle: "ask-history-toggle",
-                list: "ask-list",
-                item: "ask-history-task",
-                singular: "previous answer",
-                plural: "previous answers",
-                back: "Back to the questions",
-                collapse_steps: true,
-                id_base: ASK_HISTORY_IX,
-                expanded: false,
-                open: None,
-                scroll: scrollbar::measured_list(ListAlignment::Top, OUTPUT_OVERDRAW),
-                laid_out: Cell::new((0, None)),
-                opened: 0,
-                scroll_to_latest: Cell::new(false),
-            },
+            ask_history: HistoryList::answers(),
             _ask_history_load: Task::ready(()),
             ask_session: None,
         }
@@ -1055,10 +986,7 @@ pub struct PromptMode {
     tasks: Vec<PromptTask>,
     /// The latest task's output, which follows new rows while scrolled to
     /// the bottom, or always while locked there.
-    output_list: ListState,
-    /// The task, and how many rows of it, the output list was last laid out
-    /// for.
-    output_list_for: Cell<(u64, usize, u64)>,
+    output_table: TaskTable,
     output_locked: bool,
     queue_scroll: ScrollHandle,
     chat_input: Entity<ChatInput>,
@@ -1180,8 +1108,7 @@ impl PromptMode {
             background: HashMap::new(),
             in_background: false,
             tasks: Vec::new(),
-            output_list: scrollbar::measured_list(ListAlignment::Top, OUTPUT_OVERDRAW),
-            output_list_for: Cell::new((0, 0, 0)),
+            output_table: TaskTable::new(),
             output_locked: false,
             queue_scroll: ScrollHandle::new(),
             chat_input,
@@ -1189,22 +1116,7 @@ impl PromptMode {
             working: false,
             history_stale: false,
             _history_load: Task::ready(()),
-            task_history: HistoryList {
-                toggle: "history-toggle",
-                list: "task-list",
-                item: "history-task",
-                singular: "previous task",
-                plural: "previous tasks",
-                back: "Back to the latest task",
-                collapse_steps: false,
-                id_base: 0,
-                expanded: false,
-                open: None,
-                scroll: scrollbar::measured_list(ListAlignment::Top, OUTPUT_OVERDRAW),
-                laid_out: Cell::new((0, None)),
-                opened: 0,
-                scroll_to_latest: Cell::new(false),
-            },
+            task_history: HistoryList::tasks(),
             queue: Vec::new(),
             next_queue_id: 0,
             queue_expanded: false,
@@ -1230,22 +1142,7 @@ impl PromptMode {
             drawer_fill_height: Rc::default(),
             stack_rows_height: Rc::default(),
             answers: Vec::new(),
-            ask_history: HistoryList {
-                toggle: "ask-history-toggle",
-                list: "ask-list",
-                item: "ask-history-task",
-                singular: "previous answer",
-                plural: "previous answers",
-                back: "Back to the questions",
-                collapse_steps: true,
-                id_base: ASK_HISTORY_IX,
-                expanded: false,
-                open: None,
-                scroll: scrollbar::measured_list(ListAlignment::Top, OUTPUT_OVERDRAW),
-                laid_out: Cell::new((0, None)),
-                opened: 0,
-                scroll_to_latest: Cell::new(false),
-            },
+            ask_history: HistoryList::answers(),
             _ask_history_load: Task::ready(()),
             on_ask_tab: false,
             ask_session: None,
@@ -1307,8 +1204,7 @@ impl PromptMode {
         // Nothing on screen carries over from the project left.
         self.output_locked = false;
         self.selection_popover = None;
-        self.output_list_for.set((0, 0, 0));
-        self.scroll_output_to_top();
+        self.output_table.forget();
         let working = self.working;
         self.chat_input
             .update(cx, |input, cx| input.set_busy(working, cx));
@@ -1456,7 +1352,7 @@ impl PromptMode {
     pub fn reveal_task(&mut self, cx: &mut Context<Self>) {
         self.task_history.expanded = false;
         self.close_answer_drawer();
-        self.output_list.scroll_to_end();
+        self.output_table.scroll_to_end();
         cx.notify();
     }
 
@@ -1555,6 +1451,51 @@ impl PromptMode {
         });
     }
 
+    /// Closes the file open beside the chat, which slides back into the
+    /// sidebar from the width it had.
+    fn close_file_pane(&mut self, cx: &mut Context<Self>) {
+        if let Some(file) = self.file.take() {
+            self.pane_closing = Some(PaneClosing {
+                file,
+                width: self.pane_width.get(),
+                slide: self.pane_opened.map_or(0, |(n, _)| n),
+                closed: Instant::now(),
+            });
+        }
+        cx.notify();
+    }
+
+    /// A file or folder was renamed to `to`, or deleted: the file open beside
+    /// the chat, when it is that file or inside that folder, opens again at
+    /// its new path unless it has unsaved changes, or closes without asking.
+    pub fn file_moved(
+        &mut self,
+        from: &Path,
+        to: Option<&Path>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(file) = self.file.as_ref().map(|file| file.read(cx)) else {
+            return;
+        };
+        let (open, dirty) = (file.path().to_path_buf(), file.is_dirty());
+        let Ok(within) = open.strip_prefix(from) else {
+            return;
+        };
+        match to {
+            Some(_) if dirty => {}
+            Some(to) => {
+                let moved = if within.as_os_str().is_empty() {
+                    to.to_path_buf()
+                } else {
+                    to.join(within)
+                };
+                self.show_file(moved, None, window, cx)
+            }
+            None => self.close_file_pane(cx),
+        }
+    }
+
     fn show_file(
         &mut self,
         path: PathBuf,
@@ -1577,18 +1518,7 @@ impl PromptMode {
                 this.chat_input
                     .update(cx, |input, cx| input.attach_text(text, cx));
             }),
-            cx.subscribe(&file, |this, _, _: &CloseFile, cx| {
-                // It slides back into the sidebar from the width it had.
-                if let Some(file) = this.file.take() {
-                    this.pane_closing = Some(PaneClosing {
-                        file,
-                        width: this.pane_width.get(),
-                        slide: this.pane_opened.map_or(0, |(n, _)| n),
-                        closed: Instant::now(),
-                    });
-                }
-                cx.notify();
-            }),
+            cx.subscribe(&file, |this, _, _: &CloseFile, cx| this.close_file_pane(cx)),
             cx.subscribe_in(
                 &file,
                 window,
@@ -1628,33 +1558,18 @@ impl PromptMode {
         // A raw output line only changes the raw tail at the end of the
         // output, so there is nothing to redraw while that is out of sight.
         let unseen = matches!(event, HarnessEvent::Output(_))
-            && (!latest || self.task_history.expanded || !self.output_end_in_view());
+            && (!latest || self.task_history.expanded || !self.output_table.end_in_view());
         // Follows new output only while already scrolled to the bottom.
-        let scroll = Scroll::from(&self.output_list);
+        let scroll = self.output_table.scroll();
         let following = scroll.offset().y <= -scroll.max_offset().y + px(1.);
         self.tasks[ix].apply(event);
         if unseen {
             return;
         }
         if (following || self.output_locked) && latest {
-            self.output_list.scroll_to_end();
+            self.output_table.scroll_to_end();
         }
         cx.notify();
-    }
-
-    /// Whether the end of the latest task's output, where the raw tail is,
-    /// was in view when last laid out.
-    fn output_end_in_view(&self) -> bool {
-        let count = self.output_list.item_count();
-        if count == 0 {
-            return true;
-        }
-        match self.output_list.item_is_below_viewport(count - 1) {
-            Some(below) => !below,
-            // Not measured: off screen once the list has been laid out, since
-            // everything in view is measured; otherwise not yet known.
-            None => self.output_list.viewport_bounds().size.height <= px(0.),
-        }
     }
 
     fn scroll_output_to_top(&self) {
@@ -1662,10 +1577,7 @@ impl PromptMode {
         if self.in_background {
             return;
         }
-        self.output_list.scroll_to(ListOffset {
-            item_ix: 0,
-            offset_in_item: px(0.),
-        });
+        self.output_table.scroll_to_top();
     }
 
     /// Heads the task at `ix` with the compiled markdown it was sent as, and
@@ -1678,10 +1590,7 @@ impl PromptMode {
         cx: &mut Context<Self>,
     ) {
         if let Some(task) = self.tasks.get_mut(ix) {
-            task.set_compiled(Compiled {
-                anchor: anchor.into(),
-                markdown,
-            });
+            task.set_compiled(Compiled::new(anchor.into(), markdown));
         }
         cx.notify();
     }
@@ -2095,7 +2004,7 @@ impl PromptMode {
         }
         self.output_locked = locked;
         if self.output_locked {
-            self.output_list.scroll_to_end();
+            self.output_table.scroll_to_end();
         }
         cx.notify();
     }
@@ -2337,9 +2246,9 @@ impl PromptMode {
                     if let Err(err) = saved {
                         // Shown without failing the task: the run itself is
                         // unaffected.
-                        task.reply.parts.push(ReplyPart::Error(format!(
+                        task.reply.push_error(format!(
                             "Could not save this task to the history: {err:#}"
-                        )));
+                        ));
                     }
                 }
                 this.working = false;
@@ -2453,10 +2362,7 @@ impl PromptMode {
                             .map(|session| harness::Resume { session, fork }),
                         project_dir.clone(),
                     );
-                    let compiled = Compiled {
-                        anchor: anchor.into(),
-                        markdown: prompt,
-                    };
+                    let compiled = Compiled::new(anchor.into(), prompt);
                     if this
                         .update(cx, |this, cx| {
                             this.in_project(&project_dir, cx, |this, cx| {
@@ -2533,7 +2439,7 @@ impl PromptMode {
         self.asks.push(Ask {
             id: self.next_ask_id,
             task: PromptTask::new(text),
-            scroll: ScrollHandle::new(),
+            table: TaskTable::new(),
             locked: false,
             _run: Task::ready(()),
         });
@@ -2551,7 +2457,7 @@ impl PromptMode {
         if let Some(ask) = self.asks.iter_mut().find(|ask| ask.id == id) {
             update(&mut ask.task);
             if ask.locked {
-                ask.scroll.scroll_to_bottom();
+                ask.table.scroll_to_end();
             }
             cx.notify();
         }
@@ -2561,7 +2467,7 @@ impl PromptMode {
     /// any other down to its row.
     fn expand_ask(&mut self, id: usize, cx: &mut Context<Self>) {
         if let Some(ask) = self.asks.iter().find(|ask| ask.id == id) {
-            ask.scroll.set_offset(point(px(0.), px(0.)));
+            ask.table.scroll_to_top();
             self.expanded_ask = Some(id);
             cx.notify();
         }
@@ -2737,9 +2643,10 @@ impl PromptMode {
             history.push(self.render_ask_history_row(cx));
             let open_file = self.file_opener(cx);
             let list = self.ask_history.render_list(
+                &self.answers,
                 |this| &this.answers,
-                self.answers.len(),
                 |this| &mut this.ask_history,
+                &self.steps_shown,
                 &open_file,
                 cx,
             );
@@ -2925,25 +2832,14 @@ impl PromptMode {
                         .child(first_line(&task.text)),
                 )
                 .child(close);
-            if ask.locked {
-                ask.scroll.scroll_to_bottom();
-            }
-            let output = div()
-                .id(("ask-output", id))
-                .size_full()
-                .overflow_y_scroll()
-                .track_scroll(&ask.scroll)
-                .px_4()
-                .pb_3()
-                .child(output_table(
-                    ASK_IX - id,
-                    &task.reply,
-                    Some(&open),
-                    Some(self.steps(ASK_IX - id, cx)),
-                    cx,
-                ));
-            // Lets UI tests find the output; inert in normal builds.
-            let output = gpui_kit::TestSupportExt::test_support(output);
+            let reply_of = task_table::reply_of({
+                let this = cx.entity().downgrade();
+                move |cx| {
+                    let this = this.upgrade()?.read(cx);
+                    let ask = this.asks.iter().find(|ask| ask.id == id)?;
+                    Some(&ask.task.reply)
+                }
+            });
             let this = cx.entity().downgrade();
             let toggle: SetLock = Rc::new(move |locked, _, cx| {
                 this.update(cx, |this, cx| {
@@ -2952,24 +2848,34 @@ impl PromptMode {
                     {
                         ask.locked = locked;
                         if ask.locked {
-                            ask.scroll.scroll_to_bottom();
+                            ask.table.scroll_to_end();
                         }
                         cx.notify();
                     }
                 })
                 .ok();
             });
-            vec![
-                heading.into_any_element(),
-                scrollbar::with_scrollbar(
-                    format!("ask-output-{id}"),
-                    &ask.scroll,
-                    output,
-                    true,
-                    Some((ask.locked, toggle)),
-                    cx,
-                ),
-            ]
+            let output = ask.table.render(
+                &task.reply,
+                reply_of,
+                TableView {
+                    id: ("ask-output", id).into(),
+                    scrollbar: format!("ask-output-{id}").into(),
+                    table: ASK_IX - id,
+                    open: Some(&open),
+                    steps: Some(self.steps(ASK_IX - id, cx)),
+                    lock: Some((ask.locked, toggle)),
+                    padding: Edges {
+                        top: px(0.),
+                        right: px(16.),
+                        bottom: px(12.),
+                        left: px(16.),
+                    },
+                    max_height: None,
+                },
+                cx,
+            );
+            vec![heading.into_any_element(), output]
         } else {
             let summary = if done {
                 // Over: its status and the question, opening onto its table.
@@ -3253,184 +3159,39 @@ impl PromptMode {
             return div().into_any_element();
         };
         let task_ix = self.tasks.len() - 1;
-        let rows = task.reply.rows();
-        let count = rows.len();
-        // What the last rows, which stream, show, so they're remeasured only
-        // when that changes; remeasuring has the list go over every row.
-        let streaming = {
-            use std::hash::{Hash as _, Hasher as _};
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            for row in &rows[count.saturating_sub(2)..] {
-                match row {
-                    OutputRow::Text(text) => (0, *text).hash(&mut hasher),
-                    OutputRow::Error(text) => (1, *text).hash(&mut hasher),
-                    OutputRow::Tool(call) => {
-                        (2, &call.name, &call.summary, call.state as u8).hash(&mut hasher)
-                    }
-                    OutputRow::Pending => 3.hash(&mut hasher),
-                }
-            }
-            hasher.finish()
-        };
-        drop(rows);
-        // Only the rows in view are laid out, so drawing it costs the same
-        // however long the output grows. The list is told when the task
-        // changes, when rows come or go, and that the last rows, which
-        // stream, may have changed height.
-        let (laid_out_task, laid_out_count, laid_out_streaming) = self.output_list_for.get();
-        if laid_out_task != task.uid {
-            self.output_list.reset(count);
-        } else if laid_out_count != count {
-            self.output_list.splice(
-                laid_out_count.min(count)..laid_out_count,
-                count - laid_out_count.min(count),
-            );
-            scrollbar::measure_new_rows(&self.output_list);
-        }
-        self.output_list_for.set((task.uid, count, streaming));
-        // Its markdown's states are kept, so rows measure as tall out of view
-        // as in it: all of them when the task or its rows change, and the last
-        // rows as they stream.
-        let changed_rows = if laid_out_task != task.uid || laid_out_count != count {
-            Some(0..count)
-        } else {
-            (streaming != laid_out_streaming).then(|| count.saturating_sub(2)..count)
-        };
-        if let Some(rows) = changed_rows {
-            let project_dir = ProjectDirectory::get(cx);
-            for (key, text) in task_markdown(task_ix, task, rows, false, project_dir.as_deref()) {
-                MarkdownStates::prepare(key, &text, cx);
-            }
-        }
-        if count > 0 && streaming != laid_out_streaming {
-            self.output_list
-                .remeasure_items(count.saturating_sub(2)..count);
-        }
-        if self.output_locked {
-            self.output_list.scroll_to_end();
-        }
-
-        let theme = cx.theme();
-        let content = if count == 0 {
-            div()
-                .p_4()
-                .text_color(theme.muted_foreground)
-                .child("No output.")
-                .into_any_element()
-        } else {
-            let this = cx.entity().downgrade();
-            let open = self.file_opener(cx);
-            let border = theme.border;
-            let rows = list(self.output_list.clone(), move |row_ix, _, cx| {
-                let Some(this) = this.upgrade() else {
-                    return div().into_any_element();
-                };
-                let this = this.read(cx);
-                let Some(task) = this.tasks.get(task_ix) else {
-                    return div().into_any_element();
-                };
-                let rows = task.reply.rows();
-                let Some(row) = rows.get(row_ix) else {
-                    return div().into_any_element();
-                };
-                let project_dir = ProjectDirectory::get(cx);
-                div()
-                    .when(row_ix > 0, |row| row.border_t_1().border_color(border))
-                    .child(output_row(
-                        task_ix,
-                        &task.reply,
-                        row_ix,
-                        row,
-                        Some(&open),
-                        project_dir.as_deref(),
-                        cx,
-                    ))
-                    .into_any_element()
-            })
-            .size_full();
-            // A table, as elsewhere, with its header kept above the rows as
-            // they scroll.
-            v_flex()
-                .size_full()
-                .overflow_hidden()
-                .text_base()
-                .line_height(relative(1.5))
-                .rounded(theme.radius)
-                .border_1()
-                .border_color(theme.border)
-                .bg(theme.tokens.table)
-                .child(output_header(cx))
-                .child(div().flex_1().min_h_0().child(rows))
-                .into_any_element()
-        };
-        let output = div().id("task-output").size_full().p_4().child(content);
-        // Lets UI tests find the output; inert in normal builds.
-        let output = gpui_kit::TestSupportExt::test_support(output);
         let this = cx.entity().downgrade();
+        let reply_of = task_table::reply_of({
+            let this = this.clone();
+            move |cx| {
+                let task = this.upgrade()?.read(cx).tasks.get(task_ix)?;
+                Some(&task.reply)
+            }
+        });
+        let open = self.file_opener(cx);
         let toggle: SetLock = Rc::new(move |locked, _, cx| {
             this.update(cx, |this, cx| this.set_output_lock(locked, cx))
                 .ok();
         });
-        scrollbar::with_scrollbar(
-            "task-output",
-            &self.output_list,
-            output,
-            true,
-            Some((self.output_locked, toggle)),
+        self.output_table.render(
+            &task.reply,
+            reply_of,
+            TableView {
+                id: "task-output".into(),
+                scrollbar: "task-output".into(),
+                table: task_ix,
+                open: Some(&open),
+                steps: None,
+                lock: Some((self.output_locked, toggle)),
+                padding: Edges::all(px(16.)),
+                max_height: None,
+            },
             cx,
         )
     }
 }
 
-impl PromptMode {
-    /// Keeps the markdown states of the open previous task and answer, and
-    /// has each list measure again a row whose markdown finished parsing
-    /// since it was last measured (see [`MarkdownStates`]).
-    fn keep_markdown(&self, cx: &mut Context<Self>) {
-        let project_dir = ProjectDirectory::get(cx);
-        let lists = [
-            (&self.task_history, &self.tasks),
-            (&self.ask_history, &self.answers),
-        ];
-        for (history, tasks) in lists {
-            let Some(open) = history.open.filter(|_| history.expanded) else {
-                continue;
-            };
-            if let Some(task) = tasks.get(open) {
-                let rows = 0..task.reply.rows().len();
-                let pieces = task_markdown(
-                    history.id_base + open,
-                    task,
-                    rows,
-                    true,
-                    project_dir.as_deref(),
-                );
-                for (key, text) in pieces {
-                    MarkdownStates::prepare(key, &text, cx);
-                }
-            }
-        }
-        let latest = self.tasks.len().checked_sub(1);
-        for key in MarkdownStates::take_changed(cx) {
-            if Some(key.table) == latest && key.kind != MarkdownKind::Prompt {
-                self.output_list.remeasure_items(key.row..key.row + 1);
-                scrollbar::measure_new_rows(&self.output_list);
-            }
-            for history in [&self.task_history, &self.ask_history] {
-                if let Some(open) = history.open
-                    && key.table == history.id_base + open
-                {
-                    history.scroll.remeasure_items(open..open + 1);
-                    scrollbar::measure_new_rows(&history.scroll);
-                }
-            }
-        }
-    }
-}
-
 impl Render for PromptMode {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.keep_markdown(cx);
         // The popover for text selected in an answer goes with the drawer.
         if !self.drawer_open() {
             self.selection_popover = None;
@@ -3461,9 +3222,10 @@ impl Render for PromptMode {
         } else if self.task_history.expanded {
             let open_file = self.file_opener(cx);
             self.task_history.render_list(
+                &self.tasks,
                 |this| &this.tasks,
-                self.tasks.len(),
                 |this| &mut this.task_history,
+                &self.steps_shown,
                 &open_file,
                 cx,
             )
@@ -3528,9 +3290,10 @@ impl Render for PromptMode {
         };
         let body = match pane {
             // Just opened, the pane grows out of the sidebar at its left, with
-            // the file sliding into view from behind the sidebar's edge, and
-            // the task view giving way beside it. Once it has, it is an ordinary
-            // split that can be dragged.
+            // the file sliding into view from behind the sidebar's edge, over
+            // the task view, which keeps its width until the slide settles, so
+            // its rows aren't laid out anew each frame. Once it has, it is an
+            // ordinary split that can be dragged.
             Some((file, file_min)) if sliding.is_some() && self.body_width.get() > px(0.) => {
                 window.request_animation_frame();
                 let width = pane_width(file_min);
@@ -3558,12 +3321,7 @@ impl Render for PromptMode {
                     grow,
                     |this, width| this.w(width.max(px(0.))),
                 );
-                body.child(
-                    h_flex()
-                        .size_full()
-                        .child(pane)
-                        .child(div().flex_1().min_w_0().h_full().child(history)),
-                )
+                body.child(covered(history, pane, self.body_width.get(), cx))
             }
             Some((file, file_min)) => {
                 let mut file_panel = resizable_panel().size_range(file_min..Pixels::MAX);
@@ -3584,8 +3342,8 @@ impl Render for PromptMode {
                 )
             }
             // Just closed, the pane shrinks back into the sidebar, with the
-            // file sliding out of view behind the sidebar's edge, and the task
-            // view growing back beside it.
+            // file sliding out of view behind the sidebar's edge, uncovering
+            // the task view, already at its full width beneath it.
             None if let Some(closing) = &self.pane_closing => {
                 window.request_animation_frame();
                 let shrink = SpringAnimation::new(PANE_SPRING)
@@ -3614,12 +3372,7 @@ impl Render for PromptMode {
                     shrink,
                     |this, width| this.w(width.max(px(0.))),
                 );
-                body.child(
-                    h_flex()
-                        .size_full()
-                        .child(pane)
-                        .child(div().flex_1().min_w_0().h_full().child(history)),
-                )
+                body.child(covered(history, pane, self.body_width.get(), cx))
             }
             None => body.child(history),
         };
@@ -3659,104 +3412,6 @@ impl Render for PromptMode {
             .child(body)
             .child(self.chat_input.clone())
     }
-}
-
-/// Markdown whose headings are sized from the window's base font size; left
-/// to its default, the smaller headings come out below the body text. With
-/// `open`, a link to a file opens it in the editor.
-pub(crate) fn markdown_view(
-    key: MarkdownKey,
-    text: &str,
-    open: Option<&OpenFile>,
-    cx: &App,
-) -> TextView {
-    let text = markdown::without_inline_code(text);
-    let view = cached_text_view(key, text, cx).style(TextViewStyle {
-        heading_base_font_size: cx.theme().font_size,
-        ..TextViewStyle::default()
-    });
-    match open {
-        Some(open) => {
-            let open = open.clone();
-            view.on_link_click(move |url, _, window, cx| {
-                file_link::open_link(url, &open, window, cx)
-            })
-        }
-        None => view,
-    }
-}
-
-/// A command, laid out across lines and highlighted as a code block.
-fn command_markdown(command: &str) -> String {
-    code_block("bash", &shell_format::format_command(command))
-}
-
-/// `markdown` shown at `key`: with the state kept for it once one is (see
-/// [`MarkdownStates`]), or one of the element's own until then.
-fn cached_text_view(key: MarkdownKey, markdown: String, cx: &App) -> TextView {
-    match MarkdownStates::cached(key, &markdown, cx) {
-        Some(state) => TextView::new(&state),
-        None => TextView::markdown(
-            ElementId::NamedInteger(
-                format!("{:?}-{}", key.kind, key.table).into(),
-                key.row as u64,
-            ),
-            markdown,
-        ),
-    }
-}
-
-/// Where each piece of markdown in a task's table is shown, and what it
-/// shows, as [`output_row`] and [`task_prompt`] show them, for keeping their
-/// states (see [`MarkdownStates`]). Only `rows` of the output, and the prompt
-/// if `prompt`.
-fn task_markdown(
-    task_ix: usize,
-    task: &PromptTask,
-    rows: std::ops::Range<usize>,
-    prompt: bool,
-    project_dir: Option<&Path>,
-) -> Vec<(MarkdownKey, String)> {
-    let mut pieces = Vec::new();
-    if prompt && let Some(compiled) = &task.compiled {
-        pieces.push((
-            MarkdownKey {
-                kind: MarkdownKind::Prompt,
-                table: task_ix,
-                row: 0,
-            },
-            markdown::without_inline_code(&compiled.markdown),
-        ));
-    }
-    let output = task.reply.rows();
-    let rows = rows.start.min(output.len())..rows.end.min(output.len());
-    for (row_ix, row) in output[rows.clone()].iter().enumerate() {
-        let row_ix = rows.start + row_ix;
-        match row {
-            OutputRow::Text(text) if !text.trim().is_empty() => pieces.push((
-                MarkdownKey {
-                    kind: MarkdownKind::Output,
-                    table: task_ix,
-                    row: row_ix,
-                },
-                markdown::without_inline_code(text),
-            )),
-            OutputRow::Tool(call) if ToolKind::of(&call.name) == ToolKind::Command => {
-                if let Some(summary) = &call.summary {
-                    pieces.push((
-                        MarkdownKey {
-                            kind: MarkdownKind::Command,
-                            table: task_ix,
-                            row: row_ix,
-                        },
-                        command_markdown(&relative_to_project(summary, project_dir)),
-                    ));
-                }
-            }
-            _ => {}
-        }
-    }
-    pieces
 }
 
 /// The hidden anchor `text` is sent as in `mode`: importing what `piton lsp`
@@ -3804,52 +3459,6 @@ fn first_line(text: &str) -> SharedString {
         .into()
 }
 
-/// `code` as a fenced markdown code block, its fence longer than any run of
-/// backticks inside it.
-fn code_block(language: &str, code: &str) -> String {
-    let longest = code.split(|c| c != '`').map(str::len).max().unwrap_or(0);
-    let fence = "`".repeat(longest.max(2) + 1);
-    format!("{fence}{language}\n{code}\n{fence}")
-}
-
-/// `text` with the project directory written relative to it: paths inside the
-/// directory lose its path, and the directory itself reads `.`. A path that
-/// only starts with the same characters, like a sibling directory, is kept.
-fn relative_to_project(text: &str, project_dir: Option<&Path>) -> String {
-    let Some(dir) = project_dir
-        .and_then(Path::to_str)
-        .map(|dir| dir.trim_end_matches('/'))
-        .filter(|dir| !dir.is_empty())
-    else {
-        return text.to_string();
-    };
-    let is_path_char = |c: char| c.is_alphanumeric() || matches!(c, '/' | '.' | '_' | '-' | '~');
-    let ends_path = |rest: &str| rest.chars().next().is_none_or(|c| !is_path_char(c));
-
-    let mut out = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(at) = rest.find(dir) {
-        out.push_str(&rest[..at]);
-        let after = &rest[at + dir.len()..];
-        let starts_path = out.chars().last().is_none_or(|c| !is_path_char(c));
-        rest = if starts_path && ends_path(after) {
-            out.push('.');
-            after
-        } else if starts_path && after.starts_with('/') {
-            let inside = &after[1..];
-            if ends_path(inside) {
-                out.push('.');
-            }
-            inside
-        } else {
-            out.push_str(dir);
-            after
-        };
-    }
-    out.push_str(rest);
-    out
-}
-
 /// A task's status as a coloured label, a spinner while it is under way, and
 /// the name of the hidden anchor it was compiled from once it has compiled.
 fn task_title(ix: usize, task: &PromptTask, cx: &App) -> Div {
@@ -3887,13 +3496,9 @@ fn task_prompt(ix: usize, task: &PromptTask, open: &OpenFile, cx: &App) -> AnyEl
             let prompt = div()
                 .id(("compiled-prompt", ix))
                 .min_w_0()
-                .child(markdown_view(
-                    MarkdownKey {
-                        kind: MarkdownKind::Prompt,
-                        table: ix,
-                        row: 0,
-                    },
-                    &compiled.markdown,
+                .child(shown_markdown_view(
+                    prompt_key(ix),
+                    compiled.shown(),
                     Some(open),
                     cx,
                 ));
@@ -3928,276 +3533,6 @@ fn task_summary(id: (&'static str, usize), ix: usize, task: &PromptTask, cx: &Ap
     gpui_kit::TestSupportExt::test_support(summary).into_any_element()
 }
 
-/// The header of a task's output table, with the theme's bevel.
-fn output_header(cx: &App) -> TableHeader {
-    TableHeader::new().relative().child(
-        TableRow::new()
-            .child(TableHead::new().w(KIND_WIDTH).flex_none().child("Type"))
-            .child(TableHead::new().flex_1().min_w_0().child("Output"))
-            .child(TableHead::new().w(STATUS_WIDTH).flex_none().child("Status"))
-            // Laid over the whole header, taking no room of the row's.
-            .child(
-                TableHead::new()
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .size_full()
-                    .p_0()
-                    .child(crate::theme::bevel(crate::theme::Bevel::Raised, cx)),
-            ),
-    )
-}
-
-/// Row `row_ix` of a task's output table.
-fn output_row(
-    task_ix: usize,
-    reply: &Reply,
-    row_ix: usize,
-    row: &OutputRow,
-    open: Option<&OpenFile>,
-    project_dir: Option<&Path>,
-    cx: &App,
-) -> TableRow {
-    let theme = cx.theme();
-    let detail = match row {
-        OutputRow::Text(text) if text.trim().is_empty() => raw_tail(reply, cx),
-        OutputRow::Pending => raw_tail(reply, cx),
-        OutputRow::Text(text) => div()
-            .w_full()
-            .min_w_0()
-            .child(markdown_view(
-                MarkdownKey {
-                    kind: MarkdownKind::Output,
-                    table: task_ix,
-                    row: row_ix,
-                },
-                text,
-                open,
-                cx,
-            ))
-            .into_any_element(),
-        OutputRow::Tool(call) => {
-            let summary = call
-                .summary
-                .as_deref()
-                .map(|summary| relative_to_project(summary, project_dir.as_deref()));
-            match summary {
-                // A command is laid out across lines and highlighted, so it
-                // can be read rather than cut off.
-                Some(command) if ToolKind::of(&call.name) == ToolKind::Command => div()
-                    .w_full()
-                    .min_w_0()
-                    .child(cached_text_view(
-                        MarkdownKey {
-                            kind: MarkdownKind::Command,
-                            table: task_ix,
-                            row: row_ix,
-                        },
-                        command_markdown(&command),
-                        cx,
-                    ))
-                    .into_any_element(),
-                // A known tool whose input is on its way shows only a
-                // skeleton, with nothing else beside it.
-                None if row.is_partial() && ToolKind::of(&call.name).pending_input().is_some() => {
-                    Skeleton::new()
-                        .w(relative(0.6))
-                        .h_4()
-                        .rounded_md()
-                        .into_any_element()
-                }
-                summary => h_flex()
-                    .w_full()
-                    .min_w_0()
-                    .gap_2()
-                    .when_some(call.shown_name(), |row, name| {
-                        row.child(div().flex_none().font_medium().child(name.to_string()))
-                    })
-                    // Its input is on its way, and there is no telling
-                    // what it will be.
-                    .when(row.is_partial(), |row| {
-                        row.child(div().flex_1().min_w_0().child(raw_tail(reply, cx)))
-                    })
-                    .when_some(summary, |row, summary| {
-                        let text = div()
-                            .min_w_0()
-                            .truncate()
-                            .font_family(theme.mono_font_family.clone())
-                            .child(summary);
-                        // A file a file tool worked on opens when clicked.
-                        let file = open
-                            .filter(|_| call.works_on_a_file())
-                            .zip(call.summary.clone());
-                        match file {
-                            Some((open, target)) => {
-                                let open = open.clone();
-                                let link = text
-                                    .id(("output-file", row_ix))
-                                    .text_color(theme.link)
-                                    .cursor_pointer()
-                                    .hover(|style| style.underline())
-                                    .on_click(move |_, window, cx| {
-                                        file_link::open_link(&target, &open, window, cx)
-                                    });
-                                // Lets UI tests find the link; inert in normal builds.
-                                row.child(gpui_kit::TestSupportExt::test_support(link))
-                            }
-                            None => row.child(text),
-                        }
-                    })
-                    .into_any_element(),
-            }
-        }
-        OutputRow::Error(error) => div()
-            .min_w_0()
-            .text_color(theme.foreground)
-            .child(error.to_string())
-            .into_any_element(),
-    };
-    let detail = div()
-        .id(("output-row", row_ix))
-        .w_full()
-        .min_w_0()
-        .child(detail);
-
-    let status = row_status(row, cx);
-
-    TableRow::new()
-        .child(
-            TableCell::new()
-                .w(KIND_WIDTH)
-                .flex_none()
-                .items_start()
-                .child(row.badge(cx)),
-        )
-        .child(
-            TableCell::new()
-                .flex_1()
-                .min_w_0()
-                .items_start()
-                // Lets UI tests find the row; inert in normal builds.
-                .child(gpui_kit::TestSupportExt::test_support(detail)),
-        )
-        .child(
-            TableCell::new()
-                .w(STATUS_WIDTH)
-                .flex_none()
-                .items_start()
-                .children(status),
-        )
-}
-
-/// A task's output as a table: a row for each piece of text, tool call and
-/// error, in order, with its kind as a badge, what it was, and a tool call's
-/// state spelled out rather than only coloured. While the reply streams, its
-/// last row shows the harness's latest raw output in place of what is not yet
-/// known of it. With `open`, files
-/// the output links to, and those its file tools worked on, open when clicked.
-pub(crate) fn output_table(
-    task_ix: usize,
-    reply: &Reply,
-    open: Option<&OpenFile>,
-    steps: Option<Steps>,
-    cx: &App,
-) -> AnyElement {
-    let theme = cx.theme();
-    let rows = reply.rows();
-    // An unfinished reply always has a row, so only a finished one is empty.
-    if rows.is_empty() {
-        return div()
-            .text_color(theme.muted_foreground)
-            .child("No output.")
-            .into_any_element();
-    }
-
-    let header = output_header(cx);
-    let project_dir = ProjectDirectory::get(cx);
-    let render_row = |row_ix: usize, row: &OutputRow| {
-        output_row(
-            task_ix,
-            reply,
-            row_ix,
-            row,
-            open,
-            project_dir.as_deref(),
-            cx,
-        )
-    };
-
-    // With `steps`, a finished reply's rows up to its last tool call collapse
-    // behind a row that shows or hides them, leaving the answer after them.
-    let collapsed = steps.filter(|_| reply.is_done()).and_then(|steps| {
-        let last_tool = rows
-            .iter()
-            .rposition(|row| matches!(row, OutputRow::Tool(_)))?;
-        (last_tool + 1 < rows.len()).then_some((steps, last_tool + 1))
-    });
-    let body = match collapsed {
-        None => TableBody::new().children(
-            rows.iter()
-                .enumerate()
-                .map(|(row_ix, row)| render_row(row_ix, row)),
-        ),
-        Some((steps, count)) => {
-            let label = match (steps.shown, count) {
-                (false, 1) => "Show 1 step".to_string(),
-                (false, count) => format!("Show {count} steps"),
-                (true, 1) => "Hide 1 step".to_string(),
-                (true, count) => format!("Hide {count} steps"),
-            };
-            let toggle = steps.toggle;
-            let toggle_row = h_flex()
-                .id(("output-steps", task_ix))
-                .w_full()
-                .gap_1p5()
-                .cursor_pointer()
-                .text_color(theme.muted_foreground)
-                .child(Icon::new(if steps.shown {
-                    IconName::ChevronDown
-                } else {
-                    IconName::ChevronRight
-                }))
-                .child(label)
-                .on_click(move |_, window, cx| toggle(window, cx));
-            // Lets UI tests find the row; inert in normal builds.
-            let toggle_row = TableRow::new().child(
-                TableCell::new()
-                    .flex_1()
-                    .min_w_0()
-                    .child(gpui_kit::TestSupportExt::test_support(toggle_row)),
-            );
-            let shown = if steps.shown { 0..count } else { 0..0 };
-            TableBody::new()
-                .child(toggle_row)
-                .children(shown.map(|row_ix| render_row(row_ix, &rows[row_ix])))
-                .children(
-                    rows.iter()
-                        .enumerate()
-                        .skip(count)
-                        .map(|(row_ix, row)| render_row(row_ix, row)),
-                )
-        }
-    };
-
-    Table::new()
-        // Legible at the window's base font size; tables are otherwise smaller.
-        .text_base()
-        .line_height(relative(1.5))
-        .rounded(theme.radius)
-        .border_1()
-        .border_color(theme.border)
-        .child(header)
-        .child(body)
-        .into_any_element()
-}
-
-/// Whether a table's steps up to its answer are shown, and how to show or
-/// hide them.
-pub(crate) struct Steps {
-    pub shown: bool,
-    pub toggle: Rc<dyn Fn(&mut Window, &mut App)>,
-}
-
 /// The steps of prompt mode's table for `task_ix`, which a click shows or
 /// hides.
 fn steps(task_ix: usize, shown: &HashSet<usize>, entity: &Entity<PromptMode>) -> Steps {
@@ -4217,41 +3552,6 @@ fn steps(task_ix: usize, shown: &HashSet<usize>, entity: &Entity<PromptMode>) ->
     }
 }
 
-/// A tool call's state in the status column, as an icon and spelled out
-/// rather than only coloured. Other rows have none.
-fn row_status(row: &OutputRow, cx: &App) -> Option<AnyElement> {
-    let OutputRow::Tool(call) = row else {
-        return None;
-    };
-    let theme = cx.theme();
-    let icon = match call.state {
-        ToolState::Running => Spinner::new().small().into_any_element(),
-        ToolState::Done => Icon::new(IconName::Check)
-            .small()
-            .text_color(theme.success)
-            .into_any_element(),
-        ToolState::Failed => Icon::new(IconName::X)
-            .small()
-            .text_color(theme.danger)
-            .into_any_element(),
-    };
-    Some(
-        h_flex()
-            .gap_1p5()
-            .child(icon)
-            .child(
-                div()
-                    .map(|state| match call.state {
-                        // A failure reads at full strength.
-                        ToolState::Failed => state.font_medium(),
-                        _ => state.text_color(theme.muted_foreground),
-                    })
-                    .child(call.state.label()),
-            )
-            .into_any_element(),
-    )
-}
-
 /// A reply's latest row, the thing the harness is doing now, as the only row
 /// of its task table, on a single line: the last line of its text, a tool
 /// call's name and input, or the harness's latest raw output while nothing
@@ -4259,8 +3559,7 @@ fn row_status(row: &OutputRow, cx: &App) -> Option<AnyElement> {
 /// reply streams.
 fn latest_row(id: usize, reply: &Reply, cx: &App) -> AnyElement {
     let theme = cx.theme();
-    let rows = reply.rows();
-    let Some(row) = rows.last() else {
+    let Some(row) = reply.last_row() else {
         return div()
             .text_color(theme.muted_foreground)
             .child("No output.")
@@ -4274,13 +3573,13 @@ fn latest_row(id: usize, reply: &Reply, cx: &App) -> AnyElement {
             .child(text)
             .into_any_element()
     };
-    let raw_line = || match reply.raw_tail.back() {
+    let raw_line = || match reply.raw_line(reply.raw_tail.len().wrapping_sub(1), cx) {
         Some(line) => div()
             .min_w_0()
             .truncate()
             .font_family(theme.mono_font_family.clone())
             .text_color(theme.muted_foreground)
-            .child(highlighted_json(line, cx))
+            .child(line)
             .into_any_element(),
         None => muted("Waiting for the harness…".into()),
     };
@@ -4328,7 +3627,7 @@ fn latest_row(id: usize, reply: &Reply, cx: &App) -> AnyElement {
             .into_any_element(),
         OutputRow::Text(_) | OutputRow::Pending => raw_line(),
     };
-    let status = row_status(row, cx)
+    let status = row_status(&row, cx)
         .or_else(|| (!reply.is_done()).then(|| Spinner::new().small().into_any_element()));
     let detail = div()
         .id(("ask-row-detail", id))
@@ -4370,45 +3669,6 @@ fn latest_row(id: usize, reply: &Reply, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-/// The harness's latest raw output, standing in for output that has yet to
-/// arrive: a line for each of its last few events, newest last, highlighted as
-/// JSON and cut off at the cell's edge. It is always as tall as a full tail, so
-/// the row keeps its height as lines stream in.
-fn raw_tail(reply: &Reply, cx: &App) -> AnyElement {
-    let theme = cx.theme();
-    v_flex()
-        .w_full()
-        .min_w_0()
-        .font_family(theme.mono_font_family.clone())
-        .text_color(theme.muted_foreground)
-        .children((0..RAW_TAIL_LINES).map(|ix| {
-            let line: AnyElement = match reply.raw_tail.get(ix) {
-                Some(line) => highlighted_json(line, cx).into_any_element(),
-                None if ix == 0 => "Waiting for the harness…".into_any_element(),
-                // A no-break space keeps a line with nothing in it a line tall.
-                None => "\u{a0}".into_any_element(),
-            };
-            div().w_full().min_w_0().truncate().child(line)
-        }))
-        .into_any_element()
-}
-
-/// A line of the harness's raw output, highlighted as JSON. A line cut short
-/// is still highlighted as far as it parses.
-pub(crate) fn highlighted_json(line: &str, cx: &App) -> StyledText {
-    let styles = json_highlights(line, &cx.theme().highlight_theme);
-    StyledText::new(SharedString::from(line.to_string())).with_highlights(styles)
-}
-
-fn json_highlights(
-    line: &str,
-    theme: &HighlightTheme,
-) -> Vec<(std::ops::Range<usize>, HighlightStyle)> {
-    let mut highlighter = SyntaxHighlighter::new("json");
-    highlighter.update(None, &Rope::from(line), None);
-    highlighter.styles(&(0..line.len()), theme)
-}
-
 #[cfg(test)]
 mod tests {
     // Explicit imports: globbing `gpui_kit::*` would bring in GPUI's `test`
@@ -4419,16 +3679,14 @@ mod tests {
     use gpui_kit::test::{TestAppContextExt as _, TestWindowExt as _};
     use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 
-    use super::{
-        OutputRow, PromptMode, PromptTask, RAW_LINE_CHARS, Reply, ReplyPart, Session, TaskStatus,
-        ToolState,
-    };
+    use super::{OutputRow, PromptMode, PromptTask, Reply, Session, TaskStatus};
     use crate::harness::HarnessEvent;
     use crate::hidden_anchor::HiddenAnchor;
     use crate::piton_syntax;
     use crate::project_directory::ProjectDirectory;
     use crate::prompt_history::{RunRecord, SavedPrompt};
     use crate::prompt_queue;
+    use crate::task_table::{RAW_LINE_CHARS, ReplyPart, ToolState};
 
     fn tool(id: &str, name: &str) -> HarnessEvent {
         HarnessEvent::ToolStarted {
@@ -4798,23 +4056,32 @@ mod tests {
     /// and there is a summary; otherwise the name is kept.
     #[test]
     fn tool_name_is_shown_only_when_the_badge_does_not_say_it() {
-        let call = |name: &str, summary: Option<&str>| super::ToolCall {
-            id: "t".into(),
-            name: name.into(),
-            summary: summary.map(Into::into),
-            state: ToolState::Done,
+        let call = |name: &str, summary: Option<&str>| {
+            let mut reply = Reply::default();
+            reply.apply(tool("t", name));
+            if let Some(summary) = summary {
+                reply.apply(HarnessEvent::ToolInput {
+                    id: "t".into(),
+                    summary: summary.into(),
+                });
+            }
+            let shown = match reply.row(0) {
+                Some(OutputRow::Tool(call)) => call.shown_name().map(str::to_string),
+                row => panic!("{row:?}"),
+            };
+            shown
         };
-        assert_eq!(call("Read", Some("/tmp/a.txt")).shown_name(), None);
-        assert_eq!(call("Bash", Some("ls")).shown_name(), None);
-        assert_eq!(call("WebSearch", Some("gpui")).shown_name(), None);
-        assert_eq!(call("Bash", None).shown_name(), Some("Bash"));
+        assert_eq!(call("Read", Some("/tmp/a.txt")), None);
+        assert_eq!(call("Bash", Some("ls")), None);
+        assert_eq!(call("WebSearch", Some("gpui")), None);
+        assert_eq!(call("Bash", None), Some("Bash".to_string()));
         assert_eq!(
-            call("TodoWrite", Some("plan")).shown_name(),
-            Some("TodoWrite")
+            call("TodoWrite", Some("plan")),
+            Some("TodoWrite".to_string())
         );
         assert_eq!(
-            call("mcp__backlog__list", None).shown_name(),
-            Some("mcp__backlog__list")
+            call("mcp__backlog__list", None),
+            Some("mcp__backlog__list".to_string())
         );
     }
 
@@ -4828,7 +4095,7 @@ mod tests {
             r#"{"type":"stream_event","index":0,"done":true}"#,
             r#"{"type":"stream_event","event":{"delta":{"partial_js"#,
         ] {
-            let colored = super::json_highlights(line, &theme)
+            let colored = crate::task_table::json_highlights(line, &theme)
                 .into_iter()
                 .filter(|(_, style)| style.color.is_some())
                 .count();
@@ -4885,10 +4152,7 @@ mod tests {
     fn task_status_follows_its_run() {
         let mut task = PromptTask::new("Do it".into());
         assert_eq!(task.status, TaskStatus::Compiling);
-        task.set_compiled(super::Compiled {
-            anchor: "Prompt_0".into(),
-            markdown: "Do it".into(),
-        });
+        task.set_compiled(super::Compiled::new("Prompt_0".into(), "Do it".into()));
         assert_eq!(task.status, TaskStatus::Running);
         task.apply(HarnessEvent::Finished {
             is_error: false,
@@ -4898,20 +4162,14 @@ mod tests {
         assert_eq!(task.status, TaskStatus::Done);
 
         let mut failed = PromptTask::new("Do it".into());
-        failed.set_compiled(super::Compiled {
-            anchor: "Prompt_1".into(),
-            markdown: "Do it".into(),
-        });
+        failed.set_compiled(super::Compiled::new("Prompt_1".into(), "Do it".into()));
         failed.apply(HarnessEvent::Failed("no harness".into()));
         failed.end();
         assert_eq!(failed.status, TaskStatus::Failed);
         assert_eq!(failed.reply.rows(), [OutputRow::Error("no harness")]);
 
         let mut stopped = PromptTask::new("Do it".into());
-        stopped.set_compiled(super::Compiled {
-            anchor: "Prompt_2".into(),
-            markdown: "Do it".into(),
-        });
+        stopped.set_compiled(super::Compiled::new("Prompt_2".into(), "Do it".into()));
         stopped.apply(tool("t1", "Bash"));
         stopped.end();
         assert_eq!(stopped.status, TaskStatus::Failed);
@@ -5338,7 +4596,7 @@ mod tests {
                     } else {
                         &this.ask_history
                     };
-                    history.scroll.scroll_to(gpui_kit::ListOffset {
+                    history.rows.state().scroll_to(gpui_kit::ListOffset {
                         item_ix: 0,
                         offset_in_item: gpui_kit::px(0.),
                     });
@@ -5476,24 +4734,27 @@ mod tests {
             let panel = window
                 .find(("history-panel", super::ASK_HISTORY_IX + 1))
                 .bounds();
+            let end = window
+                .find(("history-panel-end", super::ASK_HISTORY_IX + 1))
+                .bounds();
             let row = window.find(("output-row", 0usize)).bounds();
+            for (part, bounds) in [("prompt", panel), ("table", row), ("end", end)] {
+                assert!(
+                    bounds.right() <= list.right(),
+                    "the open answer's {part} {bounds:?} is wider than its list {list:?}"
+                );
+            }
             assert!(
-                panel.right() <= list.right(),
-                "the open answer {panel:?} is wider than its list {list:?}"
-            );
-            assert!(
-                panel.bottom() - row.bottom() < gpui_kit::px(32.),
+                end.bottom() - row.bottom() < gpui_kit::px(32.),
                 "{:?} of space below the answer's last row",
-                panel.bottom() - row.bottom()
+                end.bottom() - row.bottom()
             );
-            let item = prompt_mode
-                .read(cx)
-                .ask_history
-                .scroll
-                .bounds_for_item(1)
-                .unwrap();
+            // The open answer is the last item, so its end is the list's last
+            // row.
+            let rows = &prompt_mode.read(cx).ask_history.rows;
+            let item = rows.state().bounds_for_item(rows.count() - 1).unwrap();
             assert!(
-                item.bottom() - panel.bottom() < gpui_kit::px(2.),
+                (item.bottom() - end.bottom()).abs() < gpui_kit::px(2.),
                 "the list measured the item {item:?} taller than it is drawn"
             );
         })
@@ -5966,11 +5227,8 @@ mod tests {
         })
         .await;
 
-        let (toggle, answer_rows, task_rows) = rows(cx);
-        assert!(toggle, "the answer has no row for its steps");
-        assert_eq!(answer_rows, 1, "only the answer shows");
-        assert_eq!(task_rows, 3, "the task collapsed its chain");
-
+        // Counted once the drawer has slid open: only the rows in view are
+        // laid out.
         let (row, _) = settle(
             handle,
             steps,
@@ -5984,6 +5242,10 @@ mod tests {
             cx,
         );
         std::thread::sleep(Duration::from_millis(400));
+        let (toggle, answer_rows, task_rows) = rows(cx);
+        assert!(toggle, "the answer has no row for its steps");
+        assert_eq!(answer_rows, 1, "only the answer shows");
+        assert_eq!(task_rows, 3, "the task collapsed its chain");
         cx.update_window(handle, |_, window, cx| window.click(steps, cx))
             .unwrap();
         cx.run_until_parked();
@@ -6196,7 +5458,7 @@ mod tests {
 
         // At the end, where the tail shows, it redraws.
         cx.update_window(handle, |_, window, cx| {
-            prompt_mode.update(cx, |this, _| this.output_list.scroll_to_end());
+            prompt_mode.update(cx, |this, _| this.output_table.scroll_to_end());
             window.render_frame(cx);
             window.render_frame(cx);
             prompt_mode.update(cx, |this, cx| {
@@ -6240,23 +5502,31 @@ mod tests {
             });
         })
         .unwrap();
-        let scroll = prompt_mode.read_with(cx, |this, _| {
-            crate::scrollbar::Scroll::from(&this.task_history.scroll)
-        });
+        let scroll = prompt_mode.read_with(cx, |this, _| this.task_history.rows.scroll());
+        let rows = prompt_mode.read_with(cx, |this, _| this.task_history.rows.clone());
+        // Draws, letting background parses land and the rows they're in be
+        // measured again, until every row's height is known.
         let frame = |cx: &mut TestAppContext| {
-            for _ in 0..4 {
+            for n in 0.. {
                 cx.update_window(handle, |_, window, cx| window.render_frame(cx))
                     .unwrap();
                 cx.executor().advance_clock(crate::markdown::POLL_INTERVAL);
                 cx.run_until_parked();
+                if n >= 3 && rows.is_settled() {
+                    break;
+                }
+                assert!(n < 1000, "the rows were never all measured");
             }
         };
         frame(cx);
         prompt_mode.update(cx, |this, _| {
-            this.task_history.scroll.scroll_to(gpui_kit::ListOffset {
-                item_ix: 0,
-                offset_in_item: gpui_kit::px(0.),
-            })
+            this.task_history
+                .rows
+                .state()
+                .scroll_to(gpui_kit::ListOffset {
+                    item_ix: 0,
+                    offset_in_item: gpui_kit::px(0.),
+                })
         });
         frame(cx);
         let max = scroll.max_offset().y;
@@ -6301,17 +5571,20 @@ mod tests {
             });
         })
         .unwrap();
-        let scroll = prompt_mode.read_with(cx, |this, _| {
-            crate::scrollbar::Scroll::from(&this.output_list)
-        });
+        let scroll = prompt_mode.read_with(cx, |this, _| this.output_table.scroll());
+        let rows = prompt_mode.read_with(cx, |this, _| this.output_table.list().clone());
         // Draws, letting background parses land and the rows they're in be
-        // measured again.
+        // measured again, until every row's height is known.
         let frame = |cx: &mut TestAppContext| {
-            for _ in 0..4 {
+            for n in 0.. {
                 cx.update_window(handle, |_, window, cx| window.render_frame(cx))
                     .unwrap();
                 cx.executor().advance_clock(crate::markdown::POLL_INTERVAL);
                 cx.run_until_parked();
+                if n >= 3 && rows.is_settled() {
+                    break;
+                }
+                assert!(n < 1000, "the rows were never all measured");
             }
         };
         frame(cx);
@@ -6453,6 +5726,113 @@ mod tests {
         scroll.set_offset(gpui_kit::point(gpui_kit::px(0.), -narrow / 2.));
         frame(cx);
         assert!((scroll.max_offset().y - narrow).abs() < gpui_kit::px(1.));
+    }
+
+    /// However long a task's output, a frame draws only about the rows in
+    /// view, and the rest are measured a few a frame. When its width changes,
+    /// the rows in view stay where they are while the others are measured
+    /// again; once they have been, the scrollbar holds still, and rows that
+    /// come in while the output is scrolled away from its end leave the thumb
+    /// where it is.
+    #[gpui_kit::test]
+    async fn long_output_is_measured_a_few_rows_a_frame(cx: &mut TestAppContext) {
+        const ROWS: usize = 1500;
+        let (prompt_mode, handle) = open(cx);
+        let paragraph = |n: usize| match n % 3 {
+            0 => format!("Paragraph {n}. {}", "Words wrap here. ".repeat(20)),
+            _ => format!("Paragraph {n}."),
+        };
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let ix = this.push_task("Do it".into(), cx);
+                for n in 0..ROWS {
+                    this.apply_event(ix, HarnessEvent::TextStarted, cx);
+                    this.apply_event(ix, HarnessEvent::TextDelta(paragraph(n)), cx);
+                }
+            });
+        })
+        .unwrap();
+        let (scroll, rows) = prompt_mode.read_with(cx, |this, _| {
+            (this.output_table.scroll(), this.output_table.list().clone())
+        });
+        // A single frame, counting the rows it draws.
+        let draw = |cx: &mut TestAppContext| {
+            crate::task_table::rows_drawn();
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                .unwrap();
+            crate::task_table::rows_drawn()
+        };
+        let drawn = draw(cx);
+        assert!(
+            drawn < ROWS / 4,
+            "{drawn} of {ROWS} rows were drawn in the first frame"
+        );
+        let mut frames = 0;
+        while !rows.is_settled() {
+            let drawn = draw(cx);
+            assert!(drawn < ROWS / 4, "{drawn} rows were drawn in a frame");
+            frames += 1;
+            assert!(frames < 5000, "the rows were never all measured");
+        }
+        let max = scroll.max_offset().y;
+        scroll.set_offset(gpui_kit::point(gpui_kit::px(0.), -max / 2.));
+        draw(cx);
+        draw(cx);
+        let top = rows.state().logical_scroll_top().item_ix;
+        assert!(top > 0, "the output didn't scroll");
+
+        // A narrower window: the frame it narrows in draws about the rows in
+        // view, not all of them.
+        crate::task_table::rows_drawn();
+        gpui_kit::VisualTestContext::from_window(handle, cx)
+            .simulate_resize(gpui_kit::size(gpui_kit::px(600.), gpui_kit::px(700.)));
+        // Resizing may draw a frame of its own.
+        let drawn = crate::task_table::rows_drawn() + draw(cx);
+        assert!(
+            drawn < ROWS / 4,
+            "{drawn} of {ROWS} rows were drawn as the width changed"
+        );
+        assert!(!rows.is_settled(), "every row was measured in one frame");
+        let mut frames = 0;
+        while !rows.is_settled() {
+            draw(cx);
+            assert_eq!(
+                rows.state().logical_scroll_top().item_ix,
+                top,
+                "the rows in view moved while the rest were measured"
+            );
+            frames += 1;
+            assert!(frames < 5000, "the rows were never all measured again");
+        }
+
+        // Measured, the thumb holds still frame after frame.
+        let (offset, max) = (scroll.offset().y, scroll.max_offset().y);
+        for _ in 0..5 {
+            draw(cx);
+            assert!((scroll.offset().y - offset).abs() < gpui_kit::px(0.5));
+            assert!((scroll.max_offset().y - max).abs() < gpui_kit::px(0.5));
+        }
+
+        // Rows that come below, scrolled away from them, leave the rows above
+        // where they are.
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                for n in 0..20 {
+                    this.apply_event(0, HarnessEvent::TextStarted, cx);
+                    this.apply_event(0, HarnessEvent::TextDelta(paragraph(n)), cx);
+                }
+            });
+        })
+        .unwrap();
+        while !rows.is_settled() {
+            draw(cx);
+        }
+        assert!(
+            (scroll.offset().y - offset).abs() < gpui_kit::px(0.5),
+            "new rows moved the output from {offset:?} to {:?}",
+            scroll.offset().y
+        );
+        assert!(scroll.max_offset().y > max, "the new rows aren't counted");
     }
 
     /// An open question fills the answer drawer to 80% of the space above the
@@ -6631,9 +6011,7 @@ mod tests {
         })
         .await;
         let offset = |cx: &mut TestAppContext| {
-            prompt_mode.read_with(cx, |this, _| {
-                crate::scrollbar::Scroll::from(&this.output_list).offset().y
-            })
+            prompt_mode.read_with(cx, |this, _| this.output_table.scroll().offset().y)
         };
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
@@ -6690,11 +6068,8 @@ mod tests {
         })
         .unwrap();
         assert!(
-            prompt_mode.read_with(cx, |this, _| crate::scrollbar::Scroll::from(
-                &this.output_list
-            )
-            .max_offset()
-            .y) > gpui_kit::px(0.),
+            prompt_mode.read_with(cx, |this, _| this.output_table.scroll().max_offset().y)
+                > gpui_kit::px(0.),
             "the output does not scroll"
         );
 
@@ -6734,10 +6109,8 @@ mod tests {
         .unwrap();
         let (offset, max) = prompt_mode.read_with(cx, |this, _| {
             (
-                crate::scrollbar::Scroll::from(&this.output_list).offset().y,
-                crate::scrollbar::Scroll::from(&this.output_list)
-                    .max_offset()
-                    .y,
+                this.output_table.scroll().offset().y,
+                this.output_table.scroll().max_offset().y,
             )
         });
         assert!(
@@ -6772,10 +6145,8 @@ mod tests {
         .unwrap();
         let (offset, max) = prompt_mode.read_with(cx, |this, _| {
             (
-                crate::scrollbar::Scroll::from(&this.output_list).offset().y,
-                crate::scrollbar::Scroll::from(&this.output_list)
-                    .max_offset()
-                    .y,
+                this.output_table.scroll().offset().y,
+                this.output_table.scroll().max_offset().y,
             )
         });
         assert!(

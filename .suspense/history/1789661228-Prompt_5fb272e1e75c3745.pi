@@ -1,0 +1,53 @@
+
+anchor Prompt_5fb272e1e75c3745:
+    userPrompt:
+        -
+            - "For performance"
+        -
+            - ""
+        -
+            - "tay in place and nothing shrinks to fit."
+        -
+            - "Code:"
+        -
+            - "src/ribbon/mod.rs adds the small size, which the minimized row now uses; slim buttons still fill their column."
+        -
+            - "The row is now three parts: the indicator, the scrolling middle with the spinner, commands and dividers, and the chevron. The two ends never shrink."
+        -
+            - "src/ribbon/application_tab.rs gives the Dark mode block a small version that is only as wide as its switch."
+        -
+            - "Test: ribbon_tabs_hold_their_controls in src/main_window.rs now checks the minimized row:"
+        -
+            - "each command is under 160px wide, in order and not touching the next;"
+        -
+            - "at a 360px window width, the indicator and chevron stay inside the window while the commands run past the edge instead of shrinking;"
+        -
+            - "scrolling sideways brings Settings, the last command, into view."
+        -
+            - "With the old sizing put back, the test fails on exactly this bug."
+        -
+            - "This change applies to the minimized row only. The full ribbon's command area already scrolled sideways, and I didn't change the tab bar, which cuts off rather than scrolls if the window is narrower than the tabs. I also haven'"
+        -
+            - ""
+        -
+            - "Use one virtualized table everywhere. Make output_table a stateful component that owns a ListState, and use it in the answer drawer, history panel, palette and all three inset panels. Row ids are stable (task and row index), so this is mostly mechanical, and the spec already calls for it."
+        -
+            - "Stop building the row list per row. Keep rows on Reply, updated in apply() as events arrive, or index reply.parts directly with a precomputed map from row to part. Then each row callback does constant work and rows() isn't called per row."
+        -
+            - "Only prepare new or changed rows. When rows are added, prepare markdown for laid_out_count..count and the last streaming row, not 0..count. Keep the without_inline_code result on the reply part so it isn't recomputed."
+        -
+            - "Drop measure_all for long tables. Use with_uniform_item_height(estimate), which gpui recommends for table rows. The scrollbar then settles as rows are drawn, and a width change only re-measures the rows in view. Because the scrollbar's lock-to-bottom uses scroll_to_end, it doesn't need exact heights for rows off screen. If exact scrollbar sizes matter, measure new rows in a background pass instead of the whole list on every resize."
+        -
+            - "Cache row output that doesn't change. Store the formatted and highlighted command on the ToolCall once its input arrives. For the waiting row, cache the highlight per raw line, or highlight only the last line with a cheap tokenizer instead of tree-sitter."
+        -
+            - "Avoid layout changes while animating. While the editor pane slides, animate a cover or clip over the output instead of changing its width. The list then keeps its measured heights."
+        -
+            - ""
+        -
+            - "But you're going to have to be really careful to not introduct the scrollbar jumping issue."
+
+    mode: code
+
+    systemPrompt:
+        -
+            - "We're working on the code located in ./src. Don't edit the spec located in ./spec."
