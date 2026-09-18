@@ -115,7 +115,7 @@ shape RibbonShape:
     commands:
         A command button is one of two sizes, and each tab says which of its
         commands are which:
-        - full: as tall as its large icon above its label need, but never shorter than two slim buttons stacked, nor taller than three
+        - full: its large icon above its label, between two and three slim buttons stacked tall: two, or more where its group has the room, up to three
         - slim: 22 pixels tall, its small icon to the left of its label
         - small: only in the collapsed ribbon: 22 pixels tall, its small icon to the left of its label, and only as wide as they are
 
@@ -126,12 +126,12 @@ shape RibbonShape:
         alone. A slim button fills only its column's width: nowhere does a
         button stretch to fill a row.
 
-        Every command takes the height it needs, within what its size allows,
-        from the top of its group: a full button beside a taller column of slim
-        buttons keeps its own height rather than stretching to the group's, and
-        the commands of a tab all start at the same line. A full button is
-        between two and three slim buttons tall, so it is always taller than a
-        single slim button and never taller than a full column of them.
+        Every command starts from the top of its group, so the commands of a
+        tab all start at the same line. A full button is never shorter than two
+        slim buttons stacked, nor taller than three; where the tallest column
+        beside it leaves the room, as three stacked slim buttons do, it grows to
+        fill it, up to three slim buttons tall. Alone, or beside columns no
+        taller than two slim buttons, it is two slim buttons tall.
 
         Every button is square, with no rounded corners. Its background is
         clearly apart from the commands' area behind it, though still quiet:

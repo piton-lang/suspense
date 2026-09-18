@@ -1050,8 +1050,12 @@ mod layout_tests {
                 let full = |id: &'static str| {
                     (
                         CommandSize::Full,
-                        gpui_kit::TestSupportExt::test_support(div().id(id).w(px(60.)).h(px(44.)))
-                            .into_any_element(),
+                        // Content of its own, but no height of its own: it
+                        // grows to its group's, as a full button does.
+                        gpui_kit::TestSupportExt::test_support(
+                            div().id(id).w(px(60.)).child(div().h(px(44.))),
+                        )
+                        .into_any_element(),
                     )
                 };
                 // No height of its own: the group is as tall as its commands.

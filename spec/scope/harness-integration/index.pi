@@ -4,6 +4,7 @@ from ./baked-prompts import BakedSystemPromptsScope
 from ./catalog import HarnessCatalogScope
 from ./one-off-run import OneOffAgentRunScope
 from ../prompt-mode/mode-system-prompts import ModeSystemPromptsScope
+from /scope/prompt-mode/chat-input import ChatInputScope
 
 export scope HarnessIntegrationScope:
     concept: {HarnessIntegrationConcept}
@@ -43,6 +44,15 @@ shape HarnessIntegrationShape:
         its own prompt's systemPrompt, even when it carries on a conversation
         begun in a different mode. The palette's file search always starts
         fresh.
+
+        A conversation can be left for a new one, from the chat input's New
+        Session, as the @{ChatInputScope} says: the next request starts a new
+        conversation with no context, and the one left is not carried on again,
+        not by a run of it still going, nor by the project's history, until the
+        application is next opened. How much context a conversation holds is
+        known from what the harness reports with each reply: everything the
+        model was given, cached or not, and what it wrote, as of its latest
+        reply; replies of subagents don't count.
 
     bakedPrompts: @{BakedSystemPromptsScope}
 

@@ -52,7 +52,9 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::activity::{Job, JobKind};
-use crate::chat_input::{self, ChatInput, PreviewPrompt, QueuedEdit, SendMode, Submit, TabChanged};
+use crate::chat_input::{
+    self, ChatInput, NewSession, PreviewPrompt, QueuedEdit, SendMode, Submit, TabChanged,
+};
 use crate::commit_notes;
 use crate::file_link::OpenFile;
 use crate::file_view::{CloseFile, FileView, OpenDefinition, SendToPrompt};
@@ -854,6 +856,8 @@ impl Drop for AskLog {
 struct Session {
     project_dir: PathBuf,
     id: String,
+    /// How many tokens its context holds, as of its latest reply, once known.
+    context: Option<u64>,
 }
 
 impl Session {
@@ -873,25 +877,70 @@ impl Session {
         }
     }
 
-    /// The latest conversation in a project's history.
+    /// The latest conversation in a project's history, with its context as
+    /// that run left it.
     fn latest(history: &[SavedPrompt], project_dir: &Path) -> Option<Self> {
-        let id = history.iter().rev().find_map(|saved| {
-            saved
+        history.iter().rev().find_map(|saved| {
+            let (mut id, mut context) = (None, None);
+            for event in saved
                 .record
                 .as_ref()?
                 .output
                 .iter()
                 .flat_map(harness::parse)
-                .filter_map(|event| match event {
-                    HarnessEvent::Session(id) => Some(id),
-                    _ => None,
-                })
-                .last()
-        })?;
-        Some(Self {
-            project_dir: project_dir.to_path_buf(),
-            id,
+            {
+                match event {
+                    HarnessEvent::Session(session) => id = Some(session),
+                    HarnessEvent::Usage { context: tokens } => context = Some(tokens),
+                    _ => {}
+                }
+            }
+            Some(Self {
+                project_dir: project_dir.to_path_buf(),
+                id: id?,
+                context,
+            })
         })
+    }
+
+    /// Follows a run's events: the conversation it reported, and how much
+    /// context that holds as it replies. A run started before the
+    /// conversation was left for a new one, which `current` is no longer,
+    /// changes nothing.
+    fn follow(
+        session: &mut Option<Self>,
+        current: bool,
+        run: &mut Option<String>,
+        event: &HarnessEvent,
+        project_dir: &Path,
+    ) {
+        match event {
+            HarnessEvent::Session(id) => {
+                *run = Some(id.clone());
+                if current {
+                    // Carrying on the same conversation keeps what it holds
+                    // until the run says otherwise.
+                    let context = session
+                        .as_ref()
+                        .filter(|session| session.id == *id)
+                        .and_then(|session| session.context);
+                    *session = Some(Self {
+                        project_dir: project_dir.to_path_buf(),
+                        id: id.clone(),
+                        context,
+                    });
+                }
+            }
+            HarnessEvent::Usage { context } if current => {
+                if let Some(session) = session
+                    .as_mut()
+                    .filter(|session| Some(&session.id) == run.as_ref())
+                {
+                    session.context = Some(*context);
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -928,6 +977,7 @@ struct ProjectSession {
     queue_held: bool,
     _pending: Task<()>,
     session: Option<Session>,
+    session_epoch: u64,
     asks: Vec<Ask>,
     expanded_ask: Option<usize>,
     steps_shown: HashSet<usize>,
@@ -935,6 +985,7 @@ struct ProjectSession {
     ask_history: HistoryList,
     _ask_history_load: Task<()>,
     ask_session: Option<Session>,
+    ask_session_epoch: u64,
 }
 
 impl ProjectSession {
@@ -952,6 +1003,7 @@ impl ProjectSession {
             queue_held: false,
             _pending: Task::ready(()),
             session: None,
+            session_epoch: 0,
             asks: Vec::new(),
             expanded_ask: None,
             steps_shown: HashSet::new(),
@@ -959,6 +1011,7 @@ impl ProjectSession {
             ask_history: HistoryList::answers(),
             _ask_history_load: Task::ready(()),
             ask_session: None,
+            ask_session_epoch: 0,
         }
     }
 }
@@ -1024,6 +1077,9 @@ pub struct PromptMode {
     _pending: Task<()>,
     /// The conversation the tasks share, each resuming the last.
     session: Option<Session>,
+    /// Counts the times the tasks' conversation was left for a new one, so a
+    /// run started before can't bring it back, nor can the history.
+    session_epoch: u64,
     /// The questions asked from the Ask tab, oldest first, each run at once
     /// and apart from the tasks.
     asks: Vec<Ask>,
@@ -1059,6 +1115,8 @@ pub struct PromptMode {
     on_ask_tab: bool,
     /// The conversation questions share, apart from the tasks'.
     ask_session: Option<Session>,
+    /// As [`Self::session_epoch`], for the questions' conversation.
+    ask_session_epoch: u64,
     _file_subscriptions: Vec<Subscription>,
     /// Compiling the prompt for the chat input's preview.
     _preview: Task<()>,
@@ -1098,6 +1156,9 @@ impl PromptMode {
                 this.on_ask_tab = input.read(cx).mode() == SendMode::Ask;
                 cx.notify();
             }),
+            cx.subscribe(&chat_input, |this, _, _: &NewSession, cx| {
+                this.new_session(cx)
+            }),
             // A row whose markdown finished parsing is measured again.
             cx.observe_global::<MarkdownStates>(|_, cx| cx.notify()),
             cx.observe_global::<ProjectDirectory>(|this, cx| this.project_changed(cx)),
@@ -1130,6 +1191,7 @@ impl PromptMode {
             body_width: Rc::default(),
             _pending: Task::ready(()),
             session: None,
+            session_epoch: 0,
             asks: Vec::new(),
             next_ask_id: 0,
             expanded_ask: None,
@@ -1146,6 +1208,7 @@ impl PromptMode {
             _ask_history_load: Task::ready(()),
             on_ask_tab: false,
             ask_session: None,
+            ask_session_epoch: 0,
             _file_subscriptions: Vec::new(),
             _preview: Task::ready(()),
             summarize: commit_notes::summarize,
@@ -1170,6 +1233,7 @@ impl PromptMode {
         swap(&mut self.queue_held, &mut other.queue_held);
         swap(&mut self._pending, &mut other._pending);
         swap(&mut self.session, &mut other.session);
+        swap(&mut self.session_epoch, &mut other.session_epoch);
         swap(&mut self.asks, &mut other.asks);
         swap(&mut self.expanded_ask, &mut other.expanded_ask);
         swap(&mut self.steps_shown, &mut other.steps_shown);
@@ -1177,6 +1241,7 @@ impl PromptMode {
         swap(&mut self.ask_history, &mut other.ask_history);
         swap(&mut self._ask_history_load, &mut other._ask_history_load);
         swap(&mut self.ask_session, &mut other.ask_session);
+        swap(&mut self.ask_session_epoch, &mut other.ask_session_epoch);
     }
 
     /// Follows the project on screen: the work of the one left keeps running
@@ -1715,7 +1780,11 @@ impl PromptMode {
                         return;
                     }
                     this.tasks = tasks;
-                    this.session = session;
+                    // The history's conversation, unless it was left for a new
+                    // one here.
+                    if this.session_epoch == 0 {
+                        this.session = session;
+                    }
                     this.task_history.open = None;
                     this.scroll_output_to_top();
                     cx.notify();
@@ -1997,6 +2066,37 @@ impl PromptMode {
         cx.notify();
     }
 
+    /// Leaves the selected tab's conversation, the questions' on the Ask tab
+    /// and the tasks' on any other, so its next prompt starts a new one with
+    /// no context. Runs already under way finish as they were, but no longer
+    /// carry on the conversation left, nor bring it back.
+    pub fn new_session(&mut self, cx: &mut Context<Self>) {
+        if self.on_ask_tab {
+            self.ask_session = None;
+            self.ask_session_epoch += 1;
+        } else {
+            self.session = None;
+            self.session_epoch += 1;
+        }
+        cx.notify();
+    }
+
+    /// How much context the selected tab's next prompt carries on with:
+    /// `None` when it starts a new conversation, and none that the project's
+    /// runs know of counts as nothing yet.
+    fn context(&self) -> Option<u64> {
+        let session = if self.on_ask_tab {
+            &self.ask_session
+        } else {
+            &self.session
+        };
+        let project_dir = self.project_dir.as_deref()?;
+        session
+            .as_ref()
+            .filter(|session| session.project_dir == project_dir)
+            .map(|session| session.context.unwrap_or(0))
+    }
+
     /// Locks the latest task's output to the bottom, or unlocks it.
     fn set_output_lock(&mut self, locked: bool, cx: &mut Context<Self>) {
         if self.output_locked == locked {
@@ -2049,7 +2149,7 @@ impl PromptMode {
                                 .is_none_or(|compiled| !open.contains(&compiled.anchor))
                         })
                         .collect();
-                    if this.ask_session.is_none() {
+                    if this.ask_session.is_none() && this.ask_session_epoch == 0 {
                         this.ask_session = session;
                     }
                     this.ask_history.open = None;
@@ -2078,6 +2178,7 @@ impl PromptMode {
         }
 
         let resume = Session::resume(&self.session, &project_dir);
+        let epoch = self.session_epoch;
         let lsp = self.chat_input.read(cx).lsp();
         // A prompt that works on the code or the spec is sent against a
         // freshly built spec.
@@ -2177,6 +2278,8 @@ impl PromptMode {
                         return;
                     }
                     let mut started = false;
+                    // The conversation this run reported.
+                    let mut run_session = None;
                     while let Some(event) = events.next().await {
                         record.note(&event);
                         if let HarnessEvent::Finished {
@@ -2190,13 +2293,16 @@ impl PromptMode {
                             .update(cx, |this, cx| {
                                 let dir = project_dir.clone();
                                 this.in_project(&dir, cx, |this, cx| {
-                                    if let HarnessEvent::Session(id) = &event {
+                                    if let HarnessEvent::Session(_) = &event {
                                         started = true;
-                                        this.session = Some(Session {
-                                            project_dir: project_dir.clone(),
-                                            id: id.clone(),
-                                        });
                                     }
+                                    Session::follow(
+                                        &mut this.session,
+                                        this.session_epoch == epoch,
+                                        &mut run_session,
+                                        &event,
+                                        &project_dir,
+                                    );
                                     this.apply_event(task_ix, event, cx)
                                 });
                             })
@@ -2302,6 +2408,7 @@ impl PromptMode {
             .iter()
             .any(|ask| ask.id != run && ask.task.status.is_active());
         let resume = Session::resume(&self.ask_session, &project_dir);
+        let epoch = self.ask_session_epoch;
         let lsp = self.chat_input.read(cx).lsp();
         let compile = cx.background_spawn({
             let project_dir = project_dir.clone();
@@ -2374,19 +2481,24 @@ impl PromptMode {
                         return;
                     }
                     let mut started = false;
+                    // The conversation this run reported.
+                    let mut run_session = None;
                     while let Some(event) = events.next().await {
                         log.record.note(&event);
                         if this
                             .update(cx, |this, cx| {
                                 let dir = project_dir.clone();
                                 this.in_project(&dir, cx, |this, cx| {
-                                    if let HarnessEvent::Session(id) = &event {
+                                    if let HarnessEvent::Session(_) = &event {
                                         started = true;
-                                        this.ask_session = Some(Session {
-                                            project_dir: project_dir.clone(),
-                                            id: id.clone(),
-                                        });
                                     }
+                                    Session::follow(
+                                        &mut this.ask_session,
+                                        this.ask_session_epoch == epoch,
+                                        &mut run_session,
+                                        &event,
+                                        &project_dir,
+                                    );
                                     this.update_ask(run, |ask| ask.apply(event), cx)
                                 });
                             })
@@ -3192,6 +3304,12 @@ impl PromptMode {
 
 impl Render for PromptMode {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // The chat input shows how much context its next prompt carries on.
+        let context = self.context();
+        if self.chat_input.read(cx).context() != context {
+            self.chat_input
+                .update(cx, |input, cx| input.set_context(context, cx));
+        }
         // The popover for text selected in an answer goes with the drawer.
         if !self.drawer_open() {
             self.selection_popover = None;
@@ -4236,7 +4354,11 @@ mod tests {
         };
         let history = [
             saved(&[r#"{"type":"system","subtype":"init","session_id":"old"}"#]),
-            saved(&[r#"{"type":"system","subtype":"init","session_id":"latest"}"#]),
+            saved(&[
+                r#"{"type":"system","subtype":"init","session_id":"latest"}"#,
+                r#"{"type":"assistant","message":{"content":[],"usage":{"input_tokens":10,"cache_read_input_tokens":2000,"output_tokens":90}}}"#,
+                r#"{"type":"assistant","message":{"content":[],"usage":{"input_tokens":5,"cache_read_input_tokens":3000,"output_tokens":20}}}"#,
+            ]),
             saved(&["not json"]),
             SavedPrompt {
                 anchor: HiddenAnchor::random(),
@@ -4254,12 +4376,115 @@ mod tests {
             Session::resume(&session, std::path::Path::new("/other")),
             None
         );
+        // Its context as the run left it: the latest reply's.
+        assert_eq!(
+            session.as_ref().and_then(|session| session.context),
+            Some(3025)
+        );
 
         Session::forget(&mut session, "old");
         assert!(session.is_some(), "a different session was forgotten");
         Session::forget(&mut session, "latest");
         assert!(session.is_none());
         assert!(Session::latest(&history[2..], project).is_none());
+    }
+
+    /// The chat input shows how much context the selected tab's conversation
+    /// holds. New Session leaves it: the next prompt starts a new conversation,
+    /// and a run of the old one that is still going can't bring it back. The
+    /// Ask tab's conversation is its own.
+    #[gpui_kit::test]
+    async fn new_session_leaves_the_conversation_and_its_context(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-new-session-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        let dir = prompt_mode.read_with(cx, |this, _| this.project_dir.clone().unwrap());
+        let input = prompt_mode.read_with(cx, |this, _| this.chat_input.clone());
+        let shown = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                .unwrap();
+            input.read_with(cx, |input, _| input.context())
+        };
+        // A run of the tasks' conversation, as the harness reports it.
+        let run = |this: &mut PromptMode, epoch: u64, events: &[HarnessEvent]| {
+            let mut run = None;
+            for event in events {
+                Session::follow(
+                    &mut this.session,
+                    this.session_epoch == epoch,
+                    &mut run,
+                    event,
+                    &dir,
+                );
+            }
+        };
+        assert_eq!(shown(cx), None, "a new project already holds context");
+
+        prompt_mode.update(cx, |this, _| {
+            run(
+                this,
+                0,
+                &[
+                    HarnessEvent::Session("s1".into()),
+                    HarnessEvent::Usage { context: 42_100 },
+                ],
+            )
+        });
+        assert_eq!(shown(cx), Some(42_100));
+        cx.update_window(handle, |_, window, cx| {
+            assert!(window.find("chat-context").visible());
+        })
+        .unwrap();
+
+        // On the Ask tab, the questions' conversation, which has none yet.
+        prompt_mode.update(cx, |this, _| this.on_ask_tab = true);
+        assert_eq!(shown(cx), None);
+        prompt_mode.update(cx, |this, _| this.on_ask_tab = false);
+        assert_eq!(shown(cx), Some(42_100));
+
+        // New Session: the next task starts afresh, with nothing to resume.
+        cx.update_window(handle, |_, window, cx| window.click("new-session", cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert_eq!(shown(cx), None, "New Session left context behind");
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(Session::resume(&this.session, &dir), None);
+        });
+
+        // The old run, still going, reports on: it doesn't come back.
+        prompt_mode.update(cx, |this, _| {
+            run(
+                this,
+                0,
+                &[
+                    HarnessEvent::Session("s1".into()),
+                    HarnessEvent::Usage { context: 50_000 },
+                ],
+            )
+        });
+        assert_eq!(
+            shown(cx),
+            None,
+            "a run of the old conversation brought it back"
+        );
+
+        // A run started since is the new conversation.
+        prompt_mode.update(cx, |this, _| {
+            let epoch = this.session_epoch;
+            run(
+                this,
+                epoch,
+                &[
+                    HarnessEvent::Session("s2".into()),
+                    HarnessEvent::Usage { context: 900 },
+                ],
+            )
+        });
+        assert_eq!(shown(cx), Some(900));
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// The latest task heads the view with its status, its anchor and the

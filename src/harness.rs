@@ -44,6 +44,11 @@ pub enum HarnessEvent {
         result: String,
     },
     Failed(String),
+    /// How many tokens the conversation's context holds, as of the model's
+    /// latest reply: all it was given, cached or not, and what it wrote.
+    Usage {
+        context: u64,
+    },
 }
 
 /// A conversation an earlier run reported, for a run to carry on.
@@ -238,6 +243,7 @@ pub fn parse(event: &Value) -> Vec<HarnessEvent> {
                     summary: summarize(block.get("input")?)?,
                 })
             })
+            .chain(context_size(event).map(|context| HarnessEvent::Usage { context }))
             .collect(),
         Some("user") => content_blocks(event, "tool_result")
             .filter_map(|block| {
@@ -259,6 +265,19 @@ pub fn parse(event: &Value) -> Vec<HarnessEvent> {
         }],
         _ => Vec::new(),
     }
+}
+
+/// The tokens in the context as of an assistant message: its input, whether
+/// read from or written to the cache or not, and its output.
+fn context_size(event: &Value) -> Option<u64> {
+    let usage = event.pointer("/message/usage")?;
+    let tokens = |key: &str| usage.get(key).and_then(Value::as_u64).unwrap_or(0);
+    Some(
+        tokens("input_tokens")
+            + tokens("cache_creation_input_tokens")
+            + tokens("cache_read_input_tokens")
+            + tokens("output_tokens"),
+    )
 }
 
 fn str_at(value: &Value, pointer: &str) -> Option<String> {
@@ -321,7 +340,12 @@ mod tests {
                 "type": "content_block_delta", "index": 0,
                 "delta": { "type": "input_json_delta", "partial_json": "" } } }),
             json!({ "type": "assistant", "parent_tool_use_id": null, "message": { "content": [
-                { "type": "tool_use", "id": "t1", "name": "Read", "input": { "file_path": "/tmp/note.txt" } } ] } }),
+                { "type": "tool_use", "id": "t1", "name": "Read", "input": { "file_path": "/tmp/note.txt" } } ],
+                "usage": { "input_tokens": 3, "cache_creation_input_tokens": 1200,
+                    "cache_read_input_tokens": 15000, "output_tokens": 40 } } }),
+            // A subagent's usage is its own context, not the conversation's.
+            json!({ "type": "assistant", "parent_tool_use_id": "t9", "message": { "content": [],
+                "usage": { "input_tokens": 90000, "output_tokens": 1 } } }),
             json!({ "type": "user", "parent_tool_use_id": null, "message": { "content": [
                 { "type": "tool_result", "tool_use_id": "t1", "content": "1\thello" } ] } }),
             json!({ "type": "stream_event", "parent_tool_use_id": null, "event": {
@@ -346,6 +370,7 @@ mod tests {
                     id: "t1".into(),
                     summary: "/tmp/note.txt".into()
                 },
+                HarnessEvent::Usage { context: 16_243 },
                 HarnessEvent::ToolFinished {
                     id: "t1".into(),
                     is_error: false

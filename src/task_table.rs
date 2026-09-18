@@ -578,7 +578,7 @@ impl Reply {
                 self.refresh();
                 return Some(error);
             }
-            HarnessEvent::Session(_) => return None,
+            HarnessEvent::Session(_) | HarnessEvent::Usage { .. } => return None,
         }
         self.refresh();
         None

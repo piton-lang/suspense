@@ -173,6 +173,36 @@ shape ChatInputShape:
             It reads what the selected tab's mode is for, as the
             @{PromptModesScope} says.
 
+        session:
+            At the far right of the bar, after the help text, sits how much
+            context the selected tab's conversation holds, then a New Session
+            button. The questions of the Ask tab have a conversation of their
+            own, and the other tabs share the tasks', as the
+            @{HarnessIntegrationScope} says, so the figure is the Ask tab's
+            conversation while it is selected, and the tasks' on any other tab.
+
+            The figure reads "Context", then the number of tokens, short and
+            extra small, muted: "850", "42.1k", "123k", or "1.2M", to a decimal
+            place below a hundred of a unit. It follows each reply as the
+            harness reports it. While the next prompt would start a new
+            conversation, as when the project has none yet or New Session was
+            just pressed, it reads "Context 0". Its tooltip says how many tokens
+            the conversation the next prompt carries on holds, or that the next
+            prompt starts a new conversation.
+
+            New Session is a small ghost button with a sparkles icon. Pressing
+            it leaves the selected tab's conversation: the next prompt sent from
+            that tab, or from any tab sharing its conversation, starts a new one
+            with no context, and the figure reads "Context 0". A run of the
+            conversation left that is still going finishes as it would, but
+            neither it nor the project's history brings that conversation back.
+            While there is no conversation to leave, it is disabled, and its
+            tooltip says the next prompt already starts a new conversation.
+
+            Both sit on the bar's bottom line, which runs beneath them as it does
+            beneath the help text, and neither is cut off: the help text gives
+            way to them when the bar is narrow.
+
         colour:
             The selected tab and the tab body holding the input are tinted the
             colour of its mode, of the @{PromptModesScope}. With Chain selected,

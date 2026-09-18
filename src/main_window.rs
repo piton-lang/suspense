@@ -1336,8 +1336,9 @@ mod tests {
     /// command only as tall as it needs: the body is the tallest column on the
     /// open tab, padded 8 pixels above and below, so a tab of three stacked
     /// slim buttons is taller than one of two, a tab with no commands is
-    /// shorter than any with them, and a full button beside a taller column
-    /// keeps its own height rather than stretching to the body's.
+    /// shorter than any with them. A full button grows into the room its group
+    /// leaves, up to three slim buttons tall, and is two tall where its group
+    /// leaves no more.
     #[gpui_kit::test]
     async fn the_ribbon_body_fits_its_commands(cx: &mut TestAppContext) {
         use crate::ribbon::RibbonTab;
@@ -1408,22 +1409,36 @@ mod tests {
         );
 
         // On Spec, whose tallest column is three slim buttons, a full button
-        // is only as tall as its own icon and label.
-        ribbon.update(cx, |ribbon, cx| ribbon.select_tab(RibbonTab::Spec, cx));
-        cx.run_until_parked();
-        cx.update_window(handle, |_, window, cx| {
-            window.render_frame(cx);
-            let body = window.find("ribbon-controls").bounds();
-            let full = window.find("build").bounds();
-            assert!(
-                full.size.height < body.size.height - padding * 2.,
-                "the full button {:?} stretched to its group {:?}",
-                full.size.height,
-                body.size.height
-            );
-            assert_eq!(full.top() - body.top(), padding, "it isn't at the top");
-        })
-        .unwrap();
+        // grows to that whole height; on Application, where nothing is taller,
+        // it is two slim buttons tall.
+        for (tab, full, stacked) in [
+            (RibbonTab::Spec, "build", 3.),
+            (RibbonTab::Application, "settings", 2.),
+        ] {
+            ribbon.update(cx, |ribbon, cx| ribbon.select_tab(tab, cx));
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let body = window.find("ribbon-controls").bounds();
+                let button = window.find(full).bounds();
+                let slims = gpui_kit::px(22.) * stacked + padding * (stacked - 1.);
+                assert_eq!(
+                    button.size.height, slims,
+                    "{tab:?}: the full button isn't {stacked} slim buttons tall"
+                );
+                assert_eq!(
+                    button.size.height,
+                    body.size.height - padding * 2.,
+                    "{tab:?}: it doesn't fill the buttons' room"
+                );
+                assert_eq!(
+                    button.top() - body.top(),
+                    padding,
+                    "{tab:?}: not at the top"
+                );
+            })
+            .unwrap();
+        }
     }
 
     #[cfg(target_os = "macos")]

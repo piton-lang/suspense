@@ -329,6 +329,9 @@ pub struct ChatInput {
     tint_target: f32,
     lsp: Option<Arc<PitonSession>>,
     busy: bool,
+    /// The context of the conversation the selected tab's next prompt carries
+    /// on, in tokens; `None` when the next prompt starts a new one.
+    context: Option<u64>,
     /// How the input grows to fit its text.
     fit: GrowToFit,
     /// Width of the chain's tab as last laid out, which is how far Code and
@@ -359,6 +362,29 @@ impl EventEmitter<PreviewPrompt> for ChatInput {}
 pub struct TabChanged;
 
 impl EventEmitter<TabChanged> for ChatInput {}
+
+/// Emitted to leave the selected tab's conversation, so its next prompt
+/// starts a new one with no context.
+pub struct NewSession;
+
+impl EventEmitter<NewSession> for ChatInput {}
+
+/// A number of tokens, short: "850", "42.1k", "123k", "1.2M".
+pub fn tokens_label(tokens: u64) -> String {
+    let short = |value: f64, unit: &str| {
+        if value < 100. {
+            let text = format!("{value:.1}");
+            format!("{}{unit}", text.trim_end_matches(".0"))
+        } else {
+            format!("{value:.0}{unit}")
+        }
+    };
+    match tokens {
+        0..1_000 => tokens.to_string(),
+        1_000..1_000_000 => short(tokens as f64 / 1_000., "k"),
+        _ => short(tokens as f64 / 1_000_000., "M"),
+    }
+}
 
 impl ChatInput {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -410,6 +436,7 @@ impl ChatInput {
             tint_target: DEFAULT_TAB as f32,
             lsp: None,
             busy: false,
+            context: None,
             fit: GrowToFit::new(MAX_ROWS),
             chain_width: None,
             attachments: Vec::new(),
@@ -802,6 +829,19 @@ impl ChatInput {
     }
 
     /// Marks the harness as working; sending then queues the prompt.
+    /// Shows how much context the selected tab's conversation holds, or that
+    /// the next prompt starts a new one.
+    pub fn set_context(&mut self, context: Option<u64>, cx: &mut Context<Self>) {
+        if self.context != context {
+            self.context = context;
+            cx.notify();
+        }
+    }
+
+    pub fn context(&self) -> Option<u64> {
+        self.context
+    }
+
     pub fn set_busy(&mut self, busy: bool, cx: &mut Context<Self>) {
         self.busy = busy;
         cx.notify();
@@ -1260,6 +1300,50 @@ impl Render for ChatInput {
                 .text_color(cx.theme().muted_foreground.opacity(0.7))
                 .child(div().min_w_0().truncate().child(TABS[selected].help())),
         );
+        // At the far right, how much context the selected tab's conversation
+        // holds, and a button to leave it for a new one.
+        let context = self.context;
+        let session = h_flex()
+            .flex_none()
+            .self_stretch()
+            .items_center()
+            .gap_2()
+            .pr_2()
+            .border_b_1()
+            .border_color(cx.theme().border)
+            .child(gpui_kit::TestSupportExt::test_support(
+                div()
+                    .id("chat-context")
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(format!(
+                        "Context {}",
+                        tokens_label(context.unwrap_or_default())
+                    ))
+                    .tooltip(move |window, cx| {
+                        let text = match context {
+                            Some(tokens) => format!(
+                                "The conversation this tab's next prompt carries on holds {tokens} tokens"
+                            ),
+                            None => "This tab's next prompt starts a new conversation".into(),
+                        };
+                        Tooltip::new(text).build(window, cx)
+                    }),
+            ))
+            .child(
+                Button::new("new-session")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::Sparkles)
+                    .label("New Session")
+                    .disabled(context.is_none())
+                    .tooltip(if context.is_some() {
+                        "Leave this conversation: the next prompt starts a new one, with no context"
+                    } else {
+                        "The next prompt already starts a new conversation"
+                    })
+                    .on_click(cx.listener(|_, _, _, cx| cx.emit(NewSession))),
+            );
         let tabs = gpui_kit::TestSupportExt::test_support(
             div()
                 .id("chat-tabs")
@@ -1270,7 +1354,8 @@ impl Render for ChatInput {
                 .child(code)
                 .child(spec)
                 .child(ask)
-                .child(help),
+                .child(help)
+                .child(session),
         );
 
         // Anything attached is listed above the input.
@@ -1509,6 +1594,18 @@ mod tests {
     use std::rc::Rc;
     use std::time::Duration;
 
+    /// Token counts read short, to a decimal place below a hundred of a unit.
+    #[test]
+    fn tokens_read_short() {
+        use super::tokens_label;
+        assert_eq!(tokens_label(0), "0");
+        assert_eq!(tokens_label(850), "850");
+        assert_eq!(tokens_label(1_000), "1k");
+        assert_eq!(tokens_label(42_150), "42.1k");
+        assert_eq!(tokens_label(123_456), "123k");
+        assert_eq!(tokens_label(1_200_000), "1.2M");
+    }
+
     use gpui_kit::component::Root;
     use gpui_kit::test::{TestAppContextExt as _, TestWindowExt as _};
     use gpui_kit::{
@@ -1706,8 +1803,9 @@ mod tests {
         }
     }
 
-    /// To the right of the tabs, filling the rest of the bar, a line of help
-    /// says what the selected tab is for, and changes with it.
+    /// To the right of the tabs, filling the bar up to the context and New
+    /// Session at its far right, a line of help says what the selected tab is
+    /// for, and changes with it.
     #[gpui_kit::test]
     async fn help_beside_the_tabs_says_what_the_tab_is_for(cx: &mut TestAppContext) {
         cx.update(|cx| {
@@ -1735,13 +1833,29 @@ mod tests {
                 window.find("tab-help").bounds(),
                 window.find("chat-tabs").bounds(),
             );
+            let (context, new_session) = (
+                window.find("chat-context").bounds(),
+                window.find("new-session").bounds(),
+            );
             assert!(
                 help.left() >= ask.right() - gpui_kit::px(0.5),
                 "{help:?} is not right of {ask:?}"
             );
+            // The help fills the bar up to the context, and New Session ends
+            // it, a little in from its right edge.
+            let between = context.left() - help.right();
             assert!(
-                (help.right() - bar.right()).abs() <= gpui_kit::px(1.),
-                "{help:?} does not fill {bar:?}"
+                between >= gpui_kit::px(0.) && between <= gpui_kit::px(8.),
+                "{help:?} does not fill the bar up to the context {context:?}"
+            );
+            assert!(
+                new_session.left() > context.right(),
+                "New Session {new_session:?} isn't after the context {context:?}"
+            );
+            assert!(
+                new_session.right() <= bar.right()
+                    && bar.right() - new_session.right() <= gpui_kit::px(8.),
+                "New Session {new_session:?} isn't at the far right of {bar:?}"
             );
         })
         .unwrap();
