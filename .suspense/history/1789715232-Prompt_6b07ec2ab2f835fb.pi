@@ -1,0 +1,41 @@
+from /scope/prompt-mode/message-list import MessageList
+from /ui/components/sidebar import SidebarScope
+
+anchor Prompt_6b07ec2ab2f835fb:
+    userPrompt:
+        -
+            - "When a task is running, I'd like an additional "
+            - @{SidebarScope}
+            - " to slide out from the right of the "
+            - @{MessageList}
+            - " that lists which spec files are ferenced."
+
+    mode: combined
+
+    systemPrompt:
+        -
+            - "We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec."
+        -
+            - ""
+        -
+            - "You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec."
+        -
+            - ""
+        -
+            - "Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other."
+        -
+            - ""
+        -
+            - "Then build the spec and execute the prompt directly on the code using a unified plan."
+        -
+            - ""
+        -
+            - "Make sure that you write both code and spec."
+        -
+            - ""
+        -
+            - "Links to .claude/reference/… in the prompt are the spec for what they name. Read each one before changing anything it covers."
+        -
+            - ""
+        -
+            - "\${PITON_FLUENCY}"

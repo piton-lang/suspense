@@ -27,8 +27,8 @@ shape RibbonShape:
         @{ThemeScope}'s colours. Nothing adds to or takes away from a tab's own
         borders or margins, so a tab's label never shifts as tabs open and
         close. Along the top of the commands, a line in the colour of the tabs'
-        own side borders runs from the far left, beneath the project indicator,
-        to the side border of the first open tab, and on from that tab's other
+        own side borders runs from the far left, beneath the project indicator
+        and the rest of the left container, to the side border of the first open tab, and on from that tab's other
         side border to the next open tab or the far right. An open tab meets
         the commands beneath it with no line between them, its side borders
         running straight down to where the line picks up again. There is no
@@ -71,18 +71,40 @@ shape RibbonShape:
         shows the same tabs open. Which tabs are open isn't kept between
         launches: the window always opens with only Project open.
 
+    leftContainer:
+        At the left end of the bar, left of the tab bar itself rather than
+        inside it, so the tab bar's own padding and bottom line don't reach
+        it, sits the left container. It holds, in order, the project
+        indicator, the collapse chevron, and the activity spinner, and can
+        hold other things after them. It is the same whether the ribbon is
+        expanded, beside the tabs, or collapsed, leading the row of primary
+        commands.
+
+        Everything in it is vertically centred in the bar, with no gap
+        between one thing and the next and no padding around them: each
+        thing's own size is all the room it takes. The container shrinks to
+        fit what it holds, and when it holds nothing, it isn't there at all.
+
+    rightContainer:
+        At the right end of the bar, right of the tabs, or of the primary
+        commands when the ribbon is collapsed, sits the right container. It
+        holds nothing yet, and can hold other things. It lays out what it
+        holds as the left container does: vertically centred, with no gap
+        between things and no padding around them, shrinking to fit, and not
+        there at all while it holds nothing, as it is now.
+
     activity:
-        The indicator and list of the @{RunningActivityScope} sit just to the
-        right of the project indicator, as it is beside the tabs or leading the
-        collapsed ribbon.
+        The indicator and list of the @{RunningActivityScope} sit in the left
+        container, just right of the collapse chevron. While nothing is
+        running, the spinner isn't there, and the left container shrinks
+        around the project indicator and the chevron.
 
     projectIndicator:
-        At the left end of the bar sits the @{ProjectIndicator}, a solid block
-        the full height of the bar, left of the tab bar itself rather than
-        inside it, so the tab bar's own padding and bottom line don't reach it.
-        There is no divider between it and what follows: the change of
-        background is the edge. The activity spinner leads the tab bar, just
-        after it.
+        The @{ProjectIndicator} leads the left container, a solid block the
+        full height of the bar. There is no divider between it and what
+        follows: the change of background is the edge. The collapse chevron
+        sits just after it, and the activity spinner just after the
+        chevron.
 
     groups:
         Each group has its title in muted text rotated -90deg (bottom to top)
@@ -115,23 +137,21 @@ shape RibbonShape:
     commands:
         A command button is one of two sizes, and each tab says which of its
         commands are which:
-        - full: its large icon above its label, between two and three slim buttons stacked tall: two, or more where its group has the room, up to three
+        - full: its large icon above its label, exactly two slim buttons stacked tall
         - slim: 22 pixels tall, its small icon to the left of its label
         - small: only in the collapsed ribbon: 22 pixels tall, its small icon to the left of its label, and only as wide as they are
 
         Buttons side by side are 8 pixels apart. Slim buttons side by side
-        stack down instead, top aligned, three to a column, each column as wide
-        as its widest button and each button as wide as its column; a fourth
+        stack down instead, top aligned, two to a column, each column as wide
+        as its widest button and each button as wide as its column; a third
         starts the next column, 8 pixels along. A full button always stands
         alone. A slim button fills only its column's width: nowhere does a
         button stretch to fill a row.
 
         Every command starts from the top of its group, so the commands of a
-        tab all start at the same line. A full button is never shorter than two
-        slim buttons stacked, nor taller than three; where the tallest column
-        beside it leaves the room, as three stacked slim buttons do, it grows to
-        fill it, up to three slim buttons tall. Alone, or beside columns no
-        taller than two slim buttons, it is two slim buttons tall.
+        tab all start at the same line. A full button is always two slim
+        buttons stacked tall, never shorter or taller, however much its icon
+        and label would take, alone or beside any column.
 
         Every button is square, with no rounded corners. Its background is
         clearly apart from the commands' area behind it, though still quiet:
@@ -155,12 +175,12 @@ shape RibbonShape:
     height:
         The commands drive the height: the command area is as tall as the
         tallest column of the open tabs, padded 8 pixels above and below, and
-        nothing more. Since no column holds more than three slim buttons, and no
-        full button is taller than three, the tallest the command area gets is
-        three slim buttons with 8 pixels between each, padded: 98 pixels; a tab
-        of full buttons alone is at least two slim buttons tall, padded: 68
-        pixels. A tab whose tallest column is three
-        slim buttons is taller than one of two, and a tab with no commands,
+        nothing more. Since no column holds more than two slim buttons, and a
+        full button is two slim buttons tall, the tallest the command area gets
+        is two slim buttons with 8 pixels between them, padded: 68 pixels, and
+        never more. A tab whose tallest column is two slim buttons, or that has
+        a full button, is taller than one of a single slim button, and a tab
+        with no commands,
         which is only its "No commands yet" padded the same way, is the
         shortest of all. So switching tabs can change the command area's
         height, and the window beneath moves with it.
@@ -175,27 +195,32 @@ shape RibbonShape:
         with each title centred down its strip whatever that height is.
 
     collapsing:
-        The ribbon collapses, and expands again, with a chevron button at the
-        right end of the ribbon, by double-clicking a tab, or with Ctrl+F1
+        The ribbon collapses, and expands again, with a chevron button in the
+        left container, after the project indicator, by double-clicking a tab, or with Ctrl+F1
         (Cmd+F1 on macOS). Whether it is collapsed is one of the
         @{UserPreferencesScope}.
 
+        The chevron button is square, 22 pixels on each side, its icon
+        centred in it. It is the same size, and its icon the same size,
+        whether the ribbon is expanded or collapsed: only the way the
+        chevron points changes.
+
         Collapsed, the tabs go away too. The ribbon becomes a single thin row
-        led by the project indicator, the same solid block as beside the tabs,
-        filling the row's height, with no divider after it, then the activity
-        spinner, and then every primary command, from all of
+        led by the left container, the same as beside the tabs, the project
+        indicator filling the row's height, and then every primary command, from all of
         the tabs, as small buttons: a small icon beside its label, and dark mode
         as a small switch in a block only as wide as the switch and its label.
         Every one is only as wide as its own icon and label, 8 pixels from the
         next, whatever the tab it comes from calls it; a command that is slim
         in its tab doesn't grow to fill the row. They keep the order of their
         tabs, with a thin vertical divider between the commands of one tab and
-        the next, and keep their tooltips and disabled states. The chevron sits
-        at the right end of the row. Every control in the row, the chevron and
-        the dividers included, is vertically centred in it.
+        the next, and keep their tooltips and disabled states. The right
+        container, when it holds anything, ends the row. Every control in the
+        row, the dividers and the containers' contents included, is
+        vertically centred in it.
 
-        When the spinner, commands, and dividers are wider than the room
-        between the project indicator and the chevron, that stretch of the row
-        scrolls sideways, as the expanded command area does. The project
-        indicator and the chevron stay where they are, never scrolled away or
+        When the commands and dividers are wider than the room between the
+        left container and the right container, or the right end of the row,
+        that stretch of the row scrolls sideways, as the expanded command area
+        does. The containers stay where they are, never scrolled away or
         squeezed, and nothing in the row shrinks to fit.

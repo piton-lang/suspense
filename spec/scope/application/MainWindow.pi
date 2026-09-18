@@ -1,7 +1,6 @@
 use /lib
 use /ui
 from ../rescope import RescopeScope
-from ../project-directory import ProjectDirectoryScope
 from ../project/open-project import OpenProjectScope
 from ../prompt-mode import PromptEditor
 from ../prompt-mode/chat-input import ChatInputScope
@@ -9,7 +8,7 @@ from ../editor import EditorScope
 from ../palette import PaletteScope
 from /ui/components/ribbon import RibbonScope
 from /ui/components/file-tree import FileTreeScope
-from /ui/components/sidebar import SidebarScope
+from /ui/components/project-sidebar import ProjectSidebarScope
 from /ui/components/diff-view import DiffViewScope
 from /ui/components/inset-panel import InsetPanelScope
 from ../new-project import NewProjectScope
@@ -67,7 +66,7 @@ shape MainWindowShape:
         ribbon: @{RibbonScope}
 
     body:
-        sidebar: @{SidebarScope}
+        sidebar: @{ProjectSidebarScope}
 
         openFile:
             A file opened, from the @{FileTreeScope} or anywhere else the
@@ -84,6 +83,7 @@ shape MainWindowShape:
             its width while the file slides over it, so nothing in it is laid
             out anew each frame, and takes the rest of the width once the slide
             settles.
+
             The slide is quick and settles without bouncing, and only then can
             the split be dragged. A file opened in place of one already showing
             doesn't slide, since the split is already open. The
@@ -142,4 +142,4 @@ shape MainWindowShape:
 
         promptMode:
             The body displays the @{PromptEditor} and any splits, to the right
-            of the @{SidebarScope}.
+            of the @{ProjectSidebarScope}.

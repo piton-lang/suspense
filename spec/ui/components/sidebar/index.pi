@@ -1,28 +1,47 @@
 use /lib
 use /ui
-from /ui/components/file-tree import FileTreeScope
-from /ui/components/git-panel import GitPanelScope
+from ./Sidebar export *
+from ./Panel export *
+from /ui/components/project-sidebar import ProjectSidebarScope
+from /ui/components/referenced-spec-sidebar import ReferencedSpecSidebarScope
+from /ui/components/scrollbar import ScrollbarScope
 
 export ui-component SidebarScope:
     concept: {SidebarConcept}
 
 concept SidebarConcept:
     pitch:
-        A column along the left of the main window's body that holds the
-        tools for finding your way around the project.
+        A column along the left or right of the main window, holding panels
+        one above the other, each a tool for the work beside it.
 
     shape: {SidebarShape}
 
 shape SidebarShape:
     description:
-        Runs the full height of the body, beneath the ribbon, to the left of
-        everything else in it. It is resized by dragging its right edge: it
-        starts 260 pixels wide and can't be dragged narrower than 160.
+        Every sidebar is a sidebar, as its own scope says: it names the side it
+        runs along, how wide it starts and how narrow it can be dragged, and
+        the panels it holds, and those decide how it is drawn. It runs along
+        its side, with a thin line down the edge where it meets what it sits
+        beside, and is resized by dragging that edge. It holds its panels one
+        above the other, across its full width, with a single thin line
+        between one panel and the next.
 
-    contents:
-        fileTree: @{FileTreeScope}
-        gitPanel: @{GitPanelScope}
+    sidebars:
+        - left: the @{ProjectSidebarScope}, along the left of the body, for finding your way around the project
+        - right: the @{ReferencedSpecSidebarScope}, at the right of the message list while a task runs
 
-    layout:
-        The file tree fills the sidebar from the top, and the git panel sits
-        along the bottom, underneath it, taking only the height it needs.
+    panels:
+        A panel is one tool in a sidebar, as its own scope says. What it is
+        like follows from four things it names:
+
+        - its title: a panel with a title has a header reading it; one without has no header
+        - whether it is counted: a counted panel's header shows how many rows it lists, muted, at its right
+        - its height: a panel fills the height its sidebar's other panels leave, fits its contents, or shares the height left with the other panels that share it, by a line dragged between them
+        - whether it scrolls: one that scrolls has a @{ScrollbarScope} of its own when its contents are taller than it
+
+    headers:
+        A panel's header is slightly contrasting to the panel's body: the
+        header is on the theme's raised surface, a small step toward the
+        viewer, and the body on its base surface, as the sidebar is, so the
+        header reads as part of the panel, marked off from its body, with no
+        line between them.

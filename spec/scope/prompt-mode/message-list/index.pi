@@ -5,6 +5,7 @@ from /scope/prompt-mode/answer-drawer import AnswerDrawerScope
 from /scope/prompt-mode/chat-input import ChatInputScope
 from /scope/prompt-mode/modes import PromptModesScope
 from /ui/components/task-table import TaskTableScope
+from /ui/components/referenced-spec-sidebar import ReferencedSpecSidebarScope
 
 export ui-component MessageList:
     concept: {MessageListConcept}
@@ -53,6 +54,11 @@ shape MessageListShape:
         doesn't say which tab it was sent from keeps the tab bar's colour. The
         queue along the bottom and the previous tasks row along the top both
         have the same background colour as the tab bar.
+
+    referencedSpec:
+        While a task is running, a @{ReferencedSpecSidebarScope} slides out from
+        the message list's right edge, listing the spec files the task
+        references, and slides back once the run is over.
 
     askDimming:
         While the @{AnswerDrawerScope} is open, it dims the message list beneath

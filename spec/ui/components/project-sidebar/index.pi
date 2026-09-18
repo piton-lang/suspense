@@ -1,0 +1,34 @@
+use /lib
+use /ui/components/sidebar/Sidebar
+from /ui/components/sidebar import SidebarScope
+from /ui/components/file-tree import FileTreeScope
+from /ui/components/git-panel import GitPanelScope
+from /scope/prompt-mode/message-list import MessageList
+
+export sidebar ProjectSidebarScope:
+    side: left
+
+    panels:
+        - @{FileTreeScope}
+        - @{GitPanelScope}
+
+    concept: {ProjectSidebarConcept}
+
+concept ProjectSidebarConcept:
+    pitch:
+        The @{SidebarScope} along the left of the main window's body, holding
+        the tools for finding your way around the project.
+
+    shape: {ProjectSidebarShape}
+
+shape ProjectSidebarShape:
+    description:
+        Runs the full height of the body, beneath the ribbon, to the left of
+        everything else in it. The file tree fills it from the top, and the git
+        panel sits along the bottom, underneath it, taking only the height it
+        needs.
+
+    others:
+        It is the body's only sidebar on the left. While a task runs, a second
+        one, the running task's referenced spec, slides out at the right of
+        the message list, as the @{MessageList} says.

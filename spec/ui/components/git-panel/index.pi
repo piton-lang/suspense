@@ -1,5 +1,6 @@
 use /lib
 use /ui
+use /ui/components/sidebar/Panel
 from /ui/components/growing-text-input import GrowingTextInputScope
 from /ui/components/file-tree import FileTreeScope
 from /scope/project-directory import ProjectDirectoryScope
@@ -8,7 +9,10 @@ from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
 from /scope/project-data import ProjectDataScope
 from /scope/prompt-mode/modes import PromptModesScope
 
-export ui-component GitPanelScope:
+export panel GitPanelScope:
+    height: fit
+    scrolls: false
+
     concept: {GitPanelConcept}
 
 concept GitPanelConcept:
@@ -22,8 +26,8 @@ concept GitPanelConcept:
 
 shape GitPanelShape:
     description:
-        A compact panel with a thin border along its top. It is shown only
-        while the project is inside a git repository.
+        A compact panel. It is shown only while the project is inside a git
+        repository.
 
     branch:
         The top row shows the branch from the @{GitScope}, or "Detached HEAD",

@@ -2,6 +2,7 @@ use /lib
 
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/project-locations import ProjectLocationsScope
+from /scope/harness-integration import HarnessIntegrationScope
 
 export scope ProjectDataScope:
     concept: {ProjectDataConcept}
@@ -24,9 +25,10 @@ shape ProjectDataShape:
         - `asks/`: every question asked from the Ask tab, saved the same way as a task but apart from them
         - `queue/`: each queued prompt, as its hidden anchor's source, imports included, named so they list in the order they were queued
         - `divergence/`: each divergence report, a JSON file named by when it was made
-        - `system-prompts/`: each mode's system prompt template, a Markdown file named after its mode, code.md, combined.md for Chain, spec.md, and ask.md
+        - `system-prompts/`: each mode's system prompt template, a Markdown file named after its mode, code.md, combined.md for Chain, spec.md, and ask.md, and the spec-reading prompt injected into them, spec-reading.md
         - `commit-notes.json`: the Git panel's commit notes
         - `harness.json`: the last report the harness gave of the skills and agents it has
+        - `conversations.json`: which conversation of the tasks, and of the questions, was last left for a new one, as the @{HarnessIntegrationScope} says, so it isn't carried on again once the project is reopened
 
         The draft, `.suspense-draft.pi`, isn't in `.suspense`: it is the prompt
         being written, as `piton lsp` is shown it, a document named as if it
@@ -36,7 +38,9 @@ shape ProjectDataShape:
     machineOnly:
         Some of it belongs to one machine rather than to the project: the
         harness report `.suspense/harness.json`, the queue `.suspense/queue/`,
-        the commit notes `.suspense/commit-notes.json`, and the draft
+        the commit notes `.suspense/commit-notes.json`, the conversations left
+        `.suspense/conversations.json`, whose conversations only this machine's
+        harness knows, and the draft
         `.suspense-draft.pi` wherever it is, should it ever be written. Git
         ignores these, so they are never committed. Everything else, the prompt
         history, the questions, the divergence reports, and the system prompts,

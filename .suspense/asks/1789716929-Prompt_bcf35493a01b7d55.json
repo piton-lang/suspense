@@ -1,0 +1,5179 @@
+{
+  "userPrompt": "Would it be possible to have like, a running summary of what's been *understood* from the spec as a build task is going ?",
+  "output": [
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "0da681be-5e90-4d1e-90f0-27cc97910f0f",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "1c336703-69c9-48e9-84f4-696da28c0a9a",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "f5539224-1255-434c-87fc-a5d6a3b452fe",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "9d735218-9690-425d-b06d-fcdde9fc831b",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "0da681be-5e90-4d1e-90f0-27cc97910f0f",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "",
+      "stdout": "",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "a0a11069-92e6-4b52-b14b-6811529b3677",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "f5539224-1255-434c-87fc-a5d6a3b452fe",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "{\"terminalSequence\":\"\\u001b]777;notify;warp://cli-agent;{\\\"v\\\":1,\\\"agent\\\":\\\"claude\\\",\\\"event\\\":\\\"session_start\\\",\\\"session_id\\\":\\\"2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d\\\",\\\"cwd\\\":\\\"/home/hyphyphyph/piton/repl\\\",\\\"project\\\":\\\"repl\\\",\\\"plugin_version\\\":\\\"2.2.0\\\"}\\u0007\"}\n",
+      "stdout": "{\"terminalSequence\":\"\\u001b]777;notify;warp://cli-agent;{\\\"v\\\":1,\\\"agent\\\":\\\"claude\\\",\\\"event\\\":\\\"session_start\\\",\\\"session_id\\\":\\\"2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d\\\",\\\"cwd\\\":\\\"/home/hyphyphyph/piton/repl\\\",\\\"project\\\":\\\"repl\\\",\\\"plugin_version\\\":\\\"2.2.0\\\"}\\u0007\"}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "34db596b-c5ee-4203-980a-137cab22def2",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "/home/hyphyphyph/piton/repl",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "tools": [
+        "Task",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "ListAgents",
+        "ListMcpResourcesTool",
+        "Monitor",
+        "NotebookEdit",
+        "PushNotification",
+        "Read",
+        "ReadMcpResourceDirTool",
+        "ReadMcpResourceTool",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskOutput",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write",
+        "mcp__claude_ai_Claude_Docs__batch",
+        "mcp__claude_ai_Claude_Docs__create",
+        "mcp__claude_ai_Claude_Docs__delete",
+        "mcp__claude_ai_Claude_Docs__export",
+        "mcp__claude_ai_Claude_Docs__guide",
+        "mcp__claude_ai_Claude_Docs__query",
+        "mcp__claude_ai_Claude_Docs__read",
+        "mcp__claude_ai_Claude_Docs__update"
+      ],
+      "mcp_servers": [
+        {
+          "name": "backlog",
+          "status": "connected",
+          "source": "user"
+        },
+        {
+          "name": "claude.ai Claude Docs",
+          "status": "connected",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Drive",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Gmail",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Calendar",
+          "status": "needs-auth",
+          "source": "claudeai"
+        }
+      ],
+      "model": "claude-opus-5[1m]",
+      "permissionMode": "auto",
+      "slash_commands": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "output-style",
+        "context",
+        "effort",
+        "fast",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "skill-doctor",
+        "goal",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "terminal_slash_commands": [
+        "doctor",
+        "color",
+        "reload-plugins"
+      ],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.275",
+      "output_style": "default",
+      "agents": [
+        "claude",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
+      "skills": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "plugins": [
+        {
+          "name": "gitkraken-hooks",
+          "path": "/home/hyphyphyph/.claude/plugins/marketplaces/gitkraken/plugins/gitkraken-hooks",
+          "source": "gitkraken-hooks@gitkraken",
+          "version": "3.1.73"
+        },
+        {
+          "name": "warp",
+          "path": "/home/hyphyphyph/.claude/plugins/cache/claude-code-warp/warp/2.2.0",
+          "source": "warp@claude-code-warp",
+          "version": "2.2.0"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "msg_lifecycle_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "ecd556ef-cd0b-4849-aa36-e893cd154373",
+      "memory_paths": {
+        "auto": "/home/hyphyphyph/.claude/projects/-home-hyphyphyph-piton-repl/memory/"
+      },
+      "messaging_socket_path": "/run/user/1000/cc-socks/894629.sock",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "89bbe8dd-3dc0-416e-a17f-4cf3c1e3649e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5",
+          "id": "msg_011CfAX75btNEwfbtuKri6ua",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 1227,
+            "cache_read_input_tokens": 274797,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1227
+            },
+            "output_tokens": 3,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "d9df3bcb-8e4c-4f64-a3ef-b4640b95c48a",
+      "ttft_ms": 1345
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "cd688082-8d42-4f69-a619-581b28b428c4"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "2f5c37c4-8463-44eb-a7e2-c42810268576"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5bd40675-d93d-46e4-a55e-59eb6db49468"
+    },
+    {
+      "type": "system",
+      "subtype": "commands_changed",
+      "commands": [
+        {
+          "name": "gepeto",
+          "description": "Guide for building 1-click launchers and building apps with launchers built-in using Pinokio (user)",
+          "argumentHint": ""
+        },
+        {
+          "name": "pinokio",
+          "description": "Discover, launch, and use apps and tools for the current task. (user)",
+          "argumentHint": ""
+        },
+        {
+          "name": "plannotator-annotate",
+          "description": "Open Plannotator's annotation UI for a markdown file, HTML file, URL, or folder and then respond to the returned annotations. (user)",
+          "argumentHint": ""
+        },
+        {
+          "name": "plannotator-last",
+          "description": "Open Plannotator on the latest rendered assistant message and use the returned annotations to revise that message or continue. (user)",
+          "argumentHint": ""
+        },
+        {
+          "name": "plannotator-review",
+          "description": "Open Plannotator's browser-based code review UI for the current worktree or a pull request URL, then act on the feedback that comes back. (user)",
+          "argumentHint": ""
+        },
+        {
+          "name": "build-application",
+          "description": "build or change the ApplicationScope scope Use when you need to build or change the ApplicationScope scope (project)",
+          "argumentHint": ""
+        },
+        {
+          "name": "deep-research",
+          "description": "Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report. (dynamic workflow)",
+          "argumentHint": ""
+        },
+        {
+          "name": "design",
+          "description": "Grant or revoke Claude agent access to your Design projects",
+          "argumentHint": "consent | revoke"
+        },
+        {
+          "name": "design-sync",
+          "description": "Push a React design system to claude.ai/design. This runs a converter that bundles the real component code (from Storybook or a bare package) and uploads it. Use when the user runs /design-sync or says \"sync my design system to Claude Design\".",
+          "argumentHint": "[<project hint, e.g. \"Acme DS\">]"
+        },
+        {
+          "name": "dataviz",
+          "description": "Use this skill whenever you are about to create ANY chart, graph, plot, dashboard, or data visualization, in ANY output medium — an HTML or React artifact, inline SVG, plotting code in any library (matplotlib, plotly, d3, Recharts, …), an image/PNG you will render and upload, or a chart shared into Slack. Read it BEFORE writing the first line of chart code, choosing chart colors, building a stat tile / meter / KPI row, or laying out a dashboard. When the destination is a first-party document connector (host-designated, never self-described) that renders live charts, hand it the rows (inline, or as an uploaded data file the chart cites) rather than a rendered PNG/SVG — a picture of a chart loses hover, data inspection and per-value comments. Produces visualizations that read as one system — elegant, accessible, consistent in light and dark — using a brand-neutral placeholder palette you swap for your own. Teaches a design-system-agnostic method: a form heuristic, a color formula with a runnable validator, mark specs, and interaction rules. A validated default palette is documented in `references/palette.md` — swap that file's values for your brand's. Triggers on: \"chart\", \"graph\", \"plot\", \"data viz\", \"visualization\", \"dashboard\", \"analytics\", \"visualize data\", \"categorical colors\", \"sequential / diverging palette\", \"stat tile\", \"sparkline\", \"heatmap\", \"legend\", \"axis\", \"tooltip\", \"chart colors\", \"color by series\".",
+          "argumentHint": ""
+        },
+        {
+          "name": "update-config",
+          "description": "Use this skill to configure the Claude Code harness via settings.json. Automated behaviors (\"from now on when X\", \"each time X\", \"whenever X\", \"before/after X\") require hooks configured in settings.json - the harness executes these, not Claude, so memory/preferences cannot fulfill them. Also use for: permissions (\"allow X\", \"add permission\", \"move permission to\"), env vars (\"set X=Y\"), hook troubleshooting, or any changes to settings.json/settings.local.json files. Examples: \"allow npm commands\", \"add bq permission to global settings\", \"move permission to user settings\", \"set DEBUG=true\", \"when claude stops show X\". For simple settings like theme/model, suggest the /config command.",
+          "argumentHint": ""
+        },
+        {
+          "name": "verify",
+          "description": "Verify that a code change actually does what it's supposed to by exercising it end-to-end and observing behavior — drive the affected flow, not just tests or typecheck. Run before committing nontrivial changes; bootstraps this repo's project verify skill if none exists yet. Don't invoke it on a diff that only touches tests, docs, or other code with no runtime surface to drive (a change to product source always has one) — there's nothing to observe.",
+          "argumentHint": ""
+        },
+        {
+          "name": "debug",
+          "description": "Enable debug logging for this session and help diagnose issues",
+          "argumentHint": "[issue description]"
+        },
+        {
+          "name": "code-review",
+          "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's review recipe covers them) at the given effort level (low/medium: fewer, high-confidence findings; high→max: broader coverage, may include uncertain findings; ultra: deep multi-agent review in the cloud); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply the findings to the working tree after the review. For ultra on a GitHub.com PR target, --post asks to post the finished review’s findings to the PR as a single comment from the user’s GitHub account (not a review; the launch dialog still confirms in interactive sessions, while non-interactive mode posts on the flag alone) and --no-post hides that option.",
+          "argumentHint": "[low|medium|high|xhigh|max|ultra] [--fix] [--comment] [<pr#>|<branch>|<path>]",
+          "aliases": [
+            "review"
+          ]
+        },
+        {
+          "name": "simplify",
+          "description": "Review the changed code for reuse, simplification, efficiency, and altitude cleanups, then apply the fixes. Quality only — it does not hunt for bugs; use /code-review for that.",
+          "argumentHint": "[<target>]"
+        },
+        {
+          "name": "batch",
+          "description": "Research and plan a large-scale change, then execute it in parallel across 5–30 isolated worktree agents that each open a PR.",
+          "argumentHint": "<instruction>"
+        },
+        {
+          "name": "fewer-permission-prompts",
+          "description": "Scan your transcripts for common read-only Bash and MCP tool calls, then add a prioritized allowlist to project .claude/settings.json to reduce permission prompts.",
+          "argumentHint": ""
+        },
+        {
+          "name": "doctor",
+          "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration.",
+          "argumentHint": "",
+          "aliases": [
+            "checkup"
+          ]
+        },
+        {
+          "name": "loop",
+          "description": "Run a prompt or slash command on a recurring interval (e.g. /loop 5m /foo). Omit the interval to let the model self-pace.",
+          "argumentHint": "[interval] [prompt]",
+          "aliases": [
+            "proactive"
+          ]
+        },
+        {
+          "name": "schedule",
+          "description": "Create, update, list, or run scheduled cloud agents (routines) that execute on a cron schedule.",
+          "argumentHint": "",
+          "aliases": [
+            "routines"
+          ]
+        },
+        {
+          "name": "claude-api",
+          "description": "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read BEFORE opening the target file; don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file).",
+          "argumentHint": ""
+        },
+        {
+          "name": "workflow-authoring",
+          "description": "Reference for writing a Workflow tool script (script API and gotchas, resume, quality patterns, worked examples). Load before authoring a script for a workflow the user already opted into; it does not itself authorize running one.",
+          "argumentHint": ""
+        },
+        {
+          "name": "run",
+          "description": "Launch and drive this project's app to see a change working. Use when asked to run, start, or screenshot the app, or to confirm a change works in the real app (not just tests). First looks for a project skill that already covers launching the app; otherwise falls back to built-in patterns per project type (CLI, server, TUI, Electron, browser-driven, library).",
+          "argumentHint": ""
+        },
+        {
+          "name": "run-skill-generator",
+          "description": "Author or improve the run-<unit> skill - a per-project skill that tells agents how to build, launch, and drive this project's app. Use when the user asks to set up the project, get it running, write run instructions, or verify build/run steps work from a clean environment.",
+          "argumentHint": ""
+        },
+        {
+          "name": "advisor",
+          "description": "Let Claude consult a stronger model at key moments",
+          "argumentHint": "[fable|opus|sonnet|off]"
+        },
+        {
+          "name": "agents",
+          "description": "(removed) Ask Claude to create/manage subagents, or edit .claude/agents/",
+          "argumentHint": ""
+        },
+        {
+          "name": "auto-mode-setup",
+          "description": "Teach auto mode about your environment, plus optional rule tweaks",
+          "argumentHint": "[--request-id <uuid>] (--wizard posture=… scope=… depth=… --propose | --expect-sha256 <64-hex> --apply-file <path>)"
+        },
+        {
+          "name": "autocompact",
+          "description": "Configure the auto-compact window size",
+          "argumentHint": "[auto|<tokens>]"
+        },
+        {
+          "name": "clear",
+          "description": "Start a new session with empty context; previous session stays on disk (resumable with /resume)",
+          "argumentHint": "[name]",
+          "aliases": [
+            "reset",
+            "new"
+          ]
+        },
+        {
+          "name": "color",
+          "description": "Set the prompt bar color for this session",
+          "argumentHint": "[red|blue|green|yellow|purple|orange|pink|cyan|default]"
+        },
+        {
+          "name": "compact",
+          "description": "Free up context by summarizing the conversation so far",
+          "argumentHint": "<optional custom summarization instructions>"
+        },
+        {
+          "name": "config",
+          "description": "Set a setting by key",
+          "argumentHint": "key=value",
+          "aliases": [
+            "settings"
+          ]
+        },
+        {
+          "name": "output-style",
+          "description": "List output styles or switch to one",
+          "argumentHint": "[style]"
+        },
+        {
+          "name": "context",
+          "description": "Show current context usage",
+          "argumentHint": ""
+        },
+        {
+          "name": "effort",
+          "description": "Set effort level for model usage",
+          "argumentHint": "<low|medium|high|xhigh|max|ultracode|auto>"
+        },
+        {
+          "name": "fast",
+          "description": "Toggle fast mode (Opus 5)",
+          "argumentHint": "[on|off]"
+        },
+        {
+          "name": "heapdump",
+          "description": "Dump the JS heap to the Desktop; on Linux with no Desktop folder, the home directory",
+          "argumentHint": ""
+        },
+        {
+          "name": "init",
+          "description": "Initialize a new CLAUDE.md file with codebase documentation",
+          "argumentHint": ""
+        },
+        {
+          "name": "mcp",
+          "description": "Manage MCP servers",
+          "argumentHint": "[reconnect|enable|disable [<server>|all]]"
+        },
+        {
+          "name": "import",
+          "description": "Import config from another AI coding agent",
+          "argumentHint": ""
+        },
+        {
+          "name": "model",
+          "description": "Set the AI model for Claude Code",
+          "argumentHint": "<model>"
+        },
+        {
+          "name": "__remote-workflow",
+          "description": "Run the workflow script delivered in this session environment (server-launched sessions only)",
+          "argumentHint": ""
+        },
+        {
+          "name": "workflow-launch-exec",
+          "description": "Execute a server-launched workflow handoff (workflow_launch event sessions only)",
+          "argumentHint": ""
+        },
+        {
+          "name": "reload-plugins",
+          "description": "Activate pending plugin changes in the current session",
+          "argumentHint": "[--force]"
+        },
+        {
+          "name": "reload-skills",
+          "description": "Pick up skills added or changed on disk during this session",
+          "argumentHint": ""
+        },
+        {
+          "name": "rename",
+          "description": "Rename the current conversation",
+          "argumentHint": "[name]",
+          "aliases": [
+            "name"
+          ]
+        },
+        {
+          "name": "ultrareview",
+          "description": "Start a cloud agent that finds and verifies bugs in your branch (~5-10 min, $5-$25 USD) · Runs in a cloud session. See https://code.claude.com/docs/en/claude-code-on-the-web",
+          "argumentHint": ""
+        },
+        {
+          "name": "security-review",
+          "description": "Complete a security review of the pending changes on the current branch",
+          "argumentHint": ""
+        },
+        {
+          "name": "usage-credits",
+          "description": "Configure usage credits or request them from your admin when you hit a limit",
+          "argumentHint": ""
+        },
+        {
+          "name": "extra-usage",
+          "description": "Renamed to /usage-credits",
+          "argumentHint": ""
+        },
+        {
+          "name": "usage",
+          "description": "Show session cost, plan usage, and what's contributing to your limits",
+          "argumentHint": "",
+          "aliases": [
+            "cost",
+            "stats"
+          ]
+        },
+        {
+          "name": "insights",
+          "description": "Generate a report analyzing your Claude Code sessions",
+          "argumentHint": ""
+        },
+        {
+          "name": "recap",
+          "description": "Generate a one-line session recap now",
+          "argumentHint": ""
+        },
+        {
+          "name": "skill-doctor",
+          "description": "Show which loaded skills are unused and costing context",
+          "argumentHint": ""
+        },
+        {
+          "name": "goal",
+          "description": "Set a goal — keep working until the condition is met",
+          "argumentHint": ""
+        },
+        {
+          "name": "design-consent",
+          "description": "Grant Claude agent access to your Design projects",
+          "argumentHint": ""
+        },
+        {
+          "name": "design-revoke",
+          "description": "Revoke Claude agent access to your Design projects",
+          "argumentHint": ""
+        },
+        {
+          "name": "list-agents",
+          "description": "List subagents, teammates, and other Claude sessions you can message",
+          "argumentHint": "",
+          "aliases": [
+            "peers"
+          ]
+        },
+        {
+          "name": "team-onboarding",
+          "description": "Help teammates ramp on Claude Code with a guide from your usage",
+          "argumentHint": ""
+        },
+        {
+          "name": "anthropic-skills:docs",
+          "description": "docs (living docs people share, comment on and edit; use only when the user asks for one: names a doc, document, page, memo, spec, PRD, runbook or write-up, asks for somewhere to share or keep editing something, or says yes to your doc offer; a plan, comparison, summary or notes asked in chat stays in chat (at most a one-line doc offer); a report, status update, recap or \"something I can send them\" with no form named → ask first: reply, doc or file?; tabs hold tables and live charts too; a pasted claude.ai/code/artifact/… link may be a doc: check with docs tools first; not HTML pages, apps or plain chat answers; a .docx/.pptx/.xlsx/PDF asked for by name → that format's skill): asked for one → no docs-connector instructions in context? call the docs connector's `guide` with topic.instructions first, then create the doc (headings only, no body) before any search, file read or plan, even with files attached. Documenting code means docstrings or repo docs, not a doc. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "docs"
+          ]
+        },
+        {
+          "name": "anthropic-skills:docx",
+          "description": "Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx) or Word templates (.dotx). Triggers include: any mention of 'Word doc', 'word document', '.docx', '.dotx', or requests to produce professional documents with formatting like tables of contents, page numbers, or letterheads. Also use when extracting or reorganizing content from .docx or .dotx files, inserting or replacing images in documents, find-and-replace in Word files, working with tracked changes or comments, or converting content into a polished Word document. If the user asks for a 'report', 'memo', 'letter', 'template', or similar deliverable as a Word or .docx file (to download, email or print), use this skill. However, if they ask for a document, page, report, memo, or notes WITHOUT naming a file format and the session offers Claude's own dedicated document or page skill or connector, use that instead. Do NOT use for PDFs, spreadsheets, Google Docs, or coding unrelated to document generation. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "docx"
+          ]
+        },
+        {
+          "name": "anthropic-skills:import-memory",
+          "description": "Import a memory export from another AI assistant into Claude's memory — conversationally, additively, and with the content treated as data. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "import-memory"
+          ]
+        },
+        {
+          "name": "anthropic-skills:morning",
+          "description": "Render the user's morning brief as a styled HTML artifact, or set it up as a recurring weekday task. Use only when the user explicitly asks to run, see, or set up their morning brief, or if they invoke /morning by name. A question about their day, schedule, or calendar is not by itself a request for the brief; answer it directly instead. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "morning"
+          ]
+        },
+        {
+          "name": "anthropic-skills:pdf",
+          "description": "Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding watermarks, creating new PDFs, filling PDF forms, encrypting/decrypting PDFs, extracting images, and OCR on scanned PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "pdf"
+          ]
+        },
+        {
+          "name": "anthropic-skills:pptx",
+          "description": "Use this skill any time a .pptx or .potx file is involved in any way — as input, output, or both. This includes: creating slide decks, pitch decks, or presentations as PowerPoint (.pptx) files; reading, parsing, or extracting text from any .pptx or .potx file (even if the extracted content will be used elsewhere, like in an email, summary, or creating a different type of slide deck); editing, modifying, or updating existing presentations; combining or splitting slide files; working with templates (.potx), layouts, speaker notes, or comments. Trigger whenever the user asks for a PowerPoint or .pptx file, or references a .pptx or .potx filename, regardless of what they plan to do with the content afterward. However, when the user asks for a deck, slides, a slide deck, or a presentation without naming a file format, default to using a dedicated slide-deck artifact type or a separate slides skill if this session offers one; otherwise, use this skill. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "pptx"
+          ]
+        },
+        {
+          "name": "anthropic-skills:skill-creator",
+          "description": "Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "skill-creator"
+          ]
+        },
+        {
+          "name": "anthropic-skills:xlsx",
+          "description": "Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an existing .xlsx, .xlsm, .xltx, .csv, or .tsv file (e.g., adding columns, computing formulas, formatting, charting, cleaning messy data); create a new spreadsheet from scratch or from other data sources; or convert between tabular file formats. Trigger especially when the user references a spreadsheet file by name or path — even casually (like \"the xlsx in my downloads\") — and wants something done to it or produced from it. Also trigger for cleaning or restructuring messy tabular data files (malformed rows, misplaced headers, junk data) into proper spreadsheets. The deliverable must be a spreadsheet file. Do NOT trigger when the primary deliverable is a Word document, HTML report, standalone Python script, database pipeline, or Google Sheets API integration, even if tabular data is involved. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "xlsx"
+          ]
+        }
+      ],
+      "uuid": "79956ce4-88e2-4749-84ea-a1bdcd84430a",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 100,
+      "estimated_tokens_delta": 50,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "1408bf9f-40bf-4cd4-b3d7-209fcc2f172d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "534e8c18-228b-4cd3-9ae1-8dc98f988eca"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 250,
+      "estimated_tokens_delta": 150,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "0735fa9e-ae75-4dab-ab4a-5061c1d6de7e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 150
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1f472274-5b5d-412c-8d9f-497494773d20"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 400,
+      "estimated_tokens_delta": 150,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "c2ffb2ce-d640-4a11-8a5d-ed773681fc64"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 150
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "fd2c4a30-ce44-4fcc-a06b-b75d6fa28499"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 500,
+      "estimated_tokens_delta": 100,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "6025854c-da0d-445b-92eb-aae9edbcaf35"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 100
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "9374dea4-e946-40c9-917d-fa4f57bc31f4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "239776ed-7c07-4cfd-80cb-0d39917eadd6"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 599,
+      "estimated_tokens_delta": 99,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "f5471c44-82bf-458f-8958-02da46c4fae9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "CAQS0xIKEAgRGAI4AUIIdGhpbmtpbmcSDLZKoSJmlbcDXd1GvRoMS/xluPk9ieV7rcV3IjD4sytkNvFzRXwa7mIh185MkEKLz7EJvNpgKnN/2PPTpnT9r1U3tqmc+v8244NPJ5kq8BHtyzejxdc/X0dWnw+YiYELaShDnMsjYzePzL+UWiEVZDD0GliPOPTrH3F+FnGwiDa1VD+VOlGae9YbtYyecbSxnEBQ+EM3hgdLbvZ0g8rUpwH6c3c3ac0I4A85RkOaetalqDNEv5N4sgGnpxrDuA9tV79uBRM4gyD6ZgwfXxS+Or1VEPNjL8WsrFBn5oW5hy4n3AdS/Nv3EbWLB4kQMuXFh6k5NKOa+ZG0Xz5Gjv1HIzTIuPxKccGMQi6I9ZfydPSF/BSqoWltp8dAtbzwxxdoQCmKFpQEm2ymPVyFD6CkW3qdm1uyOcJat5ffIuSue7ALCYTD/PrnjVLay3Sdp3a0dcBmqv5k4qX+qnxev+LVqzLBsiPamKt8RDC7xSS4iYhh+ffbRSDIDH8iyKUgiiVzyp0V9nobd11xxM2ypvXmbm9g68mkh87REhwV67s0SnR+jI3Isiaa/z8RFWaDX3leGDASv8ERiqiyiDaCKTVEpO1eSxovBq2uNcMa9RnFCkMpuz7Wr1M7w4+fgBNmkQEHorMJYmhe4NQZ9fKHvSUzCSW98PFssW6DLO/R2XOIzBjdb60hQYBY6eaondNSiYh2Kqu8EbckgOuDE7qpA6m1iuhOincfru1XbCW8dmCIwiw+yOeq9uXrPOooVGig2eVo2WrDkIJU7ZOcwOqOFDNtezp3VXXI0h5s87jnIr/aK8eGq3mCfaTx3z6dof40Gw4UIjJILwvkUPQCNR9/N2G17M3JMxlNagCJORB3xm1lbe3YyJIz2euSQhCRaT7IMhfHmUZX6pQ7PJ8zgU44gvKZOvWZW6ArM0Isvmfq4DLKbLH2gZ9uYogSN3IEkqGfB+BQszUl5JeCVWKQTywsGeOAErJomnbJ55Ql+gHoxkWxrKgsjDYf5krIgp6sNm3ygXRwu2SxjPbhu5ER/QH6rFzdCN12IFxrKc/Axi6urijS9wxHuDtGY6EJxKCz4+2jFn28CXhlqvV2AZC3JjUDqi86yE6J3fhF7UC5OhM5JaRyONku9arwoHB3q4PLcH18sQPsvmuHQ99/5f22YZZyue6FgXFgPs98p7xZqd6YVjDZBGoTsRPqVMmU6778uNtVcFh1Sk+yPluiNIeKTbt0B8+nRNQz5bDeMaRsH9NJ5PFI0gHkgVzx9hp9eh7wlQmrwjV474ZdgtMbxzGvZaMAYHpGfdhmxr0BpIqttj6q7+iJH995FiMBalc8Ik0YDQIJdn3Fj4ODzT4tfidKzAk/kAtJEc+Un9aY37NZws2UzbmTgMo8+RoHcDJQ1k+JpAXyZMKWTbOSCPD2G4nPXSINZVW9G/xkbxiFSg5uAW9cCpFZuphru/NfROmVvlaAlR9mvTLF9f4TgT/dVk8SIjmH8UgA8n2b8maULhKkLny6ieHGRImiCYW+JvzamL+e9VqUvT1Rbjkvx1PljnUf6lvPxdf/W5GnjxyiuHKGDAO2RBMsNn1bv4DkZthVAhlZ+AaRCfH8pnMDpc1McaXttDBPXXp3Q+DPJvuuAhH60aBD9gz33Ngfbi+JPHxdoO/PixK902hDxW3kkJWhNi6/awJ5vhLhV5qonVNO1w/gcTPV/qbtbSkvbUObgEh23HzajaxBYVlb4kQAEKI9+ThmFw8fIBgeyFPw/JJBWDfMD7UY4q7tx7FdgNvRNtZpD1BGxho6AMe/5Bnh6eTF0yahOkCgIwz25c7LsfF8uB4RqGROw9VVwTOjlLyDSPihVTq6487gAy/OyE44gRzlQKsaVefcgfde6aDxVqmgUVJQhL4CRsKoLHQCdX+nwdGYCZJzIAydKhdJBl+Uhm1znanRoNYFKbuCplTyZGUtM72FJh+tTyF+yFtbSxt7fIFqaXA//UBl7OYNE8WmOpRE79PEuze4yuOJBn5LW6177/LAPHsnmJNJpPQ3cGbWkBL33zfrmmEag/GM/+HZM+etyYITYRyz87ltFKlt0MTESQvXL/+vIcZxuXTFYSRly4nxDoaV4mBuG1DW47WRLWuWik3/8chODbJ/xMuKhedSOpQ47Dt+j71CcJJHHAcV/r7+qOe4yMF9EOY0HsVw+4bBiiQV7GPKIuBih+3lFOcsp0mCt69AJlutCl4WzECEBs23UfQO3dfWPiEcdr/9S9rdDHufmzxsx+GINDeD8qnLWTIc5emZunTptW8gP3nX43ctvk3bppSFOiFjv/vZu2W9DQahhbeaGUrtAX9fIcnM2YiGM4ZlLRkSz843YSlsRm8naiYDHNiqYzYvU667pIA8o8pVcYG3fCzwd74P3sVPPgypvoEIY3saJ5S4zG8Sm4rmeoH1i5LfaRuqkCeDW7lp98AVR5MY/l94D9VIZ9pVlXKNByDzdpJUCcG8/V05R/em/mPa2O5e+9x0ufIu0LXXQCB92MVgdQr7FnojpqPO9Gm3Wjmb3GNhZo9wXUQ0HegKaSVNWPjt14wJ3BcWRb4mDEDIrvR4NjoqCqN4nbNAFhq5svF0Ska/Wqt43GJRqUHYj9R9QDiEh6kDucW426SxPR2Po3+hLYAHONX1zq+kzCnKMUPD0C8ER9v+GlO4lNmXrurDH61bmBGok3dqznMJrsIgwRd0d1t6jakggZaC+5G/VmH084Y6neoeznhesE2tqOR8/MzB2oTbhFocncRouMTxX8/5ds+BZw5HupdqKE1Q2FodpzPp5ZkzEgjXe6vhQG0kb3QNaAfF3OOP7I/AjbfJxOHJ8SJ+jBUx6tmI/L/WaUV5BIcWJq4McRClkVc6Z/xCszt8FA2tSX4T/XT5wf6SJtsxzqPYY46bfK0iZeApvBWrQfBSEQ/DVuvmC9g9VTauKT+eLrd4y1E5orG5n3M5KJMUV/8vh/6ymcXU90eAtQA3f5ZMu4q1xyKxDcFO9GZlB2vw3PHqVgqRK++DfzGhfai+yEWQxUtDy4gF1ofxzArjd4TpDgdYRbNJuswVCWJW6O+Csbdmwkk9B2m1UVpLA4/bUJPlkkJ3eFi3btUfLs0HJP8WjSPqXhi75XwBb+xVtehf+PHUvQLNAI3iLninHB7SYxCySxgB"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a9d060c3-e4d3-43c9-b52f-ccd6635ef59d"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5",
+        "id": "msg_011CfAX75btNEwfbtuKri6ua",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAQS0xIKEAgRGAI4AUIIdGhpbmtpbmcSDLZKoSJmlbcDXd1GvRoMS/xluPk9ieV7rcV3IjD4sytkNvFzRXwa7mIh185MkEKLz7EJvNpgKnN/2PPTpnT9r1U3tqmc+v8244NPJ5kq8BHtyzejxdc/X0dWnw+YiYELaShDnMsjYzePzL+UWiEVZDD0GliPOPTrH3F+FnGwiDa1VD+VOlGae9YbtYyecbSxnEBQ+EM3hgdLbvZ0g8rUpwH6c3c3ac0I4A85RkOaetalqDNEv5N4sgGnpxrDuA9tV79uBRM4gyD6ZgwfXxS+Or1VEPNjL8WsrFBn5oW5hy4n3AdS/Nv3EbWLB4kQMuXFh6k5NKOa+ZG0Xz5Gjv1HIzTIuPxKccGMQi6I9ZfydPSF/BSqoWltp8dAtbzwxxdoQCmKFpQEm2ymPVyFD6CkW3qdm1uyOcJat5ffIuSue7ALCYTD/PrnjVLay3Sdp3a0dcBmqv5k4qX+qnxev+LVqzLBsiPamKt8RDC7xSS4iYhh+ffbRSDIDH8iyKUgiiVzyp0V9nobd11xxM2ypvXmbm9g68mkh87REhwV67s0SnR+jI3Isiaa/z8RFWaDX3leGDASv8ERiqiyiDaCKTVEpO1eSxovBq2uNcMa9RnFCkMpuz7Wr1M7w4+fgBNmkQEHorMJYmhe4NQZ9fKHvSUzCSW98PFssW6DLO/R2XOIzBjdb60hQYBY6eaondNSiYh2Kqu8EbckgOuDE7qpA6m1iuhOincfru1XbCW8dmCIwiw+yOeq9uXrPOooVGig2eVo2WrDkIJU7ZOcwOqOFDNtezp3VXXI0h5s87jnIr/aK8eGq3mCfaTx3z6dof40Gw4UIjJILwvkUPQCNR9/N2G17M3JMxlNagCJORB3xm1lbe3YyJIz2euSQhCRaT7IMhfHmUZX6pQ7PJ8zgU44gvKZOvWZW6ArM0Isvmfq4DLKbLH2gZ9uYogSN3IEkqGfB+BQszUl5JeCVWKQTywsGeOAErJomnbJ55Ql+gHoxkWxrKgsjDYf5krIgp6sNm3ygXRwu2SxjPbhu5ER/QH6rFzdCN12IFxrKc/Axi6urijS9wxHuDtGY6EJxKCz4+2jFn28CXhlqvV2AZC3JjUDqi86yE6J3fhF7UC5OhM5JaRyONku9arwoHB3q4PLcH18sQPsvmuHQ99/5f22YZZyue6FgXFgPs98p7xZqd6YVjDZBGoTsRPqVMmU6778uNtVcFh1Sk+yPluiNIeKTbt0B8+nRNQz5bDeMaRsH9NJ5PFI0gHkgVzx9hp9eh7wlQmrwjV474ZdgtMbxzGvZaMAYHpGfdhmxr0BpIqttj6q7+iJH995FiMBalc8Ik0YDQIJdn3Fj4ODzT4tfidKzAk/kAtJEc+Un9aY37NZws2UzbmTgMo8+RoHcDJQ1k+JpAXyZMKWTbOSCPD2G4nPXSINZVW9G/xkbxiFSg5uAW9cCpFZuphru/NfROmVvlaAlR9mvTLF9f4TgT/dVk8SIjmH8UgA8n2b8maULhKkLny6ieHGRImiCYW+JvzamL+e9VqUvT1Rbjkvx1PljnUf6lvPxdf/W5GnjxyiuHKGDAO2RBMsNn1bv4DkZthVAhlZ+AaRCfH8pnMDpc1McaXttDBPXXp3Q+DPJvuuAhH60aBD9gz33Ngfbi+JPHxdoO/PixK902hDxW3kkJWhNi6/awJ5vhLhV5qonVNO1w/gcTPV/qbtbSkvbUObgEh23HzajaxBYVlb4kQAEKI9+ThmFw8fIBgeyFPw/JJBWDfMD7UY4q7tx7FdgNvRNtZpD1BGxho6AMe/5Bnh6eTF0yahOkCgIwz25c7LsfF8uB4RqGROw9VVwTOjlLyDSPihVTq6487gAy/OyE44gRzlQKsaVefcgfde6aDxVqmgUVJQhL4CRsKoLHQCdX+nwdGYCZJzIAydKhdJBl+Uhm1znanRoNYFKbuCplTyZGUtM72FJh+tTyF+yFtbSxt7fIFqaXA//UBl7OYNE8WmOpRE79PEuze4yuOJBn5LW6177/LAPHsnmJNJpPQ3cGbWkBL33zfrmmEag/GM/+HZM+etyYITYRyz87ltFKlt0MTESQvXL/+vIcZxuXTFYSRly4nxDoaV4mBuG1DW47WRLWuWik3/8chODbJ/xMuKhedSOpQ47Dt+j71CcJJHHAcV/r7+qOe4yMF9EOY0HsVw+4bBiiQV7GPKIuBih+3lFOcsp0mCt69AJlutCl4WzECEBs23UfQO3dfWPiEcdr/9S9rdDHufmzxsx+GINDeD8qnLWTIc5emZunTptW8gP3nX43ctvk3bppSFOiFjv/vZu2W9DQahhbeaGUrtAX9fIcnM2YiGM4ZlLRkSz843YSlsRm8naiYDHNiqYzYvU667pIA8o8pVcYG3fCzwd74P3sVPPgypvoEIY3saJ5S4zG8Sm4rmeoH1i5LfaRuqkCeDW7lp98AVR5MY/l94D9VIZ9pVlXKNByDzdpJUCcG8/V05R/em/mPa2O5e+9x0ufIu0LXXQCB92MVgdQr7FnojpqPO9Gm3Wjmb3GNhZo9wXUQ0HegKaSVNWPjt14wJ3BcWRb4mDEDIrvR4NjoqCqN4nbNAFhq5svF0Ska/Wqt43GJRqUHYj9R9QDiEh6kDucW426SxPR2Po3+hLYAHONX1zq+kzCnKMUPD0C8ER9v+GlO4lNmXrurDH61bmBGok3dqznMJrsIgwRd0d1t6jakggZaC+5G/VmH084Y6neoeznhesE2tqOR8/MzB2oTbhFocncRouMTxX8/5ds+BZw5HupdqKE1Q2FodpzPp5ZkzEgjXe6vhQG0kb3QNaAfF3OOP7I/AjbfJxOHJ8SJ+jBUx6tmI/L/WaUV5BIcWJq4McRClkVc6Z/xCszt8FA2tSX4T/XT5wf6SJtsxzqPYY46bfK0iZeApvBWrQfBSEQ/DVuvmC9g9VTauKT+eLrd4y1E5orG5n3M5KJMUV/8vh/6ymcXU90eAtQA3f5ZMu4q1xyKxDcFO9GZlB2vw3PHqVgqRK++DfzGhfai+yEWQxUtDy4gF1ofxzArjd4TpDgdYRbNJuswVCWJW6O+Csbdmwkk9B2m1UVpLA4/bUJPlkkJ3eFi3btUfLs0HJP8WjSPqXhi75XwBb+xVtehf+PHUvQLNAI3iLninHB7SYxCySxgB"
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1227,
+          "cache_read_input_tokens": 274797,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1227
+          },
+          "output_tokens": 3,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "4a8cea1a-83c1-43e9-a568-689ec38a4b2b",
+      "timestamp": "2026-09-18T07:35:42.053Z",
+      "request_id": "req_011CfAX74jYpLAKwxp84tHpY"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f04e7b84-1e76-400d-9ceb-616199634328"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "tool_use",
+          "id": "toolu_01R6q6w7LCP2N47vqXBWJjLe",
+          "name": "Bash",
+          "input": {},
+          "caller": {
+            "type": "direct"
+          }
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "598c50aa-dee2-47e1-8f94-e0e0fe09a7e9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ""
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "fdd36ec2-3d00-4d59-8921-11b92f5c0316"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "{\"command\": \"cd /home/"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "dae93c7e-2e75-41b6-bbc7-ab088d02ad6b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "hyphy"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a4109ee1-298f-467c-bc99-06d66659e5f1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "phy"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ad127c3b-9ffd-4b90-9109-834122ac351a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ph"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "0bda6473-480d-4e0c-b784-b23b719a8533"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/piton/"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "02e20f63-59bc-4c1b-b419-d617107c9a3b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "repl; python3 - "
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "d6ab1604-5d84-4f21-86ce-79b2289dbd54"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "<<'E'\\nimport json,"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "87f31f92-171a-48d1-b38f-2ae68750cb76"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "glob,os,collections"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f68610a3-750f-4ab9-b75f-7c13cd4060ab"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\nc=collections.Counter"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4b1c4d22-4e69-4c67-831d-d37b5dccaede"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "(); th=0;"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "0914a8b2-65d1-418a-861e-345f1eed4c7a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " run"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "0a64b19a-f11a-46c9-8120-b1d00fce1b15"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "s=0\\nfor f in s"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c1bc5e1f-43ca-4869-86e5-5ca1c81c5c1a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "orted(glob.glob"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4965f1c9-9f09-475d-b7a6-be6f2f1b5d07"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "('.suspense/history/"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5dc4918e-0d61-44bb-9d08-d21eb5a6c088"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "*.json'),key=os"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "84103b00-912b-461d-9afb-43f58746cf73"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ".path.getmtime)"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "0a3fc51c-72d2-42ee-a68f-520ca7d1dbbc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "[-30:]:\\n    "
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b9a0b6e8-4287-4bfc-b5ca-3a79ae455535"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "runs+=1\\n    for"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c3904b1a-707c-44be-b3f4-2aed430bdcd8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " e in json.load(open("
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1e1a9b8c-1d72-4355-b4dc-c911f5142dd2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "f)"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "8741812a-6e9b-44a5-82d8-d3a608b7a6ba"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ").get('output',[]):"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1d44d7f4-c6e2-4717-b51b-810e99d10f8b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n        if isinstance("
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "7332aa11-dc6b-44f0-93f0-26854d5c4b51"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "e,dict) and e."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ada625b6-7727-4516-8943-dd642a4348a2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "get('type')=='assist"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "17eaeba7-d00a-485b-9f8d-4b56539b9b8b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ant':\\n            for x in e"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4c50d25c-70f4-49f2-a58b-60e7a6d0ae58"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "['message'].get('content',"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4abbc8da-f25e-47f0-a71b-6c91ff494c6a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "[]):\\n                if x."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "cf6a913e-3993-4376-9112-baf7250a5b24"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "get('type')=='tool"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "72019996-666a-4a6b-9399-c2a79faf0102"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "_use': c["
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f23c6f7e-ebe9-4530-a083-14a72106d8b1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "x['name']]+=1"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "de79bf39-e738-4c0a-96bc-ab8964b7d49d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n                if"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "47566f99-fd25-4b98-9b19-0b8a83ee1cc3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " x.get('type')=='"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "98e40e8c-3150-4a0f-a17c-3eebb811c522"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "thinking': th+=len"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4fdd0d9f-c70e-4f70-828b-106cef1b90ab"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "(x.get('thinking"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "812d1df7-94c4-4f3a-8fb2-15aa5ccb64d0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "',''))\\nprint("
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "695f4647-9193-4a5f-8717-73951d5ab3db"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "runs,'run"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "739e5f50-7501-458a-83b5-c8e19ead74f3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "s; TodoWrite"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1761ea1c-8f73-40a8-aecd-26ad2e055228"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " cal"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e6a39a6b-e35f-4702-b96d-00a54d52a1ef"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ls',c['"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "31de4a6a-df25-45e8-9241-e577ca817e92"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "TodoWrite'],"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "d9947569-0832-44ae-8c12-96fe7ed44a8f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "';"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "22e01c42-395d-410a-a050-4e22b4b56929"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " thinking chars',th)"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a819c676-4ae7-498b-ad6e-f6040ff18baa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\nE"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "7523431f-e77f-4c35-bebc-c0057943b603"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\", \"description\": \"Check"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f2a50361-e2f9-472c-afc3-c426a1a3d14d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " TodoWrite and th"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "0ea279df-4c52-4b5d-b585-4b7e78f6f43f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "inking in"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "49fd32a2-b782-45fd-9192-9532a4590e2b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " recent runs"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "af606f16-9697-45ee-9e40-c09a915d576d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\"}"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "803c2775-2642-419d-8cc0-53c65e4e5821"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5",
+        "id": "msg_011CfAX75btNEwfbtuKri6ua",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "toolu_01R6q6w7LCP2N47vqXBWJjLe",
+            "name": "Bash",
+            "input": {
+              "command": "cd /home/hyphyphyph/piton/repl; python3 - <<'E'\nimport json,glob,os,collections\nc=collections.Counter(); th=0; runs=0\nfor f in sorted(glob.glob('.suspense/history/*.json'),key=os.path.getmtime)[-30:]:\n    runs+=1\n    for e in json.load(open(f)).get('output',[]):\n        if isinstance(e,dict) and e.get('type')=='assistant':\n            for x in e['message'].get('content',[]):\n                if x.get('type')=='tool_use': c[x['name']]+=1\n                if x.get('type')=='thinking': th+=len(x.get('thinking',''))\nprint(runs,'runs; TodoWrite calls',c['TodoWrite'],'; thinking chars',th)\nE",
+              "description": "Check TodoWrite and thinking in recent runs"
+            },
+            "caller": {
+              "type": "direct"
+            }
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1227,
+          "cache_read_input_tokens": 274797,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1227
+          },
+          "output_tokens": 3,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "f0d3baa7-a5a0-4b8c-9701-80a4dbe8a77c",
+      "timestamp": "2026-09-18T07:35:44.058Z",
+      "request_id": "req_011CfAX74jYpLAKwxp84tHpY",
+      "wire_tool_inputs": {
+        "toolu_01R6q6w7LCP2N47vqXBWJjLe": {
+          "command": "cd /home/hyphyphyph/piton/repl; python3 - <<'E'\nimport json,glob,os,collections\nc=collections.Counter(); th=0; runs=0\nfor f in sorted(glob.glob('.suspense/history/*.json'),key=os.path.getmtime)[-30:]:\n    runs+=1\n    for e in json.load(open(f)).get('output',[]):\n        if isinstance(e,dict) and e.get('type')=='assistant':\n            for x in e['message'].get('content',[]):\n                if x.get('type')=='tool_use': c[x['name']]+=1\n                if x.get('type')=='thinking': th+=len(x.get('thinking',''))\nprint(runs,'runs; TodoWrite calls',c['TodoWrite'],'; thinking chars',th)\nE",
+          "description": "Check TodoWrite and thinking in recent runs"
+        }
+      }
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "892deac9-c25a-4c7e-b98e-59d4f580333f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1227,
+          "cache_read_input_tokens": 274797,
+          "output_tokens": 937,
+          "output_tokens_details": {
+            "thinking_tokens": 584
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 937,
+              "cache_read_input_tokens": 274797,
+              "cache_creation_input_tokens": 1227,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 1227
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "50c003ff-79c6-418f-a1b2-81b1ac6e9bad"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "355dd913-8d8a-4176-b20d-3c9c20e35a56"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1789730400,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.1,
+            "resetsAt": 1789730400
+          },
+          "seven_day": {
+            "utilization": 0.3,
+            "resetsAt": 1790103600
+          }
+        }
+      },
+      "uuid": "e52f76c3-f8b9-4086-8c55-f436e8c0cfeb",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "tool_use_id": "toolu_01R6q6w7LCP2N47vqXBWJjLe",
+            "type": "tool_result",
+            "content": "30 runs; TodoWrite calls 0 ; thinking chars 11342",
+            "is_error": false
+          }
+        ]
+      },
+      "parent_tool_use_id": null,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "9250abe0-f3d8-45a7-a728-312323a4ad36",
+      "timestamp": "2026-09-18T07:35:46.559Z",
+      "tool_use_result": {
+        "stdout": "30 runs; TodoWrite calls 0 ; thinking chars 11342",
+        "stderr": "",
+        "interrupted": false,
+        "isImage": false,
+        "noOutputExpected": false
+      }
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "9b79bb65-8760-4453-8710-404975218322"
+    },
+    {
+      "type": "system",
+      "subtype": "commands_changed",
+      "commands": [
+        {
+          "name": "gepeto",
+          "description": "Guide for building 1-click launchers and building apps with launchers built-in using Pinokio (user)",
+          "argumentHint": ""
+        },
+        {
+          "name": "pinokio",
+          "description": "Discover, launch, and use apps and tools for the current task. (user)",
+          "argumentHint": ""
+        },
+        {
+          "name": "plannotator-annotate",
+          "description": "Open Plannotator's annotation UI for a markdown file, HTML file, URL, or folder and then respond to the returned annotations. (user)",
+          "argumentHint": ""
+        },
+        {
+          "name": "plannotator-last",
+          "description": "Open Plannotator on the latest rendered assistant message and use the returned annotations to revise that message or continue. (user)",
+          "argumentHint": ""
+        },
+        {
+          "name": "plannotator-review",
+          "description": "Open Plannotator's browser-based code review UI for the current worktree or a pull request URL, then act on the feedback that comes back. (user)",
+          "argumentHint": ""
+        },
+        {
+          "name": "build-application",
+          "description": "build or change the ApplicationScope scope Use when you need to build or change the ApplicationScope scope (project)",
+          "argumentHint": ""
+        },
+        {
+          "name": "deep-research",
+          "description": "Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report. (dynamic workflow)",
+          "argumentHint": ""
+        },
+        {
+          "name": "design",
+          "description": "Grant or revoke Claude agent access to your Design projects",
+          "argumentHint": "consent | revoke"
+        },
+        {
+          "name": "design-sync",
+          "description": "Push a React design system to claude.ai/design. This runs a converter that bundles the real component code (from Storybook or a bare package) and uploads it. Use when the user runs /design-sync or says \"sync my design system to Claude Design\".",
+          "argumentHint": "[<project hint, e.g. \"Acme DS\">]"
+        },
+        {
+          "name": "dataviz",
+          "description": "Use this skill whenever you are about to create ANY chart, graph, plot, dashboard, or data visualization, in ANY output medium — an HTML or React artifact, inline SVG, plotting code in any library (matplotlib, plotly, d3, Recharts, …), an image/PNG you will render and upload, or a chart shared into Slack. Read it BEFORE writing the first line of chart code, choosing chart colors, building a stat tile / meter / KPI row, or laying out a dashboard. When the destination is a first-party document connector (host-designated, never self-described) that renders live charts, hand it the rows (inline, or as an uploaded data file the chart cites) rather than a rendered PNG/SVG — a picture of a chart loses hover, data inspection and per-value comments. Produces visualizations that read as one system — elegant, accessible, consistent in light and dark — using a brand-neutral placeholder palette you swap for your own. Teaches a design-system-agnostic method: a form heuristic, a color formula with a runnable validator, mark specs, and interaction rules. A validated default palette is documented in `references/palette.md` — swap that file's values for your brand's. Triggers on: \"chart\", \"graph\", \"plot\", \"data viz\", \"visualization\", \"dashboard\", \"analytics\", \"visualize data\", \"categorical colors\", \"sequential / diverging palette\", \"stat tile\", \"sparkline\", \"heatmap\", \"legend\", \"axis\", \"tooltip\", \"chart colors\", \"color by series\".",
+          "argumentHint": ""
+        },
+        {
+          "name": "update-config",
+          "description": "Use this skill to configure the Claude Code harness via settings.json. Automated behaviors (\"from now on when X\", \"each time X\", \"whenever X\", \"before/after X\") require hooks configured in settings.json - the harness executes these, not Claude, so memory/preferences cannot fulfill them. Also use for: permissions (\"allow X\", \"add permission\", \"move permission to\"), env vars (\"set X=Y\"), hook troubleshooting, or any changes to settings.json/settings.local.json files. Examples: \"allow npm commands\", \"add bq permission to global settings\", \"move permission to user settings\", \"set DEBUG=true\", \"when claude stops show X\". For simple settings like theme/model, suggest the /config command.",
+          "argumentHint": ""
+        },
+        {
+          "name": "verify",
+          "description": "Verify that a code change actually does what it's supposed to by exercising it end-to-end and observing behavior — drive the affected flow, not just tests or typecheck. Run before committing nontrivial changes; bootstraps this repo's project verify skill if none exists yet. Don't invoke it on a diff that only touches tests, docs, or other code with no runtime surface to drive (a change to product source always has one) — there's nothing to observe.",
+          "argumentHint": ""
+        },
+        {
+          "name": "debug",
+          "description": "Enable debug logging for this session and help diagnose issues",
+          "argumentHint": "[issue description]"
+        },
+        {
+          "name": "code-review",
+          "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's review recipe covers them) at the given effort level (low/medium: fewer, high-confidence findings; high→max: broader coverage, may include uncertain findings; ultra: deep multi-agent review in the cloud); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply the findings to the working tree after the review. For ultra on a GitHub.com PR target, --post asks to post the finished review’s findings to the PR as a single comment from the user’s GitHub account (not a review; the launch dialog still confirms in interactive sessions, while non-interactive mode posts on the flag alone) and --no-post hides that option.",
+          "argumentHint": "[low|medium|high|xhigh|max|ultra] [--fix] [--comment] [<pr#>|<branch>|<path>]",
+          "aliases": [
+            "review"
+          ]
+        },
+        {
+          "name": "simplify",
+          "description": "Review the changed code for reuse, simplification, efficiency, and altitude cleanups, then apply the fixes. Quality only — it does not hunt for bugs; use /code-review for that.",
+          "argumentHint": "[<target>]"
+        },
+        {
+          "name": "batch",
+          "description": "Research and plan a large-scale change, then execute it in parallel across 5–30 isolated worktree agents that each open a PR.",
+          "argumentHint": "<instruction>"
+        },
+        {
+          "name": "fewer-permission-prompts",
+          "description": "Scan your transcripts for common read-only Bash and MCP tool calls, then add a prioritized allowlist to project .claude/settings.json to reduce permission prompts.",
+          "argumentHint": ""
+        },
+        {
+          "name": "doctor",
+          "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration.",
+          "argumentHint": "",
+          "aliases": [
+            "checkup"
+          ]
+        },
+        {
+          "name": "loop",
+          "description": "Run a prompt or slash command on a recurring interval (e.g. /loop 5m /foo). Omit the interval to let the model self-pace.",
+          "argumentHint": "[interval] [prompt]",
+          "aliases": [
+            "proactive"
+          ]
+        },
+        {
+          "name": "schedule",
+          "description": "Create, update, list, or run scheduled cloud agents (routines) that execute on a cron schedule.",
+          "argumentHint": "",
+          "aliases": [
+            "routines"
+          ]
+        },
+        {
+          "name": "claude-api",
+          "description": "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read BEFORE opening the target file; don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file).",
+          "argumentHint": ""
+        },
+        {
+          "name": "workflow-authoring",
+          "description": "Reference for writing a Workflow tool script (script API and gotchas, resume, quality patterns, worked examples). Load before authoring a script for a workflow the user already opted into; it does not itself authorize running one.",
+          "argumentHint": ""
+        },
+        {
+          "name": "run",
+          "description": "Launch and drive this project's app to see a change working. Use when asked to run, start, or screenshot the app, or to confirm a change works in the real app (not just tests). First looks for a project skill that already covers launching the app; otherwise falls back to built-in patterns per project type (CLI, server, TUI, Electron, browser-driven, library).",
+          "argumentHint": ""
+        },
+        {
+          "name": "run-skill-generator",
+          "description": "Author or improve the run-<unit> skill - a per-project skill that tells agents how to build, launch, and drive this project's app. Use when the user asks to set up the project, get it running, write run instructions, or verify build/run steps work from a clean environment.",
+          "argumentHint": ""
+        },
+        {
+          "name": "advisor",
+          "description": "Let Claude consult a stronger model at key moments",
+          "argumentHint": "[fable|opus|sonnet|off]"
+        },
+        {
+          "name": "agents",
+          "description": "(removed) Ask Claude to create/manage subagents, or edit .claude/agents/",
+          "argumentHint": ""
+        },
+        {
+          "name": "auto-mode-setup",
+          "description": "Teach auto mode about your environment, plus optional rule tweaks",
+          "argumentHint": "[--request-id <uuid>] (--wizard posture=… scope=… depth=… --propose | --expect-sha256 <64-hex> --apply-file <path>)"
+        },
+        {
+          "name": "autocompact",
+          "description": "Configure the auto-compact window size",
+          "argumentHint": "[auto|<tokens>]"
+        },
+        {
+          "name": "clear",
+          "description": "Start a new session with empty context; previous session stays on disk (resumable with /resume)",
+          "argumentHint": "[name]",
+          "aliases": [
+            "reset",
+            "new"
+          ]
+        },
+        {
+          "name": "color",
+          "description": "Set the prompt bar color for this session",
+          "argumentHint": "[red|blue|green|yellow|purple|orange|pink|cyan|default]"
+        },
+        {
+          "name": "compact",
+          "description": "Free up context by summarizing the conversation so far",
+          "argumentHint": "<optional custom summarization instructions>"
+        },
+        {
+          "name": "config",
+          "description": "Set a setting by key",
+          "argumentHint": "key=value",
+          "aliases": [
+            "settings"
+          ]
+        },
+        {
+          "name": "output-style",
+          "description": "List output styles or switch to one",
+          "argumentHint": "[style]"
+        },
+        {
+          "name": "context",
+          "description": "Show current context usage",
+          "argumentHint": ""
+        },
+        {
+          "name": "effort",
+          "description": "Set effort level for model usage",
+          "argumentHint": "<low|medium|high|xhigh|max|ultracode|auto>"
+        },
+        {
+          "name": "fast",
+          "description": "Toggle fast mode (Opus 5)",
+          "argumentHint": "[on|off]"
+        },
+        {
+          "name": "heapdump",
+          "description": "Dump the JS heap to the Desktop; on Linux with no Desktop folder, the home directory",
+          "argumentHint": ""
+        },
+        {
+          "name": "init",
+          "description": "Initialize a new CLAUDE.md file with codebase documentation",
+          "argumentHint": ""
+        },
+        {
+          "name": "mcp",
+          "description": "Manage MCP servers",
+          "argumentHint": "[reconnect|enable|disable [<server>|all]]"
+        },
+        {
+          "name": "import",
+          "description": "Import config from another AI coding agent",
+          "argumentHint": ""
+        },
+        {
+          "name": "model",
+          "description": "Set the AI model for Claude Code",
+          "argumentHint": "<model>"
+        },
+        {
+          "name": "__remote-workflow",
+          "description": "Run the workflow script delivered in this session environment (server-launched sessions only)",
+          "argumentHint": ""
+        },
+        {
+          "name": "workflow-launch-exec",
+          "description": "Execute a server-launched workflow handoff (workflow_launch event sessions only)",
+          "argumentHint": ""
+        },
+        {
+          "name": "reload-plugins",
+          "description": "Activate pending plugin changes in the current session",
+          "argumentHint": "[--force]"
+        },
+        {
+          "name": "reload-skills",
+          "description": "Pick up skills added or changed on disk during this session",
+          "argumentHint": ""
+        },
+        {
+          "name": "rename",
+          "description": "Rename the current conversation",
+          "argumentHint": "[name]",
+          "aliases": [
+            "name"
+          ]
+        },
+        {
+          "name": "ultrareview",
+          "description": "Start a cloud agent that finds and verifies bugs in your branch (~5-10 min, $5-$25 USD) · Runs in a cloud session. See https://code.claude.com/docs/en/claude-code-on-the-web",
+          "argumentHint": ""
+        },
+        {
+          "name": "security-review",
+          "description": "Complete a security review of the pending changes on the current branch",
+          "argumentHint": ""
+        },
+        {
+          "name": "usage-credits",
+          "description": "Configure usage credits or request them from your admin when you hit a limit",
+          "argumentHint": ""
+        },
+        {
+          "name": "extra-usage",
+          "description": "Renamed to /usage-credits",
+          "argumentHint": ""
+        },
+        {
+          "name": "usage",
+          "description": "Show session cost, plan usage, and what's contributing to your limits",
+          "argumentHint": "",
+          "aliases": [
+            "cost",
+            "stats"
+          ]
+        },
+        {
+          "name": "insights",
+          "description": "Generate a report analyzing your Claude Code sessions",
+          "argumentHint": ""
+        },
+        {
+          "name": "recap",
+          "description": "Generate a one-line session recap now",
+          "argumentHint": ""
+        },
+        {
+          "name": "skill-doctor",
+          "description": "Show which loaded skills are unused and costing context",
+          "argumentHint": ""
+        },
+        {
+          "name": "goal",
+          "description": "Set a goal — keep working until the condition is met",
+          "argumentHint": ""
+        },
+        {
+          "name": "design-consent",
+          "description": "Grant Claude agent access to your Design projects",
+          "argumentHint": ""
+        },
+        {
+          "name": "design-revoke",
+          "description": "Revoke Claude agent access to your Design projects",
+          "argumentHint": ""
+        },
+        {
+          "name": "list-agents",
+          "description": "List subagents, teammates, and other Claude sessions you can message",
+          "argumentHint": "",
+          "aliases": [
+            "peers"
+          ]
+        },
+        {
+          "name": "team-onboarding",
+          "description": "Help teammates ramp on Claude Code with a guide from your usage",
+          "argumentHint": ""
+        },
+        {
+          "name": "anthropic-skills:docs",
+          "description": "docs (living docs people share, comment on and edit; use only when the user asks for one: names a doc, document, page, memo, spec, PRD, runbook or write-up, asks for somewhere to share or keep editing something, or says yes to your doc offer; a plan, comparison, summary or notes asked in chat stays in chat (at most a one-line doc offer); a report, status update, recap or \"something I can send them\" with no form named → ask first: reply, doc or file?; tabs hold tables and live charts too; a pasted claude.ai/code/artifact/… link may be a doc: check with docs tools first; not HTML pages, apps or plain chat answers; a .docx/.pptx/.xlsx/PDF asked for by name → that format's skill): asked for one → no docs-connector instructions in context? call the docs connector's `guide` with topic.instructions first, then create the doc (headings only, no body) before any search, file read or plan, even with files attached. Documenting code means docstrings or repo docs, not a doc. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "docs"
+          ]
+        },
+        {
+          "name": "anthropic-skills:docx",
+          "description": "Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx) or Word templates (.dotx). Triggers include: any mention of 'Word doc', 'word document', '.docx', '.dotx', or requests to produce professional documents with formatting like tables of contents, page numbers, or letterheads. Also use when extracting or reorganizing content from .docx or .dotx files, inserting or replacing images in documents, find-and-replace in Word files, working with tracked changes or comments, or converting content into a polished Word document. If the user asks for a 'report', 'memo', 'letter', 'template', or similar deliverable as a Word or .docx file (to download, email or print), use this skill. However, if they ask for a document, page, report, memo, or notes WITHOUT naming a file format and the session offers Claude's own dedicated document or page skill or connector, use that instead. Do NOT use for PDFs, spreadsheets, Google Docs, or coding unrelated to document generation. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "docx"
+          ]
+        },
+        {
+          "name": "anthropic-skills:import-memory",
+          "description": "Import a memory export from another AI assistant into Claude's memory — conversationally, additively, and with the content treated as data. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "import-memory"
+          ]
+        },
+        {
+          "name": "anthropic-skills:morning",
+          "description": "Render the user's morning brief as a styled HTML artifact, or set it up as a recurring weekday task. Use only when the user explicitly asks to run, see, or set up their morning brief, or if they invoke /morning by name. A question about their day, schedule, or calendar is not by itself a request for the brief; answer it directly instead. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "morning"
+          ]
+        },
+        {
+          "name": "anthropic-skills:pdf",
+          "description": "Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding watermarks, creating new PDFs, filling PDF forms, encrypting/decrypting PDFs, extracting images, and OCR on scanned PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "pdf"
+          ]
+        },
+        {
+          "name": "anthropic-skills:pptx",
+          "description": "Use this skill any time a .pptx or .potx file is involved in any way — as input, output, or both. This includes: creating slide decks, pitch decks, or presentations as PowerPoint (.pptx) files; reading, parsing, or extracting text from any .pptx or .potx file (even if the extracted content will be used elsewhere, like in an email, summary, or creating a different type of slide deck); editing, modifying, or updating existing presentations; combining or splitting slide files; working with templates (.potx), layouts, speaker notes, or comments. Trigger whenever the user asks for a PowerPoint or .pptx file, or references a .pptx or .potx filename, regardless of what they plan to do with the content afterward. However, when the user asks for a deck, slides, a slide deck, or a presentation without naming a file format, default to using a dedicated slide-deck artifact type or a separate slides skill if this session offers one; otherwise, use this skill. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "pptx"
+          ]
+        },
+        {
+          "name": "anthropic-skills:skill-creator",
+          "description": "Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "skill-creator"
+          ]
+        },
+        {
+          "name": "anthropic-skills:xlsx",
+          "description": "Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an existing .xlsx, .xlsm, .xltx, .csv, or .tsv file (e.g., adding columns, computing formulas, formatting, charting, cleaning messy data); create a new spreadsheet from scratch or from other data sources; or convert between tabular file formats. Trigger especially when the user references a spreadsheet file by name or path — even casually (like \"the xlsx in my downloads\") — and wants something done to it or produced from it. Also trigger for cleaning or restructuring messy tabular data files (malformed rows, misplaced headers, junk data) into proper spreadsheets. The deliverable must be a spreadsheet file. Do NOT trigger when the primary deliverable is a Word document, HTML report, standalone Python script, database pipeline, or Google Sheets API integration, even if tabular data is involved. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "xlsx"
+          ]
+        }
+      ],
+      "uuid": "fda77006-f4c7-4c68-b794-ec019642e30e",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5",
+          "id": "msg_011CfAX86CdTQGVRNcPqnpGH",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 992,
+            "cache_read_input_tokens": 276024,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 992
+            },
+            "output_tokens": 657,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "6aeba1e7-148d-4ead-9410-ae0dcf554418",
+      "ttft_ms": 8186
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "bebe413c-6934-4e0f-94fd-cf7c5fcfd274"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "Yes."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "3524a7ae-c01a-4c0e-812c-dc8d41f79ecb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " The d"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "0e2cd4a0-45cf-4342-99cf-545f41560b7f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ependable way is to have the ag"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "fa32c1ca-62aa-4b67-af1f-d766df9ad1af"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ent write its understanding down"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "32f51c2f-bbfb-4ea2-b623-e05a7d1d7835"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " as it works"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "8f90ca66-6828-42bb-95dd-bdb616233f9c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ", and have"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e3ba444f-4beb-454f-b755-ee2d3ef11579"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " the app show it live"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "76d26437-1d47-408b-a418-3443ef305422"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n\n**Sign"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "fde4f04f-8099-466e-8b7b-343be9acd089"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "als the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ffe503dc-14fd-44a7-aa63-14c85c764cc9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " app already has,"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "69ec40b7-236d-4851-b37d-6a5fdf17a542"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " and why"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "725a18a7-f95f-4d86-80a7-df694b2f2047"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " they f"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f891b609-8e50-4962-a19d-dfed2649fc5d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "all short**\n- **Th"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "962c287f-56c7-4a58-9949-22a1fe47dd5c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "inking:** in `"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c41ba7a3-9941-4fcf-8b1f-6dcd5ddb6cbd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "-p` stre"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "88e7bb20-8bd0-40b4-8986-26f765ced8ee"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "aming the th"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "44f844d7-bae3-4851-836d-a4be443d5702"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "inking com"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "324d3946-5048-4092-8170-b02072beb7b0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "es through"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "09583873-ae05-4d62-ade1-e1ad9a1be9e5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " mostly summarized."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1c10f9fe-bb0f-4e02-84d3-7b1012e9a663"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " The"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "290ac332-e713-4926-8ce1-14430f5f79ca"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " last 30 runs total"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "475611ba-1dc1-47ae-bed5-ef734cd49d8a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " about 11,"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c3a71c9c-2825-4ce5-a2c6-bd7ace0e079f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "000 characters of"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "cde2f912-ed81-460f-bd56-72c073b31fff"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " it, too"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ce3963f6-eac9-402f-b405-164f7af2c96c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " th"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "46c7010c-fbae-4a58-8a18-af09aacdc0ad"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "in to re"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "d3c0f57a-5a46-45a7-9d64-7d7dd29466d2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "construct underst"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f09dc66f-ef8f-4a97-ac4f-0d776c3f1d12"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "anding."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "dbc45bf1-58dc-4b92-af38-2b5a9e8db109"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n- **Tod"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c5642780-ba93-47f7-8fb7-b82a2e4a955a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "o lists:** Claude"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "2c6c5562-caa3-4f85-8023-545cd04e0058"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " Code's T"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "773bb55e-1eef-4a79-a23c-58f54768c298"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "odoWrite would"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e4f2007c-f376-4ee1-b0a3-43e878e1967b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " show up"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1b9895d1-fae0-43c5-bee1-2fd942fe1ec3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " in the stream, but none"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "80902243-ab59-44c1-8967-dab8bfd634c4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " of the last 30 runs"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "41893712-c3ae-433e-83ee-04377dc0879f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " used it, and it t"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "87658b4c-457c-469d-bfdf-5a3d2ea89118"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "racks steps,"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b17dc6de-7bd4-425b-9920-042df6b84832"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " not underst"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "9bca79e9-8b7f-44bb-888f-e17772ef9da1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "anding.\n- **Re"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "aabf390d-03b5-408a-99e0-3df123834ee6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ply text:** it ar"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e1c41bb8-0caa-404f-b320-a91168963a8f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "rives mostly at the end"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "14575b8b-bbca-47b7-bd92-902e4ce0e7f5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ", as"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "9b3d3a12-801b-45ad-b701-dcc0b25b3dff"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " the summary of"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "de77e825-9fdf-481a-a62b-be2cb065ddf4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " what was done.\n\n**"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f0bc484d-98b3-425d-b6b5-40d36686425d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "Option 1: the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4c7a7479-2018-4a3b-9c38-58520ed440d9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " agent ke"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "732c015b-3f84-431f-abd6-6baba52c370f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "eps an"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "97695fda-33c6-460a-80b0-92313b6c4649"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " understanding file (recommended"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c12043bb-a388-4ad1-b16e-f9b61221eb3f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ")**"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "530b4e34-0e83-45f6-a550-ecbf217444ac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "\nAdd to the Code,"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5ac74e1e-0817-49b9-aeca-29160b34caaf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " Chain and Spec system"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "67947390-d7fc-41c5-8a42-020e8d645410"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " prompts something like:\n\n>"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "7619f036-7b93-4a52-9454-60b65d89cd7e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " Before changing anything, write"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "14effecf-8e4e-476e-bd9e-482afc994422"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " what you understand this"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5192881a-7893-4c4e-adcb-d64651af3edc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " task requires from the spec to"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b9a69dd0-665a-4765-94a0-9031d9d559fe"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " `"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "51e89849-7b6a-4612-b60e-761c56d15084"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "<understanding file>`,"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ced8eb9c-0647-4229-b099-d83a3d7d4e1b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " and keep it current"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "fa6ee8b1-afa5-42ca-a6d4-fa366b4c4e1f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " as you read"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "8e1c5143-b5c0-4902-b97e-5d18711c1671"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " more. Under \""
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "cd04dd00-4b14-4477-b144-a8c2151a5ebd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "Requirements\", each th"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "6b03eb1c-91c4-472d-b1c6-d3c8af521859"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ing to"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f098b69c-62ad-486a-b963-0e33b8b59e5a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " build, with the scope it com"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5f9d246d-a23b-4b47-b3f5-d1b457345dee"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "es from. Under \"Ass"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "fe82faff-2a46-4029-93c9-176202d5c0ee"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "umptions\", an"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "7ddf981f-d0d3-4fdb-a920-c0259fd8a661"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ything the spec do"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1722c773-34be-4ddb-a99f-2b5ce093cb84"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "esn't say that"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "0e15a6c4-0d6c-4c41-b85d-a3d76d464b75"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " you're"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ad70404f-6671-4677-bac6-40232140e87c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " deciding."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ba46e66a-d1f6-4deb-9202-d6a7444a4d98"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " Under \"Open questions\","
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "afbe4a5a-c8a1-4880-acd4-3d8caac2d942"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " an"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e9aa4115-4046-4759-af18-5e5e5544cfdd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ything unclear or cont"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ab4add4f-a82b-4df7-9b97-7d5ef021742b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "radictory.\n\nThe app g"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "649b6f8e-7ac0-445e-bd2c-a4f37143f61c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ives each task its"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "9caa0d4d-9c81-4860-aee4-08ecdd514b2f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " own file (e.g. `"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "553f86d2-133e-40df-9b35-692676b7d852"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ".suspense/understanding"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "cbd9df4d-bc12-4b28-a4aa-8eeba284f3d6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "/"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "33f311d7-2a45-488c-83d7-0c9577935f0c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "<anchor>.md`), f"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "749929e8-199c-4ee6-94ac-d8f64bb09854"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ills the path"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "66d44d5c-2e7e-48c3-9204-b955e7424108"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " into"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "dbfe2b1b-e04e-4ca4-97be-55acc8351e73"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " the system"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "d8be44df-6c5c-46b8-966a-695fab0b01d5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " prompt, watches it with"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "499073a5-55c6-4f8a-bcd3-ca1e8b37b885"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " the file watcher it"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "551a51e6-f811-4981-9442-42f8566b6fca"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " already uses for"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "6c7dbf03-e84c-48a3-8663-0d5dd97a0ddf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " the tree, and shows it"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4276b0a1-088e-41ff-85db-e185ec3fc69e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " as markdown,"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c0526720-88bf-4d75-9e4e-4986cb6eeaf3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " for example in the Referenced"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "936df7e7-a3e4-4628-a577-1b3a136b020a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " sp"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "0ff8b994-2a0b-41d8-8dd9-3ada44e16fd2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec sidebar under"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "d7af2bfc-cf1f-4210-87c1-2dff7d7de4b4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " the file"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c5b1a036-7b7b-43e4-8511-8e1c6de67b49"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " list.\n\nWhat"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5fde64b9-4d6b-4569-bb62-ad14e5144ac5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " you get:\n- **Early"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "7ca7ff69-09c1-49ee-b232-ac59a0ea3fb9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " war"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "edc4819a-f725-44fe-a9e3-09b4a4d8c20a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ning:"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a5bb9157-7d7e-4a10-8dd2-8f49297251b0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "** a"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "924dd74a-71b1-480c-a7fc-7db829252faf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " misread"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e2b1be82-ea20-4b69-85fc-10797af1fc4a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " spec shows up in"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "80122744-1805-49c8-bf13-a2c04253a4d5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " the first minute, before the ed"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "98b01494-18e6-472f-8ab7-13dfcdd343b1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "its, so you can stop the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f5091876-78a4-4132-985c-565ed7c93b76"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " task"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "15d34a1e-603b-4476-acae-d15251a0a2ef"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n- **Ass"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ab495304-fd1a-4327-a2be-fd34aff2cfed"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "umptions made"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ef9c71cd-cad4-4ca8-8bc7-5bb6665ab7c6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " visible:** the g"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5820d3fb-d8f0-4abc-a1cd-0b5a3e0106b5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "aps the agent filled in"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "33366424-acd8-41a3-91f2-b53b1adb2c1b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ","
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c3db7ce2-6373-43cb-9e32-15c4f9670adb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " which are"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "eb4e6e71-7202-4416-b3f7-d40f886fe080"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " exactly what"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a5606a49-1bde-4926-b98d-c95954fe4e97"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " later sh"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "560c0df5-20fd-43bc-90df-89797e03043f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ows up"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1df1fc08-76b1-4f7d-abb9-6e7a324e33d3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " as divergence, get"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b9db7b5a-1944-4c3d-9a29-1a0ba0584b5a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " listed as"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ce51f3ce-37c4-4df9-9264-358bc4e8bdce"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " they're"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "609c55d7-1b18-40cb-a2e2-0b36193fe903"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " decided.\n- **A record"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "96bd01c3-fae3-440c-8e19-39d850eb2888"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ":"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "53cf117f-9ac0-4557-a8a0-274dee39026a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "** saved with the task, it"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "0f92711f-063b-4443-873e-868d0a2f5bf6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " explains af"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b5082f24-cf12-4575-b526-af6711bb483d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "terwards why the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ba1206d4-1734-4d25-b981-903d1f7ed2ff"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " code came"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4e45aaf0-3309-4d5a-b664-738a8a5da1e9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " out the way it did,"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b3be2a05-4895-4e12-88c5-26cdb4740e2f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " and feeds div"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "80a452a5-3b0e-4580-a88f-160916658728"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ergence anal"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "3c176908-f2c8-450a-aec0-5ed3193a8004"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ysis and"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "70a7a77a-5a5a-4f77-8330-4051b976a9f2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " comm"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "9de81d53-8799-40dc-afd2-ce3f6288f2c8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "it notes."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5181b01b-4df6-4d7f-8233-1d5e825306a6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n- **Better"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "485bd8fa-3a24-4250-b83b-31b9c4a07a39"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " run"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a348467f-a86c-42fd-b1ee-3d23305355ad"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "s:** writing the underst"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "3480df7e-b46f-47a8-96b4-5390bee97480"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "anding down t"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a55894d5-70b0-47d8-bf29-f890d2e04d00"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ends to make the agent read"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "3a12181c-f4df-4d6a-b206-b19871e89760"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " the spec more carefully before"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "6373bb9b-871a-45f8-8d20-c335ca5f4aa9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " edit"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5fa7c89b-5be2-430f-8a55-93a9bcef7f30"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ing. The cost is a few"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "10558f53-1acf-4a18-9dcb-71cfbebbd1eb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " hundred tokens per update"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "6d293a30-2c9c-4c4f-b1ac-f6500f096800"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n\nThe"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e93ea793-9c5c-4492-b730-1900d4f9527d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " lim"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5a77a1a5-f1a4-4c08-9439-a964d6d07485"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "it is that it's the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e4c76205-b6c1-4b50-ab06-b9ddc72d2e64"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " agent's own"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4e5174ad-0457-4682-aaad-08f6665dd909"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " account."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "142d929e-6c3a-4850-8d65-297d7ab3454a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " It can"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "45ee78f1-7ca2-48cf-a2e9-c400044a6390"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " be inc"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "2c3eef90-3b66-40b6-a451-752e8716915d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "omplete, and it won't"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5e85c39a-e61a-4e9f-9391-21ad1064dc23"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " reveal what it didn't"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "78d4173a-9233-4a95-874b-3947749c083d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " notice.\n\n**Option "
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "cf59aa71-ba1b-4394-adc4-a6945a45aaea"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "2: an outside summ"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c98725eb-d4b3-49a0-b5fc-363b5683947e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ar"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a069f10c-8dbc-4a0f-91f0-eec1179ccdbd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "izer**"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "8e19a111-1421-43df-b16c-49edb3234e9f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "\nWhile"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "bf4dd40c-daf1-4a5c-98aa-c3a7e56ed73a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " a task runs, a che"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "dcc650c7-de38-4498-9ec2-9b2aab76a897"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ap model (Haiku,"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ab023d98-d654-4cf8-b100-ef89573e7d5c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " as for"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "78025131-fe80-4151-8c86-38378338cd13"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " commit notes) summariz"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "568e0b00-9285-4e37-ad94-5b61aa2816f7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "es every "
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1c870296-5fa5-4b4c-9940-b534a42beae0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "20–30 seconds from"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "84e2e9c8-9c42-4911-b4bd-02dfbedcc7e9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " the sp"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "22f19734-1ba9-4587-8859-7bf4fe5290a9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec files read"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1e1cabba-506e-473e-9b4b-09382e001654"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " so"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "fed20a24-eff2-46cd-bc7e-a7c9a7991500"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " far (the Referenced sp"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "8a57e892-e455-4ef9-b293-ed2ae48f29e7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec list"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "9ed9a193-cac4-43d2-95bc-dba2d1c7a66e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ") and the agent's text"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "804cd172-232c-417e-aad3-5629b7effc89"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "8af56ee4-a837-49a2-b15e-31da1c4263ac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " This needs no change to the ag"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "cc495064-52d7-4320-9172-898bc8dee803"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ent, but it only sees what"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b47af7f8-d658-4ef7-83e9-d60bfe75758f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " was"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "6b144129-e0fb-49da-8428-ae1d8676978d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " read, not what was understood,"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "549746d9-e06d-4077-99c6-7fd163069ebf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " and it costs a"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "38b37fbb-e072-4f3b-ac20-892e3347bccd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " run per"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "df0a8760-14b9-45bd-a270-05134fc592a9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " update. It's a re"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b6872f91-6d98-4de2-8456-f458000c1e2c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "asonable supplement for"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ac3ac51a-d723-4fe7-b125-cf7b57d57884"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " Ask or"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5289e594-d7a8-4d84-b0b9-215e572fa492"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " long"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f9f88b7a-868d-4700-abde-7c202c3dac4c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " runs, not a replacement"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "39fd6e8c-92f7-444a-8454-386e7d31f175"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n\n**How"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "03a9bae7-0bc0-450f-8195-e0b77a375950"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " it would look"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "7bc7e54e-93f3-4963-a03a-19bc2b41767b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "**\nPut"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4531a583-540a-43d9-a788-786fb5cadaea"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " it under the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b314a2cd-ee17-41da-9f86-220e6436ff31"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " file list in the Referenced"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "fb54d062-57db-436d-a79e-8e013b18d703"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " spec sidebar, as"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a9892442-d442-40da-ade2-d098795d8138"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " an \"Understanding\" section"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "88c7ba63-ff3f-4255-8a2a-7b90eaf8c258"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " with the three head"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e0d76ed7-6246-4f66-bae4-b3b0f9d4b133"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ings, updating live"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "cc5222e5-814c-4e1a-b9b5-6240893cd7bf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " and each"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f9ac4792-31d4-44c0-9dcb-48a5592f0d62"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " change bri"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "6b8635dc-d806-49e2-949c-f8a5226f78a7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "efly highlighted. When"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "3086241a-36e3-4790-bb73-97d705b6cf51"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " the task finishes, it st"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "70b3a5fc-98da-4612-b0ba-7d06e165894a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ays with the task in"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a993d858-f729-456e-b0ac-ca84cf20d455"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " the history"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "78e51460-2e2d-4c86-a6a1-d07e43300e57"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ". If you'"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e6f487a4-a450-4571-9354-cedef57e0b14"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "d like"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "de323e3b-6cba-451a-8a7d-ad1f823be4e6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ", I"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "eeeab4c0-96d2-48ed-9c38-973b4128d8c1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " can write this"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "aa763fe8-e22d-44f9-a463-d0be25e70a53"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " up"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "9238044c-12ea-4df5-b1d0-243fd3ea75da"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " as a prompt like"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "8944fe11-0646-45db-84b0-97b313a5cbce"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " the previ"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "340f12f1-b2fe-4221-a288-4b84b9c87cb0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ous ones."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "6d3b7548-af3a-4bbd-b0ad-93c4bdd00665"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5",
+        "id": "msg_011CfAX86CdTQGVRNcPqnpGH",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Yes. The dependable way is to have the agent write its understanding down as it works, and have the app show it live.\n\n**Signals the app already has, and why they fall short**\n- **Thinking:** in `-p` streaming the thinking comes through mostly summarized. The last 30 runs total about 11,000 characters of it, too thin to reconstruct understanding.\n- **Todo lists:** Claude Code's TodoWrite would show up in the stream, but none of the last 30 runs used it, and it tracks steps, not understanding.\n- **Reply text:** it arrives mostly at the end, as the summary of what was done.\n\n**Option 1: the agent keeps an understanding file (recommended)**\nAdd to the Code, Chain and Spec system prompts something like:\n\n> Before changing anything, write what you understand this task requires from the spec to `<understanding file>`, and keep it current as you read more. Under \"Requirements\", each thing to build, with the scope it comes from. Under \"Assumptions\", anything the spec doesn't say that you're deciding. Under \"Open questions\", anything unclear or contradictory.\n\nThe app gives each task its own file (e.g. `.suspense/understanding/<anchor>.md`), fills the path into the system prompt, watches it with the file watcher it already uses for the tree, and shows it as markdown, for example in the Referenced spec sidebar under the file list.\n\nWhat you get:\n- **Early warning:** a misread spec shows up in the first minute, before the edits, so you can stop the task.\n- **Assumptions made visible:** the gaps the agent filled in, which are exactly what later shows up as divergence, get listed as they're decided.\n- **A record:** saved with the task, it explains afterwards why the code came out the way it did, and feeds divergence analysis and commit notes.\n- **Better runs:** writing the understanding down tends to make the agent read the spec more carefully before editing. The cost is a few hundred tokens per update.\n\nThe limit is that it's the agent's own account. It can be incomplete, and it won't reveal what it didn't notice.\n\n**Option 2: an outside summarizer**\nWhile a task runs, a cheap model (Haiku, as for commit notes) summarizes every 20–30 seconds from the spec files read so far (the Referenced spec list) and the agent's text. This needs no change to the agent, but it only sees what was read, not what was understood, and it costs a run per update. It's a reasonable supplement for Ask or long runs, not a replacement.\n\n**How it would look**\nPut it under the file list in the Referenced spec sidebar, as an \"Understanding\" section with the three headings, updating live and each change briefly highlighted. When the task finishes, it stays with the task in the history. If you'd like, I can write this up as a prompt like the previous ones."
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 992,
+          "cache_read_input_tokens": 276024,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 992
+          },
+          "output_tokens": 657,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "d11d44ea-174d-4486-8c78-4c1368c2590f",
+      "timestamp": "2026-09-18T07:35:57.427Z",
+      "request_id": "req_011CfAX85BcKv3N8aB86944t"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "70e9c1de-95dd-4faf-8f79-a60a7853d640"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 992,
+          "cache_read_input_tokens": 276024,
+          "output_tokens": 904,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 904,
+              "cache_read_input_tokens": 276024,
+              "cache_creation_input_tokens": 992,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 992
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "51131afa-8af0-4c2a-bc12-a8901d47bee6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "be548a00-f2e1-40c3-bfd8-372aa62c0646"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1789730400,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.1,
+            "resetsAt": 1789730400
+          },
+          "seven_day": {
+            "utilization": 0.31,
+            "resetsAt": 1790103600
+          }
+        }
+      },
+      "uuid": "c6fb1906-c61a-44d5-a006-cdbd341ad643",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "duration_api_ms": 22165,
+      "stop_reason": "end_turn",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "total_cost_usd": 0.34364550000000005,
+      "usage": {
+        "input_tokens": 4,
+        "cache_creation_input_tokens": 2219,
+        "cache_read_input_tokens": 550821,
+        "output_tokens": 1841,
+        "output_tokens_details": {
+          "thinking_tokens": 584
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2219,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 904,
+            "cache_read_input_tokens": 276024,
+            "cache_creation_input_tokens": 992,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 992
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "modelUsage": {
+        "claude-opus-5[1m]": {
+          "inputTokens": 4,
+          "outputTokens": 1841,
+          "cacheReadInputTokens": 550821,
+          "cacheCreationInputTokens": 2219,
+          "webSearchRequests": 0,
+          "costUSD": 0.34364550000000005,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 584,
+          "canonicalModel": "claude-opus-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "is_error": false,
+      "num_turns": 2,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "Yes. The dependable way is to have the agent write its understanding down as it works, and have the app show it live.\n\n**Signals the app already has, and why they fall short**\n- **Thinking:** in `-p` streaming the thinking comes through mostly summarized. The last 30 runs total about 11,000 characters of it, too thin to reconstruct understanding.\n- **Todo lists:** Claude Code's TodoWrite would show up in the stream, but none of the last 30 runs used it, and it tracks steps, not understanding.\n- **Reply text:** it arrives mostly at the end, as the summary of what was done.\n\n**Option 1: the agent keeps an understanding file (recommended)**\nAdd to the Code, Chain and Spec system prompts something like:\n\n> Before changing anything, write what you understand this task requires from the spec to `<understanding file>`, and keep it current as you read more. Under \"Requirements\", each thing to build, with the scope it comes from. Under \"Assumptions\", anything the spec doesn't say that you're deciding. Under \"Open questions\", anything unclear or contradictory.\n\nThe app gives each task its own file (e.g. `.suspense/understanding/<anchor>.md`), fills the path into the system prompt, watches it with the file watcher it already uses for the tree, and shows it as markdown, for example in the Referenced spec sidebar under the file list.\n\nWhat you get:\n- **Early warning:** a misread spec shows up in the first minute, before the edits, so you can stop the task.\n- **Assumptions made visible:** the gaps the agent filled in, which are exactly what later shows up as divergence, get listed as they're decided.\n- **A record:** saved with the task, it explains afterwards why the code came out the way it did, and feeds divergence analysis and commit notes.\n- **Better runs:** writing the understanding down tends to make the agent read the spec more carefully before editing. The cost is a few hundred tokens per update.\n\nThe limit is that it's the agent's own account. It can be incomplete, and it won't reveal what it didn't notice.\n\n**Option 2: an outside summarizer**\nWhile a task runs, a cheap model (Haiku, as for commit notes) summarizes every 20–30 seconds from the spec files read so far (the Referenced spec list) and the agent's text. This needs no change to the agent, but it only sees what was read, not what was understood, and it costs a run per update. It's a reasonable supplement for Ask or long runs, not a replacement.\n\n**How it would look**\nPut it under the file list in the Referenced spec sidebar, as an \"Understanding\" section with the three headings, updating live and each change briefly highlighted. When the task finishes, it stays with the task in the history. If you'd like, I can write this up as a prompt like the previous ones.",
+      "ttft_ms": 9337,
+      "type": "result",
+      "duration_ms": 25117,
+      "uuid": "41f25f5b-5cf8-4ec2-a077-1dcc83eb9f19",
+      "ttft_stream_ms": 1435,
+      "time_to_request_ms": 91,
+      "first_content_frame_ms": 1435,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  ]
+}

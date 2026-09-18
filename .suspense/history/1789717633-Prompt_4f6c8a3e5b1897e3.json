@@ -1,0 +1,4199 @@
+{
+  "userPrompt": "If the filename in the [ReferencedSpecSidebarScope](.claude/reference/ui/components/referenced-spec-sidebar/ReferencedSpecSidebarScope.md) is called index.* then we should also display the containing directory.  Not the full path, just the immediate parent directory.",
+  "output": [
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "cefd8a63-4914-4355-bd79-975bc4e59392",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "6d8bdfa2-f1bf-4d65-b4c9-329f56279e62",
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "2ef72a5e-b57d-4896-ab43-8503d517da72",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "b1c2a838-7e49-4212-843f-b04f63a1e076",
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "cefd8a63-4914-4355-bd79-975bc4e59392",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "",
+      "stdout": "",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "eb6ce8b8-9629-420f-bdb6-72d4fc30ec21",
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "2ef72a5e-b57d-4896-ab43-8503d517da72",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "{\"terminalSequence\":\"\\u001b]777;notify;warp://cli-agent;{\\\"v\\\":1,\\\"agent\\\":\\\"claude\\\",\\\"event\\\":\\\"session_start\\\",\\\"session_id\\\":\\\"3e5f8e1b-ae2e-422c-a4e6-415c484388d3\\\",\\\"cwd\\\":\\\"/home/hyphyphyph/piton/repl\\\",\\\"project\\\":\\\"repl\\\",\\\"plugin_version\\\":\\\"2.2.0\\\"}\\u0007\"}\n",
+      "stdout": "{\"terminalSequence\":\"\\u001b]777;notify;warp://cli-agent;{\\\"v\\\":1,\\\"agent\\\":\\\"claude\\\",\\\"event\\\":\\\"session_start\\\",\\\"session_id\\\":\\\"3e5f8e1b-ae2e-422c-a4e6-415c484388d3\\\",\\\"cwd\\\":\\\"/home/hyphyphyph/piton/repl\\\",\\\"project\\\":\\\"repl\\\",\\\"plugin_version\\\":\\\"2.2.0\\\"}\\u0007\"}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "134dcb50-758e-40dd-9016-a23125db4399",
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3"
+    },
+    {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "/home/hyphyphyph/piton/repl",
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "tools": [
+        "Task",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "ListAgents",
+        "ListMcpResourcesTool",
+        "Monitor",
+        "NotebookEdit",
+        "PushNotification",
+        "Read",
+        "ReadMcpResourceDirTool",
+        "ReadMcpResourceTool",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskOutput",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write",
+        "mcp__claude_ai_Claude_Docs__batch",
+        "mcp__claude_ai_Claude_Docs__create",
+        "mcp__claude_ai_Claude_Docs__delete",
+        "mcp__claude_ai_Claude_Docs__export",
+        "mcp__claude_ai_Claude_Docs__guide",
+        "mcp__claude_ai_Claude_Docs__query",
+        "mcp__claude_ai_Claude_Docs__read",
+        "mcp__claude_ai_Claude_Docs__update"
+      ],
+      "mcp_servers": [
+        {
+          "name": "backlog",
+          "status": "connected",
+          "source": "user"
+        },
+        {
+          "name": "claude.ai Claude Docs",
+          "status": "connected",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Drive",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Gmail",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Calendar",
+          "status": "needs-auth",
+          "source": "claudeai"
+        }
+      ],
+      "model": "claude-opus-5[1m]",
+      "permissionMode": "auto",
+      "slash_commands": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "output-style",
+        "context",
+        "effort",
+        "fast",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "skill-doctor",
+        "goal",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "terminal_slash_commands": [
+        "doctor",
+        "color",
+        "reload-plugins"
+      ],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.275",
+      "output_style": "default",
+      "agents": [
+        "claude",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
+      "skills": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "plugins": [
+        {
+          "name": "gitkraken-hooks",
+          "path": "/home/hyphyphyph/.claude/plugins/marketplaces/gitkraken/plugins/gitkraken-hooks",
+          "source": "gitkraken-hooks@gitkraken",
+          "version": "3.1.73"
+        },
+        {
+          "name": "warp",
+          "path": "/home/hyphyphyph/.claude/plugins/cache/claude-code-warp/warp/2.2.0",
+          "source": "warp@claude-code-warp",
+          "version": "2.2.0"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "msg_lifecycle_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "4e189f1e-a135-4e60-acb4-71be49198159",
+      "memory_paths": {
+        "auto": "/home/hyphyphyph/.claude/projects/-home-hyphyphyph-piton-repl/memory/"
+      },
+      "messaging_socket_path": "/run/user/1000/cc-socks/911793.sock",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "uuid": "8325711c-d11d-4d46-b408-b5dda45fac7b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5",
+          "id": "msg_011CfAXzyYi2E3RDuQyDsmhX",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 8622,
+            "cache_read_input_tokens": 224313,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 8622
+            },
+            "output_tokens": 4,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "bdabe954-d636-4524-b90f-d1b91664bc7c",
+      "ttft_ms": 1689
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "95115672-bda1-4d1e-b7bb-c04c4f53dccf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "da72b288-d578-41fc-bd01-121debe5798e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "CAQS7wUKEAgRGAI4AUIIdGhpbmtpbmcSDETuZG7Vq2rqjT86kxoMQQejN4765/nYUcX0IjCCKDE51HG25i7wRE2RslbaZ8srQ6uis7lg6dW2JCWzfAYZ0MJ6tSzw9ZzsoJHlG2wqjAUVgPkK6BJ9b8pBqNTS4/qcjRZPXnwYti0XVTUZjn0yzXim1KbJO9Xzt8k2gv5DITrnCm2thXexB+CbtBwAsHFGXV5qp4ENCU9HJYvXtdRn5HFvyYEtY15ou8RiPp8vczrzb6npnyRHaU2UDhd7yGuHn9LkzfoSP2FmHo+FYlyWqtalbPhaRIn26kpXWP/hxDPvLeVxuIqe/fEfaDAqfSnbHsHCECRwcOwQdVvfNrMSSwHke7x3n5HlrlY6i4IzoKrRqFEQ50FRX5y/HWWnHHJCfgleeZMzcqU7/x6d7x6At98sTvucTiP9kx3uV0O9mXSRV6FkuegjTyAANZgU9US2sc0tcgq+QsQ7YPruEXuHZo8TA866MRy33pBQdtZag4BCHpm787LcJ55/v6zxbHYodZNd2YgWyJXtB2jVwhJ5TX+pwSThfBQ3vtcz3KvNHX3fdL/MG3UhcnTDT9NWK6WS1i3ugfV25im3wzk0kJIooJtOj0/4KNOrLIi075yxTSpNXLNzOV8loy44vULwbou7uNtACJ93a74MCVuYZkWeWriap/aVF7eIm7+QbPONdAjeUUWo9JUMJCkd0p6ZxfD7AbP/zhAB1ImJVKyfrLhvznsEQCy83phe39bslL7hQW76fqlmRB4ZZs5ENtHoPVbX2lJ98wIpLwxkpKpSS3IYBnJnaEG7LAh4dbb2Dmal0+6eJNgmWNr8HmWq7OZmlB6X78A2mxLjjJQjpjjTOk6slvzeTqqs8bw8Y3vo6D8uO+RaNny17c8a602o2NlXleZIVcstq61zUt6NY6aXw3EC6o6U3vhRa7QyFwZee7Ve6GEv6MhI4ckd3TQdGDoeoWdYH2nSkeQArXi96yAQGAE="
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "d20d2d02-4de0-48ab-92b3-6ced9b9cfd69"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5",
+        "id": "msg_011CfAXzyYi2E3RDuQyDsmhX",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAQS7wUKEAgRGAI4AUIIdGhpbmtpbmcSDETuZG7Vq2rqjT86kxoMQQejN4765/nYUcX0IjCCKDE51HG25i7wRE2RslbaZ8srQ6uis7lg6dW2JCWzfAYZ0MJ6tSzw9ZzsoJHlG2wqjAUVgPkK6BJ9b8pBqNTS4/qcjRZPXnwYti0XVTUZjn0yzXim1KbJO9Xzt8k2gv5DITrnCm2thXexB+CbtBwAsHFGXV5qp4ENCU9HJYvXtdRn5HFvyYEtY15ou8RiPp8vczrzb6npnyRHaU2UDhd7yGuHn9LkzfoSP2FmHo+FYlyWqtalbPhaRIn26kpXWP/hxDPvLeVxuIqe/fEfaDAqfSnbHsHCECRwcOwQdVvfNrMSSwHke7x3n5HlrlY6i4IzoKrRqFEQ50FRX5y/HWWnHHJCfgleeZMzcqU7/x6d7x6At98sTvucTiP9kx3uV0O9mXSRV6FkuegjTyAANZgU9US2sc0tcgq+QsQ7YPruEXuHZo8TA866MRy33pBQdtZag4BCHpm787LcJ55/v6zxbHYodZNd2YgWyJXtB2jVwhJ5TX+pwSThfBQ3vtcz3KvNHX3fdL/MG3UhcnTDT9NWK6WS1i3ugfV25im3wzk0kJIooJtOj0/4KNOrLIi075yxTSpNXLNzOV8loy44vULwbou7uNtACJ93a74MCVuYZkWeWriap/aVF7eIm7+QbPONdAjeUUWo9JUMJCkd0p6ZxfD7AbP/zhAB1ImJVKyfrLhvznsEQCy83phe39bslL7hQW76fqlmRB4ZZs5ENtHoPVbX2lJ98wIpLwxkpKpSS3IYBnJnaEG7LAh4dbb2Dmal0+6eJNgmWNr8HmWq7OZmlB6X78A2mxLjjJQjpjjTOk6slvzeTqqs8bw8Y3vo6D8uO+RaNny17c8a602o2NlXleZIVcstq61zUt6NY6aXw3EC6o6U3vhRa7QyFwZee7Ve6GEv6MhI4ckd3TQdGDoeoWdYH2nSkeQArXi96yAQGAE="
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 8622,
+          "cache_read_input_tokens": 224313,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 8622
+          },
+          "output_tokens": 4,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "uuid": "44a7408c-2dfe-4ade-bf53-dffc25f52227",
+      "timestamp": "2026-09-18T07:47:19.006Z",
+      "request_id": "req_011CfAXzx8cvmqF2zn2nsmuS"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "0dd4a9b8-6b0d-4a64-81f1-d468ddde5f0b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "tool_use",
+          "id": "toolu_01XaGLs5uvseDNUn73mPjVU3",
+          "name": "Bash",
+          "input": {},
+          "caller": {
+            "type": "direct"
+          }
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "8a50b8e4-f184-4d70-bb16-3b08a43c0c41"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ""
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "d1947ac2-219a-496a-b90e-4b8828f801ac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "{\"command\": \"c"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "0549157b-080f-4dde-a6ef-549866380f2b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "d /home/hyphy"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "a252e3c6-b988-4789-ab39-63e78bbd74ca"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "phyph"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "24473993-a559-481f-8aca-2bc688e3eeaf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/piton/repl; python"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "00934f3e-e90a-48c6-86e6-0b5be51aabb6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "3 - <<'EO"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "31b9b4ba-4174-4ff1-981c-c8e1e7da7304"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "F'\\np='spec/"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "6cc3f7e0-c677-45ef-b96f-286e126efc32"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ui/components/referenced"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "3fa35c44-e5a5-47e8-923a-880f1ef9aa85"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "-spec-sidebar"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "fbabdd0b-7f2c-458f-8fb9-1128d11f48f8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/index.pi'\\ns"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "51a7c3b0-2d7d-4a9f-b76b-ec9020212e1a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "=open(p).read()"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "909f5832-1a86-4204-9c76-6cbc47ecf3df"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\na='''file icon, then"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "1432adea-3b37-40f9-863b-f4b465c5db7e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " its file name alone, without its"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "0d239e8f-9fb7-4a53-99fc-39c2cee7d231"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " folders, cut off with"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "c73c9e22-7e5f-42de-97fa-54007ddf59ee"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n        an ellipsis when"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "7842175d-5fd4-4a35-b1b9-f4ed18170d4e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " the sidebar is too nar"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "76a3347c-359f-433f-af57-13a49b83f353"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "row, its full path in its"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "45409a29-6fa0-4129-81a8-9e3f255295e9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n        tooltip.'"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "6e0005a4-117b-40ce-a9b7-c72d0afb2e7c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "''\\nassert a in s"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "c2b4bcd0-51cb-4e68-9a86-09bd15bd26a7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\ns=s.replace(a"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "3a35f354-8fa3-4c58-be56-22dd38ddc5b9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ",'''file icon, then"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "1796e73a-882e-42dc-b7b8-6ff2bcf0a4e6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " its file name alone, without its"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "dc54197d-7568-4ccb-8719-ad69c8d87d4d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " folders, cut off with"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "6af96cb2-0885-4e8f-b76f-f8deb3095d11"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n        an ellipsis when"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "706a0f75-fd74-4b38-94b0-c5a97dc573d4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " the sidebar is too nar"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "f95bccc0-3845-457f-8022-165b17b27a31"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "row, its full path in its"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "27ff43d3-bc34-4b12-89f1-2b9ed4469a64"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n        tooltip. A"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "362786fc-ff42-434a-8226-511324ff29b5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " file named index, wh"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "eaf31475-a0d5-43a2-9b57-13d665c830fc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "atever its extension, such"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "467ed94f-be36-4d65-8190-7d06b4883205"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " as\\n        `index.pi"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "6d6f250a-ef77-4296-bacc-02c7120d0d88"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "`"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "6b61b4ff-193f-4c9a-a8fa-cfd8943f5c84"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ", shows the folder it is"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "3ea140e7-5d9c-4f25-b82c-f8855e45d651"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " in before"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "aed51d4d-fe7d-43e0-b637-68cedfba243e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " its"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "e3559ea0-c370-4a7b-bbd0-926983dfc49f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " name, as\\n        `chat"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "87b211b4-3174-45f8-a478-f0c785266310"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "-input/index.pi`"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "5f82fe8b-21e7-4200-b210-7b65c41d1773"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ", and"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "ba01e244-6263-4dee-8830-3d8d9a5909c5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " no"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "9ba89940-a359-4efc-a0e7-e33bb9ae3525"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " folder above"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "97c374da-9f1a-496b-9e2d-62abb3e16b0a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " that.''',"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "d33a278e-3929-4ecf-a461-c537d2350d43"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "1)\\nopen(p,'"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "db6ceac7-1936-4494-8753-0690c11524a8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "w').write(s)\\np"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "ca3606fb-d481-4cca-b809-89585ed67ec2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "='src/referenced_sp"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "ad3aeefc-57ef-48f6-8a01-463b143cc00d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ec.rs'\\ns="
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "6e53c2c8-0034-409c-a3e2-67907018c7c4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "open(p).read()\\nstart"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "ef068438-5f16-44f8-9686-4acf4c7d3054"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "=s.index('        //"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "1dc6e52a-30ba-4864-89a4-9a806bd7a22b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " Only the file\\\\'s name;"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "455473ef-aed6-41ad-918b-f76851293600"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " its full path is in its too"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "05eb9902-0180-49be-acb9-999ad30753a6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ltip.')\\nend=s"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "75cc8e28-dd4e-43d5-8be6-e283bff5f569"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ".index('        let full"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "78381670-8f26-40f5-9d8d-ed187a6c0a55"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ": SharedString',"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "4cf1288d-566a-4f22-9417-2531dd110912"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "start)\\ns=s[:"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "78a02355-ae4a-4774-8e4e-1c90e997b743"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "start]+'"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "125f1d9e-cf21-4f94-9ab9-dfd3d4d04382"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "''        //"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "75ea106c-2284-4c30-81b0-64516cdc09e1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " Only the file's name, and"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "08da66df-f8b1-49fd-985e-303f610a5625"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " for"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "5b6dc43f-adde-4edc-afb3-7567e7f7cbb6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " an index file the"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "9c5f4b83-8f8c-42fc-aa22-66f1edfc0345"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " folder it is in;\\n        "
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "b43d4eb1-5173-4079-b094-60b2edca7264"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "// its full path is in its t"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "c7ff63c1-87f5-4ccc-bc2d-e19dafbe44b6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ooltip.\\n        let sh"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "911c8660-52e3-43f8-9d91-5d46f24505e3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "own = shown_name(&"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "a8d5351c-b1b6-4885-ab9e-28df76643430"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "file.path);\\n'''+"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "73174a0b-97bf-41df-b3aa-c2e40a2c08a0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "s[end:]\\ns="
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "20df0865-e860-4616-a0c8-84926503c9ea"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "s.replace('''///"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "1755f133-9cad-42dd-99cd-a8791bf9fb0b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " The height each half of the sid"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "c4a74320-9981-45f2-9ba7-a70f641f9aec"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ebar''"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "99d85d35-8387-411b-b07c-12c5a240efb5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "','''/// What"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "3076f21e-63c5-44c8-8cdb-38b72ffa104d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " a row"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "cfe60b4f-513e-4e8f-97c9-29a65f7960db"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " shows of"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "280482d1-8b66-4534-b91a-936f5dbc4ec9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " `"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "69f603ea-8a56-4799-8486-0abf841218e4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "path`: its file name, after"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "9fd3088a-5900-406e-b5a5-c800b20311a1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " the folder it is in when"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "01d2e6cb-dc96-4725-8c70-c6b080691423"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n/// it"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "668fe043-804c-422c-ae54-90a6d31086b3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " is an index file, as `ch"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "e801105a-a8e6-4d99-8df3-04ea8edf98de"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "at-input/index.pi"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "f8bff7f1-cf41-4d35-9d5a-0cc606aed42b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "`.\\nfn shown_"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "3cd710d0-2b8d-4464-8d71-c4c23ac72272"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "name(path: &Path)"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "ebee1000-afdf-44d6-ab7e-e7c1e4993c6a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " -> String {\\n    let"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "34f8112c-ef64-4c78-812c-b061d6cfcf3f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " Some(name) = path.file"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "2e2a3cdf-9d07-49f8-81b0-38ba3cd544f9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "_name() else {\\n        return"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "cd8b5c5b-e1fa-4b72-afcb-d45f50cd1812"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " path.display().to_string();"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "c8d4304d-d6f7-48e7-b67f-c4f08495afc9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n    };\\n    let name ="
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "8192537a-421b-429f-8be6-2d97920ceb7c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " name.to_string_loss"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "6d032bae-6d7d-441a-aec6-c2c1134980d5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "y();\\n    let is"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "825b0c79-6ed5-453a-a60b-f578c0938223"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "_index = path.file_st"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "dda41d77-c42e-41d9-ba2c-8f370c5c6f58"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "em().is_some_and("
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "95b4292f-0dc3-4fc9-b801-004c41697c8e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "|stem| stem == \\\""
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "c9fca5b2-992a-436c-be94-a8d2a8ff7807"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "index\\\");\\n    match path"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "c187deea-9c99-4e52-9d22-fba2f7b242ac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ".parent().and_then("
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "d114b002-dcb8-4cf9-829d-e39c83576358"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "Path::file_name).fil"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "ee101b2f-301d-4e3f-b5de-fbb35c4ace7a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ter(|_| is_index"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "7167f6e0-cea7-4322-a050-241037d5ce42"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ") {\\n        Some(fol"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "8cb1552b-041b-4e98-bc29-308bf940aa66"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "der) => format!(\\\"{}"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "677bbd11-b43c-4613-a691-779e5191bb0f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/{name}\\\", folder."
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "9b034145-4085-49f0-86b0-29f6d852b595"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "to_string_lossy()"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "d6e716d9-2691-4237-9bd7-184e7f4bf184"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "),\\n        None => name.into"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "b1c3735e-e172-46f1-890c-1b8073709f15"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "_owned(),\\n    }"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "65487333-5137-48c0-a8b1-7d13f4146e03"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n}\\n\\n/// The height each"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "9694e949-0d19-4d40-946c-f75db968de14"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " half of the sidebar''"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "6a313c0b-a318-4bb2-88e8-494c5b8049e6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "',1)\\ns=s."
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "bd11ce06-be76-4aeb-9f6a-7b3840e49569"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "replace('''    use super::"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "feb7238f-e32b-47e7-9bfc-76888109ce7e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "{Referenced, References,"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "a3fb7604-84a5-4adc-bf81-e8350b49c8ee"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " collect};''','''    use"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "2c197d70-892e-4082-a9e6-13355b81655a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " super::{Referenced,"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "af4e2a0c-b982-4e21-96de-b96ed90acea5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " References, collect, shown_"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "9888af47-bcae-4409-8986-12e9bbcef1e0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "name};''',1)"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "900af60d-a48c-42ce-942c-2b56ad14d788"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\nts=s.rind"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "01f5fc89-fe77-4cee-ad80-fe539f158205"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ex('\\\\"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "bafc3c9d-8c82-4c20-828b-9cd943de77fb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "n}\\\\n')\\ns="
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "9eff85df-c0fb-4b94-9579-a51aeafe1c3c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "s[:ts]+'"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "49ce0583-f18b-49d5-a10d-b1735805ba3d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "''\\n\\n    /// A row sh"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "c7f0722a-8039-47bb-a721-14cd61d580d7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ows the"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "23dd824a-2594-4315-8563-1760d84e04ba"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " file's name, and an index file"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "d226c427-2817-4833-a51f-bfabc8e938e8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "'s folder before"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "0ae15b03-6b4b-4c12-987c-ead9dbd90030"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " it.\\n    #[test]"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "f0517a01-2bd2-4d5c-abb0-01f07e23cf8d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n    fn shows_names"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "94d1f8dc-9e03-4b62-b429-257d91e50054"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "_and"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "2a21ba2f-d4e6-4b83-b234-823aed874a55"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "_index_folders() {"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "e21826c5-4cf3-46fc-92ac-c34fe8f8b989"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n        assert_eq!("
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "1f66ccad-815c-4fcf-8389-81647897e955"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "shown_name(Path::"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "e91dd4de-72e8-4931-99eb-b4e051b8b51c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "new(\\\"/p"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "ae7903d1-9863-44dd-b648-3b2319105577"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/spec/a.pi"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "c76b06a6-7a32-4625-8c8a-bbd4a2d54f8b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\\")), \\\"a.pi\\\");"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "2d4ec8d2-c403-48e3-8eef-98f714a437ac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n        assert_eq!"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "4515d022-600a-4604-a934-33df507f9a86"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "(\\n            shown_name("
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "411927df-3c54-4a15-bd1d-46a0895ecc89"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "Path::new(\\\"/p/"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "03eb509b-1476-44fd-b87b-1927672241e1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "spec/pr"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "e3f15280-0734-4cbe-b15b-452ca81d6ef2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ompt-mode/chat"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "3a39ae46-a1ad-4434-a69e-45da5f7680df"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "-input/index.pi\\\")"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "c49b4991-5b1f-4c61-9e81-3038906d7f39"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "),\\n            \\\"chat-input"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "da0cd973-e023-4a5b-91ce-bef4c4b56247"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/index.pi\\\"\\n        "
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "c9bccc16-1073-4947-b31c-28047328318d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ");\\n        assert_eq"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "751ec5e1-9a71-4638-8c01-a4b3903d48f6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "!(shown_name("
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "39efe235-c6b5-4dbf-ac3a-7a06c92326d5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "Path::new(\\\"/p/."
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "a0780965-7662-4729-a751-c5ddd5333acb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "claude/reference/index."
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "1dc4dd9b-98fc-4e62-a92d-c49a10ef20ff"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "md\\\")), \\\"re"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "9d8d229d-a670-4686-a1d1-10d06087ed1e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ference/index.md\\\");\\n        "
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "5b917960-1f81-4c1b-90c8-600fb723aa29"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "assert_eq!(sh"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "d27853d1-2fbb-49f7-b77f-603a7b72d7fb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "own_name(Path::new"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "f5c77016-ccb5-40af-a55b-b5e52da4a787"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "(\\\"/p/spec/ind"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "15c903d8-4102-42d6-99a4-fd70156425f8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "exes"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "7a4c696f-912a-4020-b9cb-0f45ae0b0013"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ".pi\\\")), \\\"index"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "46c42cd9-2b7e-42fa-ad1c-744101c9c111"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "es.pi\\\");\\n    }"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "1bfa3fc3-19ed-4ce1-994e-84e7d6c56521"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n}\\n'''\\nopen(p"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "f5e65984-ce70-495f-8697-13e2ee8dd6d5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ",'w').write(s)"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "ae94effb-d7f1-4b88-97ce-1c22ae280175"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\nEOF\\npi"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "385abef1-9431-4c5e-b441-f9eb62218e4b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ton build 2>&1 "
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "9ceb370d-b37b-4161-bc5f-2369b31028fc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "| tail -1; carg"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "bc6395c5-b3d3-49e8-8be9-760897366aa4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "o fmt; cargo"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "075afbcf-c20d-4046-a79f-771be52fa698"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " test 2>&1 |"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "2eef81c1-0070-45f7-b58e-8edc686f9989"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " grep -E \\\"^"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "bf47c12c-1448-4e12-b6d7-a1655ac6fcda"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "error|test result|FAIL"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "23fd70ef-1450-471b-bdaa-c9edc8955abc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ED|panicked\\\" -A"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "a173142f-581c-4ee3-8efa-dbd481be718e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "3 | head"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "5310cc02-8586-49a5-bcd9-850de4909512"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\", \"description\": \"Show index files"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "7a2f5007-961d-4916-8da4-b37572450899"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " with"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "b289ee83-ea9e-477a-914c-195bae3c0015"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " their"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "818722d1-173f-48c8-983c-9393e3857b8d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " folder in spec and code"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "e658e5cc-949d-4a5f-a002-a9b3bce281de"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\", \"timeout\": 600000"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "9b6fc226-8d98-4d60-8ced-0425cfce3a0e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "}"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "5d6d0d5e-fd18-4a1b-af15-7df1045c0b2c"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5",
+        "id": "msg_011CfAXzyYi2E3RDuQyDsmhX",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "toolu_01XaGLs5uvseDNUn73mPjVU3",
+            "name": "Bash",
+            "input": {
+              "command": "cd /home/hyphyphyph/piton/repl; python3 - <<'EOF'\np='spec/ui/components/referenced-spec-sidebar/index.pi'\ns=open(p).read()\na='''file icon, then its file name alone, without its folders, cut off with\n        an ellipsis when the sidebar is too narrow, its full path in its\n        tooltip.'''\nassert a in s\ns=s.replace(a,'''file icon, then its file name alone, without its folders, cut off with\n        an ellipsis when the sidebar is too narrow, its full path in its\n        tooltip. A file named index, whatever its extension, such as\n        `index.pi`, shows the folder it is in before its name, as\n        `chat-input/index.pi`, and no folder above that.''',1)\nopen(p,'w').write(s)\np='src/referenced_spec.rs'\ns=open(p).read()\nstart=s.index('        // Only the file\\'s name; its full path is in its tooltip.')\nend=s.index('        let full: SharedString',start)\ns=s[:start]+'''        // Only the file's name, and for an index file the folder it is in;\n        // its full path is in its tooltip.\n        let shown = shown_name(&file.path);\n'''+s[end:]\ns=s.replace('''/// The height each half of the sidebar''','''/// What a row shows of `path`: its file name, after the folder it is in when\n/// it is an index file, as `chat-input/index.pi`.\nfn shown_name(path: &Path) -> String {\n    let Some(name) = path.file_name() else {\n        return path.display().to_string();\n    };\n    let name = name.to_string_lossy();\n    let is_index = path.file_stem().is_some_and(|stem| stem == \"index\");\n    match path.parent().and_then(Path::file_name).filter(|_| is_index) {\n        Some(folder) => format!(\"{}/{name}\", folder.to_string_lossy()),\n        None => name.into_owned(),\n    }\n}\n\n/// The height each half of the sidebar''',1)\ns=s.replace('''    use super::{Referenced, References, collect};''','''    use super::{Referenced, References, collect, shown_name};''',1)\nts=s.rindex('\\n}\\n')\ns=s[:ts]+'''\n\n    /// A row shows the file's name, and an index file's folder before it.\n    #[test]\n    fn shows_names_and_index_folders() {\n        assert_eq!(shown_name(Path::new(\"/p/spec/a.pi\")), \"a.pi\");\n        assert_eq!(\n            shown_name(Path::new(\"/p/spec/prompt-mode/chat-input/index.pi\")),\n            \"chat-input/index.pi\"\n        );\n        assert_eq!(shown_name(Path::new(\"/p/.claude/reference/index.md\")), \"reference/index.md\");\n        assert_eq!(shown_name(Path::new(\"/p/spec/indexes.pi\")), \"indexes.pi\");\n    }\n}\n'''\nopen(p,'w').write(s)\nEOF\npiton build 2>&1 | tail -1; cargo fmt; cargo test 2>&1 | grep -E \"^error|test result|FAILED|panicked\" -A3 | head",
+              "description": "Show index files with their folder in spec and code",
+              "timeout": 600000
+            },
+            "caller": {
+              "type": "direct"
+            }
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 8622,
+          "cache_read_input_tokens": 224313,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 8622
+          },
+          "output_tokens": 4,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "uuid": "a91f01a4-13ad-4ec2-b18c-646d455739b6",
+      "timestamp": "2026-09-18T07:47:26.469Z",
+      "request_id": "req_011CfAXzx8cvmqF2zn2nsmuS",
+      "wire_tool_inputs": {
+        "toolu_01XaGLs5uvseDNUn73mPjVU3": {
+          "command": "cd /home/hyphyphyph/piton/repl; python3 - <<'EOF'\np='spec/ui/components/referenced-spec-sidebar/index.pi'\ns=open(p).read()\na='''file icon, then its file name alone, without its folders, cut off with\n        an ellipsis when the sidebar is too narrow, its full path in its\n        tooltip.'''\nassert a in s\ns=s.replace(a,'''file icon, then its file name alone, without its folders, cut off with\n        an ellipsis when the sidebar is too narrow, its full path in its\n        tooltip. A file named index, whatever its extension, such as\n        `index.pi`, shows the folder it is in before its name, as\n        `chat-input/index.pi`, and no folder above that.''',1)\nopen(p,'w').write(s)\np='src/referenced_spec.rs'\ns=open(p).read()\nstart=s.index('        // Only the file\\'s name; its full path is in its tooltip.')\nend=s.index('        let full: SharedString',start)\ns=s[:start]+'''        // Only the file's name, and for an index file the folder it is in;\n        // its full path is in its tooltip.\n        let shown = shown_name(&file.path);\n'''+s[end:]\ns=s.replace('''/// The height each half of the sidebar''','''/// What a row shows of `path`: its file name, after the folder it is in when\n/// it is an index file, as `chat-input/index.pi`.\nfn shown_name(path: &Path) -> String {\n    let Some(name) = path.file_name() else {\n        return path.display().to_string();\n    };\n    let name = name.to_string_lossy();\n    let is_index = path.file_stem().is_some_and(|stem| stem == \"index\");\n    match path.parent().and_then(Path::file_name).filter(|_| is_index) {\n        Some(folder) => format!(\"{}/{name}\", folder.to_string_lossy()),\n        None => name.into_owned(),\n    }\n}\n\n/// The height each half of the sidebar''',1)\ns=s.replace('''    use super::{Referenced, References, collect};''','''    use super::{Referenced, References, collect, shown_name};''',1)\nts=s.rindex('\\n}\\n')\ns=s[:ts]+'''\n\n    /// A row shows the file's name, and an index file's folder before it.\n    #[test]\n    fn shows_names_and_index_folders() {\n        assert_eq!(shown_name(Path::new(\"/p/spec/a.pi\")), \"a.pi\");\n        assert_eq!(\n            shown_name(Path::new(\"/p/spec/prompt-mode/chat-input/index.pi\")),\n            \"chat-input/index.pi\"\n        );\n        assert_eq!(shown_name(Path::new(\"/p/.claude/reference/index.md\")), \"reference/index.md\");\n        assert_eq!(shown_name(Path::new(\"/p/spec/indexes.pi\")), \"indexes.pi\");\n    }\n}\n'''\nopen(p,'w').write(s)\nEOF\npiton build 2>&1 | tail -1; cargo fmt; cargo test 2>&1 | grep -E \"^error|test result|FAILED|panicked\" -A3 | head",
+          "description": "Show index files with their folder in spec and code",
+          "timeout": 600000
+        }
+      }
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "be026f8b-9d26-47d7-9104-ac9f5997c18c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 8622,
+          "cache_read_input_tokens": 224313,
+          "output_tokens": 1185,
+          "output_tokens_details": {
+            "thinking_tokens": 21
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 1185,
+              "cache_read_input_tokens": 224313,
+              "cache_creation_input_tokens": 8622,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 8622
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "3ba0bda7-1de2-4b2b-9d1f-005ed685bbfa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "7c6249bb-5701-45d9-95ec-9fbe1e472dee"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1789730400,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.11,
+            "resetsAt": 1789730400
+          },
+          "seven_day": {
+            "utilization": 0.31,
+            "resetsAt": 1790103600
+          }
+        }
+      },
+      "uuid": "d3a3938a-65e1-4b1d-aa56-5d20009f9ba8",
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3"
+    },
+    {
+      "type": "system",
+      "subtype": "commands_changed",
+      "commands": [
+        {
+          "name": "gepeto",
+          "description": "Guide for building 1-click launchers and building apps with launchers built-in using Pinokio (user)",
+          "argumentHint": ""
+        },
+        {
+          "name": "pinokio",
+          "description": "Discover, launch, and use apps and tools for the current task. (user)",
+          "argumentHint": ""
+        },
+        {
+          "name": "plannotator-annotate",
+          "description": "Open Plannotator's annotation UI for a markdown file, HTML file, URL, or folder and then respond to the returned annotations. (user)",
+          "argumentHint": ""
+        },
+        {
+          "name": "plannotator-last",
+          "description": "Open Plannotator on the latest rendered assistant message and use the returned annotations to revise that message or continue. (user)",
+          "argumentHint": ""
+        },
+        {
+          "name": "plannotator-review",
+          "description": "Open Plannotator's browser-based code review UI for the current worktree or a pull request URL, then act on the feedback that comes back. (user)",
+          "argumentHint": ""
+        },
+        {
+          "name": "build-application",
+          "description": "build or change the ApplicationScope scope Use when you need to build or change the ApplicationScope scope (project)",
+          "argumentHint": ""
+        },
+        {
+          "name": "deep-research",
+          "description": "Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report. (dynamic workflow)",
+          "argumentHint": ""
+        },
+        {
+          "name": "design",
+          "description": "Grant or revoke Claude agent access to your Design projects",
+          "argumentHint": "consent | revoke"
+        },
+        {
+          "name": "design-sync",
+          "description": "Push a React design system to claude.ai/design. This runs a converter that bundles the real component code (from Storybook or a bare package) and uploads it. Use when the user runs /design-sync or says \"sync my design system to Claude Design\".",
+          "argumentHint": "[<project hint, e.g. \"Acme DS\">]"
+        },
+        {
+          "name": "dataviz",
+          "description": "Use this skill whenever you are about to create ANY chart, graph, plot, dashboard, or data visualization, in ANY output medium — an HTML or React artifact, inline SVG, plotting code in any library (matplotlib, plotly, d3, Recharts, …), an image/PNG you will render and upload, or a chart shared into Slack. Read it BEFORE writing the first line of chart code, choosing chart colors, building a stat tile / meter / KPI row, or laying out a dashboard. When the destination is a first-party document connector (host-designated, never self-described) that renders live charts, hand it the rows (inline, or as an uploaded data file the chart cites) rather than a rendered PNG/SVG — a picture of a chart loses hover, data inspection and per-value comments. Produces visualizations that read as one system — elegant, accessible, consistent in light and dark — using a brand-neutral placeholder palette you swap for your own. Teaches a design-system-agnostic method: a form heuristic, a color formula with a runnable validator, mark specs, and interaction rules. A validated default palette is documented in `references/palette.md` — swap that file's values for your brand's. Triggers on: \"chart\", \"graph\", \"plot\", \"data viz\", \"visualization\", \"dashboard\", \"analytics\", \"visualize data\", \"categorical colors\", \"sequential / diverging palette\", \"stat tile\", \"sparkline\", \"heatmap\", \"legend\", \"axis\", \"tooltip\", \"chart colors\", \"color by series\".",
+          "argumentHint": ""
+        },
+        {
+          "name": "update-config",
+          "description": "Use this skill to configure the Claude Code harness via settings.json. Automated behaviors (\"from now on when X\", \"each time X\", \"whenever X\", \"before/after X\") require hooks configured in settings.json - the harness executes these, not Claude, so memory/preferences cannot fulfill them. Also use for: permissions (\"allow X\", \"add permission\", \"move permission to\"), env vars (\"set X=Y\"), hook troubleshooting, or any changes to settings.json/settings.local.json files. Examples: \"allow npm commands\", \"add bq permission to global settings\", \"move permission to user settings\", \"set DEBUG=true\", \"when claude stops show X\". For simple settings like theme/model, suggest the /config command.",
+          "argumentHint": ""
+        },
+        {
+          "name": "verify",
+          "description": "Verify that a code change actually does what it's supposed to by exercising it end-to-end and observing behavior — drive the affected flow, not just tests or typecheck. Run before committing nontrivial changes; bootstraps this repo's project verify skill if none exists yet. Don't invoke it on a diff that only touches tests, docs, or other code with no runtime surface to drive (a change to product source always has one) — there's nothing to observe.",
+          "argumentHint": ""
+        },
+        {
+          "name": "debug",
+          "description": "Enable debug logging for this session and help diagnose issues",
+          "argumentHint": "[issue description]"
+        },
+        {
+          "name": "code-review",
+          "description": "Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's review recipe covers them) at the given effort level (low/medium: fewer, high-confidence findings; high→max: broader coverage, may include uncertain findings; ultra: deep multi-agent review in the cloud); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply the findings to the working tree after the review. For ultra on a GitHub.com PR target, --post asks to post the finished review’s findings to the PR as a single comment from the user’s GitHub account (not a review; the launch dialog still confirms in interactive sessions, while non-interactive mode posts on the flag alone) and --no-post hides that option.",
+          "argumentHint": "[low|medium|high|xhigh|max|ultra] [--fix] [--comment] [<pr#>|<branch>|<path>]",
+          "aliases": [
+            "review"
+          ]
+        },
+        {
+          "name": "simplify",
+          "description": "Review the changed code for reuse, simplification, efficiency, and altitude cleanups, then apply the fixes. Quality only — it does not hunt for bugs; use /code-review for that.",
+          "argumentHint": "[<target>]"
+        },
+        {
+          "name": "batch",
+          "description": "Research and plan a large-scale change, then execute it in parallel across 5–30 isolated worktree agents that each open a PR.",
+          "argumentHint": "<instruction>"
+        },
+        {
+          "name": "fewer-permission-prompts",
+          "description": "Scan your transcripts for common read-only Bash and MCP tool calls, then add a prioritized allowlist to project .claude/settings.json to reduce permission prompts.",
+          "argumentHint": ""
+        },
+        {
+          "name": "doctor",
+          "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration.",
+          "argumentHint": "",
+          "aliases": [
+            "checkup"
+          ]
+        },
+        {
+          "name": "loop",
+          "description": "Run a prompt or slash command on a recurring interval (e.g. /loop 5m /foo). Omit the interval to let the model self-pace.",
+          "argumentHint": "[interval] [prompt]",
+          "aliases": [
+            "proactive"
+          ]
+        },
+        {
+          "name": "schedule",
+          "description": "Create, update, list, or run scheduled cloud agents (routines) that execute on a cron schedule.",
+          "argumentHint": "",
+          "aliases": [
+            "routines"
+          ]
+        },
+        {
+          "name": "claude-api",
+          "description": "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read BEFORE opening the target file; don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file).",
+          "argumentHint": ""
+        },
+        {
+          "name": "workflow-authoring",
+          "description": "Reference for writing a Workflow tool script (script API and gotchas, resume, quality patterns, worked examples). Load before authoring a script for a workflow the user already opted into; it does not itself authorize running one.",
+          "argumentHint": ""
+        },
+        {
+          "name": "run",
+          "description": "Launch and drive this project's app to see a change working. Use when asked to run, start, or screenshot the app, or to confirm a change works in the real app (not just tests). First looks for a project skill that already covers launching the app; otherwise falls back to built-in patterns per project type (CLI, server, TUI, Electron, browser-driven, library).",
+          "argumentHint": ""
+        },
+        {
+          "name": "run-skill-generator",
+          "description": "Author or improve the run-<unit> skill - a per-project skill that tells agents how to build, launch, and drive this project's app. Use when the user asks to set up the project, get it running, write run instructions, or verify build/run steps work from a clean environment.",
+          "argumentHint": ""
+        },
+        {
+          "name": "advisor",
+          "description": "Let Claude consult a stronger model at key moments",
+          "argumentHint": "[fable|opus|sonnet|off]"
+        },
+        {
+          "name": "agents",
+          "description": "(removed) Ask Claude to create/manage subagents, or edit .claude/agents/",
+          "argumentHint": ""
+        },
+        {
+          "name": "auto-mode-setup",
+          "description": "Teach auto mode about your environment, plus optional rule tweaks",
+          "argumentHint": "[--request-id <uuid>] (--wizard posture=… scope=… depth=… --propose | --expect-sha256 <64-hex> --apply-file <path>)"
+        },
+        {
+          "name": "autocompact",
+          "description": "Configure the auto-compact window size",
+          "argumentHint": "[auto|<tokens>]"
+        },
+        {
+          "name": "clear",
+          "description": "Start a new session with empty context; previous session stays on disk (resumable with /resume)",
+          "argumentHint": "[name]",
+          "aliases": [
+            "reset",
+            "new"
+          ]
+        },
+        {
+          "name": "color",
+          "description": "Set the prompt bar color for this session",
+          "argumentHint": "[red|blue|green|yellow|purple|orange|pink|cyan|default]"
+        },
+        {
+          "name": "compact",
+          "description": "Free up context by summarizing the conversation so far",
+          "argumentHint": "<optional custom summarization instructions>"
+        },
+        {
+          "name": "config",
+          "description": "Set a setting by key",
+          "argumentHint": "key=value",
+          "aliases": [
+            "settings"
+          ]
+        },
+        {
+          "name": "output-style",
+          "description": "List output styles or switch to one",
+          "argumentHint": "[style]"
+        },
+        {
+          "name": "context",
+          "description": "Show current context usage",
+          "argumentHint": ""
+        },
+        {
+          "name": "effort",
+          "description": "Set effort level for model usage",
+          "argumentHint": "<low|medium|high|xhigh|max|ultracode|auto>"
+        },
+        {
+          "name": "fast",
+          "description": "Toggle fast mode (Opus 5)",
+          "argumentHint": "[on|off]"
+        },
+        {
+          "name": "heapdump",
+          "description": "Dump the JS heap to the Desktop; on Linux with no Desktop folder, the home directory",
+          "argumentHint": ""
+        },
+        {
+          "name": "init",
+          "description": "Initialize a new CLAUDE.md file with codebase documentation",
+          "argumentHint": ""
+        },
+        {
+          "name": "mcp",
+          "description": "Manage MCP servers",
+          "argumentHint": "[reconnect|enable|disable [<server>|all]]"
+        },
+        {
+          "name": "import",
+          "description": "Import config from another AI coding agent",
+          "argumentHint": ""
+        },
+        {
+          "name": "model",
+          "description": "Set the AI model for Claude Code",
+          "argumentHint": "<model>"
+        },
+        {
+          "name": "__remote-workflow",
+          "description": "Run the workflow script delivered in this session environment (server-launched sessions only)",
+          "argumentHint": ""
+        },
+        {
+          "name": "workflow-launch-exec",
+          "description": "Execute a server-launched workflow handoff (workflow_launch event sessions only)",
+          "argumentHint": ""
+        },
+        {
+          "name": "reload-plugins",
+          "description": "Activate pending plugin changes in the current session",
+          "argumentHint": "[--force]"
+        },
+        {
+          "name": "reload-skills",
+          "description": "Pick up skills added or changed on disk during this session",
+          "argumentHint": ""
+        },
+        {
+          "name": "rename",
+          "description": "Rename the current conversation",
+          "argumentHint": "[name]",
+          "aliases": [
+            "name"
+          ]
+        },
+        {
+          "name": "ultrareview",
+          "description": "Start a cloud agent that finds and verifies bugs in your branch (~5-10 min, $5-$25 USD) · Runs in a cloud session. See https://code.claude.com/docs/en/claude-code-on-the-web",
+          "argumentHint": ""
+        },
+        {
+          "name": "security-review",
+          "description": "Complete a security review of the pending changes on the current branch",
+          "argumentHint": ""
+        },
+        {
+          "name": "usage-credits",
+          "description": "Configure usage credits or request them from your admin when you hit a limit",
+          "argumentHint": ""
+        },
+        {
+          "name": "extra-usage",
+          "description": "Renamed to /usage-credits",
+          "argumentHint": ""
+        },
+        {
+          "name": "usage",
+          "description": "Show session cost, plan usage, and what's contributing to your limits",
+          "argumentHint": "",
+          "aliases": [
+            "cost",
+            "stats"
+          ]
+        },
+        {
+          "name": "insights",
+          "description": "Generate a report analyzing your Claude Code sessions",
+          "argumentHint": ""
+        },
+        {
+          "name": "recap",
+          "description": "Generate a one-line session recap now",
+          "argumentHint": ""
+        },
+        {
+          "name": "skill-doctor",
+          "description": "Show which loaded skills are unused and costing context",
+          "argumentHint": ""
+        },
+        {
+          "name": "goal",
+          "description": "Set a goal — keep working until the condition is met",
+          "argumentHint": ""
+        },
+        {
+          "name": "design-consent",
+          "description": "Grant Claude agent access to your Design projects",
+          "argumentHint": ""
+        },
+        {
+          "name": "design-revoke",
+          "description": "Revoke Claude agent access to your Design projects",
+          "argumentHint": ""
+        },
+        {
+          "name": "list-agents",
+          "description": "List subagents, teammates, and other Claude sessions you can message",
+          "argumentHint": "",
+          "aliases": [
+            "peers"
+          ]
+        },
+        {
+          "name": "team-onboarding",
+          "description": "Help teammates ramp on Claude Code with a guide from your usage",
+          "argumentHint": ""
+        },
+        {
+          "name": "anthropic-skills:docs",
+          "description": "docs (living docs people share, comment on and edit; use only when the user asks for one: names a doc, document, page, memo, spec, PRD, runbook or write-up, asks for somewhere to share or keep editing something, or says yes to your doc offer; a plan, comparison, summary or notes asked in chat stays in chat (at most a one-line doc offer); a report, status update, recap or \"something I can send them\" with no form named → ask first: reply, doc or file?; tabs hold tables and live charts too; a pasted claude.ai/code/artifact/… link may be a doc: check with docs tools first; not HTML pages, apps or plain chat answers; a .docx/.pptx/.xlsx/PDF asked for by name → that format's skill): asked for one → no docs-connector instructions in context? call the docs connector's `guide` with topic.instructions first, then create the doc (headings only, no body) before any search, file read or plan, even with files attached. Documenting code means docstrings or repo docs, not a doc. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "docs"
+          ]
+        },
+        {
+          "name": "anthropic-skills:docx",
+          "description": "Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx) or Word templates (.dotx). Triggers include: any mention of 'Word doc', 'word document', '.docx', '.dotx', or requests to produce professional documents with formatting like tables of contents, page numbers, or letterheads. Also use when extracting or reorganizing content from .docx or .dotx files, inserting or replacing images in documents, find-and-replace in Word files, working with tracked changes or comments, or converting content into a polished Word document. If the user asks for a 'report', 'memo', 'letter', 'template', or similar deliverable as a Word or .docx file (to download, email or print), use this skill. However, if they ask for a document, page, report, memo, or notes WITHOUT naming a file format and the session offers Claude's own dedicated document or page skill or connector, use that instead. Do NOT use for PDFs, spreadsheets, Google Docs, or coding unrelated to document generation. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "docx"
+          ]
+        },
+        {
+          "name": "anthropic-skills:import-memory",
+          "description": "Import a memory export from another AI assistant into Claude's memory — conversationally, additively, and with the content treated as data. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "import-memory"
+          ]
+        },
+        {
+          "name": "anthropic-skills:morning",
+          "description": "Render the user's morning brief as a styled HTML artifact, or set it up as a recurring weekday task. Use only when the user explicitly asks to run, see, or set up their morning brief, or if they invoke /morning by name. A question about their day, schedule, or calendar is not by itself a request for the brief; answer it directly instead. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "morning"
+          ]
+        },
+        {
+          "name": "anthropic-skills:pdf",
+          "description": "Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding watermarks, creating new PDFs, filling PDF forms, encrypting/decrypting PDFs, extracting images, and OCR on scanned PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "pdf"
+          ]
+        },
+        {
+          "name": "anthropic-skills:pptx",
+          "description": "Use this skill any time a .pptx or .potx file is involved in any way — as input, output, or both. This includes: creating slide decks, pitch decks, or presentations as PowerPoint (.pptx) files; reading, parsing, or extracting text from any .pptx or .potx file (even if the extracted content will be used elsewhere, like in an email, summary, or creating a different type of slide deck); editing, modifying, or updating existing presentations; combining or splitting slide files; working with templates (.potx), layouts, speaker notes, or comments. Trigger whenever the user asks for a PowerPoint or .pptx file, or references a .pptx or .potx filename, regardless of what they plan to do with the content afterward. However, when the user asks for a deck, slides, a slide deck, or a presentation without naming a file format, default to using a dedicated slide-deck artifact type or a separate slides skill if this session offers one; otherwise, use this skill. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "pptx"
+          ]
+        },
+        {
+          "name": "anthropic-skills:skill-creator",
+          "description": "Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "skill-creator"
+          ]
+        },
+        {
+          "name": "anthropic-skills:xlsx",
+          "description": "Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an existing .xlsx, .xlsm, .xltx, .csv, or .tsv file (e.g., adding columns, computing formulas, formatting, charting, cleaning messy data); create a new spreadsheet from scratch or from other data sources; or convert between tabular file formats. Trigger especially when the user references a spreadsheet file by name or path — even casually (like \"the xlsx in my downloads\") — and wants something done to it or produced from it. Also trigger for cleaning or restructuring messy tabular data files (malformed rows, misplaced headers, junk data) into proper spreadsheets. The deliverable must be a spreadsheet file. Do NOT trigger when the primary deliverable is a Word document, HTML report, standalone Python script, database pipeline, or Google Sheets API integration, even if tabular data is involved. (claude.ai sync)",
+          "argumentHint": "",
+          "aliases": [
+            "xlsx"
+          ]
+        }
+      ],
+      "uuid": "18da1ee6-47f0-48ff-8326-cae402dc5dff",
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3"
+    },
+    {
+      "type": "system",
+      "subtype": "task_started",
+      "task_id": "bnnfn640g",
+      "tool_use_id": "toolu_01XaGLs5uvseDNUn73mPjVU3",
+      "description": "Show index files with their folder in spec and code",
+      "is_backgrounded": false,
+      "task_type": "local_bash",
+      "uuid": "8ea5d5af-b4ca-4be9-b3fe-2f9b54bdb02c",
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3"
+    },
+    {
+      "type": "tool_progress",
+      "tool_use_id": "toolu_01XaGLs5uvseDNUn73mPjVU3-heartbeat-0",
+      "tool_name": "Bash",
+      "parent_tool_use_id": "toolu_01XaGLs5uvseDNUn73mPjVU3",
+      "elapsed_time_seconds": 30,
+      "heartbeat": true,
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "uuid": "ada36fcd-6ea3-43d6-b6d7-190a79b4ab71"
+    },
+    {
+      "type": "system",
+      "subtype": "task_notification",
+      "task_id": "bnnfn640g",
+      "tool_use_id": "toolu_01XaGLs5uvseDNUn73mPjVU3",
+      "status": "completed",
+      "output_file": "",
+      "summary": "Show index files with their folder in spec and code",
+      "uuid": "83702994-c443-453c-ada4-bdfee7a60ac1",
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3"
+    },
+    {
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "tool_use_id": "toolu_01XaGLs5uvseDNUn73mPjVU3",
+            "type": "tool_result",
+            "content": "wrote 66 files\ntest result: ok. 244 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 25.66s",
+            "is_error": false
+          }
+        ]
+      },
+      "parent_tool_use_id": null,
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "uuid": "d08fa3e3-786b-4611-aa24-089d288b0885",
+      "timestamp": "2026-09-18T07:48:02.904Z",
+      "tool_use_result": {
+        "stdout": "wrote 66 files\ntest result: ok. 244 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 25.66s",
+        "stderr": "",
+        "interrupted": false,
+        "isImage": false,
+        "noOutputExpected": false,
+        "bashEditDiff": {
+          "files": [
+            {
+              "filePath": "/home/hyphyphyph/piton/repl/spec/ui/components/referenced-spec-sidebar/index.pi",
+              "hunks": [
+                {
+                  "oldStart": 54,
+                  "oldLines": 7,
+                  "newStart": 54,
+                  "newLines": 9,
+                  "lines": [
+                    "         the rest in the order they are first referenced. Each row shows its",
+                    "         file icon, then its file name alone, without its folders, cut off with",
+                    "         an ellipsis when the sidebar is too narrow, its full path in its",
+                    "-        tooltip.",
+                    "+        tooltip. A file named index, whatever its extension, such as",
+                    "+        `index.pi`, shows the folder it is in before its name, as",
+                    "+        `chat-input/index.pi`, and no folder above that.",
+                    " ",
+                    "         A spec file is one in the spec location, as the",
+                    "         @{ProjectLocationsScope} says; a compiled spec file is one under"
+                  ]
+                }
+              ]
+            },
+            {
+              "filePath": "/home/hyphyphyph/piton/repl/src/referenced_spec.rs",
+              "hunks": [
+                {
+                  "oldStart": 171,
+                  "oldLines": 6,
+                  "newStart": 171,
+                  "newLines": 20,
+                  "lines": [
+                    "     files",
+                    " }",
+                    " ",
+                    "+/// What a row shows of `path`: its file name, after the folder it is in when",
+                    "+/// it is an index file, as `chat-input/index.pi`.",
+                    "+fn shown_name(path: &Path) -> String {",
+                    "+    let Some(name) = path.file_name() else {",
+                    "+        return path.display().to_string();",
+                    "+    };",
+                    "+    let name = name.to_string_lossy();",
+                    "+    let is_index = path.file_stem().is_some_and(|stem| stem == \"index\");",
+                    "+    match path.parent().and_then(Path::file_name).filter(|_| is_index) {",
+                    "+        Some(folder) => format!(\"{}/{name}\", folder.to_string_lossy()),",
+                    "+        None => name.into_owned(),",
+                    "+    }",
+                    "+}",
+                    "+",
+                    " /// The height each half of the sidebar can be dragged down to.",
+                    " pub const MIN_HALF_HEIGHT: Pixels = px(80.);",
+                    " "
+                  ]
+                },
+                {
+                  "oldStart": 248,
+                  "oldLines": 11,
+                  "newStart": 262,
+                  "newLines": 9,
+                  "lines": [
+                    " ) -> AnyElement {",
+                    "     let theme = cx.theme();",
+                    "     let rows = files.iter().enumerate().map(|(ix, file)| {",
+                    "-        // Only the file's name; its full path is in its tooltip.",
+                    "-        let shown = file.path.file_name().map_or_else(",
+                    "-            || file.path.display().to_string(),",
+                    "-            |name| name.to_string_lossy().into_owned(),",
+                    "-        );",
+                    "+        // Only the file's name, and for an index file the folder it is in;",
+                    "+        // its full path is in its tooltip.",
+                    "+        let shown = shown_name(&file.path);",
+                    "         let full: SharedString = file.path.display().to_string().into();",
+                    "         let by_subagent = file.by_subagent;",
+                    "         let (path, open) = (file.path.clone(), open.clone());"
+                  ]
+                },
+                {
+                  "oldStart": 373,
+                  "oldLines": 7,
+                  "newStart": 385,
+                  "newLines": 7,
+                  "lines": [
+                    " ",
+                    "     use serde_json::json;",
+                    " ",
+                    "-    use super::{Referenced, References, collect};",
+                    "+    use super::{Referenced, References, collect, shown_name};",
+                    "     use crate::harness::HarnessEvent;",
+                    " ",
+                    "     /// A project with a few spec, reference, and source files."
+                  ]
+                },
+                {
+                  "oldStart": 498,
+                  "oldLines": 4,
+                  "newStart": 510,
+                  "newLines": 19,
+                  "lines": [
+                    "                 .any(|file| file.path == Path::new(&path(\"spec/unnamed.pi\")))",
+                    "         );",
+                    "     }",
+                    "+",
+                    "+    /// A row shows the file's name, and an index file's folder before it.",
+                    "+    #[test]",
+                    "+    fn shows_names_and_index_folders() {",
+                    "+        assert_eq!(shown_name(Path::new(\"/p/spec/a.pi\")), \"a.pi\");",
+                    "+        assert_eq!(",
+                    "+            shown_name(Path::new(\"/p/spec/prompt-mode/chat-input/index.pi\")),",
+                    "+            \"chat-input/index.pi\"",
+                    "+        );",
+                    "+        assert_eq!(",
+                    "+            shown_name(Path::new(\"/p/.claude/reference/index.md\")),",
+                    "+            \"reference/index.md\"",
+                    "+        );",
+                    "+        assert_eq!(shown_name(Path::new(\"/p/spec/indexes.pi\")), \"indexes.pi\");",
+                    "+    }",
+                    " }"
+                  ]
+                }
+              ]
+            }
+          ],
+          "moreFiles": 0,
+          "changedFiles": [
+            "/home/hyphyphyph/piton/repl/spec/ui/components/referenced-spec-sidebar/index.pi",
+            "/home/hyphyphyph/piton/repl/src/referenced_spec.rs"
+          ]
+        }
+      }
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "uuid": "a96ccc0b-4ade-4e3c-a607-3b05f97584ae"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5",
+          "id": "msg_011CfAY4Myv2m16rC1KJFqpo",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 2264,
+            "cache_read_input_tokens": 232935,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 2264
+            },
+            "output_tokens": 233,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "d978fb8d-75ea-48f3-8b0b-481a2de7392d",
+      "ttft_ms": 3262
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "c52514d6-2353-4013-96e1-68eecf23abdc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "Rows for"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "0abfe37a-eb25-42ad-9b2a-ec1afe51938b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " files named `index`"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "feb93d73-c1b6-4ec3-9c04-63f5ef6cac7b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " now show the folder they're in"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "2abcca5d-8be3-4ee0-8593-bb62e9bd2560"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ", like"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "7d19b2a7-383c-485f-b781-afb0f01d630e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " `chat-input/index."
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "a6b69c31-e1cf-4138-a1ec-839b2da4c536"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "pi`, inst"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "d0e35117-08e5-44cc-b21c-90b8cf70c97d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ead of a"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "33e59e27-9790-43de-b1b8-5fbaa37df01c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " list"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "dfa76569-2362-48d2-b03a-dae27e9dce08"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " of ident"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "54e7dba8-fc8b-49ba-8678-3e52cfcc319c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ical `index.pi` r"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "6bbd8ab6-c577-4f7f-956f-fcfa388367ca"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ows. All"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "e2e4a7d4-6914-4d27-89eb-bbc1b7bb5e40"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " 244 tests pass,"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "fa6f2306-0af4-40f7-96aa-ee4088602abd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " including a new one for how"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "133d8ee5-046f-456a-a93b-3bf1bb98a7bb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " names"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "f4c06670-0dd8-4547-9779-ad05751d89f5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " are shown.\n\n- **"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "6b703d3b-9830-49cf-9ea3-4aec97f1a905"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "Spec**"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "006ef7e0-816e-44f5-a2d8-c4bc6b2aaa43"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " (`spec/ui/"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "ec7c6149-a2ec-4bd5-831a-274d3876875b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "components/referenced-spec"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "4b493a0f-8ede-4c05-bd25-a23bcaa67d75"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "-sidebar/index."
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "2cfc4470-f902-4eb2-bb0f-1f4cc8bb1341"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "pi`, rebuil"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "14a5e858-a3fe-4a38-8e21-83f0880aa535"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "t): a file named index, wh"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "ebb8d374-ba23-4b6c-b375-a4d62a595fda"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "atever its extension, shows"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "6ef187ed-60ab-4c2b-a46f-857f1bc1bbe5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " only"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "bbf21675-7ad5-44e5-9ec1-9cecb5fdea2c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " the folder it is in before"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "1ebb0be1-4edf-494e-82be-6323df7b107d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " its name, n"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "4d07bb6d-3e07-4cb2-b058-29a8bc29f559"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "othing above that."
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "09c570b1-0095-4c07-aa00-97b7f995573e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n- **Code** (`"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "3962aa46-3cfd-4f58-8426-174191ce51f1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "src/referenced_spec"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "54b4102c-f216-4684-b4fa-a23c8fae2391"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ".rs`): a new `"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "9b640d05-41e5-42b0-93d7-811f5202ed74"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "shown_name` does"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "5cf36117-3e9a-4ec9-84ad-f1c89be4c101"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " this. Other files still"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "221b72b9-ace6-478a-9731-3aa6cc5237cc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " show just their name, and hov"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "1ab38910-a232-4beb-9123-47e5fdeb2f72"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ering a"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "7674f1a6-623b-4332-9e71-2fdd1a15f021"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " row still shows the full path."
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "798da851-0c45-4d9d-a5c1-587c1a6532f1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " It only matches files named"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "60d49904-9e1d-48e3-ba51-db9cdfa309bd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " exactly `index`, so"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "903958bc-22ec-49b4-8d46-e00b286750de"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " `indexes.pi`"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "8261c824-5d8d-4608-bf77-241760b630a9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " shows as it"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "a7175377-e73b-4c1b-955e-1f5194494c18"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "self.\n\nNothing is"
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "607562be-64c9-43f7-bf45-2b5125f9f056"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " committed."
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "50cc804d-5efc-4513-881e-90b8a4076b0e"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5",
+        "id": "msg_011CfAY4Myv2m16rC1KJFqpo",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Rows for files named `index` now show the folder they're in, like `chat-input/index.pi`, instead of a list of identical `index.pi` rows. All 244 tests pass, including a new one for how names are shown.\n\n- **Spec** (`spec/ui/components/referenced-spec-sidebar/index.pi`, rebuilt): a file named index, whatever its extension, shows only the folder it is in before its name, nothing above that.\n- **Code** (`src/referenced_spec.rs`): a new `shown_name` does this. Other files still show just their name, and hovering a row still shows the full path. It only matches files named exactly `index`, so `indexes.pi` shows as itself.\n\nNothing is committed."
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2264,
+          "cache_read_input_tokens": 232935,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 2264
+          },
+          "output_tokens": 233,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "uuid": "1bb98a03-8974-4375-b891-d5967ac52702",
+      "timestamp": "2026-09-18T07:48:06.197Z",
+      "request_id": "req_011CfAY4MGVnUnmgE4yA7MAm"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "13d09173-1dc1-43e8-a1f1-90b3f15a5bf0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2264,
+          "cache_read_input_tokens": 232935,
+          "output_tokens": 233,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 233,
+              "cache_read_input_tokens": 232935,
+              "cache_creation_input_tokens": 2264,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 2264
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "87c4c0d6-48ad-461b-b65d-df0c9f861b10"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "parent_tool_use_id": null,
+      "uuid": "9f5ca307-3913-4f6f-974d-0ef2b57f12ac"
+    },
+    {
+      "duration_api_ms": 12972,
+      "stop_reason": "end_turn",
+      "session_id": "3e5f8e1b-ae2e-422c-a4e6-415c484388d3",
+      "total_cost_usd": 0.372954,
+      "usage": {
+        "input_tokens": 4,
+        "cache_creation_input_tokens": 10886,
+        "cache_read_input_tokens": 457248,
+        "output_tokens": 1418,
+        "output_tokens_details": {
+          "thinking_tokens": 21
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 10886,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 233,
+            "cache_read_input_tokens": 232935,
+            "cache_creation_input_tokens": 2264,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 2264
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "modelUsage": {
+        "claude-opus-5[1m]": {
+          "inputTokens": 4,
+          "outputTokens": 1418,
+          "cacheReadInputTokens": 457248,
+          "cacheCreationInputTokens": 10886,
+          "webSearchRequests": 0,
+          "costUSD": 0.372954,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 21,
+          "canonicalModel": "claude-opus-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "is_error": false,
+      "num_turns": 2,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "Rows for files named `index` now show the folder they're in, like `chat-input/index.pi`, instead of a list of identical `index.pi` rows. All 244 tests pass, including a new one for how names are shown.\n\n- **Spec** (`spec/ui/components/referenced-spec-sidebar/index.pi`, rebuilt): a file named index, whatever its extension, shows only the folder it is in before its name, nothing above that.\n- **Code** (`src/referenced_spec.rs`): a new `shown_name` does this. Other files still show just their name, and hovering a row still shows the full path. It only matches files named exactly `index`, so `indexes.pi` shows as itself.\n\nNothing is committed.",
+      "ttft_ms": 2707,
+      "type": "result",
+      "duration_ms": 50275,
+      "uuid": "26c81143-525c-497f-9568-5b02bb246ef5",
+      "ttft_stream_ms": 2201,
+      "time_to_request_ms": 513,
+      "first_content_frame_ms": 2202,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  ]
+}

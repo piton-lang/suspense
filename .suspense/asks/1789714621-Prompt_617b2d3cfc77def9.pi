@@ -1,0 +1,22 @@
+
+anchor Prompt_617b2d3cfc77def9:
+    userPrompt:
+        -
+            - "Turn this into a prompt I can send."
+
+    mode: ask
+
+    attachedText:
+        -
+            - "Code:"
+            - "src/ribbon/mod.rs: SLIM_STACK is now 2. A new full_height() gives full buttons a fixed height and replaces the old full_min()/full_max() range. I updated the comments and the two layout tests to match."
+            - "src/main_window.rs: the_ribbon_body_fits_its_commands expected the Spec tab to be taller than the Project tab and its Build button to be three slim buttons tall. It now checks that both tabs stop at 68px and that full buttons are two slim buttons tall."
+            - ""
+            - "Send it with every mode. Append the output of piton claude --print-prompt to the system prompt: always for Spec and Chain, and for Code and Ask too, since they read the spec. The app could run it once per project and cache it, or build it in with the other baked prompts. A \${PITON_FLUENCY} placeholder in the mode templates would keep it editable in Settings."
+            - "Tell Claude to follow the links. Add a line such as: \"Links to .claude/reference/… in the prompt are the spec for what it names. Read each one before changing anything it covers.\""
+            - "Pair both with the \"New conversation\" reset, so every task gets a small, predictable context that has the Piton fluency and the relevant scope docs, not an old transcript."
+            - ""
+
+    systemPrompt:
+        -
+            - "We're only asking a question about the code located in ./src and the spec located in ./spec. Don't edit either of them."

@@ -15,6 +15,10 @@ use crate::harness_mentions;
 
 const HARNESS_COMMAND: &str = "claude";
 
+/// The directory the harness in use reads its agentic Markdown and reference
+/// files from, which a system prompt's `${HARNESS_DIRECTORY}` stands for.
+pub const DIRECTORY: &str = ".claude";
+
 /// Something the harness did, in the order it happened.
 #[derive(Debug, PartialEq)]
 pub enum HarnessEvent {
@@ -38,6 +42,20 @@ pub enum HarnessEvent {
     ToolFinished {
         id: String,
         is_error: bool,
+    },
+    /// A tool call's whole input, from the run or from a subagent it started,
+    /// for working out the files it names.
+    ToolCalled {
+        id: String,
+        name: String,
+        input: Value,
+        subagent: bool,
+    },
+    /// What a tool call gave back, as text, from the run or from a subagent.
+    ToolOutput {
+        id: String,
+        output: String,
+        subagent: bool,
     },
     Finished {
         is_error: bool,
@@ -192,14 +210,20 @@ fn run(
     Ok(())
 }
 
-/// Translates one line of `stream-json` output. Events from subagents (those
-/// with a `parent_tool_use_id`) are left out so the reply reads as one thread.
+/// Translates one line of `stream-json` output. Of events from subagents
+/// (those with a `parent_tool_use_id`) only their tool calls' inputs and
+/// outputs are kept, so the reply reads as one thread.
 pub fn parse(event: &Value) -> Vec<HarnessEvent> {
-    if event
+    let subagent = event
         .get("parent_tool_use_id")
-        .is_some_and(|parent| !parent.is_null())
-    {
-        return Vec::new();
+        .is_some_and(|parent| !parent.is_null());
+    let calls = || tool_calls(event, subagent);
+    if subagent {
+        return match str_at(event, "/type").as_deref() {
+            Some("assistant") => calls().collect(),
+            Some("user") => tool_outputs(event, subagent).collect(),
+            _ => Vec::new(),
+        };
     }
 
     match str_at(event, "/type").as_deref() {
@@ -243,6 +267,7 @@ pub fn parse(event: &Value) -> Vec<HarnessEvent> {
                     summary: summarize(block.get("input")?)?,
                 })
             })
+            .chain(calls())
             .chain(context_size(event).map(|context| HarnessEvent::Usage { context }))
             .collect(),
         Some("user") => content_blocks(event, "tool_result")
@@ -255,6 +280,7 @@ pub fn parse(event: &Value) -> Vec<HarnessEvent> {
                         .unwrap_or(false),
                 })
             })
+            .chain(tool_outputs(event, subagent))
             .collect(),
         Some("result") => vec![HarnessEvent::Finished {
             is_error: event
@@ -265,6 +291,39 @@ pub fn parse(event: &Value) -> Vec<HarnessEvent> {
         }],
         _ => Vec::new(),
     }
+}
+
+/// The whole input of each tool call in an assistant message.
+fn tool_calls(event: &Value, subagent: bool) -> impl Iterator<Item = HarnessEvent> + '_ {
+    content_blocks(event, "tool_use").filter_map(move |block| {
+        Some(HarnessEvent::ToolCalled {
+            id: str_at(block, "/id")?,
+            name: str_at(block, "/name")?,
+            input: block.get("input")?.clone(),
+            subagent,
+        })
+    })
+}
+
+/// The text each tool result in a user message gave back, whether a string
+/// or a list of blocks.
+fn tool_outputs(event: &Value, subagent: bool) -> impl Iterator<Item = HarnessEvent> + '_ {
+    content_blocks(event, "tool_result").filter_map(move |block| {
+        let output = match block.get("content")? {
+            Value::String(text) => text.clone(),
+            Value::Array(blocks) => blocks
+                .iter()
+                .filter_map(|block| block.get("text")?.as_str())
+                .collect::<Vec<_>>()
+                .join("\n"),
+            _ => return None,
+        };
+        Some(HarnessEvent::ToolOutput {
+            id: str_at(block, "/tool_use_id")?,
+            output,
+            subagent,
+        })
+    })
 }
 
 /// The tokens in the context as of an assistant message: its input, whether
@@ -310,7 +369,8 @@ fn summarize(input: &Value) -> Option<String> {
     let (key, value) = KEYS
         .iter()
         .find_map(|key| Some((*key, input.get(key)?.as_str()?)))?;
-    if key == "command" {
+    // A command is shown whole, and a file's path must stay whole to open it.
+    if key == "command" || key == "file_path" {
         return Some(value.to_string());
     }
     let line = value.lines().next().unwrap_or_default();
@@ -329,6 +389,20 @@ mod tests {
 
     /// Shapes taken from a real `claude -p --output-format stream-json
     /// --verbose --include-partial-messages` run.
+    /// A file's path is summarized whole, however long, so it still opens;
+    /// other long inputs are cut short.
+    #[test]
+    fn summaries_keep_file_paths_whole() {
+        let path = format!("/project/spec/{}/index.pi", "deep/".repeat(40));
+        assert_eq!(
+            super::summarize(&json!({ "file_path": path })).as_deref(),
+            Some(path.as_str())
+        );
+        let pattern = "x".repeat(200);
+        let cut = super::summarize(&json!({ "pattern": pattern })).unwrap();
+        assert!(cut.ends_with('…') && cut.chars().count() == 121, "{cut}");
+    }
+
     #[test]
     fn parses_stream_json_events() {
         let lines = [
@@ -343,9 +417,14 @@ mod tests {
                 { "type": "tool_use", "id": "t1", "name": "Read", "input": { "file_path": "/tmp/note.txt" } } ],
                 "usage": { "input_tokens": 3, "cache_creation_input_tokens": 1200,
                     "cache_read_input_tokens": 15000, "output_tokens": 40 } } }),
-            // A subagent's usage is its own context, not the conversation's.
-            json!({ "type": "assistant", "parent_tool_use_id": "t9", "message": { "content": [],
+            // A subagent's usage is its own context, not the conversation's,
+            // and of what it does only its tool calls are kept.
+            json!({ "type": "assistant", "parent_tool_use_id": "t9", "message": { "content": [
+                { "type": "tool_use", "id": "s1", "name": "Grep", "input": { "pattern": "x" } } ],
                 "usage": { "input_tokens": 90000, "output_tokens": 1 } } }),
+            json!({ "type": "user", "parent_tool_use_id": "t9", "message": { "content": [
+                { "type": "tool_result", "tool_use_id": "s1",
+                    "content": [{ "type": "text", "text": "spec/a.pi" }] } ] } }),
             json!({ "type": "user", "parent_tool_use_id": null, "message": { "content": [
                 { "type": "tool_result", "tool_use_id": "t1", "content": "1\thello" } ] } }),
             json!({ "type": "stream_event", "parent_tool_use_id": null, "event": {
@@ -370,10 +449,32 @@ mod tests {
                     id: "t1".into(),
                     summary: "/tmp/note.txt".into()
                 },
+                HarnessEvent::ToolCalled {
+                    id: "t1".into(),
+                    name: "Read".into(),
+                    input: json!({ "file_path": "/tmp/note.txt" }),
+                    subagent: false
+                },
                 HarnessEvent::Usage { context: 16_243 },
+                HarnessEvent::ToolCalled {
+                    id: "s1".into(),
+                    name: "Grep".into(),
+                    input: json!({ "pattern": "x" }),
+                    subagent: true
+                },
+                HarnessEvent::ToolOutput {
+                    id: "s1".into(),
+                    output: "spec/a.pi".into(),
+                    subagent: true
+                },
                 HarnessEvent::ToolFinished {
                     id: "t1".into(),
                     is_error: false
+                },
+                HarnessEvent::ToolOutput {
+                    id: "t1".into(),
+                    output: "1\thello".into(),
+                    subagent: false
                 },
                 HarnessEvent::TextStarted,
                 HarnessEvent::TextDelta("The".into()),

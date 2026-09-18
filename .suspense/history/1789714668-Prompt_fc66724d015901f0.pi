@@ -1,0 +1,91 @@
+from /scope/harness-integration import HarnessIntegrationScope
+from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
+from /scope/settings-window import SettingsWindowScope
+
+anchor Prompt_fc66724d015901f0:
+    userPrompt:
+        -
+            - "Every run of the harness should start with what it needs to work on a Piton"
+        -
+            - "project, and a small, predictable context rather than an old transcript."
+        -
+            - ""
+        -
+            - "1. Piton fluency in every mode. "
+            - @{ModeSystemPromptsScope}
+            - " gains a third"
+        -
+            - "placeholder, PITON_FLUENCY, alongside CODE_LOCATION and SPEC_LOCATION. It"
+        -
+            - "stands for the output of `piton claude --print-prompt`, run in the project"
+        -
+            - "directory. It is run once when the project is opened and kept for as long as"
+        -
+            - "it stays open. Where `piton` isn't installed or fails, it is replaced with"
+        -
+            - "nothing, and the run goes ahead without it. Every mode's default template"
+        -
+            - "(Code, Chain, Spec, and Ask) ends with PITON_FLUENCY, and like the other"
+        -
+            - "placeholders it can be moved or removed in "
+            - @{SettingsWindowScope}
+            - ". Projects"
+        -
+            - "whose saved templates predate it keep them as they are."
+        -
+            - ""
+        -
+            - "2. Following references. Every mode's default template also says: \"Links to"
+        -
+            - ".claude/reference/… in the prompt are the spec for what they name. Read each"
+        -
+            - "one before changing anything it covers.\""
+        -
+            - ""
+        -
+            - "3. Starting a new conversation. Tasks and questions each carry on their own"
+        -
+            - "conversation, as "
+            - @{HarnessIntegrationScope}
+            - " says. Add a \"New conversation\""
+        -
+            - "button to "
+            - @{ChatInputScope}
+            - ", at the right end of the help text beside the"
+        -
+            - "tabs, that starts a new conversation for the selected tab: tasks for Code,"
+        -
+            - "Chain, and Spec, questions for Ask. The next run in that tab starts fresh"
+        -
+            - "instead of carrying on. Its tooltip says which conversation it resets. It is"
+        -
+            - "disabled while that conversation has nothing to carry on, and while a run in"
+        -
+            - "it is under way. The choice survives reopening the project, so a project"
+        -
+            - "opened after its conversation was reset starts fresh too, rather than"
+        -
+            - "carrying on the latest conversation in its history."
+
+    mode: combined
+
+    systemPrompt:
+        -
+            - "We're working on both the code located in ./src and the spec located in ./spec. You should edit both code and spec."
+        -
+            - ""
+        -
+            - "You should use the input prompt to modify the spec.  Simultaneously, in parallel, build a code change plan based off the prompt.  Once you've modified the spec, generate a modification plan drived off the spec."
+        -
+            - ""
+        -
+            - "Once both plans are done, compare them semantically.  For any differences consolidate the spec against the code against the prompt to achieve optimal accuracy and correctness.  Run the plan loop repeatedly until the two plans are within at least 80% of erach other."
+        -
+            - ""
+        -
+            - "Then build the spec and execute the prompt directly on the code using a unified plan."
+        -
+            - ""
+        -
+            - "Make sure that you write both code and spec."

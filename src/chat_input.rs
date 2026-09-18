@@ -332,6 +332,9 @@ pub struct ChatInput {
     /// The context of the conversation the selected tab's next prompt carries
     /// on, in tokens; `None` when the next prompt starts a new one.
     context: Option<u64>,
+    /// Whether a run of the selected tab's conversation is under way, so it
+    /// can't be left for a new one yet.
+    conversation_running: bool,
     /// How the input grows to fit its text.
     fit: GrowToFit,
     /// Width of the chain's tab as last laid out, which is how far Code and
@@ -363,11 +366,11 @@ pub struct TabChanged;
 
 impl EventEmitter<TabChanged> for ChatInput {}
 
-/// Emitted to leave the selected tab's conversation, so its next prompt
-/// starts a new one with no context.
-pub struct NewSession;
+/// Emitted to start a new conversation for the selected tab, so its next run
+/// starts fresh rather than carrying on.
+pub struct NewConversation;
 
-impl EventEmitter<NewSession> for ChatInput {}
+impl EventEmitter<NewConversation> for ChatInput {}
 
 /// A number of tokens, short: "850", "42.1k", "123k", "1.2M".
 pub fn tokens_label(tokens: u64) -> String {
@@ -437,6 +440,7 @@ impl ChatInput {
             lsp: None,
             busy: false,
             context: None,
+            conversation_running: false,
             fit: GrowToFit::new(MAX_ROWS),
             chain_width: None,
             attachments: Vec::new(),
@@ -840,6 +844,19 @@ impl ChatInput {
 
     pub fn context(&self) -> Option<u64> {
         self.context
+    }
+
+    /// Marks a run of the selected tab's conversation as under way, or over;
+    /// New conversation waits for it.
+    pub fn set_conversation_running(&mut self, running: bool, cx: &mut Context<Self>) {
+        if self.conversation_running != running {
+            self.conversation_running = running;
+            cx.notify();
+        }
+    }
+
+    pub fn conversation_running(&self) -> bool {
+        self.conversation_running
     }
 
     pub fn set_busy(&mut self, busy: bool, cx: &mut Context<Self>) {
@@ -1301,8 +1318,21 @@ impl Render for ChatInput {
                 .child(div().min_w_0().truncate().child(TABS[selected].help())),
         );
         // At the far right, how much context the selected tab's conversation
-        // holds, and a button to leave it for a new one.
+        // holds, and a button to start a new one: the questions' on Ask, the
+        // tasks' on any other tab.
         let context = self.context;
+        let (runs, run) = if self.mode() == SendMode::Ask {
+            ("questions", "question")
+        } else {
+            ("tasks", "task")
+        };
+        let new_conversation_tooltip = if self.conversation_running {
+            format!("A {run} is running: start a new conversation once it finishes")
+        } else if context.is_some() {
+            format!("Start a new conversation for {runs}")
+        } else {
+            format!("The next {run} already starts a new conversation")
+        };
         let session = h_flex()
             .flex_none()
             .self_stretch()
@@ -1331,18 +1361,14 @@ impl Render for ChatInput {
                     }),
             ))
             .child(
-                Button::new("new-session")
+                Button::new("new-conversation")
                     .ghost()
                     .xsmall()
                     .icon(IconName::Sparkles)
-                    .label("New Session")
-                    .disabled(context.is_none())
-                    .tooltip(if context.is_some() {
-                        "Leave this conversation: the next prompt starts a new one, with no context"
-                    } else {
-                        "The next prompt already starts a new conversation"
-                    })
-                    .on_click(cx.listener(|_, _, _, cx| cx.emit(NewSession))),
+                    .label("New conversation")
+                    .disabled(context.is_none() || self.conversation_running)
+                    .tooltip(new_conversation_tooltip)
+                    .on_click(cx.listener(|_, _, _, cx| cx.emit(NewConversation))),
             );
         let tabs = gpui_kit::TestSupportExt::test_support(
             div()
@@ -1804,7 +1830,7 @@ mod tests {
     }
 
     /// To the right of the tabs, filling the bar up to the context and New
-    /// Session at its far right, a line of help says what the selected tab is
+    /// conversation at its far right, a line of help says what the selected tab is
     /// for, and changes with it.
     #[gpui_kit::test]
     async fn help_beside_the_tabs_says_what_the_tab_is_for(cx: &mut TestAppContext) {
@@ -1835,13 +1861,13 @@ mod tests {
             );
             let (context, new_session) = (
                 window.find("chat-context").bounds(),
-                window.find("new-session").bounds(),
+                window.find("new-conversation").bounds(),
             );
             assert!(
                 help.left() >= ask.right() - gpui_kit::px(0.5),
                 "{help:?} is not right of {ask:?}"
             );
-            // The help fills the bar up to the context, and New Session ends
+            // The help fills the bar up to the context, and New conversation ends
             // it, a little in from its right edge.
             let between = context.left() - help.right();
             assert!(
@@ -1850,12 +1876,12 @@ mod tests {
             );
             assert!(
                 new_session.left() > context.right(),
-                "New Session {new_session:?} isn't after the context {context:?}"
+                "New conversation {new_session:?} isn't after the context {context:?}"
             );
             assert!(
                 new_session.right() <= bar.right()
                     && bar.right() - new_session.right() <= gpui_kit::px(8.),
-                "New Session {new_session:?} isn't at the far right of {bar:?}"
+                "New conversation {new_session:?} isn't at the far right of {bar:?}"
             );
         })
         .unwrap();

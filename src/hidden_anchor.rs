@@ -79,6 +79,11 @@ impl Imports {
         })
     }
 
+    /// The modules names are imported from, absolute from the spec root.
+    pub fn modules(&self) -> impl Iterator<Item = &str> {
+        self.0.keys().map(String::as_str)
+    }
+
     /// Adds every name in `other`.
     pub fn extend(&mut self, other: &Imports) {
         for (module, names) in &other.0 {
@@ -482,16 +487,20 @@ fn blank_for_lsp(line: &str) -> String {
 }
 
 /// The system prompt a prompt sent in `mode` is given: the project's template
-/// for it (see [`crate::system_prompts`]), naming the code and spec locations
-/// set in its `piton.config.pi`. A template left empty gives none.
-pub fn system_prompt(mode: SendMode, project_dir: &Path) -> Result<Option<String>> {
+/// for it (see [`crate::system_prompts`]), with the project's spec-reading
+/// prompt injected, naming the code and spec locations set in its
+/// `piton.config.pi` and the harness's directory, and with the project's Piton
+/// `fluency`. A template that is empty once filled in gives none.
+pub fn system_prompt(mode: SendMode, project_dir: &Path, fluency: &str) -> Result<Option<String>> {
     let template = system_prompts::load(mode, project_dir)?;
     if template.trim().is_empty() {
         return Ok(None);
     }
     let code = config_value(project_dir, "codeRoot")?;
     let spec = config_value(project_dir, "root")?;
-    Ok(Some(system_prompts::fill(&template, &code, &spec)))
+    let reading = system_prompts::load(system_prompts::Prompt::SpecReading, project_dir)?;
+    let filled = system_prompts::fill(&template, &code, &spec, &reading, fluency);
+    Ok((!filled.trim().is_empty()).then_some(filled))
 }
 
 /// The mode of a prompt saved before modes were, read from the default system
@@ -611,6 +620,34 @@ fn spec_root(project_dir: &Path) -> Result<PathBuf> {
     config_value(project_dir, "root").map(PathBuf::from)
 }
 
+/// The spec location, as a directory of the project, when its
+/// `piton.config.pi` names one.
+pub fn spec_dir(project_dir: &Path) -> Option<PathBuf> {
+    let root = spec_root(project_dir).ok()?;
+    Some(project_dir.join(root.strip_prefix("./").unwrap_or(&root)))
+}
+
+/// The spec files `imports` import from: each module under the spec location,
+/// as `<module>.pi` or `<module>/index.pi`, whichever exists. Packages, and
+/// modules with no file, are left out.
+pub fn spec_files(imports: &Imports, project_dir: &Path) -> Vec<PathBuf> {
+    let Some(root) = spec_dir(project_dir) else {
+        return Vec::new();
+    };
+    imports
+        .modules()
+        .filter_map(|module| {
+            let module = module.strip_prefix('/')?;
+            [
+                root.join(format!("{module}.pi")),
+                root.join(module).join("index.pi"),
+            ]
+            .into_iter()
+            .find(|file| file.is_file())
+        })
+        .collect()
+}
+
 /// Reads the first `key:` value in the project's `piton.config.pi`.
 pub fn config_value(project_dir: &Path, key: &str) -> Result<String> {
     let config_path = project_dir.join(CONFIG_FILE_NAME);
@@ -674,7 +711,7 @@ mod tests {
 
     use super::{
         HiddenAnchor, Imports, MODE_PREFIX, PROMPT_INDENT, SYSTEM_PROMPT_LINE, compile, mode_of,
-        prose, system_prompt,
+        prose, spec_files, system_prompt,
     };
     use crate::chat_input::SendMode;
     use crate::project_directory::CONFIG_FILE_NAME;
@@ -761,10 +798,18 @@ mod tests {
         .unwrap();
 
         for mode in SendMode::ALL {
-            let prompt = system_prompt(mode, &project_dir).unwrap().unwrap();
+            let prompt = system_prompt(mode, &project_dir, "# Piton fluency")
+                .unwrap()
+                .unwrap();
             assert_eq!(
                 prompt,
-                system_prompts::fill(system_prompts::default_template(mode), "./src", "./spec")
+                system_prompts::fill(
+                    system_prompts::default_prompt(mode),
+                    "./src",
+                    "./spec",
+                    system_prompts::default_prompt(system_prompts::Prompt::SpecReading),
+                    "# Piton fluency"
+                )
             );
             assert_eq!(mode_of(&prompt), Some(mode));
         }
@@ -777,13 +822,42 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            system_prompt(SendMode::Code, &project_dir)
+            system_prompt(SendMode::Code, &project_dir, "")
                 .unwrap()
                 .as_deref(),
             Some("Code in ./src only.")
         );
         system_prompts::save(SendMode::Ask, "", &project_dir).unwrap();
-        assert_eq!(system_prompt(SendMode::Ask, &project_dir).unwrap(), None);
+        assert_eq!(
+            system_prompt(SendMode::Ask, &project_dir, "").unwrap(),
+            None
+        );
+        // Nothing but the fluency, without piton, gives none either.
+        system_prompts::save(SendMode::Spec, system_prompts::PITON_FLUENCY, &project_dir).unwrap();
+        assert_eq!(
+            system_prompt(SendMode::Spec, &project_dir, "").unwrap(),
+            None
+        );
+    }
+
+    /// A prompt's imports name the spec files they come from, as
+    /// `<module>.pi` or `<module>/index.pi`; packages name none.
+    #[test]
+    fn imports_name_their_spec_files() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/spec-files-test");
+        fs::remove_dir_all(&dir).ok();
+        fs::create_dir_all(dir.join("spec/b")).unwrap();
+        fs::write(dir.join(CONFIG_FILE_NAME), "root: ./spec\n").unwrap();
+        fs::write(dir.join("spec/a.pi"), "").unwrap();
+        fs::write(dir.join("spec/b/index.pi"), "").unwrap();
+        let mut imports = Imports::default();
+        imports.add_from_source(
+            "from /a import A\nfrom ./b import B\nfrom /missing import M\nfrom @piton/belay import Skill",
+        );
+        assert_eq!(
+            spec_files(&imports, &dir),
+            [dir.join("spec/a.pi"), dir.join("spec/b/index.pi")]
+        );
     }
 
     #[test]
@@ -930,9 +1004,11 @@ mod tests {
             .add_from_source("from ./scope/application import ApplicationScope");
         anchor.mode = Some(SendMode::Spec);
         anchor.system_prompt = Some(system_prompts::fill(
-            system_prompts::default_template(SendMode::Spec),
+            system_prompts::default_prompt(SendMode::Spec),
             "./src",
             "./spec",
+            system_prompts::default_prompt(system_prompts::Prompt::SpecReading),
+            "",
         ));
 
         let dir = project_dir.join("target/hidden-anchor-test");

@@ -34,6 +34,7 @@ const GITIGNORE: &str = "\
 /.suspense/harness.json
 /.suspense/queue/
 /.suspense/commit-notes.json
+/.suspense/conversations.json
 .suspense-draft.pi
 ";
 
@@ -922,6 +923,7 @@ belay-agent-adapter CodexAdapter:
         let ignore = std::fs::read_to_string(folder.join(".gitignore")).unwrap();
         for ignored in [
             "/.suspense/commit-notes.json",
+            "/.suspense/conversations.json",
             "/.suspense/queue/",
             "/.suspense/harness.json",
         ] {

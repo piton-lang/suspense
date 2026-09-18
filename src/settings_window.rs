@@ -1,8 +1,9 @@
-//! The settings, shown in the main window's inset panel: the system prompt
-//! each tab gives a prompt, for the open project. Every edit is saved straight
-//! away to the project's `.suspense/system-prompts` (see
-//! [`crate::system_prompts`]), and the prompts are read from there each time
-//! the settings open, so an edit made by hand shows up.
+//! The settings, shown in the main window's inset panel, in sections picked
+//! from a sidebar of vertical tabs: the system prompt each tab gives a prompt,
+//! and the spec-reading prompt injected into them, for the open project. Every
+//! edit is saved straight away to the project's `.suspense/system-prompts`
+//! (see [`crate::system_prompts`]), and the prompts are read from there each
+//! time the settings open, so an edit made by hand shows up.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -10,12 +11,14 @@ use gpui_kit::component::input::{Editor, EditorState, InputEvent};
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, h_flex, v_flex,
 };
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use crate::chat_input::SendMode;
 use crate::piton_syntax;
 use crate::project_directory::ProjectDirectory;
-use crate::system_prompts::{self, CODE_LOCATION, SPEC_LOCATION};
+use crate::system_prompts::{
+    self, CODE_LOCATION, HARNESS_DIRECTORY, PITON_FLUENCY, Prompt, SPEC_LOCATION, SPEC_READING,
+};
 
 actions!(suspense, [OpenSettings]);
 
@@ -24,6 +27,50 @@ pub struct CloseSettings;
 
 /// How tall each prompt's editor is before it scrolls.
 const EDITOR_HEIGHT: Pixels = px(120.);
+
+/// How wide the sidebar of sections is.
+const SIDEBAR_WIDTH: Pixels = px(180.);
+
+/// A section of the settings, picked from the sidebar.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum Section {
+    #[default]
+    SystemPrompts,
+    InjectedPrompts,
+}
+
+impl Section {
+    const ALL: [Section; 2] = [Section::SystemPrompts, Section::InjectedPrompts];
+
+    fn label(self) -> &'static str {
+        match self {
+            Section::SystemPrompts => "System prompts",
+            Section::InjectedPrompts => "Injected prompts",
+        }
+    }
+
+    fn key(self) -> &'static str {
+        match self {
+            Section::SystemPrompts => "system-prompts",
+            Section::InjectedPrompts => "injected-prompts",
+        }
+    }
+
+    /// The prompts it edits.
+    fn holds(self, prompt: Prompt) -> bool {
+        matches!(
+            (self, prompt),
+            (Section::SystemPrompts, Prompt::Mode(_))
+                | (Section::InjectedPrompts, Prompt::SpecReading)
+        )
+    }
+}
+
+/// The section picked, kept while the settings are closed and opened again.
+#[derive(Default)]
+struct PickedSection(Section);
+
+impl Global for PickedSection {}
 
 /// Ctrl+, (Cmd+, on macOS) opens the settings from anywhere in the main
 /// window, which handles the action.
@@ -36,9 +83,9 @@ pub fn bind_keys(cx: &mut App) {
     ]);
 }
 
-/// One mode's system prompt, as edited.
+/// One prompt, as edited.
 struct PromptEditor {
-    mode: SendMode,
+    prompt: Prompt,
     editor: Entity<EditorState>,
     /// Why the prompt could not be read or saved, until it can be.
     error: Option<SharedString>,
@@ -68,9 +115,9 @@ impl SettingsWindow {
                 this.load(window, cx)
             }),
         ];
-        let prompts = SendMode::ALL
+        let prompts = Prompt::ALL
             .into_iter()
-            .map(|mode| {
+            .map(|prompt| {
                 let editor = cx.new(|cx| {
                     EditorState::new(window, cx)
                         .language(piton_syntax::LANGUAGE_NAME)
@@ -83,12 +130,12 @@ impl SettingsWindow {
                     window,
                     move |this, _, event: &InputEvent, _, cx| {
                         if matches!(event, InputEvent::Change) && !this.loading {
-                            this.save(mode, cx);
+                            this.save(prompt, cx);
                         }
                     },
                 ));
                 PromptEditor {
-                    mode,
+                    prompt,
                     editor,
                     error: None,
                 }
@@ -106,6 +153,19 @@ impl SettingsWindow {
         this
     }
 
+    fn section(cx: &App) -> Section {
+        cx.try_global::<PickedSection>()
+            .map(|picked| picked.0)
+            .unwrap_or_default()
+    }
+
+    /// Shows `section`, from its top.
+    fn pick(&mut self, section: Section, cx: &mut Context<Self>) {
+        cx.set_global(PickedSection(section));
+        self.scroll.set_offset(point(px(0.), px(0.)));
+        cx.notify();
+    }
+
     /// Fills each editor with the open project's prompt, leaving alone any
     /// that already shows it so its cursor stays put.
     fn load(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -118,7 +178,7 @@ impl SettingsWindow {
         self.loading = true;
         for prompt in &mut self.prompts {
             let (text, error) = match &project_dir {
-                Some(project_dir) => match system_prompts::load(prompt.mode, project_dir) {
+                Some(project_dir) => match system_prompts::load(prompt.prompt, project_dir) {
                     Ok(text) => (text, None),
                     Err(err) => (String::new(), Some(format!("{err:#}").into())),
                 },
@@ -135,45 +195,49 @@ impl SettingsWindow {
         cx.notify();
     }
 
-    /// Saves `mode`'s prompt as edited.
-    fn save(&mut self, mode: SendMode, cx: &mut Context<Self>) {
+    /// Saves `which` as edited.
+    fn save(&mut self, which: Prompt, cx: &mut Context<Self>) {
         let Some(project_dir) = ProjectDirectory::get(cx) else {
             return;
         };
-        let Some(prompt) = self.prompts.iter_mut().find(|prompt| prompt.mode == mode) else {
+        let Some(prompt) = self
+            .prompts
+            .iter_mut()
+            .find(|prompt| prompt.prompt == which)
+        else {
             return;
         };
         let text = prompt.editor.read(cx).value();
-        prompt.error = system_prompts::save(mode, &text, &project_dir)
+        prompt.error = system_prompts::save(which, &text, &project_dir)
             .err()
             .map(|err| format!("{err:#}").into());
         cx.notify();
     }
 
-    /// Puts `mode`'s default prompt back, and saves it.
-    fn reset(&mut self, mode: SendMode, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(prompt) = self.prompts.iter().find(|prompt| prompt.mode == mode) else {
+    /// Puts `which`'s default back, and saves it.
+    fn reset(&mut self, which: Prompt, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(prompt) = self.prompts.iter().find(|prompt| prompt.prompt == which) else {
             return;
         };
         prompt.editor.update(cx, |editor, cx| {
-            editor.set_value(system_prompts::default_template(mode), window, cx)
+            editor.set_value(system_prompts::default_prompt(which), window, cx)
         });
-        self.save(mode, cx);
+        self.save(which, cx);
     }
 
     fn render_prompt(&self, prompt: &PromptEditor, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
-        let mode = prompt.mode;
+        let which = prompt.prompt;
         let is_default =
-            prompt.editor.read(cx).value().as_ref() == system_prompts::default_template(mode);
-        let file = format!(".suspense/system-prompts/{}.md", mode.key());
+            prompt.editor.read(cx).value().as_ref() == system_prompts::default_prompt(which);
+        let file = format!(".suspense/system-prompts/{}.md", which.key());
         v_flex()
             .gap_2()
             .child(
                 h_flex()
                     .gap_3()
                     .items_center()
-                    .child(div().font_semibold().child(mode.label()))
+                    .child(div().font_semibold().child(which.label()))
                     .child(
                         div()
                             .flex_1()
@@ -186,14 +250,14 @@ impl SettingsWindow {
                     .child(
                         Button::new(SharedString::from(format!(
                             "reset-{}-system-prompt",
-                            mode.key()
+                            which.key()
                         )))
                         .ghost()
                         .xsmall()
                         .label("Reset to default")
                         .disabled(is_default)
                         .on_click(
-                            cx.listener(move |this, _, window, cx| this.reset(mode, window, cx)),
+                            cx.listener(move |this, _, window, cx| this.reset(which, window, cx)),
                         ),
                     ),
             )
@@ -205,10 +269,48 @@ impl SettingsWindow {
                     .map(|error| div().text_sm().text_color(theme.danger).child(error)),
             )
     }
+
+    /// The sidebar of sections, the one picked marked with the accent.
+    fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let picked = Self::section(cx);
+        v_flex()
+            .flex_none()
+            .w(SIDEBAR_WIDTH)
+            .h_full()
+            .py_2()
+            .border_r_1()
+            .border_color(theme.border)
+            .children(Section::ALL.into_iter().map(|section| {
+                let is_picked = section == picked;
+                div()
+                    .id(SharedString::from(format!(
+                        "settings-section-{}",
+                        section.key()
+                    )))
+                    .px_4()
+                    .py_2()
+                    .border_l_2()
+                    .border_color(if is_picked {
+                        theme.accent
+                    } else {
+                        gpui_kit::transparent_black()
+                    })
+                    .when(is_picked, |row| row.bg(theme.list_active).font_semibold())
+                    .when(!is_picked, |row| {
+                        row.text_color(theme.muted_foreground)
+                            .hover(|row| row.bg(theme.list_hover))
+                    })
+                    .cursor_pointer()
+                    .child(section.label())
+                    .on_click(cx.listener(move |this, _, _, cx| this.pick(section, cx)))
+            }))
+    }
 }
 
 impl Render for SettingsWindow {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let section = Self::section(cx);
         let theme = cx.theme();
         let (background, foreground, muted, border) = (
             theme.background,
@@ -216,17 +318,43 @@ impl Render for SettingsWindow {
             theme.muted_foreground,
             theme.border,
         );
+        let (title, blurb, without_project) = match section {
+            Section::SystemPrompts => (
+                "System prompts",
+                format!(
+                    "Each tab gives a prompt sent from it this system prompt. \
+                     They are saved with the project as they are edited. \
+                     {CODE_LOCATION} and {SPEC_LOCATION} stand for codeRoot and \
+                     root in piton.config.pi, {SPEC_READING} for the injected \
+                     spec reading, and {PITON_FLUENCY} for what \
+                     `piton claude --print-prompt` prints for the project."
+                ),
+                "Open a project to edit its system prompts.",
+            ),
+            Section::InjectedPrompts => (
+                "Injected prompts",
+                format!(
+                    "These are injected into the system prompts wherever their \
+                     placeholder is written: the spec reading at {SPEC_READING}. \
+                     They are saved with the project as they are edited. \
+                     {HARNESS_DIRECTORY} stands for the harness's directory, {}.",
+                    crate::harness::DIRECTORY
+                ),
+                "Open a project to edit its injected prompts.",
+            ),
+        };
         let body: AnyElement = if ProjectDirectory::get(cx).is_some() {
             let prompts: Vec<AnyElement> = self
                 .prompts
                 .iter()
+                .filter(|prompt| section.holds(prompt.prompt))
                 .map(|prompt| self.render_prompt(prompt, cx).into_any_element())
                 .collect();
             v_flex().gap_5().children(prompts).into_any_element()
         } else {
             div()
                 .text_color(muted)
-                .child("Open a project to edit its system prompts.")
+                .child(without_project)
                 .into_any_element()
         };
 
@@ -256,31 +384,30 @@ impl Render for SettingsWindow {
                 v_flex()
                     .gap_4()
                     .p_6()
-                    .child(div().text_lg().font_semibold().child("System prompts"))
-                    .child(div().text_sm().text_color(muted).child(format!(
-                        "Each tab gives a prompt sent from it this system prompt. \
-                         They are saved with the project as they are edited. \
-                         {CODE_LOCATION} and {SPEC_LOCATION} stand for codeRoot and \
-                         root in piton.config.pi."
-                    )))
+                    .child(div().text_lg().font_semibold().child(title))
+                    .child(div().text_sm().text_color(muted).child(blurb))
                     .child(body),
             );
         v_flex()
             .size_full()
             .track_focus(&self.focus_handle)
             .bg(background)
+            .text_color(foreground)
             .child(heading)
             .child(
-                div()
+                h_flex()
                     .flex_1()
                     .min_h_0()
-                    .child(crate::scrollbar::with_scrollbar(
-                        "settings",
-                        &self.scroll,
-                        page,
-                        true,
-                        None,
-                        cx,
+                    .child(self.render_sidebar(cx))
+                    .child(div().flex_1().min_w_0().h_full().child(
+                        crate::scrollbar::with_scrollbar(
+                            "settings",
+                            &self.scroll,
+                            page,
+                            true,
+                            None,
+                            cx,
+                        ),
                     )),
             )
     }
@@ -296,22 +423,24 @@ mod tests {
     use gpui_kit::test::TestWindowExt as _;
     use gpui_kit::{AppContext as _, Entity, Focusable as _, TestAppContext, VisualTestContext};
 
-    use super::SettingsWindow;
+    use super::{Section, SettingsWindow};
     use crate::chat_input::SendMode;
     use crate::piton_syntax;
     use crate::project_directory::ProjectDirectory;
     use crate::system_prompts;
+    use crate::system_prompts::Prompt;
 
     fn text(
         settings: &Entity<SettingsWindow>,
-        mode: SendMode,
+        which: impl Into<Prompt>,
         cx: &mut VisualTestContext,
     ) -> String {
+        let which = which.into();
         settings.read_with(cx, |this, cx| {
             let prompt = this
                 .prompts
                 .iter()
-                .find(|prompt| prompt.mode == mode)
+                .find(|prompt| prompt.prompt == which)
                 .unwrap();
             prompt.editor.read(cx).value().to_string()
         })
@@ -343,14 +472,14 @@ mod tests {
         let cx = &mut VisualTestContext::from_window(window.into(), cx);
         cx.run_until_parked();
 
-        for mode in SendMode::ALL {
+        for prompt in Prompt::ALL {
             assert_eq!(
-                text(&settings, mode, cx),
-                system_prompts::default_template(mode)
+                text(&settings, prompt, cx),
+                system_prompts::default_prompt(prompt)
             );
             assert!(
-                system_prompts::file(mode, &dir).exists(),
-                "{mode:?} was not saved"
+                system_prompts::file(prompt, &dir).exists(),
+                "{prompt:?} was not saved"
             );
         }
 
@@ -377,12 +506,37 @@ mod tests {
         assert_eq!(system_prompts::load(SendMode::Code, &dir).unwrap(), typed);
 
         settings.update_in(cx, |this, window, cx| {
-            this.reset(SendMode::Spec, window, cx)
+            this.reset(SendMode::Spec.into(), window, cx)
         });
         cx.run_until_parked();
         assert_eq!(
             system_prompts::load(SendMode::Spec, &dir).unwrap(),
-            system_prompts::default_template(SendMode::Spec)
+            system_prompts::default_prompt(SendMode::Spec)
+        );
+
+        // The spec reading is edited in its own section, picked from the
+        // sidebar, which stays picked for the next settings opened.
+        assert_eq!(
+            settings.read_with(cx, |_, cx| SettingsWindow::section(cx)),
+            Section::SystemPrompts
+        );
+        settings.update(cx, |this, cx| this.pick(Section::InjectedPrompts, cx));
+        system_prompts::save(Prompt::SpecReading, "Read it all.", &dir).unwrap();
+        settings.update_in(cx, |this, window, cx| this.load(window, cx));
+        cx.run_until_parked();
+        assert_eq!(text(&settings, Prompt::SpecReading, cx), "Read it all.");
+        settings.update_in(cx, |this, window, cx| {
+            this.reset(Prompt::SpecReading, window, cx)
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            system_prompts::load(Prompt::SpecReading, &dir).unwrap(),
+            system_prompts::default_prompt(Prompt::SpecReading)
+        );
+        // Kept by the application rather than the window, so it outlives it.
+        assert_eq!(
+            cx.update(|_, cx| SettingsWindow::section(cx)),
+            Section::InjectedPrompts
         );
 
         fs::remove_dir_all(&dir).ok();

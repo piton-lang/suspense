@@ -14,8 +14,9 @@ export ui-component SettingsWindowScope:
 
 concept SettingsWindowConcept:
     pitch:
-        The application's settings, which for now are
-        the system prompts each tab of the @{ChatInputScope} sends.
+        The application's settings, in sections picked from a sidebar: the
+        system prompts each tab of the @{ChatInputScope} sends, and the prompts
+        injected into them.
 
     shape: {SettingsWindowShape}
 
@@ -24,7 +25,21 @@ shape SettingsWindowShape:
         Shown in an @{InsetPanelScope} over the main window, not a window of its
         own. It is headed "Settings", with a close button whose tooltip says it
         closes the settings; closing the panel any way an inset panel closes
-        closes them too. Beneath the heading, its page scrolls with a
+        closes them too.
+
+    sidebar:
+        Beneath the heading, down its left, a sidebar of vertical tabs, one
+        per section, in order: "System prompts" and "Injected prompts". Each
+        tab is a row across the sidebar's width reading the section's name,
+        and the one picked is marked with the theme's accent. Clicking a tab
+        picks its section, and the page beside the sidebar shows only that
+        section, scrolled back to its top. The sidebar is a fixed 180 pixels
+        wide, with a thin line down its right edge where it meets the page.
+        "System prompts" is picked when the application starts, and the
+        section picked stays picked while the settings are closed and opened
+        again.
+
+        The page fills the rest of the width, and scrolls with a
         @{ScrollbarScope}.
 
     opening:
@@ -34,11 +49,13 @@ shape SettingsWindowShape:
         is rather than opening another.
 
     systemPrompts:
-        The page is headed "System prompts", with a muted line beneath saying
+        The "System prompts" section is headed "System prompts", with a muted line beneath saying
         that each tab gives a prompt sent from it this system prompt, that they
         are saved with the project as they are edited, and that the
         CODE_LOCATION and SPEC_LOCATION placeholders stand for the code and spec
-        locations, as the @{ModeSystemPromptsScope} says.
+        locations, SPEC_READING for the injected spec-reading prompt, and
+        PITON_FLUENCY for the project's Piton fluency, as the
+        @{ModeSystemPromptsScope} says.
 
         Then, for each tab, in the order of the @{PromptModesScope}: its name,
         the muted path of the file its prompt is saved in, and a
@@ -51,12 +68,28 @@ shape SettingsWindowShape:
         Without a project open, as the @{NoProjectStateScope} says, in place of
         the prompts it reads "Open a project to edit its system prompts."
 
+    injectedPrompts:
+        The "Injected prompts" section is headed "Injected prompts", with a
+        muted line beneath saying that these are injected into the system
+        prompts wherever their placeholder is written, that they are saved
+        with the project as they are edited, and that HARNESS_DIRECTORY
+        stands for the directory of the harness in use, as the
+        @{ModeSystemPromptsScope} says.
+
+        Then the spec-reading prompt, laid out as each tab's system prompt is:
+        its name, "Spec reading", the muted path of the file it is saved in, a
+        "Reset to default" button, disabled while it is already the default,
+        its editor, and why it can't be read or saved, if it can't.
+
+        Without a project open, in place of it the section reads
+        "Open a project to edit its injected prompts."
+
     saving:
-        The prompts belong to the project opened through the
-        @{ProjectDirectoryScope}, each saved with the project's data, as the
-        @{ProjectDataScope} says. Every edit is saved straight away. When the
-        window loads the prompts, any tab with no file yet has its default
-        saved, so every prompt can also be found and
+        The prompts, the system prompts and the injected ones, belong to the
+        project opened through the @{ProjectDirectoryScope}, each saved with
+        the project's data, as the @{ProjectDataScope} says. Every edit is
+        saved straight away. When the window loads the prompts, any prompt
+        with no file yet has its default saved, so every prompt can also be found and
         edited by hand. The prompts are read again each time the settings open
         and whenever another project is opened, so an edit made by hand shows
         up; a prompt that already shows what was read is left alone, so its

@@ -147,7 +147,7 @@ impl ToolCall {
     }
 
     /// Whether the call reads or edits one file, which its summary names.
-    fn works_on_a_file(&self) -> bool {
+    pub(crate) fn works_on_a_file(&self) -> bool {
         matches!(
             self.name.as_str(),
             "Read" | "Edit" | "MultiEdit" | "Write" | "NotebookRead" | "NotebookEdit"
@@ -578,7 +578,10 @@ impl Reply {
                 self.refresh();
                 return Some(error);
             }
-            HarnessEvent::Session(_) | HarnessEvent::Usage { .. } => return None,
+            HarnessEvent::Session(_)
+            | HarnessEvent::Usage { .. }
+            | HarnessEvent::ToolCalled { .. }
+            | HarnessEvent::ToolOutput { .. } => return None,
         }
         self.refresh();
         None

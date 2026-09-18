@@ -1,5 +1,6 @@
 use /lib
 from ../project-directory import ProjectDirectoryScope
+from ../project-data import ProjectDataScope
 from ./baked-prompts import BakedSystemPromptsScope
 from ./catalog import HarnessCatalogScope
 from ./one-off-run import OneOffAgentRunScope
@@ -28,6 +29,9 @@ shape HarnessIntegrationShape:
         The prompt is given to the harness on its standard input, and what the
         harness does is streamed back as it happens.
 
+        The harness in use is Claude Code, so its directory, which a system
+        prompt's HARNESS_DIRECTORY stands for, is .claude.
+
     context:
         The harness keeps its context between requests instead of starting fresh
         each time. Tasks share one ongoing conversation, and each task sent
@@ -46,10 +50,14 @@ shape HarnessIntegrationShape:
         fresh.
 
         A conversation can be left for a new one, from the chat input's New
-        Session, as the @{ChatInputScope} says: the next request starts a new
-        conversation with no context, and the one left is not carried on again,
-        not by a run of it still going, nor by the project's history, until the
-        application is next opened. How much context a conversation holds is
+        conversation button, as the @{ChatInputScope} says: the next request
+        starts a new conversation with no context, and the one left is not
+        carried on again, not by a run of it still going, nor by the project's
+        history. Leaving it is kept with the project, as the @{ProjectDataScope}
+        says, so a project opened after its tasks' or questions' conversation
+        was left starts a new one too, rather than carrying on the latest
+        conversation in its history, until a run after the reset begins one of
+        its own. How much context a conversation holds is
         known from what the harness reports with each reply: everything the
         model was given, cached or not, and what it wrote, as of its latest
         reply; replies of subagents don't count.

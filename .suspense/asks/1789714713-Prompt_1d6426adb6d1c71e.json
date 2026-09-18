@@ -1,0 +1,1085 @@
+{
+  "userPrompt": "Now, I thought that making skills that said \"use when\" would get called automatically, which means links would be followed and reference would be read.  Is that incorrect?",
+  "output": [
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "af02f8e2-cde3-4dca-a0ac-2dcbf9fe8f02",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "60dad8ed-12c0-48ec-a137-547facd62828",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "5824acc8-173b-4db2-8f22-fe4efd4d8842",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "97a92625-94e5-4626-8dc3-ea979f12acd4",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "af02f8e2-cde3-4dca-a0ac-2dcbf9fe8f02",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "",
+      "stdout": "",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "a1635f17-54a8-48ae-b0e2-82097e29b391",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "5824acc8-173b-4db2-8f22-fe4efd4d8842",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "{\"terminalSequence\":\"\\u001b]777;notify;warp://cli-agent;{\\\"v\\\":1,\\\"agent\\\":\\\"claude\\\",\\\"event\\\":\\\"session_start\\\",\\\"session_id\\\":\\\"2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d\\\",\\\"cwd\\\":\\\"/home/hyphyphyph/piton/repl\\\",\\\"project\\\":\\\"repl\\\",\\\"plugin_version\\\":\\\"2.2.0\\\"}\\u0007\"}\n",
+      "stdout": "{\"terminalSequence\":\"\\u001b]777;notify;warp://cli-agent;{\\\"v\\\":1,\\\"agent\\\":\\\"claude\\\",\\\"event\\\":\\\"session_start\\\",\\\"session_id\\\":\\\"2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d\\\",\\\"cwd\\\":\\\"/home/hyphyphyph/piton/repl\\\",\\\"project\\\":\\\"repl\\\",\\\"plugin_version\\\":\\\"2.2.0\\\"}\\u0007\"}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "3f2790b8-c998-4488-90d8-d98cb7a4507f",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "/home/hyphyphyph/piton/repl",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "tools": [
+        "Task",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "ListAgents",
+        "ListMcpResourcesTool",
+        "Monitor",
+        "NotebookEdit",
+        "PushNotification",
+        "Read",
+        "ReadMcpResourceDirTool",
+        "ReadMcpResourceTool",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskOutput",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write",
+        "mcp__claude_ai_Claude_Docs__batch",
+        "mcp__claude_ai_Claude_Docs__create",
+        "mcp__claude_ai_Claude_Docs__delete",
+        "mcp__claude_ai_Claude_Docs__export",
+        "mcp__claude_ai_Claude_Docs__guide",
+        "mcp__claude_ai_Claude_Docs__query",
+        "mcp__claude_ai_Claude_Docs__read",
+        "mcp__claude_ai_Claude_Docs__update"
+      ],
+      "mcp_servers": [
+        {
+          "name": "backlog",
+          "status": "connected",
+          "source": "user"
+        },
+        {
+          "name": "claude.ai Claude Docs",
+          "status": "connected",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Drive",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Gmail",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Calendar",
+          "status": "needs-auth",
+          "source": "claudeai"
+        }
+      ],
+      "model": "claude-opus-5[1m]",
+      "permissionMode": "auto",
+      "slash_commands": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "output-style",
+        "context",
+        "effort",
+        "fast",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "skill-doctor",
+        "goal",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "terminal_slash_commands": [
+        "doctor",
+        "color",
+        "reload-plugins"
+      ],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.275",
+      "output_style": "default",
+      "agents": [
+        "claude",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
+      "skills": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "plugins": [
+        {
+          "name": "gitkraken-hooks",
+          "path": "/home/hyphyphyph/.claude/plugins/marketplaces/gitkraken/plugins/gitkraken-hooks",
+          "source": "gitkraken-hooks@gitkraken",
+          "version": "3.1.73"
+        },
+        {
+          "name": "warp",
+          "path": "/home/hyphyphyph/.claude/plugins/cache/claude-code-warp/warp/2.2.0",
+          "source": "warp@claude-code-warp",
+          "version": "2.2.0"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "msg_lifecycle_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "a7463ad7-7622-457f-b808-d0069c2d9649",
+      "memory_paths": {
+        "auto": "/home/hyphyphyph/.claude/projects/-home-hyphyphyph-piton-repl/memory/"
+      },
+      "messaging_socket_path": "/run/user/1000/cc-socks/840024.sock",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "e5005385-51d0-4988-9559-6101cdd7fb75"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5",
+          "id": "msg_011CfAUHhhUC8qVcZFToEgKi",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 1271,
+            "cache_read_input_tokens": 290506,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1271
+            },
+            "output_tokens": 5,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c8ea5876-7c45-4df0-b98e-cfc56ce206af",
+      "ttft_ms": 2224
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "78cbba3f-14fc-473a-9004-4358fc26863f"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "468d71a5-d815-49b0-8919-8341bd5a3830"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ee665027-b555-427a-9bdc-c741f33f31e1"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 150,
+      "estimated_tokens_delta": 100,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "de09d197-4938-4830-9c75-c2be1a0c9554"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 100
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "10bdc637-18dc-4248-8ba1-ba9cdaabe34e"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 350,
+      "estimated_tokens_delta": 200,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "66f6e31f-e873-43b7-a969-53864d04ff59"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 200
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "2fe194f2-c4a3-4926-9bc1-cf81abe64f9f"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 450,
+      "estimated_tokens_delta": 100,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "8173307d-3229-40a1-b919-09f37088f934"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 100
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "dd874b38-5cb9-4f39-817f-2b2687232c2d"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 550,
+      "estimated_tokens_delta": 100,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "444fe839-f336-4da8-8c54-5efe6b69aa33"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 100
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1da99f67-734e-41b9-82e6-167e5919cc3b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "edd5d1ef-24ff-477c-840a-69127e6104a0"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 577,
+      "estimated_tokens_delta": 27,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "4bc261c9-89e6-4c9d-b145-9093133a02ce"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "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"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ac0bdf1b-e3cb-4468-a592-ce483b7efdee"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5",
+        "id": "msg_011CfAUHhhUC8qVcZFToEgKi",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAQS/BEKEAgRGAI4AUIIdGhpbmtpbmcSDLCjHagW4EIhYYdjjRoMx/aJjnMaVcxBUg2VIjA1N6nRBRFH7WSEbjvO/q1ewQkxziiDA5byV9LTrvSi1zhBqgGmCmKeqiEjfHXvvBMqmRHHRg2v3oyg7qQUlxRZT4ct0dnXsgM4N5mVeMrkT2VmsQSvSAS5XbtKlkKHQCXHBlJNUeJBooCILjkNrFo+AeGEKNK5e58o77pEnRWXIJFFs3EMpITu4XgWC3k4N2y1PD7OmVZimmiTjHS+HjSQqbIjvY2y3+/RBPUfPkMrigFZYKZoXSagVjga7ro3w5PHTxc/NW96aqj8fx0AlmqJN6aqUwslx44ofhpIF35APXguAeGzi/+3xbYY4nTN8Wk31IKx9iVhlA8IgDucmUYLcViZ4vjoAc7rqHV3GLC1+FXtgwD+/azZSlGx1/u9V55H2NVnOWSE1mtyeGL8qZ+YtO2SqTbiA8WcCKJyHut75wJyUslNpxhaXIS3WcSxmxIm0phNDfMaRIzU/lysfuzVLFTJppTcnqBgS+tumlaFBfM07xI5Ktr2bUb2VB9Sblm7bmgZ4fK/ziAJz0iCe6nIK769emnRSes2T6byMu8u9WYERt8Ty75FYg6BmC1KRCxTUyK09xB33hiXM5+b8Xkq+AqfCxY/z4Vg+AUW9un5Kh88V8w7EmBEx8k4/pavfwrXMjH/8ST8yKFLMxodC8vRB2zEUYHxafwdrFqD9wXbAJSDYILqEC8nO9DhoCkhvzzqYoiYHTx6e5n6f56QnBMbYCJRQdnFcObI6bJ6tmHsJvzFV627T39k7ic8fxAuH0IaNPwwoYFoJzuVxS1c9/Ocr2QcwJKJOBoMZOcNpgo7YE1J5rVHhT3rtcEg0fsG/2CWAzdFBKgBwWfHuhqzn1eJzZpiQK5TiQ5ygEDJFSHBKq9luvw3Jm9cPJUziOazxzQ6uinTi6fdgz0/Elw2d4EJ6EIt8eoaxojxBWHg5IzOo5Slt5s9nWQ+608ZWDN8Gyhg29xcIgXgEWP6zaEtQ3l1GUvBh5RO53MYew+2j6bozqPiPDK88DjKqDYI00+Rfro8pN3Yu5xW9BEzXKtRQrZAQh4Zxe+Do92lNZGSUXC908xj+qcaykY+q/uMoX5qsgM7j6arcEgc4pCl9pw2d1r0CHR1eSPfSFXNUwK8do3Jffzt4CkzurTWN6JFEEQg0sgpZImI58RTyrRQI78vObzKcnATbygGeNParAo+8uRuhk92s56bMmmZBGIHaijZIr7lDCBp+pDXgtWxSIqj9LDH7BOe1sHjTeyMEbMGF8wP6XKFjDbSOM43i6JfwNX5pG291G6optfB5g60glDY6O5vKHxZx/X+3nO2IUX/2MK6myu3GEIFOa6o2nH1u/TtMWEhmYEE3EiSlb2PXmQUzvp+JCpmEcD8bRDv+uul4jw3I+HuuP90t6+Yg8zj7Txtb9BkVJ0H9WSfXjFYiCzW7Rmv3Re7JeLti9uXZUr5X0xwQFAD7fxFKgv+B9t+mJ9aVCKedaRNzW2mGljYL0QiV1Jw88zN/Dz1JaeXqcdElkQMvnme5fh4ZqGZBZhU5LuiBBL+rtkkbRFOWBuuohbmupx/cTCgLMspg2/x/venv2Msp+SQ8gMZ+rkXottmbxDREcBRkfN5WN/yYM+H8WpZArvdZo8nuiOWg3h/QQZVkQ2oG9U7FBJ00/q8cY5aPyJUxLjb0ZcNGuYS1zUZPFPCF2LBsve4+TzmQZh5llJv8/GXOgt4RuZ/F+qDk4LT4bx/ROQ88Q5/12GUrXvC8JVSbE7ZvMMV4ISwEm+PvjdQGAsxIe1SraHYueOQnOEZFOc778vy2wDQSZqpceUXG9IrJ5f2UKCga7jcjLrCQgd5m9yOTkU9GZo6tuMQQgUGXkTCAOE9MjflpFoMXfwtDo8mf4g0wvflkOU24owTFHyvBP1jZmDVi/0KlP+JhllJIKCPOI9Hq3cbvhCLAA2eC8QYOB3Jn1cui3lEC9Z+DbE3P6yz6u5eKYkW71yPlFZcr6ibUa9PsyWqIcl3UHhlcSHThuRCYjajjKRLNBxCC32psAk27Yip1IvkOHYOUD0MFsocbRecpwcPyTO6SUmxVil5wAMICwxU8uDca5CZunlRwgVr2jkRmgKk2v1OyFBVVGEvpaAYyOrADaNfKZDERflROQwsPWtXEi3dy4M/hbCI00ruWyaAbLtuSI6gHf12n/FGeAsnt5hfBKoj0Z/al/6cdimw4l4t5+g0Rh7jsmtGWTKY3ENTSnkiFphV8dSqjm9oPrQpyl8iUppTVN3JTWFEKe7zRvMoqoVCkwokhL4hgDW5LlSY1TpDAxd+jqoLXnOBizmHaftNw5SXI/e5pm6t+V/bjO0gWUxT/VnIvbN3gTRai0fV7/XTt+feJodONa6moS3TM4rGBnBDFr4ZL8LUYgf1zzNbv8Tj8Nfakz5jwAcTs0hRJFGG+/8ZyMdJC5N5r6bZaezGQLsy+YQWSlkff7XvU3u634q7Wlek32MWOiV3SfjbiPTabwOkPhtOx5tm/CVRSlVnAyL897ADICrdgL943QqV0HlDq2iaThDu4an+Jj7nFA/O62q3jnidhGinKza7di/x6ctrrgYDWYyArVLi9RT15T7PPIUK0IX/NudoWBRTNdZksf12NCJ1EwCTKr8UZW8g/Cy4WDFYIiFUHIyT58ECwk7ILHSs3G2QwOP2s5uTnxWiZ5RqtA/hl68Rhr/x4QAWs21lDHJJknarLoT0a0GKi4mI+imvSeTotAuvwz3BqAZwBKNvRnZ70py82/VDQctrhxMzdRsh3wKavoj2rnEl6TjII0abGgelCHseLxBNCS2s/Gisgryr/x4cvM/hnWRU9JfJvlrMMyv4TN7taUWtp+ikIlBbSIPH7wFoTVo2r18MGBQXNjC2e9QREbG2ccUHiYCDn4L7JUtjdTnhgbMekg62xL4pRBMMDpCPTP44m0rOK37DQ/5XrXaSKGeLRKJF5szy1zphdrDYosZCZMHXWfkaR06vTHZCXuETgHdIDTrBS3xBoT8knxgB"
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1271,
+          "cache_read_input_tokens": 290506,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1271
+          },
+          "output_tokens": 5,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "d259314f-6e8a-42b4-95a2-cfdace252293",
+      "timestamp": "2026-09-18T06:58:44.578Z",
+      "request_id": "req_011CfAUHeXxoAyvE3nzsn7Go"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "516f8e60-5d0e-439d-9bfe-334f0cf67fac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "27e9b3df-f06f-47af-99ae-886e1f90e9eb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Partly. A \"use when\" line makes it more likely Claude picks a skill, but nothing invokes skills automatically,"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ab0413e3-5d52-4b7f-b812-4ab323e689a1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and even an invoked skill doesn't guarantee its links get read.\n\n**How skills work in Claude Code**\n1. **Only the description is always there.** Each skill's name and description sit in the system prompt of every run. The body ("
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "0db80d0f-1b2d-4d6d-be7c-60f40314c0ac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "`SKILL.md`) isn't loaded.\n2. **Claude decides whether to use one.** If it judges that a skill matches the task, it calls the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ee277639-5663-403f-94e7-431937aecf29"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Skill tool, and only then is the body loaded. \"Use when …\" is a hint for that decision, not a trigger.\n3. **Links in the body are optional reading.** Once lo"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a99e4057-5002-430f-b828-ba4e7392e631"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "aded, the body's links (such as `[ApplicationScope](../../reference/…)`) are still ordinary links. Claude reads the target only if it decides it needs to. Belay writes links rather than `@` imports on purpose, so"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e650f745-d6d5-4207-b4bf-a00b3ce19233"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " nothing is pulled in automatically.\n\nSo there are two separate decisions, each made by the model: invoke the skill, then open the links.\n\n**Your history"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "499fa559-0c53-4979-8389-02edd8561692"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " shows both usually go the other way**\n- **Skills:** in about 150 task runs since the first day, the Skill tool was called essentially never, even"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e928e46c-29da-478e-9044-b64b59d2122a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " with 21 `build-*` skills available.\n- **Links:** in your last 40 runs, 31 prompts linked to reference docs, and Claude opened one in only 4 runs.\n\n**Why your sk"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "57196445-a0b6-472d-ab36-d50017514471"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ills in particular weren't picked**\n- **The descriptions describe the skill in its own terms.** \"build or change the RibbonScope scope. Use when you need to build or change the RibbonScope"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "49610e5a-3785-4413-abf8-e022ed833fee"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " scope\" matches only if the task is phrased as \"build the RibbonScope scope\". Your prompts say things like \"the ribbon's full buttons should be two slim buttons tall\", which"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a5402819-a546-4999-8854-8a6dbb5e0356"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " doesn't obviously match.\n- **They look alike.** 21 near-identical descriptions give Claude no reason to prefer one, so the easy choice is none.\n- **The task already loo"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "336af372-b95d-4bdb-9639-f79e00a37eff"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ks answerable.** Given a concrete request and file access, Claude tends to go straight to the code rather than stopping to load gu"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "d9975858-cad3-4852-839c-62fa5ea6ae3f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "idance.\n\n`build-application` does inline its scope's content in the skill body (the `# Scope` section), so it would have helped if invoked. It just wasn't.\n\n**What does"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a7897cc4-0cb4-4a8b-8dc7-808d0b11869c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " reliably get into context**\n| Mechanism | Guaranteed? |\n|---|---|\n| System prompt (`--append-system-prompt`, your mode templates) | Yes, every run |\n| Root `CLAUDE.md` | Yes, every run |\n| Nested"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5e3bb81d-a0ef-4fb6-bce6-257f5139a9a3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `CLAUDE.md` (e.g. `src/CLAUDE.md`) | Once Claude touches files in that folder |\n| Text in the prompt itself | Yes |\n| Skill bodies | Only if Claude invokes the skill |\n| Links an"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "8e76274c-3dac-40aa-b3a2-91e9d44aaad1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ywhere | Only if Claude opens them |\n\n**What I'd do**\n1. **Inline what the prompt references.** When you write `@{ChatInputScope}`, you've said explicitly that it's"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "076a3fef-e4aa-44af-963f-61ef52798992"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " relevant, so the app shouldn't leave it to chance. When compiling the hidden anchor, append each referenced scope's compiled reference doc to the prompt, the same way attached text is appended. That's deterministic"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "d0486530-1bb0-42e8-9dc7-2f69008c31e1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", and costs only what you referenced.\n2. **Put the rules in the system prompt or root `CLAUDE.md`.** \"Spec is the source of truth\" and \"follow the Belay shape\" ap"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "7c2a3ce6-fc31-4c49-9f52-3f5775b69a31"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ply to every build, so they shouldn't depend on a skill being chosen.\n3. **Keep skills for discovery.** They're useful when Claude should find guidance you"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "40c4e061-b87f-435d-80fc-38ea36c9946f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " didn't point it to. If you keep them, write descriptions in the words your prompts actually use (\"the ribbon, its tabs, groups and bu"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "9dcd2846-cf3a-40d5-87be-8f02afa8dc6b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ttons, in `src/ribbon`\"), and generate far fewer of them.\n4. **Or name the skill in the prompt.** Typing `/build-ribbon` runs it directly, and the ch"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4084d00c-a701-4bfd-96dc-40165095fd9b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "at input already offers skills when you type `/`.\n\nOption 1 is the one that matches how you already write prompts. It's a change to how the hidden anchor is compiled (the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "6a1f587e-dc20-48ec-84cc-a5714d416edd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `Hidden Anchor` section of `ChatInputScope`) and possibly to `piton compile`, which currently turns references into links."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4dd38dd2-7844-4ac5-bc87-5cfce89f46d3"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5",
+        "id": "msg_011CfAUHhhUC8qVcZFToEgKi",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Partly. A \"use when\" line makes it more likely Claude picks a skill, but nothing invokes skills automatically, and even an invoked skill doesn't guarantee its links get read.\n\n**How skills work in Claude Code**\n1. **Only the description is always there.** Each skill's name and description sit in the system prompt of every run. The body (`SKILL.md`) isn't loaded.\n2. **Claude decides whether to use one.** If it judges that a skill matches the task, it calls the Skill tool, and only then is the body loaded. \"Use when …\" is a hint for that decision, not a trigger.\n3. **Links in the body are optional reading.** Once loaded, the body's links (such as `[ApplicationScope](../../reference/…)`) are still ordinary links. Claude reads the target only if it decides it needs to. Belay writes links rather than `@` imports on purpose, so nothing is pulled in automatically.\n\nSo there are two separate decisions, each made by the model: invoke the skill, then open the links.\n\n**Your history shows both usually go the other way**\n- **Skills:** in about 150 task runs since the first day, the Skill tool was called essentially never, even with 21 `build-*` skills available.\n- **Links:** in your last 40 runs, 31 prompts linked to reference docs, and Claude opened one in only 4 runs.\n\n**Why your skills in particular weren't picked**\n- **The descriptions describe the skill in its own terms.** \"build or change the RibbonScope scope. Use when you need to build or change the RibbonScope scope\" matches only if the task is phrased as \"build the RibbonScope scope\". Your prompts say things like \"the ribbon's full buttons should be two slim buttons tall\", which doesn't obviously match.\n- **They look alike.** 21 near-identical descriptions give Claude no reason to prefer one, so the easy choice is none.\n- **The task already looks answerable.** Given a concrete request and file access, Claude tends to go straight to the code rather than stopping to load guidance.\n\n`build-application` does inline its scope's content in the skill body (the `# Scope` section), so it would have helped if invoked. It just wasn't.\n\n**What does reliably get into context**\n| Mechanism | Guaranteed? |\n|---|---|\n| System prompt (`--append-system-prompt`, your mode templates) | Yes, every run |\n| Root `CLAUDE.md` | Yes, every run |\n| Nested `CLAUDE.md` (e.g. `src/CLAUDE.md`) | Once Claude touches files in that folder |\n| Text in the prompt itself | Yes |\n| Skill bodies | Only if Claude invokes the skill |\n| Links anywhere | Only if Claude opens them |\n\n**What I'd do**\n1. **Inline what the prompt references.** When you write `@{ChatInputScope}`, you've said explicitly that it's relevant, so the app shouldn't leave it to chance. When compiling the hidden anchor, append each referenced scope's compiled reference doc to the prompt, the same way attached text is appended. That's deterministic, and costs only what you referenced.\n2. **Put the rules in the system prompt or root `CLAUDE.md`.** \"Spec is the source of truth\" and \"follow the Belay shape\" apply to every build, so they shouldn't depend on a skill being chosen.\n3. **Keep skills for discovery.** They're useful when Claude should find guidance you didn't point it to. If you keep them, write descriptions in the words your prompts actually use (\"the ribbon, its tabs, groups and buttons, in `src/ribbon`\"), and generate far fewer of them.\n4. **Or name the skill in the prompt.** Typing `/build-ribbon` runs it directly, and the chat input already offers skills when you type `/`.\n\nOption 1 is the one that matches how you already write prompts. It's a change to how the hidden anchor is compiled (the `Hidden Anchor` section of `ChatInputScope`) and possibly to `piton compile`, which currently turns references into links."
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1271,
+          "cache_read_input_tokens": 290506,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1271
+          },
+          "output_tokens": 5,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "1f50073b-ca5f-406f-a199-cf1847285f5a",
+      "timestamp": "2026-09-18T06:58:57.489Z",
+      "request_id": "req_011CfAUHeXxoAyvE3nzsn7Go"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ab5c999c-1411-4330-86f4-a1b2dfff31d1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1271,
+          "cache_read_input_tokens": 290506,
+          "output_tokens": 1876,
+          "output_tokens_details": {
+            "thinking_tokens": 543
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 1876,
+              "cache_read_input_tokens": 290506,
+              "cache_creation_input_tokens": 1271,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 1271
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "d4252f5e-d99f-4bbd-9810-4ef06094b402"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e6b3ebb4-cfeb-4c76-a37e-858d51c5f888"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1789730400,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.04,
+            "resetsAt": 1789730400
+          },
+          "seven_day": {
+            "utilization": 0.3,
+            "resetsAt": 1790103600
+          }
+        }
+      },
+      "uuid": "5c931df7-1e71-45ba-9783-2d9f28f25b5e",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "duration_api_ms": 21589,
+      "stop_reason": "end_turn",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "total_cost_usd": 0.204873,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 1271,
+        "cache_read_input_tokens": 290506,
+        "output_tokens": 1876,
+        "output_tokens_details": {
+          "thinking_tokens": 543
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1271,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 1876,
+            "cache_read_input_tokens": 290506,
+            "cache_creation_input_tokens": 1271,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1271
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "modelUsage": {
+        "claude-opus-5[1m]": {
+          "inputTokens": 2,
+          "outputTokens": 1876,
+          "cacheReadInputTokens": 290506,
+          "cacheCreationInputTokens": 1271,
+          "webSearchRequests": 0,
+          "costUSD": 0.204873,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "thinkingTokens": 543,
+          "canonicalModel": "claude-opus-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "is_error": false,
+      "num_turns": 1,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "Partly. A \"use when\" line makes it more likely Claude picks a skill, but nothing invokes skills automatically, and even an invoked skill doesn't guarantee its links get read.\n\n**How skills work in Claude Code**\n1. **Only the description is always there.** Each skill's name and description sit in the system prompt of every run. The body (`SKILL.md`) isn't loaded.\n2. **Claude decides whether to use one.** If it judges that a skill matches the task, it calls the Skill tool, and only then is the body loaded. \"Use when …\" is a hint for that decision, not a trigger.\n3. **Links in the body are optional reading.** Once loaded, the body's links (such as `[ApplicationScope](../../reference/…)`) are still ordinary links. Claude reads the target only if it decides it needs to. Belay writes links rather than `@` imports on purpose, so nothing is pulled in automatically.\n\nSo there are two separate decisions, each made by the model: invoke the skill, then open the links.\n\n**Your history shows both usually go the other way**\n- **Skills:** in about 150 task runs since the first day, the Skill tool was called essentially never, even with 21 `build-*` skills available.\n- **Links:** in your last 40 runs, 31 prompts linked to reference docs, and Claude opened one in only 4 runs.\n\n**Why your skills in particular weren't picked**\n- **The descriptions describe the skill in its own terms.** \"build or change the RibbonScope scope. Use when you need to build or change the RibbonScope scope\" matches only if the task is phrased as \"build the RibbonScope scope\". Your prompts say things like \"the ribbon's full buttons should be two slim buttons tall\", which doesn't obviously match.\n- **They look alike.** 21 near-identical descriptions give Claude no reason to prefer one, so the easy choice is none.\n- **The task already looks answerable.** Given a concrete request and file access, Claude tends to go straight to the code rather than stopping to load guidance.\n\n`build-application` does inline its scope's content in the skill body (the `# Scope` section), so it would have helped if invoked. It just wasn't.\n\n**What does reliably get into context**\n| Mechanism | Guaranteed? |\n|---|---|\n| System prompt (`--append-system-prompt`, your mode templates) | Yes, every run |\n| Root `CLAUDE.md` | Yes, every run |\n| Nested `CLAUDE.md` (e.g. `src/CLAUDE.md`) | Once Claude touches files in that folder |\n| Text in the prompt itself | Yes |\n| Skill bodies | Only if Claude invokes the skill |\n| Links anywhere | Only if Claude opens them |\n\n**What I'd do**\n1. **Inline what the prompt references.** When you write `@{ChatInputScope}`, you've said explicitly that it's relevant, so the app shouldn't leave it to chance. When compiling the hidden anchor, append each referenced scope's compiled reference doc to the prompt, the same way attached text is appended. That's deterministic, and costs only what you referenced.\n2. **Put the rules in the system prompt or root `CLAUDE.md`.** \"Spec is the source of truth\" and \"follow the Belay shape\" apply to every build, so they shouldn't depend on a skill being chosen.\n3. **Keep skills for discovery.** They're useful when Claude should find guidance you didn't point it to. If you keep them, write descriptions in the words your prompts actually use (\"the ribbon, its tabs, groups and buttons, in `src/ribbon`\"), and generate far fewer of them.\n4. **Or name the skill in the prompt.** Typing `/build-ribbon` runs it directly, and the chat input already offers skills when you type `/`.\n\nOption 1 is the one that matches how you already write prompts. It's a change to how the hidden anchor is compiled (the `Hidden Anchor` section of `ChatInputScope`) and possibly to `piton compile`, which currently turns references into links.",
+      "ttft_ms": 8680,
+      "type": "result",
+      "duration_ms": 22037,
+      "uuid": "aa7233e8-3125-4f5e-98ba-9784ed8f4904",
+      "ttft_stream_ms": 2310,
+      "time_to_request_ms": 87,
+      "first_content_frame_ms": 2313,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  ]
+}

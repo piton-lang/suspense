@@ -1,0 +1,142 @@
+use /lib
+use /ui
+use /ui/components/sidebar/Sidebar
+use /ui/components/sidebar/Panel
+from /scope/open-file import OpenFileScope
+from /scope/project-locations import ProjectLocationsScope
+from /ui/components/sidebar import SidebarScope
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
+
+export sidebar ReferencedSpecSidebarScope:
+    side: right
+
+    panels:
+        - @{ReferencedFilesPanel}
+        - @{UnderstandingPanel}
+
+    concept: {ReferencedSpecSidebarConcept}
+
+concept ReferencedSpecSidebarConcept:
+    pitch:
+        A second @{SidebarScope}, at the right of the message list, that lists
+        the spec files the running task references, so it's clear what part of
+        the spec the harness is working from, and the constraints it has taken
+        from it for the task.
+
+    shape: {ReferencedSpecSidebarShape}
+
+shape ReferencedSpecSidebarShape:
+    description:
+        It runs the full height of the message list, above the chat input,
+        which stays across the full width of prompt mode. It keeps the width
+        it was dragged to while the application runs.
+
+        Its two panels, the referenced files above the understanding, share
+        its height, starting halfway. The line between them keeps where it
+        was dragged for as long as the application runs, whichever task the
+        sidebar shows.
+
+    showing:
+        It is only there while a task is running: from the moment a task is
+        sent from the Code, Chain, or Spec tab until its run is over. Questions
+        from the Ask tab never show it, even when one is sent from the queue.
+
+        When a task starts, it slides out from the message list's right edge,
+        growing from nothing to its width, its contents sliding into view from
+        behind that edge as it does. When the run is over, it slides back the
+        same way. The slide is quick and settles without bouncing. The message
+        list takes the rest of the width, laid out anew only once the slide
+        settles, as when a file's split opens.
+
+export panel ReferencedFilesPanel:
+    title: Referenced spec
+    counted: true
+    height: share
+    scrolls: true
+
+    concept: {ReferencedFilesConcept}
+
+concept ReferencedFilesConcept:
+    pitch:
+        The top panel of the @{ReferencedSpecSidebarScope}: the spec files the
+        running task references.
+
+    shape: {ReferencedFilesShape}
+
+shape ReferencedFilesShape:
+    description:
+        One row per spec file the running task references, each listed once: first those its prompt imports from, then
+        the rest in the order they are first referenced. Each row shows its
+        file icon, then its file name alone, without its folders, cut off with
+        an ellipsis when the sidebar is too narrow, its full path in its
+        tooltip. A file named index, whatever its extension, such as
+        `index.pi`, shows the folder it is in before its name, as
+        `chat-input/index.pi`, and no folder above that.
+
+    referencing:
+        A spec file is one in the spec location, as the
+        @{ProjectLocationsScope} says; a compiled spec file is one under
+        `.claude/reference`, which stands for part of the spec. Both are
+        listed, and files anywhere else are not. A file's full path counts
+        however long it is, and a relative path is read from the project
+        directory.
+
+        A file is referenced, however the harness reads it, when:
+
+        - the task's prompt imports from it, its hidden anchor naming it
+        - the harness reads, edits, or writes it with a file tool
+        - a shell command reads it, such as cat, head, tail, sed, less, grep,
+          rg, awk, or diff naming it, or a pattern or folder that takes it in,
+          as far as the command shows
+        - a shell command edits or writes it, such as sed -i, a redirect (> or
+          >>), tee, mv, or cp onto it
+        - a search tool, Grep or Glob, searches a folder or pattern that takes
+          it in and its results name it
+        - a subagent the harness starts does any of the above
+
+        A file taken in only by a folder or pattern, without the results
+        naming it, is not listed. A command whose target can't be worked out
+        is skipped rather than guessed at. A file referenced again isn't listed
+        again.
+
+        A file edited or written in any of these ways, rather than only read
+        or imported, shows a small pencil icon at the right of its row. A row
+        a subagent referenced shows the same way, with "Read by a subagent" in
+        its tooltip beneath its full path.
+
+        Clicking a row opens its file, as the @{OpenFileScope} says. While no
+        spec file is referenced yet, the list reads
+        "No spec files referenced yet", muted.
+
+export panel UnderstandingPanel:
+    title: Understanding
+    counted: true
+    height: share
+    scrolls: true
+
+    concept: {UnderstandingConcept}
+
+concept UnderstandingConcept:
+    pitch:
+        The bottom panel of the @{ReferencedSpecSidebarScope}: the constraints
+        the harness has taken from the spec for the running task.
+
+    shape: {UnderstandingShape}
+
+shape UnderstandingShape:
+    description:
+        It shows the running task's understanding file, as the
+        @{ModeSystemPromptsScope} says, as it is written: one row per item of
+        its Markdown list, in the file's order, its text wrapping rather than
+        cut off. Anything in the file that isn't a list item is left out.
+
+        A row's text is its item's, with any link shown as its text alone.
+        Clicking a row opens the file its link points to, read from the
+        project directory, as the @{OpenFileScope} says. A row whose link
+        points to a file that doesn't exist shows its text muted, and clicking
+        it does nothing; a row with no link does nothing either.
+
+        It follows the file as it changes on disk while the task runs. A row
+        that is added, or whose text changes, is briefly highlighted, fading
+        back to the panel's body. Until the file exists, it reads
+        "Nothing understood yet", muted.

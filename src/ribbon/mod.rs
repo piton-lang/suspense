@@ -6,7 +6,8 @@
 //! above their labels, tooltips explain rather than repeat the label and give
 //! any shortcut, a command that can't run is disabled rather than hidden,
 //! groups are titled down their left edge, and the ribbon collapses by
-//! double-clicking a tab, its chevron, or Ctrl/Cmd+F1, which is remembered
+//! double-clicking a tab, its chevron beside the project indicator, or
+//! Ctrl/Cmd+F1, which is remembered
 //! across launches. Collapsed, the tabs go too, and the
 //! commands marked primary (for now, all of them) sit small in a single row.
 
@@ -64,21 +65,16 @@ const BODY_PADDING: Pixels = px(8.);
 const SLIM_HEIGHT: Pixels = px(22.);
 
 /// Slim buttons stacked in one column, at most.
-const SLIM_STACK: usize = 3;
+const SLIM_STACK: usize = 2;
 
 /// How tall a column of `slim` slim buttons is, with the gaps between them.
 fn stacked(slim: usize) -> Pixels {
     SLIM_HEIGHT * slim as f32 + BODY_PADDING * (slim as f32 - 1.)
 }
 
-/// A full button is at least two slim buttons tall and at most three: as tall
-/// as its icon and label need, and taller if its group leaves the room, up to
-/// three.
-fn full_min() -> Pixels {
-    stacked(2)
-}
-
-fn full_max() -> Pixels {
+/// A full button is exactly two slim buttons tall, however much its icon and
+/// label would take.
+fn full_height() -> Pixels {
     stacked(SLIM_STACK)
 }
 
@@ -191,8 +187,8 @@ struct CommandPlace {
 enum CommandSize {
     /// The full height of the body, its icon large above its label.
     Full,
-    /// A third of that, near enough, its small icon left of its label; slim
-    /// buttons side by side stack down, three to a column.
+    /// Near enough half of that, its small icon left of its label; slim
+    /// buttons side by side stack down, two to a column.
     Slim,
     /// As tall as slim but only as wide as its icon and label, for the
     /// collapsed ribbon's row.
@@ -276,8 +272,26 @@ impl Ribbon {
                 .id("ribbon-prefix")
                 .flex()
                 .flex_none()
+                .h_full()
                 .child(self.project_indicator.clone()),
         )
+    }
+
+    /// The left container: the project indicator, the collapse chevron, and
+    /// the activity spinner while anything is running, leading the bar
+    /// whether expanded or collapsed.
+    fn render_left(&self, collapse: Button, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let items = [
+            Some(self.render_indicator().into_any_element()),
+            Some(collapse.into_any_element()),
+            self.render_activity(cx),
+        ];
+        container("ribbon-left", items.into_iter().flatten().collect())
+    }
+
+    /// The right container, ending the bar; it holds nothing yet.
+    fn render_right(&self) -> Option<AnyElement> {
+        container("ribbon-right", Vec::new())
     }
 
     /// The spinner beside the project's name while anything is running, with
@@ -499,15 +513,37 @@ impl Ribbon {
     }
 }
 
+/// A container at either end of the bar: what it holds side by side,
+/// vertically centred, with no gap between them or padding around them,
+/// only as wide as they are; nothing at all while it holds nothing. Lets UI
+/// tests find it; inert in normal builds.
+/// The collapse chevron's width and height.
+const CHEVRON_SIZE: Pixels = px(22.);
+
+fn container(id: &'static str, items: Vec<AnyElement>) -> Option<AnyElement> {
+    (!items.is_empty()).then(|| {
+        gpui_kit::TestSupportExt::test_support(h_flex().id(id))
+            .flex_none()
+            .h_full()
+            .items_center()
+            .children(items)
+            .into_any_element()
+    })
+}
+
 impl Render for Ribbon {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
         let (border, muted) = (theme.border, theme.muted_foreground);
         let (title_background, font) = (theme.muted, theme.font_family.clone());
 
+        // Square, and the same size expanded or collapsed: only the way it
+        // points changes.
         let collapse = Button::new("ribbon-collapse")
             .ghost()
             .xsmall()
+            .flex_none()
+            .size(CHEVRON_SIZE)
             .icon(if self.collapsed {
                 IconName::ChevronDown
             } else {
@@ -558,13 +594,13 @@ impl Render for Ribbon {
                 row.push(self.render_command(place.command, CommandSize::Small, cx));
             }
             // Lets UI tests find the row; inert in normal builds. The
-            // indicator and chevron stay put; what's between them scrolls
-            // sideways when it's wider than the room left.
+            // indicator and the chevron after it stay put; what follows them
+            // scrolls sideways when it's wider than the room left.
             return ribbon.child(gpui_kit::TestSupportExt::test_support(
                 h_flex()
                     .id("ribbon-primary")
                     .items_stretch()
-                    .child(div().flex().flex_none().child(self.render_indicator()))
+                    .children(self.render_left(collapse, cx))
                     .child(gpui_kit::TestSupportExt::test_support(
                         h_flex()
                             .id("ribbon-primary-commands")
@@ -576,13 +612,9 @@ impl Render for Ribbon {
                             .gap_2()
                             .px_2()
                             .py_1()
-                            .children(
-                                self.render_activity(cx)
-                                    .map(|activity| div().flex_none().child(activity)),
-                            )
                             .children(row),
                     ))
-                    .child(h_flex().flex_none().items_center().pr_2().child(collapse)),
+                    .children(self.render_right()),
             ));
         }
 
@@ -618,8 +650,9 @@ impl Render for Ribbon {
                     this.tab_clicked(tab, event.click_count(), event.modifiers().secondary(), cx)
                 }))
         });
-        // The open project's name, a block of its own left of the tab bar,
-        // with the activity spinner leading the bar after it. gpui-kit's tab
+        // The left container, holding the open project's name, the chevron,
+        // and the activity spinner, left of the tab bar, and the right
+        // container after it. gpui-kit's tab
         // bar draws a line along its bottom, which the tabs have none of here:
         // the row is a pixel shorter than the bar, clipping that line away and
         // leaving the tabs as they are.
@@ -638,12 +671,7 @@ impl Render for Ribbon {
             .overflow_hidden()
             .items_start()
             .bg(cx.theme().tab_bar)
-            .child(
-                div()
-                    .flex()
-                    .h(TAB_ROW_HEIGHT)
-                    .child(self.render_indicator()),
-            )
+            .children(self.render_left(collapse, cx))
             .child(gpui_kit::TestSupportExt::test_support(
                 div()
                     .id("ribbon-tabs-line")
@@ -658,12 +686,9 @@ impl Render for Ribbon {
                 TabBar::new("ribbon-tabs")
                     .flex_1()
                     .bg(cx.theme().transparent)
-                    .when_some(self.render_activity(cx), |bar, activity| {
-                        bar.prefix(h_flex().h_full().items_center().px_1().child(activity))
-                    })
-                    .children(tabs)
-                    .suffix(div().px_2().child(collapse)),
-            );
+                    .children(tabs),
+            )
+            .children(self.render_right());
 
         // With a Code or Spec tab open alone, the body is tinted as the chat
         // input's is for that mode.
@@ -772,7 +797,7 @@ fn group(
     title_background: Hsla,
     font: &str,
 ) -> AnyElement {
-    // Full buttons stand alone; slim ones side by side stack down, three to a
+    // Full buttons stand alone; slim ones side by side stack down, two to a
     // column, top aligned.
     let mut columns: Vec<AnyElement> = Vec::new();
     let mut stack: Vec<AnyElement> = Vec::new();
@@ -791,16 +816,14 @@ fn group(
         match size {
             CommandSize::Full => {
                 flush(&mut stack, &mut columns);
-                // As tall as its content needs, and as tall as its group where
-                // that leaves the room, within two and three slim buttons; the
+                // Exactly two slim buttons tall, whatever its content; the
                 // button itself fills that.
                 columns.push(
                     h_flex()
                         .flex_none()
                         .items_stretch()
                         .overflow_hidden()
-                        .min_h(full_min())
-                        .max_h(full_max())
+                        .h(full_height())
                         .child(element)
                         .into_any_element(),
                 );
@@ -830,9 +853,8 @@ fn group(
                 .child(group_title(label, muted, font)),
         )
         .child(
-            // Each command takes the height it needs; a full button grows into
-            // its group's height where there is more of it, up to its own
-            // limit.
+            // Each command takes the height it needs, a full button two slim
+            // buttons.
             h_flex()
                 .items_stretch()
                 .py(BODY_PADDING)
@@ -961,10 +983,10 @@ mod layout_tests {
 
     use super::{CommandSize, group};
 
-    /// A full command alone in its group is as tall as its content needs, but
-    /// never shorter than two slim buttons stacked, nor taller than three.
+    /// A full command is two slim buttons tall, whether its content needs less
+    /// or far more.
     #[gpui_kit::test]
-    fn a_full_button_is_two_to_three_slim_buttons_tall(cx: &mut TestAppContext) {
+    fn a_full_button_is_two_slim_buttons_tall(cx: &mut TestAppContext) {
         use gpui_kit::component::Root;
         use gpui_kit::test::TestWindowExt as _;
         use gpui_kit::{
@@ -976,7 +998,7 @@ mod layout_tests {
         impl Render for View {
             fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
                 // A command with hardly any content, and one with far more
-                // than three slim buttons' worth.
+                // than two slim buttons' worth.
                 let full = |id: &'static str, content: gpui_kit::Pixels| {
                     (
                         CommandSize::Full,
@@ -1017,17 +1039,17 @@ mod layout_tests {
             );
             assert_eq!(
                 window.find("large").bounds().size.height,
-                super::stacked(super::SLIM_STACK),
-                "a tall command isn't held to three slim buttons"
+                super::stacked(2),
+                "a tall command isn't held to two slim buttons"
             );
         })
         .unwrap();
     }
 
-    /// Four slim buttons in a row stack into a column of three, then a column
+    /// Three slim buttons in a row stack into a column of two, then a column
     /// of one; a full button between slim ones stands alone.
     #[gpui_kit::test]
-    fn slim_buttons_stack_three_to_a_column(cx: &mut TestAppContext) {
+    fn slim_buttons_stack_two_to_a_column(cx: &mut TestAppContext) {
         use gpui_kit::component::Root;
         use gpui_kit::test::TestWindowExt as _;
         use gpui_kit::{
@@ -1061,14 +1083,7 @@ mod layout_tests {
                 // No height of its own: the group is as tall as its commands.
                 div().flex().child(group(
                     "Group",
-                    vec![
-                        slim("a"),
-                        slim("b"),
-                        slim("c"),
-                        slim("d"),
-                        full("e"),
-                        slim("f"),
-                    ],
+                    vec![slim("a"), slim("b"), slim("d"), full("e"), slim("f")],
                     gpui_kit::black(),
                     gpui_kit::black(),
                     "sans-serif",
@@ -1083,24 +1098,18 @@ mod layout_tests {
         cx.update_window(window.into(), |_, window, cx| {
             window.render_frame(cx);
             let at = |id: &'static str| window.find(id).bounds();
-            let (a, b, c, d, e, f) = (at("a"), at("b"), at("c"), at("d"), at("e"), at("f"));
+            let (a, b, d, e, f) = (at("a"), at("b"), at("d"), at("e"), at("f"));
             let gap = super::BODY_PADDING;
-            assert_eq!(
-                (a.left(), b.left(), c.left()),
-                (a.left(), a.left(), a.left()),
-                "a, b, c aren't one column"
-            );
+            assert_eq!(b.left(), a.left(), "a, b aren't one column");
             assert_eq!(b.top() - a.bottom(), gap);
-            assert_eq!(c.top() - b.bottom(), gap);
-            assert_eq!(d.top(), a.top(), "the fourth doesn't start a new column");
+            assert_eq!(d.top(), a.top(), "the third doesn't start a new column");
             assert_eq!(d.left() - a.right(), gap);
             assert_eq!(e.left() - d.right(), gap);
-            // A full button grows to the height of the tallest column beside
-            // it: here, three slim buttons and the gaps between them.
+            // A full button is two slim buttons and the gap between them.
             assert_eq!(
                 e.size.height,
-                super::stacked(super::SLIM_STACK),
-                "the full button didn't grow to its group's height"
+                super::stacked(2),
+                "the full button isn't two slim buttons tall"
             );
             assert_eq!((f.top(), f.left() - e.right()), (a.top(), gap));
         })

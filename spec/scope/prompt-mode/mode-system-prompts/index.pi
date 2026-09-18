@@ -1,8 +1,11 @@
 use /lib
 from /scope/prompt-mode/modes import PromptModesScope
 from /scope/project-data import ProjectDataScope
+from /scope/harness-integration import HarnessIntegrationScope
+from /scope/new-project import NewProjectScope
 from /scope/project-locations import ProjectLocationsScope
 from /scope/settings-window import SettingsWindowScope
+from /ui/components/referenced-spec-sidebar import ReferencedSpecSidebarScope
 
 export scope ModeSystemPromptsScope:
     concept: {ModeSystemPromptsConcept}
@@ -22,16 +25,68 @@ shape ModeSystemPromptsShape:
 
     templates:
         A template is Piton prose, like the prompt it is sent with, so it can
-        reference the spec, with two placeholders, CODE_LOCATION and
-        SPEC_LOCATION, each written after a dollar sign and inside braces like a
-        Piton interpolation. Before the prompt is compiled, they are filled in
-        with the code location and the spec location, as the
-        @{ProjectLocationsScope} says.
+        reference the spec, with six placeholders, CODE_LOCATION,
+        SPEC_LOCATION, HARNESS_DIRECTORY, SPEC_READING, PITON_FLUENCY, and
+        UNDERSTANDING_FILE, each written after a dollar sign and inside braces
+        like a Piton interpolation. Before the prompt is compiled, all but
+        UNDERSTANDING_FILE are filled in: SPEC_READING first, with the
+        spec-reading prompt, so the placeholders it holds are filled in too;
+        then CODE_LOCATION and SPEC_LOCATION with the code location and the
+        spec location, as the @{ProjectLocationsScope} says, HARNESS_DIRECTORY
+        with the directory of the harness in use, and PITON_FLUENCY with the
+        project's Piton fluency. Each can be moved or removed, like any other
+        text of the template.
+
+        HARNESS_DIRECTORY is the directory the harness that runs the prompt,
+        as the @{HarnessIntegrationScope} says, reads its agentic Markdown and
+        reference files from, written without a leading ./: .claude for
+        Claude Code, .opencode for OpenCode, .codex for Codex, .cursor for
+        Cursor, and .agents for Agents, the directories the @{NewProjectScope}
+        names for them.
+
+        UNDERSTANDING_FILE stands for the path, from the project directory, of
+        the task's understanding file, and is filled in as the prompt is sent,
+        once the task's history record is named, so a prompt sent from the
+        queue is given its own. A question from the Ask tab has no
+        understanding file, and UNDERSTANDING_FILE is filled in with nothing.
+
+    pitonFluency:
+        The Piton fluency is what `piton claude --print-prompt` prints, run in
+        the project directory. It is run once, in the background, when the
+        project is opened, and kept for as long as the project stays open, so
+        every prompt sent meanwhile is given the same; a prompt sent before it
+        has finished waits for it. Where `piton` isn't installed or fails,
+        PITON_FLUENCY is filled in with nothing, and the prompt is sent without
+        it. A template left with nothing but blank space once filled in gives
+        no system prompt at all. What it prints is
+        taken as text, never read as Piton: its braces, backslashes, and
+        interpolations reach the harness exactly as printed.
+
+    specReading:
+        The spec-reading prompt explains how to read the spec before executing
+        anything: that reference links in the prompt are the spec for what
+        they name, and that each is read before anything it covers is changed.
+        It is injected into a template wherever SPEC_READING is written, and
+        may itself use every placeholder but SPEC_READING, which in it is left
+        as written. One left with nothing but blank space leaves SPEC_READING
+        filled in with nothing, and a paragraph that held nothing but it goes
+        with it. Like the templates, each project has its own, saved with its
+        data, as the @{ProjectDataScope} says, in spec-reading.md beside them,
+        and edited in the @{SettingsWindowScope}; with no file yet the project
+        uses its default.
 
     saving:
         Each project has its own templates, saved with its data, as the
         @{ProjectDataScope} says, a Markdown file per mode, and edited in the
         @{SettingsWindowScope}. A mode with no file yet sends its default.
+
+    understandingFile:
+        Each Code, Chain, or Spec task has an understanding file: the short
+        list of constraints the harness has taken from the spec for it, which
+        the @{ReferencedSpecSidebarScope} shows as it changes. It is saved
+        beside the task's history record, with the same name and the
+        extension `.understanding.md`, written by the harness itself. Nothing
+        else writes it, and nothing is there until the harness writes it.
 
     defaults:
         The defaults are the templates saved in this application's own
@@ -42,5 +97,21 @@ shape ModeSystemPromptsShape:
         them changes the defaults the next build has. A build can't be made
         without them.
 
+        The spec-reading prompt's default is saved there too, as
+        spec-reading.md, baked in the same way. It says:
+
+        \ Before executing anything, read the spec it touches. Links to ${HARNESS_DIRECTORY}/reference/… in the prompt are the spec for what they name. Read each one before changing anything it covers. \
+
+        Every mode's default, Code, Chain, Spec, and Ask, has, after what the
+        mode is for, SPEC_READING on a paragraph of its own.
+
+        Each then has PITON_FLUENCY, on a paragraph of its own. Ask's ends
+        there. The Code, Chain, and Spec defaults then end with, on a
+        paragraph of its own:
+
+        \ Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another. \
+
         The defaults are only where a project starts, and what resetting a
-        template puts back.
+        template puts back. A project whose templates were saved before a
+        default changed, such as before SPEC_READING was added, keeps them as
+        they are.

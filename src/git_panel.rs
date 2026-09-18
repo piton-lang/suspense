@@ -679,13 +679,20 @@ impl GitPanel {
     }
 }
 
+impl GitPanel {
+    /// Whether it shows, which it does only inside a git repository.
+    pub fn is_shown(&self) -> bool {
+        self.summary.is_some()
+    }
+}
+
 impl Render for GitPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let Some(summary) = self.summary.clone() else {
             return div().id("git-panel").into_any_element();
         };
         let theme = cx.theme();
-        let (border, muted) = (theme.border, theme.muted_foreground);
+        let muted = theme.muted_foreground;
         let busy = self.busy;
         let has_message =
             !commit_notes::message(&self.message.read(cx).value(), &self.current_notes(cx))
@@ -780,8 +787,6 @@ impl Render for GitPanel {
             .flex_none()
             .gap_2()
             .p_2()
-            .border_t_1()
-            .border_color(border)
             .text_sm()
             .child(
                 h_flex()

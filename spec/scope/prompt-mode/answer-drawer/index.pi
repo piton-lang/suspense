@@ -15,21 +15,23 @@ concept AnswerDrawerConcept:
 
 shape AnswerDrawerShape:
     description:
-        The drawer slides up out of the @{ChatInputScope} over everything
-        above it: the @{MessageList}, any file beside it, and the stack of
-        question rows. Only two things are a drawer: a question open onto its
-        task table, and the previous answers expanded. Unlike the stack of
-        question rows, which pushes what is above it, the drawer covers what is
-        above it rather than pushing it. Closing it slides nothing back; the
-        stack and the message list are where they were beneath it.
+        The drawer slides up over the @{MessageList} and any file beside it.
+        Only two things are a drawer: a question open onto its task table, and
+        the previous answers expanded. Unlike the stack of question rows, which
+        pushes what is above it, the drawer covers what is above it rather than
+        pushing it. Closing it slides nothing back; the stack and the message
+        list are where they were beneath it.
 
-    previousAnswers:
-        The previous answers are the exception: they slide up from on top of
-        the question rows in the stack rather than out of the chat input over
-        them, leaving those rows where they were, uncovered and undimmed, and
-        the drawer's share of the space counts from the chat input, rows
-        included. With no rows left in the stack, they slide up out of the chat
-        input as usual.
+    questionRows:
+        The drawer never covers the question rows still in the stack, so a
+        question still running stays in view, its row following the harness,
+        whatever is open. Whether it is a question open onto its table or the
+        previous answers, the drawer slides up from on top of the rows in the
+        stack rather than out of the chat input over them, leaving those rows
+        where they were, uncovered and undimmed, and its share of the space
+        counts from the chat input, rows included. As rows come and go, the
+        drawer's bottom follows the top of the stack. With no rows left in the
+        stack, it slides up out of the chat input.
 
     height:
         The drawer opens to 80% of the height of the space above the chat input
@@ -48,7 +50,7 @@ shape AnswerDrawerShape:
         While the drawer is open, a dark shade fades in over what it covers, to
         draw attention to it, and fades back out when it closes. The shade
         covers all the space above the chat input beneath the drawer: the
-        message list, any file open beside it, and the stack of question rows,
-        except those the previous answers leave uncovered. Question rows in the
+        message list and any file open beside it, but not the question rows
+        the drawer sits on top of. Question rows in the
         stack, running or finished, never dim anything themselves; they push
         the message list up instead.

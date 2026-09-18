@@ -53,9 +53,10 @@ use gpui_kit::*;
 
 use crate::activity::{Job, JobKind};
 use crate::chat_input::{
-    self, ChatInput, NewSession, PreviewPrompt, QueuedEdit, SendMode, Submit, TabChanged,
+    self, ChatInput, NewConversation, PreviewPrompt, QueuedEdit, SendMode, Submit, TabChanged,
 };
 use crate::commit_notes;
+use crate::conversations;
 use crate::file_link::OpenFile;
 use crate::file_view::{CloseFile, FileView, OpenDefinition, SendToPrompt};
 use crate::harness::{self, HarnessEvent};
@@ -68,6 +69,7 @@ use crate::piton_lsp::PitonSession;
 use crate::project_directory::ProjectDirectory;
 use crate::prompt_history::{self, RunRecord, SavedPrompt};
 use crate::prompt_queue::{self, QueuedPrompt};
+use crate::referenced_spec;
 use crate::scrollbar::{self, SetLock};
 use crate::selection_popover::{SelectionAction, selection_popover};
 use crate::system_prompts;
@@ -76,6 +78,7 @@ use crate::task_table::{
     TableView, TaskTable, ToolKind, relative_to_project, row_status, shown_markdown_view,
 };
 use crate::theme::Hue;
+use crate::understanding::{self, Understanding};
 
 /// The share of the width an opened file takes from the task view.
 const FILE_SHARE: f32 = 0.5;
@@ -156,6 +159,17 @@ struct PromptTask {
     status: TaskStatus,
     /// The mode it was sent in, when known, which tints its header.
     mode: Option<SendMode>,
+    /// The spec files its prompt imports from, once it has compiled.
+    imported: Vec<PathBuf>,
+    /// The spec location it was sent against, once it has compiled.
+    spec_dir: Option<PathBuf>,
+    /// The files its run references, for the referenced spec sidebar.
+    references: referenced_spec::References,
+    /// The constraints the harness has taken from the spec for it, as its
+    /// understanding file last read; a question has none.
+    understanding: Understanding,
+    /// Follows its understanding file while it runs.
+    _understanding_watch: Task<()>,
 }
 
 /// A sent prompt once compiled.
@@ -240,6 +254,11 @@ impl PromptTask {
             reply: Reply::default(),
             status: TaskStatus::Compiling,
             mode: None,
+            imported: Vec::new(),
+            spec_dir: None,
+            references: referenced_spec::References::default(),
+            understanding: Understanding::default(),
+            _understanding_watch: Task::ready(()),
         }
     }
 
@@ -276,6 +295,7 @@ impl PromptTask {
 
     /// Folds a harness event into the task's output and status.
     fn apply(&mut self, event: HarnessEvent) {
+        self.references.apply(&event);
         match self.reply.apply(event) {
             Some(error) => self.fail(error),
             None if self.reply.done && self.status == TaskStatus::Running => {
@@ -783,6 +803,64 @@ fn covered(history: Div, pane: impl IntoElement, width: Pixels, cx: &App) -> Div
         )
 }
 
+/// The task view at `width`, its left edge at the body's, with a sliding
+/// `pane` laid over its right, as [`covered`] lays one over its left.
+fn covered_right(history: Div, pane: impl IntoElement, width: Pixels, cx: &App) -> Div {
+    div()
+        .relative()
+        .size_full()
+        .overflow_hidden()
+        .child(
+            div()
+                .absolute()
+                .top_0()
+                .bottom_0()
+                .left_0()
+                .w(width)
+                .child(history),
+        )
+        .child(
+            div()
+                .absolute()
+                .top_0()
+                .bottom_0()
+                .right_0()
+                .occlude()
+                .bg(cx.theme().background)
+                .child(pane),
+        )
+}
+
+/// A sidebar sliding out from, or back behind, the task view's right edge,
+/// its width following `spring`: `contents` at their full `width`, pinned to
+/// the pane's left, so they come into view from behind the edge as the pane
+/// grows.
+fn slide_pane(
+    id: (&'static str, usize),
+    spring_id: (&'static str, usize),
+    spring: SpringAnimation<Pixels>,
+    width: Pixels,
+    contents: AnyElement,
+) -> AnyElement {
+    // Lets UI tests find the pane as it slides; inert in normal builds.
+    gpui_kit::TestSupportExt::test_support(div().id(id))
+        .relative()
+        .flex_none()
+        .h_full()
+        .overflow_hidden()
+        .child(
+            div()
+                .absolute()
+                .top_0()
+                .bottom_0()
+                .left_0()
+                .w(width)
+                .child(contents),
+        )
+        .with_spring(spring_id, spring, |this, width| this.w(width.max(px(0.))))
+        .into_any_element()
+}
+
 /// Where a task's compiled prompt's markdown is kept.
 fn prompt_key(task_ix: usize) -> MarkdownKey {
     MarkdownKey {
@@ -878,9 +956,10 @@ impl Session {
     }
 
     /// The latest conversation in a project's history, with its context as
-    /// that run left it.
-    fn latest(history: &[SavedPrompt], project_dir: &Path) -> Option<Self> {
-        history.iter().rev().find_map(|saved| {
+    /// that run left it; none if that is the conversation `left` for a new
+    /// one, so the next run starts fresh.
+    fn latest(history: &[SavedPrompt], project_dir: &Path, left: Option<&str>) -> Option<Self> {
+        let latest = history.iter().rev().find_map(|saved| {
             let (mut id, mut context) = (None, None);
             for event in saved
                 .record
@@ -900,7 +979,8 @@ impl Session {
                 id: id?,
                 context,
             })
-        })
+        })?;
+        (Some(latest.id.as_str()) != left).then_some(latest)
     }
 
     /// Follows a run's events: the conversation it reported, and how much
@@ -945,6 +1025,18 @@ impl Session {
 }
 
 /// A file pane sliding closed.
+/// The referenced spec sidebar, just closed, sliding back behind the task
+/// view's right edge.
+struct RefsClosing {
+    files: Vec<referenced_spec::Referenced>,
+    understanding: Understanding,
+    /// The width it slides closed from.
+    width: Pixels,
+    /// Which opening of the sidebar this closes, so each slide animates afresh.
+    slide: usize,
+    closed: Instant,
+}
+
 struct PaneClosing {
     file: Entity<FileView>,
     /// The width it slides closed from.
@@ -1074,6 +1166,25 @@ pub struct PromptMode {
     file_split: Entity<ResizableState>,
     /// The width the task view and any file share, as last laid out.
     body_width: Rc<Cell<Pixels>>,
+    /// Whether the referenced spec sidebar shows, as of the last frame.
+    refs_shown: bool,
+    /// When the referenced spec sidebar last slid out, and how many times it
+    /// has.
+    refs_opened: Option<(usize, Instant)>,
+    /// The referenced spec sidebar, just closed, sliding back in.
+    refs_closing: Option<RefsClosing>,
+    /// The referenced spec sidebar's width, as last laid out once settled, so
+    /// it opens at the width it was dragged to.
+    refs_width: Rc<Cell<Pixels>>,
+    refs_split: Entity<ResizableState>,
+    refs_scroll: ScrollHandle,
+    /// How the sidebar's height is shared between its referenced files and
+    /// its understanding, kept for as long as the application runs.
+    refs_halves: Entity<ResizableState>,
+    understanding_scroll: ScrollHandle,
+    /// The task view's width beside the referenced spec sidebar, as last laid
+    /// out.
+    history_width: Rc<Cell<Pixels>>,
     _pending: Task<()>,
     /// The conversation the tasks share, each resuming the last.
     session: Option<Session>,
@@ -1156,8 +1267,8 @@ impl PromptMode {
                 this.on_ask_tab = input.read(cx).mode() == SendMode::Ask;
                 cx.notify();
             }),
-            cx.subscribe(&chat_input, |this, _, _: &NewSession, cx| {
-                this.new_session(cx)
+            cx.subscribe(&chat_input, |this, _, _: &NewConversation, cx| {
+                this.new_conversation(cx)
             }),
             // A row whose markdown finished parsing is measured again.
             cx.observe_global::<MarkdownStates>(|_, cx| cx.notify()),
@@ -1189,6 +1300,15 @@ impl PromptMode {
             pane_width: Rc::default(),
             file_split: cx.new(|_| ResizableState::default()),
             body_width: Rc::default(),
+            refs_shown: false,
+            refs_opened: None,
+            refs_closing: None,
+            refs_width: Rc::new(Cell::new(referenced_spec::WIDTH)),
+            refs_split: cx.new(|_| ResizableState::default()),
+            refs_scroll: ScrollHandle::new(),
+            refs_halves: cx.new(|_| ResizableState::default()),
+            understanding_scroll: ScrollHandle::new(),
+            history_width: Rc::default(),
             _pending: Task::ready(()),
             session: None,
             session_epoch: 0,
@@ -1260,13 +1380,25 @@ impl PromptMode {
         match dir.as_ref().and_then(|dir| self.background.remove(dir)) {
             Some(mut back) => self.swap_session(&mut back),
             None => {
+                // Printed once as the project opens, ready for its prompts.
+                if let Some(dir) = dir.clone() {
+                    cx.background_spawn(async move {
+                        crate::piton_fluency::get(&dir);
+                    })
+                    .detach();
+                }
                 self.project_dir = dir;
                 self.load_queue(cx);
                 self.load_history(cx);
                 self.load_answers(cx);
             }
         }
-        // Nothing on screen carries over from the project left.
+        // Nothing on screen carries over from the project left, and the
+        // referenced spec sidebar shows as the project switched to has it,
+        // without sliding.
+        self.refs_shown = self.refs_wanted();
+        self.refs_opened = None;
+        self.refs_closing = None;
         self.output_locked = false;
         self.selection_popover = None;
         self.output_table.forget();
@@ -1603,7 +1735,9 @@ impl PromptMode {
 
     /// Adds a task for `text`, compiling, as the latest. Returns its index.
     fn push_task(&mut self, text: SharedString, cx: &mut Context<Self>) -> usize {
-        self.tasks.push(PromptTask::new(text));
+        let mut task = PromptTask::new(text);
+        task.references = referenced_spec::References::new(self.project_dir.clone());
+        self.tasks.push(task);
         // A new task's output starts at its top.
         self.scroll_output_to_top();
         cx.notify();
@@ -1763,8 +1897,10 @@ impl PromptMode {
         let load = cx.background_spawn(async move {
             let project_dir = load_dir;
             let history = prompt_history::load(&project_dir);
-            // Tasks sent now carry on the conversation the history left off.
-            let session = Session::latest(&history, &project_dir);
+            // Tasks sent now carry on the conversation the history left off,
+            // unless it was left for a new one.
+            let left = conversations::left(&project_dir, conversations::Kind::Tasks);
+            let session = Session::latest(&history, &project_dir, left.as_deref());
             let tasks = history
                 .into_iter()
                 .map(PromptTask::restore)
@@ -2066,19 +2202,240 @@ impl PromptMode {
         cx.notify();
     }
 
-    /// Leaves the selected tab's conversation, the questions' on the Ask tab
-    /// and the tasks' on any other, so its next prompt starts a new one with
-    /// no context. Runs already under way finish as they were, but no longer
-    /// carry on the conversation left, nor bring it back.
-    pub fn new_session(&mut self, cx: &mut Context<Self>) {
-        if self.on_ask_tab {
-            self.ask_session = None;
+    /// Starts a new conversation for the selected tab, the questions' on the
+    /// Ask tab and the tasks' on any other, so its next run starts fresh
+    /// rather than carrying on. The conversation left is kept with the
+    /// project, so reopening it doesn't carry it on either. Does nothing while
+    /// there is nothing to carry on, or while a run of it is under way.
+    pub fn new_conversation(&mut self, cx: &mut Context<Self>) {
+        if self.context().is_none() || self.conversation_running() {
+            return;
+        }
+        let Some(project_dir) = self.project_dir.clone() else {
+            return;
+        };
+        let (left, kind) = if self.on_ask_tab {
             self.ask_session_epoch += 1;
+            (self.ask_session.take(), conversations::Kind::Questions)
         } else {
-            self.session = None;
             self.session_epoch += 1;
+            (self.session.take(), conversations::Kind::Tasks)
+        };
+        if let Some(left) = left {
+            cx.background_spawn(async move {
+                if let Err(err) = conversations::leave(&project_dir, kind, &left.id) {
+                    eprintln!("could not keep the conversation left: {err:#}");
+                }
+            })
+            .detach();
         }
         cx.notify();
+    }
+
+    /// Whether the referenced spec sidebar should show: while a task from the
+    /// Code, Chain, or Spec tab runs.
+    fn refs_wanted(&self) -> bool {
+        self.working
+            && self
+                .tasks
+                .last()
+                .is_some_and(|task| task.mode != Some(SendMode::Ask))
+    }
+
+    /// The spec files the running task references.
+    fn referenced_files(&self) -> Vec<referenced_spec::Referenced> {
+        let (Some(project_dir), Some(task)) = (self.project_dir.as_deref(), self.tasks.last())
+        else {
+            return Vec::new();
+        };
+        referenced_spec::collect(
+            &task.imported,
+            &task.references,
+            project_dir,
+            task.spec_dir.as_deref(),
+        )
+    }
+
+    /// The understanding of the running task, as last read.
+    fn running_understanding(&self) -> Understanding {
+        self.tasks
+            .last()
+            .map(|task| task.understanding.clone())
+            .unwrap_or_default()
+    }
+
+    /// Follows the understanding `file` of the task at `ix` while it runs,
+    /// reading it a few times a second off the UI thread, and showing it
+    /// again whenever what it says, or whether its links' files exist,
+    /// changes.
+    fn watch_understanding(
+        ix: usize,
+        file: PathBuf,
+        project_dir: PathBuf,
+        cx: &mut Context<Self>,
+    ) -> Task<()> {
+        cx.spawn(async move |this, cx| {
+            let mut last: Option<Option<Vec<understanding::Read>>> = None;
+            loop {
+                let read = cx
+                    .background_spawn({
+                        let (file, project_dir) = (file.clone(), project_dir.clone());
+                        async move { understanding::read(&file, &project_dir) }
+                    })
+                    .await;
+                let fresh = last.as_ref() != Some(&read);
+                last = Some(read.clone());
+                let running = this
+                    .update(cx, |this, cx| {
+                        this.in_project(&project_dir, cx, |this, cx| {
+                            let Some(task) = this.tasks.get_mut(ix) else {
+                                return false;
+                            };
+                            if fresh && task.understanding.update(read) {
+                                cx.notify();
+                            }
+                            task.status.is_active()
+                        })
+                    })
+                    .ok()
+                    .flatten()
+                    .unwrap_or(false);
+                if !running {
+                    break;
+                }
+                cx.background_executor()
+                    .timer(understanding::POLL_INTERVAL)
+                    .await;
+            }
+        })
+    }
+
+    /// The task view with the referenced spec sidebar at its right while a
+    /// task runs: sliding out from behind its right edge as the task starts,
+    /// over the task view, which keeps its width until the slide settles; then
+    /// a split that can be dragged; and sliding back once the run is over.
+    fn with_referenced_spec(
+        &mut self,
+        history: Div,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let shown = self.refs_wanted();
+        if shown != self.refs_shown {
+            self.refs_shown = shown;
+            let slide = self.refs_opened.map_or(0, |(n, _)| n);
+            if shown {
+                self.refs_opened = Some((slide + 1, Instant::now()));
+                self.refs_closing = None;
+                // Opens at the width last dragged to.
+                self.refs_split = cx.new(|_| ResizableState::default());
+            } else {
+                self.refs_closing = Some(RefsClosing {
+                    files: self.referenced_files(),
+                    understanding: self.running_understanding(),
+                    width: self.refs_width.get(),
+                    slide,
+                    closed: Instant::now(),
+                });
+            }
+        }
+        if self
+            .refs_closing
+            .as_ref()
+            .is_some_and(|closing| closing.closed.elapsed() >= PANE_SLIDE_TIME)
+        {
+            self.refs_closing = None;
+        }
+        let host = div().relative().size_full().on_prepaint({
+            let history_width = self.history_width.clone();
+            move |bounds, _, _| history_width.set(bounds.size.width)
+        });
+        let host_width = self.history_width.get();
+        let contents = |files: &[referenced_spec::Referenced],
+                        understanding: &Understanding,
+                        this: &Self,
+                        cx: &mut Context<Self>| {
+            referenced_spec::render(
+                files,
+                understanding,
+                referenced_spec::Layout {
+                    files_scroll: &this.refs_scroll,
+                    understanding_scroll: &this.understanding_scroll,
+                    split: &this.refs_halves,
+                },
+                this.file_opener(cx),
+                cx,
+            )
+        };
+        let sliding = self
+            .refs_opened
+            .filter(|(_, opened)| opened.elapsed() < PANE_SLIDE_TIME)
+            .map(|(n, _)| n);
+        if shown {
+            let files = self.referenced_files();
+            let understanding = self.running_understanding();
+            // Rows just added or changed fade back.
+            if understanding.fading() {
+                window.request_animation_frame();
+            }
+            let width = self.refs_width.get();
+            if let Some(n) = sliding.filter(|_| host_width > px(0.)) {
+                window.request_animation_frame();
+                let grow = SpringAnimation::new(PANE_SPRING).to(width).from(px(0.));
+                let pane = slide_pane(
+                    ("refs-slide", n),
+                    ("refs-grow", n),
+                    grow,
+                    width,
+                    contents(&files, &understanding, self, cx),
+                );
+                return host.child(covered_right(history, pane, host_width, cx));
+            }
+            let refs_width = self.refs_width.clone();
+            let sidebar = div()
+                .size_full()
+                .on_prepaint(move |bounds, _, _| refs_width.set(bounds.size.width))
+                .child(contents(&files, &understanding, self, cx));
+            return host.child(
+                h_resizable("refs-split")
+                    .with_state(&self.refs_split)
+                    .children([
+                        resizable_panel()
+                            .size_range(MIN_SPLIT_WIDTH..Pixels::MAX)
+                            .child(history),
+                        resizable_panel()
+                            .size(width)
+                            .size_range(referenced_spec::MIN_WIDTH..Pixels::MAX)
+                            .child(sidebar),
+                    ]),
+            );
+        }
+        if let Some(closing) = &self.refs_closing {
+            window.request_animation_frame();
+            let (width, n) = (closing.width, closing.slide);
+            let shrink = SpringAnimation::new(PANE_SPRING).to(px(0.)).from(width);
+            let files = closing.files.clone();
+            let understanding = closing.understanding.clone();
+            let pane = slide_pane(
+                ("refs-slide-out", n),
+                ("refs-shrink", n),
+                shrink,
+                width,
+                contents(&files, &understanding, self, cx),
+            );
+            return host.child(covered_right(history, pane, host_width, cx));
+        }
+        host.child(history)
+    }
+
+    /// Whether a run of the selected tab's conversation is under way: a task
+    /// on Code, Chain, or Spec, any question on Ask.
+    fn conversation_running(&self) -> bool {
+        if self.on_ask_tab {
+            self.asks.iter().any(|ask| ask.task.status.is_active())
+        } else {
+            self.working
+        }
     }
 
     /// How much context the selected tab's next prompt carries on with:
@@ -2123,7 +2480,8 @@ impl PromptMode {
         let load = cx.background_spawn(async move {
             let project_dir = load_dir;
             let saved = prompt_history::load_asks(&project_dir);
-            let session = Session::latest(&saved, &project_dir);
+            let left = conversations::left(&project_dir, conversations::Kind::Questions);
+            let session = Session::latest(&saved, &project_dir, left.as_deref());
             let answers = saved
                 .into_iter()
                 .map(PromptTask::restore)
@@ -2210,7 +2568,11 @@ impl PromptMode {
                 };
                 let file = hidden_anchor::save(&anchor, &text, &project_dir)?;
                 let compiled = hidden_anchor::compile(&anchor, &file, &project_dir);
-                anyhow::Ok((anchor.name().to_string(), file, compiled))
+                let imported = (
+                    hidden_anchor::spec_files(&anchor.imports, &project_dir),
+                    hidden_anchor::spec_dir(&project_dir),
+                );
+                anyhow::Ok((anchor.name().to_string(), file, compiled, imported))
             }
         };
 
@@ -2250,17 +2612,32 @@ impl PromptMode {
             let mut prompt_file = None;
             // The harness's final summary, once the run finished without error.
             let mut finished: Option<String> = None;
-            let compiled = compile.await.and_then(|(anchor, file, compiled)| {
+            let compiled = compile.await.and_then(|(anchor, file, compiled, imported)| {
                 prompt_file = Some(file);
-                Ok((anchor, compiled?))
+                Ok((anchor, compiled?, imported))
             });
             match compiled {
-                Ok((anchor, compiled)) => {
+                Ok((anchor, compiled, imported)) => {
                     let prompt = compiled.user_prompt;
                     record.user_prompt = Some(prompt.clone());
+                    // A Code, Chain, or Spec task keeps its understanding
+                    // beside its history record; a question has none.
+                    let understanding_file = prompt_file
+                        .as_deref()
+                        .filter(|_| builds)
+                        .map(understanding::path);
+                    let shown_path = understanding_file.as_deref().map(|file| {
+                        file.strip_prefix(&project_dir)
+                            .unwrap_or(file)
+                            .display()
+                            .to_string()
+                    });
+                    let system_prompt = compiled.system_prompt.map(|system_prompt| {
+                        system_prompts::fill_understanding(&system_prompt, shown_path.as_deref())
+                    });
                     let mut events = harness::send(
                         prompt.clone(),
-                        compiled.system_prompt,
+                        system_prompt,
                         resume.clone().map(|session| harness::Resume {
                             session,
                             fork: false,
@@ -2270,6 +2647,20 @@ impl PromptMode {
                     if this
                         .update(cx, |this, cx| {
                             this.in_project(&project_dir, cx, |this, cx| {
+                                if let Some(file) = understanding_file {
+                                    let watch = Self::watch_understanding(
+                                        task_ix,
+                                        file,
+                                        project_dir.clone(),
+                                        cx,
+                                    );
+                                    if let Some(task) = this.tasks.get_mut(task_ix) {
+                                        task._understanding_watch = watch;
+                                    }
+                                }
+                                if let Some(task) = this.tasks.get_mut(task_ix) {
+                                    (task.imported, task.spec_dir) = imported;
+                                }
                                 this.show_compiled(task_ix, anchor, prompt, cx)
                             });
                         })
@@ -2461,9 +2852,13 @@ impl PromptMode {
                 Ok((anchor, compiled)) => {
                     let prompt = compiled.user_prompt;
                     log.record.user_prompt = Some(prompt.clone());
+                    // A question has no understanding file.
+                    let system_prompt = compiled.system_prompt.map(|system_prompt| {
+                        system_prompts::fill_understanding(&system_prompt, None)
+                    });
                     let mut events = harness::send(
                         prompt.clone(),
-                        compiled.system_prompt,
+                        system_prompt,
                         resume
                             .clone()
                             .map(|session| harness::Resume { session, fork }),
@@ -2641,14 +3036,10 @@ impl PromptMode {
     }
 
     /// How far above the chat input the drawer sits: on top of any question
-    /// rows still in the stack while the previous answers are expanded, so they
-    /// stay in view, or right on the input otherwise.
+    /// rows still in the stack, so a running question stays in view whatever
+    /// is open, or right on the input when there are none.
     fn drawer_bottom(&self) -> Pixels {
-        if self.ask_history_shown() {
-            self.stack_rows_height.get()
-        } else {
-            px(0.)
-        }
+        self.stack_rows_height.get()
     }
 
     /// Whether the drawer follows a drag rather than sliding: it was dragged
@@ -2693,6 +3084,7 @@ impl PromptMode {
     /// drawer leaves the stack.
     fn render_ask_stack(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         if self.asks.is_empty() && !self.on_ask_tab {
+            self.stack_rows_height.set(px(0.));
             return None;
         }
         let expanded = self.expanded().map(|ask| ask.id);
@@ -2743,8 +3135,8 @@ impl PromptMode {
     }
 
     /// The answer drawer: a finished question open onto its whole table, or
-    /// the previous answers expanded, sliding up out of the chat input over
-    /// the task view and the stack of questions, which dim behind it. Its top
+    /// the previous answers expanded, sliding up from on top of the questions
+    /// still in the stack over the task view, which dims behind it. Its top
     /// edge resizes it.
     fn render_ask_drawer(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         if !self.drawer_open() {
@@ -3310,6 +3702,12 @@ impl Render for PromptMode {
             self.chat_input
                 .update(cx, |input, cx| input.set_context(context, cx));
         }
+        // New conversation waits for a run of the conversation to finish.
+        let running = self.conversation_running();
+        if self.chat_input.read(cx).conversation_running() != running {
+            self.chat_input
+                .update(cx, |input, cx| input.set_conversation_running(running, cx));
+        }
         // The popover for text selected in an answer goes with the drawer.
         if !self.drawer_open() {
             self.selection_popover = None;
@@ -3367,6 +3765,7 @@ impl Render for PromptMode {
         // Lets UI tests find the history; inert in normal builds.
         let history = gpui_kit::TestSupportExt::test_support(history);
         let history = div().relative().size_full().child(history);
+        let history = self.with_referenced_spec(history, window, cx);
 
         // The task view, and any file split off it.
         let body = div().relative().flex_1().min_h_0().on_prepaint({
@@ -3553,7 +3952,10 @@ fn resolve_anchor(
     system_prompts::save_missing(project_dir).ok();
     anchor.mode = Some(mode);
     anchor.attached_text = attached_text;
-    anchor.system_prompt = hidden_anchor::system_prompt(mode, project_dir)?;
+    // Waits for the project's fluency if it is still being printed; every
+    // caller is already off the UI thread.
+    let fluency = crate::piton_fluency::get(project_dir);
+    anchor.system_prompt = hidden_anchor::system_prompt(mode, project_dir, &fluency)?;
     Ok(anchor)
 }
 
@@ -3827,6 +4229,277 @@ mod tests {
             Root::new(view, window, cx)
         });
         (prompt_mode.unwrap(), window.into())
+    }
+
+    /// While a task from the Code, Chain, or Spec tab runs, the referenced
+    /// spec sidebar slides out from the task view's right edge, over the task
+    /// view, which keeps its width meanwhile, lists the spec files the task
+    /// references, opens one clicked, and slides back once the run is over.
+    /// A question never shows it.
+    /// The sidebar's bottom half shows the running task's understanding
+    /// file as the harness writes it, a row per list item, sharing the height
+    /// evenly with the referenced files; a row whose link points to a missing
+    /// file does nothing, and one whose file exists opens it.
+    #[gpui_kit::test]
+    async fn referenced_spec_shows_the_understanding(cx: &mut TestAppContext) {
+        let dir =
+            std::env::temp_dir().join(format!("suspense-understanding-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("spec")).unwrap();
+        std::fs::write(
+            dir.join("piton.config.pi"),
+            "export piton-config Project:\n    root: ./spec\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("spec/a.pi"), "a: 1\n").unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        let dir = prompt_mode.read_with(cx, |this, _| this.project_dir.clone().unwrap());
+        let file = crate::understanding::path(&dir.join(".suspense/history/1-Prompt_a.pi"));
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("Change a".into(), cx);
+            this.tasks[ix].mode = Some(crate::chat_input::SendMode::Code);
+            this.tasks[ix].status = TaskStatus::Running;
+            this.tasks[ix]._understanding_watch =
+                PromptMode::watch_understanding(ix, file.clone(), dir.clone(), cx);
+            this.set_working(true);
+            cx.notify();
+        });
+        let settle = |cx: &mut TestAppContext| {
+            cx.executor().advance_clock(Duration::from_millis(300));
+            cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(400));
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                .unwrap();
+        };
+        settle(cx);
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find("understanding-list").is_some());
+            assert!(window.try_find(("understanding-row", 0usize)).is_none());
+        })
+        .unwrap();
+
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(
+            &file,
+            "Notes that aren't a list item.\n\
+             - [A is one](spec/a.pi)\n\
+             - [B is two](spec/missing.pi)\n",
+        )
+        .unwrap();
+        settle(cx);
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find(("understanding-row", 1usize)).is_some());
+            assert!(window.try_find(("understanding-row", 2usize)).is_none());
+            let files = window.find("referenced-files-list").bounds();
+            let understanding = window.find("understanding-list").bounds();
+            assert!(
+                understanding.top() >= files.bottom() - gpui_kit::px(1.),
+                "{understanding:?} isn't beneath {files:?}"
+            );
+            assert!(
+                (understanding.size.height - files.size.height).abs() <= gpui_kit::px(4.)
+                    && understanding.size.height >= gpui_kit::px(40.),
+                "the halves {files:?} and {understanding:?} don't share the height"
+            );
+        })
+        .unwrap();
+        prompt_mode.read_with(cx, |this, _| {
+            let rows = &this.tasks.last().unwrap().understanding.rows;
+            assert_eq!(rows[0].text, "A is one");
+            assert!(rows[0].target.is_some() && rows[1].linked && rows[1].target.is_none());
+        });
+
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("understanding-row", 1usize), cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        prompt_mode.read_with(cx, |this, _| {
+            assert!(this.file.is_none(), "a missing file opened")
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("understanding-row", 0usize), cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        prompt_mode.read_with(cx, |this, _| {
+            assert!(this.file.is_some(), "the linked file didn't open")
+        });
+    }
+
+    #[gpui_kit::test]
+    async fn referenced_spec_slides_out_while_a_task_runs(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-refs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("spec")).unwrap();
+        std::fs::write(
+            dir.join("piton.config.pi"),
+            "export piton-config Project:\n    root: ./spec\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("spec/a.pi"), "a: 1\n").unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        let dir = prompt_mode.read_with(cx, |this, _| this.project_dir.clone().unwrap());
+        let frame = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                .unwrap();
+        };
+        frame(cx);
+
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("Change a".into(), cx);
+            this.tasks[ix].mode = Some(crate::chat_input::SendMode::Code);
+            this.tasks[ix].spec_dir = Some(dir.join("spec"));
+            for event in [
+                tool("t1", "Read"),
+                HarnessEvent::ToolCalled {
+                    id: "t1".into(),
+                    name: "Read".into(),
+                    input: serde_json::json!({ "file_path": dir.join("spec/a.pi") }),
+                    subagent: false,
+                },
+                tool("t2", "Bash"),
+                HarnessEvent::ToolCalled {
+                    id: "t2".into(),
+                    name: "Bash".into(),
+                    input: serde_json::json!({ "command": "cat src/main.rs spec/a.pi" }),
+                    subagent: false,
+                },
+            ] {
+                this.apply_event(ix, event, cx);
+            }
+            this.set_working(true);
+            cx.notify();
+        });
+
+        // It grows from the task view's right edge, through widths in between,
+        // while the task view keeps its width.
+        let mut widths = Vec::new();
+        let mut history_widths = Vec::new();
+        let start = std::time::Instant::now();
+        while start.elapsed() < Duration::from_millis(350) {
+            let found = cx
+                .update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    window.try_find(("refs-slide", 1usize)).map(|pane| {
+                        let history = window.find("history").bounds();
+                        history_widths.push(history.size.width);
+                        (pane.bounds(), history)
+                    })
+                })
+                .unwrap();
+            if let Some((pane, history)) = found {
+                assert!(
+                    (pane.right() - history.right()).abs() <= gpui_kit::px(2.),
+                    "the sidebar {pane:?} doesn't grow from the task view's right edge {history:?}"
+                );
+                widths.push(pane.size.width);
+            }
+            std::thread::sleep(Duration::from_millis(8));
+        }
+        let widest = widths
+            .iter()
+            .copied()
+            .fold(gpui_kit::px(0.), gpui_kit::Pixels::max);
+        assert!(
+            widths
+                .iter()
+                .any(|width| *width > gpui_kit::px(1.) && *width < widest - gpui_kit::px(1.)),
+            "the sidebar {widths:?} appeared without sliding out"
+        );
+        assert!(
+            history_widths
+                .windows(2)
+                .all(|pair| (pair[1] - pair[0]).abs() < gpui_kit::px(0.5)),
+            "the task view {history_widths:?} changed width as the sidebar slid out"
+        );
+
+        // Settled, it is 260 pixels wide, beside the task view, listing the
+        // spec file read and not the code.
+        std::thread::sleep(Duration::from_millis(200));
+        for _ in 0..3 {
+            cx.run_until_parked();
+            frame(cx);
+        }
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let refs = window.find("referenced-files").bounds();
+            let history = window.find("history").bounds();
+            assert!(
+                (refs.size.width - gpui_kit::px(260.)).abs() <= gpui_kit::px(2.),
+                "the sidebar is {refs:?}"
+            );
+            assert!(
+                refs.left() >= history.right() - gpui_kit::px(1.),
+                "{refs:?} isn't right of {history:?}"
+            );
+            assert!(window.try_find(("referenced-file", 0usize)).is_some());
+            assert!(
+                window.try_find(("referenced-file", 1usize)).is_none(),
+                "a code file is listed"
+            );
+        })
+        .unwrap();
+
+        // Clicking the file opens it.
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("referenced-file", 0usize), cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        prompt_mode.read_with(cx, |this, _| {
+            assert!(this.file.is_some(), "the file didn't open")
+        });
+
+        // Once the run is over, it slides back and is gone.
+        prompt_mode.update(cx, |this, cx| {
+            this.set_working(false);
+            cx.notify();
+        });
+        let mut widths = Vec::new();
+        let start = std::time::Instant::now();
+        while start.elapsed() < Duration::from_millis(600) {
+            let found = cx
+                .update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    window
+                        .try_find(("refs-slide-out", 1usize))
+                        .map(|pane| pane.bounds().size.width)
+                })
+                .unwrap();
+            widths.extend(found);
+            std::thread::sleep(Duration::from_millis(8));
+        }
+        assert!(
+            widths
+                .iter()
+                .any(|width| *width > gpui_kit::px(1.) && *width < widths[0] - gpui_kit::px(1.)),
+            "the sidebar {widths:?} closed without sliding back"
+        );
+        frame(cx);
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find("referenced-files").is_none());
+        })
+        .unwrap();
+
+        // A question running shows no sidebar.
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("Why?".into(), cx);
+            this.tasks[ix].mode = Some(crate::chat_input::SendMode::Ask);
+            this.set_working(true);
+            cx.notify();
+        });
+        frame(cx);
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find(("refs-slide", 2usize)).is_none());
+            assert!(window.try_find("referenced-files").is_none());
+        })
+        .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// A queued prompt is edited in the chat input, held meanwhile, and saved
@@ -4367,7 +5040,7 @@ mod tests {
             },
         ];
         let project = std::path::Path::new("/project");
-        let mut session = Session::latest(&history, project);
+        let mut session = Session::latest(&history, project, None);
         assert_eq!(
             Session::resume(&session, project).as_deref(),
             Some("latest")
@@ -4386,16 +5059,26 @@ mod tests {
         assert!(session.is_some(), "a different session was forgotten");
         Session::forget(&mut session, "latest");
         assert!(session.is_none());
-        assert!(Session::latest(&history[2..], project).is_none());
+        assert!(Session::latest(&history[2..], project, None).is_none());
+
+        // Left for a new one, the latest conversation isn't carried on; an
+        // older one left changes nothing.
+        assert!(Session::latest(&history, project, Some("latest")).is_none());
+        assert_eq!(
+            Session::latest(&history, project, Some("old")).map(|session| session.id),
+            Some("latest".into())
+        );
     }
 
     /// The chat input shows how much context the selected tab's conversation
-    /// holds. New Session leaves it: the next prompt starts a new conversation,
-    /// and a run of the old one that is still going can't bring it back. The
-    /// Ask tab's conversation is its own.
+    /// holds. New conversation leaves it: the next prompt starts a new
+    /// conversation, a run of the old one that is still going can't bring it
+    /// back, and neither can reopening the project. The Ask tab's
+    /// conversation is its own.
     #[gpui_kit::test]
-    async fn new_session_leaves_the_conversation_and_its_context(cx: &mut TestAppContext) {
-        let dir = std::env::temp_dir().join(format!("suspense-new-session-{}", std::process::id()));
+    async fn new_conversation_leaves_the_conversation_and_its_context(cx: &mut TestAppContext) {
+        let dir =
+            std::env::temp_dir().join(format!("suspense-new-conversation-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let (prompt_mode, handle) = open(cx);
@@ -4445,14 +5128,31 @@ mod tests {
         prompt_mode.update(cx, |this, _| this.on_ask_tab = false);
         assert_eq!(shown(cx), Some(42_100));
 
-        // New Session: the next task starts afresh, with nothing to resume.
-        cx.update_window(handle, |_, window, cx| window.click("new-session", cx))
+        // While a task runs, its conversation can't be left.
+        prompt_mode.update(cx, |this, _| this.working = true);
+        shown(cx);
+        assert!(input.read_with(cx, |input, _| input.conversation_running()));
+        prompt_mode.update(cx, |this, cx| this.new_conversation(cx));
+        assert_eq!(shown(cx), Some(42_100), "left while a task was running");
+        prompt_mode.update(cx, |this, _| this.working = false);
+
+        // New conversation: the next task starts afresh, with nothing to
+        // resume, and the conversation left is kept with the project.
+        cx.update_window(handle, |_, window, cx| window.click("new-conversation", cx))
             .unwrap();
         cx.run_until_parked();
-        assert_eq!(shown(cx), None, "New Session left context behind");
+        assert_eq!(shown(cx), None, "New conversation left context behind");
         prompt_mode.read_with(cx, |this, _| {
             assert_eq!(Session::resume(&this.session, &dir), None);
         });
+        assert_eq!(
+            crate::conversations::left(&dir, crate::conversations::Kind::Tasks).as_deref(),
+            Some("s1")
+        );
+        assert_eq!(
+            crate::conversations::left(&dir, crate::conversations::Kind::Questions),
+            None
+        );
 
         // The old run, still going, reports on: it doesn't come back.
         prompt_mode.update(cx, |this, _| {
@@ -5060,6 +5760,11 @@ mod tests {
             window.try_find("task-header").is_some() && window.try_find("task-output").is_some()
         })
         .await;
+        // The referenced spec sidebar slides out over the queue's right end
+        // as the task runs; let it settle beside it.
+        std::thread::sleep(super::PANE_SLIDE_TIME);
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+            .unwrap();
         cx.update_window(handle, |_, window, cx| window.click("queue-toggle", cx))
             .unwrap();
         cx.wait_for(handle, Duration::from_secs(1), |window, _| {
@@ -5632,6 +6337,60 @@ mod tests {
         let _ = row;
     }
 
+    /// With another question still running, a finished one opened onto its
+    /// table slides up from on top of the running one's row, which stays in
+    /// view and undimmed, following the harness.
+    #[gpui_kit::test]
+    async fn an_open_answer_leaves_running_questions_in_view(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let done = this.push_ask("Answered?".into(), cx);
+                let running = this.push_ask("Still thinking?".into(), cx);
+                this.update_ask(running, |ask| ask.apply(tool("t1", "Read")), cx);
+                this.update_ask(
+                    done,
+                    |ask| {
+                        ask.apply(HarnessEvent::TextStarted);
+                        ask.apply(HarnessEvent::TextDelta("Yes.".into()));
+                        ask.end();
+                    },
+                    cx,
+                );
+                this.expand_ask(done, cx);
+            });
+        })
+        .unwrap();
+        let mut last = None;
+        let drawer = loop {
+            let (drawer, _) = settle(handle, "ask-drawer", |_, _| true, cx);
+            if last == Some(drawer) {
+                break drawer;
+            }
+            last = Some(drawer);
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        let (row, _) = settle(
+            handle,
+            ("ask-row", 2usize),
+            |row, _| row.size.height > gpui_kit::px(0.),
+            cx,
+        );
+        assert!(
+            (drawer.bottom() - row.top()).abs() <= gpui_kit::px(2.),
+            "the open answer {drawer:?} doesn't sit on top of the running question {row:?}"
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let dim = window.find("ask-dim").bounds();
+            assert!(
+                dim.bottom() <= row.top() + gpui_kit::px(2.),
+                "the shade {dim:?} covers the running question {row:?}"
+            );
+        })
+        .unwrap();
+    }
+
     /// Only the output rows in view are laid out, however long the output; and
     /// a raw output line, which only changes the raw tail at the output's end,
     /// redraws nothing while that end is scrolled out of view, though the
@@ -6091,7 +6850,9 @@ mod tests {
             })
             .unwrap()
         };
-        let share = |panel: Bounds, body: Bounds| panel.size.height / body.size.height;
+        // Its share counts from the chat input, taking in any question rows
+        // it sits on top of.
+        let share = |panel: Bounds, body: Bounds| (body.bottom() - panel.top()) / body.size.height;
 
         let mut last = None;
         let panel = loop {

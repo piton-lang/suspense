@@ -8,6 +8,7 @@ use gpui_kit::component::button::ButtonVariant;
 use gpui_kit::component::dialog::DialogButtonProps;
 use gpui_kit::component::resizable::{ResizableState, h_resizable, resizable_panel};
 use gpui_kit::component::{ActiveTheme, Root, WindowExt as _};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::activity::{Job, JobKind, RevealJob};
@@ -1296,10 +1297,14 @@ impl Render for MainWindow {
                                 .size(SIDEBAR_WIDTH)
                                 .size_range(MIN_SIDEBAR_WIDTH..Pixels::MAX)
                                 .child(
-                                    // The file tree, with the git panel beneath it.
+                                    // The file tree, with the git panel beneath it
+                                    // while it shows, a single line between them.
                                     gpui_kit::component::v_flex()
                                         .size_full()
                                         .child(div().flex_1().min_h_0().child(self.sidebar.clone()))
+                                        .when(self.git_panel.read(cx).is_shown(), |panels: Div| {
+                                            panels.child(crate::sidebar::divider(cx))
+                                        })
                                         .child(self.git_panel.clone()),
                                 ),
                             resizable_panel()
@@ -1334,11 +1339,9 @@ mod tests {
 
     /// The ribbon's body is only as tall as its commands need, and each
     /// command only as tall as it needs: the body is the tallest column on the
-    /// open tab, padded 8 pixels above and below, so a tab of three stacked
-    /// slim buttons is taller than one of two, a tab with no commands is
-    /// shorter than any with them. A full button grows into the room its group
-    /// leaves, up to three slim buttons tall, and is two tall where its group
-    /// leaves no more.
+    /// open tab, padded 8 pixels above and below, and never taller than two
+    /// stacked slim buttons, padded; a tab with no commands is shorter than
+    /// any with them. A full button is always two slim buttons tall.
     #[gpui_kit::test]
     async fn the_ribbon_body_fits_its_commands(cx: &mut TestAppContext) {
         use crate::ribbon::RibbonTab;
@@ -1379,7 +1382,7 @@ mod tests {
             })
             .unwrap()
         };
-        // Two slim buttons stacked, three slim buttons stacked, and no
+        // Two slim buttons stacked, many slim buttons and a full one, and no
         // commands at all.
         let project = body_of(
             RibbonTab::Project,
@@ -1402,17 +1405,18 @@ mod tests {
             cx,
         );
         let empty = body_of(RibbonTab::Code, &[], cx);
+        // Two slim buttons stacked, padded, is as tall as the body gets.
+        let most = gpui_kit::px(22.) * 2. + padding * 3.;
         assert!(
-            empty < project && project < spec,
+            empty < project && project == most && spec == most,
             "the tabs' bodies don't fit their commands: \
-             empty {empty:?}, two stacked {project:?}, three {spec:?}"
+             empty {empty:?}, two stacked {project:?}, many {spec:?}"
         );
 
-        // On Spec, whose tallest column is three slim buttons, a full button
-        // grows to that whole height; on Application, where nothing is taller,
-        // it is two slim buttons tall.
+        // On Spec and on Application alike, a full button is two slim buttons
+        // tall, and fills the buttons' room.
         for (tab, full, stacked) in [
-            (RibbonTab::Spec, "build", 3.),
+            (RibbonTab::Spec, "build", 2.),
             (RibbonTab::Application, "settings", 2.),
         ] {
             ribbon.update(cx, |ribbon, cx| ribbon.select_tab(tab, cx));
@@ -1644,15 +1648,46 @@ mod tests {
                     background.border_widths.right.0 == 0. && background.border_widths.left.0 == 0.,
                     "{mode:?}: the indicator's area has a border"
                 );
+                // The chevron sits between the indicator and the tabs.
+                let chevron = window.find("ribbon-collapse").bounds();
+                assert_eq!(
+                    chevron.size,
+                    gpui_kit::size(gpui_kit::px(22.), gpui_kit::px(22.)),
+                    "{mode:?}: the chevron isn't square"
+                );
+                // The left container holds the indicator and chevron with no
+                // gap between them, vertically centred, shrunk to fit; the
+                // right container holds nothing, so isn't there.
+                let left = window.find("ribbon-left").bounds();
+                assert!(
+                    (chevron.left() - prefix.right()).abs() < gpui_kit::px(1.),
+                    "{mode:?}: a gap between {prefix:?} and {chevron:?}"
+                );
+                assert!(
+                    (left.right() - chevron.right()).abs() < gpui_kit::px(1.)
+                        && (left.left() - prefix.left()).abs() < gpui_kit::px(1.),
+                    "{mode:?}: the left container {left:?} doesn't fit its contents"
+                );
+                assert!(
+                    (chevron.center().y - left.center().y).abs() < gpui_kit::px(1.),
+                    "{mode:?}: the chevron {chevron:?} isn't centred in {left:?}"
+                );
+                assert!(window.try_find("ribbon-right").is_none());
+                let chevron_right = chevron.right().as_f32() * scale;
+                assert!(
+                    chevron.left().as_f32() * scale >= right - 1.,
+                    "{mode:?}: the chevron {chevron:?} isn't after the indicator"
+                );
                 let project_tab = quads.iter().find(|quad| {
-                    (quad.bounds.origin.x.0 - right).abs() < 1.
+                    quad.bounds.origin.x.0 >= chevron_right - 1.
+                        && quad.bounds.origin.x.0 - chevron_right < 8. * scale
                         && (quad.bounds.origin.y.0 - top).abs() < 4.
                         && quad.bounds.size.width.0 > 40. * scale
                         && quad.background.as_solid() == Some(theme.tab_active)
                 });
                 assert!(
                     project_tab.is_some(),
-                    "{mode:?}: no selected tab drawn right after the indicator"
+                    "{mode:?}: no selected tab drawn right after the chevron"
                 );
                 // The line along the bottom of the row shows beneath the
                 // indicator and beyond the tabs, but the open Project tab covers
@@ -3789,7 +3824,8 @@ mod tests {
         .unwrap();
 
         // Too narrow for its commands, the row scrolls them sideways: the
-        // project indicator and chevron stay whole and in the window.
+        // project indicator and the chevron after it stay whole and in the
+        // window, left of the commands.
         let wide = cx
             .update_window(handle, |_, window, _| window.bounds().size)
             .unwrap();
@@ -3800,14 +3836,20 @@ mod tests {
             let row = window.find("ribbon-primary").bounds();
             let commands = window.find("ribbon-primary-commands").bounds();
             let chevron = window.find("ribbon-collapse").bounds();
+            // The same square as beside the tabs.
+            assert_eq!(
+                chevron.size,
+                gpui_kit::size(gpui_kit::px(22.), gpui_kit::px(22.)),
+                "the collapsed chevron isn't square"
+            );
             let name = window.find("ribbon-project-name").bounds();
             let settings = window.find("settings").bounds();
             assert!(
                 row.right() <= gpui_kit::px(360.),
                 "the row overflows: {row:?}"
             );
-            assert!(chevron.right() <= row.right() && chevron.left() >= commands.right());
-            assert!(name.left() >= row.left() && name.right() <= commands.left());
+            assert!(name.left() >= row.left() && name.right() <= chevron.left());
+            assert!(chevron.right() <= commands.left());
             assert!(
                 settings.right() > commands.right(),
                 "the commands squeeze to fit rather than scroll: {settings:?} in {commands:?}"

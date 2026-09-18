@@ -1,0 +1,19 @@
+use /lib
+from /ui import UiComponent
+
+// A sidebar, along either side of what it sits beside, holding panels. Its
+// side and widths switch the text of the sidebar section as it is extended.
+export abstract anchor Sidebar extends UiComponent as sidebar:
+    // Which side it runs along: left or right.
+    side:: string
+    width:: number: 260
+    minWidth:: number: 160
+    // Its panels, top to bottom.
+    panels:: list
+
+    sidebar:
+        It runs along the ${self.side} of what it sits beside, with a thin line down its ${self.side == "left" ? "right" : "left"} edge, where the two meet. It is resized by dragging that edge: it starts ${self.width} pixels wide and can't be dragged narrower than ${self.minWidth}.
+
+        It holds its panels one above the other, in the order it lists them, each across its full width. A single thin line, in the theme's line colour, lies between one panel and the next, never two. A panel that isn't shown for the moment takes no room and leaves no line.
+
+        It is on the theme's base surface, as its panels' bodies are.
