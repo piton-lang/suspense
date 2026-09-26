@@ -1,0 +1,23 @@
+use /lib
+
+export shape TaskTableStreamingShape:
+    description:
+        While the run is under way, the table ends in a waiting row for
+        whatever the harness does next. As soon as a row's type is known, its
+        badge is real, and as soon as its text or argument arrives, that is
+        shown.
+
+    rawOutput:
+        Until a row has something meaningful to show, its Type cell is a
+        skeleton and its Output cell shows the last three lines of the
+        harness's raw JSON output: muted, monospace, JSON syntax-highlighted,
+        and always three lines tall so the row doesn't jump. Before any output
+        has arrived it reads "Waiting for the harness…".
+
+    skeletons:
+        While the input of a Files, Edit, Command, Web, or Agent call is still
+        arriving, its Output cell shows only a skeleton.
+
+        A skeleton stands in for a running row only while there is nothing
+        meaningful to show for it. As soon as there is, no skeleton is shown for
+        it at all.

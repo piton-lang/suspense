@@ -520,11 +520,17 @@ impl Ribbon {
 /// The collapse chevron's width and height.
 const CHEVRON_SIZE: Pixels = px(22.);
 
+/// How tall the containers, and the row the collapsed ribbon becomes, are:
+/// the tab row down to the line along its bottom, so the containers end on
+/// that line and are the same height, their contents in the same place,
+/// whether the ribbon is expanded or collapsed.
+const ABOVE_LINE_HEIGHT: Pixels = px(29.);
+
 fn container(id: &'static str, items: Vec<AnyElement>) -> Option<AnyElement> {
     (!items.is_empty()).then(|| {
         gpui_kit::TestSupportExt::test_support(h_flex().id(id))
             .flex_none()
-            .h_full()
+            .h(ABOVE_LINE_HEIGHT)
             .items_center()
             .children(items)
             .into_any_element()
@@ -599,6 +605,9 @@ impl Render for Ribbon {
             return ribbon.child(gpui_kit::TestSupportExt::test_support(
                 h_flex()
                     .id("ribbon-primary")
+                    // As tall as the tab row, down to the ribbon's bottom line
+                    // as the tab row is to its own, so collapsing moves nothing.
+                    .h(ABOVE_LINE_HEIGHT)
                     .items_stretch()
                     .children(self.render_left(collapse, cx))
                     .child(gpui_kit::TestSupportExt::test_support(
@@ -611,7 +620,6 @@ impl Render for Ribbon {
                             .items_center()
                             .gap_2()
                             .px_2()
-                            .py_1()
                             .children(row),
                     ))
                     .children(self.render_right()),

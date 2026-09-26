@@ -1,0 +1,9 @@
+use /lib
+
+export shape TaskTableScrollingShape:
+    description:
+        The table usually has its lock to the bottom, following the run's
+        latest output. While the end of the table is scrolled out of view, raw
+        output that would only change the waiting row redraws nothing. What a
+        row shows that never changes once known, such as a command laid out
+        across lines or a line of raw output highlighted, is worked out once.

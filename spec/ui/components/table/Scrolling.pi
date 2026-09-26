@@ -1,0 +1,9 @@
+use /lib
+from /ui/components/scrollbar import ScrollbarScope
+
+export shape TableScrollingShape:
+    description:
+        The rows scroll beneath the table's header with a @{ScrollbarScope},
+        with or without its lock to the bottom. Locked, the table follows its
+        latest rows. Unlocked, it still follows new rows while it is already
+        scrolled to the bottom, and stays put once scrolled away from it.

@@ -1,0 +1,15 @@
+use /lib
+
+export shape TableDrawingShape:
+    description:
+        However many rows the table grows to, drawing it costs no more than
+        drawing the rows in view, so scrolling, animations, and new rows stay
+        smooth. This holds wherever the table is used: every use shows it the
+        same way, with only the rows in view laid out. While the end of the
+        table is scrolled out of view, a change that would only touch rows out
+        of view redraws nothing.
+
+        Drawing a row takes the same little work whichever row it is and
+        however many rows there are. Only rows that are new, or whose content
+        changed, are laid out again; what a row shows that never changes once
+        known is worked out once.

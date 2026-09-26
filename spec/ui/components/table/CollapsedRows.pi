@@ -1,0 +1,14 @@
+use /lib
+
+export shape TableCollapsedRowsShape:
+    description:
+        A table that can collapse a run of rows at its start, and whose use
+        says it does, shows in their place a first row reading "Show 1 …" or
+        "Show N …", naming them, muted, beside a right chevron, with the rest
+        of the rows beneath it.
+
+    toggling:
+        A single click on that row expands them in place, above the rest, and
+        the row then reads "Hide 1 …" or "Hide N …" beside a down chevron;
+        clicking it again collapses them. Each table is expanded or collapsed
+        on its own.

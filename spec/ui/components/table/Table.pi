@@ -1,0 +1,18 @@
+from /ui import UiComponent
+
+export abstract anchor Table extends UiComponent as table:
+    columns:: string
+    lock:: string: each use
+    collapses:: null:: string: null
+
+    pitch:
+        A table of rows under a header of named columns, that can grow long
+        and keep growing while it is shown, and stays smooth however long it
+        gets.
+
+    table:
+        Its header reads ${self.columns}.
+
+        ${self.lock == "each use" ? "Each use says whether its table has the lock to the bottom, and whether it starts on." : self.lock == "none" ? "It scrolls with no lock to the bottom." : "It scrolls with its lock to the bottom, " + self.lock + " to start with."}
+
+        ${self.collapses ? "A use can say its table collapses its " + self.collapses + "s, which the first row counts as \"Show 1 " + self.collapses + "\" or \"Show N " + self.collapses + "s\"." : "It never collapses any of its rows."}

@@ -1,0 +1,18 @@
+use /lib
+
+export shape TaskTableToolCallsShape:
+    description:
+        A tool call's Output cell shows its most telling argument. For Files,
+        Edit, Command, Web, and Agent calls the tool's name is left out, since
+        the badge already says what it is; any other tool's name comes first.
+        Arguments other than commands are shown on a single line.
+
+    paths:
+        Any path inside the project directory is shown relative to it, and the
+        project directory itself reads `.`.
+
+    commands:
+        A command is shown whole, as a syntax-highlighted bash block, and a long
+        one is split across lines at `&&`, `||`, `|`, and `;`, one command per
+        line with the chained ones indented. It never splits inside quotes,
+        command substitutions, brackets, comments, or heredocs.

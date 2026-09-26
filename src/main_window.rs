@@ -3756,6 +3756,21 @@ mod tests {
         })
         .unwrap();
 
+        // The tab row's height, down to the line along its bottom, which the
+        // collapsed row keeps; the left container ends on that line.
+        let expanded_row = cx
+            .update_window(handle, |_, window, _| {
+                let left = window.find("ribbon-left").bounds();
+                let line = window.find("ribbon-tabs-line").bounds();
+                assert_eq!(
+                    left.bottom(),
+                    line.top(),
+                    "the left container runs past the line"
+                );
+                (left.top(), line.bottom(), left.size.height)
+            })
+            .unwrap();
+
         // Ctrl+F1 collapses the ribbon: the tabs go, and every primary
         // command shows in a single row, whichever tab was selected.
         cx.update_window(handle, |_, window, cx| window.press(TOGGLE_RIBBON, cx))
@@ -3769,6 +3784,29 @@ mod tests {
                 "the tabs still show"
             );
             assert!(window.try_find("ribbon-primary").is_some());
+            // As tall as the tab row was, its bottom line where the tab row's
+            // was, and the left container as tall.
+            let (top, line_bottom, left_height) = expanded_row;
+            let row = window.find("ribbon-primary").bounds();
+            let left = window.find("ribbon-left").bounds();
+            assert_eq!(row.top(), top, "the collapsed row moved");
+            assert_eq!(
+                row.bottom() + gpui_kit::px(1.),
+                line_bottom,
+                "the collapsed row {row:?} isn't the tab row's height"
+            );
+            // The indicator, and the rest of the left container, keep their
+            // height and place, ending on the line in both.
+            assert_eq!(
+                left.size.height, left_height,
+                "the left container changed height"
+            );
+            assert_eq!(left.top(), top, "the left container moved");
+            let prefix = window.find("ribbon-prefix").bounds();
+            assert_eq!(
+                prefix.size.height, left_height,
+                "the indicator changed height"
+            );
             // Led by the project's name.
             let row = window.find("ribbon-primary").bounds();
             let name = window.find("ribbon-project-name").bounds();

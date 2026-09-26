@@ -1,20 +1,20 @@
 use /lib
 use /ui
-from /ui/components/growing-text-input import GrowingTextInputScope
-from /ui/components/selection-popover import SelectionPopoverScope
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/harness-integration/catalog import HarnessCatalogScope
 from /scope/lsp import LSP
+from /scope/open-projects import OpenProjectsScope
+from /scope/prompt-mode import PromptEditor
 from /scope/prompt-mode/answer-drawer import AnswerDrawerScope
 from /scope/prompt-mode/message-list import MessageList
 from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from /scope/prompt-mode/modes import PromptModesScope
 from /scope/prompt-mode/sending import PromptSendingScope
-from /ui/components/history-list import HistoryListScope
-from /ui/components/task-table import TaskTableScope
-from /scope/prompt-mode import PromptEditor
-from /scope/open-projects import OpenProjectsScope
 from /shape/ChatInput import ChatInputInstruction
+from /ui/components/growing-text-input import GrowingTextInputScope
+from /ui/components/history-list import HistoryListScope
+from /ui/components/selection-popover import SelectionPopoverScope
+from /ui/components/task-table import TaskTableScope
 
 export ui-component ChatInputScope:
     concept: {ChatInputConcept}
@@ -222,6 +222,16 @@ shape ChatInputShape:
             <Ctrl+Tab> on Ask fades green straight to Code's red, and
             <Ctrl+Shift+Tab> on Code fades red straight to Ask's green; neither
             lights up Chain or Spec on the way.
+
+            The send button, both its halves, takes the same colour as the
+            selected tab, purple with Chain selected, but at full strength
+            rather than as a tint, so it stands out against the tinted body.
+            Its label and chevron are in the theme's text colour for a solid
+            hue, and the line between its halves is only faintly darker or
+            lighter than it, half as far as its hover, just enough to part
+            them. Disabled, the button fades as a disabled button does, in the
+            same colour, and the line fades with the half it borders, never
+            staying solid across a faded button.
 
     systemPrompt:
         The selected tab is the mode a prompt is sent in, and each mode's system

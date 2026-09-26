@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use gpui_kit::Focusable as _;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonVariants};
 use gpui_kit::component::input::{
     CompletionProvider, Editor, EditorState, Enter, Escape, IndentInline, InputEvent, MoveDown,
     MoveUp, OutdentInline, Rope,
@@ -203,6 +203,57 @@ pub fn mode_tint(mode: SendMode, cx: &App) -> Hsla {
     let position = TABS.iter().position(|tab| *tab == mode).unwrap_or(0);
     let theme = cx.theme();
     tint(theme.red, theme.blue, theme.green, position as f32)
+}
+
+/// The send button's colour: the selected tab's mode colour at full
+/// strength, where the tab and body have only a tint of it.
+fn send_color(position: f32, cx: &App) -> Hsla {
+    let theme = cx.theme();
+    Hsla {
+        a: 1.,
+        ..tint(theme.red, theme.blue, theme.green, position)
+    }
+}
+
+/// How far the line between the send button's halves steps from its colour:
+/// half as far as its hover, just enough to part them.
+const SEND_SEAM_STEP: f32 = 0.03;
+
+/// `color` a step darker in dark mode, whose hues are light, and lighter in
+/// light mode, for the send button's hover, press, and the line between its
+/// halves.
+fn send_step(color: Hsla, by: f32, cx: &App) -> Hsla {
+    let by = if cx.theme().is_dark() { -by } else { by };
+    Hsla {
+        l: (color.l + by).clamp(0., 1.),
+        ..color
+    }
+}
+
+/// The line between the send button's halves: faintly off its colour, and
+/// faded with the chevron half while that is disabled, as gpui-kit fades a
+/// disabled button's background, so it never stands out from a faded button.
+fn send_seam(position: f32, disabled: bool, cx: &App) -> Hsla {
+    let seam = send_step(send_color(position, cx), SEND_SEAM_STEP, cx);
+    if disabled {
+        seam.opacity(DISABLED_OPACITY)
+    } else {
+        seam
+    }
+}
+
+/// How opaque gpui-kit draws a disabled custom button's colour.
+const DISABLED_OPACITY: f32 = 0.15;
+
+/// The send button's colours, with text in the theme's colour for a solid
+/// hue.
+fn send_colors(position: f32, cx: &App) -> ButtonCustomVariant {
+    let color = send_color(position, cx);
+    ButtonCustomVariant::new(cx)
+        .color(color)
+        .foreground(cx.theme().danger_foreground)
+        .hover(send_step(color, 0.06, cx))
+        .active(send_step(color, 0.12, cx))
 }
 
 /// `from` blended `t` of the way to `to`, at the tint's opacity.
@@ -1429,13 +1480,19 @@ impl Render for ChatInput {
         };
         // The send button, and joined to its right, the chevron opening its
         // menu of other ways to send; the menu hangs above them.
+        let send_colors = send_colors(self.tint_target, cx);
+        let send_fill = send_color(self.tint_target, cx);
         let send = h_flex()
             .id("send-split")
             .relative()
             .flex_none()
             .child(
                 Button::new("send")
-                    .primary()
+                    .custom(send_colors)
+                    // gpui-kit draws a custom button's colour at a fifth of its
+                    // strength; enabled, it is drawn in full. (Disabled, this
+                    // would override gpui-kit's fading, so it isn't set.)
+                    .when(!empty, |button| button.bg(send_fill))
                     // While the harness works, sending queues the prompt; while a
                     // queued prompt is edited, it saves the edit.
                     .label(if editing {
@@ -1458,13 +1515,20 @@ impl Render for ChatInput {
             )
             .child(
                 Button::new("send-options")
-                    .primary()
+                    .custom(send_colors)
+                    .when(!(empty || previewing || editing), |button| {
+                        button.bg(send_fill)
+                    })
                     .icon(IconName::ChevronDown)
                     .h(one_row)
                     .px_1p5()
                     .rounded_l_none()
                     .border_l_1()
-                    .border_color(cx.theme().primary_hover)
+                    .border_color(send_seam(
+                        self.tint_target,
+                        empty || previewing || editing,
+                        cx,
+                    ))
                     .tooltip(format!("More ways to send ({SEND_MENU_SHORTCUT})"))
                     .disabled(empty || previewing || editing)
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_send_menu(cx))),
@@ -1632,11 +1696,11 @@ mod tests {
         assert_eq!(tokens_label(1_200_000), "1.2M");
     }
 
-    use gpui_kit::component::Root;
+    use gpui_kit::component::{Root, Theme, ThemeMode};
     use gpui_kit::test::{TestAppContextExt as _, TestWindowExt as _};
     use gpui_kit::{
-        AppContext as _, Context, Entity, Focusable as _, IntoElement, ParentElement as _, Render,
-        Styled as _, TestAppContext, Window, div,
+        AppContext as _, Context, Entity, Focusable as _, Hsla, IntoElement, ParentElement as _,
+        Render, Styled as _, TestAppContext, Window, div,
     };
 
     use super::{ChatInput, MAX_ROWS};
@@ -1657,6 +1721,40 @@ mod tests {
                 .justify_end()
                 .child(self.0.clone())
         }
+    }
+
+    /// The send button is each tab's mode colour, the chain's purple
+    /// included, at full strength where the tab has only a tint of it, with
+    /// the theme's text for a solid hue, in both modes.
+    #[gpui_kit::test]
+    fn the_send_button_is_the_tabs_colour_at_full_strength(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            for mode in [ThemeMode::Dark, ThemeMode::Light] {
+                Theme::change(mode, None, cx);
+                for (ix, tab) in super::TABS.into_iter().enumerate() {
+                    let tint = super::mode_tint(tab, cx);
+                    let color = super::send_color(ix as f32, cx);
+                    assert!(tint.a < 1., "{mode:?} {tab:?}: the tab isn't a tint");
+                    assert_eq!(color, Hsla { a: 1., ..tint }, "{mode:?} {tab:?}");
+                    let seam = super::send_seam(ix as f32, false, cx);
+                    // Disabled, it fades with the button rather than staying
+                    // solid across it.
+                    let faded = super::send_seam(ix as f32, true, cx);
+                    assert!(faded.a <= super::DISABLED_OPACITY, "{mode:?} {tab:?}");
+                    let hover = super::send_step(color, 0.06, cx);
+                    assert!(
+                        (seam.l - color.l).abs() < (hover.l - color.l).abs(),
+                        "{mode:?} {tab:?}: the seam stands out more than the hover"
+                    );
+                    assert!(
+                        (seam.l < color.l) == mode.is_dark(),
+                        "{mode:?} {tab:?}: the seam steps the wrong way"
+                    );
+                }
+            }
+        });
     }
 
     /// Types `Update @{Appl` into the real chat input key by key, with
@@ -2677,6 +2775,55 @@ mod tests {
                 (editor.bottom() - send.bottom()).abs() <= gpui_kit::px(1.),
                 "input {editor:?} and Send {send:?} are not aligned"
             );
+        })
+        .unwrap();
+    }
+
+    /// Enabled, the send button is painted in its colour at full strength,
+    /// so the line between its halves, faintly off that colour, doesn't
+    /// stand out against a faded body.
+    #[gpui_kit::test]
+    async fn the_enabled_send_button_is_painted_solid(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            Theme::change(ThemeMode::Dark, None, cx);
+            super::bind_keys(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut input = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| ChatInput::new(window, cx));
+            input = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let input = input.unwrap();
+        let handle = window.into();
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("prompt-editor").is_some()
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| {
+            input.update(cx, |this, cx| this.set_text_for_test("Hi", window, cx));
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let scale = window.scale_factor();
+            let color = input.read(cx).tint_target;
+            let color = super::send_color(color, cx);
+            let quads = window.painted_quads();
+            for id in ["send", "send-options"] {
+                let bounds = window.find(id).bounds().scale(scale);
+                let body = quads
+                    .iter()
+                    .filter(|quad| quad.bounds == bounds)
+                    .filter_map(|quad| quad.background.as_solid())
+                    .find(|bg| (bg.h - color.h).abs() < 1e-3 && bg.a > 0.);
+                assert_eq!(body, Some(color), "{id} isn't painted solid");
+            }
         })
         .unwrap();
     }

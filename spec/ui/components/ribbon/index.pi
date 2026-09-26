@@ -9,6 +9,7 @@ from ./research-tab import RibbonResearchTabScope
 from ./application-tab import RibbonApplicationTabScope
 from /scope/running-activity import RunningActivityScope
 from /scope/user-preferences import UserPreferencesScope
+from /shape/ribbon/Ribbon export *
 
 export ui-component RibbonScope:
     concept: {RibbonConcept}
@@ -28,7 +29,8 @@ shape RibbonShape:
         borders or margins, so a tab's label never shifts as tabs open and
         close. Along the top of the commands, a line in the colour of the tabs'
         own side borders runs from the far left, beneath the project indicator
-        and the rest of the left container, to the side border of the first open tab, and on from that tab's other
+        and the rest of the left container, to the side border of the first open
+        tab, and on from that tab's other
         side border to the next open tab or the far right. An open tab meets
         the commands beneath it with no line between them, its side borders
         running straight down to where the line picks up again. There is no
@@ -80,7 +82,9 @@ shape RibbonShape:
         expanded, beside the tabs, or collapsed, leading the row of primary
         commands.
 
-        Everything in it is vertically centred in the bar, with no gap
+        It runs from the top of the bar down to the line along its bottom,
+        never over it, so it is the same height expanded and collapsed.
+        Everything in it is vertically centred in that height, with no gap
         between one thing and the next and no padding around them: each
         thing's own size is all the room it takes. The container shrinks to
         fit what it holds, and when it holds nothing, it isn't there at all.
@@ -101,7 +105,10 @@ shape RibbonShape:
 
     projectIndicator:
         The @{ProjectIndicator} leads the left container, a solid block the
-        full height of the bar. There is no divider between it and what
+        full height of the bar down to the line along its bottom, ending on
+        that line. It is the same height, and what it shows is in the same
+        place, whether the ribbon is expanded or collapsed. There is no divider
+        between it and what
         follows: the change of background is the edge. The collapse chevron
         sits just after it, and the activity spinner just after the
         chevron.
@@ -114,7 +121,8 @@ shape RibbonShape:
         within the strip, which runs the full height of the commands' area, with
         no padding above or below it, 8 pixels from the buttons beside it. The
         first group's strip sits flush against the left edge of the commands'
-        area, with no space before it. Groups sit side by side, 8 pixels apart, with no
+        area, with no space before it. Groups sit side by side, 8 pixels apart,
+        with no
         divider between them: each group's title strip is what marks where it
         starts.
 
@@ -157,7 +165,8 @@ shape RibbonShape:
         clearly apart from the commands' area behind it, though still quiet:
         white laid a seventh of the way over that area in dark mode, and not
         quite half way in light mode, rather than a colour of its own, so it
-        stays as far apart from a tinted body too, lighter in both modes, and more so while hovered; while
+        stays as far apart from a tinted body too, lighter in both modes, and
+        more so while hovered; while
         pressed it darkens instead. An on or off setting, like dark mode, is a
         switch rather than a button, sitting in a block with a button's
         colour, as wide as a button of its size and as tall as the switch and
@@ -196,7 +205,8 @@ shape RibbonShape:
 
     collapsing:
         The ribbon collapses, and expands again, with a chevron button in the
-        left container, after the project indicator, by double-clicking a tab, or with Ctrl+F1
+        left container, after the project indicator, by double-clicking a tab,
+        or with Ctrl+F1
         (Cmd+F1 on macOS). Whether it is collapsed is one of the
         @{UserPreferencesScope}.
 
@@ -205,9 +215,13 @@ shape RibbonShape:
         whether the ribbon is expanded or collapsed: only the way the
         chevron points changes.
 
-        Collapsed, the tabs go away too. The ribbon becomes a single thin row
-        led by the left container, the same as beside the tabs, the project
-        indicator filling the row's height, and then every primary command, from all of
+        Collapsed, the tabs go away too. The ribbon becomes a single thin row,
+        exactly as tall as the row of tabs is when expanded, its bottom line
+        where the tab row's is, so collapsing or expanding moves nothing above
+        that line, led by the left container, the same as beside the tabs, the
+        project
+        indicator filling the row's height, and then every primary command, from
+        all of
         the tabs, as small buttons: a small icon beside its label, and dark mode
         as a small switch in a block only as wide as the switch and its label.
         Every one is only as wide as its own icon and label, 8 pixels from the

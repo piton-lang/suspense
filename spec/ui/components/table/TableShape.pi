@@ -1,0 +1,25 @@
+use /lib
+from ./Header import TableHeaderShape
+from ./Scrolling import TableScrollingShape
+from ./Drawing import TableDrawingShape
+from ./Measuring import TableMeasuringShape
+from ./CollapsedRows import TableCollapsedRowsShape
+
+export shape TableShape:
+    description:
+        A header row naming each column, above one row per item, in order.
+        Every table is a table, as its own scope says: it names its columns,
+        whether it has the lock to the bottom, and what rows it can collapse,
+        and those decide how it is drawn. Each use says what each row holds
+        and where it sits.
+
+    header: {TableHeaderShape}
+    scrolling: {TableScrollingShape}
+    drawing: {TableDrawingShape}
+    measuring: {TableMeasuringShape}
+    collapsedRows: {TableCollapsedRowsShape}
+
+    legibility:
+        The table should be readable at a glance. Make sure the font size is
+        large enough, and that the colours are legible in both light and dark
+        mode.
