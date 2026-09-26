@@ -144,8 +144,9 @@ struct QueueItem {
 
 /// A prompt on its way to the harness.
 enum Sending {
-    /// Typed and sent straight away, in a mode, with any text attached.
-    Now(SendMode, Vec<String>),
+    /// Typed and sent straight away, in a mode, with any text attached, and
+    /// whether it is sent sliced.
+    Now(SendMode, Vec<String>, bool),
     /// Out of the queue, saved with its anchor.
     Queued(QueuedPrompt),
 }
@@ -170,6 +171,27 @@ struct PromptTask {
     understanding: Understanding,
     /// Follows its understanding file while it runs.
     _understanding_watch: Task<()>,
+    /// How it was sent, to send it again the same way.
+    sent: SentAs,
+}
+
+/// How a prompt was sent, besides its text.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct SentAs {
+    /// Its mode, unknown for a prompt saved before modes were.
+    mode: Option<SendMode>,
+    attached_text: Vec<String>,
+    sliced: bool,
+}
+
+impl SentAs {
+    fn of(anchor: &HiddenAnchor) -> Self {
+        Self {
+            mode: anchor_mode(anchor),
+            attached_text: anchor.attached_text.clone(),
+            sliced: anchor.sliced,
+        }
+    }
 }
 
 /// A sent prompt once compiled.
@@ -275,6 +297,7 @@ impl PromptTask {
             references: referenced_spec::References::default(),
             understanding: Understanding::default(),
             _understanding_watch: Task::ready(()),
+            sent: SentAs::default(),
         }
     }
 
@@ -283,6 +306,7 @@ impl PromptTask {
     fn restore(saved: SavedPrompt) -> Self {
         let mut task = Self::new(saved.text.into());
         task.mode = anchor_mode(&saved.anchor);
+        task.sent = SentAs::of(&saved.anchor);
         let Some(record) = saved.record else {
             task.reply.stop();
             task.status = TaskStatus::Unrecorded;
@@ -649,6 +673,7 @@ impl HistoryList {
                     };
                     let is_open = open == Some(item);
                     let task_ix = id_base + item;
+                    let this_for_resend = this.clone();
                     let this = this.clone();
                     let trigger = h_flex()
                         .id(("history-trigger", task_ix))
@@ -672,6 +697,19 @@ impl HistoryList {
                             .ok();
                         })
                         .child(task_summary((item_id, item), task_ix, task, cx))
+                        .child({
+                            let this = this_for_resend.clone();
+                            resend_button(("resend-previous", task_ix)).on_click(
+                                move |_, window, cx| {
+                                    // The button's click isn't the heading's.
+                                    cx.stop_propagation();
+                                    this.update(cx, |this, cx| {
+                                        this.resend(tasks_of, item, window, cx)
+                                    })
+                                    .ok();
+                                },
+                            )
+                        })
                         .child(
                             Icon::new(if is_open {
                                 IconName::ChevronDown
@@ -1348,7 +1386,8 @@ impl PromptMode {
                     // Queued on purpose, it waits in the queue even while the
                     // harness is free; a question never queues.
                     if submit.queue && submit.mode != SendMode::Ask && this.project_dir.is_some() {
-                        this.enqueue(text, true, submit.mode, attached_text, window, cx);
+                        let sliced = this.chat_input.read(cx).slices();
+                        this.enqueue(text, true, submit.mode, attached_text, sliced, window, cx);
                     } else {
                         this.send(text, submit.mode, attached_text, window, cx)
                     }
@@ -1947,13 +1986,55 @@ impl PromptMode {
             );
             return;
         }
-        if mode == SendMode::Ask {
-            self.ask(text, attached_text, cx);
-        } else if self.working {
-            self.enqueue(text, false, mode, attached_text, window, cx);
-        } else {
-            self.start(text, Sending::Now(mode, attached_text), cx);
+        let sliced = self.chat_input.read(cx).slices();
+        self.send_as(text, mode, attached_text, sliced, window, cx);
+    }
+
+    /// Sends `text` in `mode`, sliced or not, as [`Self::send`] does.
+    fn send_as(
+        &mut self,
+        text: String,
+        mode: SendMode,
+        attached_text: Vec<String>,
+        sliced: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.project_dir.is_none() {
+            return;
         }
+        if mode == SendMode::Ask {
+            self.ask(text, attached_text, sliced, cx);
+        } else if self.working {
+            self.enqueue(text, false, mode, attached_text, sliced, window, cx);
+        } else {
+            self.start(text, Sending::Now(mode, attached_text, sliced), cx);
+        }
+    }
+
+    /// Sends the task at `ix` of `tasks_of` again, as it was sent: of the
+    /// tasks or the previous answers. One of unknown mode goes from the selected tab.
+    fn resend(
+        &mut self,
+        tasks_of: fn(&PromptMode) -> &Vec<PromptTask>,
+        ix: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(task) = tasks_of(self).get(ix) else {
+            return;
+        };
+        let (text, sent) = (task.text.to_string(), task.sent.clone());
+        let mode = sent.mode.unwrap_or_else(|| self.chat_input.read(cx).mode());
+        if self.project_dir.is_none() {
+            window.push_notification(
+                Notification::error("Open a project before sending a prompt.")
+                    .title("No project open"),
+                cx,
+            );
+            return;
+        }
+        self.send_as(text, mode, sent.attached_text, sent.sliced, window, cx);
     }
 
     /// Replaces the queue with the one saved for the current project. A
@@ -2048,6 +2129,7 @@ impl PromptMode {
         wait: bool,
         mode: SendMode,
         attached_text: Vec<String>,
+        sliced: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -2065,7 +2147,6 @@ impl PromptMode {
         cx.notify();
 
         let lsp = self.chat_input.read(cx).lsp();
-        let sliced = self.chat_input.read(cx).slices();
         let save = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
@@ -2628,10 +2709,15 @@ impl PromptMode {
             return;
         };
         let task_ix = self.push_task(text.clone().into(), cx);
-        self.tasks[task_ix].mode = match &sending {
-            Sending::Now(mode, _) => Some(*mode),
-            Sending::Queued(queued) => anchor_mode(&queued.anchor),
+        self.tasks[task_ix].sent = match &sending {
+            Sending::Now(mode, attached_text, sliced) => SentAs {
+                mode: Some(*mode),
+                attached_text: attached_text.clone(),
+                sliced: *sliced,
+            },
+            Sending::Queued(queued) => SentAs::of(&queued.anchor),
         };
+        self.tasks[task_ix].mode = self.tasks[task_ix].sent.mode;
         self.working = true;
         if !self.in_background {
             self.chat_input
@@ -2641,7 +2727,6 @@ impl PromptMode {
         let resume = Session::resume(&self.session, &project_dir);
         let epoch = self.session_epoch;
         let lsp = self.chat_input.read(cx).lsp();
-        let sliced = self.chat_input.read(cx).slices();
         // A prompt that works on the code or the spec is sent against a
         // freshly built spec.
         let builds = self.tasks[task_ix]
@@ -2666,7 +2751,7 @@ impl PromptMode {
                         prompt_queue::remove(&queued.file)?;
                         queued.anchor
                     }
-                    Sending::Now(mode, attached_text) => {
+                    Sending::Now(mode, attached_text, sliced) => {
                         resolve_anchor(&text, mode, attached_text, sliced, lsp, &project_dir)?
                     }
                 };
@@ -2890,11 +2975,24 @@ impl PromptMode {
     /// Asks `text` straight away, beside any task the harness is working on,
     /// in place of any question still open. It is saved apart from the
     /// history, so it never becomes one of the tasks.
-    fn ask(&mut self, text: String, attached_text: Vec<String>, cx: &mut Context<Self>) {
+    fn ask(
+        &mut self,
+        text: String,
+        attached_text: Vec<String>,
+        sliced: bool,
+        cx: &mut Context<Self>,
+    ) {
         let Some(project_dir) = self.project_dir.clone() else {
             return;
         };
         let run = self.push_ask(text.clone().into(), cx);
+        if let Some(ask) = self.asks.iter_mut().find(|ask| ask.id == run) {
+            ask.task.sent = SentAs {
+                mode: Some(SendMode::Ask),
+                attached_text: attached_text.clone(),
+                sliced,
+            };
+        }
         // Questions run at once. One that starts while another carries on the
         // conversation carries it on as a copy, so they don't write over
         // each other.
@@ -2905,7 +3003,6 @@ impl PromptMode {
         let resume = Session::resume(&self.ask_session, &project_dir);
         let epoch = self.ask_session_epoch;
         let lsp = self.chat_input.read(cx).lsp();
-        let sliced = self.chat_input.read(cx).slices();
         let compile = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
@@ -3613,7 +3710,15 @@ impl PromptMode {
             .bg(background)
             .border_b_1()
             .border_color(theme.border)
-            .child(task_title(ix, task, cx))
+            .child(
+                h_flex()
+                    .justify_between()
+                    .gap_2()
+                    .child(task_title(ix, task, cx))
+                    .child(resend_button(("resend-latest", ix)).on_click(cx.listener(
+                        move |this, _, window, cx| this.resend(|this| &this.tasks, ix, window, cx),
+                    ))),
+            )
             .child(match &task.compiled {
                 Some(compiled) => self.header_prompt.element(ix, compiled.blocks(), open, cx),
                 None => div()
@@ -4116,6 +4221,15 @@ fn task_title(ix: usize, task: &PromptTask, cx: &App) -> Div {
             // Lets UI tests find the anchor; inert in normal builds.
             row.child(gpui_kit::TestSupportExt::test_support(anchor))
         })
+}
+
+/// The button that sends a prompt again, as it was sent.
+fn resend_button(id: impl Into<ElementId>) -> Button {
+    Button::new(id)
+        .ghost()
+        .xsmall()
+        .icon(IconName::RotateCcw)
+        .tooltip("Send this prompt again, as it was sent")
 }
 
 /// The prompt a task was sent as: the compiled markdown the harness received,
@@ -7338,6 +7452,52 @@ mod tests {
             prompt_mode.read_with(cx, |this, _| this.output_locked),
             "wheeling down to the bottom did not lock the output"
         );
+    }
+
+    /// Resending a task sends its prompt again as it was sent, queuing while
+    /// the harness works, and resending a previous answer asks it again,
+    /// with its attachments, leaving both where they were.
+    #[gpui_kit::test]
+    async fn previous_prompts_can_be_resent(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        let dir = std::env::temp_dir().join(format!("suspense-resend-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let ix = this.push_task("Fix it".into(), cx);
+                this.tasks[ix].sent = super::SentAs {
+                    mode: Some(SendMode::Spec),
+                    attached_text: vec!["note".into()],
+                    sliced: false,
+                };
+                let mut answer = PromptTask::new("Why?".into());
+                answer.sent = super::SentAs {
+                    mode: Some(SendMode::Ask),
+                    attached_text: vec!["context".into()],
+                    sliced: true,
+                };
+                this.answers.push(answer);
+                this.working = true;
+                this.resend(|this| &this.tasks, ix, window, cx);
+                assert_eq!(this.tasks.len(), 1, "the task resent moved");
+                assert_eq!(this.queue.len(), 1);
+                assert_eq!(this.queue[0].text.as_ref(), "Fix it");
+                this.resend(|this| &this.answers, 0, window, cx);
+                assert_eq!(this.answers.len(), 1);
+                assert_eq!(this.asks.len(), 1);
+                assert_eq!(this.asks[0].task.text.as_ref(), "Why?");
+                assert_eq!(this.asks[0].task.sent.attached_text, ["context"]);
+                assert!(this.asks[0].task.sent.sliced);
+                this.working = false;
+            });
+        })
+        .unwrap();
+        cx.run_until_parked();
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// A Code, Chain, or Spec prompt runs `piton build` before it is sent,

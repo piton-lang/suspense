@@ -46,3 +46,21 @@ shape PromptSendingShape:
         way: queued if the harness is busy, shown as a task, and entered in the
         history. What is being written in the chat input, and attached to it,
         is left alone.
+
+    resending:
+        A prompt sent before can be sent again, from a Resend button: a small
+        ghost button with a rotating-arrow icon, whose tooltip says it sends
+        the prompt again as it was sent. It sits at the right of the latest
+        task's header, and of the heading of each previous task and previous
+        answer, beside its chevron; clicking it never opens or closes the item.
+
+        Resending sends the prompt as it was typed, in the mode it was sent in,
+        with the text that was attached to it, and sliced or not as it was, as
+        though it were sent afresh from the chat input: a task queues while the
+        harness is working, a question runs straight away, and either is
+        compiled anew, against the spec and system prompt as they are now,
+        building the spec first as any task does, and saved in the history as a
+        new task or question. The prompt resent stays where it is. A prompt
+        whose mode isn't known, saved before modes were, is resent from the
+        chat input's selected tab. What is being written in the chat input, and
+        attached to it, is left alone, and so is the Slice toggle.

@@ -289,10 +289,11 @@ shape ChatInputShape:
         lists every question asked before and closed: those saved with the
         project and those closed since. Its row reads "No previous answers",
         "1 previous answer", or "N previous answers", and while expanded,
-        "Back to the questions". Expanded, the row and the list go into the
-        @{AnswerDrawerScope}, sliding up from on top of any question rows still
-        in the stack. The questions asked from now on carry on the conversation
-        the latest of them left off.
+        "Back to the questions". Each previous answer offers Resend, which asks
+        its question again, as the @{PromptSendingScope} says. Expanded, the
+        row and the list go into the @{AnswerDrawerScope}, sliding up from on
+        top of any question rows still in the stack. The questions asked from
+        now on carry on the conversation the latest of them left off.
 
     answerDrawer: @{AnswerDrawerScope}
 

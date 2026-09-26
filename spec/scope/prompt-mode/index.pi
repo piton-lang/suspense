@@ -44,7 +44,7 @@ shape PromptEditorShape:
         Previous tasks are a @{HistoryListScope} along the top of the view,
         listing every task sent. Its row counts every task but the latest,
         which heads the view: "No previous tasks", "1 previous task", or
-        "N previous tasks". Expanded, the list takes the place of the latest
+        "N previous tasks", and each offers Resend. Expanded, the list takes the place of the latest
         task and its output, and the row reads "Back to the latest task".
 
     header:
@@ -52,7 +52,8 @@ shape PromptEditorShape:
         its status, with a spinner while it is under way, the name of the
         hidden anchor it was compiled from, and the compiled markdown the
         harness actually received, which scrolls once it gets tall. Until it
-        has compiled, the prompt as typed is shown instead.
+        has compiled, the prompt as typed is shown instead. At its right, a
+        Resend button sends it again, as the @{PromptSendingScope} says.
 
         However long the compiled prompt, a prompt sent with its spec slices
         included, the header lays out only what is in view: the prompt is
