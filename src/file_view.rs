@@ -14,8 +14,9 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::dialog::DialogButtonProps;
 use gpui_kit::component::input::{
-    CodeActionProvider, CompletionProvider, Copy, Cut, DefinitionProvider, Editor, EditorState,
-    Enter, HoverProvider, InputEvent, Paste, Rope, ShowDocumentHandler,
+    Backspace, CodeActionProvider, CompletionProvider, Copy, Cut, DefinitionProvider, Editor,
+    EditorState, Enter, HoverProvider, InputEvent, MoveHome, Paste, Rope, RopeExt as _,
+    SelectToStartOfLine, ShowDocumentHandler, TabSize,
 };
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
@@ -76,8 +77,16 @@ pub const MIN_COLUMNS: usize = 80;
 /// and the editor's padding and scrollbar.
 const GUTTER_EXTRA_COLUMNS: usize = 6;
 
+/// How many spaces a tab stop is.
+pub const TAB_SIZE: usize = 4;
+
+/// The column the ruler marks: the width a line should keep within.
+pub const RULER_COLUMN: usize = 80;
+
 pub struct FileView {
     path: PathBuf,
+    /// The language the file is highlighted in, as [`language_for`] names it.
+    language: String,
     /// The file's path within the project, or in full outside of one.
     title: SharedString,
     editor: Entity<EditorState>,
@@ -125,7 +134,11 @@ impl FileView {
         let language = language_for(&path);
         let editor = cx.new(|cx| {
             EditorState::new(window, cx)
-                .language(language)
+                .language(language.clone())
+                .tab_size(TabSize {
+                    tab_size: TAB_SIZE,
+                    hard_tabs: false,
+                })
                 .soft_wrap(false)
                 .placeholder("Loading…")
         });
@@ -175,6 +188,7 @@ impl FileView {
 
         Self {
             path,
+            language,
             title: title.into(),
             editor,
             error: None,
@@ -527,6 +541,9 @@ impl FileView {
     ) {
         let editor = self.editor.read(cx);
         if !editor.completion_menu_state().open && !editor.code_action_menu_state().open {
+            if !action.shift && self.continues_lists() && self.continue_list(window, cx) {
+                cx.stop_propagation();
+            }
             return;
         }
         let action = action.clone();
@@ -540,6 +557,135 @@ impl FileView {
 }
 
 impl FileView {
+    /// Whether <Enter> on a list item starts the next: in prose, Markdown or
+    /// Piton, rather than code, where a line starting with a dash is not one.
+    fn continues_lists(&self) -> bool {
+        matches!(self.language.as_str(), "" | "txt" | "md" | "markdown")
+            || self.language == piton_syntax::LANGUAGE_NAME
+    }
+
+    /// <Enter> on a list item, with nothing selected: starts the next item,
+    /// or ends the list on an empty one. Whether it did either.
+    fn continue_list(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let editor = self.editor.read(cx);
+        // Read-only until the file's text is in.
+        if !editor.selected_range().is_empty() || self.saved.is_none() {
+            return false;
+        }
+        let text = editor.text();
+        let cursor = editor.cursor();
+        let row = text.offset_to_position(cursor).line as usize;
+        let start = text.line_start_offset(row);
+        let line = text.slice_line(row).to_string();
+        let Some(next) = list_continuation(&line, cursor - start) else {
+            return false;
+        };
+        self.editor.update(cx, |editor, cx| match next {
+            ListEnter::Next(item) => editor.insert(format!("\n{item}"), window, cx),
+            ListEnter::End(indent) => {
+                editor.set_selected_range(start..start + line.len(), cx);
+                editor.replace(indent, window, cx);
+            }
+        });
+        true
+    }
+
+    /// <Backspace> in a line's leading spaces: back to the tab stop before
+    /// the cursor. Anything else is left to the editor.
+    fn backspace_to_tab_stop(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let editor = self.editor.read(cx);
+        if !editor.selected_range().is_empty() || self.saved.is_none() {
+            return;
+        }
+        let text = editor.text();
+        let cursor = editor.cursor();
+        let row = text.offset_to_position(cursor).line as usize;
+        let start = text.line_start_offset(row);
+        let line = text.slice_line(row).to_string();
+        let Some(width) = dedent_width(&line, cursor - start) else {
+            return;
+        };
+        self.editor.update(cx, |editor, cx| {
+            editor.set_selected_range(cursor - width..cursor, cx);
+            editor.replace("", window, cx);
+        });
+        cx.stop_propagation();
+    }
+
+    /// <Home>, or <Shift+Home> when `select`: to the line's first character
+    /// that isn't whitespace, or from there to the start of the line.
+    fn smart_home(&mut self, select: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let _ = window;
+        let editor = self.editor.read(cx);
+        let text = editor.text();
+        let cursor = editor.cursor();
+        let row = text.offset_to_position(cursor).line as usize;
+        let start = text.line_start_offset(row);
+        let line = text.slice_line(row).to_string();
+        let target = start + home_column(&line, cursor - start);
+        let range = editor.selected_range();
+        // The end of the selection the cursor isn't at stays put.
+        let anchor = if range.start == cursor {
+            range.end
+        } else {
+            range.start
+        };
+        self.editor.update(cx, |editor, cx| {
+            if select {
+                editor.set_selected_range(anchor..target, cx);
+            } else {
+                editor.set_selected_range(target..target, cx);
+            }
+        });
+        cx.stop_propagation();
+    }
+
+    /// Paints the ruler at [`RULER_COLUMN`], from the editor's own layout, so
+    /// it scrolls sideways with the text.
+    fn ruler(&self, cx: &App) -> impl IntoElement {
+        let editor = self.editor.downgrade();
+        let color = cx.theme().border;
+        canvas(
+            |_, _, _| {},
+            move |bounds, _, window, cx| {
+                let Some(editor) = editor.upgrade() else {
+                    return;
+                };
+                let editor = editor.read(cx);
+                let Some(row) = editor.visible_row_range().map(|rows| rows.start) else {
+                    return;
+                };
+                let text = editor.text();
+                let row = row.min(text.lines_len().saturating_sub(1));
+                let start = text.line_start_offset(row);
+                let Some(line) = editor.range_to_bounds(&(start..start)) else {
+                    return;
+                };
+                let theme = cx.theme();
+                let text_system = window.text_system();
+                let font_id = text_system.resolve_font(&font(theme.mono_font_family.clone()));
+                let column = text_system
+                    .advance(font_id, theme.mono_font_size, 'm')
+                    .map_or(theme.mono_font_size * 0.6, |size| size.width);
+                let x = line.left() + column * RULER_COLUMN as f32;
+                // Scrolled past, it would lie over the line numbers.
+                let text_left = line.left() - editor.scroll_offset().x;
+                if x < text_left || x > bounds.right() {
+                    return;
+                }
+                window.paint_quad(fill(
+                    Bounds::new(
+                        point(x.round(), bounds.top()),
+                        size(px(1.), bounds.size.height),
+                    ),
+                    color,
+                ));
+            },
+        )
+        .absolute()
+        .inset_0()
+    }
+
     /// The narrowest the file can be shown: its editor fits 80 columns of
     /// text beside its line numbers.
     pub fn min_width(&self, window: &Window, cx: &App) -> Pixels {
@@ -615,6 +761,17 @@ impl Render for FileView {
             .min_w(min_width)
             .on_action(cx.listener(|this, _: &SaveFile, window, cx| this.save(window, cx)))
             .capture_action(cx.listener(Self::route_enter_to_menus))
+            .capture_action(
+                cx.listener(|this, _: &Backspace, window, cx| {
+                    this.backspace_to_tab_stop(window, cx)
+                }),
+            )
+            .capture_action(
+                cx.listener(|this, _: &MoveHome, window, cx| this.smart_home(false, window, cx)),
+            )
+            .capture_action(cx.listener(|this, _: &SelectToStartOfLine, window, cx| {
+                this.smart_home(true, window, cx)
+            }))
             .child(header)
             .when_some(self.save_error.clone(), |view, error| {
                 view.child(
@@ -634,6 +791,7 @@ impl Render for FileView {
                     // Read-only until the file's text is in, so nothing typed
                     // before is lost.
                     None => body
+                        .relative()
                         // A drag that selects some of the text offers to cut,
                         // copy, paste over, or send it to the prompt, once the
                         // selection has settled.
@@ -657,7 +815,8 @@ impl Render for FileView {
                                 .bordered(false)
                                 .rounded_none()
                                 .size_full(),
-                        ),
+                        )
+                        .child(self.ruler(cx)),
                 }
             }))
             .children(self.render_selection_popover(cx));
@@ -1041,6 +1200,82 @@ pub(crate) fn language_for(path: &Path) -> String {
     language.to_string()
 }
 
+/// How many spaces <Backspace> with the cursor `at` a byte of `line` takes
+/// back to the tab stop before it, when all before the cursor is spaces;
+/// `None` when it should delete as ever.
+fn dedent_width(line: &str, at: usize) -> Option<usize> {
+    let before = line.get(..at)?;
+    if at == 0 || !before.bytes().all(|b| b == b' ') {
+        return None;
+    }
+    let width = match at % TAB_SIZE {
+        0 => TAB_SIZE,
+        rest => rest,
+    };
+    (width > 1).then_some(width)
+}
+
+/// Where <Home> goes on `line`, with the cursor `at` a byte in it: to its
+/// first character that isn't whitespace, or, from there or on a line of only
+/// whitespace, to its start.
+fn home_column(line: &str, at: usize) -> usize {
+    let line = line.trim_end_matches(['\n', '\r']);
+    let first = line.len() - line.trim_start().len();
+    if at == first || first == line.len() {
+        0
+    } else {
+        first
+    }
+}
+
+/// What <Enter> does on a list item.
+#[derive(Debug, PartialEq)]
+enum ListEnter {
+    /// Starts a new line holding the next item's indentation and marker.
+    Next(String),
+    /// Ends the list: the empty item's line becomes this indentation alone.
+    End(String),
+}
+
+/// What <Enter> with the cursor `at` a byte of `line` does, when `line` is a
+/// list item, marked with a dash, asterisk, or plus, or a number and a period
+/// or parenthesis, then a space; `None` otherwise, or with the cursor before
+/// the item's text.
+fn list_continuation(line: &str, at: usize) -> Option<ListEnter> {
+    let line = line.trim_end_matches(['\n', '\r']);
+    let indent_len = line.len() - line.trim_start_matches([' ', '\t']).len();
+    let (indent, rest) = line.split_at(indent_len);
+    let digits = rest.len() - rest.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+    let (marker, next_marker) = if digits > 0 {
+        let punct = rest[digits..]
+            .chars()
+            .next()
+            .filter(|c| matches!(c, '.' | ')'))?;
+        let number: u64 = rest[..digits].parse().ok()?;
+        (&rest[..digits + 1], format!("{}{punct}", number + 1))
+    } else {
+        let bullet = rest
+            .chars()
+            .next()
+            .filter(|c| matches!(c, '-' | '*' | '+'))?;
+        (&rest[..1], bullet.to_string())
+    };
+    let after = &rest[marker.len()..];
+    let space = after.len() - after.trim_start_matches([' ', '\t']).len();
+    if space == 0 && !after.is_empty() {
+        return None;
+    }
+    let text_start = indent_len + marker.len() + space;
+    if at < text_start.min(line.len()) {
+        return None;
+    }
+    if after.trim().is_empty() {
+        return Some(ListEnter::End(indent.to_string()));
+    }
+    let gap = if space == 0 { " " } else { &after[..space] };
+    Some(ListEnter::Next(format!("{indent}{next_marker}{gap}")))
+}
+
 /// `text` in Piton's canonical formatting, from `piton format` run in
 /// `project_dir`; an error if it could not be formatted.
 pub(crate) fn format_piton(text: &str, project_dir: &Path) -> anyhow::Result<String> {
@@ -1204,6 +1439,138 @@ mod tests {
                 .unwrap();
             cx.run_until_parked();
         }
+    }
+
+    #[test]
+    fn backspace_goes_back_to_the_tab_stop() {
+        use super::dedent_width;
+        assert_eq!(dedent_width("        x", 8), Some(4));
+        assert_eq!(dedent_width("      x", 6), Some(2));
+        assert_eq!(dedent_width("     x", 5), None);
+        assert_eq!(dedent_width("    ", 4), Some(4));
+        assert_eq!(dedent_width("  a ", 4), None);
+        assert_eq!(dedent_width("x", 0), None);
+    }
+
+    #[test]
+    fn home_goes_to_the_text_then_the_line() {
+        use super::home_column;
+        assert_eq!(home_column("    let x = 1;", 10), 4);
+        assert_eq!(home_column("    let x = 1;", 4), 0);
+        assert_eq!(home_column("    let x = 1;", 0), 4);
+        assert_eq!(home_column("    ", 2), 0);
+        assert_eq!(home_column("abc", 2), 0);
+    }
+
+    #[test]
+    fn enter_carries_lists_on() {
+        use super::{ListEnter, list_continuation};
+        let next = |s: &str| Some(ListEnter::Next(s.into()));
+        assert_eq!(list_continuation("- one", 5), next("- "));
+        assert_eq!(list_continuation("    * two", 9), next("    * "));
+        assert_eq!(list_continuation("  9. nine", 9), next("  10. "));
+        assert_eq!(list_continuation("1) a", 4), next("2) "));
+        assert_eq!(
+            list_continuation("    - ", 6),
+            Some(ListEnter::End("    ".into()))
+        );
+        assert_eq!(list_continuation("-", 1), Some(ListEnter::End("".into())));
+        assert_eq!(list_continuation("-x", 2), None);
+        assert_eq!(list_continuation("key: value", 5), None);
+        assert_eq!(list_continuation("2024 was", 8), None);
+        // Before the item's text, <Enter> only breaks the line.
+        assert_eq!(list_continuation("- one", 0), None);
+    }
+
+    /// <Tab> indents by 4 spaces, and <Backspace> in the indentation takes
+    /// back a whole tab stop at a time.
+    #[gpui_kit::test]
+    async fn tab_stops_are_four_spaces(cx: &mut TestAppContext) {
+        let file = temp_file("file-view-tabs.rs", "x");
+        init(cx, None);
+        let (view, handle) = open(cx, &file, None);
+        cx.wait_for(handle, TIMEOUT, |_, cx| {
+            view.read(cx).editor.read(cx).value().as_ref() == "x"
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.editor.update(cx, |editor, cx| {
+                    editor.set_cursor_position(Position::new(0, 0), window, cx)
+                })
+            });
+        })
+        .unwrap();
+        let value = |cx: &mut TestAppContext| {
+            view.read_with(cx, |v, cx| v.editor.read(cx).value().to_string())
+        };
+        for _ in 0..2 {
+            cx.update_window(handle, |_, window, cx| window.press("tab", cx))
+                .unwrap();
+            cx.run_until_parked();
+        }
+        assert_eq!(value(cx), "        x");
+        cx.update_window(handle, |_, window, cx| window.press("backspace", cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert_eq!(value(cx), "    x");
+        cx.update_window(handle, |_, window, cx| window.press("backspace", cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert_eq!(value(cx), "x");
+        std::fs::remove_file(&file).ok();
+    }
+
+    /// In the editor itself: <Home> goes to the text, then the line's start,
+    /// and <Enter> on a list item starts the next, or ends an empty one.
+    #[gpui_kit::test]
+    async fn home_and_enter_behave_as_in_a_code_editor(cx: &mut TestAppContext) {
+        const TEXT: &str = "    - one";
+        let file = temp_file("file-view-keys.md", TEXT);
+        init(cx, None);
+        let (view, handle) = open(cx, &file, None);
+        cx.wait_for(handle, TIMEOUT, |_, cx| {
+            view.read(cx).editor.read(cx).value().as_ref() == TEXT
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.editor.update(cx, |editor, cx| {
+                    editor.set_cursor_position(Position::new(0, 9), window, cx)
+                })
+            });
+        })
+        .unwrap();
+        let cursor =
+            |cx: &mut TestAppContext| view.read_with(cx, |v, cx| v.editor.read(cx).cursor());
+        cx.update_window(handle, |_, window, cx| window.press("home", cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert_eq!(cursor(cx), 4);
+        cx.update_window(handle, |_, window, cx| window.press("home", cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert_eq!(cursor(cx), 0);
+        cx.update_window(handle, |_, window, cx| window.press("end", cx))
+            .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| window.press("enter", cx))
+            .unwrap();
+        cx.run_until_parked();
+        type_keys(cx, handle, "two");
+        cx.update_window(handle, |_, window, cx| window.press("enter", cx))
+            .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| window.press("enter", cx))
+            .unwrap();
+        cx.run_until_parked();
+        cx.update(|cx| {
+            assert_eq!(
+                view.read(cx).editor.read(cx).value().as_ref(),
+                "    - one\n    - two\n    "
+            );
+        });
+        std::fs::remove_file(&file).ok();
     }
 
     /// Typing edits the file, marking it unsaved, and Ctrl/Cmd+S writes it.

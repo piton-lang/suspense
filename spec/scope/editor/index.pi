@@ -52,6 +52,42 @@ shape EditorShape:
         can't be edited yet. After any of them the editor keeps focus. The
         popover also closes when the text changes, or when the file closes.
 
+    ruler:
+        A thin vertical line, in the theme's line colour, runs down the text at
+        the 80th column, the width a line should keep within. It scrolls
+        sideways with the text, is drawn behind it, and never takes the mouse.
+
+    keyboard:
+        indentation:
+            A tab stop is 4 spaces: <Tab> indents by 4 spaces, <Shift+Tab>
+            outdents by 4, and a new line's indentation counts in 4s.
+
+        backspace:
+            <Backspace> with nothing selected, when everything between the
+            start of the line and the cursor is spaces, deletes back to the
+            tab stop before the cursor, up to 4 spaces at once, as though the
+            indentation were tabs. Anywhere else, or with a selection, it
+            deletes as ever, a character or the selection.
+
+        home:
+            The editor moves about a line the way a good code editor does.
+            <Home> goes to the line's first character that isn't whitespace;
+            pressed again there, or on a line that is only whitespace, it goes
+            to the very start of the line, and pressed again from there, back
+            to its first character. With <Shift> it selects the same way.
+
+        newLines:
+            <Enter> starts the new line at the indentation of the line it
+            breaks, as the language's indentation rules say. On a line that is
+            an item of a Markdown or Piton list, starting with a dash, an
+            asterisk, or a plus and a space, or a number and a period and a
+            space, the new line starts a new item of the same list at the same
+            indentation, a numbered item counting on from the one before.
+            <Enter> on an item with nothing after its marker ends the list
+            instead: the marker is taken away, leaving the line empty at its
+            indentation. <Enter> with an open completion or quick fix menu is
+            the menu's.
+
     newFiles:
         The editor can also show a file that isn't on disk yet, starting with
         the text it is given. It has unsaved changes from the start, and saving

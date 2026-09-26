@@ -100,9 +100,85 @@ fn closing_run(text: &str, ticks: usize) -> Option<usize> {
     None
 }
 
+/// `markdown` split into its blocks, each markdown of its own, so a long
+/// document can be shown a block at a time: it breaks at blank lines, but
+/// never inside a fenced code block, nor before a line indented beneath the
+/// block before, such as a list item's next paragraph.
+pub fn blocks(markdown: &str) -> Vec<String> {
+    let mut blocks = Vec::new();
+    let mut block = String::new();
+    // A blank line seen after the block's text, and where it went.
+    let mut gap = String::new();
+    let mut fence: Option<(char, usize)> = None;
+    for line in markdown.split_inclusive('\n') {
+        let trimmed = line.trim_start_matches(' ');
+        let indent = line.len() - trimmed.len();
+        let marker = trimmed.chars().next().filter(|c| matches!(c, '`' | '~'));
+        let run = marker.map_or(0, |marker| {
+            trimmed.chars().take_while(|c| *c == marker).count()
+        });
+        let blank = line.trim().is_empty();
+        if fence.is_none() && blank {
+            gap.push_str(line);
+            continue;
+        }
+        if !gap.is_empty() {
+            let continues = indent > 0 || line.starts_with('\t');
+            if block.is_empty() {
+                // Blank lines before the first block are nothing.
+            } else if continues {
+                block.push_str(&gap);
+            } else {
+                blocks.push(std::mem::take(&mut block));
+            }
+            gap.clear();
+        }
+        if let Some(marker) = marker
+            && indent <= 3
+            && run >= 3
+        {
+            match fence {
+                None => fence = Some((marker, run)),
+                Some((open, len))
+                    if marker == open && run >= len && trimmed[run..].trim().is_empty() =>
+                {
+                    fence = None
+                }
+                Some(_) => {}
+            }
+        }
+        block.push_str(line);
+    }
+    if !block.trim().is_empty() {
+        blocks.push(block);
+    }
+    for block in &mut blocks {
+        let end = block.trim_end().len();
+        block.truncate(end);
+    }
+    blocks
+}
+
 #[cfg(test)]
 mod tests {
-    use super::without_inline_code;
+    use super::{blocks, without_inline_code};
+
+    #[test]
+    fn markdown_splits_into_blocks() {
+        assert_eq!(
+            blocks(
+                "# Title\n\nSome text\nmore.\n\n\n- a\n- b\n\n  still b\n\n```\ncode\n\nmore code\n```\nafter"
+            ),
+            [
+                "# Title",
+                "Some text\nmore.",
+                "- a\n- b\n\n  still b",
+                "```\ncode\n\nmore code\n```\nafter",
+            ]
+        );
+        assert!(blocks("").is_empty());
+        assert_eq!(blocks("\n\nOne"), ["One"]);
+    }
 
     #[test]
     fn inline_code_becomes_plain_text() {
@@ -142,6 +218,9 @@ pub enum MarkdownKind {
     Command,
     /// The prompt a task was sent as.
     Prompt,
+    /// A block of the prompt the latest task was sent as, in its header,
+    /// where the prompt is drawn a block at a time; `row` is the block.
+    PromptBlock,
 }
 
 /// The parsed state of every piece of markdown shown, kept by where it's

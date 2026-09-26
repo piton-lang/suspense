@@ -179,6 +179,9 @@ struct Compiled {
     markdown: String,
     /// The markdown as it is shown, once worked out.
     shown: std::cell::OnceCell<SharedString>,
+    /// What is shown, split into the blocks the latest task's header draws
+    /// one at a time.
+    blocks: std::cell::OnceCell<Arc<[SharedString]>>,
 }
 
 impl Compiled {
@@ -187,7 +190,20 @@ impl Compiled {
             anchor,
             markdown,
             shown: std::cell::OnceCell::new(),
+            blocks: std::cell::OnceCell::new(),
         }
+    }
+
+    /// What is shown, in blocks: see [`markdown::blocks`].
+    fn blocks(&self) -> Arc<[SharedString]> {
+        self.blocks
+            .get_or_init(|| {
+                markdown::blocks(&self.shown())
+                    .into_iter()
+                    .map(SharedString::from)
+                    .collect()
+            })
+            .clone()
     }
 
     /// The markdown as it is shown.
@@ -870,6 +886,86 @@ fn prompt_key(task_ix: usize) -> MarkdownKey {
     }
 }
 
+/// The latest task's compiled prompt in its header: a virtualized list of its
+/// markdown blocks, as tall as they are up to [`MAX_PROMPT_HEIGHT`], so a long
+/// prompt, spec slices and all, lays out only what is in view.
+struct HeaderPrompt {
+    rows: MeasuredList,
+    /// The task and blocks the list was last made for.
+    shown: RefCell<Option<(usize, Arc<[SharedString]>)>>,
+    /// Which parsed markdown the list has seen, to measure a block again once
+    /// it has parsed.
+    markdown: Cell<u64>,
+}
+
+impl Default for HeaderPrompt {
+    fn default() -> Self {
+        Self {
+            rows: MeasuredList::new(task_table::OVERDRAW),
+            shown: RefCell::default(),
+            markdown: Cell::new(0),
+        }
+    }
+}
+
+impl HeaderPrompt {
+    fn key(task_ix: usize, block: usize) -> MarkdownKey {
+        MarkdownKey {
+            kind: MarkdownKind::PromptBlock,
+            table: task_ix,
+            row: block,
+        }
+    }
+
+    fn element(
+        &self,
+        task_ix: usize,
+        blocks: Arc<[SharedString]>,
+        open: OpenFile,
+        cx: &App,
+    ) -> AnyElement {
+        let same = self
+            .shown
+            .borrow()
+            .as_ref()
+            .is_some_and(|(ix, shown)| *ix == task_ix && Arc::ptr_eq(shown, &blocks));
+        if !same {
+            self.rows.reset(blocks.len());
+            *self.shown.borrow_mut() = Some((task_ix, blocks.clone()));
+            self.markdown.set(MarkdownStates::latest(cx));
+        } else {
+            let mut seen = self.markdown.get();
+            for key in MarkdownStates::changed_since(&mut seen, cx) {
+                if key.kind == MarkdownKind::PromptBlock && key.table == task_ix {
+                    self.rows.remeasure(key.row..key.row + 1);
+                }
+            }
+            self.markdown.set(seen);
+        }
+        let render: RenderRow = Rc::new(move |block, _, cx| {
+            let Some(text) = blocks.get(block).cloned() else {
+                return div().into_any_element();
+            };
+            let key = Self::key(task_ix, block);
+            // Its markdown's state is kept, so it's parsed once.
+            MarkdownStates::prepare(key, &text, cx);
+            div()
+                .min_w_0()
+                .when(block > 0, |row| row.pt_2())
+                .child(shown_markdown_view(key, text, Some(&open), cx))
+                .into_any_element()
+        });
+        let height = self.rows.total_height().min(MAX_PROMPT_HEIGHT);
+        let prompt = div()
+            .id(("compiled-prompt", task_ix))
+            .min_w_0()
+            .h(height)
+            .child(self.rows.element(render));
+        // Lets UI tests find the compiled prompt; inert in normal builds.
+        gpui_kit::TestSupportExt::test_support(prompt).into_any_element()
+    }
+}
+
 /// Writes a commit note for a task from its prompt and its final summary.
 type Summarize = fn(&Path, &str, &str) -> Result<Option<String>>;
 
@@ -1231,6 +1327,9 @@ pub struct PromptMode {
     _file_subscriptions: Vec<Subscription>,
     /// Compiling the prompt for the chat input's preview.
     _preview: Task<()>,
+    /// The latest task's compiled prompt in its header, drawn a block at a
+    /// time.
+    header_prompt: HeaderPrompt,
     /// Writes a finished task's commit note: [`commit_notes::summarize`],
     /// replaced in tests.
     summarize: Summarize,
@@ -1331,6 +1430,7 @@ impl PromptMode {
             ask_session_epoch: 0,
             _file_subscriptions: Vec::new(),
             _preview: Task::ready(()),
+            header_prompt: HeaderPrompt::default(),
             summarize: commit_notes::summarize,
             _subscriptions: subscriptions,
         };
@@ -3514,13 +3614,15 @@ impl PromptMode {
             .border_b_1()
             .border_color(theme.border)
             .child(task_title(ix, task, cx))
-            .child(
-                div()
+            .child(match &task.compiled {
+                Some(compiled) => self.header_prompt.element(ix, compiled.blocks(), open, cx),
+                None => div()
                     .id(("task-prompt", ix))
                     .max_h(MAX_PROMPT_HEIGHT)
                     .overflow_y_scroll()
-                    .child(task_prompt(ix, task, &open, cx)),
-            );
+                    .child(task_prompt(ix, task, &open, cx))
+                    .into_any_element(),
+            });
         // Lets UI tests find the header; inert in normal builds.
         Some(gpui_kit::TestSupportExt::test_support(header).into_any_element())
     }
@@ -5193,6 +5295,46 @@ mod tests {
         });
         assert_eq!(shown(cx), Some(900));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A long compiled prompt, as one sent with its spec slices, is drawn a
+    /// block at a time: the header stops growing where it scrolls, and only
+    /// the blocks in view are laid out.
+    #[gpui_kit::test]
+    async fn a_long_prompt_header_lays_out_only_what_is_in_view(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        let long: String = (0..400)
+            .map(|n| format!("## Section {n}\n\nSome text about section {n}.\n\n"))
+            .collect();
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let ix = this.push_task("Do it".into(), cx);
+                this.show_compiled(ix, "Prompt_0".into(), long.clone(), cx);
+            });
+        })
+        .unwrap();
+        cx.wait_for(handle, Duration::from_secs(1), |window, _| {
+            window.try_find(("compiled-prompt", 0usize)).is_some()
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let prompt = window.find(("compiled-prompt", 0usize)).bounds();
+            assert!(
+                prompt.size.height <= super::MAX_PROMPT_HEIGHT + gpui_kit::px(0.5),
+                "{prompt:?}"
+            );
+            assert!(prompt.size.height > gpui_kit::px(40.), "{prompt:?}");
+        })
+        .unwrap();
+        prompt_mode.read_with(cx, |this, _| {
+            let rows = &this.header_prompt.rows;
+            assert_eq!(rows.count(), 800);
+            let drawn = (0..rows.count())
+                .filter(|ix| rows.state().bounds_for_item(*ix).is_some())
+                .count();
+            assert!(drawn < 50, "{drawn} blocks were laid out");
+        });
     }
 
     /// The latest task heads the view with its status, its anchor and the

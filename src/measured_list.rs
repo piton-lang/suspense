@@ -286,6 +286,9 @@ impl MeasuredList {
         }
         let count = self.count();
         let mut heights = self.heights.borrow_mut();
+        // What holds the list may be as tall as it is: once that changes, it
+        // is drawn again.
+        let total = heights.tops().last().copied();
         // A new width wraps the rows anew: every height is only a guess until
         // measured again. The list threw its own guesses away too.
         if heights.width != Some(width) {
@@ -343,6 +346,8 @@ impl MeasuredList {
         }
         if heights.rows.iter().skip(heights.next).any(|row| !row.exact) {
             window.request_animation_frame();
+        } else if heights.tops().last().copied() != total {
+            window.refresh();
         }
     }
 }

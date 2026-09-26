@@ -54,6 +54,14 @@ shape PromptEditorShape:
         harness actually received, which scrolls once it gets tall. Until it
         has compiled, the prompt as typed is shown instead.
 
+        However long the compiled prompt, a prompt sent with its spec slices
+        included, the header lays out only what is in view: the prompt is
+        split into its blocks of markdown, paragraphs, headings, lists, and
+        code blocks, each drawn as it scrolls into view, as the rows of a
+        table are, so a long prompt costs no more to show, scroll, or
+        animate than a short one. The header is as tall as the prompt up to
+        where it starts to scroll.
+
     queue:
         overview:
             The queue holds the tasks sent while the harness is working, as the

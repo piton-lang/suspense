@@ -506,7 +506,7 @@ impl ChatInput {
             preview_id: 0,
             preview_scroll: ScrollHandle::new(),
             editing: None,
-            slice: false,
+            slice: true,
             _subscriptions: subscriptions,
         };
         this.connect_lsp(cx);
