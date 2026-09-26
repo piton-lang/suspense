@@ -14,7 +14,7 @@ export abstract anchor Panel extends UiComponent as panel:
     scrolls:: boolean: true
 
     panel:
-        ${self.title ? "It has a header along its top, reading its title in small, semibold text, with a little padding around it. The header is on the theme's raised surface and the panel's body on its base surface, so the header stands slightly apart from the body, contrasting with it only a little, with no line between them." : "It has no header: its contents start at its top edge, on the theme's base surface."}
+        ${self.title != null ? "It has a header along its top, reading its title in small, semibold text, with a little padding around it. The header is on the theme's raised surface and the panel's body on its base surface, so the header stands slightly apart from the body, contrasting with it only a little, with no line between them." : "It has no header: its contents start at its top edge, on the theme's base surface."}
 
         ${self.counted ? "At its header's right, how many rows it lists, in smaller text, muted." : "It shows no count of what it lists."}
 

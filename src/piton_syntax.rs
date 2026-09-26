@@ -39,7 +39,10 @@ mod tests {
         let mut parser = tree_sitter::Parser::new();
         parser.set_language(&language).unwrap();
         let tree = parser
-            .parse("export scope ApplicationScope:\n    pitch: hello\n", None)
+            .parse(
+                "use /lib\nfrom ./a import A\n\nexport scope ApplicationScope:\n    pitch: hello @{A}\n    total:: number: {1 + 2}\n    text:\n        \\\\\\\n        {kept}\n        \\\\\\\n",
+                None,
+            )
             .unwrap();
         assert!(
             !tree.root_node().has_error(),

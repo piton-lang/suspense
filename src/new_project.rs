@@ -47,27 +47,17 @@ pub enum Agent {
     Claude,
     OpenCode,
     Codex,
-    Cursor,
-    Agents,
 }
 
 impl Agent {
     /// Every agent, in the order they are listed and written.
-    pub const ALL: [Agent; 5] = [
-        Agent::Claude,
-        Agent::OpenCode,
-        Agent::Codex,
-        Agent::Cursor,
-        Agent::Agents,
-    ];
+    pub const ALL: [Agent; 3] = [Agent::Claude, Agent::OpenCode, Agent::Codex];
 
     pub fn label(self) -> &'static str {
         match self {
             Agent::Claude => "Claude Code",
             Agent::OpenCode => "OpenCode",
             Agent::Codex => "Codex",
-            Agent::Cursor => "Cursor",
-            Agent::Agents => "Agents",
         }
     }
 
@@ -77,37 +67,33 @@ impl Agent {
             Agent::Claude => ".claude",
             Agent::OpenCode => ".opencode",
             Agent::Codex => ".codex",
-            Agent::Cursor => ".cursor",
-            Agent::Agents => ".agents",
         }
     }
 
-    /// Its adapter anchor's name.
+    /// Its adapter anchor's name, as @piton/belay exports it.
     fn adapter(self) -> &'static str {
         match self {
-            Agent::Claude => "ClaudeAdapter",
+            Agent::Claude => "ClaudeCodeAdapter",
             Agent::OpenCode => "OpenCodeAdapter",
             Agent::Codex => "CodexAdapter",
-            Agent::Cursor => "CursorAdapter",
-            Agent::Agents => "AgentsAdapter",
         }
     }
+}
 
-    /// The tool flag its adapter sets.
-    fn flag(self) -> &'static str {
-        match self {
-            Agent::Claude => "claude",
-            Agent::OpenCode => "opencode",
-            Agent::Codex => "codex",
-            Agent::Cursor => "cursor",
-            Agent::Agents => "agents",
-        }
-    }
-
-    /// Whether @piton/belay exports its adapter ready-made.
-    fn ready_made(self) -> bool {
-        matches!(self, Agent::Claude | Agent::OpenCode)
-    }
+/// The opencode.json written into a project OpenCode is chosen for: it loads
+/// the guidance Belay places throughout the code root, which OpenCode doesn't
+/// on its own, and hides the skills Belay writes for commands, which OpenCode
+/// would otherwise also offer as ordinary skills.
+fn opencode_json(code_root: &str) -> String {
+    let code_root = code_root.strip_prefix("./").unwrap_or(code_root);
+    let instructions = if code_root == "." || code_root.is_empty() {
+        "**/AGENTS.md".to_string()
+    } else {
+        format!("{code_root}/**/AGENTS.md")
+    };
+    format!(
+        "{{\n  \"$schema\": \"https://opencode.ai/config.json\",\n  \"instructions\": [\"{instructions}\"],\n  \"permission\": {{\n    \"skill\": {{\n      \"x-*\": \"deny\"\n    }}\n  }}\n}}\n"
+    )
 }
 
 /// Everything the form collects.
@@ -225,11 +211,7 @@ impl Settings {
             .into_iter()
             .filter(|agent| self.agents.contains(agent))
             .collect();
-        let imported: Vec<&str> = agents
-            .iter()
-            .filter(|agent| agent.ready_made())
-            .map(|agent| agent.adapter())
-            .collect();
+        let imported: Vec<&str> = agents.iter().map(|agent| agent.adapter()).collect();
 
         let mut config = String::from("use @piton/config\nuse @piton/belay\n\n");
         if !imported.is_empty() {
@@ -249,14 +231,6 @@ impl Settings {
         config += "\n    adapters:\n";
         for agent in &agents {
             config += &format!("        - {{{}}}\n", agent.adapter());
-        }
-        for agent in agents.iter().filter(|agent| !agent.ready_made()) {
-            config += &format!(
-                "\nbelay-agent-adapter {}:\n    description: Writes agentic Markdown into the {} directory\n    {}: true\n",
-                agent.adapter(),
-                agent.directory(),
-                agent.flag()
-            );
         }
         config
     }
@@ -299,6 +273,12 @@ impl Settings {
         for root in roots {
             std::fs::create_dir_all(&root)
                 .with_context(|| format!("Couldn't create {}", root.display()))?;
+        }
+        let opencode = folder.join("opencode.json");
+        if self.agents.contains(&Agent::OpenCode) && !opencode.exists() {
+            let code_root = project_path(&self.code_root).unwrap_or_default();
+            std::fs::write(&opencode, opencode_json(&code_root))
+                .with_context(|| format!("Couldn't write {}", opencode.display()))?;
         }
         let warning = self
             .init_git
@@ -808,8 +788,8 @@ mod tests {
         assert_eq!(no_agents.problem(), None);
     }
 
-    /// The config names the project, points at its roots, and lists an adapter
-    /// per agent, importing the ready-made ones and writing out the others.
+    /// The config names the project, points at its roots, and lists the
+    /// adapter @piton/belay exports for each agent.
     #[test]
     fn config_sets_up_belay_for_the_chosen_agents() {
         let config = settings(vec![Agent::Codex, Agent::Claude]).config();
@@ -818,7 +798,7 @@ mod tests {
             "use @piton/config
 use @piton/belay
 
-from @piton/belay import ClaudeAdapter
+from @piton/belay import ClaudeCodeAdapter, CodexAdapter
 
 export piton-config MyNewProject:
     root: ./spec
@@ -832,12 +812,8 @@ belay-config BelayConfiguration:
     shapeRoot: ./spec/shape
 
     adapters:
-        - {ClaudeAdapter}
+        - {ClaudeCodeAdapter}
         - {CodexAdapter}
-
-belay-agent-adapter CodexAdapter:
-    description: Writes agentic Markdown into the .codex directory
-    codex: true
 "
         );
         let mut without_shape = settings(vec![Agent::Claude]);

@@ -1,6 +1,9 @@
 use /lib
 use /ui
-from /ui/components/fs-browser import FsBrowserScope, FsBrowserConcept, FsBrowserShape
+from /ui/components/fs-browser import
+    FsBrowserConcept,
+    FsBrowserScope,
+    FsBrowserShape
 
 export ui-component FolderBrowserScope extends FsBrowserScope:
     concept: {FolderBrowserConcept}
@@ -12,6 +15,8 @@ concept FolderBrowserConcept extends FsBrowserConcept:
     shape: {FolderBrowserShape}
 
 shape FolderBrowserShape extends FsBrowserShape:
+    description: {FsBrowserShape.description}
+
     listed:
         Only the current folder's folders are listed, never its files. A folder
         with no folders in it reads "No folders here". Clicking a folder twice,

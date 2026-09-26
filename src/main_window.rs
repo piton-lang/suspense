@@ -2882,7 +2882,7 @@ mod tests {
         let text = std::fs::read_to_string(&written).unwrap();
         assert!(text.contains("export scope ParserScope:"), "{text}");
         assert!(
-            text.contains("Reads \\{things\\}\\: all of them."),
+            text.contains("        \\\\\\\n        Reads {things}: all of them.\n        \\\\\\\n"),
             "{text}"
         );
         let open = main.read_with(cx, |main, cx| {
@@ -3269,7 +3269,7 @@ mod tests {
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             let agents = window.find("new-project-agents").bounds();
-            for ix in 0..5usize {
+            for ix in 0..crate::new_project::Agent::ALL.len() {
                 let row = window.find(("new-project-agent-row", ix)).bounds();
                 assert!(
                     row.top() >= agents.top()

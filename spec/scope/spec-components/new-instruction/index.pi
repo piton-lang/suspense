@@ -64,7 +64,12 @@ shape NewInstructionShape:
         - its prompt, empty but for a line to write over, which the cursor starts on
 
         Saving it writes the file, making its folders as needed, and it is then
-        a file like any other. Closing the editor closes the panel, first asking
+        a file like any other. Since Belay only compiles what the spec's entry
+        reaches, once the panel closes with the file written, the entry, the
+        config's entry or the spec location's index.pi, exports it: a
+        `from ... export *` line naming the file relative to the entry, without
+        its extension, is added after the imports at the entry's top, unless
+        the entry already imports or exports from it. Closing the editor closes the panel, first asking
         to discard any changes not yet saved, as the editor always does;
         closing the panel any other way asks the same. Once saved and closed,
         the file opens beside the chat, as the @{OpenFileScope} says.

@@ -1360,11 +1360,11 @@ mod tests {
             "suspense-file-view-format-{}.pi",
             std::process::id()
         ));
-        std::fs::write(&file, "anchor A:\n    x: 1\n").unwrap();
+        std::fs::write(&file, "anchor A:\n  x: 1\n").unwrap();
         init(cx, None);
         let (view, handle) = open(cx, &file, None);
         cx.wait_for(handle, TIMEOUT, |_, cx| {
-            view.read(cx).editor.read(cx).value().as_ref() == "anchor A:\n    x: 1\n"
+            view.read(cx).editor.read(cx).value().as_ref() == "anchor A:\n  x: 1\n"
         })
         .await;
 
@@ -1373,16 +1373,16 @@ mod tests {
             focus.focus(window, cx);
         })
         .unwrap();
-        type_keys(cx, handle, "anchor   B:\n");
+        type_keys(cx, handle, "//note\n");
         cx.update_window(handle, |_, window, cx| window.press(SAVE, cx))
             .unwrap();
         cx.wait_for(handle, TIMEOUT, |_, cx| {
             let view = view.read(cx);
-            !view.is_dirty() && view.editor.read(cx).value().starts_with("anchor B:")
+            !view.is_dirty() && view.editor.read(cx).value().starts_with("// note\n")
         })
         .await;
         let saved = std::fs::read_to_string(&file).unwrap();
-        assert!(saved.starts_with("anchor B:"), "{saved}");
+        assert_eq!(saved, "// note\nanchor A:\n    x: 1\n");
         assert_eq!(
             view.read_with(cx, |view, cx| view.editor.read(cx).value().to_string()),
             saved

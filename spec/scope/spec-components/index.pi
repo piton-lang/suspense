@@ -1,5 +1,9 @@
 use /lib
 use /ui
+from ./new-concept import NewConceptScope
+from ./new-instruction import NewInstructionScope
+from ./new-scope import NewScopeScope
+from ./new-shape import NewShapeScope
 from /scope/harness-integration/catalog import HarnessCatalogScope
 from /scope/open-file import OpenFileScope
 from /scope/project-locations import ProjectLocationsScope
@@ -7,10 +11,6 @@ from /scope/prompt-mode/modes import PromptModesScope
 from /scope/prompt-mode/sending import PromptSendingScope
 from /ui/components/growing-text-input import GrowingTextInputScope
 from /ui/components/inset-panel import InsetPanelScope
-from ./new-scope import NewScopeScope
-from ./new-concept import NewConceptScope
-from ./new-shape import NewShapeScope
-from ./new-instruction import NewInstructionScope
 
 export ui-component SpecComponentsScope:
     concept: {SpecComponentsConcept}

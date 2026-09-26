@@ -1,6 +1,9 @@
 use /lib
 use /ui
-from /ui/components/fs-browser import FsBrowserScope, FsBrowserConcept, FsBrowserShape
+from /ui/components/fs-browser import
+    FsBrowserConcept,
+    FsBrowserScope,
+    FsBrowserShape
 
 export ui-component FileBrowserScope extends FsBrowserScope:
     concept: {FileBrowserConcept}
@@ -12,6 +15,8 @@ concept FileBrowserConcept extends FsBrowserConcept:
     shape: {FileBrowserShape}
 
 shape FileBrowserShape extends FsBrowserShape:
+    description: {FsBrowserShape.description}
+
     listed:
         The current folder's folders are listed, to find the file in, then its
         files. Whatever uses it can give the name a file must have, such as

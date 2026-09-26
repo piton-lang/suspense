@@ -154,11 +154,7 @@ fn compile_prompts() {
 fn compile_with_piton(files: &[std::path::PathBuf]) -> Option<BTreeMap<String, Value>> {
     let mut prompts = BTreeMap::new();
     for file in files {
-        let output = match Command::new("piton")
-            .args(["compile", "--stdout"])
-            .arg(file)
-            .output()
-        {
+        let output = match Command::new("piton").arg("compile").arg(file).output() {
             Ok(output) => output,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return None,
             Err(err) => panic!("could not run `piton compile`: {err}"),

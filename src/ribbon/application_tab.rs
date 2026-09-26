@@ -27,18 +27,14 @@ pub(super) const COMMANDS: &[CommandPlace] = &[
     },
 ];
 
-/// Dark mode: a switch rather than a button, since it is on or off, sitting in
-/// a block the size and colour of a button of `size`, square.
-pub(super) fn dark_mode(
-    size: CommandSize,
-    background: Hsla,
-    cx: &mut Context<Ribbon>,
-) -> AnyElement {
+/// Dark mode: a switch rather than a button, since it is on or off, taking the
+/// room of a button of `size` but with no background, since it isn't one.
+pub(super) fn dark_mode(size: CommandSize, cx: &mut Context<Ribbon>) -> AnyElement {
     let switch = Switch::new("dark-mode")
         .label("Dark mode")
         .checked(cx.theme().is_dark())
         .on_click(|dark, window, cx| set_dark_mode(*dark, window, cx));
-    let block = h_flex().items_center().px_2().bg(background);
+    let block = h_flex().items_center().px_2();
     match size {
         CommandSize::Slim => block.h(super::SLIM_HEIGHT).w_full().child(switch.small()),
         CommandSize::Small => block

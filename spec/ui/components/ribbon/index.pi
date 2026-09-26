@@ -1,15 +1,14 @@
 use /lib
-from /ui/theme import ThemeScope
 use /ui
-from /ui/components/project-indicator import ProjectIndicator
-from ./project-tab import RibbonProjectTabScope
-from ./code-tab import RibbonCodeTabScope
-from ./spec-tab import RibbonSpecTabScope
-from ./research-tab import RibbonResearchTabScope
 from ./application-tab import RibbonApplicationTabScope
+from ./code-tab import RibbonCodeTabScope
+from ./project-tab import RibbonProjectTabScope
+from ./research-tab import RibbonResearchTabScope
+from ./spec-tab import RibbonSpecTabScope
 from /scope/running-activity import RunningActivityScope
 from /scope/user-preferences import UserPreferencesScope
-from /shape/ribbon/Ribbon export *
+from /ui/components/project-indicator import ProjectIndicator
+from /ui/theme import ThemeScope
 
 export ui-component RibbonScope:
     concept: {RibbonConcept}
@@ -168,9 +167,10 @@ shape RibbonShape:
         stays as far apart from a tinted body too, lighter in both modes, and
         more so while hovered; while
         pressed it darkens instead. An on or off setting, like dark mode, is a
-        switch rather than a button, sitting in a block with a button's
-        colour, as wide as a button of its size and as tall as the switch and
-        its label need.
+        switch rather than a button, and has no background of its own: the
+        switch and its label sit straight on the commands' area, with nothing
+        behind them, as wide as a button of its size and as tall as the
+        switch and its label need.
 
         A command's tooltip explains what it does rather than repeating its
         label, and gives its keyboard shortcut if it has one.
@@ -223,7 +223,7 @@ shape RibbonShape:
         indicator filling the row's height, and then every primary command, from
         all of
         the tabs, as small buttons: a small icon beside its label, and dark mode
-        as a small switch in a block only as wide as the switch and its label.
+        as a small switch with no background, only as wide as it and its label.
         Every one is only as wide as its own icon and label, 8 pixels from the
         next, whatever the tab it comes from calls it; a command that is slim
         in its tab doesn't grow to fill the row. They keep the order of their

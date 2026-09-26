@@ -18,7 +18,9 @@ use gpui_kit::component::input::{
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{ActiveTheme, Disableable, Icon, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{
+    ActiveTheme, Disableable, Icon, Selectable as _, Sizable as _, h_flex, v_flex,
+};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use lsp_types::{CompletionContext, CompletionResponse};
@@ -404,6 +406,9 @@ pub struct ChatInput {
     preview_scroll: ScrollHandle,
     /// The queued prompt being edited, while one is.
     editing: Option<Editing>,
+    /// Whether the Slice toggle is on: prompts are sent with the `piton
+    /// slice` of each spec they reference rather than links to them.
+    slice: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -501,6 +506,7 @@ impl ChatInput {
             preview_id: 0,
             preview_scroll: ScrollHandle::new(),
             editing: None,
+            slice: false,
             _subscriptions: subscriptions,
         };
         this.connect_lsp(cx);
@@ -590,6 +596,11 @@ impl ChatInput {
     /// The project's `piton lsp` session, once it is running.
     pub fn lsp(&self) -> Option<Arc<PitonSession>> {
         self.lsp.clone()
+    }
+
+    /// Whether the Slice toggle is on, for prompts sent now.
+    pub fn slices(&self) -> bool {
+        self.slice
     }
 
     /// Moves keyboard focus into the input.
@@ -1392,6 +1403,25 @@ impl Render for ChatInput {
             .pr_2()
             .border_b_1()
             .border_color(cx.theme().border)
+            .child(
+                Button::new("slice-toggle")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::Scissors)
+                    .label("Slice")
+                    .selected(self.slice)
+                    .tooltip(if self.slice {
+                        "Sending the prompt with the piton slice of each spec it references"
+                    } else {
+                        "Sending the prompt written as a spec, linking the specs it references"
+                    })
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.slice = !this.slice;
+                        // The prompt would now be sent differently.
+                        this.close_preview(window, cx);
+                        cx.notify();
+                    })),
+            )
             .child(gpui_kit::TestSupportExt::test_support(
                 div()
                     .id("chat-context")
@@ -1957,7 +1987,8 @@ mod tests {
                 window.find("tab-help").bounds(),
                 window.find("chat-tabs").bounds(),
             );
-            let (context, new_session) = (
+            let (slice, context, new_session) = (
+                window.find("slice-toggle").bounds(),
                 window.find("chat-context").bounds(),
                 window.find("new-conversation").bounds(),
             );
@@ -1965,12 +1996,16 @@ mod tests {
                 help.left() >= ask.right() - gpui_kit::px(0.5),
                 "{help:?} is not right of {ask:?}"
             );
-            // The help fills the bar up to the context, and New conversation ends
-            // it, a little in from its right edge.
-            let between = context.left() - help.right();
+            // The help fills the bar up to the Slice toggle, then the context,
+            // and New conversation ends it, a little in from its right edge.
+            let between = slice.left() - help.right();
             assert!(
                 between >= gpui_kit::px(0.) && between <= gpui_kit::px(8.),
-                "{help:?} does not fill the bar up to the context {context:?}"
+                "{help:?} does not fill the bar up to the Slice toggle {slice:?}"
+            );
+            assert!(
+                context.left() > slice.right(),
+                "the context {context:?} isn't after the Slice toggle {slice:?}"
             );
             assert!(
                 new_session.left() > context.right(),

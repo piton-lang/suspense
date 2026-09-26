@@ -1,0 +1,14 @@
+use /lib
+use /ui
+from ./TableShape import TableShape
+
+export ui-component TableScope:
+    concept: {TableConcept}
+
+concept TableConcept:
+    pitch:
+        A table of rows under a header of named columns, that can grow long
+        and keep growing while it is shown, and stays smooth however long it
+        gets.
+
+    shape: {TableShape}

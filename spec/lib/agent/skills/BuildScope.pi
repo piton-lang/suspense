@@ -1,6 +1,6 @@
 use @piton/belay
 
-from @piton/belay import __BELAY_SHAPE__
+from @piton/belay import BELAY_COMPILED_SHAPE
 
 from ../../Scope import Scope
 
@@ -8,7 +8,7 @@ export abstract skill BuildScope as build-scope:
     description: build or change the ${self.scope} scope
     useWhen: you need to ${self.description}
     prompt:
-        Read all necessary skills and specs, then ${this.description} according
+        Read all necessary skills and specs, then ${self.description} according
         to what already exists in the codebase.
 
         If nothing has been built, start from scratch.
@@ -25,12 +25,12 @@ export abstract skill BuildScope as build-scope:
         code should be refactored to match the spec.
 
     belayShape:
-        Use the directory structure of ${__BELAY_SHAPE__} to guide how to
+        Use the directory structure of ${BELAY_COMPILED_SHAPE} to guide how to
         structure and organize the code.  If the shape changes, refactor the
         code to match.
 
         Do not use the structure of the spec to fundamentally guide the layout
         of the application.  The only guidance you should look at for
-        structure/organization is ${__BELAY_SHAPE__}.
+        structure/organization is ${BELAY_COMPILED_SHAPE}.
 
     scope:: extends Scope

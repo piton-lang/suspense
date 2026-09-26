@@ -327,7 +327,7 @@ impl Render for SettingsWindow {
                      {CODE_LOCATION} and {SPEC_LOCATION} stand for codeRoot and \
                      root in piton.config.pi, {SPEC_READING} for the injected \
                      spec reading, and {PITON_FLUENCY} for what \
-                     `piton claude --print-prompt` prints for the project."
+                     `piton agent --print-fluency` prints for the project."
                 ),
                 "Open a project to edit its system prompts.",
             ),

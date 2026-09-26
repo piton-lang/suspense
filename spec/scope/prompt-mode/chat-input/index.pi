@@ -213,6 +213,18 @@ shape ChatInputShape:
             beneath the help text, and neither is cut off: the help text gives
             way to them when the bar is narrow.
 
+        slice:
+            Just left of the context figure sits the Slice toggle: a small ghost
+            button with a scissors icon, reading "Slice", which shows as
+            selected while it is on. It starts off. Its tooltip says what the
+            prompt is sent as: while off, the prompt written as a spec, its
+            references linking to the spec they name; while on, the prompt with
+            the `piton slice` of each spec it references. Clicking it turns it
+            on or off, and it applies to every tab, Ask included. It stays as it
+            is across sends, tab switches, and project switches, as the prompt
+            being written does, and the help text gives way to it as it does to
+            the session controls.
+
         colour:
             The selected tab and the tab body holding the input are tinted the
             colour of its mode, of the @{PromptModesScope}. With Chain selected,
@@ -315,8 +327,8 @@ shape ChatInputShape:
         answers belong to their project, as the @{OpenProjectsScope} says:
         switching projects shows those of the project switched to, while the
         questions of other projects carry on running in the background. The
-        prompt being written, its attachments, and the selected tab stay as they
-        are across a switch, and are sent to the project on screen.
+        prompt being written, its attachments, the selected tab, and the Slice
+        toggle stay as they are across a switch, and are sent to the project on screen.
 
     escape:
         Pressing <Escape> while in the chat input takes focus out of the chat
@@ -370,22 +382,30 @@ shape ChatInputShape:
 
         escaping:
             A prompt may hold anything, text pasted into it included, so it
-            isn't written into the anchor as Piton prose, where braces, quotes,
-            colons, leading dashes, code fences, comments, indentation, and
-            backslashes all mean something. Its userPrompt is a list with an
-            item per line of the prompt, in order, and each line a list of its
-            pieces: the text between references as a quoted string, with
-            quotes, backslashes, and each dollar-brace escaped, so nothing in it
-            is interpolated or evaluated; and each at-brace or dollar-brace
-            around a dotted path of identifiers whose first name is imported as
-            a reference of its own. A reference to a name that isn't imported,
-            such as a pasted shell variable, is only text. An empty line is a
-            single empty string. The compiled userPrompt is the pieces of each
-            line joined together, and the lines joined by line breaks, so what
-            the harness receives is exactly what was typed or pasted, line for
-            line, with each reference resolved. The systemPrompt is written the
-            same way. A prompt saved as prose by an earlier version still reads
-            back.
+            isn't written into the anchor as Piton prose, where braces, colons,
+            leading dashes, code fences, comments, indentation, and backslashes
+            all mean something. The anchor is exported, so that it compiles,
+            and its userPrompt is a multi-line escape block, which Piton keeps
+            exactly as it is: the prompt's lines, each at the block's
+            indentation, fenced by a line of three backslashes, or of one more
+            than any line of the prompt made only of backslashes, so nothing in
+            it closes the block early. The systemPrompt is written the same way.
+
+            Each at-brace or dollar-brace around a dotted path of identifiers
+            whose first name is imported, in the userPrompt and then the
+            systemPrompt, is also listed once, in the order they first appear,
+            as an item of the anchor's references property, left out when there
+            are none; a reference to a name that isn't imported, such as a
+            pasted shell variable, is only text. `piton compile` resolves the
+            references. What the harness receives is the prompt as it was
+            saved, line for line, with each reference replaced by what it
+            resolved to: a dollar-brace by its text, and an at-brace by a
+            Markdown link, from the project directory, to the reference document
+            the project's build writes for it, in the reference root of the
+            config's first adapter, such as .claude/reference, named by its
+            dotted path, and going to the heading for the anchor or property it
+            names once the document is built. A prompt saved by an earlier
+            version, as quoted pieces or as prose, still reads back.
 
         autoImports:
             The names a prompt uses are imported however the prompt got there,
@@ -401,10 +421,10 @@ shape ChatInputShape:
         attachedText:
             A prompt with attached text gives the hidden anchor an attachedText
             property: a list with an item per attached piece of text, in the
-            order they were attached. Since attached text is taken as it is, not
-            as Piton, each item is itself a list of the text's lines, each a
-            quoted string, with quotes and backslashes escaped, so nothing in it
-            is interpolated or evaluated. A prompt with nothing attached has no
+            order they were attached, keyed text1, text2, and so on. Since
+            attached text is taken as it is, not as Piton, each is written as a
+            multi-line escape block, as the userPrompt is, so nothing in it is
+            interpolated or evaluated. A prompt with nothing attached has no
             attachedText property.
 
             What the harness receives is the compiled userPrompt followed by the
@@ -412,3 +432,19 @@ shape ChatInputShape:
             fenced code block, whose fence is longer than any run of backticks
             in the text itself. This is also the compiled prompt shown in the
             task's header.
+
+        sliced:
+            A prompt sent with Slice on is still written as the hidden anchor,
+            which records that it was sliced, and is compiled the same way, so a
+            prompt that fails to compile fails with Slice on too. But what the
+            harness receives is the prompt as it was saved, line for line, with
+            each at-brace reference replaced by the dotted path it names rather
+            than a link, and each dollar-brace by its text, as ever. Then, for
+            each at-brace reference in the userPrompt, once, in the order they
+            first appear, what `piton slice` prints for it, run in the project
+            directory on the source file and dotted path the reference names,
+            under a line reading "Spec slices:". A slice that fails puts why in
+            its place, and the prompt is still sent. Attached text follows the
+            slices, as it follows the prompt. The system prompt is resolved as
+            ever. A queued prompt keeps whether it was sliced, and the preview
+            shows what the harness would receive with the toggle as it is.

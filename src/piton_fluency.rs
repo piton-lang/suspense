@@ -1,4 +1,4 @@
-//! The project's Piton fluency: what `piton claude --print-prompt` prints, run
+//! The project's Piton fluency: what `piton agent --print-fluency` prints, run
 //! in the project directory, filled in for `${PITON_FLUENCY}` in a mode's
 //! system prompt (see [`crate::system_prompts`]). It is run once per project,
 //! in the background as the project is opened, and kept while the application
@@ -30,11 +30,11 @@ pub fn get(project_dir: &Path) -> String {
         .clone()
 }
 
-/// What `program claude --print-prompt` prints in `project_dir`, or nothing
+/// What `program agent --print-fluency` prints in `project_dir`, or nothing
 /// when it can't be run or fails.
 fn print_prompt(program: &str, project_dir: &Path) -> String {
     match Command::new(program)
-        .args(["claude", "--print-prompt"])
+        .args(["agent", "--print-fluency"])
         .current_dir(project_dir)
         .output()
     {

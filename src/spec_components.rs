@@ -158,37 +158,65 @@ pub fn spec_files(project_dir: &Path) -> Result<(PathBuf, Vec<String>)> {
     Ok((project_dir.join(spec_root), files))
 }
 
-/// `text` as prose indented `indent` spaces beneath its key, escaped so that
-/// nothing in it reads as an interpolation, a key, a list item, a comment, or
-/// a fence.
+/// `text` as prose indented `indent` spaces beneath its key. Prose Piton
+/// would read as more than text, with braces, backslashes, or a line that
+/// would be a key, a list item, a composition line, a comment, or a fence, is
+/// written in a multi-line escape block instead, each paragraph a line of its
+/// own, so it compiles to the same text as prose would, but taken as it is.
 pub fn prose(text: &str, indent: usize) -> String {
     let pad = " ".repeat(indent);
-    let mut lines: Vec<String> = Vec::new();
-    for line in text.trim().lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            if lines.last().is_some_and(|last| !last.is_empty()) {
-                lines.push(String::new());
-            }
-            continue;
+    let mut lines: Vec<&str> = Vec::new();
+    for line in text.trim().lines().map(str::trim) {
+        if !line.is_empty() || lines.last().is_some_and(|last| !last.is_empty()) {
+            lines.push(line);
         }
-        let mut escaped = String::new();
-        if line.starts_with('-')
-            || line.starts_with("//")
-            || line.starts_with("```")
-            || line.starts_with("~~~")
-        {
-            escaped.push('\\');
-        }
-        for c in line.chars() {
-            if matches!(c, '{' | '}' | ':') {
-                escaped.push('\\');
-            }
-            escaped.push(c);
-        }
-        lines.push(format!("{pad}{escaped}"));
     }
-    lines.join("\n")
+    if lines.iter().all(|line| plain(line)) {
+        return lines
+            .iter()
+            .map(|line| match line.is_empty() {
+                true => String::new(),
+                false => format!("{pad}{line}"),
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
+    let paragraphs: Vec<String> = lines
+        .split(|line| line.is_empty())
+        .map(|paragraph| paragraph.join(" "))
+        .collect();
+    let fence = "\\".repeat(
+        paragraphs
+            .iter()
+            .filter(|paragraph| paragraph.chars().all(|c| c == '\\'))
+            .map(|paragraph| paragraph.len() + 1)
+            .max()
+            .unwrap_or(0)
+            .max(3),
+    );
+    let mut block = vec![format!("{pad}{fence}")];
+    block.extend(
+        paragraphs
+            .iter()
+            .map(|paragraph| format!("{pad}{paragraph}")),
+    );
+    block.push(format!("{pad}{fence}"));
+    block.join("\n")
+}
+
+/// Whether Piton reads `line`, in a block of prose, as nothing but text.
+fn plain(line: &str) -> bool {
+    let key = line.split_once(':').is_some_and(|(key, rest)| {
+        !key.is_empty()
+            && key
+                .chars()
+                .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-'))
+            && (rest.is_empty() || rest.starts_with(' '))
+    });
+    !key && !line.contains(['{', '}', '\\'])
+        && !["-", "+", "//", "```", "~~~"]
+            .iter()
+            .any(|start| line.starts_with(start))
 }
 
 /// The description's first sentence.
@@ -404,9 +432,14 @@ mod tests {
 
     #[test]
     fn prose_is_escaped() {
+        assert_eq!(prose("a b: c\n\nd", 4), "    a b: c\n\n    d");
         assert_eq!(
-            prose("a {b}: c\n\n- d\n// e", 4),
-            "    a \\{b\\}\\: c\n\n    \\- d\n    \\// e"
+            prose("a {b}: c\nmore\n\n- d\n// e", 4),
+            "    \\\\\\\n    a {b}: c more\n    - d // e\n    \\\\\\"
+        );
+        assert_eq!(
+            prose("Inputs: none", 4),
+            "    \\\\\\\n    Inputs: none\n    \\\\\\"
         );
         assert_eq!(first_sentence("One. Two."), "One.");
     }
@@ -468,7 +501,9 @@ mod tests {
         concept.write(&dir).unwrap();
         assert!(concept.write(&dir).is_err(), "declared twice");
 
-        for file in [scope, dir.join("index.pi")] {
+        // Only exports compile, so the concept and shape added to index.pi
+        // are only checked; the scope's copy of its concept holds the text.
+        for (file, exported) in [(scope, true), (dir.join("index.pi"), false)] {
             let out = Command::new("piton")
                 .arg("compile")
                 .arg(&file)
@@ -482,9 +517,12 @@ mod tests {
                 std::fs::read_to_string(&file).unwrap(),
                 String::from_utf8_lossy(&out.stderr)
             );
-            let json = std::fs::read_to_string(file.with_extension("json")).unwrap();
+            let json = String::from_utf8_lossy(&out.stdout);
             assert!(
-                json.contains("Shows the project's files: {all} of them. As a tree. - even this"),
+                !exported
+                    || json.contains(
+                        "Shows the project's files: {all} of them. As a tree. - even this"
+                    ),
                 "{json}"
             );
         }

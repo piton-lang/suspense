@@ -1,9 +1,9 @@
 use /lib
-from /scope/prompt-mode/modes import PromptModesScope
-from /scope/project-data import ProjectDataScope
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/new-project import NewProjectScope
+from /scope/project-data import ProjectDataScope
 from /scope/project-locations import ProjectLocationsScope
+from /scope/prompt-mode/modes import PromptModesScope
 from /scope/settings-window import SettingsWindowScope
 from /ui/components/referenced-spec-sidebar import ReferencedSpecSidebarScope
 
@@ -40,9 +40,8 @@ shape ModeSystemPromptsShape:
         HARNESS_DIRECTORY is the directory the harness that runs the prompt,
         as the @{HarnessIntegrationScope} says, reads its agentic Markdown and
         reference files from, written without a leading ./: .claude for
-        Claude Code, .opencode for OpenCode, .codex for Codex, .cursor for
-        Cursor, and .agents for Agents, the directories the @{NewProjectScope}
-        names for them.
+        Claude Code, .opencode for OpenCode, and .codex for Codex, the
+        directories the @{NewProjectScope} names for them.
 
         UNDERSTANDING_FILE stands for the path, from the project directory, of
         the task's understanding file, and is filled in as the prompt is sent,
@@ -51,7 +50,7 @@ shape ModeSystemPromptsShape:
         understanding file, and UNDERSTANDING_FILE is filled in with nothing.
 
     pitonFluency:
-        The Piton fluency is what `piton claude --print-prompt` prints, run in
+        The Piton fluency is what `piton agent --print-fluency` prints, run in
         the project directory. It is run once, in the background, when the
         project is opened, and kept for as long as the project stays open, so
         every prompt sent meanwhile is given the same; a prompt sent before it

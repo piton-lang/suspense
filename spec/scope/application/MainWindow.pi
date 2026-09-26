@@ -1,25 +1,25 @@
 use /lib
 use /ui
-from ../rescope import RescopeScope
+from ../divergence import DivergenceScope
+from ../editor import EditorScope
+from ../harness-integration/catalog import HarnessCatalogScope
+from ../new-project import NewProjectScope
+from ../open-file import OpenFileScope
+from ../palette import PaletteScope
 from ../project/open-project import OpenProjectScope
 from ../prompt-mode import PromptEditor
 from ../prompt-mode/chat-input import ChatInputScope
-from ../editor import EditorScope
-from ../palette import PaletteScope
-from /ui/components/ribbon import RibbonScope
-from /ui/components/file-tree import FileTreeScope
-from /ui/components/project-sidebar import ProjectSidebarScope
-from /ui/components/diff-view import DiffViewScope
-from /ui/components/inset-panel import InsetPanelScope
-from ../new-project import NewProjectScope
-from ../divergence import DivergenceScope
-from ../settings-window import SettingsWindowScope
-from ../harness-integration/catalog import HarnessCatalogScope
-from ../open-file import OpenFileScope
 from ../prompt-mode/sending import PromptSendingScope
+from ../rescope import RescopeScope
 from ../running-activity import RunningActivityScope
+from ../settings-window import SettingsWindowScope
 from ../user-preferences import UserPreferencesScope
+from /ui/components/diff-view import DiffViewScope
+from /ui/components/file-tree import FileTreeScope
+from /ui/components/inset-panel import InsetPanelScope
 from /ui/components/minimizable-panel import MinimizablePanelScope
+from /ui/components/project-sidebar import ProjectSidebarScope
+from /ui/components/ribbon import RibbonScope
 from /ui/theme import ThemeScope
 
 export ui-component MainWindowScope:

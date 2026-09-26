@@ -6,7 +6,7 @@
 
 use std::path::{Component, Path, PathBuf};
 
-use anyhow::{Result, bail};
+use anyhow::{Context as _, Result, bail};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
@@ -158,11 +158,77 @@ pub fn pascal_case(entry: &str) -> String {
 /// The instruction's file as it starts, and where the cursor starts: on the
 /// line of its prompt to write over.
 pub fn template(name: &str, entry: &str) -> (String, Position) {
-    let entry = entry.trim_end_matches('/').replace(':', "\\:");
+    let entry = entry.trim_end_matches('/');
     let text = format!(
         "use @piton/belay\n\nexport instruction {name}:\n    description: Instructions for {entry}\n    prompt:\n        Write the instructions here.\n"
     );
     (text, Position::new(5, 8))
+}
+
+/// Exports the instruction in `file` from the project's entry, the config's
+/// `entry` or the spec location's index.pi, since Belay only compiles what the
+/// entry reaches: a `from … export *` line, relative to the entry, after the
+/// imports at its top, unless the entry already has one for it.
+pub fn export_from_entry(project_dir: &Path, file: &Path) -> Result<()> {
+    let entry = match hidden_anchor::config_value(project_dir, "entry") {
+        Ok(entry) => project_dir.join(normalize(&entry)),
+        Err(_) => project_dir
+            .join(normalize(&hidden_anchor::config_value(
+                project_dir,
+                "root",
+            )?))
+            .join("index.pi"),
+    };
+    let from = entry.parent().context("the entry is in no folder")?;
+    let module = relative_module(from, &file.with_extension(""));
+    let line = format!("from {module} export *");
+    let text = std::fs::read_to_string(&entry).unwrap_or_default();
+    if text.lines().any(|existing| {
+        existing
+            .strip_prefix(&format!("from {module} "))
+            .is_some_and(|rest| rest.starts_with("export") || rest.starts_with("import"))
+    }) {
+        return Ok(());
+    }
+    let mut lines: Vec<&str> = text.lines().collect();
+    let at = lines
+        .iter()
+        .take_while(|line| {
+            let line = line.trim();
+            line.is_empty()
+                || line.starts_with("//")
+                || line.starts_with("use ")
+                || line.starts_with("from ")
+                || line.starts_with(' ')
+        })
+        .count();
+    let at = lines[..at]
+        .iter()
+        .rposition(|line| line.starts_with("use ") || line.starts_with("from "))
+        .map_or(0, |last| last + 1);
+    lines.insert(at, &line);
+    let mut text = lines.join("\n");
+    text.push('\n');
+    std::fs::write(&entry, text).with_context(|| format!("Couldn't write {}", entry.display()))
+}
+
+/// `target`, a module path without its extension, as imported from a file in
+/// `from`: `./` and the path beneath it, or climbing with `..` as needed.
+fn relative_module(from: &Path, target: &Path) -> String {
+    let from: Vec<_> = from.components().collect();
+    let target: Vec<_> = target.components().collect();
+    let shared = from.iter().zip(&target).take_while(|(a, b)| a == b).count();
+    let mut parts: Vec<String> = vec![".".into()];
+    parts.extend(std::iter::repeat_n("..".to_string(), from.len() - shared));
+    if parts.len() > 1 {
+        parts.remove(0);
+    }
+    parts.extend(
+        target[shared..]
+            .iter()
+            .map(|part| part.as_os_str().to_string_lossy().into_owned()),
+    );
+    parts.join("/")
 }
 
 enum Step {
@@ -338,8 +404,13 @@ impl NewInstructionForm {
         let path = self.project_dir.join(file);
         let view = cx.new(|cx| FileView::unwritten(path, text, cursor, window, cx));
         self._subscriptions
-            .push(cx.subscribe(&view, |_, view, _: &CloseFile, cx| {
+            .push(cx.subscribe(&view, |this, view, _: &CloseFile, cx| {
                 let path = view.read(cx).path().to_path_buf();
+                if path.exists()
+                    && let Err(err) = export_from_entry(&this.project_dir, &path)
+                {
+                    eprintln!("could not export the instruction from the entry: {err:#}");
+                }
                 cx.emit(CloseInstruction(path.exists().then_some(path)));
             }));
         view.update(cx, |view, cx| view.focus_editor(window, cx));
@@ -525,7 +596,7 @@ mod tests {
         std::fs::create_dir_all(project.join("src/ribbon")).unwrap();
         std::fs::write(
             project.join("piton.config.pi"),
-            "use @piton/config\nuse @piton/belay\n\nexport piton-config Project:\n    root: ./spec\n    entry: ./spec/index.pi\n\n    frameworks:\n        - {Belay}\n\nbelay-config Belay:\n    codeRoot: ./src\n    shapeRoot: ./spec/shape\n",
+            "use @piton/config\nuse @piton/belay\n\nexport piton-config Project:\n    root: ./spec\n    entry: ./spec/index.pi\n\n    frameworks:\n        - {Belay}\n\nfrom @piton/belay import ClaudeCodeAdapter\n\nbelay-config Belay:\n    codeRoot: ./src\n    shapeRoot: ./spec/shape\n\n    adapters:\n        - {ClaudeCodeAdapter}\n",
         )
         .unwrap();
         std::fs::write(project.join("spec/index.pi"), "").unwrap();
@@ -550,6 +621,40 @@ mod tests {
         );
         let entries = code_entries(&project, "src").unwrap();
         assert_eq!(entries, ["src/", "src/ribbon/"]);
+        std::fs::write(
+            project.join("spec/index.pi"),
+            "use /lib\n\nanchor A:\n    pass\n",
+        )
+        .unwrap();
+        super::export_from_entry(&project, &file).unwrap();
+        super::export_from_entry(&project, &file).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(project.join("spec/index.pi")).unwrap(),
+            "use /lib\nfrom ./shape/ribbon/SpecTab export *\n\nanchor A:\n    pass\n"
+        );
+        assert_eq!(
+            super::relative_module(Path::new("/p/spec"), Path::new("/p/shape/X")),
+            "../shape/X"
+        );
+        std::fs::write(
+            project.join("spec/index.pi"),
+            "from ./shape/ribbon/SpecTab export *\n",
+        )
+        .unwrap();
+        let build = std::process::Command::new("piton")
+            .arg("build")
+            .current_dir(&project)
+            .output()
+            .unwrap();
+        assert!(
+            build.status.success(),
+            "{}",
+            String::from_utf8_lossy(&build.stderr)
+        );
+        assert!(
+            project.join("src/ribbon/CLAUDE.md").is_file(),
+            "the instruction wasn't built"
+        );
         std::fs::remove_dir_all(&project).ok();
     }
 }

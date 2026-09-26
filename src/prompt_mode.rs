@@ -1810,13 +1810,14 @@ impl PromptMode {
             return;
         };
         let lsp = input.read(cx).lsp();
+        let sliced = input.read(cx).slices();
         let (text, mode, attached_text) = (
             preview.text.clone(),
             preview.mode,
             preview.attached_text.clone(),
         );
         let compile = cx.background_spawn(async move {
-            let anchor = resolve_anchor(&text, mode, attached_text, lsp, &project_dir)?;
+            let anchor = resolve_anchor(&text, mode, attached_text, sliced, lsp, &project_dir)?;
             hidden_anchor::preview(&anchor, &text, &project_dir)
         });
         self._preview = cx.spawn(async move |_, cx| {
@@ -1964,10 +1965,11 @@ impl PromptMode {
         cx.notify();
 
         let lsp = self.chat_input.read(cx).lsp();
+        let sliced = self.chat_input.read(cx).slices();
         let save = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
-                let anchor = resolve_anchor(&text, mode, attached_text, lsp, &project_dir)?;
+                let anchor = resolve_anchor(&text, mode, attached_text, sliced, lsp, &project_dir)?;
                 prompt_queue::add(anchor, text, &project_dir)
             }
         });
@@ -2078,11 +2080,12 @@ impl PromptMode {
         let old_text = std::mem::replace(&mut item.text, text.clone().into());
         cx.notify();
         let lsp = self.chat_input.read(cx).lsp();
+        let sliced = self.chat_input.read(cx).slices();
         let (text, mode, attached_text) = (text.clone(), *mode, attached_text.clone());
         let save = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
-                match resolve_anchor(&text, mode, attached_text, lsp, &project_dir) {
+                match resolve_anchor(&text, mode, attached_text, sliced, lsp, &project_dir) {
                     Ok(anchor) => prompt_queue::replace(old.file.clone(), anchor, text)
                         .map_err(|err| (old, err)),
                     Err(err) => Err((old, err)),
@@ -2538,6 +2541,7 @@ impl PromptMode {
         let resume = Session::resume(&self.session, &project_dir);
         let epoch = self.session_epoch;
         let lsp = self.chat_input.read(cx).lsp();
+        let sliced = self.chat_input.read(cx).slices();
         // A prompt that works on the code or the spec is sent against a
         // freshly built spec.
         let builds = self.tasks[task_ix]
@@ -2563,7 +2567,7 @@ impl PromptMode {
                         queued.anchor
                     }
                     Sending::Now(mode, attached_text) => {
-                        resolve_anchor(&text, mode, attached_text, lsp, &project_dir)?
+                        resolve_anchor(&text, mode, attached_text, sliced, lsp, &project_dir)?
                     }
                 };
                 let file = hidden_anchor::save(&anchor, &text, &project_dir)?;
@@ -2801,6 +2805,7 @@ impl PromptMode {
         let resume = Session::resume(&self.ask_session, &project_dir);
         let epoch = self.ask_session_epoch;
         let lsp = self.chat_input.read(cx).lsp();
+        let sliced = self.chat_input.read(cx).slices();
         let compile = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
@@ -2811,6 +2816,7 @@ impl PromptMode {
                     &text,
                     SendMode::Ask,
                     attached_text.clone(),
+                    sliced,
                     lsp,
                     &project_dir,
                 ) {
@@ -3931,14 +3937,15 @@ impl Render for PromptMode {
     }
 }
 
-/// The hidden anchor `text` is sent as in `mode`: importing what `piton lsp`
-/// resolved for it, with the mode's system prompt. Without `piton lsp`
+/// The hidden anchor `text` is sent as in `mode`, sliced or not: importing
+/// what `piton lsp` resolved for it, with the mode's system prompt. Without `piton lsp`
 /// nothing is imported, and any spec name the prompt uses fails to compile
 /// with an explicit error.
 fn resolve_anchor(
     text: &str,
     mode: SendMode,
     attached_text: Vec<String>,
+    sliced: bool,
     lsp: Option<Arc<PitonSession>>,
     project_dir: &Path,
 ) -> Result<HiddenAnchor> {
@@ -3951,6 +3958,7 @@ fn resolve_anchor(
     // cannot be saved.
     system_prompts::save_missing(project_dir).ok();
     anchor.mode = Some(mode);
+    anchor.sliced = sliced;
     anchor.attached_text = attached_text;
     // Waits for the project's fluency if it is still being printed; every
     // caller is already off the UI thread.

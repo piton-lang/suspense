@@ -507,7 +507,7 @@ impl Ribbon {
             Command::ViewDivergenceReports => spec_tab::view_divergence_reports(button, cx),
             Command::GenerateSkills => spec_tab::generate_skills(button, cx),
             Command::Rescope => spec_tab::rescope(button, cx),
-            Command::DarkMode => application_tab::dark_mode(size, command_shades(cx).0, cx),
+            Command::DarkMode => application_tab::dark_mode(size, cx),
             Command::Settings => application_tab::settings(button),
         }
     }

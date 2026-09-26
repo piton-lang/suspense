@@ -1,17 +1,18 @@
 //! The hidden anchor. Prompts are typed as plain text, but behind the scenes
-//! they are the `userPrompt` of a randomly-named Piton anchor whose imports
-//! `piton lsp` adds automatically (see [`crate::piton_lsp`]), so they are never
-//! written or seen. Each sent prompt is saved as a `.pi` file in the project's
-//! prompt history and compiled; the compiled `userPrompt` is what the harness
-//! receives.
+//! they are the `userPrompt` of a randomly-named, exported Piton anchor whose
+//! imports `piton lsp` adds automatically (see [`crate::piton_lsp`]), so they
+//! are never written or seen. Each sent prompt is saved as a `.pi` file in the
+//! project's prompt history and compiled; the harness receives the prompt with
+//! each reference in it resolved.
 //!
 //! A prompt may hold anything, pasted text included, so it isn't written as
-//! Piton prose, where braces, quotes, colons, leading dashes, comments, and
-//! backslashes all mean something. Each line is a list of pieces instead: the
-//! text between references as a quoted string, taken exactly as it is, and each
-//! `@{Name}` or `${Name.path}` whose name is imported as a reference of its own.
-//! A reference to a name that isn't imported, such as a pasted `${HOME}`, is
-//! only text.
+//! Piton prose, where braces, colons, leading dashes, comments, and
+//! backslashes all mean something. It is written in a multi-line escape block
+//! instead, which Piton keeps exactly as it is. Each `@{Name}` or
+//! `${Name.path}` in it whose name is imported is also listed, once, in the
+//! anchor's `references`, which is what `piton compile` resolves; the prompt's
+//! text around them is taken from the saved source. A reference to a name
+//! that isn't imported, such as a pasted `${HOME}`, is only text.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -109,6 +110,9 @@ pub struct HiddenAnchor {
     pub imports: Imports,
     /// The mode the prompt was sent in, written after the `userPrompt`.
     pub mode: Option<SendMode>,
+    /// Sent with the `piton slice` of each spec it references, rather than
+    /// links to them, written as `sliced: true` after the mode.
+    pub sliced: bool,
     /// Text attached to the prompt, written as `attachedText` after the mode:
     /// each piece a list of quoted lines, taken as it is rather than as Piton.
     pub attached_text: Vec<String>,
@@ -132,6 +136,7 @@ impl HiddenAnchor {
             ),
             imports: Imports::default(),
             mode: None,
+            sliced: false,
             attached_text: Vec::new(),
             system_prompt: None,
         }
@@ -148,35 +153,39 @@ impl HiddenAnchor {
             let names: Vec<&str> = names.iter().map(String::as_str).collect();
             writeln!(source, "from {module} import {}", names.join(", ")).ok();
         }
-        writeln!(source, "\nanchor {}:\n    userPrompt:", self.name).ok();
-        self.push_pieces(&mut source, prompt);
-        // After the prompt, so the prompt's lines stay where
-        // `prompt_first_line` says they are.
+        writeln!(source, "\nexport anchor {}:\n    userPrompt:", self.name).ok();
+        push_block(&mut source, PROMPT_INDENT, prompt);
         if let Some(mode) = self.mode {
             source.push('\n');
             writeln!(source, "{MODE_PREFIX}{}", mode.key()).ok();
+        }
+        if self.sliced {
+            source.push('\n');
+            writeln!(source, "{SLICED_LINE}").ok();
         }
         if !self.attached_text.is_empty() {
             source.push('\n');
             source.push_str(ATTACHED_TEXT_LINE);
             source.push('\n');
-            for text in &self.attached_text {
-                writeln!(source, "{ATTACHMENT_ITEM}").ok();
-                for line in text.split('\n') {
-                    writeln!(
-                        source,
-                        "{ATTACHMENT_LINE_PREFIX}{}",
-                        quote(line.trim_end_matches('\r'))
-                    )
-                    .ok();
-                }
+            for (index, text) in self.attached_text.iter().enumerate() {
+                writeln!(source, "{PROMPT_INDENT}{ATTACHMENT_KEY}{}:", index + 1).ok();
+                push_block(&mut source, ATTACHMENT_INDENT, text);
             }
         }
         if let Some(system_prompt) = &self.system_prompt {
             source.push('\n');
             source.push_str(SYSTEM_PROMPT_LINE);
             source.push('\n');
-            self.push_pieces(&mut source, system_prompt);
+            push_block(&mut source, PROMPT_INDENT, system_prompt);
+        }
+        let references = self.references(prompt);
+        if !references.is_empty() {
+            source.push('\n');
+            source.push_str(REFERENCES_LINE);
+            source.push('\n');
+            for reference in references {
+                writeln!(source, "{PROMPT_INDENT}- {reference}").ok();
+            }
         }
         source
     }
@@ -202,40 +211,48 @@ impl HiddenAnchor {
         source
     }
 
-    /// Adds `text` to `source` as the lines of a property, each a list of its
-    /// pieces: quoted text, and references to imported names.
-    fn push_pieces(&self, source: &mut String, text: &str) {
-        for line in text.split('\n') {
-            writeln!(source, "{PROMPT_INDENT}-").ok();
-            let mut pending = String::new();
-            let mut wrote = false;
-            for piece in pieces(line.trim_end_matches('\r')) {
-                match piece {
-                    Piece::Reference(reference, name) if self.imports.has(name) => {
-                        if !pending.is_empty() {
-                            writeln!(source, "{PIECE_PREFIX}{}", quote(&pending)).ok();
-                            pending.clear();
-                        }
-                        writeln!(source, "{PIECE_PREFIX}{reference}").ok();
-                        wrote = true;
-                    }
-                    Piece::Reference(text, _) | Piece::Text(text) => pending.push_str(text),
+    /// Each reference to an imported name in `prompt`, then in the system
+    /// prompt, once, in the order they first appear.
+    fn references<'a>(&'a self, prompt: &'a str) -> Vec<&'a str> {
+        let mut references = Vec::new();
+        for text in std::iter::once(prompt).chain(self.system_prompt.as_deref()) {
+            for piece in pieces(text) {
+                if let Piece::Reference(reference, name) = piece
+                    && self.imports.has(name)
+                    && !references.contains(&reference)
+                {
+                    references.push(reference);
                 }
             }
-            if !pending.is_empty() || !wrote {
-                writeln!(source, "{PIECE_PREFIX}{}", quote(&pending)).ok();
-            }
         }
+        references
+    }
+
+    /// `text` with each reference to an imported name replaced by what it
+    /// resolved to, and everything else as it is.
+    fn resolve(&self, text: &str, resolved: &BTreeMap<String, String>) -> String {
+        pieces(text)
+            .into_iter()
+            .map(|piece| match piece {
+                Piece::Reference(reference, name) if self.imports.has(name) => {
+                    resolved.get(reference).map_or(reference, String::as_str)
+                }
+                Piece::Reference(text, _) | Piece::Text(text) => text,
+            })
+            .collect()
     }
 
     /// Reads back an anchor saved with [`Self::source`], with the prompt it
-    /// holds.
+    /// holds. Anchors saved by earlier versions, their text as quoted pieces
+    /// or as prose, read back too.
     pub fn parse(source: &str) -> Option<(Self, String)> {
         let mut imports = Imports::default();
         let mut lines = source.lines();
         let name = loop {
             let line = lines.next()?;
             if let Some(name) = line
+                .strip_prefix("export ")
+                .unwrap_or(line)
                 .strip_prefix("anchor ")
                 .and_then(|rest| rest.strip_suffix(':'))
             {
@@ -247,50 +264,73 @@ impl HiddenAnchor {
             return None;
         }
         let lines: Vec<&str> = lines.collect();
-        // Prompt lines are indented deeper, so only the properties themselves
-        // match these lines.
-        let property = |line: &&str| {
-            *line == SYSTEM_PROMPT_LINE
-                || *line == ATTACHED_TEXT_LINE
-                || line.starts_with(MODE_PREFIX)
+        let (prompt, mut rest) = match read_escaped(&lines, PROMPT_INDENT) {
+            Some(read) => read,
+            None => {
+                // Prompt lines are indented deeper, so only the properties
+                // themselves match these lines.
+                let property = |line: &&str| {
+                    *line == SYSTEM_PROMPT_LINE
+                        || *line == ATTACHED_TEXT_LINE
+                        || *line == SLICED_LINE
+                        || line.starts_with(MODE_PREFIX)
+                };
+                let end = lines.iter().position(property).unwrap_or(lines.len());
+                let prompt = &lines[..end];
+                let prompt = prompt.strip_suffix(&[""]).unwrap_or(prompt);
+                (read_block(prompt), &lines[end..])
+            }
         };
-        let end = lines.iter().position(property).unwrap_or(lines.len());
-        // Drop the blank line separating the prompt from the next property;
-        // prompt lines, even empty ones, are always indented.
-        let prompt = &lines[..end];
-        let prompt = if end < lines.len() {
-            prompt.strip_suffix(&[""]).unwrap_or(prompt)
-        } else {
-            prompt
-        };
-        let mut rest = &lines[end..];
+        // A blank line separates each property from the next.
+        rest = rest.strip_prefix(&[""]).unwrap_or(rest);
         let mut mode = None;
         if let Some(key) = rest.first().and_then(|line| line.strip_prefix(MODE_PREFIX)) {
             mode = SendMode::from_key(key.trim());
             rest = &rest[1..];
             rest = rest.strip_prefix(&[""]).unwrap_or(rest);
         }
+        let sliced = rest.first() == Some(&SLICED_LINE);
+        if sliced {
+            rest = &rest[1..];
+            rest = rest.strip_prefix(&[""]).unwrap_or(rest);
+        }
         let mut attached_text = Vec::new();
         if rest.first() == Some(&ATTACHED_TEXT_LINE) {
             rest = &rest[1..];
+            let mut quoted: Vec<Vec<String>> = Vec::new();
             while let Some(line) = rest.first() {
-                if *line == ATTACHMENT_ITEM {
-                    attached_text.push(Vec::new());
-                } else if let Some(quoted) = line.strip_prefix(ATTACHMENT_LINE_PREFIX) {
-                    attached_text.last_mut()?.push(unquote(quoted)?);
+                if line
+                    .strip_prefix(PROMPT_INDENT)
+                    .and_then(|key| key.strip_prefix(ATTACHMENT_KEY))
+                    .is_some_and(|key| key.ends_with(':'))
+                {
+                    let (text, after) = read_escaped(&rest[1..], ATTACHMENT_INDENT)?;
+                    attached_text.push(text);
+                    rest = after;
+                    continue;
+                } else if *line == OLD_ATTACHMENT_ITEM {
+                    quoted.push(Vec::new());
+                } else if let Some(line) = line.strip_prefix(OLD_ATTACHMENT_LINE_PREFIX) {
+                    quoted.last_mut()?.push(unquote(line)?);
                 } else {
                     break;
                 }
                 rest = &rest[1..];
             }
+            attached_text.extend(quoted.into_iter().map(|lines| lines.join("\n")));
             rest = rest.strip_prefix(&[""]).unwrap_or(rest);
         }
-        let attached_text = attached_text
-            .into_iter()
-            .map(|lines| lines.join("\n"))
-            .collect();
         let system_prompt = match rest.first() {
-            Some(&SYSTEM_PROMPT_LINE) => Some(read_block(&rest[1..])),
+            Some(&SYSTEM_PROMPT_LINE) => Some(match read_escaped(&rest[1..], PROMPT_INDENT) {
+                Some((text, _)) => text,
+                None => {
+                    let end = rest[1..]
+                        .iter()
+                        .position(|line| *line == REFERENCES_LINE)
+                        .map_or(rest.len(), |end| end + 1);
+                    read_block(&rest[1..end])
+                }
+            }),
             _ => None,
         };
         Some((
@@ -298,10 +338,11 @@ impl HiddenAnchor {
                 name,
                 imports,
                 mode,
+                sliced,
                 attached_text,
                 system_prompt,
             },
-            read_block(prompt),
+            prompt,
         ))
     }
 
@@ -314,33 +355,75 @@ impl HiddenAnchor {
 /// The start of the `mode` line of [`HiddenAnchor::source`].
 const MODE_PREFIX: &str = "    mode: ";
 
+/// The line of [`HiddenAnchor::source`] saying the prompt is sent sliced.
+const SLICED_LINE: &str = "    sliced: true";
+
 /// The line opening the `systemPrompt` property of [`HiddenAnchor::source`].
 const SYSTEM_PROMPT_LINE: &str = "    systemPrompt:";
 
-/// The line opening the `attachedText` property of [`HiddenAnchor::source`],
-/// the line opening each piece of text in it, and the start of each of the
-/// piece's quoted lines.
-const ATTACHED_TEXT_LINE: &str = "    attachedText:";
-const ATTACHMENT_ITEM: &str = "        -";
-const ATTACHMENT_LINE_PREFIX: &str = "            - ";
+/// The line opening the `references` property of [`HiddenAnchor::source`].
+const REFERENCES_LINE: &str = "    references:";
 
-/// `line` as a quoted Piton string, taken as it is: quotes and backslashes
-/// escaped, and each `${` too, so nothing in it is interpolated or evaluated.
-fn quote(line: &str) -> String {
-    let mut quoted = String::with_capacity(line.len() + 2);
-    quoted.push('"');
-    let mut chars = line.chars().peekable();
-    while let Some(c) = chars.next() {
-        if matches!(c, '"' | '\\') || (c == '$' && chars.peek() == Some(&'{')) {
-            quoted.push('\\');
+/// The line opening the `attachedText` property of [`HiddenAnchor::source`],
+/// what each piece of text in it is keyed by, followed by its number, and
+/// the indentation of the piece's escape block.
+const ATTACHED_TEXT_LINE: &str = "    attachedText:";
+const ATTACHMENT_KEY: &str = "text";
+const ATTACHMENT_INDENT: &str = "            ";
+
+/// Adds `text` to `source` as a multi-line escape block at `indent`, which
+/// Piton keeps exactly as it is. Its fence is three backslashes, or one more
+/// than any line of the text made only of backslashes, so nothing in the text
+/// closes it early.
+fn push_block(source: &mut String, indent: &str, text: &str) {
+    let fence = "\\".repeat(fence_length(text));
+    writeln!(source, "{indent}{fence}").ok();
+    for line in text.split('\n') {
+        let line = line.trim_end_matches('\r');
+        if line.is_empty() {
+            source.push('\n');
+        } else {
+            writeln!(source, "{indent}{line}").ok();
         }
-        quoted.push(c);
     }
-    quoted.push('"');
-    quoted
+    writeln!(source, "{indent}{fence}").ok();
 }
 
-/// The line a string written by [`quote`] holds.
+/// How many backslashes fence `text`'s escape block.
+fn fence_length(text: &str) -> usize {
+    text.split('\n')
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && line.chars().all(|c| c == '\\'))
+        .map(|line| line.len() + 1)
+        .max()
+        .unwrap_or(0)
+        .max(3)
+}
+
+/// The text of an escape block written by [`push_block`] at `indent` at the
+/// start of `lines`, and the lines after it; `None` when `lines` don't start
+/// with one.
+fn read_escaped<'a, 'b>(lines: &'a [&'b str], indent: &str) -> Option<(String, &'a [&'b str])> {
+    let fence = lines.first()?.strip_prefix(indent)?;
+    if fence.len() < 3 || !fence.chars().all(|c| c == '\\') {
+        return None;
+    }
+    let close = format!("{indent}{fence}");
+    let end = 1 + lines[1..].iter().position(|line| *line == close)?;
+    let text = lines[1..end]
+        .iter()
+        .map(|line| line.strip_prefix(indent).unwrap_or(line.trim_start()))
+        .collect::<Vec<_>>()
+        .join("\n");
+    Some((text, &lines[end + 1..]))
+}
+
+/// The line opening each piece of attached text, and the start of each of its
+/// quoted lines, as earlier versions wrote them.
+const OLD_ATTACHMENT_ITEM: &str = "        -";
+const OLD_ATTACHMENT_LINE_PREFIX: &str = "            - ";
+
+/// The line a quoted string, as earlier versions wrote them, holds.
 fn unquote(quoted: &str) -> Option<String> {
     let inner = quoted.strip_prefix('"')?.strip_suffix('"')?;
     let mut line = String::with_capacity(inner.len());
@@ -366,11 +449,11 @@ pub fn with_attached_text(user_prompt: &str, attached_text: &[String]) -> String
     prompt
 }
 
-/// The start of each piece of a line, written by [`HiddenAnchor::source`].
+/// The start of each piece of a line, as earlier versions wrote them.
 const PIECE_PREFIX: &str = "            - ";
 
-/// The text of a property's lines: as pieces, written by
-/// [`HiddenAnchor::source`], or as the prose earlier versions saved.
+/// The text of a property's lines as earlier versions saved them: each line a
+/// list of quoted pieces and references, or prose.
 fn read_block(block: &[&str]) -> String {
     let line_item = format!("{PROMPT_INDENT}-");
     if block.first() != Some(&line_item.as_str()) {
@@ -569,10 +652,17 @@ fn save_in(dir: &Path, anchor: &HiddenAnchor, prompt: &str) -> Result<PathBuf> {
     Ok(file)
 }
 
-/// Compiles `file`, a saved `anchor`, and returns its compiled prompt text.
+/// Compiles `file`, a saved `anchor`, and returns its compiled prompt text:
+/// the prompt as it was saved, with each reference resolved as `piton compile`
+/// resolves it, a link to its reference document for an `@{…}` and its text
+/// for a `${…}`.
 pub fn compile(anchor: &HiddenAnchor, file: &Path, project_dir: &Path) -> Result<CompiledPrompt> {
+    let source =
+        fs::read_to_string(file).with_context(|| format!("could not read {}", file.display()))?;
+    let (saved, prompt) =
+        HiddenAnchor::parse(&source).ok_or_else(|| anyhow!("{} is no prompt", file.display()))?;
     let output = Command::new("piton")
-        .args(["compile", "--stdout"])
+        .arg("compile")
         .arg(file)
         .current_dir(project_dir)
         .output()
@@ -588,31 +678,295 @@ pub fn compile(anchor: &HiddenAnchor, file: &Path, project_dir: &Path) -> Result
     let compiled = compiled
         .get(&anchor.name)
         .ok_or_else(|| anyhow!("the compiled output has no {}", anchor.name))?;
-    let user_prompt = compiled
-        .get("userPrompt")
-        .ok_or_else(|| anyhow!("the compiled anchor has no userPrompt"))?;
-    // Each piece of attached text compiles to the list of its lines.
-    let attached_text: Vec<String> = compiled
-        .get("attachedText")
+    let values = compiled
+        .get("references")
         .and_then(Value::as_array)
-        .map(|pieces| {
-            pieces
-                .iter()
-                .map(|piece| match piece {
-                    Value::Array(lines) => lines
-                        .iter()
-                        .map(|line| line.as_str().unwrap_or_default())
-                        .collect::<Vec<_>>()
-                        .join("\n"),
-                    other => prose(other),
-                })
-                .collect()
-        })
+        .map(Vec::as_slice)
         .unwrap_or_default();
+    let file_dir = file
+        .parent()
+        .map(|dir| dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf()))
+        .unwrap_or_default();
+    let references: Vec<(&str, &Value)> =
+        saved.references(&prompt).into_iter().zip(values).collect();
+    let resolved: BTreeMap<String, String> = references
+        .iter()
+        .map(|&(reference, value)| {
+            let text = match value {
+                // Sliced, the reference names what its slice, sent after the
+                // prompt, is headed by.
+                Value::String(target) if reference.starts_with('@') && saved.sliced => target
+                    .rsplit_once(':')
+                    .map_or_else(|| target.clone(), |(_, dotted)| dotted.to_string()),
+                Value::String(target) if reference.starts_with('@') => {
+                    link(target, &file_dir, project_dir).unwrap_or_else(|| target.clone())
+                }
+                Value::String(text) => text.clone(),
+                other => other.to_string(),
+            };
+            (reference.to_string(), text)
+        })
+        .collect();
+    let mut user_prompt = saved.resolve(&prompt, &resolved);
+    if saved.sliced {
+        // Each spec the prompt itself, not its system prompt, refers to,
+        // once, in order.
+        let in_prompt: Vec<&str> = pieces(&prompt)
+            .into_iter()
+            .filter_map(|piece| match piece {
+                Piece::Reference(reference, _) => Some(reference),
+                Piece::Text(_) => None,
+            })
+            .collect();
+        let targets: Vec<&str> = references
+            .iter()
+            .filter(|(reference, _)| reference.starts_with('@') && in_prompt.contains(reference))
+            .filter_map(|(_, value)| value.as_str())
+            .collect();
+        if !targets.is_empty() {
+            user_prompt.push_str("\n\nSpec slices:");
+            for target in targets {
+                user_prompt.push_str("\n\n");
+                user_prompt.push_str(slice(target, &file_dir, project_dir).trim_end());
+            }
+        }
+    }
     Ok(CompiledPrompt {
-        user_prompt: with_attached_text(&text_of(user_prompt), &attached_text),
-        system_prompt: compiled.get("systemPrompt").map(text_of),
+        user_prompt: with_attached_text(&user_prompt, &saved.attached_text),
+        system_prompt: saved
+            .system_prompt
+            .as_deref()
+            .map(|text| saved.resolve(text, &resolved)),
     })
+}
+
+/// A Markdown link, from the project directory, to where the project's build
+/// writes the document `target` names: `piton compile`'s reference, a module's
+/// output path relative to `file_dir` and the dotted path in it after a colon.
+/// A module's document is in the first adapter's reference root, at its path
+/// under the spec root, or in the compiled shape, at its path under the shape
+/// root; the link goes to the heading for the anchor, or the property, it
+/// names when the document is built.
+fn link(target: &str, file_dir: &Path, project_dir: &Path) -> Option<String> {
+    let (module, dotted) = target.rsplit_once(':')?;
+    let module = normalize(&file_dir.join(module)).with_extension("pi");
+    let canonical = |dir: PathBuf| dir.canonicalize().unwrap_or(dir);
+    let reference_root = PathBuf::from(reference_root(project_dir));
+    let shape_root = config_value(project_dir, "shapeRoot")
+        .ok()
+        .map(|root| canonical(project_dir.join(root)));
+    let document =
+        match shape_root.and_then(|root| module.strip_prefix(root).ok().map(Path::to_path_buf)) {
+            Some(relative) => reference_root.join("shape").join(relative),
+            None => reference_root.join(
+                module
+                    .strip_prefix(canonical(spec_dir(project_dir)?))
+                    .ok()?,
+            ),
+        }
+        .with_extension("md");
+    let fragment = fs::read_to_string(project_dir.join(&document))
+        .ok()
+        .and_then(|text| fragment(&text, dotted))
+        .map(|slug| format!("#{slug}"))
+        .unwrap_or_default();
+    let document = document
+        .components()
+        .map(|part| part.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/");
+    Some(format!("[{dotted}]({document}{fragment})"))
+}
+
+/// What `piton slice` prints, run in the project directory, for the anchor or
+/// property `target` names, `piton compile`'s reference: a module's output
+/// path relative to `file_dir` and the dotted path in it after a colon. A slice
+/// that can't be had says why in its place.
+fn slice(target: &str, file_dir: &Path, project_dir: &Path) -> String {
+    let Some((module, dotted)) = target.rsplit_once(':') else {
+        return format!("Could not slice {target}: it names no spec.");
+    };
+    let module = normalize(&file_dir.join(module)).with_extension("pi");
+    let project = project_dir
+        .canonicalize()
+        .unwrap_or_else(|_| project_dir.to_path_buf());
+    let module = module.strip_prefix(&project).unwrap_or(&module);
+    let output = Command::new("piton")
+        .arg("slice")
+        .arg(format!("{}#{dotted}", module.display()))
+        .current_dir(project_dir)
+        .output();
+    match output {
+        Ok(output) if output.status.success() => {
+            String::from_utf8_lossy(&output.stdout).into_owned()
+        }
+        Ok(output) => {
+            let mut message = String::from_utf8_lossy(&output.stdout).into_owned();
+            message.push_str(&String::from_utf8_lossy(&output.stderr));
+            format!("Could not slice {dotted}: {}", message.trim())
+        }
+        Err(err) => format!("Could not slice {dotted}: could not run `piton slice`: {err}"),
+    }
+}
+
+/// `path` with its `.` and `..` parts worked out, without touching the disk.
+fn normalize(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut normal = PathBuf::new();
+    for part in path.components() {
+        match part {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normal.pop();
+            }
+            other => normal.push(other),
+        }
+    }
+    normal
+}
+
+/// Where the first adapter in the project's `piton.config.pi` writes its
+/// reference documents, `.claude/reference` for Claude Code, `.codex/reference`
+/// for Codex, and `.opencode/reference` for OpenCode.
+pub fn reference_root(project_dir: &Path) -> &'static str {
+    let config = fs::read_to_string(project_dir.join(CONFIG_FILE_NAME)).unwrap_or_default();
+    config
+        .lines()
+        .skip_while(|line| line.trim() != "adapters:")
+        .find_map(|line| match line.trim() {
+            "- {ClaudeCodeAdapter}" => Some(".claude/reference"),
+            "- {CodexAdapter}" => Some(".codex/reference"),
+            "- {OpenCodeAdapter}" => Some(".opencode/reference"),
+            _ => None,
+        })
+        .unwrap_or(".claude/reference")
+}
+
+/// The fragment of the heading in a reference document for `dotted`, an
+/// anchor's name perhaps followed by the path of a property in it, as Belay
+/// links it: the anchor's own heading, then each property's beneath it as far
+/// as they have headings, its slug made as GitHub makes it, a repeated one
+/// gaining `-1`, `-2`, and so on through the document.
+fn fragment(document: &str, dotted: &str) -> Option<String> {
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    let headings: Vec<(usize, String, String)> = headings(document)
+        .into_iter()
+        .map(|(level, title)| {
+            let base = heading_slug(&title);
+            let count = counts.entry(base.clone()).or_default();
+            let slug = match *count {
+                0 => base,
+                n => format!("{base}-{n}"),
+            };
+            *count += 1;
+            (level, title, slug)
+        })
+        .collect();
+    let mut parts = dotted.split('.');
+    let anchor = title_case(parts.next()?);
+    let mut position = headings
+        .iter()
+        .position(|(level, title, _)| *level == 1 && *title == anchor)?;
+    for part in parts {
+        let wanted = title_case(part);
+        let level = headings[position].0;
+        match headings[position + 1..]
+            .iter()
+            .take_while(|heading| heading.0 > level)
+            .position(|heading| heading.0 == level + 1 && heading.1 == wanted)
+        {
+            Some(offset) => position += 1 + offset,
+            None => break,
+        }
+    }
+    Some(headings[position].2.clone())
+}
+
+/// The level and title of each ATX heading in a Markdown document, outside
+/// fenced code.
+fn headings(document: &str) -> Vec<(usize, String)> {
+    let mut headings = Vec::new();
+    let mut fence: Option<&str> = None;
+    for line in document.lines() {
+        let trimmed = line.trim_start();
+        let marker = ["```", "~~~"]
+            .into_iter()
+            .find(|marker| trimmed.starts_with(marker));
+        if let Some(marker) = marker {
+            match fence {
+                Some(open) if open == marker => fence = None,
+                None => fence = Some(marker),
+                _ => {}
+            }
+            continue;
+        }
+        if fence.is_some() || line.starts_with([' ', '\t']) {
+            continue;
+        }
+        let level = line.chars().take_while(|c| *c == '#').count();
+        let rest = &line[level..];
+        if (1..=6).contains(&level) && (rest.is_empty() || rest.starts_with(' ')) {
+            headings.push((level, rest.trim().trim_end_matches('#').trim().to_string()));
+        }
+    }
+    headings
+}
+
+/// A heading's fragment, as GitHub makes it: lowercase, spaces as hyphens,
+/// and other punctuation dropped.
+fn heading_slug(title: &str) -> String {
+    let mut slug = String::new();
+    for c in title.trim().chars() {
+        if c.is_alphanumeric() || c == '_' || c == '-' {
+            slug.extend(c.to_lowercase());
+        } else if c == ' ' {
+            slug.push('-');
+        }
+    }
+    slug
+}
+
+/// A Piton name as Belay titles it: split into words at a lowercase letter
+/// or digit followed by a capital, at a letter followed by a digit, and at
+/// `-`, `_`, and spaces, each word capitalized; a run of capitals stays whole.
+fn title_case(name: &str) -> String {
+    let chars: Vec<char> = name.chars().collect();
+    let mut words: Vec<String> = Vec::new();
+    let mut current = String::new();
+    for (i, &c) in chars.iter().enumerate() {
+        if matches!(c, '-' | '_' | ' ') {
+            if !current.is_empty() {
+                words.push(std::mem::take(&mut current));
+            }
+            continue;
+        }
+        let boundary = i > 0 && {
+            let previous = chars[i - 1];
+            (previous.is_lowercase() || previous.is_ascii_digit())
+                && (c.is_uppercase() || c.is_ascii_digit() && !previous.is_ascii_digit())
+        };
+        if boundary && !current.is_empty() {
+            words.push(std::mem::take(&mut current));
+        }
+        current.push(c);
+    }
+    if !current.is_empty() {
+        words.push(current);
+    }
+    if words.is_empty() {
+        return name.to_string();
+    }
+    words
+        .iter()
+        .map(|word| {
+            let mut chars = word.chars();
+            chars
+                .next()
+                .map(|first| first.to_uppercase().chain(chars).collect::<String>())
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Reads the spec root (`root:`) from the project's `piton.config.pi`.
@@ -660,50 +1014,6 @@ pub fn config_value(project_dir: &Path, key: &str) -> Result<String> {
         .ok_or_else(|| anyhow!("{} has no {key}", config_path.display()))
 }
 
-/// A compiled property's text: its lines of pieces joined back together, or,
-/// for prose, as [`prose`] reads it.
-fn text_of(value: &Value) -> String {
-    match value {
-        Value::Array(lines) if !lines.is_empty() && lines.iter().all(Value::is_array) => lines
-            .iter()
-            .map(|line| {
-                line.as_array()
-                    .into_iter()
-                    .flatten()
-                    .map(|piece| match piece {
-                        Value::String(text) => text.clone(),
-                        other => prose(other),
-                    })
-                    .collect::<String>()
-            })
-            .collect::<Vec<_>>()
-            .join("\n"),
-        other => prose(other),
-    }
-}
-
-/// Turns a compiled `userPrompt` back into text: paragraphs are separated by
-/// blank lines and lists become `- ` items.
-fn prose(value: &Value) -> String {
-    match value {
-        Value::String(text) => text.clone(),
-        Value::Array(blocks) => blocks
-            .iter()
-            .map(|block| match block {
-                Value::Array(items) => items
-                    .iter()
-                    .map(|item| format!("- {}", prose(item)))
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-                other => prose(other),
-            })
-            .collect::<Vec<_>>()
-            .join("\n\n"),
-        Value::Null => String::new(),
-        other => serde_json::to_string_pretty(other).unwrap_or_default(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -711,7 +1021,7 @@ mod tests {
 
     use super::{
         HiddenAnchor, Imports, MODE_PREFIX, PROMPT_INDENT, SYSTEM_PROMPT_LINE, compile, mode_of,
-        prose, spec_files, system_prompt,
+        spec_files, system_prompt,
     };
     use crate::chat_input::SendMode;
     use crate::project_directory::CONFIG_FILE_NAME;
@@ -722,22 +1032,23 @@ mod tests {
         let mut imports = Imports::default();
         assert!(imports.add_from_source("from ./lib import Concept\n\n"));
         assert!(imports.add_from_source("from ./lib import Concept, Scope\n"));
-        assert!(imports.add_from_source("from @piton/belay import ClaudeAdapter\n\n"));
+        assert!(imports.add_from_source("from @piton/belay import ClaudeCodeAdapter\n\n"));
         assert!(!imports.add_from_source("from /lib import Scope\nanchor Other:\n"));
 
         let anchor = HiddenAnchor {
             name: "Prompt_test".into(),
             imports,
             mode: None,
+            sliced: false,
             attached_text: Vec::new(),
             system_prompt: None,
         };
         assert_eq!(
             anchor.source("hi"),
             "from /lib import Concept, Scope\n\
-             from @piton/belay import ClaudeAdapter\n\
+             from @piton/belay import ClaudeCodeAdapter\n\
              \n\
-             anchor Prompt_test:\n    userPrompt:\n        -\n            - \"hi\"\n"
+             export anchor Prompt_test:\n    userPrompt:\n        \\\\\\\n        hi\n        \\\\\\\n"
         );
     }
 
@@ -860,10 +1171,62 @@ mod tests {
         );
     }
 
+    /// A prompt's escape block is fenced beyond any line of backslashes in
+    /// it, and reads back exactly, even with nothing in it.
     #[test]
-    fn turns_compiled_prompt_into_text() {
-        let value = serde_json::json!(["First paragraph.", ["one", "two"], "Last."]);
-        assert_eq!(prose(&value), "First paragraph.\n\n- one\n- two\n\nLast.");
+    fn escape_blocks_outlast_the_text() {
+        let mut anchor = HiddenAnchor::random();
+        for prompt in [
+            "",
+            "\\\\\\\n  \\\\\\\\  \nend",
+            "  lead\ttab  \n\n\n",
+            "true",
+        ] {
+            anchor.system_prompt = Some(prompt.to_string());
+            let source = anchor.source(prompt);
+            let (parsed, text) = HiddenAnchor::parse(&source).unwrap();
+            assert_eq!(text, prompt, "{source}");
+            assert_eq!(parsed.system_prompt.as_deref(), Some(prompt));
+        }
+        assert_eq!(super::fence_length("a\n \\\\\\\\ \nb"), 5);
+        assert_eq!(super::fence_length("\\"), 3);
+    }
+
+    /// References resolve to the heading Belay gives the anchor, or the
+    /// property, a repeated one numbered.
+    #[test]
+    fn fragments_follow_the_headings() {
+        let document = "# Button\n\n## Description\n\n```\n# not a heading\n```\n\n\
+                        ## Color\n\n# Save Button\n\n## Description\n\n### Tone\n";
+        use super::fragment;
+        assert_eq!(fragment(document, "Button").as_deref(), Some("button"));
+        assert_eq!(fragment(document, "Button.color").as_deref(), Some("color"));
+        assert_eq!(
+            fragment(document, "SaveButton.description").as_deref(),
+            Some("description-1")
+        );
+        assert_eq!(
+            fragment(document, "SaveButton.description.tone").as_deref(),
+            Some("tone")
+        );
+        assert_eq!(
+            fragment(document, "SaveButton.missing").as_deref(),
+            Some("save-button")
+        );
+        assert_eq!(fragment(document, "Other"), None);
+        assert_eq!(super::title_case("whatIsAType"), "What Is AType");
+        assert_eq!(super::title_case("t1"), "T 1");
+    }
+
+    /// Prompts saved as quoted pieces by earlier versions still read back.
+    #[test]
+    fn quoted_prompts_read_back() {
+        let old = "from /a import A\n\nanchor Prompt_old:\n    userPrompt:\n        -\n            - @{A}\n            - \" say \\\"hi\\\"\"\n        -\n            - \"\"\n\n    mode: combined\n\n    attachedText:\n        -\n            - \"x\"\n            - \"y\"\n\n    systemPrompt:\n        -\n            - \"Be brief.\"\n";
+        let (anchor, prompt) = HiddenAnchor::parse(old).unwrap();
+        assert_eq!(prompt, "@{A} say \"hi\"\n");
+        assert_eq!(anchor.mode, Some(SendMode::Both));
+        assert_eq!(anchor.attached_text, ["x\ny"]);
+        assert_eq!(anchor.system_prompt.as_deref(), Some("Be brief."));
     }
 
     #[test]
@@ -949,7 +1312,8 @@ mod tests {
         let file = dir.join("pasted.pi");
         fs::write(&file, &source).unwrap();
         let compiled = compile(&anchor, &file, project_dir).unwrap();
-        let link = "[ApplicationScope](.claude/reference/scope/application/ApplicationScope.md)";
+        let link =
+            "[ApplicationScope](.claude/reference/scope/application/index.md#application-scope)";
         assert_eq!(
             compiled.user_prompt,
             prompt
@@ -979,7 +1343,7 @@ mod tests {
         let compiled = super::preview(&anchor, "Look at @{ApplicationScope}", project_dir).unwrap();
         assert_eq!(
             compiled.user_prompt,
-            "Look at [ApplicationScope](.claude/reference/scope/application/ApplicationScope.md)"
+            "Look at [ApplicationScope](.claude/reference/scope/application/index.md#application-scope)"
         );
         assert_eq!(compiled.system_prompt.as_deref(), Some("Be brief."));
         let kept = project_dir.join(super::APP_DIR).join("preview");
@@ -1026,6 +1390,42 @@ mod tests {
         assert!(text.contains("- a list item"), "{text}");
         assert!(!text.contains("Attached text"), "{text}");
         assert_eq!(compiled.system_prompt, anchor.system_prompt);
+    }
+
+    /// A sliced prompt reads back sliced, and reaches the harness with its
+    /// references named rather than linked, followed by their slices.
+    #[test]
+    fn a_sliced_prompt_is_sent_with_its_slices() {
+        let mut anchor = HiddenAnchor::random();
+        anchor.mode = Some(SendMode::Code);
+        anchor.sliced = true;
+        anchor.attached_text = vec!["attached".into()];
+        let (read, prompt) = HiddenAnchor::parse(&anchor.source("Hello")).unwrap();
+        assert!(read.sliced);
+        assert_eq!(read.mode, Some(SendMode::Code));
+        assert_eq!(read.attached_text, anchor.attached_text);
+        assert_eq!(prompt, "Hello");
+        let (read, _) = HiddenAnchor::parse(&HiddenAnchor::random().source("Hello")).unwrap();
+        assert!(!read.sliced);
+
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        let project_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut anchor = HiddenAnchor::random();
+        anchor
+            .imports
+            .add_from_source("from ./scope/application import ApplicationScope");
+        anchor.sliced = true;
+        let dir = project_dir.join("target/hidden-anchor-test");
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("sliced.pi");
+        fs::write(&file, anchor.source("See @{ApplicationScope}.")).unwrap();
+        let text = compile(&anchor, &file, project_dir).unwrap().user_prompt;
+        assert!(
+            text.starts_with("See ApplicationScope.\n\nSpec slices:\n\n# ApplicationScope"),
+            "{text}"
+        );
     }
 
     /// Attached text that looks like Piton, or holds quotes, backslashes, and

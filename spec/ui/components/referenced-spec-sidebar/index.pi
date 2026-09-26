@@ -1,11 +1,11 @@
 use /lib
 use /ui
-use /ui/components/sidebar/Sidebar
 use /ui/components/sidebar/Panel
+use /ui/components/sidebar/Sidebar
 from /scope/open-file import OpenFileScope
 from /scope/project-locations import ProjectLocationsScope
-from /ui/components/sidebar import SidebarScope
 from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
+from /ui/components/sidebar import SidebarScope
 
 export sidebar ReferencedSpecSidebarScope:
     side: right
@@ -86,12 +86,12 @@ shape ReferencedFilesShape:
         - the task's prompt imports from it, its hidden anchor naming it
         - the harness reads, edits, or writes it with a file tool
         - a shell command reads it, such as cat, head, tail, sed, less, grep,
-          rg, awk, or diff naming it, or a pattern or folder that takes it in,
-          as far as the command shows
+            rg, awk, or diff naming it, or a pattern or folder that takes it in,
+            as far as the command shows
         - a shell command edits or writes it, such as sed -i, a redirect (> or
-          >>), tee, mv, or cp onto it
+            >>), tee, mv, or cp onto it
         - a search tool, Grep or Glob, searches a folder or pattern that takes
-          it in and its results name it
+            it in and its results name it
         - a subagent the harness starts does any of the above
 
         A file taken in only by a folder or pattern, without the results

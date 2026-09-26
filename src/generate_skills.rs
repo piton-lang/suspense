@@ -445,7 +445,7 @@ pub fn fixture(name: &str) -> (std::path::PathBuf, Vec<String>) {
     .to_vec();
     std::fs::write(
         dir.join("piton.config.pi"),
-        "use @piton/config\nuse @piton/belay\n\nfrom @piton/belay import ClaudeAdapter\n\nexport piton-config Project:\n    root: ./spec\n    entry: ./spec/index.pi\n\n    frameworks:\n        - {BelayConfiguration}\n\nbelay-config BelayConfiguration:\n    codeRoot: ./src\n\n    adapters:\n        - {ClaudeAdapter}\n",
+        "use @piton/config\nuse @piton/belay\n\nfrom @piton/belay import ClaudeCodeAdapter\n\nexport piton-config Project:\n    root: ./spec\n    entry: ./spec/index.pi\n\n    frameworks:\n        - {BelayConfiguration}\n\nbelay-config BelayConfiguration:\n    codeRoot: ./src\n\n    adapters:\n        - {ClaudeCodeAdapter}\n",
     )
     .unwrap();
     std::fs::create_dir_all(dir.join("src")).unwrap();

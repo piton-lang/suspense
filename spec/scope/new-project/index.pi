@@ -1,9 +1,9 @@
 use /lib
 use /ui
+from /scope/project-data import ProjectDataScope
+from /scope/project-directory import ProjectDirectoryScope
 from /scope/project/open-project import OpenProjectScope
 from /ui/components/folder-browser import FolderBrowserScope
-from /scope/project-directory import ProjectDirectoryScope
-from /scope/project-data import ProjectDataScope
 
 export ui-component NewProjectScope:
     concept: {NewProjectConcept}
@@ -69,11 +69,10 @@ shape NewProjectShape:
 
     agents:
         Beneath the template, in the second column, an "Agents" group of
-        checkboxes, one per agent Belay writes for, each
-        with the directory it writes into: "Claude Code" (.claude), "OpenCode"
-        (.opencode), "Codex" (.codex), "Cursor" (.cursor), and "Agents"
-        (.agents). Only Claude Code starts checked. At least one must be
-        checked.
+        checkboxes, one per agent Belay has an adapter for, each with the
+        directory it writes into: "Claude Code" (.claude), "OpenCode"
+        (.opencode), and "Codex" (.codex). Only Claude Code starts checked. At
+        least one must be checked.
 
         Each checkbox's label is shown in full beside it, vertically centred on
         it, with room below its baseline so the bottoms of letters like p and y,
@@ -96,12 +95,17 @@ shape NewProjectShape:
         belay-config anchor named BelayConfiguration. That anchor has the code
         root as its codeRoot, the shape root as its shapeRoot unless there is
         none, and an adapter for each checked agent, in the order they are
-        listed. Claude Code and OpenCode use ClaudeAdapter and OpenCodeAdapter,
-        imported from @piton/belay; each of the others is a belay-agent-adapter
-        anchor of its own written into the file, named after the agent, such as
-        CodexAdapter, with a description saying the directory it writes into and
-        its tool's flag set to true. The file is written in Piton's canonical
+        listed: ClaudeCodeAdapter, OpenCodeAdapter, and CodexAdapter, each
+        imported from @piton/belay. The file is written in Piton's canonical
         formatting.
+
+        With OpenCode checked, an opencode.json is also written in the
+        project's folder, unless there is one: it lists the AGENTS.md files
+        under the code root, as `<code root>/**/AGENTS.md`, as instructions,
+        since OpenCode doesn't load the guidance Belay places throughout the
+        code on its own, and denies the skills whose names start with x-, the
+        ones Belay writes for commands, so OpenCode doesn't also offer them as
+        ordinary skills.
 
     creating:
         "New" is disabled, with a tooltip saying why, until the name is valid,
