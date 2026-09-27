@@ -1,6 +1,6 @@
 We're working on both the code located in ${CODE_LOCATION} and the spec located in ${SPEC_LOCATION}. You should edit both code and spec.
 
-Make sure that you write both code and spec.  The spec should describe the application and constrain the code, and the code should follow the entire specification.
+Write the spec first; the spec should describe the application and constrain the code. Then `piton build`. Then send the prompt to the coding agent referencing any related anchors in the spec.
 
 ${SPEC_READING}
 ${PITON_FLUENCY}

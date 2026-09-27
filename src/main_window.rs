@@ -1569,10 +1569,24 @@ impl Render for MainWindow {
                 }
             }))
             .on_action(cx.listener(|this, _: &ribbon::RunRelease, window, cx| {
-                if (!this.panel_open() || this.showing_run())
-                    && let Some(ix) = run_targets::release(&ProjectTargets::get(cx).targets)
-                {
-                    this.run_command(RunCommand::Target(ix), window, cx)
+                if this.panel_open() && !this.showing_run() {
+                    return;
+                }
+                if ProjectDirectory::get(cx).is_none() {
+                    return;
+                }
+                match run_targets::release(&ProjectTargets::get(cx).targets) {
+                    Some(ix) => this.run_command(RunCommand::Target(ix), window, cx),
+                    // Nothing to run: say so, rather than doing nothing.
+                    None => window.push_notification(
+                        gpui_kit::component::notification::Notification::warning(
+                            "This project has no run target marked as the release run. \
+                             Find Again in the Code tab looks for one, or mark one in \
+                             .suspense/run.json with \"release\": true.",
+                        )
+                        .title("No release run target"),
+                        cx,
+                    ),
                 }
             }))
             .on_action(cx.listener(|this, _: &TogglePalette, window, cx| {
@@ -3167,6 +3181,15 @@ mod tests {
             .unwrap();
         cx.run_until_parked();
         assert_eq!(cx.update(|cx| ProjectTargets::get(cx).running), None);
+        cx.update_window(handle, |_, window, cx| {
+            let notes = Root::read(window, cx).notification.read(cx).notifications();
+            assert_eq!(
+                notes.len(),
+                1,
+                "no notification said there is no release target"
+            );
+        })
+        .unwrap();
         run_targets::save(
             &dir,
             &[

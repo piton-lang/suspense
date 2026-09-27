@@ -73,6 +73,9 @@ enum Holding {
     },
 }
 
+/// How far the panel's body is inset from its edges, on every side.
+const BODY_INSET: Pixels = px(16.);
+
 pub struct RunView {
     project_dir: PathBuf,
     agent: RunAgent,
@@ -518,7 +521,7 @@ impl RunView {
                 .id("run-found")
                 .size_full()
                 .gap_2()
-                .p_4()
+                .p(BODY_INSET)
                 .overflow_y_scroll()
                 .child(
                     div().text_sm().text_color(theme.muted_foreground).child(
@@ -579,12 +582,7 @@ impl RunView {
                 open: None,
                 steps: None,
                 lock: Some((*output_locked, toggle)),
-                padding: Edges {
-                    top: px(0.),
-                    right: px(16.),
-                    bottom: px(12.),
-                    left: px(16.),
-                },
+                padding: Edges::all(BODY_INSET),
                 max_height: None,
             },
             cx,
@@ -676,7 +674,7 @@ impl RunView {
         let log = div()
             .id("run-output")
             .size_full()
-            .py_2()
+            .py(BODY_INSET)
             .bg(gpui_kit::rgb(well))
             .child(rows.element(render));
         let log = gpui_kit::TestSupportExt::test_support(log);

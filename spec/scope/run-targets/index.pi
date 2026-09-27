@@ -76,6 +76,12 @@ shape RunTargetsShape:
             titled "Run", which holds one thing at a time: finding the targets,
             or running one of them.
 
+            Whatever the panel holds, its body is inset by the same 16 pixels
+            on every side, the top included: the output of a search for its
+            targets, the targets found, and a target's output all start 16
+            pixels below the line above them, never flush against it, and end
+            16 pixels above the panel's bottom once scrolled to their end.
+
         whileFinding:
             While finding, the panel shows a step, "Looking at the project",
             with a spinner while it runs, a tick once done, or a cross and why
@@ -172,5 +178,8 @@ shape RunTargetsShape:
         <Ctrl+Shift+F5> (<Cmd+Shift+F5> on macOS) runs the target marked
         release in the same way, and its button's tooltip gives it. Where the
         project has no release target, such as when it has no release build,
-        or its targets were found before release ones were, it does nothing.
+        or its targets were found before release ones were, it runs nothing,
+        and a notification titled "No release run target" says so, and that
+        Find Again looks for one, or that one can be marked in
+        .suspense/run.json with "release": true.
         It is otherwise as <Ctrl+F5>.
