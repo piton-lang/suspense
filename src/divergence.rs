@@ -10,7 +10,7 @@
 use std::collections::{BTreeMap, HashSet};
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -710,25 +710,6 @@ pub type RunAgent = fn(&Path, &str, &Cancel, &dyn Fn(String)) -> Result<String>;
 /// Runs `piton build` in a project.
 pub type Build = fn(&Path) -> Result<crate::piton_build::BuildOutcome>;
 
-/// The reply in a line of the harness's streamed JSON, when the line is its
-/// result: whether it is an error, and the result's text.
-pub fn result_of(line: &str) -> Option<(bool, String)> {
-    let event: serde_json::Value = serde_json::from_str(line).ok()?;
-    if event.get("type")?.as_str()? != "result" {
-        return None;
-    }
-    let is_error = event
-        .get("is_error")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
-    let result = event
-        .get("result")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or_default()
-        .to_string();
-    Some((is_error, result))
-}
-
 /// Runs the harness once in `project_dir` with `prompt`, only able to read,
 /// glob, and search files, keeping no session. Each line of JSON it streams
 /// goes to `on_line` as it arrives; its reply is the result it finishes with.
@@ -739,27 +720,16 @@ pub fn run_agent(
     cancel: &Cancel,
     on_line: &dyn Fn(String),
 ) -> Result<String> {
-    let mut child = Command::new("claude")
-        .args([
-            "-p",
-            "--tools",
-            "Read,Glob,Grep",
-            "--no-session-persistence",
-            "--output-format",
-            "stream-json",
-            "--verbose",
-            "--include-partial-messages",
-        ])
-        .current_dir(project_dir)
+    let mut child = crate::harness::one_off_command(project_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .context("could not run claude")?;
+        .with_context(|| format!("could not run {}", crate::agent::current().command()))?;
     let mut stdin = child
         .stdin
         .take()
-        .ok_or_else(|| anyhow!("claude has no stdin"))?;
+        .ok_or_else(|| anyhow!("the harness has no stdin"))?;
     let prompt = prompt.to_string();
     let writer = std::thread::spawn(move || stdin.write_all(prompt.as_bytes()));
     // Lines come through a channel, so they reach `on_line` on this thread.
@@ -785,9 +755,19 @@ pub fn run_agent(
     });
     let child = Arc::new(Mutex::new(child));
     let mut result = None;
+    let mut replying = crate::harness::Replying::default();
     let mut take = |line: String| {
-        if let Some(found) = result_of(&line) {
-            result = Some(found);
+        let events = serde_json::from_str(&line)
+            .map(|event| crate::harness::parse(&event))
+            .unwrap_or_default();
+        for event in events {
+            if let crate::harness::HarnessEvent::Finished {
+                is_error,
+                result: reply,
+            } = replying.take(event)
+            {
+                result = Some((is_error, reply));
+            }
         }
         if !line.trim().is_empty() {
             on_line(line);
@@ -812,6 +792,17 @@ pub fn run_agent(
         take(line);
     }
     let stderr = stderr.join().unwrap_or_default();
+    // A harness that ends without saying it finished, as OpenCode may,
+    // replies with what it last wrote once it exits cleanly.
+    if result.is_none()
+        && status.success()
+        && let crate::harness::HarnessEvent::Finished {
+            is_error,
+            result: reply,
+        } = replying.finish()
+    {
+        result = Some((is_error, reply));
+    }
     match result {
         Some((false, reply)) => Ok(reply),
         Some((true, reply)) => bail!("{}", reply.trim()),
@@ -908,19 +899,41 @@ mod tests {
         assert_eq!(Verdict::of(50), Verdict::Diverged);
     }
 
-    /// The reply is the result the stream ends with.
+    /// The reply is the result the stream ends with, whichever harness
+    /// streamed it.
     #[test]
     fn results_are_found_in_the_stream() {
-        use super::result_of;
-        assert_eq!(result_of(r#"{"type":"assistant","message":{}}"#), None);
-        assert_eq!(result_of("not json"), None);
+        use crate::harness::{HarnessEvent, reply_of};
+        let finished = |is_error, result: &str| HarnessEvent::Finished {
+            is_error,
+            result: result.to_string(),
+        };
         assert_eq!(
-            result_of(r#"{"type":"result","is_error":false,"result":"{\"files\": []}"}"#),
-            Some((false, r#"{"files": []}"#.to_string()))
+            reply_of([
+                r#"{"type":"assistant","message":{}}"#,
+                "not json",
+                r#"{"type":"result","is_error":false,"result":"{\"files\": []}"}"#,
+            ]),
+            finished(false, r#"{"files": []}"#)
         );
         assert_eq!(
-            result_of(r#"{"type":"result","is_error":true,"result":"overloaded"}"#),
-            Some((true, "overloaded".to_string()))
+            reply_of([r#"{"type":"result","is_error":true,"result":"overloaded"}"#]),
+            finished(true, "overloaded")
+        );
+        // Codex's reply is its last message.
+        assert_eq!(
+            reply_of([
+                r#"{"type":"thread.started","thread_id":"t"}"#,
+                r#"{"type":"item.completed","item":{"id":"i0","type":"agent_message","text":"Looking."}}"#,
+                r#"{"type":"item.completed","item":{"id":"i1","type":"agent_message","text":"{}"}}"#,
+                r#"{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}"#,
+            ]),
+            finished(false, "{}")
+        );
+        // OpenCode's is what it last wrote, even if it never says it stopped.
+        assert_eq!(
+            reply_of([r#"{"type":"text","sessionID":"s","part":{"type":"text","text":"{}"}}"#]),
+            finished(false, "{}")
         );
     }
 

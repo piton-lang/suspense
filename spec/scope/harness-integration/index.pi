@@ -2,6 +2,8 @@ use /lib
 from ../project-data import ProjectDataScope
 from ../project-directory import ProjectDirectoryScope
 from ../prompt-mode/mode-system-prompts import ModeSystemPromptsScope
+from ../settings-window import SettingsWindowScope
+from ../user-preferences import UserPreferencesScope
 from ./baked-prompts import BakedSystemPromptsScope
 from ./catalog import HarnessCatalogScope
 from ./one-off-run import OneOffAgentRunScope
@@ -12,9 +14,10 @@ export scope HarnessIntegrationScope:
 
 concept HarnessIntegrationConcept:
     pitch:
-        Uses the one-off version for a coding harness for the selected
-        ${ProjectDirectoryScope}. For example, `claude -p`. Each run carries on
-        a conversation, so the harness keeps its context between requests.
+        Uses the one-off version of a coding harness for the selected
+        ${ProjectDirectoryScope}: `claude -p`, `codex exec`, or `opencode run`,
+        whichever the user chose. Each run carries on a conversation, so the
+        harness keeps its context between requests.
 
     shape: {HarnessIntegrationShape}
 
@@ -27,10 +30,73 @@ shape HarnessIntegrationShape:
         `--append-system-prompt`.
 
         The prompt is given to the harness on its standard input, and what the
-        harness does is streamed back as it happens.
+        harness does is streamed back as it happens. A task's run takes its
+        prompt as a stream of messages rather than a single one, so it can be
+        fed more while it works, as its feeding says.
 
-        The harness in use is Claude Code, so its directory, which a system
-        prompt's HARNESS_DIRECTORY stands for, is .claude.
+        Its directory, which a system prompt's HARNESS_DIRECTORY stands for,
+        is that of the harness in use: .claude, .codex, or .opencode.
+
+    harnesses:
+        The harness in use is the one picked in the @{SettingsWindowScope}:
+        Claude Code, Codex, or OpenCode, Claude Code until another is picked.
+        It is remembered for the user, as the @{UserPreferencesScope} says, not
+        for a project. Every run the application starts goes to it, the tasks,
+        the questions, the palette's file search, the one-off runs, and the
+        notes and commit messages it writes, and everything else works the
+        same whichever it is. A run already going when another is picked
+        finishes with the harness it started with, and a conversation is only
+        carried on by the harness it began with; the next request with another
+        harness starts a new one.
+
+        Each harness is run its own way, streaming what it does as a line of
+        JSON per event, which is read into the same reply, tool calls, usage,
+        and result, whichever harness wrote it:
+
+        - Claude Code is `claude -p`, in auto mode, the system prompt given
+            with `--append-system-prompt`, a conversation carried on with
+            `--resume`, and a copy of one with `--fork-session`.
+        - Codex is `codex exec`, with `--full-auto` and `--json`, the prompt
+            read from its standard input, a conversation carried on with
+            `resume`.
+        - OpenCode is `opencode run`, with `--format json`, a conversation
+            carried on with `--session`.
+
+        Codex and OpenCode take no system prompt of their own, so it is given
+        ahead of the prompt, marked off from it. Neither can carry on a copy of
+        a conversation, so a question asked while another is running starts a
+        new conversation with them instead. The notes and commit messages are
+        written with a small model where the harness can be told one, Claude
+        Code's haiku, and with the harness's default model otherwise.
+
+        When the harness picked isn't installed, a run fails saying that it
+        can't be run, as any run that can't be started does.
+
+    feeding:
+        A task's run is given its prompt as a stream of messages: Claude Code
+        with `--input-format stream-json`, each message written as a line of
+        JSON on the harness's standard input, which stays open for as long as
+        the run lasts. The run's first message is the task's compiled prompt,
+        as ever, and each message sent to the task after it, from the
+        @{ChatInputScope}, is written as another.
+
+        A message reaches the harness when it finishes what it is doing rather
+        than interrupting it, so a run that is mid-tool-call takes it once that
+        call is over. The harness echoes each message back as it takes it in,
+        with `--replay-user-messages`. A message taken in between turns is
+        answered with a result of its own, and one taken while a turn is under
+        way is answered within that turn, sharing its result. A result no
+        longer ends the task on its own: the run ends with a result once every
+        message sent has been taken in, at which point its input is closed and
+        the task finishes, in the state of that last result. A run that is
+        stopped closes its input straight away.
+
+        Codex's `codex exec` and OpenCode's `opencode run` read a single prompt
+        and can't be fed more while they work, so a task running with either
+        takes its prompt as ever and can't be sent more.
+
+        Questions, the palette's file search, the one-off runs, and the notes
+        and commit messages each take a single prompt, as ever.
 
     context:
         The harness keeps its context between requests instead of starting fresh

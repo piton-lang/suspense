@@ -1,6 +1,6 @@
 //! A run of the harness as a table of everything it did: a row for each
-//! piece of reply text, tool call, and error, in order, filling in as the
-//! reply streams.
+//! piece of reply text, tool call, and error, and each message sent to it
+//! while it works, in order, filling in as the reply streams.
 //!
 //! Every table is virtualized, so drawing one costs no more than drawing the
 //! rows in view however long the output grows. A reply keeps its rows as its
@@ -59,6 +59,8 @@ pub(crate) struct Reply {
     settled_parts: usize,
     /// The last row that is a tool call.
     last_tool_row: Option<usize>,
+    /// The last row that is a message sent to the run.
+    last_sent_row: Option<usize>,
     /// The harness's last few raw output lines, newest last, each cut short.
     pub(crate) raw_tail: VecDeque<String>,
     /// Each raw line's highlighting once worked out, with the highlight theme
@@ -88,6 +90,8 @@ pub(crate) enum ReplyPart {
     Text(TextPart),
     Tool(ToolCall),
     Error(String),
+    /// A message sent to the run while it works, as typed.
+    Sent(String),
 }
 
 /// Reply text, and the markdown it is shown as once worked out.
@@ -274,6 +278,8 @@ pub(crate) enum OutputRow<'a> {
     Text(&'a str),
     Tool(&'a ToolCall),
     Error(&'a str),
+    /// A message sent to the run while it works, as typed.
+    Sent(&'a str),
     /// The harness is still at work, and nothing is known of what comes next.
     Pending,
 }
@@ -289,6 +295,7 @@ impl OutputRow<'_> {
                 (crate::theme::tag(kind.hue(), cx), kind.icon(), kind.label())
             }
             Self::Error(_) => (Tag::danger(), IconName::TriangleAlert, "Error"),
+            Self::Sent(_) => (Tag::primary(), IconName::Send, "Sent"),
             Self::Pending => {
                 return Skeleton::new()
                     .w(px(84.))
@@ -313,7 +320,7 @@ impl OutputRow<'_> {
         match self {
             Self::Text(text) => text.trim().is_empty(),
             Self::Tool(call) => call.summary.is_none() && call.state == ToolState::Running,
-            Self::Error(_) => false,
+            Self::Error(_) | Self::Sent(_) => false,
             Self::Pending => true,
         }
     }
@@ -327,6 +334,7 @@ impl Default for Reply {
             rows: vec![RowSource::Pending],
             settled_parts: 0,
             last_tool_row: None,
+            last_sent_row: None,
             raw_tail: VecDeque::new(),
             raw_styles: RefCell::default(),
             done: false,
@@ -351,6 +359,7 @@ impl Reply {
                 ReplyPart::Text(text) => OutputRow::Text(text),
                 ReplyPart::Tool(call) => OutputRow::Tool(call),
                 ReplyPart::Error(error) => OutputRow::Error(error),
+                ReplyPart::Sent(text) => OutputRow::Sent(text),
             },
         })
     }
@@ -469,6 +478,7 @@ impl Reply {
             .partition_point(|row| matches!(row, RowSource::Part(part) if *part < settled));
         self.rows.truncate(keep);
         self.last_tool_row = self.last_tool_row.filter(|row| *row < keep);
+        self.last_sent_row = self.last_sent_row.filter(|row| *row < keep);
         let last = self.parts.len().checked_sub(1);
         for (ix, part) in self.parts.iter().enumerate().skip(settled) {
             let shown = match part {
@@ -480,6 +490,10 @@ impl Reply {
                     true
                 }
                 ReplyPart::Error(_) => true,
+                ReplyPart::Sent(_) => {
+                    self.last_sent_row = Some(self.rows.len());
+                    true
+                }
             };
             if shown {
                 self.rows.push(RowSource::Part(ix));
@@ -520,6 +534,9 @@ impl Reply {
                 Some(ReplyPart::Text(text)) => text.push_str(&delta),
                 _ => self.parts.push(ReplyPart::Text(TextPart::new(delta))),
             },
+            // A harness that reports a call again when it finishes starts it
+            // again; it is still the one call.
+            HarnessEvent::ToolStarted { id, .. } if self.tool_part(&id).is_some() => {}
             HarnessEvent::ToolStarted { id, name } => self.parts.push(ReplyPart::Tool(ToolCall {
                 id,
                 name,
@@ -572,6 +589,23 @@ impl Reply {
                     self.parts.push(ReplyPart::Text(TextPart::new(result)));
                 }
             }
+            // A result that leaves messages sent to the run unanswered: the
+            // calls it made are over, and the run goes on.
+            HarnessEvent::Answered { is_error, result } => {
+                self.settle_tools(if is_error {
+                    ToolState::Failed
+                } else {
+                    ToolState::Done
+                });
+                if is_error {
+                    self.parts.push(ReplyPart::Error(if result.is_empty() {
+                        "The harness reported an error.".into()
+                    } else {
+                        result
+                    }));
+                }
+            }
+            HarnessEvent::Sent { text, .. } => self.parts.push(ReplyPart::Sent(text)),
             HarnessEvent::Failed(error) => {
                 self.done = true;
                 self.settle_tools(ToolState::Failed);
@@ -646,13 +680,14 @@ pub(crate) struct Steps {
 }
 
 /// How a table's rows sit in a list: each row in turn, or, with its steps
-/// collapsed behind a row that shows or hides them, that row first, then any
-/// steps shown, then the rest.
+/// collapsed behind a row that shows or hides them, the rows before the
+/// steps, that row, then any steps shown, then the rest.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Layout {
     rows: usize,
-    /// How many steps there are, and whether they are shown.
-    steps: Option<(usize, bool)>,
+    /// The row the steps start at, how many there are, and whether they are
+    /// shown.
+    steps: Option<(usize, usize, bool)>,
 }
 
 /// What an item of a table's list shows.
@@ -664,12 +699,18 @@ enum Item {
 
 impl Layout {
     /// With `steps_shown`, a finished reply's rows up to its last tool call
-    /// collapse, unless there's nothing after it.
+    /// collapse, unless there's nothing after it. A message sent to the run
+    /// is never collapsed: the steps are those after the last one sent before
+    /// the answer.
     pub(crate) fn of(reply: &Reply, steps_shown: Option<bool>) -> Self {
         let rows = reply.row_count();
         let steps = steps_shown.filter(|_| reply.is_done()).and_then(|shown| {
-            let steps = reply.last_tool_row? + 1;
-            (steps < rows).then_some((steps, shown))
+            let end = reply.last_tool_row? + 1;
+            let start = reply
+                .last_sent_row
+                .filter(|sent| *sent < end)
+                .map_or(0, |sent| sent + 1);
+            (end < rows && start < end).then_some((start, end - start, shown))
         });
         Self { rows, steps }
     }
@@ -678,17 +719,18 @@ impl Layout {
     pub(crate) fn items(&self) -> usize {
         match self.steps {
             None => self.rows,
-            Some((_, true)) => self.rows + 1,
-            Some((steps, false)) => self.rows - steps + 1,
+            Some((_, _, true)) => self.rows + 1,
+            Some((_, steps, false)) => self.rows - steps + 1,
         }
     }
 
     fn item(&self, item: usize) -> Item {
         match self.steps {
             None => Item::Row(item),
-            Some(_) if item == 0 => Item::Steps,
-            Some((_, true)) => Item::Row(item - 1),
-            Some((steps, false)) => Item::Row(item - 1 + steps),
+            Some((start, _, _)) if item < start => Item::Row(item),
+            Some((start, _, _)) if item == start => Item::Steps,
+            Some((_, _, true)) => Item::Row(item - 1),
+            Some((_, steps, false)) => Item::Row(item - 1 + steps),
         }
     }
 
@@ -696,8 +738,9 @@ impl Layout {
     fn item_of(&self, row: usize) -> Option<usize> {
         match self.steps {
             None => Some(row),
-            Some((_, true)) => Some(row + 1),
-            Some((steps, false)) => (row >= steps).then(|| row - steps + 1),
+            Some((start, _, _)) if row < start => Some(row),
+            Some((_, _, true)) => Some(row + 1),
+            Some((start, steps, false)) => (row >= start + steps).then(|| row - steps + 1),
         }
     }
 }
@@ -947,7 +990,7 @@ pub(crate) fn table_rows(
         ROWS_DRAWN.with(|drawn| drawn.set(drawn.get() + 1));
         let row = match layout.item(item) {
             Item::Steps => match (&steps, layout.steps) {
-                (Some(steps), Some((count, _))) => steps_row(table, count, steps, cx),
+                (Some(steps), Some((_, count, _))) => steps_row(table, count, steps, cx),
                 _ => div().into_any_element(),
             },
             Item::Row(ix) => {
@@ -1286,6 +1329,7 @@ fn output_row(
             .text_color(theme.foreground)
             .child(error.to_string())
             .into_any_element(),
+        OutputRow::Sent(text) => sent_message(("output-sent", row_ix), text, cx),
     };
     let detail = div()
         .id(("output-row", row_ix))
@@ -1318,6 +1362,28 @@ fn output_row(
                 .items_start()
                 .children(status),
         )
+}
+
+/// A message sent to a run while it works: its first line, the whole message
+/// as it was typed shown on hover.
+pub(crate) fn sent_message(id: impl Into<ElementId>, text: &str, cx: &App) -> AnyElement {
+    let whole = SharedString::from(text.to_string());
+    let line = text
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or_default()
+        .to_string();
+    let message = div()
+        .id(id)
+        .min_w_0()
+        .truncate()
+        .text_color(cx.theme().foreground)
+        .child(line)
+        .tooltip(move |window, cx| {
+            gpui_kit::component::tooltip::Tooltip::new(whole.clone()).build(window, cx)
+        });
+    // Lets UI tests find the message; inert in normal builds.
+    gpui_kit::TestSupportExt::test_support(message).into_any_element()
 }
 
 /// A tool call's state in the status column, as an icon and spelled out
@@ -1382,4 +1448,85 @@ pub(crate) fn json_highlights(line: &str, theme: &HighlightTheme) -> JsonStyles 
     let mut highlighter = SyntaxHighlighter::new("json");
     highlighter.update(None, &Rope::from(line), None);
     highlighter.styles(&(0..line.len()), theme)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Item, Layout, OutputRow, Reply};
+    use crate::harness::HarnessEvent;
+
+    /// A message sent to a run is never collapsed among the steps leading up
+    /// to its answer: the steps collapsed are those after the last message
+    /// sent before the answer.
+    #[test]
+    fn sent_rows_are_never_collapsed() {
+        let mut reply = Reply::default();
+        let tool = |id: &str, name: &str| HarnessEvent::ToolStarted {
+            id: id.into(),
+            name: name.into(),
+        };
+        for event in [
+            tool("t1", "Read"),
+            HarnessEvent::Sent {
+                text: "Also b.".into(),
+                compiled: "Also b.".into(),
+            },
+            tool("t2", "Grep"),
+            tool("t3", "Bash"),
+            HarnessEvent::TextStarted,
+            HarnessEvent::TextDelta("Both fine.".into()),
+            HarnessEvent::Finished {
+                is_error: false,
+                result: "Both fine.".into(),
+            },
+        ] {
+            reply.apply(event);
+        }
+        assert_eq!(reply.row(1), Some(OutputRow::Sent("Also b.")));
+
+        let collapsed = Layout::of(&reply, Some(false));
+        let items: Vec<Item> = (0..collapsed.items())
+            .map(|ix| collapsed.item(ix))
+            .collect();
+        assert_eq!(
+            items,
+            [Item::Row(0), Item::Row(1), Item::Steps, Item::Row(4)]
+        );
+        assert_eq!(collapsed.item_of(1), Some(1));
+        assert_eq!(collapsed.item_of(2), None);
+        assert_eq!(collapsed.item_of(4), Some(3));
+
+        let shown = Layout::of(&reply, Some(true));
+        let items: Vec<Item> = (0..shown.items()).map(|ix| shown.item(ix)).collect();
+        assert_eq!(
+            items,
+            [
+                Item::Row(0),
+                Item::Row(1),
+                Item::Steps,
+                Item::Row(2),
+                Item::Row(3),
+                Item::Row(4)
+            ]
+        );
+        assert_eq!(shown.item_of(3), Some(4));
+
+        // Sent just before the answer, there is nothing to collapse.
+        let mut reply = Reply::default();
+        for event in [
+            tool("t1", "Read"),
+            HarnessEvent::Sent {
+                text: "Also b.".into(),
+                compiled: "Also b.".into(),
+            },
+            HarnessEvent::TextDelta("Fine.".into()),
+            HarnessEvent::Finished {
+                is_error: false,
+                result: "Fine.".into(),
+            },
+        ] {
+            reply.apply(event);
+        }
+        assert_eq!(Layout::of(&reply, Some(false)).items(), 3);
+    }
 }

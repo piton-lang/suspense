@@ -2,17 +2,18 @@
 //! `.suspense/history` as its hidden anchor's source (see
 //! [`crate::hidden_anchor::save`]). Once its run is over, what came of it is
 //! saved beside it in a `.json` file of the same name: the compiled prompt the
-//! harness received, the harness's output line by line, and any error. Opening
-//! the project again replays them into the tasks they were.
+//! harness received, the harness's output line by line, each message sent to
+//! the task while it ran in its place among those lines, and any error.
+//! Opening the project again replays them into the tasks they were.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 
-use crate::harness::HarnessEvent;
+use crate::harness::{self, HarnessEvent, Messages};
 use crate::hidden_anchor::{self, HiddenAnchor};
 
 /// What came of a sent prompt, as saved beside it.
@@ -23,7 +24,9 @@ pub struct RunRecord {
     /// not compile.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_prompt: Option<String>,
-    /// Each line the harness printed, as JSON where it was, else as a string.
+    /// Each line the harness printed, as JSON where it was, else as a string,
+    /// and each message sent to the run while it worked, where it was sent,
+    /// as `{"sent": {"text": …, "compiled": …}}`.
     #[serde(default)]
     pub output: Vec<Value>,
     /// Why the run failed, when the harness's output does not say.
@@ -33,15 +36,47 @@ pub struct RunRecord {
 
 impl RunRecord {
     /// Keeps what of a harness event cannot be replayed from its output: the
-    /// raw lines themselves, and a failure outside them.
+    /// raw lines themselves, each message sent in its place among them, and a
+    /// failure outside them.
     pub fn note(&mut self, event: &HarnessEvent) {
         match event {
             HarnessEvent::Output(line) => self
                 .output
                 .push(serde_json::from_str(line).unwrap_or_else(|_| Value::String(line.clone()))),
+            HarnessEvent::Sent { text, compiled } => self.output.push(json!({
+                "sent": { "text": text, "compiled": compiled },
+            })),
             HarnessEvent::Failed(error) => self.error = Some(error.clone()),
             _ => {}
         }
+    }
+
+    /// The events its output replays, as the run went: what the harness
+    /// printed, each message sent where it was sent, and each result that
+    /// left a message unanswered an answer, so the run ends with the result
+    /// of its last.
+    pub fn events(&self) -> Vec<HarnessEvent> {
+        let mut messages = Messages::default();
+        let mut events = Vec::new();
+        for line in &self.output {
+            if let Some(sent) = line.get("sent") {
+                let text = |key: &str| {
+                    sent.get(key)
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string()
+                };
+                messages.sent();
+                events.push(HarnessEvent::Sent {
+                    text: text("text"),
+                    compiled: text("compiled"),
+                });
+                continue;
+            }
+            let parsed = harness::parse(line);
+            events.extend(messages.events(line, parsed));
+        }
+        events
     }
 }
 

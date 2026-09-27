@@ -1,0 +1,13 @@
+use /lib
+
+export shape TaskTableSentShape:
+    description:
+        A run can be sent more while it works. Each message sent to it is a
+        row of its own, in order among what the harness did, where it was
+        sent. Its Type is a "Sent" badge, and its Output the message's first
+        line, the whole message as it was typed shown on hover. The rows after
+        it are what the harness did in answer, until the next message. A Sent
+        row has no status.
+
+        A Sent row is never collapsed among the steps leading up to an
+        answer.

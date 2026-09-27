@@ -19,7 +19,9 @@ shape OneOffAgentRunShape:
         project directory. It keeps no session: it never carries on a
         conversation, not even one of its own, and nothing carries on from it,
         so the tasks and questions never see it. It can only read, glob, and
-        search files, never change anything.
+        search files, never change anything: Claude Code is given only those
+        tools, Codex runs in its read-only sandbox, and OpenCode runs as its
+        plan agent, which can't edit.
 
     prompt:
         Its prompt is one of the @{BakedSystemPromptsScope}, with what the

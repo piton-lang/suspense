@@ -1,0 +1,4020 @@
+{
+  "userPrompt": "Please write a prompt that I can send to code+spec for Suspense to implement this",
+  "output": [
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "810d9e77-90f9-4046-b786-64d69f3d0aaa",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "234ac1fd-b01f-450c-a131-ff5e33889230",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "7a8b1e5d-5e45-4e07-950d-aae58b6a0486",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "7669004c-c9e2-49e8-a5be-90e6a3f25a66",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "7a8b1e5d-5e45-4e07-950d-aae58b6a0486",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "",
+      "stdout": "",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "0cdb879b-4620-44ab-bec1-4462fad7eeea",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "810d9e77-90f9-4046-b786-64d69f3d0aaa",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "",
+      "stdout": "",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "e53b4c1c-e77a-4621-9462-29e366745e52",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "/home/hyphyphyph/piton/repl",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "tools": [
+        "Task",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "ListAgents",
+        "Monitor",
+        "NotebookEdit",
+        "PushNotification",
+        "Read",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write",
+        "mcp__claude_ai_Claude_Docs__batch",
+        "mcp__claude_ai_Claude_Docs__create",
+        "mcp__claude_ai_Claude_Docs__delete",
+        "mcp__claude_ai_Claude_Docs__export",
+        "mcp__claude_ai_Claude_Docs__guide",
+        "mcp__claude_ai_Claude_Docs__query",
+        "mcp__claude_ai_Claude_Docs__read",
+        "mcp__claude_ai_Claude_Docs__update"
+      ],
+      "mcp_servers": [
+        {
+          "name": "backlog",
+          "status": "failed",
+          "source": "user"
+        },
+        {
+          "name": "claude.ai Claude Docs",
+          "status": "connected",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Drive",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Gmail",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Calendar",
+          "status": "needs-auth",
+          "source": "claudeai"
+        }
+      ],
+      "model": "claude-opus-5[1m]",
+      "permissionMode": "auto",
+      "slash_commands": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "deep-research",
+        "typesafe:typesafe-ai",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "output-style",
+        "context",
+        "effort",
+        "fast",
+        "focus",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "skill-doctor",
+        "goal",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "terminal_slash_commands": [
+        "doctor",
+        "color",
+        "focus",
+        "reload-plugins"
+      ],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.281",
+      "output_style": "default",
+      "agents": [
+        "claude",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
+      "skills": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "deep-research",
+        "typesafe:typesafe-ai",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "plugins": [
+        {
+          "name": "gitkraken-hooks",
+          "path": "/home/hyphyphyph/.claude/plugins/marketplaces/gitkraken/plugins/gitkraken-hooks",
+          "source": "gitkraken-hooks@gitkraken",
+          "version": "3.1.73"
+        },
+        {
+          "name": "warp",
+          "path": "/home/hyphyphyph/.claude/plugins/cache/claude-code-warp/warp/2.2.0",
+          "source": "warp@claude-code-warp",
+          "version": "2.2.0"
+        },
+        {
+          "name": "typesafe",
+          "path": "/home/hyphyphyph/.claude/plugins/cache/typesafe-ai/typesafe/0.5.7",
+          "source": "typesafe@typesafe-ai",
+          "version": "0.5.7"
+        },
+        {
+          "name": "agents-md",
+          "path": "builtin",
+          "source": "agents-md@builtin"
+        },
+        {
+          "name": "telemetry",
+          "path": "builtin",
+          "source": "telemetry@builtin"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "msg_lifecycle_v1",
+        "mcp_read_resource_v1",
+        "mcp_tool_ui_meta_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "f08f429c-069c-43a8-ac82-190c0209feea",
+      "memory_paths": {
+        "auto": "/home/hyphyphyph/.claude/projects/-home-hyphyphyph-piton-repl/memory/"
+      },
+      "messaging_socket_path": "/run/user/1000/cc-socks/2496718.sock",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "per_turn_effort_active": false,
+      "view_mode": "default"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "a1be2b5e-e64f-43d3-a103-97816b55ba89"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5",
+          "id": "msg_011CfTpLAppkLeV3jmcYM6MW",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 1368,
+            "cache_read_input_tokens": 354792,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1368
+            },
+            "output_tokens": 8,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f8495d5b-ae35-4737-8689-bc4b8eaf3488",
+      "ttft_ms": 1918
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "972c6b95-0b15-4c9a-bd2c-e50aa0af4619"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "10900aa2-ddb6-48da-a417-773d6a714cb7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "7a4659c6-9d71-4ce7-9f8e-87a0db83e918"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 100,
+      "estimated_tokens_delta": 50,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "a48f327a-e4c1-43dc-a0be-d08d5e747df5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f77d2cdc-b498-4123-8845-e49aa6f970cd"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 150,
+      "estimated_tokens_delta": 50,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "2ffd8108-2e6f-472c-bd02-129863bade53"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4e6418d1-da42-4082-ac5c-ccbce51777da"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 250,
+      "estimated_tokens_delta": 100,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "9fada775-03e8-4f39-9590-791f1ff99cc4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 100
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "8c64c1c0-1314-4c0b-9491-86089976fc79"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 300,
+      "estimated_tokens_delta": 50,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "a4f46570-cb86-4748-90ee-84d4525e551c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "36daa100-1bea-49a0-a066-bb419885a08f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "9695ebe3-e729-410e-8061-03f6830480bc"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 447,
+      "estimated_tokens_delta": 147,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "94ea0439-a628-4dfe-9246-31bb762027ff"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "CAIS9A0K/AMIEhgCKkCKD2jTcD/m++gNwrFabYSOS9BaPz/5gSNEFHbDAn8dS+Gh8+wQa05204R5dtrOdabNlSFpLcJv6sBmSOvoAeFzMg1jbGF1ZGUtb3B1cy01OAFCCHRoaW5raW5nWiRjYmViN2ExZi01ZDkyLTQ3ZDktYjM0OS02MDA1OTJjYzdlZTdyENIF15sDF2uc5QuVzD3RnKeIAQGoAbzq49UGsAECwgGuAQi+CBCZCBpvBCatCtafA083C+nQEZBhBCatCgWaA083C0WPESU4BCatBW7/A083Bat5EYXcBCatCpMoA083C1LOEZIuBCatCun8A083CzbnEXNhBCatBTTtCpjQA083C+GfERFSBCatBeHmA083BfqYEYXcBCatIAQqDANPNwUrpAWZVwUh1jIE8yHCSDoEUCmoikIEjQplqEoElcShElALWgTJrXWmYJgDaAFwA9oBoAEKFnByZWZpeF9iZWZvcmVfYmxvY2tfdjESIAQ5WkD/xiitR8L+VDksEidqyPIfbc5KdoiqFztn+ct3IkBqW2pIE9KwGeAjzqYm1FZDFRDx9g/uMwqchSF/J7LMaoeJ0aQTOZRw/l3RV1scZdBpk8S92DcNPGMce4V39cnCMiDCwBPIapyS4i+Wbz2GF3aPi3pEyQKtzAl7+h4JivtOH0gDEgxB8C6JnhqcT9Be8VEaDI8C7NxVgCd3KBnljSIwTP8kWj++CcYkYHZvvBbMPz4NqsRCmmvF16fGuZ45mUlWnPffAKfPCiFnj9j6hoTXKqQJsnArMflzUrHlac7LUBEVXE9rC/bOrQIt4IyALdZhd05fRFWY9Zi5/EExsRFBaVY4e78fH9uIoPT2KF284+o/MWB8K1qCG+50AplPW/tP90HZqRXNiV7ZLtryE9FqCrOb2DZMQWrcJ23ShcSnoh6HRWhiTq5OtLguZ9cZsIVLnY68umiupoxTwpWzgGq/CGOjXy97d6+YAY+TbSEeBbnahbENMJCXNeA3jdHbn28c1Lt1cUnCjOe1Dizsw4g1jXcFsS+OL18jveRmJpHxmd+3tToRXyrx5VK4AbDH4/am/PKY2ixt+aIIymVeUOGX3FkKbaMTTqmQnQzL2L1IpNvT/jpLPHxNfPy9p0W5eZzki0G5NorAyI24PMpsrL7TBioSn9z7jGXFFIyo676QISwNMJm5Es3Ndj5oZbfUCxEXEN6plefws9ST8ATmh+qrg+6ORyoFCYPbBaYuX74P80Oe17Ieh/TrFIXPTdpU/QsqhXAnairH98dArUhsKTuA0rF9TghK1a4wRcqCPypDaDbiLR2c6c6HhuujDhzUQtyQX4PXGDea2N1GFpeFN3GAiWwL6ejWu+RY510Z+WCUvrnunKhZdRUxD3a2IsW1D7lAc1rRVnfm/vPoIXOchQcnglUED+VFbS9Vr4DLh8j2QsbNScra2+2KRSILa1Ms0mq5GkTU+1f6/1k2cMOPZxeMBnNKbK5L7V2gRxMrurpz9D6gn6yIcdkGOtc13FbfNcoIV4faB1bdESJuUzGFPOK5TtEo7LLDdU5Cgho0znuUGbFOPAY+VldlVDCr+hGw6ZPUCYseo+x7jI+UNgwdhmozGB+x0hpTKr5FjCYEPHOVM+B4LTCNZOg9NZpGJfzeDlo5Rk3j3D5VXstNmFmpU0vgkQYZvxl1+6BIfFLHWueO2Db5ajUhn9XejTFJ1ClZSacEKfuqhj0SrohPVPGDY73ixH51q8IcXwVdTPHS1uIv09xaNvt7ZfsYE0tC2BKaoOK3dAGkQmehNAX7pCZ+oizpYfJJ0fOlfogZKQwlGbgNFDF+QspQsR9esKlgOtfmu6VMWR9aZbnmAuqPNK7wqDYpvf/tJIKuC3TRkCDC1GB5MxxShFDXHSnli9UBekN7lUA8FYEP1LPHB8pUSGpR5SH3BWyYVYyEu17yzKKTQl+aGBVqUopXKCSqwM55PwbLs6/fMfdf/yECJXQNeQSoHfpDSHXq2NJvFKEvk5RIS/pq/5cBFhf9CHfV58SsEH2UneVoZMfhkvcj+uy4/2dV8iUh9pIbTYyTZBdcKCXZ1eCiE2vHDjZPoHn5pkqnuVJ6ShWX240iA492MNLu5RmzCMS9hl3DoWbf6Har4Wp4Ori5B0mGza/7I5pcFykiSFoJVLAXZLyCn8QmcSeWnNheFfodUmOscMqODyZRIL3YOEWUYpazrpgw78MjXryVTvVnjY0O7sv0/QCJFBErQpwBqyP652qZNiP8XpJLnwGn8Ho/7ipNrls8Gcxh/Bdxj21sB5/fMQ9h81HYvfDpl1Dq2mKBfEuQu+zo7qLtwaE82KK2J5I6il2bSUqJvTsQYwX/bxEoaMihDoFAGAE="
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "883c49eb-9240-41e5-a661-cd7e54edf9f7"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5",
+        "id": "msg_011CfTpLAppkLeV3jmcYM6MW",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAIS9A0K/AMIEhgCKkCKD2jTcD/m++gNwrFabYSOS9BaPz/5gSNEFHbDAn8dS+Gh8+wQa05204R5dtrOdabNlSFpLcJv6sBmSOvoAeFzMg1jbGF1ZGUtb3B1cy01OAFCCHRoaW5raW5nWiRjYmViN2ExZi01ZDkyLTQ3ZDktYjM0OS02MDA1OTJjYzdlZTdyENIF15sDF2uc5QuVzD3RnKeIAQGoAbzq49UGsAECwgGuAQi+CBCZCBpvBCatCtafA083C+nQEZBhBCatCgWaA083C0WPESU4BCatBW7/A083Bat5EYXcBCatCpMoA083C1LOEZIuBCatCun8A083CzbnEXNhBCatBTTtCpjQA083C+GfERFSBCatBeHmA083BfqYEYXcBCatIAQqDANPNwUrpAWZVwUh1jIE8yHCSDoEUCmoikIEjQplqEoElcShElALWgTJrXWmYJgDaAFwA9oBoAEKFnByZWZpeF9iZWZvcmVfYmxvY2tfdjESIAQ5WkD/xiitR8L+VDksEidqyPIfbc5KdoiqFztn+ct3IkBqW2pIE9KwGeAjzqYm1FZDFRDx9g/uMwqchSF/J7LMaoeJ0aQTOZRw/l3RV1scZdBpk8S92DcNPGMce4V39cnCMiDCwBPIapyS4i+Wbz2GF3aPi3pEyQKtzAl7+h4JivtOH0gDEgxB8C6JnhqcT9Be8VEaDI8C7NxVgCd3KBnljSIwTP8kWj++CcYkYHZvvBbMPz4NqsRCmmvF16fGuZ45mUlWnPffAKfPCiFnj9j6hoTXKqQJsnArMflzUrHlac7LUBEVXE9rC/bOrQIt4IyALdZhd05fRFWY9Zi5/EExsRFBaVY4e78fH9uIoPT2KF284+o/MWB8K1qCG+50AplPW/tP90HZqRXNiV7ZLtryE9FqCrOb2DZMQWrcJ23ShcSnoh6HRWhiTq5OtLguZ9cZsIVLnY68umiupoxTwpWzgGq/CGOjXy97d6+YAY+TbSEeBbnahbENMJCXNeA3jdHbn28c1Lt1cUnCjOe1Dizsw4g1jXcFsS+OL18jveRmJpHxmd+3tToRXyrx5VK4AbDH4/am/PKY2ixt+aIIymVeUOGX3FkKbaMTTqmQnQzL2L1IpNvT/jpLPHxNfPy9p0W5eZzki0G5NorAyI24PMpsrL7TBioSn9z7jGXFFIyo676QISwNMJm5Es3Ndj5oZbfUCxEXEN6plefws9ST8ATmh+qrg+6ORyoFCYPbBaYuX74P80Oe17Ieh/TrFIXPTdpU/QsqhXAnairH98dArUhsKTuA0rF9TghK1a4wRcqCPypDaDbiLR2c6c6HhuujDhzUQtyQX4PXGDea2N1GFpeFN3GAiWwL6ejWu+RY510Z+WCUvrnunKhZdRUxD3a2IsW1D7lAc1rRVnfm/vPoIXOchQcnglUED+VFbS9Vr4DLh8j2QsbNScra2+2KRSILa1Ms0mq5GkTU+1f6/1k2cMOPZxeMBnNKbK5L7V2gRxMrurpz9D6gn6yIcdkGOtc13FbfNcoIV4faB1bdESJuUzGFPOK5TtEo7LLDdU5Cgho0znuUGbFOPAY+VldlVDCr+hGw6ZPUCYseo+x7jI+UNgwdhmozGB+x0hpTKr5FjCYEPHOVM+B4LTCNZOg9NZpGJfzeDlo5Rk3j3D5VXstNmFmpU0vgkQYZvxl1+6BIfFLHWueO2Db5ajUhn9XejTFJ1ClZSacEKfuqhj0SrohPVPGDY73ixH51q8IcXwVdTPHS1uIv09xaNvt7ZfsYE0tC2BKaoOK3dAGkQmehNAX7pCZ+oizpYfJJ0fOlfogZKQwlGbgNFDF+QspQsR9esKlgOtfmu6VMWR9aZbnmAuqPNK7wqDYpvf/tJIKuC3TRkCDC1GB5MxxShFDXHSnli9UBekN7lUA8FYEP1LPHB8pUSGpR5SH3BWyYVYyEu17yzKKTQl+aGBVqUopXKCSqwM55PwbLs6/fMfdf/yECJXQNeQSoHfpDSHXq2NJvFKEvk5RIS/pq/5cBFhf9CHfV58SsEH2UneVoZMfhkvcj+uy4/2dV8iUh9pIbTYyTZBdcKCXZ1eCiE2vHDjZPoHn5pkqnuVJ6ShWX240iA492MNLu5RmzCMS9hl3DoWbf6Har4Wp4Ori5B0mGza/7I5pcFykiSFoJVLAXZLyCn8QmcSeWnNheFfodUmOscMqODyZRIL3YOEWUYpazrpgw78MjXryVTvVnjY0O7sv0/QCJFBErQpwBqyP652qZNiP8XpJLnwGn8Ho/7ipNrls8Gcxh/Bdxj21sB5/fMQ9h81HYvfDpl1Dq2mKBfEuQu+zo7qLtwaE82KK2J5I6il2bSUqJvTsQYwX/bxEoaMihDoFAGAE="
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1368,
+          "cache_read_input_tokens": 354792,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1368
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "c47423dd-dfa5-48f9-b1eb-a9b0ed921042",
+      "timestamp": "2026-09-27T10:51:40.265Z",
+      "request_id": "req_011CfTpL9NGB4WfsE7yXRCnC"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "727c13d5-b494-4cd1-8e93-2b7db608d6ad"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "631afad3-a397-4da6-816d-8992fdb01e66"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Send"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "97c0e69e-6b89-4492-853b-47f0b4ee42f2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " this from the **Chain**"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e75c5a0a-4378-4fda-9ec0-d736a29e6b8b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " tab.\n\n```\nA"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "7c5a6a0c-348e-4647-8529-68493ef764e7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " task that"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "81fe5a1f-a97b-498a-be80-ec440073dc8e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is running should be able to take"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "56a72e99-3905-4e0a-a4ac-77498b7624ce"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " more"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5bfb6488-85f0-49b6-a182-ed2514dbd843"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " from"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a7777da0-d167-4f72-a0ed-6298ce463c77"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " me"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "78d2986f-49ff-46df-8658-17a5f0f16ea5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " while"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4c6f7b34-9df2-4a28-804e-94259a365604"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it works"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "bf0fde49-66c4-444e-8267-3fa488e47888"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ",\nthe"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "40658812-c022-4b0e-a412-87d443537de5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " way a"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c5ada722-4ddf-4b3e-9037-484b80fc2323"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " terminal session does."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f6491093-21a8-469d-a181-361f73097d78"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\nFe"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "bf902f96-47b3-4254-9771-be26fe3d3765"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "eding a run"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "23dffa3f-ebab-4544-b23a-bd083708fa84"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". @{Har"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "98c2c553-f908-4d99-9ed5-68f9a988358e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "nessIntegrationSc"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e573a8e1-8fc0-4d73-bba2-0593f041d189"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ope} g"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "97a01e72-1174-45eb-b122-bc5889dbec7b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ives the harness its"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4dfa8e4a-0364-41b2-a51e-dc389e606d56"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " pr"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "0c8c9952-7823-4ead-95fd-556a3c921da4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ompt as a\nstream of"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a28fb19d-ab1f-4448-bf56-6ca6db66d1b6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " messages rather than a"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ad4e0bfa-f235-4c84-b92f-d82a7b357196"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " single one"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "da7dfda5-f5f9-4fb7-9cef-0e074ec2f088"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ": `"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f2bd9f35-3d93-40ee-92ea-b2f47224ecfc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "--"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "2980d285-5171-4512-ae93-1985b861dad5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "input-format stream-json`"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "3617b24a-6451-425f-bd5b-9b71403fa66a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ",\neach message"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "723c8251-3827-4231-9781-44a586826228"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " written"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "316a94b8-13aa-4f80-a1a8-57a9b704f8c1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " as JSON on"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "8b9ab4a0-f492-4d8b-af31-cb33047bf0e5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5b216fcc-2189-4184-b7f3-ac7be73aba09"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " harness's stand"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c940924f-74bb-4a07-a5ea-02c0b122fe4b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ard input, which"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "8a9728ba-ac9c-4531-a751-3a2b5a166a6c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " stays open"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "aa1e6418-98c4-4413-a24b-8b05815f8f83"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\nfor as long as the run l"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "06610b5f-fe86-4e22-880d-b7f9d4b83277"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "asts. The run"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ec023385-3093-4d19-99f1-023ca2493e1a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'s first message is the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b7e16a74-8478-4627-9ed2-326535924c05"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " compiled prompt,"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c7ae7257-e7c2-49b4-807d-86ad5376d7f5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\nas now"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a5cd7fb9-bcbe-451a-bb83-abbf489a4838"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". A run"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "72deac4c-dde0-4908-b9f6-560fc0f6b83d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " ends when the harness re"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a559771b-f6a2-4df1-8664-72fa4e37fbfa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ports its"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5ef21b79-38bf-4be3-a96e-bdd695b4e158"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " result and"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5a9105a0-d377-4abe-8cce-d9c5fb44d297"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " nothing more has"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c89bde7e-1243-4e4f-8f83-e30b719cd2af"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\nbeen s"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "771fc0b9-cec1-48ec-bfb1-9ad94a6ba8a3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ent, at"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1d2c2ded-3204-4e5a-800f-6ce1ddf4a47e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " which point its"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "d8571d1e-a570-4848-af64-b727c18a9e60"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " input is closed; a run that"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "54c9d99a-aea5-467a-b709-1e292f04129b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e68ff792-f326-4123-b475-a675b0099100"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " stopped clos"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4e747744-eafc-48ba-9b4e-b8fd53f07536"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "es it"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c9ba2253-e850-40d1-b36e-24d065dfd645"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\nstra"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "fd3c9610-d933-4306-a700-8ddb9e49f3f9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ight away."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "44ad6644-3f9b-4359-8b97-c45ff0a0a4e1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Each message the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e84ca3cf-8ed5-476a-b78f-50468acf6207"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " harness answ"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "87c1c973-25cb-4b3f-bfe3-6a3a573b08b9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ers re"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "70c8be9d-ac30-4bcb-911c-49ca1191e0d6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ports its own result, and"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "8ee78773-c600-48f9-a68c-e1386b61cccf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a\nresult"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c5fd59fa-2ce5-40e4-837d-c8c810a5d412"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " no"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4e2ef3b0-a04d-4a33-a9d9-4c2553299d4b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " longer ends the task"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f844de43-a144-48f2-83a5-9040babba0a4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " on"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "53010288-73cd-467e-9adf-61702bd19029"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " its own.\n\nSending more"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "8f39a052-b9d6-44f2-ac96-427fcadc8f0a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "69c90783-d1f3-468d-aeb3-be3fea9e53b5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " While a task is running and"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "82b00e8c-a51b-4101-b7ae-0731433997fe"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " its output is shown, the ch"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "69e273e9-7c94-409c-bec5-3adea7790aeb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "at"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "763a6bef-3de1-4c79-82fd-b638814b77bb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\ninput's send button off"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "0e071c97-bfc6-4d26-be8b-af51adc24cf0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ers \""
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "373f64e9-cbc6-4715-b430-f3f06a0a8aee"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Send to task\" be"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "515929a2-325b-4506-b580-922618d3d506"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "side \""
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ed0b0bdc-d94d-4442-b66e-ca8f5149e09f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Queue\":"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "21962bbe-e423-4a06-8d15-035303b523f0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " "
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b8d3ddd0-a5c4-4e4a-9784-cbd4ff7a8aa2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Ctrl/"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "dbd2454f-ac20-466d-a0f2-4373573ac4f3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Cmd+Enter"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a7338580-5a9f-4f6e-9fdb-73914d6aa4ec"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\nque"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "3da2b898-6460-4c8c-81a3-23a7800dc17d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ues as"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "7a4d8e1f-2e25-4caf-ae6e-e26fc7d29a0f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " now, and the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "14a25575-4b5d-465c-a7e7-b4c118b84667"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " button's other"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "2e1a0807-8a93-41b7-9f90-db07f2ffb4f1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " cho"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "47fd6801-9043-46de-8bb6-5071f63cffdd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ice sends what is"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "706a6a7d-7a8d-4d6c-8f8e-05801998b0f2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " typed to the\nrunning task inst"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "24f4ff6f-6693-4072-9264-bfd7b22320c5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ead, cl"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "56852e1f-c86d-4d48-9746-8479e4a1f86a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "earing the input. It"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1c6bf229-2cff-4875-b54b-d1db4de9e1de"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is only off"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4717b47b-bbc5-4f01-b4cf-f9a902d13a8d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ered while a task is\nrunning,"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "16d2c9c8-77f8-4c5e-bb8c-8c6c5923c2e1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and never"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "dfe0e273-3452-42dd-ae29-d7edde3a9d05"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " on"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1fd88e90-ec3c-4ffb-a51f-fbce4f46d39c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the Ask tab, where"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "cb008c04-52d5-4218-9f12-3f5057d330f4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a question run"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4d129ad8-cf6c-4927-af47-97641de5a686"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "s on"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b7b07342-38e0-4533-b2d7-946f6c112649"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " its own. What is\nsent"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b06cb541-62de-4be6-a57d-30564d2d1bfb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " go"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4a19fa7a-1cb9-464a-9df0-72e3fbed7569"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "es through the h"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b1fab07e-d5bd-47f7-9c50-fa3536207628"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "idden anchor and"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b0c254de-fc6b-4b09-8166-dd335eaeaf62"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " its"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "bc0aa63e-4729-428d-9ec8-d685d6a94d58"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " compilation like"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4a2a9213-f313-4994-ba02-e86183065024"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " any"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f62a5e82-2f0a-4c85-af80-ba3e6276a966"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " prompt, so it"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "2955ba9f-ff02-42fd-ae41-b9b5dcba1027"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\ncan reference the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "0954e426-ed72-485b-8469-e5529464b2bc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " spec."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "fea877ec-e967-48b4-a72d-09fc73b17a8b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\nA message re"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4418ed85-891b-4bde-a8d6-c07682d0c2c7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "aches the harness when"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ac694ce9-a0b7-4b19-822c-11da96d5a078"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it fin"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "bb35560c-7570-4c30-bd1b-5c4c7f70fe8e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ishes what it is do"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "0dfde16e-536c-4b82-a0bc-bc4466639c9e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ing r"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ec4f4b42-690f-4129-ad46-e367569c1f7e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ather than\ninter"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4e124ddd-b059-497c-b17a-4629fc867595"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "rupting it, so a"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "630c244c-c431-408f-94d3-9e07c249b04f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " task that is m"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "58f75b5d-388b-41df-bba2-b26f6eb0780b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "id-tool-call tak"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "3f0969da-dbad-406b-ad92-ce414bfd1217"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "es it"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "29f7890c-b9cb-46f3-ba96-5c0835d2c917"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " once"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e4d6279f-fe8e-4d80-980f-9b417f2ff85f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " that"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "06719646-9262-43c0-9324-ee545fe4389e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " call is\nover."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "462e1446-594b-4e09-bb96-9afe6132e131"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\nShowing it. @{Ta"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "942b64a3-72b0-4581-b6c5-1c842eac6318"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "skTableScope} g"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "48ba214e-ed34-408c-a955-da4c3f6ba593"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ains a row for each"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "abb11db0-1d6c-4e25-88d8-6690824747ba"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " message sent to"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "bcf392c8-4296-4894-8567-10d165352a6f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a running\nrun"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c036eb1d-987c-4d36-8e12-ef60f3835e87"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", in"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "de7c9f07-d490-4422-8dd8-7ef7a26d0c53"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " order"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1d64b60a-07a8-41fc-b738-8b7b63e8231b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", its"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4e79aa64-79fe-4538-b156-e3b54856ed6a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Type a"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "196e7c9b-d18a-422c-a813-28f1da7988c9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " bad"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e87326e3-f786-411d-a0f8-93bcffe1b96c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ge reading \"Sent\""
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b2b618b5-c907-4541-8408-3d51202612c2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and its Output the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "6391a8ef-8cd8-4c12-a2fd-962e6401db3e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " message's"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "792168fb-e404-44bd-843a-00b5bf4db602"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\nfirst"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ba723e07-da8d-4f6a-9186-17f4a514c3bc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " line,"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1282b225-cb6a-439e-b9be-3a4211264a2e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "6a2a2b34-ba80-464c-b646-7ae0d95a40be"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " rest on h"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1812d962-96c1-4ef1-8544-8dac83cdf3a9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "over."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "25771ff3-52f1-4f40-af3a-68440c6ec5be"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " The"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "22c53170-7251-41fb-a44d-78026d42effc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " rows after it are what the har"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "26cffd5d-abac-402f-a592-3c157854e12c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ness did"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "64fa66ed-d0c0-4313-a5e9-4503cb351d57"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "aedd95f6-a5fc-4758-af3e-c7e1e65901e0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\nanswer. A task's"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "34f76f7a-c0b9-4e7c-a6bf-6babb8c53f59"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " header still"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "51fb5545-103a-4deb-8c77-07ba6632c4aa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " shows the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "d5de2be1-3381-4d13-a9a9-8f12531632f3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " prompt it was s"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "10526db7-9485-4ecd-a75c-cf3717d3b873"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ent with"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a2fa9f0e-daeb-4e82-82a3-dd78dfb5e639"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n\nKe"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e641eafd-b396-4190-8012-55ca65807452"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "eping it. The task's record"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e60dd65f-649b-4b28-9233-d23a511acbe7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " keeps each"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "eda3efd7-2f95-4789-a195-4360d335ad22"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " message sent to it and"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ad03ee44-e20c-44a4-82d9-19449de77cc8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " what came"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "34e1071f-dc9d-4782-be9f-b609ec2909c9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " of\nit, so the task"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "09b7b100-51dd-49e9-a972-e49fe82a432e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " com"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ab217d93-f3b9-43b3-9648-ed3d6e7c9d36"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "es back as the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "abefee5e-b2eb-4c43-8d32-70d694df9433"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " exchange it was when the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "3d138ea4-1d8b-465a-8602-c34b92caffab"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project is op"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ae4f3f11-e3a7-4613-a8e8-2032293c6ebc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ened\nagain.\n```\n\n**"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f2421c2b-b762-462a-9b33-1b7f7b935864"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Choices I made,"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "9e4c9967-63c6-4271-9906-51c457601142"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " which you can"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "eae3a865-811a-40c9-b71e-798bbecddacc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " change**\n- **Where you"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f8417374-ca0f-4a28-b6cd-bed0844ca436"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " type it:** the exist"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a206f39c-b153-4eb3-96c1-2480b531e817"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ing chat input, with the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c56ebbd0-a2f7-4763-b7f4-7ad25d0b9b36"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " send button off"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1b5051dd-94a4-4396-a0a0-65c7a693fa2e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ering \""
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "d756d6f2-22b1-42f4-9bce-10d396f0242e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Send to task\"."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "8bc3171a-59b8-4cb0-88a4-5764da5f48b3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " A separ"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5638714d-284d-4c16-aafb-aedbdc7e0cc2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ate input on the running task would also"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "10b28d1d-e16a-466e-919a-2aaa1bdfaad7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " work, but this"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "269a1a40-c3fe-4be1-9e65-481c7a76662a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " reuses the L"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "2e534916-41ad-405c-99b7-4c8a233f8817"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "SP, completions"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "7db3d552-f1d0-4e2c-8fbb-1425bc70402d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and `"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4bfc0a78-e5b6-42c2-83b0-0b1be3332317"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "@{…"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "019e5f69-ed9d-408d-9db2-1a19a1069d4a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "}` references you"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "73df82ae-72d1-4c19-8f20-89cb8ead561f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " already have.\n- **Que"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c33c3aa2-e2a8-4dd9-8e0b-4d9c2ad460fe"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ue"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4bc2f6cd-9614-4aa6-b691-507d7a39fcf2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " beh"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "d8ac61d3-89d7-4993-b1ae-b8593dcc0789"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "aviour is unt"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "6e14cdd3-024d-4366-964d-bc5f5b85cae0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ouched:**"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "d401071a-050f-406c-9d2c-477d1620d7aa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Ctrl/Cm"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "98f03cd0-58ab-48e3-9e7c-1bb75d5cab89"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "d+Enter still queues"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "277ef3ff-2de5-4a9b-8040-a2d75d6d2c3a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ","
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ca88a9e3-2c26-4087-a46e-a23886a434ef"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " so n"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "17a563a2-a284-47c0-9331-0938b0159d49"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "othing you"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "d70da4e9-3508-44d2-bf43-2f0bbbc273e4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " do"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "71d3929a-10d6-4d69-b479-9044413c03b3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " by"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e6d568dc-d573-4095-80b7-93891148c136"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " habit changes me"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "367b9e0b-5d0a-4919-84ef-9d4be62fd8e4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "aning.\n- **No"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "370e3a71-0b53-4c72-b334-1c66a5e4e8e2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " interrupt:** the pr"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "56516eba-8544-4d80-8526-1297dd827166"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ompt says a"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "75ca8f59-50a0-4bef-8650-420ad4d03be9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " message is ta"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4780738b-7192-4a5b-a22d-2e244e1df43a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ken at the next turn, since"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "fbd9afed-0989-4b60-8e56-6b134c92831a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " that's what Claude Code"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "747f03fc-d3f0-4229-9f67-46fd76e02440"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " does"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "2f984040-9fe4-4c58-89a9-402b7d2e0599"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". Stopping a task st"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a7186c41-2a20-4942-8637-9a68492abdba"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ays as it is.\n\n**"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a999b771-d97e-4f86-9147-9d20ddec0959"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Worth adding if"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "7340d1b7-2838-4f66-ae41-599b9a4005ac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " you want it"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "872d29c1-43cf-45ab-86db-509c24630d71"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "**\n- **One"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "73e1a65b-30a3-4267-a92f-3e34a55366d5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " process"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4170eacd-17d0-4d64-adec-6aa9b258c753"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " per conversation:** \"The"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "be06ea9f-290f-422e-85da-9bdde18eebb6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " harness's"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a1f467be-f6ab-4ae0-bb11-819e862ceb83"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " process l"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "29cb8a75-d543-4590-b423-c9b637d38b40"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ives"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "0db5592c-1da5-491a-a4ec-78291f47697f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " for as"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "7c7a8147-539b-432f-babf-84d08e5e0211"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " long as the conversation,"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "0cc85e0e-88f6-4c31-8f49-7d5a302ad9a8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " rather than being"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "fe69cb01-3240-4a05-8c91-641e9e8e9fa3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " started again"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "c5aa9744-6474-449a-9b4f-da5eefc09233"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " for each prompt, so a"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "38e7cf1d-8559-4f19-9951-e0958159993c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " prompt s"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b05729d5-02a6-4bcc-b62b-597e57a73d6d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ent after another"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "05e769c4-9613-483a-a3f2-637d3131ba61"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " doesn't reload the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "7f988659-5d93-4e7e-b94e-23d5394fd202"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " con"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "2dbf3359-0b40-4027-b239-6bdc3b76b800"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "versation.\" This would"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "4319d574-2385-484e-a46a-f77d1e705b36"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " cut a"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b98af39b-aec9-421c-8be3-4f2886653e3d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " few seconds off every promp"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "91e40f71-6b6f-41a4-96c6-5e46082ff1a9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "t in"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "d2daf275-af4a-44f9-9b25-2a2bafd7dfff"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "f74ff0f1-8adc-4b58-8d0c-d632da611adf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " queue, but it's"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "3482f820-9b8b-4c28-87dc-366134bf30fd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a bigger change to how run"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "5a76e6c7-239e-4a7d-ad9e-4608050f51df"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "s are started"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "a50b99f2-daa6-4d3b-b74d-bfc5a31caf57"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and stopped, so it may"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "1174323a-8d25-4859-a40a-b40960bb6e72"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " be better as its"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "60dfb03a-2d35-4c89-ac06-d9ea9011f14c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " own task.\n- **Ac"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "15ba9ad4-be1b-478c-9902-f45238fd2cd2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "knowledgement:** \""
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "59222ce8-0be9-487f-ae69-38dd62492373"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "A"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ff993186-c5f0-45c0-a631-1828d4b75736"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " message is sh"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "6d1eeb35-b3db-46af-903a-a7dda4e9aa87"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "own in"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "106a1d08-bc7f-4d9f-9677-8270d86d4b75"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the table only once the harness has"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ac12c5e4-afdd-429a-b81d-76ded7fedbd5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " acknowledged it\""
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "3d2621dc-e0e9-4572-89be-154b497a6611"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " (that"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "beda8352-b96d-449b-8fbc-3c694d564221"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'s"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "dbbcedb3-262a-4fae-824a-16685e4ee036"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `--replay-user-mess"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "2126b630-bd71-424a-a855-8b5a0f5d3d75"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ages`), if you'd r"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "db8433ad-e55a-4c30-95cd-b51895ac0470"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ather not"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "b3cfdbb3-2bb4-4a29-9ac8-b162903085f0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " see a row for"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "ddaf49d8-aadf-42ec-b665-25a01b0b3d7d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " something"
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "54a3f907-bd91-4a07-bb27-2f1ed1ee4ddb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " that never arrived."
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "da3ef6f5-4149-4246-9a7b-21d5671e5037"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5",
+        "id": "msg_011CfTpLAppkLeV3jmcYM6MW",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Send this from the **Chain** tab.\n\n```\nA task that is running should be able to take more from me while it works,\nthe way a terminal session does.\n\nFeeding a run. @{HarnessIntegrationScope} gives the harness its prompt as a\nstream of messages rather than a single one: `--input-format stream-json`,\neach message written as JSON on the harness's standard input, which stays open\nfor as long as the run lasts. The run's first message is the compiled prompt,\nas now. A run ends when the harness reports its result and nothing more has\nbeen sent, at which point its input is closed; a run that is stopped closes it\nstraight away. Each message the harness answers reports its own result, and a\nresult no longer ends the task on its own.\n\nSending more. While a task is running and its output is shown, the chat\ninput's send button offers \"Send to task\" beside \"Queue\": Ctrl/Cmd+Enter\nqueues as now, and the button's other choice sends what is typed to the\nrunning task instead, clearing the input. It is only offered while a task is\nrunning, and never on the Ask tab, where a question runs on its own. What is\nsent goes through the hidden anchor and its compilation like any prompt, so it\ncan reference the spec.\nA message reaches the harness when it finishes what it is doing rather than\ninterrupting it, so a task that is mid-tool-call takes it once that call is\nover.\n\nShowing it. @{TaskTableScope} gains a row for each message sent to a running\nrun, in order, its Type a badge reading \"Sent\" and its Output the message's\nfirst line, the rest on hover. The rows after it are what the harness did in\nanswer. A task's header still shows the prompt it was sent with.\n\nKeeping it. The task's record keeps each message sent to it and what came of\nit, so the task comes back as the exchange it was when the project is opened\nagain.\n```\n\n**Choices I made, which you can change**\n- **Where you type it:** the existing chat input, with the send button offering \"Send to task\". A separate input on the running task would also work, but this reuses the LSP, completions and `@{…}` references you already have.\n- **Queue behaviour is untouched:** Ctrl/Cmd+Enter still queues, so nothing you do by habit changes meaning.\n- **No interrupt:** the prompt says a message is taken at the next turn, since that's what Claude Code does. Stopping a task stays as it is.\n\n**Worth adding if you want it**\n- **One process per conversation:** \"The harness's process lives for as long as the conversation, rather than being started again for each prompt, so a prompt sent after another doesn't reload the conversation.\" This would cut a few seconds off every prompt in the queue, but it's a bigger change to how runs are started and stopped, so it may be better as its own task.\n- **Acknowledgement:** \"A message is shown in the table only once the harness has acknowledged it\" (that's `--replay-user-messages`), if you'd rather not see a row for something that never arrived."
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1368,
+          "cache_read_input_tokens": 354792,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1368
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "uuid": "ff0e812b-6c6f-4b8c-9cae-63fa86f14fb2",
+      "timestamp": "2026-09-27T10:51:53.890Z",
+      "request_id": "req_011CfTpL9NGB4WfsE7yXRCnC"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "930dcad0-c0ab-4a58-9278-de18dcc520ed"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {}
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1368,
+          "cache_read_input_tokens": 354792,
+          "output_tokens": 1345,
+          "output_tokens_details": {
+            "thinking_tokens": 400
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 1345,
+              "cache_read_input_tokens": 354792,
+              "cache_creation_input_tokens": 1368,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 1368
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "e41a1db7-8e7d-4306-a13c-b3e58c7b715c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "parent_tool_use_id": null,
+      "uuid": "823bed79-330e-4d7e-b736-f01da57d22dd"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1790507400,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.62,
+            "resetsAt": 1790507400
+          },
+          "seven_day": {
+            "utilization": 0.37,
+            "resetsAt": 1790708400
+          }
+        }
+      },
+      "uuid": "3d0cb672-3c7d-42e8-b21b-ea8b17d3cebd",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d"
+    },
+    {
+      "duration_api_ms": 129179,
+      "stop_reason": "end_turn",
+      "session_id": "2bd4353c-9d27-4940-aa9f-a7b07a9c2a2d",
+      "total_cost_usd": 5.062920500000001,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 1368,
+        "cache_read_input_tokens": 354792,
+        "output_tokens": 1345,
+        "output_tokens_details": {
+          "thinking_tokens": 400
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1368,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 1345,
+            "cache_read_input_tokens": 354792,
+            "cache_creation_input_tokens": 1368,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1368
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "modelUsage": {
+        "claude-opus-5[1m]": {
+          "inputTokens": 18,
+          "outputTokens": 7730,
+          "thinkingTokens": 1971,
+          "cacheReadInputTokens": 2818501,
+          "cacheCreationInputTokens": 346033,
+          "webSearchRequests": 0,
+          "costUSD": 5.062920500000001,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000,
+          "canonicalModel": "claude-opus-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "is_error": false,
+      "num_turns": 1,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "Send this from the **Chain** tab.\n\n```\nA task that is running should be able to take more from me while it works,\nthe way a terminal session does.\n\nFeeding a run. @{HarnessIntegrationScope} gives the harness its prompt as a\nstream of messages rather than a single one: `--input-format stream-json`,\neach message written as JSON on the harness's standard input, which stays open\nfor as long as the run lasts. The run's first message is the compiled prompt,\nas now. A run ends when the harness reports its result and nothing more has\nbeen sent, at which point its input is closed; a run that is stopped closes it\nstraight away. Each message the harness answers reports its own result, and a\nresult no longer ends the task on its own.\n\nSending more. While a task is running and its output is shown, the chat\ninput's send button offers \"Send to task\" beside \"Queue\": Ctrl/Cmd+Enter\nqueues as now, and the button's other choice sends what is typed to the\nrunning task instead, clearing the input. It is only offered while a task is\nrunning, and never on the Ask tab, where a question runs on its own. What is\nsent goes through the hidden anchor and its compilation like any prompt, so it\ncan reference the spec.\nA message reaches the harness when it finishes what it is doing rather than\ninterrupting it, so a task that is mid-tool-call takes it once that call is\nover.\n\nShowing it. @{TaskTableScope} gains a row for each message sent to a running\nrun, in order, its Type a badge reading \"Sent\" and its Output the message's\nfirst line, the rest on hover. The rows after it are what the harness did in\nanswer. A task's header still shows the prompt it was sent with.\n\nKeeping it. The task's record keeps each message sent to it and what came of\nit, so the task comes back as the exchange it was when the project is opened\nagain.\n```\n\n**Choices I made, which you can change**\n- **Where you type it:** the existing chat input, with the send button offering \"Send to task\". A separate input on the running task would also work, but this reuses the LSP, completions and `@{…}` references you already have.\n- **Queue behaviour is untouched:** Ctrl/Cmd+Enter still queues, so nothing you do by habit changes meaning.\n- **No interrupt:** the prompt says a message is taken at the next turn, since that's what Claude Code does. Stopping a task stays as it is.\n\n**Worth adding if you want it**\n- **One process per conversation:** \"The harness's process lives for as long as the conversation, rather than being started again for each prompt, so a prompt sent after another doesn't reload the conversation.\" This would cut a few seconds off every prompt in the queue, but it's a bigger change to how runs are started and stopped, so it may be better as its own task.\n- **Acknowledgement:** \"A message is shown in the table only once the harness has acknowledged it\" (that's `--replay-user-messages`), if you'd rather not see a row for something that never arrived.",
+      "ttft_ms": 8501,
+      "type": "result",
+      "duration_ms": 22203,
+      "uuid": "b5a45c33-1598-47ce-b859-9366344404a2",
+      "ttft_stream_ms": 2391,
+      "time_to_request_ms": 475,
+      "first_content_frame_ms": 2392,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  ]
+}

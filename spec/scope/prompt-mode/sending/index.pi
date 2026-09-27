@@ -1,4 +1,5 @@
 use /lib
+from /scope/harness-integration import HarnessIntegrationScope
 from /scope/project-data import ProjectDataScope
 from /scope/prompt-mode import PromptEditor
 from /scope/prompt-mode/chat-input import ChatInputScope
@@ -39,6 +40,23 @@ shape PromptSendingShape:
         while the harness is working on a task or other questions, joins the
         questions stacked above the @{ChatInputScope}'s tabs, and is saved
         among the questions asked.
+
+    sendingToATask:
+        While a task is running, more can be sent to it, as to a terminal
+        session, from the @{ChatInputScope}'s "Send to task", as it says. What
+        is sent is written as a hidden anchor and compiled like any prompt, its
+        references, attachments, and Slice toggle included, so it can reference
+        the spec, but the spec isn't built first, and its systemPrompt isn't
+        sent, since the run already has the one it began with. It goes to the
+        running task's run as a message of its own, as the
+        @{HarnessIntegrationScope} says, and is not a task of its own: it
+        doesn't head the @{MessageList}, isn't among the previous tasks, and
+        can't be resent. It is shown in the task's output and kept with its
+        record, as the @{PromptEditor} says. A message that fails to compile
+        isn't sent, and a notification titled "Could not send to the task" says
+        why, what was typed going back into the input. A message whose task
+        ends before it can be sent is queued instead, as a task, so nothing
+        typed is lost.
 
     onTheApplicationsBehalf:
         Something in the application can send a prompt as if it were written in

@@ -67,6 +67,7 @@ shape ChatInputShape:
             The menu's options, in order:
             - "Preview Compiled Prompt", with an eye icon
             - "Queue", with a list icon, which queues the prompt rather than sending it, even while the harness is free, as the queue of the @{PromptEditor} says; like the send button, it clears the input. On the Ask tab it is disabled, since a question never queues, and the highlight passes over it
+            - "Send to task", with a send icon, only while a task is running with a harness that can be fed more, as the @{HarnessIntegrationScope} says, and its output is shown, the previous tasks not expanded over it; never on the Ask tab, where a question runs on its own. It sends what is typed, and what is attached, to the running task instead of queueing it, as the @{PromptSendingScope} says, and clears the input as sending does. <Ctrl+Enter> (<Cmd+Enter> on macOS) still queues, as the send button does
 
     editingQueued:
         Editing a queued prompt, from the queue of the @{PromptEditor}, sets
@@ -203,13 +204,23 @@ shape ChatInputShape:
             even once the project is closed and opened again, as the
             @{HarnessIntegrationScope} says.
 
+            It can be pressed while a run in that conversation is under way, a
+            task on Code, Chain, or Spec, or any question on Ask, without
+            waiting for it to finish. Pressed while a task runs, the prompts
+            sent meanwhile queue as ever, and the next task to run from the
+            queue, the first in it, starts a new conversation with no context,
+            the ones after it carrying that one on. That holds even when the
+            running task is the first of its conversation and the harness
+            hasn't yet said which conversation it is: once it does, it isn't
+            carried on either.
+
             Its tooltip says which conversation it resets:
             "Start a new conversation for tasks" or
-            "Start a new conversation for questions". It is disabled while that conversation has nothing to
-            carry on, its tooltip then saying the next task, or question,
-            already starts a new conversation; and while a run in it is under
-            way, a task on Code, Chain, or Spec, or any question on Ask, its
-            tooltip then saying it waits for that run to finish.
+            "Start a new conversation for questions", adding, while a run in
+            it is under way, that the run finishes in the conversation left.
+            It is disabled only while that conversation has nothing to carry
+            on and no run in it is under way, its tooltip then saying the next
+            task, or question, already starts a new conversation.
 
             Both sit on the bar's bottom line, which runs beneath them as it does
             beneath the help text, and neither is cut off: the help text gives

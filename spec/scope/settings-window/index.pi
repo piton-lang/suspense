@@ -1,11 +1,13 @@
 use /lib
 use /ui
+from ../harness-integration import HarnessIntegrationScope
 from ../no-project import NoProjectStateScope
 from ../project-data import ProjectDataScope
 from ../project-directory import ProjectDirectoryScope
 from ../prompt-mode/chat-input import ChatInputScope
 from ../prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from ../prompt-mode/modes import PromptModesScope
+from ../user-preferences import UserPreferencesScope
 from /ui/components/growing-text-input import GrowingTextInputScope
 from /ui/components/inset-panel import InsetPanelScope
 from /ui/components/scrollbar import ScrollbarScope
@@ -16,8 +18,8 @@ export ui-component SettingsWindowScope:
 concept SettingsWindowConcept:
     pitch:
         The application's settings, in sections picked from a sidebar: the
-        system prompts each tab of the @{ChatInputScope} sends, and the prompts
-        injected into them.
+        system prompts each tab of the @{ChatInputScope} sends, the prompts
+        injected into them, and the harness runs go to.
 
     shape: {SettingsWindowShape}
 
@@ -30,7 +32,8 @@ shape SettingsWindowShape:
 
     sidebar:
         Beneath the heading, down its left, a sidebar of vertical tabs, one
-        per section, in order: "System prompts" and "Injected prompts". Each
+        per section, in order: "System prompts", "Injected prompts", and
+        "Agent". Each
         tab is a row across the sidebar's width reading the section's name,
         and the one picked is marked with the theme's accent. Clicking a tab
         picks its section, and the page beside the sidebar shows only that
@@ -87,6 +90,23 @@ shape SettingsWindowShape:
 
         Without a project open, in place of it the section reads
         "Open a project to edit its injected prompts."
+
+    agent:
+        The "Agent" section is headed "Agent", with a muted line beneath
+        saying that every run, the tasks, the questions, and the application's
+        own, goes to the harness picked here, and that a conversation is only
+        carried on by the harness it began with.
+
+        Then a row for each harness, in order: Claude Code, Codex, and
+        OpenCode, each a radio button reading its name, with the command it
+        runs muted beside it, `claude`, `codex`, or `opencode`, and "Not
+        installed" muted after that when the command can't be found. Exactly
+        one is picked, the harness in use, as the @{HarnessIntegrationScope}
+        says. Clicking one picks it; it is used from the next run on, and
+        remembered for the user straight away, as the @{UserPreferencesScope}
+        says, not saved with a project, so the section is the same with or
+        without a project open. One that isn't installed can still be picked,
+        and its runs fail saying why.
 
     saving:
         The prompts, the system prompts and the injected ones, belong to the

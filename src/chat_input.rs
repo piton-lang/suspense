@@ -70,15 +70,22 @@ const EDITING_HINT: &str = "Ctrl+Enter to save · Esc to cancel";
 pub enum SendOption {
     PreviewCompiled,
     Queue,
+    /// Sends the prompt to the task running, as more for it to do.
+    SendToTask,
 }
 
 impl SendOption {
-    pub const ALL: [SendOption; 2] = [SendOption::PreviewCompiled, SendOption::Queue];
+    pub const ALL: [SendOption; 3] = [
+        SendOption::PreviewCompiled,
+        SendOption::Queue,
+        SendOption::SendToTask,
+    ];
 
     fn label(self) -> &'static str {
         match self {
             Self::PreviewCompiled => "Preview Compiled Prompt",
             Self::Queue => "Queue",
+            Self::SendToTask => "Send to task",
         }
     }
 
@@ -86,13 +93,32 @@ impl SendOption {
         match self {
             Self::PreviewCompiled => IconName::Eye,
             Self::Queue => IconName::ListEnd,
+            Self::SendToTask => IconName::Send,
         }
+    }
+
+    /// Whether it is offered in `mode`, where a task `can_be_sent_to`: Send
+    /// to task only while it can, and never on Ask, where a question runs on
+    /// its own.
+    fn offered(self, mode: SendMode, can_be_sent_to: bool) -> bool {
+        self != Self::SendToTask || (can_be_sent_to && mode != SendMode::Ask)
     }
 
     /// Whether it can be picked in `mode`: a question is never queued.
     fn enabled(self, mode: SendMode) -> bool {
         !(self == Self::Queue && mode == SendMode::Ask)
     }
+}
+
+/// How a prompt is sent from the input.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Sent {
+    /// Sent, or queued while the harness is working.
+    AsEver,
+    /// Queued on purpose.
+    Queued,
+    /// Sent to the task running.
+    ToTask,
 }
 
 /// What editing a queued prompt set aside, to bring back after.
@@ -359,6 +385,9 @@ pub struct Submit {
     pub attached_text: Vec<String>,
     /// Queued on purpose, rather than sent if the harness is free.
     pub queue: bool,
+    /// Sent to the task running, as more for it to do, rather than as a task
+    /// of its own.
+    pub to_task: bool,
 }
 
 /// Something attached to the prompt being written, sent along with it.
@@ -386,8 +415,11 @@ pub struct ChatInput {
     /// on, in tokens; `None` when the next prompt starts a new one.
     context: Option<u64>,
     /// Whether a run of the selected tab's conversation is under way, so it
-    /// can't be left for a new one yet.
+    /// can be left for a new one even with nothing yet to carry on.
     conversation_running: bool,
+    /// Whether the task running, its output shown, can be sent more, so the
+    /// send menu offers to.
+    can_send_to_task: bool,
     /// How the input grows to fit its text.
     fit: GrowToFit,
     /// Width of the chain's tab as last laid out, which is how far Code and
@@ -499,6 +531,7 @@ impl ChatInput {
             busy: false,
             context: None,
             conversation_running: false,
+            can_send_to_task: false,
             fit: GrowToFit::new(MAX_ROWS),
             chain_width: None,
             attachments: Vec::new(),
@@ -625,11 +658,21 @@ impl ChatInput {
         {
             self.completion.update(cx, |menu, cx| menu.hide(cx));
             let mode = TABS[self.selected_tab];
-            self.send_menu = SendOption::ALL
+            self.send_menu = self
+                .send_options()
                 .iter()
                 .position(|option| option.enabled(mode));
         }
         cx.notify();
+    }
+
+    /// The options the send menu offers, in order.
+    pub fn send_options(&self) -> Vec<SendOption> {
+        let mode = TABS[self.selected_tab];
+        SendOption::ALL
+            .into_iter()
+            .filter(|option| option.offered(mode, self.can_send_to_task))
+            .collect()
     }
 
     /// Whether the send button's menu is open.
@@ -641,12 +684,13 @@ impl ChatInput {
     /// Moves the menu's highlight `step` options along, wrapping around.
     fn step_send_menu(&mut self, step: isize, cx: &mut Context<Self>) {
         let mode = TABS[self.selected_tab];
+        let options = self.send_options();
         if let Some(highlight) = &mut self.send_menu {
-            let count = SendOption::ALL.len() as isize;
+            let count = options.len() as isize;
             // Over any option that can't be picked.
             for _ in 0..count {
                 *highlight = (*highlight as isize + step).rem_euclid(count) as usize;
-                if SendOption::ALL[*highlight].enabled(mode) {
+                if options[*highlight].enabled(mode) {
                     break;
                 }
             }
@@ -657,7 +701,8 @@ impl ChatInput {
     /// Picks the menu's option at `ix`, closing it.
     pub fn pick_send_option(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
         let mode = TABS[self.selected_tab];
-        match SendOption::ALL
+        match self
+            .send_options()
             .get(ix)
             .filter(|option| option.enabled(mode))
         {
@@ -667,7 +712,11 @@ impl ChatInput {
             }
             Some(SendOption::Queue) => {
                 self.send_menu = None;
-                self.send(true, window, cx)
+                self.send(Sent::Queued, window, cx)
+            }
+            Some(SendOption::SendToTask) => {
+                self.send_menu = None;
+                self.send(Sent::ToTask, window, cx)
             }
             None => cx.notify(),
         }
@@ -748,31 +797,35 @@ impl ChatInput {
         let highlight = self.send_menu?;
         let theme = cx.theme();
         let mode = TABS[self.selected_tab];
-        let rows = SendOption::ALL.iter().enumerate().map(|(ix, option)| {
-            let enabled = option.enabled(mode);
-            let row = h_flex()
-                .id(("send-option", ix))
-                .gap_2()
-                .px_3()
-                .py_1p5()
-                .when(!enabled, |row| row.opacity(0.5))
-                .when(enabled, |row| {
-                    row.cursor_pointer().hover(|row| row.bg(theme.list_hover))
-                })
-                .when(ix == highlight && enabled, |row| row.bg(theme.list_active))
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .on_click(
-                    cx.listener(move |this, _, window, cx| this.pick_send_option(ix, window, cx)),
-                )
-                .child(
-                    Icon::new(option.icon())
-                        .small()
-                        .text_color(theme.muted_foreground),
-                )
-                .child(div().whitespace_nowrap().child(option.label()));
-            // Lets UI tests find the option; inert in normal builds.
-            gpui_kit::TestSupportExt::test_support(row)
-        });
+        let rows =
+            self.send_options()
+                .into_iter()
+                .enumerate()
+                .map(|(ix, option)| {
+                    let enabled = option.enabled(mode);
+                    let row = h_flex()
+                        .id(("send-option", ix))
+                        .gap_2()
+                        .px_3()
+                        .py_1p5()
+                        .when(!enabled, |row| row.opacity(0.5))
+                        .when(enabled, |row| {
+                            row.cursor_pointer().hover(|row| row.bg(theme.list_hover))
+                        })
+                        .when(ix == highlight && enabled, |row| row.bg(theme.list_active))
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.pick_send_option(ix, window, cx)
+                        }))
+                        .child(
+                            Icon::new(option.icon())
+                                .small()
+                                .text_color(theme.muted_foreground),
+                        )
+                        .child(div().whitespace_nowrap().child(option.label()));
+                    // Lets UI tests find the option; inert in normal builds.
+                    gpui_kit::TestSupportExt::test_support(row)
+                });
         let menu = v_flex()
             .id("send-menu")
             .absolute()
@@ -959,7 +1012,7 @@ impl ChatInput {
     }
 
     /// Marks a run of the selected tab's conversation as under way, or over;
-    /// New conversation waits for it.
+    /// New conversation can leave the conversation while it is.
     pub fn set_conversation_running(&mut self, running: bool, cx: &mut Context<Self>) {
         if self.conversation_running != running {
             self.conversation_running = running;
@@ -969,6 +1022,53 @@ impl ChatInput {
 
     pub fn conversation_running(&self) -> bool {
         self.conversation_running
+    }
+
+    /// Marks whether the task running, its output shown, can be sent more.
+    /// An open send menu keeps its highlight on the option it was on.
+    pub fn set_can_send_to_task(&mut self, can: bool, cx: &mut Context<Self>) {
+        if self.can_send_to_task == can {
+            return;
+        }
+        let highlighted = self
+            .send_menu
+            .and_then(|highlight| self.send_options().get(highlight).copied());
+        self.can_send_to_task = can;
+        if let Some(highlighted) = highlighted {
+            let options = self.send_options();
+            let mode = TABS[self.selected_tab];
+            self.send_menu = options
+                .iter()
+                .position(|option| *option == highlighted)
+                .or_else(|| options.iter().position(|option| option.enabled(mode)));
+        }
+        cx.notify();
+    }
+
+    pub fn can_send_to_task(&self) -> bool {
+        self.can_send_to_task
+    }
+
+    /// Takes back a prompt that couldn't be sent, with what was attached to
+    /// it: into the input, ahead of anything written since.
+    pub fn take_back(
+        &mut self,
+        text: String,
+        attached_text: Vec<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        for text in attached_text {
+            self.attach_text(text, cx);
+        }
+        let written = self.editor.read(cx).value().to_string();
+        let text = if written.trim().is_empty() {
+            text
+        } else {
+            format!("{text}\n\n{written}")
+        };
+        self.put_back(text, self.selected_tab, window, cx);
+        cx.notify();
     }
 
     pub fn set_busy(&mut self, busy: bool, cx: &mut Context<Self>) {
@@ -995,7 +1095,7 @@ impl ChatInput {
     }
 
     fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.send(false, window, cx)
+        self.send(Sent::AsEver, window, cx)
     }
 
     /// Edits the queued prompt at `position` in the queue, counted from 1, in
@@ -1090,9 +1190,9 @@ impl ChatInput {
         self.editing.is_some()
     }
 
-    /// Sends the prompt, or queues it on purpose when `queue`; while a queued
-    /// prompt is being edited, saves the edit instead.
-    fn send(&mut self, queue: bool, window: &mut Window, cx: &mut Context<Self>) {
+    /// Sends the prompt, `how` it is sent; while a queued prompt is being
+    /// edited, saves the edit instead.
+    fn send(&mut self, how: Sent, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.editor.read(cx).value().to_string();
         if text.is_empty() {
             return;
@@ -1127,7 +1227,8 @@ impl ChatInput {
             text,
             mode: TABS[self.selected_tab],
             attached_text,
-            queue,
+            queue: how == Sent::Queued,
+            to_task: how == Sent::ToTask,
         });
     }
 
@@ -1438,8 +1539,12 @@ impl Render for ChatInput {
         } else {
             ("tasks", "task")
         };
+        // It can be pressed while a run is under way, which finishes in the
+        // conversation left.
         let new_conversation_tooltip = if self.conversation_running {
-            format!("A {run} is running: start a new conversation once it finishes")
+            format!(
+                "Start a new conversation for {runs}; the {run} running finishes in the conversation left"
+            )
         } else if context.is_some() {
             format!("Start a new conversation for {runs}")
         } else {
@@ -1497,7 +1602,7 @@ impl Render for ChatInput {
                     .xsmall()
                     .icon(IconName::Sparkles)
                     .label("New conversation")
-                    .disabled(context.is_none() || self.conversation_running)
+                    .disabled(context.is_none() && !self.conversation_running)
                     .tooltip(new_conversation_tooltip)
                     .on_click(cx.listener(|_, _, _, cx| cx.emit(NewConversation))),
             );
@@ -2544,6 +2649,143 @@ mod tests {
             Some(("Queued, edited".to_string(), SendMode::Spec, Vec::new()))
         );
         assert_eq!(submitted.borrow().len(), 1, "saving an edit sent a prompt");
+    }
+
+    /// The send menu offers Send to task only while a task can be sent more,
+    /// never on the Ask tab, and picking it sends the prompt, and what is
+    /// attached, to the task, clearing the input. Ctrl+Enter still sends as
+    /// ever.
+    #[gpui_kit::test]
+    async fn send_to_task_is_offered_while_a_task_can_be_sent_more(cx: &mut TestAppContext) {
+        use super::{SendMode, SendOption, Submit};
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            super::bind_keys(cx);
+            crate::main_window::bind_keys(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut chat_input = None;
+        let window = cx.add_window(|window, cx| {
+            let input = cx.new(|cx| ChatInput::new(window, cx));
+            chat_input = Some(input.clone());
+            Root::new(cx.new(|_| AtBottom(input)), window, cx)
+        });
+        let chat_input = chat_input.unwrap();
+        let handle = window.into();
+        let submitted = Rc::new(std::cell::RefCell::new(Vec::new()));
+        let _subscription = cx.update(|cx| {
+            let submitted = submitted.clone();
+            cx.subscribe(&chat_input, move |_, submit: &Submit, _| {
+                submitted.borrow_mut().push((
+                    submit.text.clone(),
+                    submit.attached_text.clone(),
+                    submit.queue,
+                    submit.to_task,
+                ))
+            })
+        });
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("prompt-editor").is_some()
+        })
+        .await;
+        let options =
+            |cx: &mut TestAppContext| chat_input.read_with(cx, |input, _| input.send_options());
+        let (preview, queue, to_task) = (
+            SendOption::PreviewCompiled,
+            SendOption::Queue,
+            SendOption::SendToTask,
+        );
+
+        // No task running: not offered.
+        assert_eq!(options(cx), [preview, queue]);
+        chat_input.update(cx, |input, cx| input.set_can_send_to_task(true, cx));
+        assert_eq!(options(cx), [preview, queue, to_task]);
+
+        // Never on Ask, where a question runs on its own.
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| input.select_tab(super::ASK_TAB, window, cx))
+        })
+        .unwrap();
+        assert_eq!(options(cx), [preview, queue]);
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| {
+                input.select_tab(super::DEFAULT_TAB, window, cx)
+            })
+        })
+        .unwrap();
+
+        // Picked from the menu, with the keyboard, it goes to the task.
+        chat_input.update(cx, |input, cx| input.attach_text("the log".into(), cx));
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| {
+                input.set_text_for_test("Also this", window, cx)
+            });
+            window.press("ctrl-shift-enter", cx);
+            window.press("up", cx);
+            window.render_frame(cx);
+            assert_eq!(chat_input.read(cx).send_menu, Some(2));
+            window.find(("send-option", 2usize));
+            window.press("enter", cx);
+            assert_eq!(chat_input.read(cx).editor.read(cx).value().as_ref(), "");
+            assert!(chat_input.read(cx).attachments().is_empty());
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(
+            submitted.borrow().as_slice(),
+            [(
+                "Also this".to_string(),
+                vec!["the log".to_string()],
+                false,
+                true
+            )]
+        );
+
+        // Ctrl+Enter still sends as ever: queued while the harness works.
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| input.set_text_for_test("Next", window, cx));
+            window.press("ctrl-enter", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(
+            submitted.borrow()[1],
+            ("Next".to_string(), Vec::new(), false, false)
+        );
+
+        // The task ends while the menu is open on Send to task: the highlight
+        // moves to an option still offered.
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| input.set_text_for_test("Late", window, cx));
+            window.press("ctrl-shift-enter", cx);
+            window.press("up", cx);
+            assert_eq!(chat_input.read(cx).send_menu, Some(2));
+            chat_input.update(cx, |input, cx| input.set_can_send_to_task(false, cx));
+            assert_eq!(chat_input.read(cx).send_menu, Some(0));
+            window.render_frame(cx);
+            assert!(window.try_find(("send-option", 2usize)).is_none());
+            window.press("escape", cx);
+        })
+        .unwrap();
+        assert_eq!(
+            chat_input.read_with(cx, |input, _| input.mode()),
+            SendMode::Both
+        );
+
+        // A message that couldn't be sent comes back, ahead of anything
+        // written since, with what was attached.
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| {
+                input.take_back("Also this".into(), vec!["the log".into()], window, cx)
+            });
+            assert_eq!(
+                chat_input.read(cx).editor.read(cx).value().as_ref(),
+                "Also this\n\nLate"
+            );
+            assert_eq!(chat_input.read(cx).attachments()[0].text, "the log");
+        })
+        .unwrap();
     }
 
     /// Attachments are listed above the input, survive switching tabs, can be

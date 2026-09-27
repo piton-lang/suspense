@@ -4,7 +4,7 @@
 //! [`crate::settings_window`]). In a template, `${CODE_LOCATION}` and
 //! `${SPEC_LOCATION}` stand for `codeRoot` and `root` in `piton.config.pi`,
 //! `${HARNESS_DIRECTORY}` for the harness's directory (see
-//! [`crate::harness::DIRECTORY`]), `${SPEC_READING}` for the spec-reading
+//! [`crate::harness::directory`]), `${SPEC_READING}` for the spec-reading
 //! prompt injected into it, saved beside the templates, and
 //! `${PITON_FLUENCY}` for the project's Piton fluency (see
 //! [`crate::piton_fluency`]), written like Piton interpolations and filled in
@@ -165,7 +165,7 @@ pub fn fill(template: &str, code: &str, spec: &str, reading: &str, fluency: &str
     let template = fill_paragraph(template, SPEC_READING, reading)
         .replace(CODE_LOCATION, code)
         .replace(SPEC_LOCATION, spec)
-        .replace(HARNESS_DIRECTORY, crate::harness::DIRECTORY);
+        .replace(HARNESS_DIRECTORY, crate::harness::directory());
     // Last, so what piton printed reaches the harness exactly as printed.
     fill_paragraph(&template, PITON_FLUENCY, fluency)
         .trim_end()

@@ -5,11 +5,9 @@
 //! can be edited or removed before committing.
 
 use std::fs;
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 
-use anyhow::{Context as _, Result, anyhow, bail};
+use anyhow::{Context as _, Result};
 use gpui_kit::{App, Global};
 use serde::{Deserialize, Serialize};
 
@@ -139,34 +137,8 @@ pub fn summarize(project_dir: &Path, prompt: &str, result: &str) -> Result<Optio
         commit_note::RESULT,
         cut(result)
     );
-    let mut child = Command::new("claude")
-        .args([
-            "-p",
-            "--model",
-            "haiku",
-            "--effort",
-            "low",
-            "--tools",
-            "",
-            "--no-session-persistence",
-        ])
-        .current_dir(project_dir)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("could not run claude")?;
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| anyhow!("claude has no stdin"))?;
-    let writer = std::thread::spawn(move || stdin.write_all(request.as_bytes()));
-    let output = child.wait_with_output()?;
-    writer.join().ok();
-    if !output.status.success() {
-        bail!("{}", String::from_utf8_lossy(&output.stderr).trim());
-    }
-    Ok(clean(&String::from_utf8_lossy(&output.stdout)))
+    let reply = crate::harness::ask_quickly(project_dir, &request)?;
+    Ok(clean(&reply))
 }
 
 /// The note in the harness's reply: its first line with anything around it

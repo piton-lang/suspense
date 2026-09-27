@@ -41,44 +41,7 @@ const GITIGNORE: &str = "\
 /// Emitted to close the form without creating anything.
 pub struct CloseNewProject;
 
-/// An agent Belay can write for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Agent {
-    Claude,
-    OpenCode,
-    Codex,
-}
-
-impl Agent {
-    /// Every agent, in the order they are listed and written.
-    pub const ALL: [Agent; 3] = [Agent::Claude, Agent::OpenCode, Agent::Codex];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Agent::Claude => "Claude Code",
-            Agent::OpenCode => "OpenCode",
-            Agent::Codex => "Codex",
-        }
-    }
-
-    /// The directory it writes into.
-    pub fn directory(self) -> &'static str {
-        match self {
-            Agent::Claude => ".claude",
-            Agent::OpenCode => ".opencode",
-            Agent::Codex => ".codex",
-        }
-    }
-
-    /// Its adapter anchor's name, as @piton/belay exports it.
-    fn adapter(self) -> &'static str {
-        match self {
-            Agent::Claude => "ClaudeCodeAdapter",
-            Agent::OpenCode => "OpenCodeAdapter",
-            Agent::Codex => "CodexAdapter",
-        }
-    }
-}
+pub use crate::agent::Agent;
 
 /// The opencode.json written into a project OpenCode is chosen for: it loads
 /// the guidance Belay places throughout the code root, which OpenCode doesn't

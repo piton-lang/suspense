@@ -1,6 +1,7 @@
 //! The settings, shown in the main window's inset panel, in sections picked
 //! from a sidebar of vertical tabs: the system prompt each tab gives a prompt,
-//! and the spec-reading prompt injected into them, for the open project. Every
+//! and the spec-reading prompt injected into them, for the open project, and
+//! the harness every run goes to, for the user (see [`crate::agent`]). Every
 //! edit is saved straight away to the project's `.suspense/system-prompts`
 //! (see [`crate::system_prompts`]), and the prompts are read from there each
 //! time the settings open, so an edit made by hand shows up.
@@ -8,12 +9,14 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Editor, EditorState, InputEvent};
+use gpui_kit::component::radio::Radio;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
+use crate::agent::{self, Agent};
 use crate::growing_input::GrowToFit;
 use crate::piton_syntax;
 use crate::project_directory::ProjectDirectory;
@@ -35,15 +38,21 @@ enum Section {
     #[default]
     SystemPrompts,
     InjectedPrompts,
+    Agent,
 }
 
 impl Section {
-    const ALL: [Section; 2] = [Section::SystemPrompts, Section::InjectedPrompts];
+    const ALL: [Section; 3] = [
+        Section::SystemPrompts,
+        Section::InjectedPrompts,
+        Section::Agent,
+    ];
 
     fn label(self) -> &'static str {
         match self {
             Section::SystemPrompts => "System prompts",
             Section::InjectedPrompts => "Injected prompts",
+            Section::Agent => "Agent",
         }
     }
 
@@ -51,6 +60,7 @@ impl Section {
         match self {
             Section::SystemPrompts => "system-prompts",
             Section::InjectedPrompts => "injected-prompts",
+            Section::Agent => "agent",
         }
     }
 
@@ -290,6 +300,47 @@ impl SettingsWindow {
             )
     }
 
+    /// Sends every run from the next on to `agent`, remembered for the user.
+    fn pick_agent(&mut self, agent: Agent, cx: &mut Context<Self>) {
+        // A pick that can't be saved still holds for the session.
+        agent::set(agent).ok();
+        cx.notify();
+    }
+
+    /// A row for each harness, the one in use picked, each with the command
+    /// it runs and whether that is installed.
+    fn render_agents(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let muted = cx.theme().muted_foreground;
+        let current = agent::current();
+        v_flex()
+            .gap_3()
+            .children(Agent::RUNNABLE.into_iter().map(|agent| {
+                h_flex()
+                    .gap_2()
+                    .child(
+                        Radio::new(SharedString::from(format!(
+                            "settings-agent-{}",
+                            agent.command()
+                        )))
+                        .label(agent.label())
+                        .checked(agent == current)
+                        .on_click(
+                            cx.listener(move |this, _: &bool, _, cx| this.pick_agent(agent, cx)),
+                        ),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(muted)
+                            .font_family(cx.theme().mono_font_family.clone())
+                            .child(agent.command()),
+                    )
+                    .when(!agent.installed(), |row| {
+                        row.child(div().text_sm().text_color(muted).child("Not installed"))
+                    })
+            }))
+    }
+
     /// The sidebar of sections, the one picked marked with the accent.
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
@@ -358,12 +409,22 @@ impl Render for SettingsWindow {
                      placeholder is written: the spec reading at {SPEC_READING}. \
                      They are saved with the project as they are edited. \
                      {HARNESS_DIRECTORY} stands for the harness's directory, {}.",
-                    crate::harness::DIRECTORY
+                    crate::harness::directory()
                 ),
                 "Open a project to edit its injected prompts.",
             ),
+            Section::Agent => (
+                "Agent",
+                "Every run goes to the harness picked here: the tasks, the \
+                 questions, and the application's own. A conversation is only \
+                 carried on by the harness it began with."
+                    .to_string(),
+                "",
+            ),
         };
-        let body: AnyElement = if ProjectDirectory::get(cx).is_some() {
+        let body: AnyElement = if section == Section::Agent {
+            self.render_agents(cx).into_any_element()
+        } else if ProjectDirectory::get(cx).is_some() {
             let prompts: Vec<AnyElement> = self
                 .prompts
                 .iter()
@@ -564,6 +625,47 @@ mod tests {
         );
 
         fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The Agent section offers each harness, the one in use picked; picking
+    /// another sends every run from then on to it, its directory standing in
+    /// for HARNESS_DIRECTORY, with or without a project open.
+    #[gpui_kit::test]
+    async fn picks_the_agent_runs_go_to(cx: &mut TestAppContext) {
+        use crate::agent::{self, Agent};
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut settings = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| SettingsWindow::new(window, cx));
+            settings = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let settings = settings.unwrap();
+        let cx = &mut VisualTestContext::from_window(window.into(), cx);
+        settings.update(cx, |this, cx| this.pick(Section::Agent, cx));
+        cx.run_until_parked();
+        assert_eq!(agent::current(), Agent::Claude);
+        assert_eq!(crate::harness::directory(), ".claude");
+
+        let click = |id: &'static str, cx: &mut VisualTestContext| {
+            cx.update(|window, cx| {
+                window.render_frame(cx);
+                window.click(id, cx);
+            });
+            cx.run_until_parked();
+        };
+        click("settings-agent-codex", cx);
+        assert_eq!(agent::current(), Agent::Codex);
+        assert_eq!(crate::harness::directory(), ".codex");
+        click("settings-agent-opencode", cx);
+        assert_eq!(agent::current(), Agent::OpenCode);
+        click("settings-agent-claude", cx);
+        assert_eq!(agent::current(), Agent::Claude);
     }
 
     /// Each prompt's editor is as tall as its prompt, growing as lines are

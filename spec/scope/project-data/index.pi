@@ -22,7 +22,7 @@ shape ProjectDataShape:
         Nothing about a project is kept anywhere else, apart from the draft.
 
     contents:
-        - `history/`: every task sent, as its hidden anchor's source, named by the second it was sent and the anchor's name, and beside it, once its run is over, a `.json` record of the same name holding the compiled userPrompt the harness received, each line the harness printed, and any error
+        - `history/`: every task sent, as its hidden anchor's source, named by the second it was sent and the anchor's name, and beside it, once its run is over, a `.json` record of the same name holding the compiled userPrompt the harness received, each line the harness printed, each message sent to the task while it ran, in its place among those lines, and any error
         - `asks/`: every question asked from the Ask tab, saved the same way as a task but apart from them
         - `queue/`: each queued prompt, as its hidden anchor's source, imports included, named so they list in the order they were queued
         - `divergence/`: each divergence report, a JSON file named by when it was made

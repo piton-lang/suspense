@@ -356,13 +356,13 @@ impl PromptTask {
             task.status = TaskStatus::Unrecorded;
             return task;
         };
-        if let Some(markdown) = record.user_prompt {
+        if let Some(markdown) = record.user_prompt.clone() {
             task.set_compiled(Compiled::new(
                 saved.anchor.name().to_string().into(),
                 markdown,
             ));
         }
-        for event in record.output.iter().flat_map(harness::parse) {
+        for event in record.events() {
             task.apply(event);
         }
         if let Some(error) = record.error {
@@ -1252,30 +1252,35 @@ impl Session {
     /// Follows a run's events: the conversation it reported, and how much
     /// context that holds as it replies. A run started before the
     /// conversation was left for a new one, which `current` is no longer,
-    /// changes nothing.
+    /// changes nothing; the conversation it reports is returned to be kept
+    /// as left, so the history doesn't carry it on either, unless a run since
+    /// has begun one of its own. That covers a run whose conversation wasn't
+    /// known yet when it was left.
+    #[must_use]
     fn follow(
         session: &mut Option<Self>,
         current: bool,
         run: &mut Option<String>,
         event: &HarnessEvent,
         project_dir: &Path,
-    ) {
+    ) -> Option<String> {
         match event {
             HarnessEvent::Session(id) => {
                 *run = Some(id.clone());
-                if current {
-                    // Carrying on the same conversation keeps what it holds
-                    // until the run says otherwise.
-                    let context = session
-                        .as_ref()
-                        .filter(|session| session.id == *id)
-                        .and_then(|session| session.context);
-                    *session = Some(Self {
-                        project_dir: project_dir.to_path_buf(),
-                        id: id.clone(),
-                        context,
-                    });
+                if !current {
+                    return session.is_none().then(|| id.clone());
                 }
+                // Carrying on the same conversation keeps what it holds until
+                // the run says otherwise.
+                let context = session
+                    .as_ref()
+                    .filter(|session| session.id == *id)
+                    .and_then(|session| session.context);
+                *session = Some(Self {
+                    project_dir: project_dir.to_path_buf(),
+                    id: id.clone(),
+                    context,
+                });
             }
             HarnessEvent::Usage { context } if current => {
                 if let Some(session) = session
@@ -1287,6 +1292,7 @@ impl Session {
             }
             _ => {}
         }
+        None
     }
 }
 
@@ -1334,6 +1340,8 @@ struct ProjectSession {
     auto_send: bool,
     queue_held: bool,
     _pending: Task<()>,
+    feed: Option<harness::Feed>,
+    feeding: Arc<futures::lock::Mutex<()>>,
     session: Option<Session>,
     session_epoch: u64,
     asks: Vec<Ask>,
@@ -1378,6 +1386,8 @@ impl ProjectSession {
             auto_send: true,
             queue_held: false,
             _pending: Task::ready(()),
+            feed: None,
+            feeding: Arc::default(),
             session: None,
             session_epoch: 0,
             asks: Vec::new(),
@@ -1479,6 +1489,12 @@ pub struct PromptMode {
     /// out.
     history_width: Rc<Cell<Pixels>>,
     _pending: Task<()>,
+    /// Sends the latest task more while it runs, where its harness can be
+    /// fed more.
+    feed: Option<harness::Feed>,
+    /// Taken by each message sent to the running task while it is compiled
+    /// and sent, so messages reach it in the order they were sent.
+    feeding: Arc<futures::lock::Mutex<()>>,
     /// The conversation the tasks share, each resuming the last.
     session: Option<Session>,
     /// Counts the times the tasks' conversation was left for a new one, so a
@@ -1548,7 +1564,12 @@ impl PromptMode {
                     let (text, attached_text) = (submit.text.clone(), submit.attached_text.clone());
                     // Queued on purpose, it waits in the queue even while the
                     // harness is free; a question never queues.
-                    if submit.queue && submit.mode != SendMode::Ask && this.project_dir.is_some() {
+                    if submit.to_task && submit.mode != SendMode::Ask {
+                        this.send_to_task(text, submit.mode, attached_text, window, cx);
+                    } else if submit.queue
+                        && submit.mode != SendMode::Ask
+                        && this.project_dir.is_some()
+                    {
                         let sliced = this.chat_input.read(cx).slices();
                         this.enqueue(text, true, submit.mode, attached_text, sliced, window, cx);
                     } else {
@@ -1611,6 +1632,8 @@ impl PromptMode {
             understanding_scroll: ScrollHandle::new(),
             history_width: Rc::default(),
             _pending: Task::ready(()),
+            feed: None,
+            feeding: Arc::default(),
             session: None,
             session_epoch: 0,
             asks: Vec::new(),
@@ -1656,6 +1679,8 @@ impl PromptMode {
         swap(&mut self.auto_send, &mut other.auto_send);
         swap(&mut self.queue_held, &mut other.queue_held);
         swap(&mut self._pending, &mut other._pending);
+        swap(&mut self.feed, &mut other.feed);
+        swap(&mut self.feeding, &mut other.feeding);
         swap(&mut self.session, &mut other.session);
         swap(&mut self.session_epoch, &mut other.session_epoch);
         swap(&mut self.asks, &mut other.asks);
@@ -2212,6 +2237,83 @@ impl PromptMode {
         self.send_as(text, mode, sent.attached_text, sent.sliced, window, cx);
     }
 
+    /// Whether the latest task is running with a harness that can be fed
+    /// more, its output shown rather than the previous tasks.
+    fn can_send_to_task(&self) -> bool {
+        self.working
+            && !self.task_history.expanded
+            && self.feed.as_ref().is_some_and(harness::Feed::is_open)
+    }
+
+    /// Sends `text`, with the text attached to it, to the task running, as
+    /// more for it to do: compiled as a hidden anchor, sliced as the Slice
+    /// toggle says, without building the spec first or a system prompt, and
+    /// kept only as part of the task. One that doesn't compile goes back into
+    /// the chat input; one whose task is over by the time it is sent is
+    /// queued as a task of its own, in `mode`.
+    fn send_to_task(
+        &mut self,
+        text: String,
+        mode: SendMode,
+        attached_text: Vec<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(project_dir) = self.project_dir.clone() else {
+            window.push_notification(
+                Notification::error("Open a project before sending a prompt.")
+                    .title("No project open"),
+                cx,
+            );
+            return;
+        };
+        let sliced = self.chat_input.read(cx).slices();
+        let Some(feed) = self.feed.clone().filter(harness::Feed::is_open) else {
+            self.enqueue(text, false, mode, attached_text, sliced, window, cx);
+            return;
+        };
+        let lsp = self.chat_input.read(cx).lsp();
+        let feeding = self.feeding.clone();
+        let sent = cx.background_spawn({
+            let (text, attached_text) = (text.clone(), attached_text.clone());
+            let project_dir = project_dir.clone();
+            async move {
+                let _turn = feeding.lock().await;
+                let compiled = message_anchor(&text, attached_text, sliced, lsp)
+                    .and_then(|anchor| hidden_anchor::preview(&anchor, &text, &project_dir));
+                match compiled {
+                    Ok(compiled) => match feed.send(text, compiled.user_prompt) {
+                        Ok(()) => ToTask::Sent,
+                        Err(_) => ToTask::Over,
+                    },
+                    Err(err) => ToTask::Failed(format!("{err:#}")),
+                }
+            }
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let sent = sent.await;
+            this.update_in(cx, |this, window, cx| match sent {
+                ToTask::Sent => {}
+                ToTask::Over => {
+                    this.in_project(&project_dir, cx, |this, cx| {
+                        this.enqueue(text, false, mode, attached_text, sliced, window, cx)
+                    });
+                }
+                ToTask::Failed(error) => {
+                    window.push_notification(
+                        Notification::error(error).title("Could not send to the task"),
+                        cx,
+                    );
+                    this.chat_input.update(cx, |input, cx| {
+                        input.take_back(text, attached_text, window, cx)
+                    });
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
     /// Replaces the queue with the one saved for the current project. A
     /// restored queue waits to be sent.
     fn load_queue(&mut self, cx: &mut Context<Self>) {
@@ -2564,10 +2666,12 @@ impl PromptMode {
     /// Starts a new conversation for the selected tab, the questions' on the
     /// Ask tab and the tasks' on any other, so its next run starts fresh
     /// rather than carrying on. The conversation left is kept with the
-    /// project, so reopening it doesn't carry it on either. Does nothing while
-    /// there is nothing to carry on, or while a run of it is under way.
+    /// project, so reopening it doesn't carry it on either. A run of it under
+    /// way finishes in the conversation left, which is kept as left once the
+    /// run says which it is, if that wasn't known yet. Does nothing while
+    /// there is nothing to carry on and no run of it is under way.
     pub fn new_conversation(&mut self, cx: &mut Context<Self>) {
-        if self.context().is_none() || self.conversation_running() {
+        if self.context().is_none() && !self.conversation_running() {
             return;
         }
         let Some(project_dir) = self.project_dir.clone() else {
@@ -2581,14 +2685,20 @@ impl PromptMode {
             (self.session.take(), conversations::Kind::Tasks)
         };
         if let Some(left) = left {
-            cx.background_spawn(async move {
-                if let Err(err) = conversations::leave(&project_dir, kind, &left.id) {
-                    eprintln!("could not keep the conversation left: {err:#}");
-                }
-            })
-            .detach();
+            Self::keep_left(project_dir, kind, left.id, cx);
         }
         cx.notify();
+    }
+
+    /// Keeps with the project, in the background, that the conversation `id`
+    /// of `kind` was left for a new one.
+    fn keep_left(project_dir: PathBuf, kind: conversations::Kind, id: String, cx: &mut App) {
+        cx.background_spawn(async move {
+            if let Err(err) = conversations::leave(&project_dir, kind, &id) {
+                eprintln!("could not keep the conversation left: {err:#}");
+            }
+        })
+        .detach();
     }
 
     /// Whether the referenced spec sidebar should show: while a task from the
@@ -3005,7 +3115,7 @@ impl PromptMode {
                     let system_prompt = compiled.system_prompt.map(|system_prompt| {
                         system_prompts::fill_understanding(&system_prompt, shown_path.as_deref())
                     });
-                    let mut events = harness::send(
+                    let harness::Run { mut events, feed } = harness::send_task(
                         prompt.clone(),
                         system_prompt,
                         resume.clone().map(|session| harness::Resume {
@@ -3017,6 +3127,8 @@ impl PromptMode {
                     if this
                         .update(cx, |this, cx| {
                             this.in_project(&project_dir, cx, |this, cx| {
+                                // More can be sent to it while it runs.
+                                this.feed = feed;
                                 if let Some(file) = understanding_file {
                                     let watch = Self::watch_understanding(
                                         task_ix,
@@ -3057,13 +3169,20 @@ impl PromptMode {
                                     if let HarnessEvent::Session(_) = &event {
                                         started = true;
                                     }
-                                    Session::follow(
+                                    if let Some(left) = Session::follow(
                                         &mut this.session,
                                         this.session_epoch == epoch,
                                         &mut run_session,
                                         &event,
                                         &project_dir,
-                                    );
+                                    ) {
+                                        Self::keep_left(
+                                            project_dir.clone(),
+                                            conversations::Kind::Tasks,
+                                            left,
+                                            cx,
+                                        );
+                                    }
                                     this.apply_event(task_ix, event, cx)
                                 });
                             })
@@ -3108,6 +3227,9 @@ impl PromptMode {
             this.update(cx, |this, cx| {
                 let dir = project_dir.clone();
                 this.in_project(&dir, cx, |this, cx| {
+                // Nothing more can be sent to it; a message on its way is
+                // queued as a task instead.
+                this.feed = None;
                 if let Some(task) = this.tasks.get_mut(task_ix) {
                     task.end();
                     if let Err(err) = saved {
@@ -3271,13 +3393,20 @@ impl PromptMode {
                                     if let HarnessEvent::Session(_) = &event {
                                         started = true;
                                     }
-                                    Session::follow(
+                                    if let Some(left) = Session::follow(
                                         &mut this.ask_session,
                                         this.ask_session_epoch == epoch,
                                         &mut run_session,
                                         &event,
                                         &project_dir,
-                                    );
+                                    ) {
+                                        Self::keep_left(
+                                            project_dir.clone(),
+                                            conversations::Kind::Questions,
+                                            left,
+                                            cx,
+                                        );
+                                    }
                                     this.update_ask(run, |ask| ask.apply(event), cx)
                                 });
                             })
@@ -4177,6 +4306,13 @@ impl Render for PromptMode {
             self.chat_input
                 .update(cx, |input, cx| input.set_conversation_running(running, cx));
         }
+        // The task running can be sent more while its output shows.
+        let can_send_to_task = self.can_send_to_task();
+        if self.chat_input.read(cx).can_send_to_task() != can_send_to_task {
+            self.chat_input.update(cx, |input, cx| {
+                input.set_can_send_to_task(can_send_to_task, cx)
+            });
+        }
         // The popover for text selected in an answer goes with the drawer.
         if !self.drawer_open() {
             self.selection_popover = None;
@@ -4432,6 +4568,33 @@ fn resolve_anchor(
     Ok(anchor)
 }
 
+/// The hidden anchor a message sent to a running task is compiled as: as
+/// [`resolve_anchor`] resolves a prompt's, but with no mode or system prompt,
+/// since the run already has the one it began with.
+fn message_anchor(
+    text: &str,
+    attached_text: Vec<String>,
+    sliced: bool,
+    lsp: Option<Arc<PitonSession>>,
+) -> Result<HiddenAnchor> {
+    let mut anchor = match lsp {
+        Some(lsp) => lsp.anchor_for(text)?,
+        None => HiddenAnchor::random(),
+    };
+    anchor.sliced = sliced;
+    anchor.attached_text = attached_text;
+    Ok(anchor)
+}
+
+/// What came of a message sent to the task running.
+enum ToTask {
+    Sent,
+    /// Its task was over before it could be sent.
+    Over,
+    /// It didn't compile, for this reason.
+    Failed(String),
+}
+
 /// The mode an anchor was sent in: as saved with it, or for one saved before
 /// modes were, as its system prompt tells.
 fn anchor_mode(anchor: &HiddenAnchor) -> Option<SendMode> {
@@ -4659,6 +4822,7 @@ fn latest_row(id: usize, reply: &Reply, cx: &App) -> AnyElement {
             .truncate()
             .child(first_line(error))
             .into_any_element(),
+        OutputRow::Sent(text) => task_table::sent_message(("ask-row-sent", id), text, cx),
         OutputRow::Text(_) | OutputRow::Pending => raw_line(),
     };
     let status = row_status(&row, cx)
@@ -4715,10 +4879,10 @@ mod tests {
 
     use super::{OutputRow, PromptMode, PromptTask, Reply, Session, TaskStatus};
     use crate::harness::HarnessEvent;
-    use crate::hidden_anchor::HiddenAnchor;
+    use crate::hidden_anchor::{self, HiddenAnchor};
     use crate::piton_syntax;
     use crate::project_directory::ProjectDirectory;
-    use crate::prompt_history::{RunRecord, SavedPrompt};
+    use crate::prompt_history::{self, RunRecord, SavedPrompt};
     use crate::prompt_queue;
     use crate::task_table::{RAW_LINE_CHARS, ReplyPart, ToolState};
 
@@ -5287,6 +5451,7 @@ mod tests {
                 OutputRow::Text(text) => format!("text {text}"),
                 OutputRow::Tool(call) => format!("{} {}", call.name, call.state.label()),
                 OutputRow::Error(error) => format!("error {error}"),
+                OutputRow::Sent(text) => format!("sent {text}"),
                 OutputRow::Pending => "pending".into(),
             })
             .collect();
@@ -5523,6 +5688,195 @@ mod tests {
         assert!(unrecorded.reply.done && unrecorded.compiled.is_none());
     }
 
+    /// A task sent more while it ran: a result that leaves a message sent
+    /// unanswered doesn't end it, and each message is a Sent row where it was
+    /// sent. Its record keeps each message, as typed and as compiled, among
+    /// the harness's lines, so the history brings the task back as the
+    /// exchange it was, in the state of its last result.
+    #[test]
+    fn a_task_sent_more_replays_as_the_exchange_it_was() {
+        let project_dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/fed-task-test");
+        std::fs::remove_dir_all(&project_dir).ok();
+        let message = "Also check b.\nThoroughly.";
+        let taken = |text: &str| {
+            HarnessEvent::Output(
+                serde_json::json!({ "type": "user", "isReplay": true, "parent_tool_use_id": null,
+                    "message": { "role": "user", "content": [{ "type": "text", "text": text }] } })
+                .to_string(),
+            )
+        };
+        let line = |line: &str| HarnessEvent::Output(line.into());
+        let run = [
+            taken("Check a."),
+            line(
+                r#"{"type":"stream_event","event":{"type":"content_block_start","content_block":{"type":"tool_use","id":"t1","name":"Read"}}}"#,
+            ),
+            HarnessEvent::Sent {
+                text: message.into(),
+                compiled: "Also check b, compiled.".into(),
+            },
+            line(
+                r#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1"}]}}"#,
+            ),
+            line(
+                r#"{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"a is fine."}}}"#,
+            ),
+            line(r#"{"type":"result","is_error":false,"result":"a is fine."}"#),
+            taken("Also check b, compiled."),
+            line(
+                r#"{"type":"stream_event","event":{"type":"content_block_start","content_block":{"type":"text","text":""}}}"#,
+            ),
+            line(
+                r#"{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"b is fine too."}}}"#,
+            ),
+            line(r#"{"type":"result","is_error":false,"result":"b is fine too."}"#),
+        ];
+        let mut record = RunRecord {
+            user_prompt: Some("Check a, compiled.".into()),
+            ..RunRecord::default()
+        };
+        for event in &run {
+            record.note(event);
+        }
+        let anchor = HiddenAnchor::random();
+        let file = hidden_anchor::save(&anchor, "Check a.", &project_dir).unwrap();
+        prompt_history::save_record(&file, &record).unwrap();
+
+        let saved = prompt_history::load(&project_dir).pop().unwrap();
+        assert_eq!(saved.record.as_ref(), Some(&record));
+        assert_eq!(
+            record.output[2],
+            serde_json::json!({ "sent": { "text": message, "compiled": "Also check b, compiled." } })
+        );
+
+        // Until the last result, the task runs on: the first is an answer.
+        let mut events = saved.record.as_ref().unwrap().events();
+        let answer = events
+            .iter()
+            .position(|event| matches!(event, HarnessEvent::Answered { .. }))
+            .unwrap();
+        events.truncate(answer + 1);
+        let mut live = PromptTask::new("Check a.".into());
+        live.set_compiled(super::Compiled::new("Prompt_0".into(), "Check a.".into()));
+        for event in events {
+            live.apply(event);
+        }
+        assert_eq!(live.status, TaskStatus::Running);
+        assert!(!live.reply.is_done());
+        assert_eq!(live.reply.rows().last(), Some(&OutputRow::Pending));
+
+        let task = PromptTask::restore(saved);
+        assert_eq!(task.status, TaskStatus::Done);
+        assert_eq!(
+            task.compiled.as_ref().unwrap().markdown,
+            "Check a, compiled.",
+            "the header shows the prompt the task was sent with"
+        );
+        assert!(matches!(
+            task.reply.rows().as_slice(),
+            [
+                OutputRow::Tool(call),
+                OutputRow::Sent(sent),
+                OutputRow::Text("a is fine."),
+                OutputRow::Text("b is fine too."),
+            ] if call.state == ToolState::Done && *sent == message
+        ));
+
+        // A task ends in the state of its last result.
+        let mut failed = RunRecord::default();
+        for event in [
+            HarnessEvent::Sent {
+                text: "More.".into(),
+                compiled: "More.".into(),
+            },
+            line(r#"{"type":"result","is_error":false,"result":"Done."}"#),
+            taken("More."),
+            line(r#"{"type":"result","is_error":true,"result":"overloaded"}"#),
+        ] {
+            failed.note(&event);
+        }
+        let failed = PromptTask::restore(SavedPrompt {
+            anchor: HiddenAnchor::random(),
+            text: "Do it".into(),
+            record: Some(failed),
+        });
+        assert_eq!(failed.status, TaskStatus::Failed);
+        std::fs::remove_dir_all(&project_dir).ok();
+    }
+
+    /// The chat input offers to send more to the latest task only while it
+    /// runs with a harness that can be fed, its output shown rather than the
+    /// previous tasks. What is sent goes to the run, in its place among what
+    /// the harness does; once the run takes no more, a message is queued as
+    /// a task instead.
+    #[gpui_kit::test]
+    async fn a_running_task_can_be_sent_more(cx: &mut TestAppContext) {
+        use futures::StreamExt as _;
+        let dir =
+            std::env::temp_dir().join(format!("suspense-send-to-task-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        let input = prompt_mode.read_with(cx, |this, _| this.chat_input.clone());
+        let offered = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                .unwrap();
+            input.read_with(cx, |input, _| input.can_send_to_task())
+        };
+        assert!(!offered(cx), "offered with no task running");
+
+        let (feed, mut events) = crate::harness::Feed::for_test();
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("Check a".into(), cx);
+            this.tasks[ix].status = TaskStatus::Running;
+            this.working = true;
+        });
+        assert!(!offered(cx), "offered for a harness that can't be fed");
+        prompt_mode.update(cx, |this, _| this.feed = Some(feed.clone()));
+        assert!(offered(cx));
+
+        // Not while the previous tasks are expanded over its output.
+        prompt_mode.update(cx, |this, _| this.task_history.expanded = true);
+        assert!(!offered(cx));
+        prompt_mode.update(cx, |this, _| this.task_history.expanded = false);
+        assert!(offered(cx));
+
+        feed.send("Also b.".into(), "Also b, compiled.".into())
+            .unwrap();
+        assert_eq!(
+            events.next().await,
+            Some(HarnessEvent::Sent {
+                text: "Also b.".into(),
+                compiled: "Also b, compiled.".into()
+            })
+        );
+
+        // The run takes no more: a message on its way is queued as a task.
+        feed.close();
+        assert!(feed.send("Late.".into(), "Late.".into()).is_err());
+        assert!(!offered(cx));
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send_to_task(
+                    "Also c.".into(),
+                    crate::chat_input::SendMode::Code,
+                    Vec::new(),
+                    window,
+                    cx,
+                )
+            })
+        })
+        .unwrap();
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.queue.len(), 1);
+            assert_eq!(this.queue[0].text.as_ref(), "Also c.");
+        });
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// Tasks carry on the latest conversation in the history, passing over
     /// runs that never reported one; a session is only resumed in its own
     /// project, and one the harness could not resume is forgotten.
@@ -5585,10 +5939,11 @@ mod tests {
     }
 
     /// The chat input shows how much context the selected tab's conversation
-    /// holds. New conversation leaves it: the next prompt starts a new
-    /// conversation, a run of the old one that is still going can't bring it
-    /// back, and neither can reopening the project. The Ask tab's
-    /// conversation is its own.
+    /// holds. New conversation leaves it, even while a task of it runs: the
+    /// next prompt starts a new conversation, a run of the old one that is
+    /// still going can't bring it back, and neither can reopening the
+    /// project, even when that run hadn't said which conversation it was yet.
+    /// The Ask tab's conversation is its own.
     #[gpui_kit::test]
     async fn new_conversation_leaves_the_conversation_and_its_context(cx: &mut TestAppContext) {
         let dir =
@@ -5606,21 +5961,29 @@ mod tests {
             input.read_with(cx, |input, _| input.context())
         };
         // A run of the tasks' conversation, as the harness reports it.
-        let run = |this: &mut PromptMode, epoch: u64, events: &[HarnessEvent]| {
+        let run = |this: &mut PromptMode,
+                   epoch: u64,
+                   events: &[HarnessEvent],
+                   cx: &mut gpui_kit::Context<PromptMode>| {
             let mut run = None;
             for event in events {
-                Session::follow(
+                if let Some(left) = Session::follow(
                     &mut this.session,
                     this.session_epoch == epoch,
                     &mut run,
                     event,
                     &dir,
-                );
+                ) {
+                    PromptMode::keep_left(dir.clone(), crate::conversations::Kind::Tasks, left, cx);
+                }
             }
+        };
+        let left = |dir: &std::path::Path| {
+            crate::conversations::left(dir, crate::conversations::Kind::Tasks)
         };
         assert_eq!(shown(cx), None, "a new project already holds context");
 
-        prompt_mode.update(cx, |this, _| {
+        prompt_mode.update(cx, |this, cx| {
             run(
                 this,
                 0,
@@ -5628,6 +5991,7 @@ mod tests {
                     HarnessEvent::Session("s1".into()),
                     HarnessEvent::Usage { context: 42_100 },
                 ],
+                cx,
             )
         });
         assert_eq!(shown(cx), Some(42_100));
@@ -5642,16 +6006,12 @@ mod tests {
         prompt_mode.update(cx, |this, _| this.on_ask_tab = false);
         assert_eq!(shown(cx), Some(42_100));
 
-        // While a task runs, its conversation can't be left.
+        // New conversation while a task of it runs: the next task starts
+        // afresh, with nothing to resume, and the conversation left is kept
+        // with the project.
         prompt_mode.update(cx, |this, _| this.working = true);
         shown(cx);
         assert!(input.read_with(cx, |input, _| input.conversation_running()));
-        prompt_mode.update(cx, |this, cx| this.new_conversation(cx));
-        assert_eq!(shown(cx), Some(42_100), "left while a task was running");
-        prompt_mode.update(cx, |this, _| this.working = false);
-
-        // New conversation: the next task starts afresh, with nothing to
-        // resume, and the conversation left is kept with the project.
         cx.update_window(handle, |_, window, cx| window.click("new-conversation", cx))
             .unwrap();
         cx.run_until_parked();
@@ -5659,17 +6019,14 @@ mod tests {
         prompt_mode.read_with(cx, |this, _| {
             assert_eq!(Session::resume(&this.session, &dir), None);
         });
-        assert_eq!(
-            crate::conversations::left(&dir, crate::conversations::Kind::Tasks).as_deref(),
-            Some("s1")
-        );
+        assert_eq!(left(&dir).as_deref(), Some("s1"));
         assert_eq!(
             crate::conversations::left(&dir, crate::conversations::Kind::Questions),
             None
         );
 
         // The old run, still going, reports on: it doesn't come back.
-        prompt_mode.update(cx, |this, _| {
+        prompt_mode.update(cx, |this, cx| {
             run(
                 this,
                 0,
@@ -5677,16 +6034,20 @@ mod tests {
                     HarnessEvent::Session("s1".into()),
                     HarnessEvent::Usage { context: 50_000 },
                 ],
+                cx,
             )
         });
+        cx.run_until_parked();
         assert_eq!(
             shown(cx),
             None,
             "a run of the old conversation brought it back"
         );
+        assert_eq!(left(&dir).as_deref(), Some("s1"));
+        prompt_mode.update(cx, |this, _| this.working = false);
 
         // A run started since is the new conversation.
-        prompt_mode.update(cx, |this, _| {
+        prompt_mode.update(cx, |this, cx| {
             let epoch = this.session_epoch;
             run(
                 this,
@@ -5695,9 +6056,70 @@ mod tests {
                     HarnessEvent::Session("s2".into()),
                     HarnessEvent::Usage { context: 900 },
                 ],
+                cx,
             )
         });
         assert_eq!(shown(cx), Some(900));
+
+        // Left with no run under way, there is nothing more to leave until
+        // one is.
+        prompt_mode.update(cx, |this, cx| this.new_conversation(cx));
+        cx.run_until_parked();
+        assert_eq!(shown(cx), None);
+        assert_eq!(left(&dir).as_deref(), Some("s2"));
+        let epoch = prompt_mode.read_with(cx, |this, _| this.session_epoch);
+        prompt_mode.update(cx, |this, cx| this.new_conversation(cx));
+        assert_eq!(
+            prompt_mode.read_with(cx, |this, _| this.session_epoch),
+            epoch,
+            "left a conversation with nothing to carry on and no run"
+        );
+
+        // The first task of a conversation runs, and New conversation is
+        // pressed before the harness says which conversation it is: once it
+        // does, that one is kept as left too, and isn't carried on.
+        prompt_mode.update(cx, |this, _| this.working = true);
+        shown(cx);
+        cx.update_window(handle, |_, window, cx| window.click("new-conversation", cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert_ne!(
+            prompt_mode.read_with(cx, |this, _| this.session_epoch),
+            epoch,
+            "couldn't leave the conversation of a task running"
+        );
+        prompt_mode.update(cx, |this, cx| {
+            run(
+                this,
+                epoch,
+                &[
+                    HarnessEvent::Session("s3".into()),
+                    HarnessEvent::Usage { context: 7_000 },
+                ],
+                cx,
+            )
+        });
+        cx.run_until_parked();
+        assert_eq!(shown(cx), None, "the run's new conversation was carried on");
+        assert_eq!(left(&dir).as_deref(), Some("s3"));
+        prompt_mode.update(cx, |this, _| this.working = false);
+
+        // The next task starts a conversation of its own, which is carried on.
+        prompt_mode.update(cx, |this, cx| {
+            let epoch = this.session_epoch;
+            run(
+                this,
+                epoch,
+                &[
+                    HarnessEvent::Session("s4".into()),
+                    HarnessEvent::Usage { context: 1_200 },
+                ],
+                cx,
+            )
+        });
+        cx.run_until_parked();
+        assert_eq!(shown(cx), Some(1_200));
+        assert_eq!(left(&dir).as_deref(), Some("s3"));
         std::fs::remove_dir_all(&dir).ok();
     }
 

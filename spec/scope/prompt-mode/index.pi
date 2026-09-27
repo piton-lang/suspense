@@ -53,7 +53,9 @@ shape PromptEditorShape:
         hidden anchor it was compiled from, and the compiled markdown the
         harness actually received, which scrolls once it gets tall. Until it
         has compiled, the prompt as typed is shown instead. At its right, a
-        Resend button sends it again, as the @{PromptSendingScope} says.
+        Resend button sends it again, as the @{PromptSendingScope} says. The
+        header shows the prompt the task was sent with, however much is sent to
+        it while it runs; what is sent is shown in its output.
 
         However long the compiled prompt, a prompt sent with its spec slices
         included, the header lays out only what is in view: the prompt is
@@ -141,7 +143,10 @@ shape PromptEditorShape:
         as the @{ProjectDataScope} says, and its record once its run is over.
         Opening the project, the first time in a launch, brings back every
         task in order, with its output
-        replayed from that record. A task with no record shows as
+        replayed from that record. The record keeps each message sent to the
+        task while it ran, as typed and as compiled, in its place among the
+        lines the harness printed, so the task comes back as the exchange it
+        was, each message a Sent row followed by what came of it. A task with no record shows as
         "Not recorded".
 
         Every question asked from the Ask tab is logged the same way, but among

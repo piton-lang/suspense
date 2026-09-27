@@ -5,12 +5,11 @@
 //! from what has changed, quickly, with a small model and no tools.
 
 use std::collections::HashMap;
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::time::Duration;
 
-use anyhow::{Context as _, Result, anyhow, bail};
+use anyhow::{Context as _, Result, bail};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Editor, EditorState, Input, InputEvent, InputState};
@@ -330,34 +329,7 @@ pub fn generate_message(dir: &Path) -> Result<String> {
         "{}\n\n{changes}",
         crate::baked_prompts::commit_message::REQUEST
     );
-    let mut child = Command::new("claude")
-        .args([
-            "-p",
-            "--model",
-            "haiku",
-            "--effort",
-            "low",
-            "--tools",
-            "",
-            "--no-session-persistence",
-        ])
-        .current_dir(dir)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("could not run claude")?;
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| anyhow!("claude has no stdin"))?;
-    let writer = std::thread::spawn(move || stdin.write_all(prompt.as_bytes()));
-    let output = child.wait_with_output()?;
-    writer.join().ok();
-    if !output.status.success() {
-        bail!("{}", String::from_utf8_lossy(&output.stderr).trim());
-    }
-    let message = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let message = crate::harness::ask_quickly(dir, &prompt)?;
     if message.is_empty() {
         bail!("the harness wrote no message");
     }
