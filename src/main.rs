@@ -30,6 +30,7 @@ mod growing_input;
 mod harness;
 mod harness_mentions;
 mod hidden_anchor;
+mod hit_areas;
 mod inset_panel;
 mod main_window;
 mod markdown;

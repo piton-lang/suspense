@@ -340,6 +340,7 @@ pub fn render(
         .child(
             v_resizable("referenced-spec-split")
                 .with_state(layout.split)
+                .with_handle_appearance(crate::hit_areas::resize_edges("referenced-spec-split"))
                 .child(panel().child(half(
                     "referenced-files",
                     crate::sidebar::header("Referenced spec", Some(files.len()), cx),

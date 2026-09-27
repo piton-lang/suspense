@@ -1190,6 +1190,8 @@ impl Render for MainWindow {
             .flex_col()
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
+            // Painted first: what overlapping hit areas are, afresh.
+            .child(crate::hit_areas::frame_start())
             .on_action(cx.listener(|this, _: &FocusChat, window, cx| {
                 // The context-less Esc binding outranks the palette's own, so
                 // the palette's Esc is handled here.
@@ -1292,6 +1294,7 @@ impl Render for MainWindow {
                     // `children` replaces panels added before it.
                     h_resizable("sidebar-split")
                         .with_state(&self.sidebar_split)
+                        .with_handle_appearance(crate::hit_areas::resize_edges("sidebar-split"))
                         .children([
                             resizable_panel()
                                 .size(SIDEBAR_WIDTH)

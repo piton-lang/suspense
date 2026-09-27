@@ -216,7 +216,7 @@ fn scrollbar(
     let scroll_by = |delta: Pixels| {
         let handle = handle.clone();
         let follow = follow.clone();
-        move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
+        let press: Press = Rc::new(move |window: &mut Window, cx: &mut App| {
             let offset = handle.offset();
             let max = handle.max_offset().y;
             let y = (offset.y + delta).min(px(0.)).max(-max);
@@ -225,7 +225,8 @@ fn scrollbar(
                 follow(window, cx);
             }
             window.refresh();
-        }
+        });
+        press
     };
 
     let track = canvas(
@@ -276,6 +277,8 @@ fn scrollbar(
                 let is_hovered = thumb.contains(&window.mouse_position());
                 hovered.set(is_hovered);
                 if grab.get().is_some() {
+                    // No edge beneath the pointer is offered while dragging.
+                    window.set_window_cursor_style(CursorStyle::Arrow);
                     window.paint_quad(fill(thumb, colors.pressed));
                 } else if is_hovered {
                     window.paint_quad(fill(thumb, colors.hover));
@@ -301,11 +304,36 @@ fn scrollbar(
                 window.on_mouse_event({
                     let (handle, grab, follow) = (handle.clone(), grab.clone(), follow.clone());
                     move |event: &MouseDownEvent, phase, window, cx| {
-                        if phase != DispatchPhase::Bubble || !bounds.contains(&event.position) {
+                        if !bounds.contains(&event.position) {
                             return;
                         }
                         let geometry = Geometry::of(&handle, bounds);
                         let y = event.position.y;
+                        // The thumb, or the track pressed off it, against any
+                        // resize edge over it there: the smaller takes the
+                        // press, taking it first when it is contested.
+                        let on_thumb = y >= geometry.thumb_top
+                            && y <= geometry.thumb_top + geometry.thumb_height;
+                        let target = if on_thumb {
+                            thumb_bounds(&geometry, bounds)
+                        } else {
+                            bounds
+                        };
+                        if !crate::hit_areas::wins_at(target, event.position, cx) {
+                            return;
+                        }
+                        let contested = crate::hit_areas::resize_at(event.position, cx);
+                        let turn = if contested {
+                            DispatchPhase::Capture
+                        } else {
+                            DispatchPhase::Bubble
+                        };
+                        if phase != turn {
+                            return;
+                        }
+                        if contested {
+                            cx.stop_propagation();
+                        }
                         // Grabbed where it was pressed; pressed off the thumb, the
                         // thumb first jumps to centre on the press.
                         let at = if y >= geometry.thumb_top
@@ -358,7 +386,11 @@ fn scrollbar(
                 format!("{id}-scroll-up"),
                 square("scroll-up", IconName::ChevronUp)
                     .tooltip("Scroll up")
-                    .on_click(scroll_by(STEP)),
+                    .on_click({
+                        let press = scroll_by(STEP);
+                        move |_, window, cx| press(window, cx)
+                    }),
+                scroll_by(STEP),
             )
             .into_any_element(),
             false,
@@ -375,12 +407,20 @@ fn scrollbar(
                 format!("{id}-scroll-down"),
                 square("scroll-down", IconName::ChevronDown)
                     .tooltip("Scroll down")
-                    .on_click(scroll_by(-STEP)),
+                    .on_click({
+                        let press = scroll_by(-STEP);
+                        move |_, window, cx| press(window, cx)
+                    }),
+                scroll_by(-STEP),
             )
             .into_any_element(),
             true,
         ))
         .when_some(lock, |column, (locked, set_lock)| {
+            let press: Press = {
+                let set_lock = set_lock.clone();
+                Rc::new(move |window, cx| set_lock(!locked, window, cx))
+            };
             let button = square("scroll-lock", IconName::ArrowDownToLine)
                 .selected(locked)
                 .tooltip(if locked {
@@ -395,6 +435,7 @@ fn scrollbar(
                     .relative()
                     .child(pulse(locked, cx))
                     .child(button)
+                    .child(over_edges(format!("{id}-scroll-lock-claim").into(), press))
                     .into_any_element(),
                 true,
             ))
@@ -406,7 +447,7 @@ fn scrollbar(
 /// `button`, with the theme's bevel while hovered, and its pressed bevel while
 /// pressed with the pointer still over it. The bevel takes no mouse: it
 /// watches the mouse before the button does.
-fn bevelled(id: String, button: impl IntoElement) -> impl IntoElement {
+fn bevelled(id: String, button: impl IntoElement, press: Press) -> impl IntoElement {
     use crate::theme::{Bevel, bevel_edges, palette};
     let key = SharedString::from(format!("{id}-bevel"));
     let overlay = canvas(
@@ -429,10 +470,10 @@ fn bevelled(id: String, button: impl IntoElement) -> impl IntoElement {
             }
             window.on_mouse_event({
                 let pressed = pressed.clone();
-                move |event: &MouseDownEvent, phase, window, _| {
+                move |event: &MouseDownEvent, phase, window, cx| {
                     if phase == DispatchPhase::Capture
                         && event.button == MouseButton::Left
-                        && bounds.contains(&event.position)
+                        && crate::hit_areas::wins_at(bounds, event.position, cx)
                     {
                         pressed.set(true);
                         window.refresh();
@@ -459,7 +500,64 @@ fn bevelled(id: String, button: impl IntoElement) -> impl IntoElement {
     .top_0()
     .left_0()
     .size_full();
-    div().relative().child(button).child(overlay)
+    div()
+        .relative()
+        .child(button)
+        .child(overlay)
+        .child(over_edges(format!("{id}-claim").into(), press))
+}
+
+/// What pressing a button in the column does.
+type Press = Rc<dyn Fn(&mut Window, &mut App)>;
+
+/// Lets the button it is laid over take a press, doing `press`, where a
+/// resize edge beside the list overlaps it and has the larger hit area, as
+/// the edge would otherwise take it: see [`crate::hit_areas`]. Over the
+/// button there, the cursor is an arrow rather than the edge's.
+fn over_edges(key: SharedString, press: Press) -> impl IntoElement {
+    canvas(
+        move |_, window, cx| {
+            // Whether a press on the button is under way.
+            window.use_keyed_state(key, cx, |_, _| Rc::new(Cell::new(false)))
+        },
+        move |bounds, claimed: Entity<Rc<Cell<bool>>>, window, cx| {
+            let claimed = claimed.read(cx).clone();
+            let contested = move |at: Point<Pixels>, cx: &App| {
+                crate::hit_areas::resize_at(at, cx) && crate::hit_areas::wins_at(bounds, at, cx)
+            };
+            if contested(window.mouse_position(), cx) {
+                window.set_window_cursor_style(CursorStyle::Arrow);
+            }
+            window.on_mouse_event({
+                let claimed = claimed.clone();
+                move |event: &MouseDownEvent, phase, window, cx| {
+                    if phase == DispatchPhase::Capture
+                        && event.button == MouseButton::Left
+                        && contested(event.position, cx)
+                    {
+                        claimed.set(true);
+                        cx.stop_propagation();
+                        window.refresh();
+                    }
+                }
+            });
+            window.on_mouse_event({
+                let press = press.clone();
+                move |event: &MouseUpEvent, phase, window, cx| {
+                    if phase == DispatchPhase::Capture && claimed.replace(false) {
+                        if bounds.contains(&event.position) {
+                            press(window, cx);
+                        }
+                        cx.stop_propagation();
+                    }
+                }
+            });
+        },
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
 }
 
 /// The glowing pulse that emanates from the lock button when the scroll
@@ -994,6 +1092,99 @@ mod tests {
         );
         cx.run_until_parked();
         assert_eq!(bevel(cx), (0, 0, false), "the bevel stayed");
+    }
+
+    /// A list whose scrollbar lies against the edge it is resized by.
+    struct SplitList {
+        scroll: ScrollHandle,
+        split: gpui_kit::Entity<gpui_kit::component::resizable::ResizableState>,
+    }
+
+    impl Render for SplitList {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            use gpui_kit::component::resizable::{h_resizable, resizable_panel};
+            let list = div()
+                .id("tall")
+                .size_full()
+                .overflow_y_scroll()
+                .track_scroll(&self.scroll)
+                .child(
+                    v_flex()
+                        .children((0..200).map(|ix| div().h(px(20.)).child(format!("row {ix}")))),
+                );
+            div()
+                .size_full()
+                .child(crate::hit_areas::frame_start())
+                .child(
+                    h_resizable("test-split")
+                        .with_state(&self.split)
+                        .with_handle_appearance(crate::hit_areas::resize_edges("test-split"))
+                        .children([
+                            resizable_panel().size(px(300.)).child(with_scrollbar(
+                                "tall",
+                                &self.scroll,
+                                list,
+                                true,
+                                None,
+                                cx,
+                            )),
+                            resizable_panel().child(div().size_full()),
+                        ]),
+                )
+        }
+    }
+
+    /// Where the edge a list is resized by overlaps its scrollbar, the smaller
+    /// hit area takes a press, and only it: the scrollbar's button over the
+    /// edge's strip, and the edge over the track. A scroll and a resize never
+    /// happen together.
+    #[gpui_kit::test]
+    async fn the_smaller_of_a_scrollbar_and_an_edge_takes_a_press(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let scroll = ScrollHandle::new();
+        let split = cx.new(|_| gpui_kit::component::resizable::ResizableState::default());
+        let window = cx.add_window({
+            let (scroll, split) = (scroll.clone(), split.clone());
+            |window, cx| {
+                let view = cx.new(|_| SplitList { scroll, split });
+                Root::new(view, window, cx)
+            }
+        });
+        let handle = window.into();
+        let width = |cx: &mut TestAppContext| split.read_with(cx, |state, _| state.sizes()[0]);
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.render_frame(cx);
+        })
+        .unwrap();
+        let before = width(cx);
+
+        // The down button, at the column's right edge, where the edge's strip
+        // lies over it: it scrolls, and nothing is resized.
+        cx.update_window(handle, |_, window, cx| {
+            let down = window.find("tall-scroll-down").bounds();
+            let at = point(down.size.width - px(2.), down.size.height / 2.);
+            window.click_at("tall-scroll-down", at, cx);
+            window.render_frame(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(scroll.offset().y < px(0.), "the down button didn't scroll");
+        assert_eq!(width(cx), before, "pressing the button resized the list");
+
+        // The track, taller than the edge's strip is wide, gives way to it:
+        // dragging there resizes, and scrolls nothing.
+        let scrolled = scroll.offset().y;
+        cx.update_window(handle, |_, window, cx| {
+            let track = window.find("tall-scroll-track").bounds();
+            let from = point(track.right() - px(2.), track.bottom() - px(20.));
+            window.drag(from, from + point(px(60.), px(0.)), cx);
+            window.render_frame(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(scroll.offset().y, scrolled, "resizing scrolled the list");
+        assert!(width(cx) > before, "dragging the edge didn't resize");
     }
 
     /// Dragging the thumb down the track scrolls the list with it, all the way

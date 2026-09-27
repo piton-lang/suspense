@@ -2583,6 +2583,7 @@ impl PromptMode {
             return host.child(
                 h_resizable("refs-split")
                     .with_state(&self.refs_split)
+                    .with_handle_appearance(crate::hit_areas::resize_edges("refs-split"))
                     .children([
                         resizable_panel()
                             .size_range(MIN_SPLIT_WIDTH..Pixels::MAX)
@@ -3398,6 +3399,9 @@ impl PromptMode {
             .flex()
             .items_center()
             .cursor_row_resize()
+            .on_prepaint(|bounds, _, cx| {
+                crate::hit_areas::register_resize("ask-drawer-resize".into(), bounds, cx)
+            })
             .child(
                 div()
                     .w_full()
@@ -4063,6 +4067,7 @@ impl Render for PromptMode {
                 body.child(
                     h_resizable("file-split")
                         .with_state(&self.file_split)
+                        .with_handle_appearance(crate::hit_areas::resize_edges("file-split"))
                         .children([
                             file_panel.child(measured(file.into_any_element())),
                             resizable_panel()

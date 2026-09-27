@@ -52,6 +52,20 @@ shape MainWindowShape:
         moves focus to the @{ChatInputScope}. Esc first closes whatever it would
         otherwise dismiss, such as a completion menu or a popup.
 
+    pointer:
+        Where the hit areas of two things that take a press overlap, such as
+        the edge a sidebar, split, or drawer is resized by and the scrollbar of
+        the list beside it, a press goes to the one with the smaller hit area,
+        and only to it: a scrollbar's button, or its thumb, takes a press over
+        the wider strip of a resize edge, while the edge takes one over the
+        scrollbar's track when the edge is the smaller. The cursor shows what a
+        press there would do.
+
+        A resize and a scroll are never under way at the same time. While an
+        edge is being dragged, the mouse wheel scrolls nothing, and while a
+        scrollbar's thumb is being dragged, no edge can be picked up, however
+        the pointer crosses one.
+
     quitting:
         The application quits with Ctrl+Q (Cmd+Q on macOS), Quit in the
         @{PaletteScope}, or the window's close button. Any of them asks first
