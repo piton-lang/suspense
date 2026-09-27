@@ -1,0 +1,176 @@
+use /lib
+use /ui
+from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
+from /scope/harness-integration/one-off-run import OneOffAgentRunScope
+from /scope/no-project import NoProjectStateScope
+from /scope/open-projects import OpenProjectsScope
+from /scope/project-data import ProjectDataScope
+from /scope/running-activity import RunningActivityScope
+from /ui/components/minimizable-panel import MinimizablePanelScope
+from /ui/components/scrollbar import ScrollbarScope
+from /ui/components/task-table import TaskTableScope
+from /ui/theme import ThemeScope
+
+export ui-component RunTargetsScope:
+    concept: {RunTargetsConcept}
+
+concept RunTargetsConcept:
+    pitch:
+        Makes the project runnable from the application, whatever kind of
+        project it is: the harness finds out once how the project is built,
+        run, and tested, that understanding is saved with the project, and
+        each way of running it becomes a button in the ribbon's Code tab.
+
+    shape: {RunTargetsShape}
+
+shape RunTargetsShape:
+    description:
+        A project's run targets are the ways it can be run, each a name and a
+        shell command, run in the project directory: for a Rust project,
+        "Run" as `cargo run`, "Build" as `cargo build`, and "Test" as
+        `cargo test`; for a C++ project built with CMake, "Run" as configuring
+        and building with `cmake`, then running the binary it built; and so
+        on for whatever the project is.
+
+    kinds:
+        Each target is of a kind, which picks its icon:
+        - run, which runs the project, with a play icon
+        - build, which only builds it, with a hammer icon
+        - test, which runs its tests, with a flask icon
+        - other, anything else, with a terminal icon
+
+        A run target can also be marked release: it runs the project from an
+        optimized release build, such as `cargo run --release`, rather than
+        the build it is developed with. At most one target is marked release.
+
+    finding:
+        overview:
+            Nothing about a project's targets is guessed by the application
+            itself. Finding them is agentic: a @{OneOffAgentRunScope}, whose
+            prompt is run-targets.pi, of the @{BakedSystemPromptsScope}, looks
+            through the project, its build files, manifests, and readme, and
+            replies with its targets, the way to run the project first. Its
+            command runs the project from scratch, building first when it has
+            to, so it works on a fresh clone.
+
+        saving:
+            Once found, the targets are saved with the project's data, as the
+            @{ProjectDataScope} says, in run.json, and read from there from then
+            on, every time the project is opened: they aren't found again
+            unless asked. run.json is kept with the project, so everyone
+            working on it has the same buttons, and can be edited by hand; one
+            that can't be read counts as no targets found.
+
+        reply:
+            The harness replies with JSON listing each target's name, command,
+            and kind, and whether it is the release run. Where the project has
+            a release build, it adds a release run target, named "Run Release"
+            or the like, after the way to run it. A target with no name or no
+            command is left out, as is a kind that isn't one of the four, which
+            counts as other. Past the first target marked release, none is. A
+            reply with no targets at all fails, saving nothing.
+
+    panel:
+        overview:
+            Finding and running are shown in one @{MinimizablePanelScope},
+            titled "Run", which holds one thing at a time: finding the targets,
+            or running one of them.
+
+        whileFinding:
+            While finding, the panel shows a step, "Looking at the project",
+            with a spinner while it runs, a tick once done, or a cross and why
+            if it failed, and beneath it the run's output in its
+            @{TaskTableScope}. Once found, in its place, the targets found, one
+            row each: its icon, its name, and its command, muted, in the
+            editor's monospace font, beneath a line saying they were saved to
+            .suspense/run.json and that the Code tab has a button for each. A
+            failure keeps whatever targets were saved before. "Find again", in
+            the header, looks afresh once it is over.
+
+        whileRunning:
+            Running a target, the header gives its icon and name, and how it is
+            going: a spinner and "Running", "Exited with 0" in the theme's
+            success colour, "Exited with N" in its error colour, or "Stopped".
+            Beneath it, its command, muted, in the monospace font, and then
+            what it prints, its output and its errors together, in the order
+            they come, a line each, in the monospace font on the theme's well
+            surface, errors not told apart. The output is clean, as a terminal
+            would show it, as the @{RunTargetsShape.consoleOutput} says. It scrolls with a
+            @{ScrollbarScope} whose lock to the bottom starts on, following the
+            latest output. A "Stop" button in the header stops it, and every
+            process it started with it, while it runs; once it is over, a
+            "Run again" button runs it afresh in its place.
+
+        oneAtATime:
+            One target runs at a time. Pressing the button of the target
+            running brings back its panel. Pressing another's stops the one
+            running and runs the other in its place. Finding the targets while
+            one runs stops it.
+
+        minimizing:
+            Its minimize button's tooltip says the target keeps running, or
+            that the search keeps going. While it runs, it is listed among the
+            @{RunningActivityScope}, as "Running" then the target's name, or
+            "Finding how to run". Closing the panel stops whatever it holds.
+
+        switchingProjects:
+            The panel belongs to its project, as the @{OpenProjectsScope}
+            says: switching to another project minimizes it, what it holds
+            carrying on in the background, and switching back brings it back
+            minimized, just as it was left, the Code tab showing that
+            project's targets and which of them runs. Each open project can
+            run one target of its own at a time. Quitting doesn't ask, and
+            stops every target running.
+
+    consoleOutput:
+        What a target prints is shown as a terminal would show it, never as
+        the bytes it wrote. Its terminal escape sequences, those that colour
+        text, move the cursor, clear the line, or set the window's title or a
+        link, never show as text; neither do other control characters, nor
+        bytes that aren't text. A line written over with a carriage return, as
+        a progress bar is, shows as it was last written, a backspace takes
+        back the character before it, and a tab lines up with the next tab
+        stop, four columns along.
+
+        It is highlighted as it would be in a terminal. Since its output isn't
+        one, the command is asked for colour all the same, as the usual
+        variables ask it, such as `CLICOLOR_FORCE`, `FORCE_COLOR`, and
+        `CARGO_TERM_COLOR`, and the colours and emphasis it writes show: bold,
+        dim, italic, and underline as themselves, and each colour as the
+        @{ThemeScope}'s colour of its hue, never the terminal's own, so it is
+        readable in both light and dark mode: red as the error colour, green as
+        the success colour, yellow as the warning colour, blue as the accent,
+        magenta as purple, cyan as cyan, black and white, and greys, as
+        tertiary and primary text. A background colour is left out. A line
+        written without colour that begins with `error`, `warning`, `note`, or
+        `help`, followed by a colon or a bracket, has that word in the error,
+        warning, or accent colour, as a compiler would colour it. A line is
+        read once, as it arrives, never again as it is drawn.
+
+    ribbon:
+        In the ribbon's Code tab, a "Run" group. Until the project has targets,
+        it holds a single full button, "Find How to Run", with a search icon,
+        whose tooltip says the harness will look through the project to find
+        how it is built, run, and tested. Once it has targets, the group holds
+        a button for each, in the order saved, with its kind's icon and its
+        name, whose tooltip gives its command: the first a full button, and
+        primary, the rest slim. The button of the target running shows a
+        spinner in place of its icon. Last, a slim "Find Again" button, with a
+        refresh icon, looks afresh. Without a project, as the
+        @{NoProjectStateScope} says, the group holds only Find How to Run,
+        disabled, its tooltip saying to open a project to run it.
+
+    shortcut:
+        <Ctrl+F5> (<Cmd+F5> on macOS), anywhere in the window, runs the
+        project's first target, its primary one, just as pressing its button
+        does: while it already runs, it brings back its panel. Until the
+        project has targets, it finds how to run it, as Find How to Run does.
+        The tooltip of whichever of the two buttons it presses gives it. It
+        does nothing without a project, or while an inset panel other than the
+        Run panel is open.
+
+        <Ctrl+Shift+F5> (<Cmd+Shift+F5> on macOS) runs the target marked
+        release in the same way, and its button's tooltip gives it. Where the
+        project has no release target, such as when it has no release build,
+        or its targets were found before release ones were, it does nothing.
+        It is otherwise as <Ctrl+F5>.

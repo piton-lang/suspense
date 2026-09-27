@@ -4,6 +4,7 @@ from /scope/open-projects import OpenProjectsScope
 from /scope/prompt-mode import PromptEditor
 from /scope/prompt-mode/chat-input import ChatInputScope
 from /scope/rescope import RescopeScope
+from /scope/run-targets import RunTargetsScope
 from /scope/spec-build import SpecBuildScope
 from /ui/components/minimizable-panel import MinimizablePanelScope
 
@@ -28,11 +29,12 @@ shape RunningActivityShape:
         - a spec build run on its own, as the @{SpecBuildScope} says, "Building the spec"
         - a divergence analysis in the @{DivergenceScope}, "Analyzing divergence"
         - a search for concepts to rescope in the @{RescopeScope}, "Finding scopes to extract"
+        - a run target of the @{RunTargetsScope} running, "Running" then its name, or its targets being found, "Finding how to run"
 
         Prompts waiting in the queue don't count as running, since they are
         saved with the project, and neither does a panel whose work is over.
 
-        Tasks, questions, and spec builds count in every open project of the
+        Everything running counts in every open project of the
         @{OpenProjectsScope}, not only the one on screen. Those of the project
         on screen come first, then each other project's, its rows headed with
         that project's folder name after the kind, such as
@@ -51,7 +53,7 @@ shape RunningActivityShape:
         its project when it belongs to another:
         - a task brings back the latest task's output, closing the previous tasks and any inset panel over it, and scrolls it to the end
         - a question closes the answer drawer and any inset panel, so its row is in view
-        - a divergence analysis or a rescope search brings its @{MinimizablePanelScope} back
+        - a divergence analysis, a rescope search, or a run target brings its @{MinimizablePanelScope} back
         - a spec build has nothing to show, so its row only closes the list
 
         Pressing the mouse outside the list, or <Escape>, closes it too, as
@@ -61,8 +63,8 @@ shape RunningActivityShape:
         Quitting, however it is asked for, while the harness is working on a
         task or a question, or while a spec build runs on its own, in any open
         project, asks first.
-        A divergence analysis or a rescope search doesn't ask, and quitting
-        stops it. The message is titled "Quit while a task is running?" and
+        A divergence analysis, a rescope search, or a run target doesn't ask,
+        and quitting stops it. The message is titled "Quit while a task is running?" and
         says what is still running: the harness working on a prompt, piton
         build, or both, and, when it runs in more than one project, in how many
         projects. "Quit" exits, and "Keep Running" or <Escape> dismisses

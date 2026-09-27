@@ -1,0 +1,32 @@
+// The prompt for finding how a project is built, run, and tested, so each
+// way becomes a button. <projectDir> is filled in with the project's folder.
+
+export anchor RunTargets:
+    intro:
+        We want to be able to run the project in <projectDir> with a button,
+        whatever kind of project it is. Only read files, and don't change
+        anything, and don't run anything.
+
+    task:
+        Look through the project to find how it is built, run, and tested:
+        its build files and manifests, such as Cargo.toml, package.json,
+        CMakeLists.txt, Makefile, pyproject.toml, go.mod, or build.gradle, its
+        scripts, and its readme. Work out a shell command for each way worth a
+        button, run from the project's folder. The first is the way to run
+        the project itself, from scratch: on a fresh clone it has to work, so
+        it builds first when the project must be built, as with cmake
+        configuring and building, then running the binary it built. Then add
+        building on its own, and running the tests, when the project has them,
+        and anything else a developer here would run often, such as a dev
+        server, a linter, or formatting. Give each a short name, such as Run,
+        Build, or Test, and its kind: run, build, test, or other. Where the
+        project has a release build, as a Rust project's cargo run --release
+        or a CMake project configured for Release, add one more run target,
+        right after the way to run the project, that runs it from a release
+        build, named Run Release, and mark it as the release. Prefer the
+        project's own scripts and tools to invented ones, and keep to at most
+        eight.
+
+    replyFormat:
+        Reply with nothing but JSON, in this form:
+        \ {"targets": [{"name": "Run", "command": "cargo run", "kind": "run"}, {"name": "Run Release", "command": "cargo run --release", "kind": "run", "release": true}]} \

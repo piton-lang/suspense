@@ -815,13 +815,6 @@ impl TaskTable {
         }
     }
 
-    /// Forgets what it was drawn for, so it's drawn afresh, scrolled to the
-    /// top.
-    pub(crate) fn forget(&self) {
-        self.list.reset(0);
-        *self.sync.borrow_mut() = TableSync::default();
-    }
-
     #[cfg(test)]
     pub(crate) fn list(&self) -> &MeasuredList {
         &self.list
@@ -1035,6 +1028,38 @@ fn steps_row(table: usize, count: usize, steps: &Steps, cx: &App) -> AnyElement 
                 .child(gpui_kit::TestSupportExt::test_support(toggle_row)),
         )
         .into_any_element()
+}
+
+/// The row beneath a sliced prompt that shows or hides its `count` spec
+/// slices, as a table's collapsed rows are shown or hidden.
+pub(crate) fn slices_row(
+    id: impl Into<ElementId>,
+    open: bool,
+    count: usize,
+    toggle: impl Fn(&mut Window, &mut App) + 'static,
+    cx: &App,
+) -> AnyElement {
+    let label = match (open, count) {
+        (false, 1) => "Show 1 spec slice".to_string(),
+        (false, count) => format!("Show {count} spec slices"),
+        (true, 1) => "Hide 1 spec slice".to_string(),
+        (true, count) => format!("Hide {count} spec slices"),
+    };
+    let row = h_flex()
+        .id(id)
+        .gap_1p5()
+        .py_1()
+        .cursor_pointer()
+        .text_color(cx.theme().muted_foreground)
+        .child(Icon::new(if open {
+            IconName::ChevronDown
+        } else {
+            IconName::ChevronRight
+        }))
+        .child(label)
+        .on_click(move |_, window, cx| toggle(window, cx));
+    // Lets UI tests find the row; inert in normal builds.
+    gpui_kit::TestSupportExt::test_support(row).into_any_element()
 }
 
 /// Markdown whose headings are sized from the window's base font size; left

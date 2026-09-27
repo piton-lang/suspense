@@ -24,7 +24,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::checkbox::checkbox;
-use crate::main_window::FocusChat;
+use crate::main_window::Dismiss;
 use crate::scrollbar;
 
 actions!(
@@ -804,7 +804,7 @@ impl Render for FsBrowser {
             }))
             // The window's Esc, which outranks any other, closes the new
             // folder row first.
-            .on_action(cx.listener(|this, _: &FocusChat, window, cx| this.escape(window, cx)))
+            .on_action(cx.listener(|this, _: &Dismiss, window, cx| this.escape(window, cx)))
             // The name field's own Escape, passed up once it has nothing to
             // cancel itself.
             .on_action(cx.listener(|this, _: &Escape, window, cx| this.escape(window, cx)))

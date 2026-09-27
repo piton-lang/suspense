@@ -2,6 +2,7 @@
 //! reached: a ribbon on top, and below it the project tree in a sidebar on the
 //! left, then prompt mode. A file's diff floats over all of it.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use gpui_kit::component::button::ButtonVariant;
@@ -31,7 +32,10 @@ use crate::project_directory::ProjectDirectory;
 use crate::project_tree::{EntryMoved, OpenDiff, OpenFile, ProjectTree};
 use crate::prompt_mode::PromptMode;
 use crate::rescope_view::{CloseRescope, MinimizeRescope, RefactorConcepts, Rescope, RescopeView};
+use crate::ribbon::RunCommand;
 use crate::ribbon::{self, Ribbon};
+use crate::run_targets::{self, ProjectTargets};
+use crate::run_view::{CloseRun, MinimizeRun, RunView, TargetsFound};
 use crate::settings_window::{CloseSettings, OpenSettings, SettingsWindow};
 use crate::spec_component_form::{
     CloseSpecComponent, ComponentCreated, RunComponentSkill, SpecComponentForm,
@@ -49,15 +53,18 @@ const MIN_SPLIT_WIDTH: Pixels = px(240.);
 const SIDEBAR_WIDTH: Pixels = px(260.);
 const MIN_SIDEBAR_WIDTH: Pixels = px(160.);
 
-actions!(suspense, [FocusChat, TogglePalette]);
+actions!(suspense, [Dismiss, FocusChat, TogglePalette]);
 
-/// Esc anywhere in the window moves focus to the chat input. It is bound
-/// without a context, so an editor or popup that has something to cancel
-/// (a completion menu, extra cursors) takes Esc first. Ctrl/Cmd+P opens or
-/// closes the palette.
+/// Esc closes what the window has open to dismiss, and otherwise goes on to
+/// wherever the keyboard is. Ctrl/Cmd+Enter moves focus to the chat input
+/// while it doesn't have it, and otherwise goes on to whatever it means
+/// there. Both are bound without a context, so they match ahead of any other
+/// binding and pass on what they don't take. Ctrl/Cmd+P opens or closes the
+/// palette.
 pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
-        KeyBinding::new("escape", FocusChat, None),
+        KeyBinding::new("escape", Dismiss, None),
+        KeyBinding::new("secondary-enter", FocusChat, None),
         #[cfg(target_os = "macos")]
         KeyBinding::new("cmd-p", TogglePalette, None),
         #[cfg(not(target_os = "macos"))]
@@ -102,6 +109,11 @@ pub struct MainWindow {
     rescope: Option<Entity<RescopeView>>,
     rescope_minimized: bool,
     _rescope_subscriptions: Vec<Subscription>,
+    /// The Run panel, finding how the project runs or running one of its
+    /// targets, which can be minimized while it goes on.
+    run: Option<Entity<RunView>>,
+    run_minimized: bool,
+    _run_subscriptions: Vec<Subscription>,
     /// Tracks the inset panel, which keeps focus within it while open.
     panel_focus: FocusHandle,
     /// What was last focused within the panel, to go back to when something
@@ -110,9 +122,27 @@ pub struct MainWindow {
     _panel_subscriptions: Vec<Subscription>,
     /// The project last on screen, to tell a switch from setting it again.
     shown_project: Option<PathBuf>,
+    /// The minimizable panels of each project switched away from, their work
+    /// carrying on, for when it's back.
+    parked: HashMap<PathBuf, ParkedPanels>,
     /// What the inset panel shows, to know when it comes in and goes away.
     panel_motion: Leaving<AnyView>,
     _subscriptions: Vec<Subscription>,
+}
+
+/// A project's minimizable panels while another project is on screen.
+#[derive(Default)]
+struct ParkedPanels {
+    divergence: Option<Entity<DivergenceView>>,
+    rescope: Option<Entity<RescopeView>>,
+    run: Option<Entity<RunView>>,
+    subscriptions: [Vec<Subscription>; 3],
+}
+
+impl ParkedPanels {
+    fn is_empty(&self) -> bool {
+        self.divergence.is_none() && self.rescope.is_none() && self.run.is_none()
+    }
 }
 
 impl MainWindow {
@@ -127,6 +157,9 @@ impl MainWindow {
                 title: Some(APP_TITLE.into()),
                 ..Default::default()
             }),
+            // Matches the desktop entry `cargo xtask install` makes, so the
+            // window gets its icon and is grouped with it.
+            app_id: Some("com.piton-lang.suspense".into()),
             ..Default::default()
         };
 
@@ -159,6 +192,11 @@ impl MainWindow {
                 |this, _, RevealJob(kind, project), window, cx| {
                     this.reveal_job(*kind, project.clone(), window, cx)
                 },
+            ),
+            cx.subscribe_in(
+                &ribbon,
+                window,
+                |this, _, command: &RunCommand, window, cx| this.run_command(*command, window, cx),
             ),
             // Switching projects closes what belongs to the screen.
             cx.observe_global_in::<ProjectDirectory>(window, |this, window, cx| {
@@ -225,6 +263,16 @@ impl MainWindow {
             }
             close
         });
+        // The run targets of the project open at launch, for the Code tab.
+        ProjectTargets::set(
+            ProjectTargets {
+                targets: ProjectDirectory::get(cx)
+                    .map(|dir| run_targets::load(&dir))
+                    .unwrap_or_default(),
+                running: None,
+            },
+            cx,
+        );
 
         Self {
             ribbon,
@@ -247,6 +295,10 @@ impl MainWindow {
             rescope: None,
             rescope_minimized: false,
             _rescope_subscriptions: Vec::new(),
+            run: None,
+            run_minimized: false,
+            _run_subscriptions: Vec::new(),
+            parked: HashMap::new(),
             panel_focus,
             panel_last_focus: None,
             _panel_subscriptions: Vec::new(),
@@ -295,6 +347,7 @@ impl MainWindow {
         self.project_picker = None;
         self.divergence_minimized = self.divergence.is_some();
         self.rescope_minimized = self.rescope.is_some();
+        self.run_minimized = self.run.is_some();
     }
 
     /// Opens the Generate Skills panel for the open project, ranking its
@@ -358,6 +411,7 @@ impl MainWindow {
         self.project_picker = None;
         self.divergence_minimized = self.divergence.is_some();
         self.rescope_minimized = self.rescope.is_some();
+        self.run_minimized = self.run.is_some();
         self._panel_subscriptions = vec![
             cx.subscribe_in(&diff, window, |this, _, _: &CloseDiff, window, cx| {
                 this.close_panel(window, cx)
@@ -440,6 +494,7 @@ impl MainWindow {
         self._panel_subscriptions.clear();
         self.divergence_minimized = false;
         self.rescope_minimized = self.rescope.is_some();
+        self.run_minimized = self.run.is_some();
         view.read(cx).focus_handle(cx).focus(window, cx);
         self.refresh_jobs(cx);
         cx.notify();
@@ -539,6 +594,7 @@ impl MainWindow {
         self._panel_subscriptions.clear();
         self.divergence_minimized = self.divergence.is_some();
         self.rescope_minimized = false;
+        self.run_minimized = self.run.is_some();
         view.read(cx).focus_handle(cx).focus(window, cx);
         self.refresh_jobs(cx);
         cx.notify();
@@ -587,6 +643,162 @@ impl MainWindow {
         self.divergence.is_some() && !self.divergence_minimized
     }
 
+    /// Handles the Code tab's run commands: finding how the project runs, or
+    /// running one of its targets. The target running already only comes
+    /// back into view.
+    fn run_command(&mut self, command: RunCommand, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(project_dir) = ProjectDirectory::get(cx) else {
+            return;
+        };
+        match command {
+            RunCommand::Find => match self.run.clone() {
+                Some(view) => {
+                    view.update(cx, |view, cx| view.find(cx));
+                    self.restore_run(&view, window, cx);
+                }
+                None => {
+                    let view = cx.new(|cx| RunView::finding(project_dir, cx));
+                    self.show_run(view, window, cx);
+                }
+            },
+            RunCommand::Target(ix) => {
+                let Some(target) = ProjectTargets::get(cx).targets.get(ix).cloned() else {
+                    return;
+                };
+                match self.run.clone() {
+                    Some(view) => {
+                        if view.read(cx).running_target() != Some(ix) {
+                            view.update(cx, |view, cx| view.run(ix, target, cx));
+                        }
+                        self.restore_run(&view, window, cx);
+                    }
+                    None => {
+                        let view = cx.new(|cx| RunView::running(project_dir, ix, target, cx));
+                        self.show_run(view, window, cx);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Runs the project's first run target, its primary one, or finds how to
+    /// run the project while it has none.
+    fn run_primary(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let command = if ProjectTargets::get(cx).targets.is_empty() {
+            RunCommand::Find
+        } else {
+            RunCommand::Target(0)
+        };
+        self.run_command(command, window, cx);
+    }
+
+    /// Shows `view` in the panel, in place of anything else there.
+    pub fn show_run(&mut self, view: Entity<RunView>, window: &mut Window, cx: &mut Context<Self>) {
+        self._run_subscriptions = vec![
+            cx.subscribe_in(&view, window, |this, _, _: &CloseRun, window, cx| {
+                this.close_run(window, cx)
+            }),
+            cx.subscribe_in(&view, window, |this, _, _: &MinimizeRun, window, cx| {
+                this.minimize_run(window, cx)
+            }),
+            // Once found and saved, the Code tab has a button for each.
+            cx.subscribe(&view, |this, view, TargetsFound(targets), cx| {
+                // A project switched away from reads them when it's back.
+                if ProjectDirectory::get(cx).as_deref() != Some(view.read(cx).project_dir()) {
+                    return;
+                }
+                let targets = targets.clone();
+                ProjectTargets::set(
+                    ProjectTargets {
+                        targets,
+                        running: None,
+                    },
+                    cx,
+                );
+                this.refresh_running_target(cx);
+            }),
+            cx.observe(&view, |this, _, cx| {
+                this.refresh_running_target(cx);
+                this.refresh_jobs(cx);
+            }),
+        ];
+        self.run = Some(view.clone());
+        self.restore_run(&view, window, cx);
+    }
+
+    /// Shows the Run panel, in place of anything else in the panel.
+    fn restore_run(&mut self, view: &Entity<RunView>, window: &mut Window, cx: &mut Context<Self>) {
+        self.diff = None;
+        self.new_project = None;
+        self.spec_component = None;
+        self.new_instruction = None;
+        self.settings = None;
+        self.generate_skills = None;
+        self.project_picker = None;
+        self._panel_subscriptions.clear();
+        self.divergence_minimized = self.divergence.is_some();
+        self.rescope_minimized = self.rescope.is_some();
+        self.run_minimized = false;
+        view.read(cx).focus_handle(cx).focus(window, cx);
+        self.refresh_running_target(cx);
+        self.refresh_jobs(cx);
+        cx.notify();
+    }
+
+    /// Hides the Run panel, what it holds carrying on.
+    fn minimize_run(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.run_minimized = true;
+        self.panel_last_focus = None;
+        self.prompt_mode
+            .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx));
+        cx.notify();
+    }
+
+    /// Closes the Run panel, stopping whatever it holds.
+    fn close_run(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let showing = self.showing_run();
+        self.run = None;
+        self.run_minimized = false;
+        self._run_subscriptions.clear();
+        self.refresh_running_target(cx);
+        self.refresh_jobs(cx);
+        if showing {
+            self.panel_last_focus = None;
+            self.prompt_mode
+                .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx));
+        }
+        cx.notify();
+    }
+
+    /// Whether the Run panel is showing, rather than minimized.
+    fn showing_run(&self) -> bool {
+        self.run.is_some() && !self.run_minimized
+    }
+
+    /// Tells the ribbon which target runs, if any.
+    fn refresh_running_target(&self, cx: &mut Context<Self>) {
+        let mut targets = ProjectTargets::get(cx);
+        targets.running = self
+            .run
+            .as_ref()
+            .and_then(|view| view.read(cx).running_target());
+        ProjectTargets::set(targets, cx);
+    }
+
+    /// The open project's run targets, read afresh from its data.
+    fn load_run_targets(&self, cx: &mut Context<Self>) {
+        let targets = ProjectDirectory::get(cx)
+            .map(|dir| run_targets::load(&dir))
+            .unwrap_or_default();
+        ProjectTargets::set(
+            ProjectTargets {
+                targets,
+                running: None,
+            },
+            cx,
+        );
+    }
+
     /// Switched to another project: a divergence analysis or a rescope
     /// search stops, and any inset panel closes, since they belong to the
     /// screen rather than a project; what runs in the project left carries on.
@@ -595,13 +807,45 @@ impl MainWindow {
         if project == self.shown_project {
             return;
         }
-        self.shown_project = project;
-        if self.divergence.is_some() {
-            self.close_divergence(window, cx);
+        let left = std::mem::replace(&mut self.shown_project, project.clone());
+        // The project left keeps its minimizable panels, minimized, their
+        // work carrying on; the one switched to gets back its own.
+        let parked = ParkedPanels {
+            divergence: self.divergence.take(),
+            rescope: self.rescope.take(),
+            run: self.run.take(),
+            subscriptions: [
+                std::mem::take(&mut self._divergence_subscriptions),
+                std::mem::take(&mut self._rescope_subscriptions),
+                std::mem::take(&mut self._run_subscriptions),
+            ],
+        };
+        if let Some(left) = left
+            && !parked.is_empty()
+        {
+            self.parked.insert(left, parked);
         }
-        if self.rescope.is_some() {
-            self.close_rescope(window, cx);
-        }
+        let back = project
+            .as_ref()
+            .and_then(|project| self.parked.remove(project))
+            .unwrap_or_default();
+        let [
+            divergence_subscriptions,
+            rescope_subscriptions,
+            run_subscriptions,
+        ] = back.subscriptions;
+        self.divergence_minimized = back.divergence.is_some();
+        self.divergence = back.divergence;
+        self._divergence_subscriptions = divergence_subscriptions;
+        self.rescope_minimized = back.rescope.is_some();
+        self.rescope = back.rescope;
+        self._rescope_subscriptions = rescope_subscriptions;
+        self.run_minimized = back.run.is_some();
+        self.run = back.run;
+        self._run_subscriptions = run_subscriptions;
+        self.panel_last_focus = None;
+        self.load_run_targets(cx);
+        self.refresh_running_target(cx);
         self.close_panel(window, cx);
         // A queued prompt of the project left is no longer edited.
         self.prompt_mode.update(cx, |prompt_mode, cx| {
@@ -684,9 +928,51 @@ impl MainWindow {
                 project: None,
             });
         }
+        if let Some(title) = self.run.as_ref().and_then(|view| view.read(cx).job_title()) {
+            jobs.push(Job {
+                kind: JobKind::Run,
+                title,
+                detail: None,
+                project: None,
+            });
+        }
+        // The work of the panels of projects switched away from.
+        let mut parked_jobs = Vec::new();
+        for (dir, parked) in &self.parked {
+            let mut push = |kind, title: &str| {
+                parked_jobs.push(Job {
+                    kind,
+                    title: crate::activity::title_in(title, Some(dir)),
+                    detail: None,
+                    project: Some(dir.to_path_buf()),
+                })
+            };
+            if parked
+                .divergence
+                .as_ref()
+                .is_some_and(|view| view.read(cx).is_running())
+            {
+                push(JobKind::Divergence, "Analyzing divergence");
+            }
+            if parked
+                .rescope
+                .as_ref()
+                .is_some_and(|view| view.read(cx).is_running())
+            {
+                push(JobKind::Rescope, "Finding scopes to extract");
+            }
+            if let Some(title) = parked
+                .run
+                .as_ref()
+                .and_then(|view| view.read(cx).job_title())
+            {
+                push(JobKind::Run, title.as_ref());
+            }
+        }
         // Then each other project's, in the order the projects are listed.
         let mut others: Vec<PathBuf> = running
             .iter()
+            .chain(&parked_jobs)
             .filter_map(|job| job.project.clone())
             .chain(
                 building
@@ -712,6 +998,12 @@ impl MainWindow {
                     project: Some(project.clone()),
                 });
             }
+            jobs.extend(
+                parked_jobs
+                    .iter()
+                    .filter(|job| job.project.as_ref() == Some(&project))
+                    .cloned(),
+            );
         }
         self.ribbon.update(cx, |ribbon, cx| {
             ribbon.set_jobs(jobs, cx);
@@ -750,11 +1042,18 @@ impl MainWindow {
                     self.restore_rescope(&view, window, cx);
                 }
             }
+            JobKind::Run => {
+                if let Some(view) = self.run.clone() {
+                    self.restore_run(&view, window, cx);
+                }
+            }
             JobKind::Task | JobKind::Question(_) => {
                 if self.showing_divergence() {
                     self.minimize_divergence(window, cx);
                 } else if self.showing_rescope() {
                     self.minimize_rescope(window, cx);
+                } else if self.showing_run() {
+                    self.minimize_run(window, cx);
                 } else if self.panel_open() {
                     self.close_panel(window, cx);
                 }
@@ -776,6 +1075,7 @@ impl MainWindow {
         self.project_picker = None;
         self.divergence_minimized = self.divergence.is_some();
         self.rescope_minimized = self.rescope.is_some();
+        self.run_minimized = self.run.is_some();
         self._panel_subscriptions = vec![
             cx.subscribe_in(&form, window, |this, _, _: &CloseNewProject, window, cx| {
                 this.close_panel(window, cx)
@@ -936,6 +1236,8 @@ impl MainWindow {
             view.read(cx).focus_handle(cx)
         } else if let Some(view) = self.rescope.as_ref().filter(|_| !self.rescope_minimized) {
             view.read(cx).focus_handle(cx)
+        } else if let Some(view) = self.run.as_ref().filter(|_| !self.run_minimized) {
+            view.read(cx).focus_handle(cx)
         } else {
             return;
         };
@@ -959,6 +1261,7 @@ impl MainWindow {
             || self.project_picker.is_some()
             || self.showing_divergence()
             || self.showing_rescope()
+            || self.showing_run()
     }
 
     /// Closes the inset panel, handing focus back to the chat input.
@@ -995,6 +1298,8 @@ impl MainWindow {
             // stops it.
             if self.showing_rescope() {
                 self.close_rescope(window, cx);
+            } else if self.showing_run() {
+                self.close_run(window, cx);
             } else {
                 self.close_divergence(window, cx);
             }
@@ -1020,6 +1325,9 @@ impl MainWindow {
     fn panel_content(&self) -> Option<(&'static str, AnyView)> {
         if let Some(view) = self.rescope.as_ref().filter(|_| self.showing_rescope()) {
             return Some(("rescope", view.clone().into()));
+        }
+        if let Some(view) = self.run.as_ref().filter(|_| self.showing_run()) {
+            return Some(("run", view.clone().into()));
         }
         if let Some(view) = self
             .divergence
@@ -1192,7 +1500,7 @@ impl Render for MainWindow {
             .text_color(cx.theme().foreground)
             // Painted first: what overlapping hit areas are, afresh.
             .child(crate::hit_areas::frame_start())
-            .on_action(cx.listener(|this, _: &FocusChat, window, cx| {
+            .on_action(cx.listener(|this, _: &Dismiss, window, cx| {
                 // The context-less Esc binding outranks the palette's own, so
                 // the palette's Esc is handled here.
                 if let Some(palette) = &this.palette
@@ -1222,6 +1530,25 @@ impl Render for MainWindow {
                     this.close_panel(window, cx);
                     return;
                 }
+                // Nothing to dismiss: Esc is for wherever the keyboard is.
+                cx.propagate();
+            }))
+            .on_action(cx.listener(|this, _: &FocusChat, window, cx| {
+                // Where Ctrl/Cmd+Enter means something already, it keeps its
+                // meaning: in the chat input, the palette, a dialog, the list
+                // of recent projects, and an inset panel over the chat input.
+                let busy_elsewhere = this
+                    .palette
+                    .as_ref()
+                    .is_some_and(|palette| palette.read(cx).is_open(window, cx))
+                    || window.has_active_dialog(cx)
+                    || this.ribbon.read(cx).project_indicator().read(cx).is_open()
+                    || this.panel_open();
+                let chat = this.prompt_mode.read(cx).chat_input_view();
+                if busy_elsewhere || chat.read(cx).has_keyboard(window, cx) {
+                    cx.propagate();
+                    return;
+                }
                 this.prompt_mode
                     .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx))
             }))
@@ -1235,6 +1562,19 @@ impl Render for MainWindow {
                     }
                 },
             ))
+            .on_action(cx.listener(|this, _: &ribbon::RunPrimary, window, cx| {
+                // Beneath any inset panel but the Run panel itself.
+                if !this.panel_open() || this.showing_run() {
+                    this.run_primary(window, cx)
+                }
+            }))
+            .on_action(cx.listener(|this, _: &ribbon::RunRelease, window, cx| {
+                if (!this.panel_open() || this.showing_run())
+                    && let Some(ix) = run_targets::release(&ProjectTargets::get(cx).targets)
+                {
+                    this.run_command(RunCommand::Target(ix), window, cx)
+                }
+            }))
             .on_action(cx.listener(|this, _: &TogglePalette, window, cx| {
                 // The palette acts on what is beneath the inset panel.
                 if !this.panel_open() {
@@ -1407,7 +1747,7 @@ mod tests {
             ],
             cx,
         );
-        let empty = body_of(RibbonTab::Code, &[], cx);
+        let empty = body_of(RibbonTab::Research, &[], cx);
         // Two slim buttons stacked, padded, is as tall as the body gets.
         let most = gpui_kit::px(22.) * 2. + padding * 3.;
         assert!(
@@ -1860,7 +2200,7 @@ mod tests {
         }
     }
 
-    /// Ctrl+` (Cmd+` on macOS) opens the recent projects flush beneath the
+    /// Ctrl+R (Cmd+R on macOS) opens the recent projects flush beneath the
     /// project indicator, square, in its dark colour, over the dimmed window,
     /// its rows reaching its edges; typing filters them fuzzily, Down and Enter
     /// open the one highlighted, and Escape closes the list.
@@ -1897,9 +2237,9 @@ mod tests {
         });
         let handle = window.into();
         #[cfg(target_os = "macos")]
-        let toggle = "cmd-`";
+        let toggle = "cmd-r";
         #[cfg(not(target_os = "macos"))]
-        let toggle = "ctrl-`";
+        let toggle = "ctrl-r";
 
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
@@ -2703,6 +3043,279 @@ mod tests {
         cx.run_until_parked();
         assert!(main.read_with(cx, |main, _| main.project_picker.is_some()));
         std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// The Code tab offers Find How to Run until the project's targets are
+    /// found; finding saves them, and each becomes a button, the way to run
+    /// the project leading. Pressing one runs it in the Run panel, its button
+    /// spinning, and listed as running; pressing it again only brings the
+    /// panel back.
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn projects_are_found_runnable_and_run_from_the_code_tab(cx: &mut TestAppContext) {
+        use crate::ribbon::RibbonTab;
+        use crate::run_targets::{self, ProjectTargets};
+        let (dir, _) = crate::generate_skills::fixture("run-main");
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+            ProjectDirectory::set(dir.clone(), cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        let ribbon = main.read_with(cx, |main, _| main.ribbon.clone());
+        ribbon.update(cx, |ribbon, cx| ribbon.select_tab(RibbonTab::Code, cx));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("find-how-to-run").is_some());
+            assert!(window.try_find(("run-target", 0usize)).is_none());
+        })
+        .unwrap();
+
+        // Found, the targets are saved, and the tab has a button for each.
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| {
+                let view = cx.new(|cx| {
+                    crate::run_view::RunView::finding_with(
+                        dir.clone(),
+                        crate::run_view::tests::agent,
+                        cx,
+                    )
+                });
+                main.show_run(view, window, cx);
+            });
+        })
+        .unwrap();
+        for _ in 0..100 {
+            cx.run_until_parked();
+            if cx.update(|cx| !ProjectTargets::get(cx).targets.is_empty()) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(run_targets::load(&dir).len(), 2);
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| main.close_run(window, cx));
+            window.render_frame(cx);
+            assert!(window.try_find("find-how-to-run").is_none());
+            assert!(window.try_find(("run-target", 0usize)).is_some());
+            assert!(window.try_find(("run-target", 1usize)).is_some());
+            assert!(window.try_find("find-run-again").is_some());
+        })
+        .unwrap();
+
+        // Pressing a target runs it, here something that runs on.
+        run_targets::save(
+            &dir,
+            &[run_targets::Target {
+                name: "Serve".into(),
+                command: "sleep 30".into(),
+                kind: run_targets::Kind::Run,
+                release: false,
+            }],
+        )
+        .unwrap();
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| {
+                main.load_run_targets(cx);
+                main.run_command(crate::ribbon::RunCommand::Target(0), window, cx);
+            });
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let panel = main.read_with(cx, |main, _| main.run.clone().unwrap());
+        assert!(main.read_with(cx, |main, _| main.showing_run()));
+        assert_eq!(cx.update(|cx| ProjectTargets::get(cx).running), Some(0));
+        assert_eq!(
+            panel.read_with(cx, |view, _| view.job_title()).as_deref(),
+            Some("Running Serve")
+        );
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| {
+                main.minimize_run(window, cx);
+                main.run_command(crate::ribbon::RunCommand::Target(0), window, cx);
+            });
+        })
+        .unwrap();
+        assert!(main.read_with(cx, |main, _| main.showing_run()));
+        assert_eq!(
+            panel.read_with(cx, |view, _| view.running_target()),
+            Some(0)
+        );
+        // Closing stops it.
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| main.close_run(window, cx))
+        })
+        .unwrap();
+        assert_eq!(cx.update(|cx| ProjectTargets::get(cx).running), None);
+
+        // Ctrl/Cmd+Shift+F5 runs the release target, when there is one.
+        let release = if cfg!(target_os = "macos") {
+            "cmd-shift-f5"
+        } else {
+            "ctrl-shift-f5"
+        };
+        cx.update_window(handle, |_, window, cx| window.press(release, cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert_eq!(cx.update(|cx| ProjectTargets::get(cx).running), None);
+        run_targets::save(
+            &dir,
+            &[
+                run_targets::Target {
+                    name: "Serve".into(),
+                    command: "sleep 30".into(),
+                    kind: run_targets::Kind::Run,
+                    release: false,
+                },
+                run_targets::Target {
+                    name: "Serve Release".into(),
+                    command: "sleep 30".into(),
+                    kind: run_targets::Kind::Run,
+                    release: true,
+                },
+            ],
+        )
+        .unwrap();
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| main.load_run_targets(cx));
+            window.press(release, cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(cx.update(|cx| ProjectTargets::get(cx).running), Some(1));
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| main.close_run(window, cx))
+        })
+        .unwrap();
+
+        // Ctrl/Cmd+F5 runs the primary target.
+        let run = if cfg!(target_os = "macos") {
+            "cmd-f5"
+        } else {
+            "ctrl-f5"
+        };
+        cx.update_window(handle, |_, window, cx| window.press(run, cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert_eq!(cx.update(|cx| ProjectTargets::get(cx).running), Some(0));
+        assert!(main.read_with(cx, |main, _| main.showing_run()));
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| main.close_run(window, cx))
+        })
+        .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Each project comes back as it was left: its file, its output's lock,
+    /// its commit message, and its Run panel, minimized, still running.
+    #[gpui_kit::test]
+    async fn projects_come_back_as_they_were_left(cx: &mut TestAppContext) {
+        use crate::activity::JobKind;
+        use crate::run_targets::{self, ProjectTargets};
+        let (a, _) = crate::generate_skills::fixture("left-alpha");
+        let (b, _) = crate::generate_skills::fixture("left-beta");
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+            ProjectDirectory::set(a.clone(), cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        let (prompt_mode, git_panel) = main.read_with(cx, |main, _| {
+            (main.prompt_mode.clone(), main.git_panel.clone())
+        });
+
+        // In alpha: a file open, the output locked, a message begun, and a
+        // target running in the Run panel.
+        std::fs::write(a.join("notes.md"), "notes").unwrap();
+        run_targets::save(
+            &a,
+            &[run_targets::Target {
+                name: "Serve".into(),
+                command: "sleep 30".into(),
+                kind: run_targets::Kind::Run,
+                release: false,
+            }],
+        )
+        .unwrap();
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |prompt_mode, cx| {
+                prompt_mode.open_file(a.join("notes.md"), window, cx);
+                prompt_mode.set_output_lock(true, cx);
+            });
+            git_panel.update(cx, |panel, cx| {
+                panel.set_message("Half a thought", window, cx)
+            });
+            main.update(cx, |main, cx| {
+                main.load_run_targets(cx);
+                main.run_command(crate::ribbon::RunCommand::Target(0), window, cx);
+            });
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let panel = main.read_with(cx, |main, _| main.run.clone().unwrap());
+
+        // In beta, none of it shows, and alpha's target runs on, listed.
+        cx.update(|cx| ProjectDirectory::set(b.clone(), cx));
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+            .unwrap();
+        assert!(prompt_mode.read_with(cx, |p, _| p.open_file_view().is_none()));
+        assert!(!prompt_mode.read_with(cx, |p, _| p.output_locked()));
+        assert_eq!(git_panel.read_with(cx, |p, cx| p.message(cx)), "");
+        assert!(main.read_with(cx, |main, _| main.run.is_none()));
+        assert_eq!(
+            panel.read_with(cx, |view, _| view.running_target()),
+            Some(0)
+        );
+        assert_eq!(cx.update(|cx| ProjectTargets::get(cx).running), None);
+        let jobs = main.read_with(cx, |main, cx| main.ribbon.read(cx).jobs().to_vec());
+        assert!(
+            jobs.iter()
+                .any(|job| job.kind == JobKind::Run && job.project.as_ref() == Some(&a)),
+            "{jobs:?}"
+        );
+
+        // Back in alpha, everything is as it was, the panel minimized.
+        cx.update(|cx| ProjectDirectory::set(a.clone(), cx));
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+            .unwrap();
+        assert!(prompt_mode.read_with(cx, |p, cx| {
+            p.open_file_view()
+                .is_some_and(|file| file.read(cx).path() == a.join("notes.md"))
+        }));
+        assert!(prompt_mode.read_with(cx, |p, _| p.output_locked()));
+        assert_eq!(
+            git_panel.read_with(cx, |p, cx| p.message(cx)),
+            "Half a thought"
+        );
+        assert!(main.read_with(cx, |main, _| main.run.as_ref() == Some(&panel)));
+        assert!(!main.read_with(cx, |main, _| main.showing_run()));
+        assert_eq!(cx.update(|cx| ProjectTargets::get(cx).running), Some(0));
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| main.close_run(window, cx))
+        })
+        .unwrap();
+        std::fs::remove_dir_all(&a).ok();
+        std::fs::remove_dir_all(&b).ok();
     }
 
     /// Rescope opens its panel, which minimizes while it looks, and comes back
@@ -3573,10 +4186,10 @@ mod tests {
         .unwrap();
     }
 
-    /// Esc in an open file moves focus back to the chat input, where typing
-    /// then lands.
+    /// Esc in an open file leaves the keyboard there; Ctrl/Cmd+Enter moves it
+    /// to the chat input, where typing then lands, and sends nothing.
     #[gpui_kit::test]
-    async fn escape_in_a_file_focuses_the_chat_input(cx: &mut TestAppContext) {
+    async fn ctrl_enter_in_a_file_focuses_the_chat_input(cx: &mut TestAppContext) {
         let dir = std::env::temp_dir().join(format!("suspense-escape-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -3621,11 +4234,29 @@ mod tests {
         })
         .unwrap();
         cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            assert!(
+                !chat.read(cx).is_focused(window, cx),
+                "Esc focused the chat"
+            );
+            window.press(
+                if cfg!(target_os = "macos") {
+                    "cmd-enter"
+                } else {
+                    "ctrl-enter"
+                },
+                cx,
+            );
+        })
+        .unwrap();
+        cx.run_until_parked();
 
         cx.update_window(handle, |_, window, cx| window.input("hi", cx))
             .unwrap();
         cx.run_until_parked();
         cx.update(|cx| assert_eq!(chat.read(cx).value(cx).as_ref(), "hi"));
+        // The file got no new line from it.
+        cx.update(|cx| assert_eq!(file.read(cx).text(cx).as_ref(), "# Notes\n"));
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -3700,12 +4331,17 @@ mod tests {
         ribbon.update(cx, |ribbon, cx| {
             ribbon.tab_clicked(RibbonTab::Application, 1, false, cx);
             ribbon.tab_clicked(RibbonTab::Project, 1, true, cx);
-            ribbon.tab_clicked(RibbonTab::Code, 1, true, cx);
+            // Research has no commands, so adds nothing between the others.
+            ribbon.tab_clicked(RibbonTab::Research, 1, true, cx);
         });
         cx.run_until_parked();
         assert_eq!(
             ribbon.read_with(cx, |ribbon, _| ribbon.open_tabs().to_vec()),
-            [RibbonTab::Project, RibbonTab::Code, RibbonTab::Application]
+            [
+                RibbonTab::Project,
+                RibbonTab::Research,
+                RibbonTab::Application
+            ]
         );
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
@@ -4063,16 +4699,31 @@ mod tests {
             prompt_mode.start_test_question("Still thinking in alpha", cx);
         });
         cx.update_window(handle, |_, window, cx| {
-            main.update(cx, |main, cx| main.open_rescope(window, cx));
+            main.update(cx, |main, cx| {
+                let view = cx.new(|cx| {
+                    crate::rescope_view::RescopeView::with_agent(
+                        a.clone(),
+                        |_, _, _, _| Ok(r#"{"concepts": []}"#.into()),
+                        cx,
+                    )
+                });
+                main.show_rescope(view, window, cx)
+            });
         })
         .unwrap();
         assert!(main.read_with(cx, |main, _| main.rescope.is_some()));
 
+        // The rescope search stays with alpha, out of sight in beta.
         cx.update(|cx| ProjectDirectory::set(b.clone(), cx));
         cx.run_until_parked();
         assert!(
-            main.read_with(cx, |main, _| main.rescope.is_none() && !main.panel_open()),
-            "the rescope search outlived the switch"
+            main.read_with(cx, |main, _| main.rescope.is_none()
+                && !main.panel_open()
+                && main
+                    .parked
+                    .get(&a)
+                    .is_some_and(|parked| parked.rescope.is_some())),
+            "the rescope search wasn't kept for alpha"
         );
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
@@ -4105,8 +4756,14 @@ mod tests {
             window.try_find("cancel").is_some()
         })
         .await;
-        cx.update_window(handle, |_, window, cx| window.click("cancel", cx))
-            .unwrap();
+        // Once the dialog has risen into place, so the button stays under
+        // the pointer from press to release, however slow the machine.
+        cx.update_window(handle, |_, window, cx| {
+            std::thread::sleep(Duration::from_millis(400));
+            window.render_frame(cx);
+            window.click("cancel", cx)
+        })
+        .unwrap();
         cx.run_until_parked();
 
         // Clicking alpha in the project list switches to it, and the chat
@@ -4117,6 +4774,10 @@ mod tests {
             indicator.update(cx, |indicator, cx| indicator.open(window, cx));
             window.render_frame(cx);
             assert!(!chat.read(cx).is_focused(window, cx));
+            // Once the list has risen into place, so the row stays under
+            // the pointer from press to release, however slow the machine.
+            std::thread::sleep(Duration::from_millis(400));
+            window.render_frame(cx);
             window.click(("recent-project", 0usize), cx);
         })
         .unwrap();

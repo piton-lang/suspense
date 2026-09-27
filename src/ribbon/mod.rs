@@ -40,7 +40,9 @@ actions!(
         ShowTab2,
         ShowTab3,
         ShowTab4,
-        ShowTab5
+        ShowTab5,
+        RunPrimary,
+        RunRelease
     ]
 );
 
@@ -92,6 +94,16 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-f1", ToggleRibbon, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-f1", ToggleRibbon, None),
+        // Ctrl+F5 (Cmd+F5 on macOS) runs the project's primary run target.
+        #[cfg(target_os = "macos")]
+        KeyBinding::new("cmd-f5", RunPrimary, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-f5", RunPrimary, None),
+        // With Shift, the release build.
+        #[cfg(target_os = "macos")]
+        KeyBinding::new("cmd-shift-f5", RunRelease, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-shift-f5", RunRelease, None),
         // Alt+1 to Alt+5 open the tabs in the order they are shown.
         KeyBinding::new("alt-1", ShowTab1, None),
         KeyBinding::new("alt-2", ShowTab2, None),
@@ -142,13 +154,13 @@ impl RibbonTab {
     }
 
     /// The tab's commands, in the order of its groups.
-    fn commands(self) -> &'static [CommandPlace] {
+    fn commands(self, cx: &App) -> Vec<CommandPlace> {
         match self {
-            RibbonTab::Project => project_tab::COMMANDS,
-            RibbonTab::Code => code_tab::COMMANDS,
-            RibbonTab::Spec => spec_tab::COMMANDS,
-            RibbonTab::Research => research_tab::COMMANDS,
-            RibbonTab::Application => application_tab::COMMANDS,
+            RibbonTab::Project => project_tab::COMMANDS.to_vec(),
+            RibbonTab::Code => code_tab::commands(cx),
+            RibbonTab::Spec => spec_tab::COMMANDS.to_vec(),
+            RibbonTab::Research => research_tab::COMMANDS.to_vec(),
+            RibbonTab::Application => application_tab::COMMANDS.to_vec(),
         }
     }
 }
@@ -167,12 +179,16 @@ enum Command {
     ViewDivergenceReports,
     GenerateSkills,
     Rescope,
+    FindHowToRun,
+    RunTarget(usize),
+    FindRunAgain,
     DarkMode,
     Settings,
 }
 
 /// Where a command sits in its tab, and whether it stays in the collapsed
 /// ribbon.
+#[derive(Clone, Copy)]
 struct CommandPlace {
     command: Command,
     group: &'static str,
@@ -213,10 +229,22 @@ pub struct Ribbon {
 }
 
 impl EventEmitter<RevealJob> for Ribbon {}
+impl EventEmitter<RunCommand> for Ribbon {}
+
+/// Emitted by the Code tab's run commands.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum RunCommand {
+    /// Find how the project is run.
+    Find,
+    /// Run the project's target at this index.
+    Target(usize),
+}
 
 impl Ribbon {
     pub fn new(cx: &mut Context<Self>) -> Self {
         cx.observe_global::<ProjectDirectory>(|_, cx| cx.notify())
+            .detach();
+        cx.observe_global::<crate::run_targets::ProjectTargets>(|_, cx| cx.notify())
             .detach();
         Self {
             // Always Project at launch: which tab was last open isn't kept.
@@ -464,7 +492,7 @@ impl Ribbon {
     ) -> AnyElement {
         let colors = command_colors(cx);
         let rest = command_shades(cx).0;
-        let button = |id: &'static str, icon: IconName, label: SharedString| {
+        let button_with = |id: ElementId, icon: IconName, label: SharedString| {
             // gpui-kit keeps only a fifth of a custom button's resting colour,
             // so the colour is given to the button itself; its hover and
             // pressed colours are taken whole.
@@ -495,7 +523,13 @@ impl Ribbon {
                 ),
             }
         };
+        let button = |id: &'static str, icon: IconName, label: SharedString| {
+            button_with(id.into(), icon, label)
+        };
         match command {
+            Command::FindHowToRun => code_tab::find_how_to_run(&button_with, cx),
+            Command::FindRunAgain => code_tab::find_again(&button_with, cx),
+            Command::RunTarget(ix) => code_tab::run_target(ix, &button_with, cx),
             Command::NewProject => project_tab::new_project(button),
             Command::OpenProject => project_tab::open_project(button),
             Command::BuildSpec => spec_tab::build_spec(self, button, cx),
@@ -578,12 +612,15 @@ impl Render for Ribbon {
             // name, as beside the tabs.
             let mut row = Vec::new();
             let mut last_tab = None;
-            let primary = RibbonTab::ALL.into_iter().flat_map(|tab| {
-                tab.commands()
-                    .iter()
-                    .filter(|place| place.primary)
-                    .map(move |place| (tab, place))
-            });
+            let primary: Vec<_> = RibbonTab::ALL
+                .into_iter()
+                .flat_map(|tab| {
+                    tab.commands(cx)
+                        .into_iter()
+                        .filter(|place| place.primary)
+                        .map(move |place| (tab, place))
+                })
+                .collect();
             for (tab, place) in primary {
                 if last_tab.is_some_and(|last| last != tab) {
                     // Centred like the controls, rather than stretched.
@@ -711,7 +748,7 @@ impl Render for Ribbon {
         let mut row = Vec::new();
         for tab in &self.open_tabs {
             let mut groups: Vec<(&'static str, Vec<(CommandSize, AnyElement)>)> = Vec::new();
-            for place in tab.commands() {
+            for place in tab.commands(cx) {
                 let element = (
                     place.size,
                     self.render_command(place.command, place.size, cx),

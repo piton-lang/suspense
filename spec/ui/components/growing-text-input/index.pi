@@ -24,6 +24,13 @@ shape GrowingTextInputShape:
         their padding and border take, and nothing more: there is no empty row
         beneath the last line.
 
+        Its rows are counted as the input itself lays its text out, in the
+        very font it draws the text in, weight and all, so the count never
+        differs from what shows: while the text is within its most rows, no
+        row is ever cut off or scrolled out of view, and no empty row is left.
+        Should a count made ahead of drawing still differ from how the text
+        was laid out, the input takes the laid out count by the next frame.
+
     mostRows:
         Whatever uses it says how many rows it grows to at most. Once its text
         takes more, it stays that tall and scrolls.

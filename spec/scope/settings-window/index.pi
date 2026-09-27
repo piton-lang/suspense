@@ -6,6 +6,7 @@ from ../project-directory import ProjectDirectoryScope
 from ../prompt-mode/chat-input import ChatInputScope
 from ../prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from ../prompt-mode/modes import PromptModesScope
+from /ui/components/growing-text-input import GrowingTextInputScope
 from /ui/components/inset-panel import InsetPanelScope
 from /ui/components/scrollbar import ScrollbarScope
 
@@ -61,9 +62,12 @@ shape SettingsWindowShape:
         the muted path of the file its prompt is saved in, and a
         "Reset to default" button, disabled while the prompt is already the
         default, which puts the default back and saves it. Beneath them, an
-        editor for the prompt, 120 pixels tall before it scrolls, highlighting
-        it as Piton, with soft wrapping and no line numbers or folding. A prompt
-        that can't be read or saved says why beneath its editor.
+        editor for the prompt, highlighting it as Piton, with soft wrapping and
+        no line numbers or folding. The editor grows to fit the prompt, as a
+        @{GrowingTextInputScope} does, with no most, so it never scrolls on its
+        own: the whole prompt is always in it, and the page scrolls instead,
+        the mouse wheel over an editor scrolling the page. A prompt that can't
+        be read or saved says why beneath its editor.
 
         Without a project open, as the @{NoProjectStateScope} says, in place of
         the prompts it reads "Open a project to edit its system prompts."

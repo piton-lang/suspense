@@ -149,6 +149,9 @@ pub struct ProjectTree {
     menu: Option<OpenMenu>,
     /// Reads the git status now and then; replaced with the project.
     _git_refresh: Task<()>,
+    /// How each project switched away from was left: its expanded folders
+    /// and the path selected, for when it's back.
+    left: HashMap<PathBuf, (HashSet<PathBuf>, Option<PathBuf>)>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -181,6 +184,7 @@ impl ProjectTree {
             select_when_listed: None,
             menu: None,
             _git_refresh: Task::ready(()),
+            left: HashMap::new(),
             _subscriptions: subscriptions,
         };
         this.open(ProjectDirectory::get(cx), cx);
@@ -191,10 +195,25 @@ impl ProjectTree {
         if root == self.root {
             return;
         }
+        // The project left keeps how it was, for when it's back.
+        if let Some(left) = self.root.take() {
+            let selected = self
+                .tree
+                .read(cx)
+                .selected_item()
+                .map(|item| PathBuf::from(item.id.as_ref()));
+            self.left
+                .insert(left, (std::mem::take(&mut self.expanded), selected));
+        }
+        let (expanded, selected) = root
+            .as_ref()
+            .and_then(|root| self.left.remove(root))
+            .unwrap_or_default();
         self.root = root.clone();
         self.editing = None;
         self.listings.clear();
-        self.expanded.clear();
+        self.expanded = expanded;
+        self.select_when_listed = selected;
         self.watched.clear();
         (self.watcher, self._refresh) = match &root {
             Some(_) => self.start_watching(cx),
@@ -208,6 +227,10 @@ impl ProjectTree {
         };
         if let Some(root) = root {
             self.load(root, cx);
+            // Its expanded folders are read again, shown open once listed.
+            for folder in self.expanded.clone() {
+                self.load(folder, cx);
+            }
         }
         cx.notify();
     }
@@ -1129,6 +1152,49 @@ mod tests {
             .map_while(|ix| state.entry(ix))
             .map(|entry| entry.item().label.to_string())
             .collect()
+    }
+
+    /// A project switched away from comes back with its folders expanded as
+    /// they were left.
+    #[gpui_kit::test]
+    async fn projects_keep_their_expanded_folders(cx: &mut TestAppContext) {
+        let root = std::env::temp_dir().join(format!("suspense-tree-kept-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let (a, b) = (root.join("a"), root.join("b"));
+        fs::create_dir_all(a.join("spec")).unwrap();
+        fs::write(a.join("spec/index.pi"), "").unwrap();
+        fs::create_dir_all(b.join("src")).unwrap();
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            ProjectDirectory::init(cx);
+        });
+        let tree = cx.update(|cx| cx.new(ProjectTree::new));
+        let window = cx.add_window(|window, cx| Root::new(tree.clone(), window, cx));
+        let handle = window.into();
+        cx.update(|cx| ProjectDirectory::set(a.clone(), cx));
+        cx.wait_for(handle, TIMEOUT, |window, cx| {
+            labels(&tree, cx) == ["spec"] && window.try_find(("project-entry", 0usize)).is_some()
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("project-entry", 0usize), cx)
+        })
+        .unwrap();
+        cx.wait_for(handle, TIMEOUT, |_, cx| {
+            labels(&tree, cx) == ["spec", "index.pi"]
+        })
+        .await;
+
+        cx.update(|cx| ProjectDirectory::set(b.clone(), cx));
+        cx.wait_for(handle, TIMEOUT, |_, cx| labels(&tree, cx) == ["src"])
+            .await;
+        cx.update(|cx| ProjectDirectory::set(a.clone(), cx));
+        cx.wait_for(handle, TIMEOUT, |_, cx| {
+            labels(&tree, cx) == ["spec", "index.pi"]
+        })
+        .await;
+        fs::remove_dir_all(&root).ok();
     }
 
     /// Picking a project lists its top level, folders first; clicking a

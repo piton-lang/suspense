@@ -83,6 +83,10 @@ pub const TAB_SIZE: usize = 4;
 /// The column the ruler marks: the width a line should keep within.
 pub const RULER_COLUMN: usize = 80;
 
+/// How much black is laid over the well past the ruler, in dark and light
+/// mode.
+const PAST_RULER_SHADE: (f32, f32) = (0.25, 0.05);
+
 pub struct FileView {
     path: PathBuf,
     /// The language the file is highlighted in, as [`language_for`] names it.
@@ -114,6 +118,59 @@ pub struct FileView {
 impl EventEmitter<CloseFile> for FileView {}
 impl EventEmitter<SendToPrompt> for FileView {}
 impl EventEmitter<OpenDefinition> for FileView {}
+
+/// Where `offset` in `before` lands in `after`, the same text reformatted,
+/// which changes only whitespace: against the same character it was
+/// against, or else just after the same one, then as many line breaks on
+/// and as many spaces along as the formatted text allows.
+fn offset_after_formatting(before: &str, after: &str, offset: usize) -> usize {
+    let offset = offset.min(before.len());
+    let head = &before[..offset];
+    let solid = head.chars().filter(|c| !c.is_whitespace()).count();
+    // What lay between the last character and the cursor.
+    let gap = &head[head.trim_end().len()..];
+    let breaks = gap.matches('\n').count();
+    let column = gap
+        .rsplit('\n')
+        .next()
+        .map_or(0, |tail| tail.chars().count());
+
+    let mut at = 0;
+    let mut seen = 0;
+    for (ix, c) in after.char_indices() {
+        if seen == solid {
+            break;
+        }
+        if !c.is_whitespace() {
+            seen += 1;
+        }
+        at = ix + c.len_utf8();
+    }
+    if seen < solid {
+        return after.len();
+    }
+    // Against a character, it stays against it.
+    if before[offset..].starts_with(|c: char| !c.is_whitespace()) {
+        return after[at..]
+            .find(|c: char| !c.is_whitespace())
+            .map_or(after.len(), |next| at + next);
+    }
+    // Then as many line breaks on, where the formatted text still has them.
+    for _ in 0..breaks {
+        match after[at..].find('\n') {
+            Some(newline) if after[at..at + newline].trim().is_empty() => at += newline + 1,
+            _ => break,
+        }
+    }
+    // And as far along the line as it was, without passing its next character.
+    let room = after[at..]
+        .char_indices()
+        .take_while(|(_, c)| *c == ' ' || *c == '\t')
+        .take(column)
+        .last()
+        .map_or(0, |(ix, c)| ix + c.len_utf8());
+    at + room
+}
 
 impl FileView {
     /// Opens the file at `path`, with the cursor at `position` if given.
@@ -284,6 +341,11 @@ impl FileView {
         };
         let text = self.editor.read(cx).value();
         self.dirty = text.as_ref() != saved;
+        // What the pointer's hover showed goes as soon as the text changes.
+        self.editor.update(cx, |editor, cx| {
+            editor.clear_hover_state(cx);
+            editor.clear_diagnostic_popover(cx);
+        });
 
         if let Some(document) = &self.document {
             document.sync(&text);
@@ -337,8 +399,15 @@ impl FileView {
                         // Shows the formatted text, unless the file was edited
                         // again while it saved.
                         if text != typed && this.editor.read(cx).value().as_ref() == typed {
+                            // The cursor and the view stay where they were.
                             this.editor.update(cx, |editor, cx| {
-                                editor.set_value(text.clone(), window, cx)
+                                let selected = editor.selected_range();
+                                let scroll = editor.scroll_offset();
+                                editor.set_value(text.clone(), window, cx);
+                                let start = offset_after_formatting(&typed, &text, selected.start);
+                                let end = offset_after_formatting(&typed, &text, selected.end);
+                                editor.set_selected_range(start..end, cx);
+                                editor.set_scroll_offset(scroll, cx);
                             });
                             if let Some(document) = &this.document {
                                 document.sync(&text);
@@ -358,6 +427,11 @@ impl FileView {
             })
             .ok();
         });
+    }
+
+    #[cfg(test)]
+    pub fn text(&self, cx: &App) -> SharedString {
+        self.editor.read(cx).value()
     }
 
     /// Whether the popover for selected text is showing.
@@ -457,7 +531,10 @@ impl FileView {
     /// or the server is not running.
     fn attach_lsp(&mut self, cx: &mut Context<Self>) {
         let is_piton = self.path.extension().is_some_and(|ext| ext == "pi");
-        let client = ProjectLsp::get(cx).filter(|_| is_piton && self.saved.is_some());
+        // A file kept for a project not on screen isn't in the server, which
+        // is the project on screen's, until its project is back.
+        let on_screen = ProjectDirectory::get(cx).is_some_and(|dir| self.path.starts_with(dir));
+        let client = ProjectLsp::get(cx).filter(|_| is_piton && on_screen && self.saved.is_some());
         let attached = self
             .document
             .as_ref()
@@ -640,11 +717,14 @@ impl FileView {
         cx.stop_propagation();
     }
 
-    /// Paints the ruler at [`RULER_COLUMN`], from the editor's own layout, so
-    /// it scrolls sideways with the text.
+    /// Paints the ruler at [`RULER_COLUMN`], and the darker background past
+    /// it, from the editor's own layout, so they scroll sideways with the
+    /// text. Drawn behind the text, whose editor has no background of its own.
     fn ruler(&self, cx: &App) -> impl IntoElement {
         let editor = self.editor.downgrade();
         let color = cx.theme().border;
+        let (dark, light) = PAST_RULER_SHADE;
+        let shade = gpui_kit::black().opacity(if cx.theme().is_dark() { dark } else { light });
         canvas(
             |_, _, _| {},
             move |bounds, _, window, cx| {
@@ -670,7 +750,20 @@ impl FileView {
                 let x = line.left() + column * RULER_COLUMN as f32;
                 // Scrolled past, it would lie over the line numbers.
                 let text_left = line.left() - editor.scroll_offset().x;
-                if x < text_left || x > bounds.right() {
+                if x > bounds.right() {
+                    return;
+                }
+                // The shade runs from the ruler, or from the text's left edge
+                // once the ruler is scrolled past, to the right edge.
+                let shade_left = x.max(text_left).round();
+                window.paint_quad(fill(
+                    Bounds::from_corners(
+                        point(shade_left, bounds.top()),
+                        point(bounds.right(), bounds.bottom()),
+                    ),
+                    shade,
+                ));
+                if x < text_left {
                     return;
                 }
                 window.paint_quad(fill(
@@ -809,14 +902,17 @@ impl Render for FileView {
                                 });
                             }),
                         )
+                        // The well is drawn here, beneath the ruler, so the
+                        // ruler and its shade sit behind the text.
+                        .bg(crate::theme::color(crate::theme::palette(cx).well))
+                        .child(self.ruler(cx))
                         .child(
                             Editor::new(&self.editor)
                                 .readonly(self.saved.is_none())
-                                .bordered(false)
+                                .appearance(false)
                                 .rounded_none()
                                 .size_full(),
-                        )
-                        .child(self.ruler(cx)),
+                        ),
                 }
             }))
             .children(self.render_selection_popover(cx));
@@ -1573,6 +1669,43 @@ mod tests {
         std::fs::remove_file(&file).ok();
     }
 
+    /// Typing clears a hover the server showed, straight away.
+    #[gpui_kit::test]
+    async fn typing_clears_hovers(cx: &mut TestAppContext) {
+        const TEXT: &str = "anchor A:\n";
+        let file = temp_file("file-view-hover", TEXT);
+        init(cx, None);
+        let (view, handle) = open(cx, &file, None);
+        cx.wait_for(handle, TIMEOUT, |_, cx| {
+            view.read(cx).editor.read(cx).value().as_ref() == TEXT
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| {
+            let editor = view.read(cx).editor.clone();
+            editor.update(cx, |editor, cx| {
+                editor.present_hover(
+                    0..6,
+                    lsp_types::Hover {
+                        contents: lsp_types::HoverContents::Markup(lsp_types::MarkupContent {
+                            kind: lsp_types::MarkupKind::PlainText,
+                            value: "An anchor".into(),
+                        }),
+                        range: None,
+                    },
+                    cx,
+                );
+                editor.focus_handle(cx).focus(window, cx);
+            });
+            assert!(editor.read(cx).hover_popover().is_some());
+        })
+        .unwrap();
+        type_keys(cx, handle, "x");
+        cx.update(|cx| {
+            assert!(view.read(cx).editor.read(cx).hover_popover().is_none());
+        });
+        std::fs::remove_file(&file).ok();
+    }
+
     /// Typing edits the file, marking it unsaved, and Ctrl/Cmd+S writes it.
     #[gpui_kit::test]
     async fn edits_and_saves_the_file(cx: &mut TestAppContext) {
@@ -1754,6 +1887,9 @@ mod tests {
             view.read_with(cx, |view, cx| view.editor.read(cx).value().to_string()),
             saved
         );
+        // The cursor stays where it was: just before "anchor".
+        let cursor = view.read_with(cx, |view, cx| view.editor.read(cx).selected_range());
+        assert_eq!(cursor, 8..8);
 
         std::fs::remove_file(&file).ok();
     }
@@ -1905,5 +2041,23 @@ mod tests {
                     .is_some_and(|set| !set.is_empty())
         })
         .await;
+    }
+
+    /// Formatting on save moves the cursor with the text around it.
+    #[test]
+    fn the_cursor_keeps_its_place_through_formatting() {
+        use super::offset_after_formatting as at;
+        let before = "anchor A:\n  name:   Hi\n  kind: x\n";
+        let after = "anchor A:\n    name: Hi\n    kind: x\n";
+        // Just after "Hi".
+        let hi = before.find("Hi").unwrap() + 2;
+        assert_eq!(&after[..at(before, after, hi)], "anchor A:\n    name: Hi");
+        // At the start of "kind", behind its indentation.
+        let kind = before.find("kind").unwrap();
+        assert_eq!(&after[at(before, after, kind)..], "kind: x\n");
+        // At the start of the second line.
+        let line = before.find('\n').unwrap() + 1;
+        assert_eq!(at(before, after, line), after.find('\n').unwrap() + 1);
+        assert_eq!(at(before, after, before.len()), after.len());
     }
 }

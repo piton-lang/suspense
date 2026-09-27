@@ -28,7 +28,7 @@ use lsp_types::{CompletionContext, CompletionResponse};
 use crate::completion_menu::CompletionMenu;
 use crate::growing_input::GrowToFit;
 use crate::harness_mentions;
-use crate::main_window::FocusChat;
+use crate::main_window::Dismiss;
 use crate::piton_lsp::PitonSession;
 use crate::piton_syntax;
 use crate::project_directory::ProjectDirectory;
@@ -403,6 +403,8 @@ pub struct ChatInput {
     /// request for it is the latest.
     preview: Option<Preview>,
     preview_id: usize,
+    /// The preview's spec slices are shown, rather than collapsed.
+    preview_slices_open: bool,
     preview_scroll: ScrollHandle,
     /// The queued prompt being edited, while one is.
     editing: Option<Editing>,
@@ -504,9 +506,10 @@ impl ChatInput {
             send_menu: None,
             preview: None,
             preview_id: 0,
+            preview_slices_open: false,
             preview_scroll: ScrollHandle::new(),
             editing: None,
-            slice: true,
+            slice: false,
             _subscriptions: subscriptions,
         };
         this.connect_lsp(cx);
@@ -678,6 +681,7 @@ impl ChatInput {
             return;
         }
         self.preview_id += 1;
+        self.preview_slices_open = false;
         self.preview = Some(Preview::Compiling);
         self.preview_scroll = ScrollHandle::new();
         self.focus_handle.focus(window, cx);
@@ -827,19 +831,56 @@ impl ChatInput {
             );
         let content = match preview {
             Preview::Compiling => None,
-            Preview::Compiled(markdown) => Some(
-                crate::task_table::markdown_view(
-                    crate::markdown::MarkdownKey {
-                        kind: crate::markdown::MarkdownKind::Prompt,
-                        table: PREVIEW_TABLE,
-                        row: self.preview_id,
-                    },
-                    markdown,
-                    None,
-                    cx,
+            Preview::Compiled(markdown) => {
+                // What was typed first, then any spec slices, collapsed.
+                let split = crate::markdown::split_slices(markdown);
+                let key = |kind| crate::markdown::MarkdownKey {
+                    kind,
+                    table: PREVIEW_TABLE,
+                    row: self.preview_id,
+                };
+                let open = self.preview_slices_open;
+                let slices = split.slices.map(|(slices, count)| {
+                    v_flex()
+                        .pt_2()
+                        .gap_2()
+                        .child(crate::task_table::slices_row(
+                            "preview-slices",
+                            open,
+                            count,
+                            {
+                                let this = cx.entity().downgrade();
+                                move |_, cx| {
+                                    this.update(cx, |this, cx| {
+                                        this.preview_slices_open = !this.preview_slices_open;
+                                        cx.notify();
+                                    })
+                                    .ok();
+                                }
+                            },
+                            cx,
+                        ))
+                        .when(open, |column| {
+                            column.child(crate::task_table::markdown_view(
+                                key(crate::markdown::MarkdownKind::Slices),
+                                &slices,
+                                None,
+                                cx,
+                            ))
+                        })
+                });
+                Some(
+                    v_flex()
+                        .child(crate::task_table::markdown_view(
+                            key(crate::markdown::MarkdownKind::Prompt),
+                            &split.prompt,
+                            None,
+                            cx,
+                        ))
+                        .children(slices)
+                        .into_any_element(),
                 )
-                .into_any_element(),
-            ),
+            }
             Preview::Failed(error) => Some(
                 div()
                     .text_sm()
@@ -892,6 +933,15 @@ impl ChatInput {
     #[cfg(test)]
     pub fn is_focused(&self, window: &Window, cx: &App) -> bool {
         self.editor.read(cx).focus_handle(cx).is_focused(window)
+    }
+
+    /// Whether it has the keyboard: its text, or the preview in its place.
+    pub fn has_keyboard(&self, window: &Window, cx: &App) -> bool {
+        self.editor
+            .read(cx)
+            .focus_handle(cx)
+            .contains_focused(window, cx)
+            || (self.preview.is_some() && self.focus_handle.is_focused(window))
     }
 
     /// Marks the harness as working; sending then queues the prompt.
@@ -1608,11 +1658,10 @@ impl Render for ChatInput {
                     this.move_focus(false, window, cx)
                 }),
             )
-            // Esc arrives as the window's FocusChat, which matches ahead of the
+            // Esc arrives as the window's Dismiss, which matches ahead of the
             // editor's own binding, or as the editor's Escape once it has
-            // nothing to cancel. Handled here, neither reaches the window,
-            // which would focus the input again.
-            .on_action(cx.listener(|this, _: &FocusChat, window, cx| this.escape(window, cx)))
+            // nothing to cancel.
+            .on_action(cx.listener(|this, _: &Dismiss, window, cx| this.escape(window, cx)))
             .on_action(cx.listener(|this, _: &Escape, window, cx| this.escape(window, cx)))
             .capture_action(cx.listener(|this, action: &Enter, window, cx| {
                 // The send button's menu takes Enter while it is open.

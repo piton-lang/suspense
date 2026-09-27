@@ -54,8 +54,11 @@ shape EditorShape:
 
     ruler:
         A thin vertical line, in the theme's line colour, runs down the text at
-        the 80th column, the width a line should keep within. It scrolls
-        sideways with the text, is drawn behind it, and never takes the mouse.
+        the 80th column, the width a line should keep within. Past it, the
+        editor's background is a step darker than the well, as black laid over
+        it, 25% in dark mode and 5% in light mode, so text running long stands
+        out while staying as readable. The line and the shade scroll sideways
+        with the text, are drawn behind it, and never take the mouse.
 
     keyboard:
         indentation:
@@ -98,6 +101,11 @@ shape EditorShape:
         file that cannot be saved keeps its changes and says why beneath the
         header.
 
+        Saving never moves the cursor or the view. A Piton file is formatted
+        as it is saved, and the editor then shows the formatted text, with the
+        cursor still at the same place in the text, beside the same characters
+        it was beside, and scrolled just as it was.
+
     languageSupport:
         overview:
             A Piton file (`.pi`) is edited with the project's @{LSP} server,
@@ -117,7 +125,11 @@ shape EditorShape:
             attaches to it.
 
         hover:
-            Hovering a name shows the server's `textDocument/hover`.
+            Hovering a name shows the server's `textDocument/hover`. Typing in
+            the editor clears whatever the pointer's hover shows, the name's
+            hover and a diagnostic's message alike, as soon as a key changes
+            the text, and nothing hovered shows again until the pointer next
+            moves over the text.
 
         definitions:
             Ctrl-clicking (Cmd-clicking on macOS) a name goes to its

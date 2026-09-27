@@ -159,9 +159,60 @@ pub fn blocks(markdown: &str) -> Vec<String> {
     blocks
 }
 
+/// The line a sliced prompt's slices follow, and the one attached text does.
+const SLICES_LINE: &str = "\n\nSpec slices:";
+const ATTACHED_LINE: &str = "\n\nAttached text:";
+
+/// A compiled prompt split into what was typed, with any text attached to it,
+/// and the spec slices sent after it, if it was sliced.
+#[derive(Debug, PartialEq)]
+pub struct SlicedPrompt {
+    pub prompt: String,
+    /// The slices, and how many there are.
+    pub slices: Option<(String, usize)>,
+}
+
+pub fn split_slices(markdown: &str) -> SlicedPrompt {
+    let Some(start) = markdown.find(SLICES_LINE) else {
+        return SlicedPrompt {
+            prompt: markdown.to_string(),
+            slices: None,
+        };
+    };
+    let end = markdown
+        .rfind(ATTACHED_LINE)
+        .filter(|end| *end > start)
+        .unwrap_or(markdown.len());
+    let slices = markdown[start + SLICES_LINE.len()..end].trim().to_string();
+    // Each slice is headed by its target, or says why it couldn't be had.
+    let count = slices
+        .lines()
+        .filter(|line| line.starts_with("# ") || line.starts_with("Could not slice "))
+        .count()
+        .max(1);
+    SlicedPrompt {
+        prompt: format!("{}{}", &markdown[..start], &markdown[end..]),
+        slices: Some((slices, count)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{blocks, without_inline_code};
+    use super::{SlicedPrompt, blocks, split_slices, without_inline_code};
+
+    #[test]
+    fn sliced_prompts_split_into_what_was_typed_and_the_slices() {
+        assert_eq!(
+            split_slices(
+                "Fix A.\n\nSpec slices:\n\n# A\n\n## A.x\n\n# B\n\nAttached text:\n\n```\nnote\n```"
+            ),
+            SlicedPrompt {
+                prompt: "Fix A.\n\nAttached text:\n\n```\nnote\n```".into(),
+                slices: Some(("# A\n\n## A.x\n\n# B".into(), 2)),
+            }
+        );
+        assert_eq!(split_slices("Plain.").slices, None);
+    }
 
     #[test]
     fn markdown_splits_into_blocks() {
@@ -218,6 +269,8 @@ pub enum MarkdownKind {
     Command,
     /// The prompt a task was sent as.
     Prompt,
+    /// The spec slices a sliced prompt was sent with, shown beneath it.
+    Slices,
     /// A block of the prompt the latest task was sent as, in its header,
     /// where the prompt is drawn a block at a time; `row` is the block.
     PromptBlock,

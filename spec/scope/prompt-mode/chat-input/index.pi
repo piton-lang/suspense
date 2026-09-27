@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /scope/application/MainWindow import MainWindowScope
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/harness-integration/catalog import HarnessCatalogScope
 from /scope/lsp import LSP
@@ -217,7 +218,7 @@ shape ChatInputShape:
         slice:
             Just left of the context figure sits the Slice toggle: a small ghost
             button with a scissors icon, reading "Slice", which shows as
-            selected while it is on. It starts on. Its tooltip says what the
+            selected while it is on. It starts off. Its tooltip says what the
             prompt is sent as: while off, the prompt written as a spec, its
             references linking to the spec they name; while on, the prompt with
             the `piton slice` of each spec it references. Clicking it turns it
@@ -341,7 +342,9 @@ shape ChatInputShape:
 
     escape:
         Pressing <Escape> while in the chat input takes focus out of the chat
-        input.
+        input. <Ctrl+Enter> (<Cmd+Enter> on macOS) brings it back, from
+        anywhere the chat input isn't beneath something else, as the
+        @{MainWindowScope} says.
 
     growToFit:
         The text input is a @{GrowingTextInputScope} growing to 12 rows at most.
@@ -457,3 +460,14 @@ shape ChatInputShape:
             slices, as it follows the prompt. The system prompt is resolved as
             ever. A queued prompt keeps whether it was sliced, and the preview
             shows what the harness would receive with the toggle as it is.
+
+            Wherever a sliced prompt is shown, in the latest task's header,
+            among the previous tasks and answers, and in the preview, the
+            prompt as typed comes first, with any text attached to it, and the
+            slices are collapsed beneath it into a single row reading "Show 1
+            spec slice" or "Show N spec slices", muted, beside a right chevron,
+            as a table's collapsed rows are. Clicking it expands the slices in
+            place, and it reads "Hide N spec slices" beside a down chevron;
+            clicking it again collapses them. Each prompt's slices start
+            collapsed, and stay as they were left for as long as the
+            application runs. What the harness receives is unchanged.

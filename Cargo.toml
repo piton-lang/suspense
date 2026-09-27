@@ -6,6 +6,10 @@ description = "A REPL and notebook for Piton: write prompts that reference the s
 license-file = "LICENSE.md"
 publish = false
 
+# `cargo xtask`, the project's own tasks, like installing the app (see xtask).
+[workspace]
+members = ["xtask"]
+
 [[bin]]
 name = "suspense"
 path = "src/main.rs"

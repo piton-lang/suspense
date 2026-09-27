@@ -90,6 +90,8 @@ jobs:
           sed -e "s/@VERSION@/${{ needs.name.outputs.version }}/g" \
             -e "s/@BUNDLE_VERSION@/${{ needs.name.outputs.bundle_version }}/g" \
             packaging/macos/Info.plist > "$app/Contents/Info.plist"
+          mkdir -p "$app/Contents/Resources"
+          cp packaging/icons/suspense.icns "$app/Contents/Resources/Suspense.icns"
           cp LICENSE.md "dist/$PACKAGE/"
           # ditto keeps the bundle's permissions and structure intact.
           cd dist && ditto -c -k --sequesterRsrc --keepParent "$PACKAGE" "../$PACKAGE.zip"

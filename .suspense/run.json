@@ -1,0 +1,39 @@
+{
+  "targets": [
+    {
+      "name": "Run",
+      "command": "cargo run --bin suspense",
+      "kind": "run"
+    },
+    {
+      "name": "Build",
+      "command": "cargo build --bin suspense",
+      "kind": "build"
+    },
+    {
+      "name": "Test",
+      "command": "cargo test --package suspense",
+      "kind": "test"
+    },
+    {
+      "name": "Release Build",
+      "command": "cargo build --release --bin suspense",
+      "kind": "build"
+    },
+    {
+      "name": "Install",
+      "command": "cargo xtask install",
+      "kind": "other"
+    },
+    {
+      "name": "Clippy",
+      "command": "cargo clippy --workspace --all-targets",
+      "kind": "other"
+    },
+    {
+      "name": "Format",
+      "command": "cargo fmt --all",
+      "kind": "other"
+    }
+  ]
+}

@@ -2,6 +2,7 @@ use /lib
 use /ui
 from /scope/prompt-mode/chat-input import ChatInputScope
 from /scope/prompt-mode/modes import PromptModesScope
+from /scope/run-targets import RunTargetsScope
 
 export ui-component RibbonCodeTabScope:
     concept: {RibbonCodeTabConcept}
@@ -14,8 +15,7 @@ concept RibbonCodeTabConcept:
 
 shape RibbonCodeTabShape:
     description:
-        The Code tab of the ribbon. With nothing in it, it reads
-        "No commands yet".
+        The Code tab of the ribbon.
 
     colour:
         While closed, the tab's label is in Code's colour, at full strength,
@@ -29,4 +29,6 @@ shape RibbonCodeTabShape:
         shared with them, is not.
 
     groups:
-        It has no groups and no commands yet.
+        A "Run" group holds the commands for running the project, as the
+        @{RunTargetsScope} says: Find How to Run until the project has run
+        targets, and then a button for each target, then Find Again.

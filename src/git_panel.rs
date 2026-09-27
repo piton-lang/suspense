@@ -4,6 +4,7 @@
 //! commit everything, push, and pull. A message can be written by the harness
 //! from what has changed, quickly, with a small model and no tools.
 
+use std::collections::HashMap;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -390,6 +391,9 @@ pub struct GitPanel {
     notes: Vec<NoteRow>,
     busy: Option<Busy>,
     _refresh: Task<()>,
+    /// The commit message each project switched away from was left with,
+    /// for when it's back.
+    left_messages: HashMap<PathBuf, String>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -407,7 +411,7 @@ impl GitPanel {
         });
         let subscriptions = vec![
             cx.observe_global_in::<ProjectDirectory>(window, |this, window, cx| {
-                this.open(cx);
+                this.open(window, cx);
                 this.load_notes(window, cx);
             }),
             // A task that finished has written a note.
@@ -426,9 +430,10 @@ impl GitPanel {
             notes: Vec::new(),
             busy: None,
             _refresh: Task::ready(()),
+            left_messages: HashMap::new(),
             _subscriptions: subscriptions,
         };
-        this.open(cx);
+        this.open(window, cx);
         this.load_notes(window, cx);
         this
     }
@@ -503,10 +508,23 @@ impl GitPanel {
     }
 
     /// Follows the project that is open, reading its summary now and then.
-    fn open(&mut self, cx: &mut Context<Self>) {
+    fn open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let root = ProjectDirectory::get(cx);
         if root == self.root {
             return;
+        }
+        // The project left keeps its message as far as it was written.
+        if let Some(left) = self.root.take() {
+            let message = self.message.read(cx).value().to_string();
+            self.left_messages.insert(left, message);
+        }
+        let message = root
+            .as_ref()
+            .and_then(|root| self.left_messages.remove(root))
+            .unwrap_or_default();
+        if self.message.read(cx).value() != message.as_str() {
+            self.message
+                .update(cx, |editor, cx| editor.set_value(message, window, cx));
         }
         self.root = root.clone();
         self.summary = None;
@@ -669,6 +687,11 @@ impl GitPanel {
             window,
             cx,
         );
+    }
+
+    #[cfg(test)]
+    pub fn message(&self, cx: &App) -> String {
+        self.message.read(cx).value().to_string()
     }
 
     #[cfg(test)]

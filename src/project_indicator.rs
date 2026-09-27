@@ -1,6 +1,6 @@
 //! The project indicator: which project is loaded, shown as its folder's name
 //! after a folder icon, or "No project" while none is, with the project's path
-//! as its tooltip. Clicking it, or Ctrl+` (Cmd+` on macOS), opens a list of the
+//! as its tooltip. Clicking it, or Ctrl+R (Cmd+R on macOS), opens a list of the
 //! projects opened most recently, flush beneath it over the dimmed window,
 //! with a filter to fuzzy search them and keys to move through them, ending in
 //! "Open Project…", which opens a project browser.
@@ -24,13 +24,13 @@ use crate::recent_projects;
 
 actions!(project_indicator, [ToggleProjectList]);
 
-/// Ctrl+` (Cmd+` on macOS) opens the list, or closes it.
+/// Ctrl+R (Cmd+R on macOS) opens the list, or closes it.
 pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
         #[cfg(target_os = "macos")]
-        KeyBinding::new("cmd-`", ToggleProjectList, None),
+        KeyBinding::new("cmd-r", ToggleProjectList, None),
         #[cfg(not(target_os = "macos"))]
-        KeyBinding::new("ctrl-`", ToggleProjectList, None),
+        KeyBinding::new("ctrl-r", ToggleProjectList, None),
     ]);
 }
 

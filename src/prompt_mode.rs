@@ -181,6 +181,8 @@ struct PromptTask {
     _understanding_watch: Task<()>,
     /// How it was sent, to send it again the same way.
     sent: SentAs,
+    /// Its spec slices are shown, rather than collapsed.
+    slices_open: bool,
 }
 
 /// How a prompt was sent, besides its text.
@@ -212,6 +214,16 @@ struct Compiled {
     /// What is shown, split into the blocks the latest task's header draws
     /// one at a time.
     blocks: std::cell::OnceCell<Arc<[SharedString]>>,
+    /// The spec slices it was sent with, as they are shown, how many, and in
+    /// blocks, apart from the prompt, which is shown first.
+    slices: std::cell::OnceCell<Option<Slices>>,
+}
+
+/// A sliced prompt's slices, as they are shown.
+struct Slices {
+    shown: SharedString,
+    count: usize,
+    blocks: Arc<[SharedString]>,
 }
 
 impl Compiled {
@@ -221,7 +233,26 @@ impl Compiled {
             markdown,
             shown: std::cell::OnceCell::new(),
             blocks: std::cell::OnceCell::new(),
+            slices: std::cell::OnceCell::new(),
         }
+    }
+
+    /// The spec slices it was sent with, if it was sliced.
+    fn slices(&self) -> Option<&Slices> {
+        self.slices
+            .get_or_init(|| {
+                let (slices, count) = markdown::split_slices(&self.markdown).slices?;
+                let shown = markdown::without_inline_code(&slices);
+                Some(Slices {
+                    blocks: markdown::blocks(&shown)
+                        .into_iter()
+                        .map(SharedString::from)
+                        .collect(),
+                    shown: shown.into(),
+                    count,
+                })
+            })
+            .as_ref()
     }
 
     /// What is shown, in blocks: see [`markdown::blocks`].
@@ -236,10 +267,14 @@ impl Compiled {
             .clone()
     }
 
-    /// The markdown as it is shown.
+    /// The markdown as it is shown: what was typed, and any text attached,
+    /// without the spec slices, which are shown apart.
     fn shown(&self) -> SharedString {
         self.shown
-            .get_or_init(|| markdown::without_inline_code(&self.markdown).into())
+            .get_or_init(|| {
+                let prompt = markdown::split_slices(&self.markdown).prompt;
+                markdown::without_inline_code(&prompt).into()
+            })
             .clone()
     }
 }
@@ -306,6 +341,7 @@ impl PromptTask {
             understanding: Understanding::default(),
             _understanding_watch: Task::ready(()),
             sent: SentAs::default(),
+            slices_open: false,
         }
     }
 
@@ -414,6 +450,8 @@ struct HistoryLaidOut {
     count: usize,
     open: Option<usize>,
     compiled: bool,
+    /// Whether the open item's spec slices were shown.
+    slices_open: bool,
     table: TableSync,
     markdown: u64,
 }
@@ -572,6 +610,7 @@ impl HistoryList {
         &self,
         tasks: &[PromptTask],
         tasks_of: fn(&PromptMode) -> &Vec<PromptTask>,
+        tasks_of_mut: fn(&mut PromptMode) -> &mut Vec<PromptTask>,
         select: fn(&mut PromptMode) -> &mut HistoryList,
         steps_shown: &HashSet<usize>,
         open_file: &OpenFile,
@@ -611,16 +650,25 @@ impl HistoryList {
                 }
                 laid_out.open = open;
                 laid_out.compiled = open.is_some_and(|open| tasks[open].compiled.is_some());
+                laid_out.slices_open = open.is_some_and(|open| tasks[open].slices_open);
                 laid_out.table = TableSync::default();
             }
             if let (Some(open), Some((task_ix, reply, layout))) = (open, table_layout) {
                 let compiled = tasks[open].compiled.is_some();
+                let slices_open = tasks[open].slices_open;
                 let prompt_changed = MarkdownStates::changed_since(&mut laid_out.markdown, cx)
                     .into_iter()
-                    .any(|key| key.kind == MarkdownKind::Prompt && key.table == task_ix);
-                if compiled != laid_out.compiled || prompt_changed {
+                    .any(|key| {
+                        matches!(key.kind, MarkdownKind::Prompt | MarkdownKind::Slices)
+                            && key.table == task_ix
+                    });
+                if compiled != laid_out.compiled
+                    || slices_open != laid_out.slices_open
+                    || prompt_changed
+                {
                     self.rows.remeasure(open + 1..open + 2);
                     laid_out.compiled = compiled;
+                    laid_out.slices_open = slices_open;
                 }
                 // "No output." stands in the header's place, for as long as
                 // there is none.
@@ -737,14 +785,37 @@ impl HistoryList {
                 }
                 HistoryRow::Prompt(item) => {
                     let task_ix = id_base + item;
-                    let shown = tasks_of(entity.read(cx))
+                    let (shown, slices) = tasks_of(entity.read(cx))
                         .get(item)
                         .and_then(|task| task.compiled.as_ref())
-                        .map(Compiled::shown);
+                        .map(|compiled| {
+                            let task = &tasks_of(entity.read(cx))[item];
+                            let slices = compiled
+                                .slices()
+                                .filter(|_| task.slices_open)
+                                .map(|slices| slices.shown.clone());
+                            (Some(compiled.shown()), slices)
+                        })
+                        .unwrap_or_default();
                     // Its markdown's state is kept, so it's parsed once.
                     if let Some(shown) = shown {
                         MarkdownStates::prepare(prompt_key(task_ix), &shown, cx);
                     }
+                    if let Some(slices) = slices {
+                        MarkdownStates::prepare(slices_key(task_ix), &slices, cx);
+                    }
+                    let toggle: Rc<dyn Fn(&mut Window, &mut App)> = {
+                        let this = this.clone();
+                        Rc::new(move |_, cx| {
+                            this.update(cx, |this, cx| {
+                                if let Some(task) = tasks_of_mut(this).get_mut(item) {
+                                    task.slices_open = !task.slices_open;
+                                    cx.notify();
+                                }
+                            })
+                            .ok();
+                        })
+                    };
                     let Some(task) = tasks_of(entity.read(cx)).get(item) else {
                         return div().into_any_element();
                     };
@@ -754,7 +825,7 @@ impl HistoryList {
                             .id(("history-panel", task_ix))
                             .pt_1()
                             .pb_3()
-                            .child(task_prompt(task_ix, task, &open_file, cx)),
+                            .child(task_prompt(task_ix, task, &open_file, Some(toggle), cx)),
                     )
                     .into_any_element()
                 }
@@ -924,6 +995,15 @@ fn slide_pane(
 }
 
 /// Where a task's compiled prompt's markdown is kept.
+/// Where a previous task's spec slices are shown, whole.
+fn slices_key(task_ix: usize) -> MarkdownKey {
+    MarkdownKey {
+        kind: MarkdownKind::Slices,
+        table: task_ix,
+        row: usize::MAX,
+    }
+}
+
 fn prompt_key(task_ix: usize) -> MarkdownKey {
     MarkdownKey {
         kind: MarkdownKind::Prompt,
@@ -937,8 +1017,9 @@ fn prompt_key(task_ix: usize) -> MarkdownKey {
 /// prompt, spec slices and all, lays out only what is in view.
 struct HeaderPrompt {
     rows: MeasuredList,
-    /// The task and blocks the list was last made for.
-    shown: RefCell<Option<(usize, Arc<[SharedString]>)>>,
+    /// The task, blocks, and whether its slices were open, the list was last
+    /// made for.
+    shown: RefCell<Option<(usize, Arc<[SharedString]>, bool)>>,
     /// Which parsed markdown the list has seen, to measure a block again once
     /// it has parsed.
     markdown: Cell<u64>,
@@ -955,49 +1036,92 @@ impl Default for HeaderPrompt {
 }
 
 impl HeaderPrompt {
-    fn key(task_ix: usize, block: usize) -> MarkdownKey {
+    fn key(kind: MarkdownKind, task_ix: usize, block: usize) -> MarkdownKey {
         MarkdownKey {
-            kind: MarkdownKind::PromptBlock,
+            kind,
             table: task_ix,
             row: block,
         }
     }
 
+    /// The prompt's blocks, then, for a sliced prompt, the row that shows or
+    /// hides its slices, and its slices' blocks while they are shown.
     fn element(
         &self,
         task_ix: usize,
-        blocks: Arc<[SharedString]>,
+        compiled: &Compiled,
+        slices_open: bool,
+        toggle: Rc<dyn Fn(&mut Window, &mut App)>,
         open: OpenFile,
         cx: &App,
     ) -> AnyElement {
+        let blocks = compiled.blocks();
+        let slices = compiled
+            .slices()
+            .map(|slices| (slices.count, slices.blocks.clone()));
+        let slice_rows = match &slices {
+            Some((_, blocks)) if slices_open => 1 + blocks.len(),
+            Some(_) => 1,
+            None => 0,
+        };
         let same = self
             .shown
             .borrow()
             .as_ref()
-            .is_some_and(|(ix, shown)| *ix == task_ix && Arc::ptr_eq(shown, &blocks));
+            .is_some_and(|(ix, shown, was)| {
+                *ix == task_ix && Arc::ptr_eq(shown, &blocks) && *was == slices_open
+            });
         if !same {
-            self.rows.reset(blocks.len());
-            *self.shown.borrow_mut() = Some((task_ix, blocks.clone()));
+            self.rows.reset(blocks.len() + slice_rows);
+            *self.shown.borrow_mut() = Some((task_ix, blocks.clone(), slices_open));
             self.markdown.set(MarkdownStates::latest(cx));
         } else {
             let mut seen = self.markdown.get();
             for key in MarkdownStates::changed_since(&mut seen, cx) {
-                if key.kind == MarkdownKind::PromptBlock && key.table == task_ix {
-                    self.rows.remeasure(key.row..key.row + 1);
+                if key.table != task_ix {
+                    continue;
                 }
+                let row = match key.kind {
+                    MarkdownKind::PromptBlock => key.row,
+                    MarkdownKind::Slices => blocks.len() + 1 + key.row,
+                    _ => continue,
+                };
+                self.rows.remeasure(row..row + 1);
             }
             self.markdown.set(seen);
         }
-        let render: RenderRow = Rc::new(move |block, _, cx| {
-            let Some(text) = blocks.get(block).cloned() else {
-                return div().into_any_element();
+        let render: RenderRow = Rc::new(move |row, _, cx| {
+            let (kind, block, text) = if let Some(text) = blocks.get(row) {
+                (MarkdownKind::PromptBlock, row, text.clone())
+            } else {
+                let Some((count, slice_blocks)) = &slices else {
+                    return div().into_any_element();
+                };
+                if row == blocks.len() {
+                    let toggle = toggle.clone();
+                    return div()
+                        .pt_2()
+                        .child(task_table::slices_row(
+                            ("prompt-slices", task_ix),
+                            slices_open,
+                            *count,
+                            move |window, cx| toggle(window, cx),
+                            cx,
+                        ))
+                        .into_any_element();
+                }
+                let block = row - blocks.len() - 1;
+                let Some(text) = slice_blocks.get(block) else {
+                    return div().into_any_element();
+                };
+                (MarkdownKind::Slices, block, text.clone())
             };
-            let key = Self::key(task_ix, block);
+            let key = Self::key(kind, task_ix, block);
             // Its markdown's state is kept, so it's parsed once.
             MarkdownStates::prepare(key, &text, cx);
             div()
                 .min_w_0()
-                .when(block > 0, |row| row.pt_2())
+                .when(row > 0, |row| row.pt_2())
                 .child(shown_markdown_view(key, text, Some(&open), cx))
                 .into_any_element()
         });
@@ -1220,10 +1344,28 @@ struct ProjectSession {
     _ask_history_load: Task<()>,
     ask_session: Option<Session>,
     ask_session_epoch: u64,
+    // How the project was left on screen, kept for when it's back.
+    output_table: TaskTable,
+    output_locked: bool,
+    header_prompt: HeaderPrompt,
+    queue_scroll: ScrollHandle,
+    ask_rows: MeasuredList,
+    ask_row_ids: RefCell<Vec<usize>>,
+    file: Option<Entity<FileView>>,
+    _file_subscriptions: Vec<Subscription>,
+    file_split: Entity<ResizableState>,
+}
+
+/// The question rows in the stack, kept on the newest question as rows slide
+/// up into it, until scrolled away from it.
+fn ask_rows() -> MeasuredList {
+    let rows = MeasuredList::new(task_table::OVERDRAW);
+    rows.state().set_follow_mode(FollowMode::Tail);
+    rows
 }
 
 impl ProjectSession {
-    fn new(project_dir: Option<PathBuf>) -> Self {
+    fn new(project_dir: Option<PathBuf>, cx: &mut App) -> Self {
         Self {
             project_dir,
             tasks: Vec::new(),
@@ -1246,6 +1388,15 @@ impl ProjectSession {
             _ask_history_load: Task::ready(()),
             ask_session: None,
             ask_session_epoch: 0,
+            output_table: TaskTable::new(),
+            output_locked: false,
+            header_prompt: HeaderPrompt::default(),
+            queue_scroll: ScrollHandle::new(),
+            ask_rows: ask_rows(),
+            ask_row_ids: RefCell::default(),
+            file: None,
+            _file_subscriptions: Vec::new(),
+            file_split: cx.new(|_| ResizableState::default()),
         }
     }
 }
@@ -1473,13 +1624,7 @@ impl PromptMode {
             drawer_height: Rc::default(),
             drawer_fill_height: Rc::default(),
             stack_rows_height: Rc::default(),
-            ask_rows: {
-                // Kept on the newest question, as rows slide up into it,
-                // until scrolled away from it.
-                let rows = MeasuredList::new(task_table::OVERDRAW);
-                rows.state().set_follow_mode(FollowMode::Tail);
-                rows
-            },
+            ask_rows: ask_rows(),
             ask_row_ids: RefCell::default(),
             answers: Vec::new(),
             ask_history: HistoryList::answers(),
@@ -1521,6 +1666,18 @@ impl PromptMode {
         swap(&mut self._ask_history_load, &mut other._ask_history_load);
         swap(&mut self.ask_session, &mut other.ask_session);
         swap(&mut self.ask_session_epoch, &mut other.ask_session_epoch);
+        swap(&mut self.output_table, &mut other.output_table);
+        swap(&mut self.output_locked, &mut other.output_locked);
+        swap(&mut self.header_prompt, &mut other.header_prompt);
+        swap(&mut self.queue_scroll, &mut other.queue_scroll);
+        swap(&mut self.ask_rows, &mut other.ask_rows);
+        swap(&mut self.ask_row_ids, &mut other.ask_row_ids);
+        swap(&mut self.file, &mut other.file);
+        swap(
+            &mut self._file_subscriptions,
+            &mut other._file_subscriptions,
+        );
+        swap(&mut self.file_split, &mut other.file_split);
     }
 
     /// Follows the project on screen: the work of the one left keeps running
@@ -1531,7 +1688,7 @@ impl PromptMode {
         if dir == self.project_dir {
             return;
         }
-        let mut left = ProjectSession::new(None);
+        let mut left = ProjectSession::new(None, cx);
         self.swap_session(&mut left);
         if let Some(left_dir) = left.project_dir.clone() {
             self.background.insert(left_dir, left);
@@ -1552,15 +1709,17 @@ impl PromptMode {
                 self.load_answers(cx);
             }
         }
-        // Nothing on screen carries over from the project left, and the
-        // referenced spec sidebar shows as the project switched to has it,
-        // without sliding.
+        // The project switched to shows just as it was left, sliding nothing
+        // in: its file already beside the chat, and the referenced spec
+        // sidebar as it has it.
         self.refs_shown = self.refs_wanted();
         self.refs_opened = None;
         self.refs_closing = None;
-        self.output_locked = false;
+        self.pane_closing = None;
+        self.pane_opened = self
+            .pane_opened
+            .map(|(n, at)| (n, Instant::now().checked_sub(PANE_SLIDE_TIME).unwrap_or(at)));
         self.selection_popover = None;
-        self.output_table.forget();
         let working = self.working;
         self.chat_input
             .update(cx, |input, cx| input.set_busy(working, cx));
@@ -1766,7 +1925,6 @@ impl PromptMode {
         self.file.clone()
     }
 
-    #[cfg(test)]
     pub fn chat_input_view(&self) -> Entity<ChatInput> {
         self.chat_input.clone()
     }
@@ -1931,10 +2089,7 @@ impl PromptMode {
     }
 
     fn scroll_output_to_top(&self) {
-        // The output list is the screen's, not a background project's.
-        if self.in_background {
-            return;
-        }
+        // The project's own output list, on screen or not.
         self.output_table.scroll_to_top();
     }
 
@@ -2659,8 +2814,13 @@ impl PromptMode {
             .map(|session| session.context.unwrap_or(0))
     }
 
+    #[cfg(test)]
+    pub fn output_locked(&self) -> bool {
+        self.output_locked
+    }
+
     /// Locks the latest task's output to the bottom, or unlocks it.
-    fn set_output_lock(&mut self, locked: bool, cx: &mut Context<Self>) {
+    pub(crate) fn set_output_lock(&mut self, locked: bool, cx: &mut Context<Self>) {
         if self.output_locked == locked {
             return;
         }
@@ -3431,6 +3591,7 @@ impl PromptMode {
             let list = self.ask_history.render_list(
                 &self.answers,
                 |this| &this.answers,
+                |this| &mut this.answers,
                 |this| &mut this.ask_history,
                 &self.steps_shown,
                 &open_file,
@@ -3802,12 +3963,25 @@ impl PromptMode {
                     ))),
             )
             .child(match &task.compiled {
-                Some(compiled) => self.header_prompt.element(ix, compiled.blocks(), open, cx),
+                Some(compiled) => {
+                    let this = cx.entity().downgrade();
+                    let toggle: Rc<dyn Fn(&mut Window, &mut App)> = Rc::new(move |_, cx| {
+                        this.update(cx, |this, cx| {
+                            if let Some(task) = this.tasks.get_mut(ix) {
+                                task.slices_open = !task.slices_open;
+                                cx.notify();
+                            }
+                        })
+                        .ok();
+                    });
+                    self.header_prompt
+                        .element(ix, compiled, task.slices_open, toggle, open, cx)
+                }
                 None => div()
                     .id(("task-prompt", ix))
                     .max_h(MAX_PROMPT_HEIGHT)
                     .overflow_y_scroll()
-                    .child(task_prompt(ix, task, &open, cx))
+                    .child(task_prompt(ix, task, &open, None, cx))
                     .into_any_element(),
             });
         // Lets UI tests find the header; inert in normal builds.
@@ -4035,6 +4209,7 @@ impl Render for PromptMode {
             self.task_history.render_list(
                 &self.tasks,
                 |this| &this.tasks,
+                |this| &mut this.tasks,
                 |this| &mut this.task_history,
                 &self.steps_shown,
                 &open_file,
@@ -4317,9 +4492,40 @@ fn resend_button(id: impl Into<ElementId>) -> Button {
 
 /// The prompt a task was sent as: the compiled markdown the harness received,
 /// or the text as typed until it compiles. Its links to files open them.
-fn task_prompt(ix: usize, task: &PromptTask, open: &OpenFile, cx: &App) -> AnyElement {
+fn task_prompt(
+    ix: usize,
+    task: &PromptTask,
+    open: &OpenFile,
+    toggle_slices: Option<Rc<dyn Fn(&mut Window, &mut App)>>,
+    cx: &App,
+) -> AnyElement {
     match &task.compiled {
         Some(compiled) => {
+            // What was typed first, then the slices it was sent with,
+            // collapsed until shown.
+            let slices = compiled
+                .slices()
+                .zip(toggle_slices)
+                .map(|(slices, toggle)| {
+                    v_flex()
+                        .pt_2()
+                        .gap_2()
+                        .child(task_table::slices_row(
+                            ("prompt-slices", ix),
+                            task.slices_open,
+                            slices.count,
+                            move |window, cx| toggle(window, cx),
+                            cx,
+                        ))
+                        .when(task.slices_open, |column| {
+                            column.child(shown_markdown_view(
+                                slices_key(ix),
+                                slices.shown.clone(),
+                                Some(open),
+                                cx,
+                            ))
+                        })
+                });
             let prompt = div()
                 .id(("compiled-prompt", ix))
                 .min_w_0()
@@ -4328,7 +4534,8 @@ fn task_prompt(ix: usize, task: &PromptTask, open: &OpenFile, cx: &App) -> AnyEl
                     compiled.shown(),
                     Some(open),
                     cx,
-                ));
+                ))
+                .children(slices);
             // Lets UI tests find the compiled prompt; inert in normal builds.
             gpui_kit::TestSupportExt::test_support(prompt).into_any_element()
         }
@@ -5492,6 +5699,45 @@ mod tests {
         });
         assert_eq!(shown(cx), Some(900));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A sliced prompt's header shows what was typed first, with its spec
+    /// slices collapsed into a row beneath it that shows and hides them.
+    #[gpui_kit::test]
+    async fn a_sliced_prompt_collapses_its_slices(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        let compiled = "Fix the ribbon.\n\nSpec slices:\n\n# RibbonScope\n\nSLICE BODY\n\n# ThemeScope\n\nMORE";
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let ix = this.push_task("Fix the ribbon.".into(), cx);
+                this.show_compiled(ix, "Prompt_0".into(), compiled.into(), cx);
+            });
+        })
+        .unwrap();
+        cx.wait_for(handle, Duration::from_secs(1), |window, _| {
+            window.try_find(("prompt-slices", 0usize)).is_some()
+        })
+        .await;
+        let rows = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                .unwrap();
+            prompt_mode.read_with(cx, |this, _| this.header_prompt.rows.count())
+        };
+        prompt_mode.read_with(cx, |this, _| {
+            let compiled = this.tasks[0].compiled.as_ref().unwrap();
+            assert_eq!(compiled.shown().as_ref(), "Fix the ribbon.");
+            assert_eq!(compiled.slices().unwrap().count, 2);
+        });
+        // The prompt, then the row that shows its slices.
+        assert_eq!(rows(cx), 2);
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("prompt-slices", 0usize), cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        prompt_mode.read_with(cx, |this, _| assert!(this.tasks[0].slices_open));
+        // And now each block of the slices beneath it.
+        assert_eq!(rows(cx), 6);
     }
 
     /// A long compiled prompt, as one sent with its spec slices, is drawn a

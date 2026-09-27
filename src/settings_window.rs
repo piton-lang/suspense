@@ -14,6 +14,7 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
+use crate::growing_input::GrowToFit;
 use crate::piton_syntax;
 use crate::project_directory::ProjectDirectory;
 use crate::system_prompts::{
@@ -24,9 +25,6 @@ actions!(suspense, [OpenSettings]);
 
 /// Emitted when the settings are closed.
 pub struct CloseSettings;
-
-/// How tall each prompt's editor is before it scrolls.
-const EDITOR_HEIGHT: Pixels = px(120.);
 
 /// How wide the sidebar of sections is.
 const SIDEBAR_WIDTH: Pixels = px(180.);
@@ -87,6 +85,8 @@ pub fn bind_keys(cx: &mut App) {
 struct PromptEditor {
     prompt: Prompt,
     editor: Entity<EditorState>,
+    /// How the editor grows to fit the whole prompt, which it never scrolls.
+    fit: GrowToFit,
     /// Why the prompt could not be read or saved, until it can be.
     error: Option<SharedString>,
 }
@@ -124,6 +124,9 @@ impl SettingsWindow {
                         .line_number(false)
                         .folding(false)
                         .soft_wrap(true)
+                        // No empty rows below the last line: it is sized to
+                        // its text.
+                        .scroll_beyond_last_line(Some(0))
                 });
                 subscriptions.push(cx.subscribe_in(
                     &editor,
@@ -137,6 +140,7 @@ impl SettingsWindow {
                 PromptEditor {
                     prompt,
                     editor,
+                    fit: GrowToFit::new(usize::MAX),
                     error: None,
                 }
             })
@@ -225,7 +229,13 @@ impl SettingsWindow {
         self.save(which, cx);
     }
 
-    fn render_prompt(&self, prompt: &PromptEditor, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_prompt(
+        &self,
+        ix: usize,
+        prompt: &PromptEditor,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let theme = cx.theme();
         let which = prompt.prompt;
         let is_default =
@@ -261,7 +271,17 @@ impl SettingsWindow {
                         ),
                     ),
             )
-            .child(Editor::new(&prompt.editor).h(EDITOR_HEIGHT))
+            .child({
+                let (height, _) = prompt.fit.heights(&prompt.editor, window, cx);
+                div()
+                    .relative()
+                    .child(Editor::new(&prompt.editor).h(height))
+                    .child(GrowToFit::tracker(
+                        &prompt.editor,
+                        cx.entity().downgrade(),
+                        move |this: &mut Self| &mut this.prompts[ix].fit,
+                    ))
+            })
             .children(
                 prompt
                     .error
@@ -309,7 +329,7 @@ impl SettingsWindow {
 }
 
 impl Render for SettingsWindow {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let section = Self::section(cx);
         let theme = cx.theme();
         let (background, foreground, muted, border) = (
@@ -347,8 +367,12 @@ impl Render for SettingsWindow {
             let prompts: Vec<AnyElement> = self
                 .prompts
                 .iter()
-                .filter(|prompt| section.holds(prompt.prompt))
-                .map(|prompt| self.render_prompt(prompt, cx).into_any_element())
+                .enumerate()
+                .filter(|(_, prompt)| section.holds(prompt.prompt))
+                .map(|(ix, prompt)| {
+                    self.render_prompt(ix, prompt, window, cx)
+                        .into_any_element()
+                })
                 .collect();
             v_flex().gap_5().children(prompts).into_any_element()
         } else {
@@ -539,6 +563,65 @@ mod tests {
             Section::InjectedPrompts
         );
 
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Each prompt's editor is as tall as its prompt, growing as lines are
+    /// added, so the whole prompt shows and only the page scrolls.
+    #[gpui_kit::test]
+    async fn prompt_editors_grow_to_fit(cx: &mut TestAppContext) {
+        let dir =
+            std::env::temp_dir().join(format!("suspense-settings-grow-{}", std::process::id()));
+        fs::remove_dir_all(&dir).ok();
+        fs::create_dir_all(&dir).unwrap();
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            ProjectDirectory::set(dir.clone(), cx);
+        });
+        let mut settings = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| SettingsWindow::new(window, cx));
+            settings = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let settings = settings.unwrap();
+        let cx = &mut VisualTestContext::from_window(window.into(), cx);
+        cx.run_until_parked();
+        let height = |cx: &mut VisualTestContext| {
+            cx.update(|window, cx| {
+                window.refresh();
+                let _ = cx;
+            });
+            cx.run_until_parked();
+            settings.update_in(cx, |this, window, cx| {
+                let prompt = &this.prompts[0];
+                prompt.fit.heights(&prompt.editor, window, cx).0
+            })
+        };
+        let short = {
+            settings.update_in(cx, |this, window, cx| {
+                this.prompts[0]
+                    .editor
+                    .update(cx, |editor, cx| editor.set_value("one", window, cx))
+            });
+            height(cx)
+        };
+        settings.update_in(cx, |this, window, cx| {
+            let long = (0..40)
+                .map(|n| format!("line {n}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            this.prompts[0]
+                .editor
+                .update(cx, |editor, cx| editor.set_value(long, window, cx))
+        });
+        let tall = height(cx);
+        assert!(
+            tall > short * 20.,
+            "{tall:?} isn't forty lines tall, next to {short:?}"
+        );
         fs::remove_dir_all(&dir).ok();
     }
 }

@@ -11,6 +11,7 @@ from ../prompt-mode import PromptEditor
 from ../prompt-mode/chat-input import ChatInputScope
 from ../prompt-mode/sending import PromptSendingScope
 from ../rescope import RescopeScope
+from ../run-targets import RunTargetsScope
 from ../running-activity import RunningActivityScope
 from ../settings-window import SettingsWindowScope
 from ../user-preferences import UserPreferencesScope
@@ -48,9 +49,19 @@ shape MainWindowShape:
         appearance.
 
     escape:
-        Pressing Esc anywhere in the window, including in an @{EditorScope},
-        moves focus to the @{ChatInputScope}. Esc first closes whatever it would
-        otherwise dismiss, such as a completion menu or a popup.
+        Pressing Esc closes whatever it dismisses, such as a completion menu, a
+        popup, the palette, or an inset panel, and otherwise does what it does
+        where the keyboard is. It never moves focus to the @{ChatInputScope}.
+
+    focusingTheChat:
+        Pressing <Ctrl+Enter> (<Cmd+Enter> on macOS) while the
+        @{ChatInputScope} doesn't have the keyboard, such as in an
+        @{EditorScope}, the @{FileTreeScope}, or the Git panel, moves focus to it,
+        with its cursor where it was, and sends nothing. While it has the
+        keyboard, it sends as the chat input says. Wherever else it already
+        means something, it keeps that meaning: in the palette, in a dialog,
+        in the list of recent projects, and in an inset panel, which the chat
+        input is beneath.
 
     pointer:
         Where the hit areas of two things that take a press overlap, such as
@@ -134,6 +145,11 @@ shape MainWindowShape:
             or brings back one that was minimized. Its Refactor sends its prompt
             to the prompt mode on the application's behalf, as the
             @{PromptSendingScope} says.
+
+        run:
+            The Code tab's run commands open the @{RunTargetsScope}'s panel as a
+            @{MinimizablePanelScope}, in place of whatever else is open there,
+            or bring back one that was minimized, as it says.
 
         viewDivergenceReports:
             The ribbon's View Divergence Reports command opens the

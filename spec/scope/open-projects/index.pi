@@ -31,19 +31,38 @@ shape OpenProjectsShape:
         - its queue, whether it is expanded, and its auto-send switch
         - its questions, from the @{ChatInputScope}'s Ask tab: those stacked above the tabs, the one open in the answer drawer, the previous answers, and the conversation questions carry on
         - a spec build run on its own in it
+        - a divergence analysis, a rescope search, or a run target of it, each in its minimizable panel
 
         Whatever a run does is written to the project it was started in, never
         to the one on screen. A project's queue only ever sends into that
         project, and sends on its own there while it is in the background, just
         as it would on screen.
 
+    keptAsLeft:
+        Each open project also keeps how it was left on screen, so switching
+        back to it shows it just as it was, with nothing to find again:
+        - the message list: how far the latest task's output was scrolled and whether it was locked to the bottom, how far its compiled prompt was scrolled, the previous tasks, whether they were expanded, which was open, and how far they were scrolled, the queue's scrolling, and the question rows' scrolling
+        - the file open in the editor beside the chat, with its unsaved changes, its cursor, and its scrolling, and the width of its split
+        - the file tree's expanded folders, and the row selected
+        - the Git panel's commit message, as far as it was written
+        - its minimizable panels, a divergence analysis, a rescope search, or the Run panel, minimized as it is switched away from, their work carrying on in the background
+
+        Coming back to a project slides nothing in: its file shows already
+        beside the chat, and its referenced spec sidebar already out if a task
+        of it is running. All of this is kept for as long as the application
+        runs, and none of it is saved with the project.
+
     followsTheScreen:
-        Everything else follows the project on screen and starts afresh for it
-        on a switch: the file tree, the Git panel, the file open in the editor,
-        the palette, the language server, the settings, and the chat input's
-        prompt being written with its attachments, which stay with the person
-        writing rather than a project. Scrolling, and whether the latest task's
-        output is locked to the bottom, start afresh too.
+        Only what isn't a project's follows the project on screen: the
+        palette and any inset panel other than a minimizable one close, the
+        language server is the project on screen's, and the settings show the
+        project on screen's prompts. A file kept for a project not on screen
+        isn't open in the language server, and is opened in it again once its
+        project is back. The chat input's prompt being written, its
+        attachments, the selected tab, and the Slice toggle stay with the
+        person writing rather than a project. What the application keeps for
+        the whole run rather than a project, such as the sidebar's width, the
+        answer drawer's height, and which ribbon tabs are open, stays as it is.
 
     switching:
         A project's history, answers, and queue are loaded from its data, as the
@@ -51,9 +70,9 @@ shape OpenProjectsShape:
         kept from then on, so switching back to it loads nothing again and
         shows it just as it was left, with whatever has happened since.
 
-        Switching projects stops, and closes, a divergence analysis or a
-        rescope search, and closes any inset panel; they belong to the screen.
-        However it is switched, the chat input then takes the keyboard.
+        Switching projects minimizes the minimizable panel showing, and closes
+        any other inset panel. However it is switched, the chat input then
+        takes the keyboard.
 
     sameProject:
         A project is the same project however its folder was reached, so it is
