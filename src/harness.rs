@@ -16,6 +16,7 @@ use serde_json::{Value, json};
 
 use crate::agent::{self, Agent};
 use crate::harness_mentions;
+use crate::usage::{PlanLimit, Spend};
 
 /// The directory the harness in use reads its agentic Markdown and reference
 /// files from, which a system prompt's `${HARNESS_DIRECTORY}` stands for.
@@ -84,6 +85,18 @@ pub enum HarnessEvent {
     Usage {
         context: u64,
     },
+    /// Tokens and cost the run reported: its totals so far when `total`,
+    /// or more on top of what it reported before otherwise. A figure left
+    /// `None` wasn't reported.
+    Spent {
+        spend: Spend,
+        total: bool,
+    },
+    /// The plan limits the harness reported, each with the share used so
+    /// far; a limit not among them is as it was.
+    Limits(Vec<PlanLimit>),
+    /// The model the run uses.
+    Model(String),
 }
 
 /// A conversation an earlier run reported, for a run to carry on.
@@ -861,10 +874,13 @@ fn parse_codex(event: &Value) -> Vec<HarnessEvent> {
             .into_iter()
             .collect(),
         // Its reply is its last message, which the run fills in.
-        Some("turn.completed") => vec![HarnessEvent::Finished {
-            is_error: false,
-            result: String::new(),
-        }],
+        Some("turn.completed") => codex_spent(event)
+            .into_iter()
+            .chain([HarnessEvent::Finished {
+                is_error: false,
+                result: String::new(),
+            }])
+            .collect(),
         Some("turn.failed") => vec![HarnessEvent::Finished {
             is_error: true,
             result: str_at(event, "/error/message").unwrap_or_default(),
@@ -874,6 +890,25 @@ fn parse_codex(event: &Value) -> Vec<HarnessEvent> {
         }
         _ => Vec::new(),
     }
+}
+
+/// The tokens a Codex turn used, from its `usage`: its input, of which
+/// `cached_input_tokens` were read from the cache, and its output. Codex
+/// reports no cost and nothing written to the cache.
+fn codex_spent(event: &Value) -> Option<HarnessEvent> {
+    let usage = event.get("usage")?;
+    let tokens = |key: &str| usage.get(key).and_then(Value::as_u64);
+    let cached = tokens("cached_input_tokens");
+    let spend = Spend {
+        input: tokens("input_tokens").map(|input| input.saturating_sub(cached.unwrap_or(0))),
+        output: tokens("output_tokens"),
+        cache_read: cached,
+        ..Spend::default()
+    };
+    (!spend.is_empty()).then_some(HarnessEvent::Spent {
+        spend,
+        total: false,
+    })
 }
 
 /// What a Codex item that started or was `done` did.
@@ -992,17 +1027,35 @@ fn parse_opencode(event: &Value) -> Vec<HarnessEvent> {
             tool_call(id, opencode_tool(&tool), input, finished)
         }
         Some("step_finish") => {
-            let tokens = |pointer: &str| {
+            let reported = |pointer: &str| {
                 part.pointer(&format!("/tokens{pointer}"))
                     .and_then(Value::as_u64)
-                    .unwrap_or(0)
             };
+            let tokens = |pointer: &str| reported(pointer).unwrap_or(0);
             let mut events = vec![HarnessEvent::Usage {
                 context: tokens("/input")
                     + tokens("/output")
                     + tokens("/cache/read")
                     + tokens("/cache/write"),
             }];
+            // Each step's tokens and cost, on top of the steps before it;
+            // its reasoning is written, so counts as output.
+            let spend = Spend {
+                input: reported("/input"),
+                output: match (reported("/output"), reported("/reasoning")) {
+                    (None, None) => None,
+                    (output, reasoning) => Some(output.unwrap_or(0) + reasoning.unwrap_or(0)),
+                },
+                cache_read: reported("/cache/read"),
+                cache_write: reported("/cache/write"),
+                cost: part.get("cost").and_then(Value::as_f64),
+            };
+            if !spend.is_empty() {
+                events.push(HarnessEvent::Spent {
+                    spend,
+                    total: false,
+                });
+            }
             if str_at(part, "/reason").as_deref() == Some("stop") {
                 events.push(HarnessEvent::Finished {
                     is_error: false,
@@ -1102,7 +1155,16 @@ fn parse_claude(event: &Value) -> Vec<HarnessEvent> {
             str_at(event, "/session_id")
                 .map(HarnessEvent::Session)
                 .into_iter()
+                .chain(str_at(event, "/model").map(HarnessEvent::Model))
                 .collect()
+        }
+        Some("rate_limit_event") => {
+            let limits = claude_limits(&event["rate_limit_info"]);
+            if limits.is_empty() {
+                Vec::new()
+            } else {
+                vec![HarnessEvent::Limits(limits)]
+            }
         }
         Some("stream_event") => {
             let inner = &event["event"];
@@ -1153,15 +1215,115 @@ fn parse_claude(event: &Value) -> Vec<HarnessEvent> {
             })
             .chain(tool_outputs(event, subagent))
             .collect(),
-        Some("result") => vec![HarnessEvent::Finished {
-            is_error: event
-                .get("is_error")
-                .and_then(Value::as_bool)
-                .unwrap_or(false),
-            result: str_at(event, "/result").unwrap_or_default(),
-        }],
+        Some("result") => claude_spent(event)
+            .into_iter()
+            .chain([HarnessEvent::Finished {
+                is_error: event
+                    .get("is_error")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+                result: str_at(event, "/result").unwrap_or_default(),
+            }])
+            .collect(),
         _ => Vec::new(),
     }
+}
+
+/// What a Claude Code run has spent, from a `result`. Its `modelUsage`,
+/// each model's tokens and cost, subagents' included, and its
+/// `total_cost_usd` are the run's totals so far, even for a run fed several
+/// messages, each answered with a result of its own; its `usage` is only the
+/// last turn's, so is added on, where there is no `modelUsage`.
+fn claude_spent(event: &Value) -> Vec<HarnessEvent> {
+    let cost = event.get("total_cost_usd").and_then(Value::as_f64);
+    if let Some(models) = event.get("modelUsage").and_then(Value::as_object)
+        && !models.is_empty()
+    {
+        let sum = |key: &str| {
+            models
+                .values()
+                .filter_map(|model| model.get(key)?.as_u64())
+                .reduce(|a, b| a + b)
+        };
+        let spend = Spend {
+            input: sum("inputTokens"),
+            output: sum("outputTokens"),
+            cache_read: sum("cacheReadInputTokens"),
+            cache_write: sum("cacheCreationInputTokens"),
+            cost: cost.or_else(|| {
+                models
+                    .values()
+                    .filter_map(|model| model.get("costUSD")?.as_f64())
+                    .reduce(|a, b| a + b)
+            }),
+        };
+        return vec![HarnessEvent::Spent { spend, total: true }];
+    }
+    let mut events = Vec::new();
+    if let Some(usage) = event.get("usage") {
+        let tokens = |key: &str| usage.get(key).and_then(Value::as_u64);
+        let spend = Spend {
+            input: tokens("input_tokens"),
+            output: tokens("output_tokens"),
+            cache_read: tokens("cache_read_input_tokens"),
+            cache_write: tokens("cache_creation_input_tokens"),
+            cost: None,
+        };
+        if !spend.is_empty() {
+            events.push(HarnessEvent::Spent {
+                spend,
+                total: false,
+            });
+        }
+    }
+    if cost.is_some() {
+        events.push(HarnessEvent::Spent {
+            spend: Spend {
+                cost,
+                ..Spend::default()
+            },
+            total: true,
+        });
+    }
+    events
+}
+
+/// The plan limits in a Claude Code `rate_limit_event`'s `rate_limit_info`:
+/// every window in its `unifiedWindows`, each with the share of it used, as
+/// a fraction, and when it resets; or, without them, the one limit it names,
+/// with its `utilization` where it gives one, and as used up where its
+/// status says it was rejected. A limit with no share known is left out.
+fn claude_limits(info: &Value) -> Vec<PlanLimit> {
+    let resets = |value: &Value| value.get("resetsAt").and_then(Value::as_u64);
+    if let Some(windows) = info.get("unifiedWindows").and_then(Value::as_object) {
+        let limits: Vec<PlanLimit> = windows
+            .iter()
+            .filter_map(|(name, window)| {
+                Some(PlanLimit {
+                    name: name.clone(),
+                    used: window.get("utilization")?.as_f64()?,
+                    resets_at: resets(window),
+                })
+            })
+            .collect();
+        if !limits.is_empty() {
+            return limits;
+        }
+    }
+    let Some(name) = str_at(info, "/rateLimitType") else {
+        return Vec::new();
+    };
+    let used = info
+        .get("utilization")
+        .and_then(Value::as_f64)
+        .or_else(|| (str_at(info, "/status").as_deref() == Some("rejected")).then_some(1.));
+    used.map(|used| PlanLimit {
+        name,
+        used,
+        resets_at: resets(info),
+    })
+    .into_iter()
+    .collect()
 }
 
 /// The whole input of each tool call in an assistant message.
@@ -1257,6 +1419,7 @@ pub(crate) mod tests {
     use serde_json::json;
 
     use super::{HarnessEvent, parse};
+    use crate::usage::{PlanLimit, Spend};
 
     /// A stand-in harness, written to `dir`: it says which conversation it
     /// is, starts a reply and a tool call, and then works on, leaving a
@@ -1385,6 +1548,186 @@ wait
 
     /// Shapes taken from a real `claude -p --output-format stream-json
     /// --verbose --include-partial-messages` run.
+    /// What Claude Code reports of usage, in the shapes of a real
+    /// `claude -p --output-format stream-json --verbose` run (2.1.281): the
+    /// model at its start, its plan limits in a `rate_limit_event`, and a
+    /// result's totals so far in `modelUsage` and `total_cost_usd`.
+    #[test]
+    fn parses_claude_usage() {
+        let init = json!({ "type": "system", "subtype": "init", "session_id": "s",
+            "model": "claude-haiku-4-5-20251001" });
+        assert_eq!(
+            parse(&init),
+            [
+                HarnessEvent::Session("s".into()),
+                HarnessEvent::Model("claude-haiku-4-5-20251001".into())
+            ]
+        );
+
+        let limits = json!({ "type": "rate_limit_event", "session_id": "s", "rate_limit_info": {
+            "status": "allowed", "resetsAt": 1790543400, "rateLimitType": "five_hour",
+            "overageStatus": "rejected", "isUsingOverage": false,
+            "unifiedWindows": {
+                "five_hour": { "utilization": 0.1, "resetsAt": 1790543400 },
+                "seven_day": { "utilization": 0.42, "resetsAt": 1790708400 } } } });
+        assert_eq!(
+            parse(&limits),
+            [HarnessEvent::Limits(vec![
+                PlanLimit {
+                    name: "five_hour".into(),
+                    used: 0.1,
+                    resets_at: Some(1790543400)
+                },
+                PlanLimit {
+                    name: "seven_day".into(),
+                    used: 0.42,
+                    resets_at: Some(1790708400)
+                },
+            ])]
+        );
+        // Without its windows, the one limit it names, where its share is
+        // known: given, or used up once rejected.
+        let named = |info: serde_json::Value| {
+            parse(&json!({ "type": "rate_limit_event", "rate_limit_info": info }))
+        };
+        assert_eq!(
+            named(
+                json!({ "status": "allowed_warning", "rateLimitType": "seven_day",
+                "utilization": 0.85, "resetsAt": 100 })
+            ),
+            [HarnessEvent::Limits(vec![PlanLimit {
+                name: "seven_day".into(),
+                used: 0.85,
+                resets_at: Some(100)
+            }])]
+        );
+        assert_eq!(
+            named(json!({ "status": "rejected", "rateLimitType": "five_hour" })),
+            [HarnessEvent::Limits(vec![PlanLimit {
+                name: "five_hour".into(),
+                used: 1.,
+                resets_at: None
+            }])]
+        );
+        assert_eq!(
+            named(json!({ "status": "allowed", "rateLimitType": "five_hour" })),
+            []
+        );
+        assert_eq!(named(json!({})), []);
+
+        // A fed run's second result: `usage` is its last turn's, while
+        // `modelUsage` and `total_cost_usd` count the whole run.
+        let result = json!({ "type": "result", "subtype": "success", "is_error": false,
+            "result": "Bye!", "total_cost_usd": 0.0148501,
+            "usage": { "input_tokens": 10, "output_tokens": 61,
+                "cache_read_input_tokens": 21679, "cache_creation_input_tokens": 1109 },
+            "modelUsage": {
+                "claude-haiku-4-5-20251001": { "inputTokens": 20, "outputTokens": 125,
+                    "cacheReadInputTokens": 39331, "cacheCreationInputTokens": 5136,
+                    "costUSD": 0.0148501, "contextWindow": 200000 } } });
+        assert_eq!(
+            parse(&result),
+            [
+                HarnessEvent::Spent {
+                    spend: Spend {
+                        input: Some(20),
+                        output: Some(125),
+                        cache_read: Some(39331),
+                        cache_write: Some(5136),
+                        cost: Some(0.0148501),
+                    },
+                    total: true,
+                },
+                HarnessEvent::Finished {
+                    is_error: false,
+                    result: "Bye!".into()
+                }
+            ]
+        );
+        // Without `modelUsage`, the turn's tokens add on, and the cost is the
+        // run's so far.
+        let result = json!({ "type": "result", "is_error": false, "result": "",
+            "total_cost_usd": 0.5, "usage": { "input_tokens": 3, "output_tokens": 4 } });
+        assert_eq!(
+            &parse(&result)[..2],
+            [
+                HarnessEvent::Spent {
+                    spend: Spend {
+                        input: Some(3),
+                        output: Some(4),
+                        ..Spend::default()
+                    },
+                    total: false,
+                },
+                HarnessEvent::Spent {
+                    spend: Spend {
+                        cost: Some(0.5),
+                        ..Spend::default()
+                    },
+                    total: true,
+                },
+            ]
+        );
+        // Nothing reported, nothing spent.
+        assert_eq!(
+            parse(&json!({ "type": "result", "is_error": false, "result": "" })),
+            [HarnessEvent::Finished {
+                is_error: false,
+                result: String::new()
+            }]
+        );
+    }
+
+    /// Codex's turn reports its tokens, of which its cached input was read
+    /// from the cache, and no cost; OpenCode's steps report their tokens and
+    /// cost, its reasoning counted as output. A turn or step reporting none
+    /// spends nothing.
+    #[test]
+    fn parses_codex_and_opencode_usage() {
+        let turn = json!({ "type": "turn.completed", "usage": {
+            "input_tokens": 24763, "cached_input_tokens": 24448, "output_tokens": 122 } });
+        assert_eq!(
+            parse(&turn)[0],
+            HarnessEvent::Spent {
+                spend: Spend {
+                    input: Some(315),
+                    output: Some(122),
+                    cache_read: Some(24448),
+                    ..Spend::default()
+                },
+                total: false,
+            }
+        );
+        assert_eq!(
+            parse(&json!({ "type": "turn.completed" })),
+            [HarnessEvent::Finished {
+                is_error: false,
+                result: String::new()
+            }]
+        );
+
+        let step = json!({ "type": "step_finish", "sessionID": "ses", "part": {
+            "type": "step-finish", "reason": "tool-calls", "cost": 0.0123,
+            "tokens": { "input": 50, "output": 7, "reasoning": 3,
+                "cache": { "read": 400, "write": 0 } } } });
+        assert_eq!(
+            parse(&step)[1],
+            HarnessEvent::Spent {
+                spend: Spend {
+                    input: Some(50),
+                    output: Some(10),
+                    cache_read: Some(400),
+                    cache_write: Some(0),
+                    cost: Some(0.0123),
+                },
+                total: false,
+            }
+        );
+        let bare = json!({ "type": "step_finish", "sessionID": "ses",
+            "part": { "type": "step-finish", "reason": "tool-calls" } });
+        assert_eq!(parse(&bare), [HarnessEvent::Usage { context: 0 }]);
+    }
+
     /// A file's path is summarized whole, however long, so it still opens;
     /// other long inputs are cut short.
     #[test]
@@ -1467,6 +1810,14 @@ wait
                 },
                 HarnessEvent::TextStarted,
                 HarnessEvent::TextDelta("Done.".into()),
+                HarnessEvent::Spent {
+                    spend: Spend {
+                        input: Some(10),
+                        output: Some(2),
+                        ..Spend::default()
+                    },
+                    total: false,
+                },
                 HarnessEvent::Finished {
                     is_error: false,
                     result: String::new()
@@ -1531,6 +1882,16 @@ wait
                 HarnessEvent::TextStarted,
                 HarnessEvent::TextDelta("It's a.".into()),
                 HarnessEvent::Usage { context: 1115 },
+                HarnessEvent::Spent {
+                    spend: Spend {
+                        input: Some(100),
+                        output: Some(5),
+                        cache_read: Some(1000),
+                        cache_write: Some(10),
+                        cost: None,
+                    },
+                    total: false,
+                },
                 HarnessEvent::Finished {
                     is_error: false,
                     result: String::new()

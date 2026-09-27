@@ -226,6 +226,45 @@ shape ChatInputShape:
             beneath the help text, and neither is cut off: the help text gives
             way to them when the bar is narrow.
 
+        usage:
+            Just right of the context figure, before New conversation, sits the
+            agent's usage: how much of the harness picked, of the
+            @{HarnessIntegrationScope}, has been used, as Claude Code's /usage
+            shows it. Its summary is short and extra small, muted like the
+            context figure: "Usage", then the share used of the plan limit
+            nearest to running out, such as "Usage 42%", turning the theme's
+            warning colour from 80% and its error colour once the limit is
+            reached. When the harness reports no plan limits, the summary is
+            the cost of this project's runs since it was opened, such as
+            "Usage $1.24", or the tokens they used, as the context figure is
+            written, when it reports no cost either. Until anything has been
+            reported, it reads "Usage", with nothing after it.
+
+            Clicking the summary opens a popover above it with all the details,
+            each group headed, and each figure labelled:
+
+            \\
+            - Plan limits: each limit the harness reports, such as the current
+              session's and the week's, with the share used as a bar and a
+              percentage, and when it resets.
+            - Conversation: the context the selected tab's conversation holds,
+              and its input, output, cache-read, and cache-written tokens, and
+              its cost.
+            - This project: the same totals for every run in the project since
+              it was opened, tasks and questions, and how many runs there were.
+            - The harness and model the figures came from, and when they were
+              last reported.
+            \\
+
+            A group, or a figure, the harness doesn't report is left out rather
+            than shown as zero, and when nothing has been reported the popover
+            says so. The figures come from what the harness reports as its runs
+            go, never from running anything of its own to ask, and update in
+            place while the popover is open, following each reply. Clicking
+            outside the popover, or pressing Escape, closes it. The summary's
+            tooltip says to click for the details. Like the context figure, it
+            is never cut off: the help text gives way to it.
+
         slice:
             Just left of the context figure sits the Slice toggle: a small ghost
             button with a scissors icon, reading "Slice", which shows as

@@ -81,6 +81,7 @@ use crate::task_table::{
 };
 use crate::theme::Hue;
 use crate::understanding::{self, Understanding};
+use crate::usage::{self, Conversation, PlanLimits, ProjectUsage, UsageReport};
 
 /// The share of the width an opened file takes from the task view.
 const FILE_SHARE: f32 = 0.5;
@@ -1485,6 +1486,7 @@ struct ProjectSession {
     _ask_history_load: Task<()>,
     ask_session: Option<Session>,
     ask_session_epoch: u64,
+    usage: ProjectUsage,
     // How the project was left on screen, kept for when it's back.
     output_table: TaskTable,
     output_locked: bool,
@@ -1531,6 +1533,7 @@ impl ProjectSession {
             _ask_history_load: Task::ready(()),
             ask_session: None,
             ask_session_epoch: 0,
+            usage: ProjectUsage::default(),
             output_table: TaskTable::new(),
             output_locked: false,
             header_prompt: HeaderPrompt::default(),
@@ -1684,6 +1687,12 @@ pub struct PromptMode {
     ask_session: Option<Session>,
     /// As [`Self::session_epoch`], for the questions' conversation.
     ask_session_epoch: u64,
+    /// What the project's tasks and questions have reported spending since
+    /// it was opened.
+    usage: ProjectUsage,
+    /// The plan limits each harness last reported, the user's rather than a
+    /// project's.
+    limits: PlanLimits,
     _file_subscriptions: Vec<Subscription>,
     /// Compiling the prompt for the chat input's preview.
     _preview: Task<()>,
@@ -1802,6 +1811,8 @@ impl PromptMode {
             on_ask_tab: false,
             ask_session: None,
             ask_session_epoch: 0,
+            usage: ProjectUsage::default(),
+            limits: PlanLimits::default(),
             _file_subscriptions: Vec::new(),
             _preview: Task::ready(()),
             header_prompt: HeaderPrompt::default(),
@@ -1838,6 +1849,7 @@ impl PromptMode {
         swap(&mut self._ask_history_load, &mut other._ask_history_load);
         swap(&mut self.ask_session, &mut other.ask_session);
         swap(&mut self.ask_session_epoch, &mut other.ask_session_epoch);
+        swap(&mut self.usage, &mut other.usage);
         swap(&mut self.output_table, &mut other.output_table);
         swap(&mut self.output_locked, &mut other.output_locked);
         swap(&mut self.header_prompt, &mut other.header_prompt);
@@ -3121,6 +3133,64 @@ impl PromptMode {
             .map(|session| session.context.unwrap_or(0))
     }
 
+    /// Follows what run `run` of the project on hand, of `agent`, reports
+    /// of its usage.
+    fn follow_usage(
+        &mut self,
+        run: Option<usize>,
+        agent: crate::agent::Agent,
+        event: &HarnessEvent,
+    ) {
+        let now = usage::now();
+        if let Some(run) = run {
+            self.usage.follow(run, agent, event, now);
+        }
+        self.limits.follow(agent, event, now);
+    }
+
+    /// The agent's usage as the chat input shows it: the plan limits of the
+    /// harness picked, the selected tab's conversation, and the project.
+    fn usage_report(&self) -> UsageReport {
+        let now = usage::now();
+        let agent = crate::agent::current();
+        let (conversation, epoch, session) = if self.on_ask_tab {
+            (
+                Conversation::Questions,
+                self.ask_session_epoch,
+                &self.ask_session,
+            )
+        } else {
+            (Conversation::Tasks, self.session_epoch, &self.session)
+        };
+        let (limits, limits_reported) = self.limits.of(agent, now);
+        let project_dir = self.project_dir.as_deref();
+        let context = session
+            .as_ref()
+            .filter(|session| Some(session.project_dir.as_path()) == project_dir)
+            .and_then(|session| session.context);
+        let (mut harness, mut model, mut reported) = self.usage.source();
+        // Limits reported since the project's own figures say where they came
+        // from.
+        if limits_reported > reported {
+            if harness != Some(agent) {
+                model = None;
+            }
+            harness = Some(agent);
+            reported = limits_reported;
+        }
+        UsageReport {
+            limits,
+            conversation: Some(conversation),
+            context,
+            conversation_spend: self.usage.conversation(conversation, epoch),
+            project_spend: self.usage.project(),
+            runs: self.usage.runs(),
+            harness,
+            model,
+            reported,
+        }
+    }
+
     #[cfg(test)]
     pub fn output_locked(&self) -> bool {
         self.output_locked
@@ -3360,6 +3430,9 @@ impl PromptMode {
                     let system_prompt = compiled.system_prompt.map(|system_prompt| {
                         system_prompts::fill_understanding(&system_prompt, shown_path.as_deref())
                     });
+                    // The harness the run goes to, which its usage came from.
+                    let agent = crate::agent::current();
+                    let mut usage_run = None;
                     let harness::Run {
                         mut events,
                         feed,
@@ -3376,6 +3449,8 @@ impl PromptMode {
                     if this
                         .update(cx, |this, cx| {
                             this.in_project(&project_dir, cx, |this, cx| {
+                                usage_run =
+                                    Some(this.usage.start_run(Conversation::Tasks, epoch));
                                 // More can be sent to it while it runs.
                                 this.feed = feed;
                                 // Cancelled, its run is stopped.
@@ -3455,6 +3530,7 @@ impl PromptMode {
                                     if let HarnessEvent::Session(_) = &event {
                                         started = true;
                                     }
+                                    this.follow_usage(usage_run, agent, &event);
                                     if let Some(left) = Session::follow(
                                         &mut this.session,
                                         this.session_epoch == epoch,
@@ -3654,6 +3730,10 @@ impl PromptMode {
                     let system_prompt = compiled.system_prompt.map(|system_prompt| {
                         system_prompts::fill_understanding(&system_prompt, None)
                     });
+                    // The harness the question goes to, which its usage came
+                    // from.
+                    let agent = crate::agent::current();
+                    let mut usage_run = None;
                     let mut events = harness::send(
                         prompt.clone(),
                         system_prompt,
@@ -3666,6 +3746,8 @@ impl PromptMode {
                     if this
                         .update(cx, |this, cx| {
                             this.in_project(&project_dir, cx, |this, cx| {
+                                usage_run =
+                                    Some(this.usage.start_run(Conversation::Questions, epoch));
                                 this.update_ask(run, |ask| ask.set_compiled(compiled), cx)
                             });
                         })
@@ -3685,6 +3767,7 @@ impl PromptMode {
                                     if let HarnessEvent::Session(_) = &event {
                                         started = true;
                                     }
+                                    this.follow_usage(usage_run, agent, &event);
                                     if let Some(left) = Session::follow(
                                         &mut this.ask_session,
                                         this.ask_session_epoch == epoch,
@@ -4817,6 +4900,12 @@ impl Render for PromptMode {
         if self.chat_input.read(cx).context() != context {
             self.chat_input
                 .update(cx, |input, cx| input.set_context(context, cx));
+        }
+        // And the agent's usage, as its runs report it.
+        let usage = self.usage_report();
+        if *self.chat_input.read(cx).usage() != usage {
+            self.chat_input
+                .update(cx, |input, cx| input.set_usage(usage, cx));
         }
         // New conversation waits for a run of the conversation to finish.
         let running = self.conversation_running();
@@ -6491,6 +6580,106 @@ mod tests {
             Session::latest(&history, project, Some("old")).map(|session| session.id),
             Some("latest".into())
         );
+    }
+
+    /// The chat input's usage follows what the project's runs report: the
+    /// selected tab's conversation, the whole project and its runs, and the
+    /// plan limits of the harness picked. New conversation leaves the
+    /// conversation's figures behind, but not the project's.
+    #[gpui_kit::test]
+    async fn usage_follows_the_runs_by_conversation_and_project(cx: &mut TestAppContext) {
+        use crate::agent::Agent;
+        use crate::usage::{Conversation, PlanLimit, Spend};
+
+        let dir = std::env::temp_dir().join(format!("suspense-usage-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        let input = prompt_mode.read_with(cx, |this, _| this.chat_input.clone());
+        let shown = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                .unwrap();
+            input.read_with(cx, |input, _| input.usage().clone())
+        };
+        let spend = |input: u64, output: u64, cost: f64| HarnessEvent::Spent {
+            spend: Spend {
+                input: Some(input),
+                output: Some(output),
+                cost: Some(cost),
+                ..Spend::default()
+            },
+            total: true,
+        };
+        assert!(shown(cx).is_empty());
+        assert_eq!(shown(cx).summary().0, "Usage");
+
+        prompt_mode.update(cx, |this, _| {
+            let task = Some(
+                this.usage
+                    .start_run(Conversation::Tasks, this.session_epoch),
+            );
+            for event in [
+                HarnessEvent::Session("s1".into()),
+                HarnessEvent::Model("claude-opus".into()),
+                spend(10, 100, 0.5),
+            ] {
+                this.follow_usage(task, Agent::Claude, &event);
+            }
+            let question = Some(
+                this.usage
+                    .start_run(Conversation::Questions, this.ask_session_epoch),
+            );
+            this.follow_usage(question, Agent::Claude, &spend(5, 50, 0.25));
+        });
+        let usage = shown(cx);
+        assert_eq!(usage.conversation, Some(Conversation::Tasks));
+        assert_eq!(usage.conversation_spend.cost, Some(0.5));
+        assert_eq!(usage.project_spend.cost, Some(0.75));
+        assert_eq!(usage.project_spend.output, Some(150));
+        assert_eq!(usage.project_spend.cache_read, None);
+        assert_eq!(usage.runs, 2);
+        assert_eq!(usage.harness, Some(Agent::Claude));
+        assert_eq!(usage.model.as_deref(), Some("claude-opus"));
+        assert!(usage.limits.is_empty());
+        assert_eq!(usage.summary().0, "Usage $0.75");
+
+        // On the Ask tab, the questions' conversation.
+        prompt_mode.update(cx, |this, _| this.on_ask_tab = true);
+        let usage = shown(cx);
+        assert_eq!(usage.conversation, Some(Conversation::Questions));
+        assert_eq!(usage.conversation_spend.cost, Some(0.25));
+        prompt_mode.update(cx, |this, _| this.on_ask_tab = false);
+
+        // Plan limits, once reported, lead the summary.
+        prompt_mode.update(cx, |this, _| {
+            this.follow_usage(
+                None,
+                Agent::Claude,
+                &HarnessEvent::Limits(vec![PlanLimit {
+                    name: "seven_day".into(),
+                    used: 0.42,
+                    resets_at: None,
+                }]),
+            )
+        });
+        assert_eq!(shown(cx).summary().0, "Usage 42%");
+
+        // A new conversation has spent nothing; the project still has.
+        prompt_mode.update(cx, |this, cx| {
+            this.session = Some(Session {
+                project_dir: this.project_dir.clone().unwrap(),
+                id: "s1".into(),
+                context: None,
+            });
+            this.new_conversation(cx)
+        });
+        cx.run_until_parked();
+        let usage = shown(cx);
+        assert!(usage.conversation_spend.is_empty());
+        assert_eq!(usage.project_spend.cost, Some(0.75));
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// The chat input shows how much context the selected tab's conversation

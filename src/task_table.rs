@@ -791,6 +791,9 @@ impl Reply {
             }
             HarnessEvent::Session(_)
             | HarnessEvent::Usage { .. }
+            | HarnessEvent::Spent { .. }
+            | HarnessEvent::Limits(_)
+            | HarnessEvent::Model(_)
             | HarnessEvent::ToolCalled { .. }
             | HarnessEvent::ToolOutput { .. } => return None,
         }

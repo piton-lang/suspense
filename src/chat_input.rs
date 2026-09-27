@@ -5,6 +5,7 @@
 //! Ctrl+Tab and Ctrl+Shift+Tab cycle the tabs, Tab and Shift+Tab move focus
 //! out of the input, and Esc takes focus out of it.
 
+use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -33,6 +34,7 @@ use crate::piton_lsp::PitonSession;
 use crate::piton_syntax;
 use crate::project_directory::ProjectDirectory;
 use crate::project_lsp::ProjectLsp;
+use crate::usage::{self, UsageReport};
 
 /// Keys the preview's markdown apart from any task's.
 const PREVIEW_TABLE: usize = usize::MAX;
@@ -462,6 +464,13 @@ pub struct ChatInput {
     /// Whether the Slice toggle is on: prompts are sent with the `piton
     /// slice` of each spec they reference rather than links to them.
     slice: bool,
+    /// The agent's usage, as its runs have reported it.
+    usage: UsageReport,
+    /// Whether the usage's popover is open.
+    usage_open: bool,
+    /// Where the usage's summary was last laid out, so that pressing it while
+    /// its popover is open closes the popover rather than reopening it.
+    usage_bounds: Rc<Cell<Bounds<Pixels>>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -562,6 +571,9 @@ impl ChatInput {
             preview_scroll: ScrollHandle::new(),
             editing: None,
             slice: false,
+            usage: UsageReport::default(),
+            usage_open: false,
+            usage_bounds: Rc::default(),
             _subscriptions: subscriptions,
         };
         this.connect_lsp(cx);
@@ -1030,6 +1042,112 @@ impl ChatInput {
         self.context
     }
 
+    /// Shows the agent's usage as its runs report it, in place in the
+    /// popover too while it is open.
+    pub fn set_usage(&mut self, usage: UsageReport, cx: &mut Context<Self>) {
+        if self.usage != usage {
+            self.usage = usage;
+            cx.notify();
+        }
+    }
+
+    pub fn usage(&self) -> &UsageReport {
+        &self.usage
+    }
+
+    /// Opens the usage's popover, or closes it. Opened, Escape closes it, so
+    /// the keyboard is brought into the chat input if it was elsewhere.
+    pub fn toggle_usage(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.usage_open = !self.usage_open;
+        if self.usage_open && !self.focus_handle.contains_focused(window, cx) {
+            self.focus_handle.focus(window, cx);
+        }
+        cx.notify();
+    }
+
+    /// Whether the usage's popover is open.
+    #[cfg(test)]
+    pub fn usage_open(&self) -> bool {
+        self.usage_open
+    }
+
+    /// The usage's summary, muted like the context figure unless a plan
+    /// limit is nearly or wholly used, with its popover above it.
+    fn render_usage(&self, cx: &mut Context<Self>) -> AnyElement {
+        let (text, level) = self.usage.summary();
+        let color = level.color(cx).unwrap_or(cx.theme().muted_foreground);
+        let hover = cx.theme().foreground;
+        let bounds = self.usage_bounds.clone();
+        let summary = div()
+            .id("chat-usage")
+            .relative()
+            .flex_none()
+            .whitespace_nowrap()
+            .text_xs()
+            .text_color(color)
+            .cursor_pointer()
+            .hover(move |this| this.text_color(hover))
+            .child(text)
+            .child(
+                canvas(move |laid_out, _, _| bounds.set(laid_out), |_, _, _, _| {})
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full(),
+            )
+            .when(!self.usage_open, |this| {
+                this.tooltip(|window, cx| {
+                    Tooltip::new("Click for the agent's usage in detail").build(window, cx)
+                })
+            })
+            .on_click(cx.listener(|this, _, window, cx| this.toggle_usage(window, cx)));
+        div()
+            .relative()
+            .flex_none()
+            .child(gpui_kit::TestSupportExt::test_support(summary))
+            .children(self.render_usage_popover(cx))
+            .into_any_element()
+    }
+
+    /// The usage's popover, above its summary, its right edge on the
+    /// summary's.
+    fn render_usage_popover(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.usage_open {
+            return None;
+        }
+        let theme = cx.theme();
+        let summary = self.usage_bounds.clone();
+        let popover = div()
+            .id("usage-popover")
+            .absolute()
+            .bottom_full()
+            .right_0()
+            .mb_1()
+            .p_3()
+            .w(px(280.))
+            .bg(theme.popover)
+            .text_color(theme.popover_foreground)
+            .border_1()
+            .border_color(theme.border)
+            .rounded(theme.radius)
+            .shadow_md()
+            .occlude()
+            .on_mouse_down_out(cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                // Pressing the summary closes it by toggling.
+                if !summary.get().contains(&event.position) {
+                    this.usage_open = false;
+                    cx.notify();
+                }
+            }))
+            .child(usage::details(&self.usage, usage::now(), cx));
+        // Lets UI tests find the popover; inert in normal builds.
+        Some(
+            deferred(gpui_kit::TestSupportExt::test_support(popover))
+                .with_priority(1)
+                .into_any_element(),
+        )
+    }
+
     /// Marks a run of the selected tab's conversation as under way, or over;
     /// New conversation can leave the conversation while it is.
     pub fn set_conversation_running(&mut self, running: bool, cx: &mut Context<Self>) {
@@ -1318,7 +1436,10 @@ impl ChatInput {
     /// Esc closes an open completion menu, and otherwise takes focus out of
     /// the input.
     fn escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.send_menu.take().is_some() {
+        if self.usage_open {
+            self.usage_open = false;
+            cx.notify();
+        } else if self.send_menu.take().is_some() {
             cx.notify();
         } else if self.preview.is_some() {
             self.close_preview(window, cx);
@@ -1615,6 +1736,8 @@ impl Render for ChatInput {
                         Tooltip::new(text).build(window, cx)
                     }),
             ))
+            // Beside it, the agent's usage, which opens its details above it.
+            .child(self.render_usage(cx))
             .child(
                 Button::new("new-conversation")
                     .ghost()
@@ -2205,6 +2328,181 @@ mod tests {
             .unwrap();
             chat_input.read_with(cx, |input, _| assert_eq!(input.mode().help(), helps[ix]));
         }
+    }
+
+    /// Just right of the context figure, before New conversation, the
+    /// agent's usage reads "Usage", then the nearest plan limit's share, or
+    /// the project's cost, or its tokens, in the warning or error colour as a
+    /// limit runs out. Clicking it opens its details above it, leaving out
+    /// what wasn't reported, updated in place; clicking it again, clicking
+    /// outside, or Escape closes them.
+    #[gpui_kit::test]
+    async fn usage_summary_opens_its_details(cx: &mut TestAppContext) {
+        use crate::usage::{Conversation, PlanLimit, Spend, UsageReport};
+        use gpui_kit::component::ActiveTheme as _;
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            super::bind_keys(cx);
+            // Esc, as the window binds it.
+            cx.bind_keys([gpui_kit::KeyBinding::new(
+                "escape",
+                crate::main_window::Dismiss,
+                None,
+            )]);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut chat_input = None;
+        let window = cx.add_window(|window, cx| {
+            let input = cx.new(|cx| ChatInput::new(window, cx));
+            chat_input = Some(input.clone());
+            Root::new(input, window, cx)
+        });
+        let chat_input = chat_input.unwrap();
+        let handle = window.into();
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("chat-usage").is_some()
+        })
+        .await;
+        let summary = |cx: &mut TestAppContext| {
+            chat_input.read_with(cx, |input, _| input.usage().summary().0)
+        };
+        let set = |usage: UsageReport, cx: &mut TestAppContext| {
+            chat_input.update(cx, |input, cx| input.set_usage(usage, cx));
+        };
+        let open =
+            |cx: &mut TestAppContext| chat_input.read_with(cx, |input, _| input.usage_open());
+
+        // Between the context figure and New conversation, never cut off.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let (context, usage, new_session) = (
+                window.find("chat-context").bounds(),
+                window.find("chat-usage").bounds(),
+                window.find("new-conversation").bounds(),
+            );
+            assert!(
+                usage.left() > context.right() && new_session.left() > usage.right(),
+                "the usage {usage:?} isn't between {context:?} and {new_session:?}"
+            );
+        })
+        .unwrap();
+        assert_eq!(summary(cx), "Usage");
+
+        // Nothing reported: the popover says so.
+        cx.update_window(handle, |_, window, cx| {
+            window.click("chat-usage", cx);
+            window.render_frame(cx);
+            assert!(window.try_find("usage-popover").is_some());
+            assert!(window.try_find("usage-nothing").is_some());
+            let (popover, usage) = (
+                window.find("usage-popover").bounds(),
+                window.find("chat-usage").bounds(),
+            );
+            assert!(
+                popover.bottom() <= usage.top(),
+                "the popover {popover:?} isn't above {usage:?}"
+            );
+        })
+        .unwrap();
+        assert!(open(cx));
+
+        // Tokens only, without a cost: no cost shown, nor any plan limits.
+        let mut usage = UsageReport {
+            conversation: Some(Conversation::Tasks),
+            context: Some(42_100),
+            conversation_spend: Spend {
+                input: Some(300),
+                output: Some(1_200),
+                ..Spend::default()
+            },
+            project_spend: Spend {
+                input: Some(900),
+                output: Some(41_200),
+                ..Spend::default()
+            },
+            runs: 3,
+            harness: Some(crate::agent::Agent::Codex),
+            reported: Some(crate::usage::now()),
+            ..UsageReport::default()
+        };
+        set(usage.clone(), cx);
+        assert_eq!(summary(cx), "Usage 42.1k");
+        // The open popover follows in place.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("usage-nothing").is_none());
+            assert!(window.try_find("usage-group-limits").is_none());
+            assert!(window.try_find("usage-group-conversation").is_some());
+            assert!(window.try_find("usage-conversation-context").is_some());
+            assert!(window.try_find("usage-conversation-output").is_some());
+            assert!(window.try_find("usage-conversation-cache-read").is_none());
+            assert!(window.try_find("usage-conversation-cost").is_none());
+            assert!(window.try_find("usage-project-runs").is_some());
+            assert!(window.try_find("usage-project-cost").is_none());
+            assert!(window.try_find("usage-source").is_some());
+        })
+        .unwrap();
+
+        // Clicking the summary again closes it.
+        cx.update_window(handle, |_, window, cx| window.click("chat-usage", cx))
+            .unwrap();
+        assert!(!open(cx));
+
+        // A cost, then a plan limit, take over the summary.
+        usage.project_spend.cost = Some(1.2391);
+        set(usage.clone(), cx);
+        assert_eq!(summary(cx), "Usage $1.24");
+        usage.limits = vec![
+            PlanLimit {
+                name: "five_hour".into(),
+                used: 0.85,
+                resets_at: None,
+            },
+            PlanLimit {
+                name: "seven_day".into(),
+                used: 0.42,
+                resets_at: None,
+            },
+        ];
+        set(usage.clone(), cx);
+        assert_eq!(summary(cx), "Usage 85%");
+        let color = |cx: &mut TestAppContext| {
+            chat_input.update(cx, |input, cx| input.usage().summary().1.color(cx))
+        };
+        let warning = cx.update(|cx| cx.theme().warning);
+        assert_eq!(color(cx), Some(warning));
+        usage.limits[1].used = 1.;
+        set(usage.clone(), cx);
+        let danger = cx.update(|cx| cx.theme().danger);
+        assert_eq!(summary(cx), "Usage 100%");
+        assert_eq!(color(cx), Some(danger));
+
+        // Clicking outside closes it.
+        cx.update_window(handle, |_, window, cx| {
+            window.click("chat-usage", cx);
+            window.render_frame(cx);
+            assert!(window.try_find("usage-group-limits").is_some());
+            assert!(window.try_find("usage-project-cost").is_some());
+            window.click("tab-help", cx);
+            window.render_frame(cx);
+            assert!(window.try_find("usage-popover").is_none());
+        })
+        .unwrap();
+        assert!(!open(cx));
+
+        // So does Escape.
+        cx.update_window(handle, |_, window, cx| {
+            window.click("chat-usage", cx);
+            window.render_frame(cx);
+            assert!(window.try_find("usage-popover").is_some());
+            window.press("escape", cx);
+            window.render_frame(cx);
+            assert!(window.try_find("usage-popover").is_none());
+        })
+        .unwrap();
+        assert!(!open(cx));
     }
 
     /// The chain has no line along its bottom while it is joined over Code

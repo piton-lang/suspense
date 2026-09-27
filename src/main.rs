@@ -73,6 +73,7 @@ mod task_table;
 mod theme;
 mod theme_preference;
 mod understanding;
+mod usage;
 
 fn main() {
     app::run();
