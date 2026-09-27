@@ -13,6 +13,7 @@ from /scope/prompt-mode/sending import PromptSendingScope
 from /shape/ChatInput import ChatInputInstruction
 from /ui/components/growing-text-input import GrowingTextInputScope
 from /ui/components/history-list import HistoryListScope
+from /ui/components/scrollbar import ScrollbarScope
 from /ui/components/selection-popover import SelectionPopoverScope
 from /ui/components/task-table import TaskTableScope
 
@@ -263,6 +264,13 @@ shape ChatInputShape:
         asked, the message list giving way above it. While the harness works on
         a question, it is a single row showing the latest thing the harness did.
         A finished question is a row with its status and first line.
+
+        However many questions are asked, the stack is only as tall as its
+        rows, up to 240 pixels, the queue's most, and scrolls beyond that with
+        a @{ScrollbarScope}, kept on the newest question, nearest the tabs, as
+        each is asked. Once it holds more than fit, the stack lays out only
+        the rows in view, as a table does, so a long stack costs no more to show, scroll, or animate than a
+        short one, and the drawer's bottom follows the stack's top as ever.
 
         Once a question is complete, it opens onto a heading, with its status
         and first line, above its full task table, in the @{AnswerDrawerScope},

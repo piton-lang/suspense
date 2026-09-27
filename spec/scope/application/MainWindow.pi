@@ -64,7 +64,9 @@ shape MainWindowShape:
         A resize and a scroll are never under way at the same time. While an
         edge is being dragged, the mouse wheel scrolls nothing, and while a
         scrollbar's thumb is being dragged, no edge can be picked up, however
-        the pointer crosses one.
+        the pointer crosses one. Nothing shows as hovered while something is
+        being dragged, either: an edge dragged across a scrollbar lights up
+        none of its buttons or its thumb, and shows no tooltip.
 
     quitting:
         The application quits with Ctrl+Q (Cmd+Q on macOS), Quit in the

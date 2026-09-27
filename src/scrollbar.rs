@@ -274,7 +274,9 @@ fn scrollbar(
                 ));
                 // The thumb fills the track inside its line, square, with no
                 // lines of its own, lightening while hovered or dragged.
-                let is_hovered = thumb.contains(&window.mouse_position());
+                // Nothing is hovered while something else, like a sidebar's
+                // edge, is being dragged across it.
+                let is_hovered = !cx.has_active_drag() && thumb.contains(&window.mouse_position());
                 hovered.set(is_hovered);
                 if grab.get().is_some() {
                     // No edge beneath the pointer is offered while dragging.
@@ -457,7 +459,8 @@ fn bevelled(id: String, button: impl IntoElement, press: Press) -> impl IntoElem
         },
         move |bounds, pressed: Entity<Rc<Cell<bool>>>, window, cx| {
             let pressed = pressed.read(cx).clone();
-            let hovered = bounds.contains(&window.mouse_position());
+            // Not while something else, like a sidebar's edge, is dragged.
+            let hovered = !cx.has_active_drag() && bounds.contains(&window.mouse_position());
             let bevel = match (hovered, pressed.get()) {
                 (true, true) => Some(Bevel::Pressed),
                 (true, false) => Some(Bevel::Raised),
@@ -525,7 +528,7 @@ fn over_edges(key: SharedString, press: Press) -> impl IntoElement {
             let contested = move |at: Point<Pixels>, cx: &App| {
                 crate::hit_areas::resize_at(at, cx) && crate::hit_areas::wins_at(bounds, at, cx)
             };
-            if contested(window.mouse_position(), cx) {
+            if !cx.has_active_drag() && contested(window.mouse_position(), cx) {
                 window.set_window_cursor_style(CursorStyle::Arrow);
             }
             window.on_mouse_event({
@@ -1185,6 +1188,101 @@ mod tests {
         cx.run_until_parked();
         assert_eq!(scroll.offset().y, scrolled, "resizing scrolled the list");
         assert!(width(cx) > before, "dragging the edge didn't resize");
+    }
+
+    /// While the edge a list is resized by is being dragged, the pointer
+    /// passing over the list's scrollbar lights up none of it: neither the
+    /// thumb nor a button's bevel.
+    #[gpui_kit::test]
+    async fn nothing_in_the_scrollbar_hovers_while_an_edge_is_dragged(cx: &mut TestAppContext) {
+        use crate::theme::{bevel_colors, palette};
+        cx.update(gpui_kit::init);
+        let split = cx.new(|_| gpui_kit::component::resizable::ResizableState::default());
+        let window = cx.add_window({
+            let split = split.clone();
+            |window, cx| {
+                let view = cx.new(|_| SplitList {
+                    scroll: ScrollHandle::new(),
+                    split,
+                });
+                Root::new(view, window, cx)
+            }
+        });
+        let handle: gpui_kit::AnyWindowHandle = window.into();
+        let (up, thumb) = cx
+            .update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.render_frame(cx);
+                let track = window.find("tall-scroll-track").bounds();
+                (
+                    window.find("tall-scroll-up").bounds(),
+                    point(track.center().x, track.top() + px(4.)),
+                )
+            })
+            .unwrap();
+        // Anything lit in the window: the thumb's own bevel, and a hover.
+        let lit = |cx: &mut gpui_kit::VisualTestContext| {
+            cx.update(|window, cx| {
+                window.render_frame(cx);
+                let (light, _) = bevel_colors(palette(cx));
+                use gpui_kit::component::ActiveTheme as _;
+                let hover = super::scroll_colors(cx.theme().is_dark()).hover;
+                window
+                    .painted_quads()
+                    .into_iter()
+                    .filter(|quad| {
+                        quad.background.as_solid() == Some(light)
+                            || quad.background.as_solid() == Some(hover)
+                    })
+                    .count()
+            })
+        };
+        let cx = &mut gpui_kit::VisualTestContext::from_window(handle, cx);
+        // Picked up on the far side of the edge, clear of the column.
+        let edge = point(up.right() + px(3.), up.bottom() + px(200.));
+        cx.simulate_mouse_move(edge, None, gpui_kit::Modifiers::default());
+        cx.run_until_parked();
+        // The thumb's own bevel, lit at rest.
+        let rest = lit(cx);
+        cx.simulate_mouse_down(
+            edge,
+            gpui_kit::MouseButton::Left,
+            gpui_kit::Modifiers::default(),
+        );
+        for to in [up.center(), thumb] {
+            cx.simulate_mouse_move(
+                to,
+                Some(gpui_kit::MouseButton::Left),
+                gpui_kit::Modifiers::default(),
+            );
+            cx.run_until_parked();
+            assert!(
+                cx.update(|_, cx| cx.has_active_drag()),
+                "the edge isn't being dragged"
+            );
+            assert_eq!(
+                lit(cx),
+                rest,
+                "the scrollbar lit up at {to:?} while the edge was dragged"
+            );
+        }
+        cx.simulate_mouse_up(
+            thumb,
+            gpui_kit::MouseButton::Left,
+            gpui_kit::Modifiers::default(),
+        );
+        cx.run_until_parked();
+        // The column moved with the edge.
+        let up = cx.update(|window, cx| {
+            window.render_frame(cx);
+            window.find("tall-scroll-up").bounds()
+        });
+        cx.simulate_mouse_move(up.center(), None, gpui_kit::Modifiers::default());
+        cx.run_until_parked();
+        assert!(
+            lit(cx) > rest,
+            "the button no longer lights up once the drag is over"
+        );
     }
 
     /// Dragging the thumb down the track scrolls the list with it, all the way

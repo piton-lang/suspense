@@ -95,6 +95,14 @@ const MIN_SPLIT_WIDTH: Pixels = px(160.);
 /// The tallest the expanded queue gets before it scrolls.
 const MAX_QUEUE_HEIGHT: Pixels = px(240.);
 
+/// The tallest the stack of question rows grows before it scrolls.
+const MAX_ASK_STACK_HEIGHT: Pixels = MAX_QUEUE_HEIGHT;
+
+/// The most question rows the stack draws as they are, every one in view,
+/// before it holds more than fit and draws only those in view. Rows slide up
+/// from nothing as they are asked, so a stack that fits is drawn whole.
+const PLAIN_ASK_ROWS: usize = 6;
+
 /// The tallest the compiled prompt in the header gets before it scrolls.
 const MAX_PROMPT_HEIGHT: Pixels = px(160.);
 
@@ -1350,6 +1358,10 @@ pub struct PromptMode {
     /// The question rows in the stack above the tabs, as last laid out, which
     /// the previous answers slide up from rather than covering.
     stack_rows_height: Rc<Cell<Pixels>>,
+    /// The question rows in the stack, drawn only as they come into view,
+    /// and the questions they were last laid out for, oldest first.
+    ask_rows: MeasuredList,
+    ask_row_ids: RefCell<Vec<usize>>,
     /// Every question asked before, oldest first: those saved with the
     /// project, and those closed since.
     answers: Vec<PromptTask>,
@@ -1461,6 +1473,14 @@ impl PromptMode {
             drawer_height: Rc::default(),
             drawer_fill_height: Rc::default(),
             stack_rows_height: Rc::default(),
+            ask_rows: {
+                // Kept on the newest question, as rows slide up into it,
+                // until scrolled away from it.
+                let rows = MeasuredList::new(task_table::OVERDRAW);
+                rows.state().set_follow_mode(FollowMode::Tail);
+                rows
+            },
+            ask_row_ids: RefCell::default(),
             answers: Vec::new(),
             ask_history: HistoryList::answers(),
             _ask_history_load: Task::ready(()),
@@ -3294,29 +3314,69 @@ impl PromptMode {
         let expanded = self.expanded().map(|ask| ask.id);
         let history_row =
             (self.on_ask_tab && !self.ask_history_shown()).then(|| self.render_ask_history_row(cx));
-        let cards: Vec<AnyElement> = self
+        let ids: Vec<usize> = self
             .asks
             .iter()
             .filter(|ask| expanded != Some(ask.id))
-            .enumerate()
-            // The stack's own top border, or the previous answers row's
-            // bottom one, is the line above the first.
-            .map(|(ix, ask)| self.render_ask_card(ask, false, ix > 0, cx))
+            .map(|ask| ask.id)
             .collect();
-        if history_row.is_none() && cards.is_empty() {
+        self.sync_ask_rows(&ids);
+        if history_row.is_none() && ids.is_empty() {
             self.stack_rows_height.set(px(0.));
             return None;
         }
-        let theme = cx.theme();
         // The question rows are measured, so the previous answers can slide up
         // from on top of them.
         let rows_height = self.stack_rows_height.clone();
         // Its top line shows once it holds more than nothing, so the line never
         // lies on the chat input's own as the first question starts to rise.
         let has_content = history_row.is_some() || rows_height.get() > px(0.5);
-        let rows = v_flex()
+        let entity = cx.entity().downgrade();
+        let render: RenderRow = Rc::new(move |ix, _, cx| {
+            let Some(entity) = entity.upgrade() else {
+                return div().into_any_element();
+            };
+            entity.update(cx, |this, cx| {
+                let id = this.ask_row_ids.borrow().get(ix).copied();
+                match id.and_then(|id| this.asks.iter().find(|ask| ask.id == id)) {
+                    // The stack's own top border, or the previous answers
+                    // row's bottom one, is the line above the first.
+                    Some(ask) => this.render_ask_card(ask, false, ix > 0, cx),
+                    None => div().into_any_element(),
+                }
+            })
+        });
+        // As tall as its rows, until it scrolls.
+        let total = self.ask_rows.total_height();
+        let height = total.min(MAX_ASK_STACK_HEIGHT);
+        let list = div()
+            .id("ask-rows")
+            .h(height)
+            .child(self.ask_rows.element(render));
+        // Lets UI tests find the rows; inert in normal builds.
+        let list = gpui_kit::TestSupportExt::test_support(list);
+        let content = (!ids.is_empty()).then(|| {
+            if ids.len() <= PLAIN_ASK_ROWS {
+                // Few enough to all be in view: drawn as they are.
+                v_flex()
+                    .children(
+                        self.asks
+                            .iter()
+                            .filter(|ask| expanded != Some(ask.id))
+                            .enumerate()
+                            .map(|(ix, ask)| self.render_ask_card(ask, false, ix > 0, cx)),
+                    )
+                    .into_any_element()
+            } else if total > MAX_ASK_STACK_HEIGHT + px(0.5) {
+                scrollbar::with_scrollbar("ask-rows", &self.ask_rows, list, false, None, cx)
+            } else {
+                list.into_any_element()
+            }
+        });
+        let rows = div()
             .on_prepaint(move |bounds, _, _| rows_height.set(bounds.size.height))
-            .children(cards);
+            .children(content);
+        let theme = cx.theme();
         let stack = v_flex()
             .id("ask")
             .flex_none()
@@ -3327,6 +3387,24 @@ impl PromptMode {
             .child(rows);
         // Lets UI tests find the questions; inert in normal builds.
         Some(gpui_kit::TestSupportExt::test_support(stack).into_any_element())
+    }
+
+    /// Makes the stack's list hold a row for each of `ids`, oldest first,
+    /// keeping the rows already measured, and keeping it on the newest as
+    /// questions are asked.
+    fn sync_ask_rows(&self, ids: &[usize]) {
+        let mut laid_out = self.ask_row_ids.borrow_mut();
+        if laid_out.as_slice() == ids {
+            return;
+        }
+        // The rows from the first that differs on are made anew.
+        let kept = laid_out.iter().zip(ids).take_while(|(a, b)| a == b).count();
+        let asked = ids.len() > laid_out.len() && kept == laid_out.len();
+        self.ask_rows.splice(kept..laid_out.len(), ids.len() - kept);
+        *laid_out = ids.to_vec();
+        if asked {
+            self.ask_rows.scroll_to_end();
+        }
     }
 
     fn render_ask_history_row(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -7243,6 +7321,58 @@ mod tests {
             });
         })
         .unwrap();
+    }
+
+    /// However many questions are asked, the stack stops growing where it
+    /// scrolls, kept on the newest, and lays out only the rows in view.
+    #[gpui_kit::test]
+    async fn a_long_question_stack_lays_out_only_what_is_in_view(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                for n in 0..200 {
+                    let id = this.push_ask(format!("Question {n}").into(), cx);
+                    this.update_ask(
+                        id,
+                        |ask| {
+                            ask.apply(HarnessEvent::Finished {
+                                is_error: false,
+                                result: "An answer.".into(),
+                            });
+                            ask.end();
+                        },
+                        cx,
+                    );
+                }
+            });
+        })
+        .unwrap();
+        // The newest sits on the tabs once the rows have slid up.
+        settle(
+            handle,
+            ("ask-row", 200usize),
+            |row, tabs| (row.bottom() - tabs.top()).abs() <= gpui_kit::px(2.),
+            cx,
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let stack = window.find("ask-rows").bounds();
+            assert!(
+                stack.size.height <= super::MAX_ASK_STACK_HEIGHT + gpui_kit::px(0.5),
+                "{stack:?}"
+            );
+            assert!(window.try_find("ask-rows-scroll-column").is_some());
+            assert!(window.try_find(("ask-row", 1usize)).is_none());
+        })
+        .unwrap();
+        prompt_mode.read_with(cx, |this, _| {
+            let rows = &this.ask_rows;
+            assert_eq!(rows.count(), 200);
+            let drawn = (0..rows.count())
+                .filter(|ix| rows.state().bounds_for_item(*ix).is_some())
+                .count();
+            assert!(drawn < 40, "{drawn} question rows were laid out");
+        });
     }
 
     /// The latest task's output has a scroll column along its right: square
