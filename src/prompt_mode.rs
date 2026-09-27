@@ -123,6 +123,10 @@ const MIN_DRAWER_FILL: Pixels = px(96.);
 /// How tall the strip along the drawer's top edge that resizes it is.
 const DRAWER_HANDLE_HEIGHT: Pixels = px(6.);
 
+/// How long the answer drawer takes to slide back down once closed, on
+/// [`ASK_SPRING`], after which it is gone.
+const DRAWER_CLOSE_TIME: Duration = Duration::from_millis(450);
+
 /// How a question slides up and expands: critically damped, so it settles
 /// without bouncing.
 const ASK_SPRING: SpringConfig = SpringConfig::new(400., 40., 1.);
@@ -540,8 +544,22 @@ impl HistoryList {
         select: fn(&mut PromptMode) -> &mut HistoryList,
         cx: &mut Context<PromptMode>,
     ) -> AnyElement {
+        self.render_row_as(self.toggle.into(), self.expanded, count, enabled, select, cx)
+    }
+
+    /// The row as it reads while `expanded`, or not, whichever it is, its
+    /// toggle's element id `toggle`.
+    fn render_row_as(
+        &self,
+        toggle: ElementId,
+        expanded: bool,
+        count: usize,
+        enabled: bool,
+        select: fn(&mut PromptMode) -> &mut HistoryList,
+        cx: &mut Context<PromptMode>,
+    ) -> AnyElement {
         let theme = cx.theme();
-        let label = if self.expanded {
+        let label = if expanded {
             self.back.to_string()
         } else {
             match count {
@@ -558,10 +576,10 @@ impl HistoryList {
             .border_b_1()
             .border_color(theme.border)
             .child(
-                Button::new(self.toggle)
+                Button::new(toggle)
                     .ghost()
                     .xsmall()
-                    .icon(if self.expanded {
+                    .icon(if expanded {
                         IconName::ChevronDown
                     } else {
                         IconName::ChevronRight
@@ -691,6 +709,8 @@ impl HistoryList {
         let item_id = self.item;
         let this = cx.entity().downgrade();
         let open_file = open_file.clone();
+        // Its table tightens as the list narrows, counting the list's padding.
+        let density = task_table::Density::of_list(&self.rows, px(32.));
         let table = table_layout.map(|(task_ix, _, layout)| {
             let reply_of = task_table::reply_of({
                 let this = this.clone();
@@ -708,6 +728,7 @@ impl HistoryList {
                 layout,
                 Some(open_file.clone()),
                 steps,
+                density,
                 cx,
             );
             (layout.items(), rows)
@@ -721,7 +742,8 @@ impl HistoryList {
             // Everything an open item shows is set in from the list's edges,
             // as wide as the list, however long its lines, so they wrap and it
             // is laid out as tall as it is measured.
-            let inset = || div().w_full().px_3();
+            let room = density.inset(window.rem_size() * 0.75);
+            let inset = || div().w_full().px(room);
             match row {
                 HistoryRow::Heading(item) => {
                     let Some(task) = tasks_of(entity.read(cx)).get(item) else {
@@ -850,7 +872,7 @@ impl HistoryList {
                                 .border_x_1()
                                 .border_color(border)
                                 .bg(table_background)
-                                .child(task_table::output_header(cx)),
+                                .child(task_table::output_header(density, cx)),
                         )
                         .into_any_element()
                 }
@@ -900,7 +922,8 @@ impl HistoryList {
             .id(SharedString::from(format!("{}-scroll", self.list)))
             .size_full()
             .p_4()
-            .child(items);
+            .child(items)
+            .child(task_table::follow_density(&self.rows, density, px(32.)));
         // Lets UI tests find the list; inert in normal builds.
         let list = gpui_kit::TestSupportExt::test_support(list);
         scrollbar::with_scrollbar(self.list, &self.rows, list, true, None, cx)
@@ -1325,6 +1348,42 @@ struct DrawerResize;
 /// which expanding of the previous answers is showing.
 type DrawerContents = (Option<usize>, Option<usize>);
 
+/// The answer drawer, just closed, sliding back down to where it slid up
+/// from, still showing what it held until it is gone.
+struct DrawerClosing {
+    /// The question it held open, if it held one.
+    question: Option<ClosingQuestion>,
+    /// Which expanding of the previous answers it held, if it held them.
+    answers: Option<usize>,
+    /// How tall it was, and each thing filling it, as last laid out open.
+    height: Pixels,
+    fill: Pixels,
+    closed: Instant,
+}
+
+/// The question an answer drawer held as it closed.
+enum ClosingQuestion {
+    /// Closed down to its row, still among the questions.
+    Collapsed(usize),
+    /// Closed altogether: now the previous answer at `answer`, its table kept
+    /// to slide down with.
+    Closed {
+        id: usize,
+        answer: usize,
+        text: SharedString,
+        table: TaskTable,
+        locked: bool,
+    },
+}
+
+impl ClosingQuestion {
+    fn id(&self) -> usize {
+        match self {
+            Self::Collapsed(id) | Self::Closed { id, .. } => *id,
+        }
+    }
+}
+
 /// The work that belongs to one open project (see the OpenProjectsScope):
 /// swapped into [`PromptMode`] while the project is on screen, or while a run
 /// of it writes back from the background, and kept aside otherwise.
@@ -1517,6 +1576,16 @@ pub struct PromptMode {
     /// What was open in the drawer when it was last dragged; while that is
     /// still what's open, the drawer follows the drag rather than sliding.
     drawer_dragged: Option<DrawerContents>,
+    /// What the drawer held as last drawn, to know when it opens and closes.
+    drawer_shown: DrawerContents,
+    /// The drawer is being drawn for the first time since it opened, so what
+    /// fills it slides up rather than starting where it ends.
+    drawer_opening: bool,
+    /// The drawer sliding back down, just closed.
+    drawer_closing: Option<DrawerClosing>,
+    /// The question just closed from the drawer, kept for it to slide down
+    /// with, should that close the drawer.
+    closed_question: Option<ClosingQuestion>,
     /// The space above the chat input, the whole drawer, and what fills it,
     /// as last laid out.
     body_height: Rc<Cell<Pixels>>,
@@ -1643,6 +1712,10 @@ impl PromptMode {
             steps_shown: HashSet::new(),
             drawer_share: DRAWER_SHARE,
             drawer_dragged: None,
+            drawer_shown: (None, None),
+            drawer_opening: false,
+            drawer_closing: None,
+            closed_question: None,
             body_height: Rc::default(),
             drawer_height: Rc::default(),
             drawer_fill_height: Rc::default(),
@@ -1741,6 +1814,10 @@ impl PromptMode {
         self.refs_opened = None;
         self.refs_closing = None;
         self.pane_closing = None;
+        // Likewise its answer drawer, open or not.
+        self.drawer_closing = None;
+        self.closed_question = None;
+        self.drawer_shown = self.drawer_contents();
         self.pane_opened = self
             .pane_opened
             .map(|(n, at)| (n, Instant::now().checked_sub(PANE_SLIDE_TIME).unwrap_or(at)));
@@ -3537,6 +3614,10 @@ impl PromptMode {
     /// above the chat input, less what the drawer's other rows take, split
     /// between the question and the previous answers if both are open.
     fn drawer_fill(&self) -> Pixels {
+        // Sliding down, it keeps the size it was.
+        if let Some(closing) = &self.drawer_closing {
+            return closing.fill;
+        }
         let (question, answers) = self.drawer_contents();
         let open = question.iter().count() + answers.iter().count();
         let body = self.body_height.get();
@@ -3561,6 +3642,65 @@ impl PromptMode {
         self.drawer_dragged == Some(self.drawer_contents())
     }
 
+    /// Notes what the drawer holds as it is drawn: when it opens, so what
+    /// fills it slides up, and when it closes, so it slides back down still
+    /// showing what it held. Changing what it holds while open does neither.
+    fn follow_drawer(&mut self, window: &mut Window) {
+        let shown = self.drawer_contents();
+        let was = std::mem::replace(&mut self.drawer_shown, shown);
+        let closed_question = self.closed_question.take();
+        let open = shown != (None, None);
+        self.drawer_opening = open && was == (None, None);
+        if open {
+            self.drawer_closing = None;
+        } else if was != (None, None) {
+            let (question, answers) = was;
+            let question = question.map(|id| match closed_question {
+                Some(closed) if closed.id() == id => closed,
+                _ => ClosingQuestion::Collapsed(id),
+            });
+            // Each thing filling it, as it was last laid out.
+            let filling = question.iter().count() + answers.iter().count();
+            let fill = self.drawer_fill_height.get() / filling as f32;
+            self.drawer_closing = Some(DrawerClosing {
+                question,
+                answers,
+                height: self.drawer_height.get(),
+                fill,
+                closed: Instant::now(),
+            });
+            // Opened again, it slides up again, at the size it was dragged to.
+            self.drawer_dragged = None;
+        }
+        if self
+            .drawer_closing
+            .as_ref()
+            .is_some_and(|closing| closing.closed.elapsed() >= DRAWER_CLOSE_TIME)
+        {
+            self.drawer_closing = None;
+        }
+        if self.drawer_closing.is_some() {
+            window.request_animation_frame();
+        }
+    }
+
+    /// The question `id`'s task: among the questions, or, as the drawer
+    /// slides down with it just closed, among the previous answers.
+    fn question_task(&self, id: usize) -> Option<&PromptTask> {
+        if let Some(ask) = self.asks.iter().find(|ask| ask.id == id) {
+            return Some(&ask.task);
+        }
+        match self.drawer_closing.as_ref()?.question.as_ref()? {
+            ClosingQuestion::Closed {
+                id: closed,
+                answer,
+                text,
+                ..
+            } if *closed == id => self.answers.get(*answer).filter(|task| task.text == *text),
+            _ => None,
+        }
+    }
+
     /// Resizes the open drawer so its top is at `y`, within `body`, the space
     /// above the chat input.
     fn drag_drawer(&mut self, y: Pixels, body: Bounds<Pixels>, cx: &mut Context<Self>) {
@@ -3576,11 +3716,32 @@ impl PromptMode {
     /// Closes the question `id`, stopping its run if it is still under way.
     fn close_ask(&mut self, id: usize, cx: &mut Context<Self>) {
         if let Some(ix) = self.asks.iter().position(|ask| ask.id == id) {
-            let mut ask = self.asks.remove(ix);
+            let Ask {
+                mut task,
+                table,
+                locked,
+                ..
+            } = self.asks.remove(ix);
             // Stopped, if it was still running, and among the previous
             // answers from now on.
-            ask.task.end();
-            self.answers.push(ask.task);
+            task.end();
+            let closed = ClosingQuestion::Closed {
+                id,
+                answer: self.answers.len(),
+                text: task.text.clone(),
+                table,
+                locked,
+            };
+            self.answers.push(task);
+            // Open, or sliding down from where it was, it goes on showing as
+            // the drawer slides down.
+            if self.expanded_ask == Some(id) {
+                self.closed_question = Some(closed);
+            } else if let Some(closing) = &mut self.drawer_closing
+                && closing.question.as_ref().map(ClosingQuestion::id) == Some(id)
+            {
+                closing.question = Some(closed);
+            }
         }
         if self.expanded_ask == Some(id) {
             self.expanded_ask = None;
@@ -3711,7 +3872,7 @@ impl PromptMode {
     /// edge resizes it.
     fn render_ask_drawer(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         if !self.drawer_open() {
-            return None;
+            return self.render_closing_drawer(cx);
         }
         let mut history: Vec<AnyElement> = Vec::new();
         if self.ask_history_shown() {
@@ -3736,12 +3897,18 @@ impl PromptMode {
                     move |bounds, _, _| filled.set(filled.get() + bounds.size.height)
                 })
                 .child(list);
-            // Slides up each time it is expanded, unless it is being dragged
-            // to size.
+            // Slides up as the drawer opens, unless it is being dragged to
+            // size; expanded while the drawer already is, it changes what the
+            // drawer holds rather than sliding up again.
             history.push(if self.drawer_follows_drag() {
                 list.h(fill).into_any_element()
             } else {
-                let height = SpringAnimation::new(ASK_SPRING).to(fill).from(px(0.));
+                let height = SpringAnimation::new(ASK_SPRING).to(fill);
+                let height = if self.drawer_opening {
+                    height.from(px(0.))
+                } else {
+                    height
+                };
                 list.with_spring(
                     ("ask-history-slide", self.ask_history.opened),
                     height,
@@ -3817,6 +3984,95 @@ impl PromptMode {
         Some(gpui_kit::TestSupportExt::test_support(drawer).into_any_element())
     }
 
+    /// The answer drawer just closed, sliding back down to the top of the
+    /// question rows in the stack, or the chat input when there are none,
+    /// showing what it held, at the size it was, until it is gone. It sits
+    /// over what is beneath as it did open, but nothing in it answers the
+    /// pointer any more.
+    fn render_closing_drawer(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let closing = self.drawer_closing.as_ref()?;
+        let mut contents: Vec<AnyElement> = Vec::new();
+        if let Some(opened) = closing.answers {
+            // Its toggle is not the stack's, which answers the pointer.
+            let toggle = format!("{}-closing", self.ask_history.toggle);
+            contents.push(self.ask_history.render_row_as(
+                SharedString::from(toggle).into(),
+                true,
+                self.answers.len(),
+                !self.answers.is_empty(),
+                |this| &mut this.ask_history,
+                cx,
+            ));
+            let open_file = self.file_opener(cx);
+            let list = self.ask_history.render_list(
+                &self.answers,
+                |this| &this.answers,
+                |this| &mut this.answers,
+                |this| &mut this.ask_history,
+                &self.steps_shown,
+                &open_file,
+                cx,
+            );
+            contents.push(
+                v_flex()
+                    .id(("ask-history", opened))
+                    .flex_none()
+                    .overflow_hidden()
+                    .h(closing.fill)
+                    .child(list)
+                    .into_any_element(),
+            );
+        }
+        let card = closing.question.as_ref().and_then(|question| match question {
+            ClosingQuestion::Collapsed(id) => {
+                let ask = self.asks.iter().find(|ask| ask.id == *id)?;
+                Some(self.render_ask_card(ask, true, false, cx))
+            }
+            ClosingQuestion::Closed {
+                id, table, locked, ..
+            } => {
+                let task = self.question_task(*id)?;
+                Some(self.render_question_card(*id, task, (table, *locked), true, false, cx))
+            }
+        });
+        let theme = cx.theme();
+        let drawer = v_flex()
+            .relative()
+            .flex_none()
+            .h(closing.height)
+            .justify_end()
+            .bg(theme.tab_bar)
+            .border_t_1()
+            .border_color(theme.border)
+            .children(contents)
+            .children(card)
+            // Laid over what it holds, taking the pointer from it.
+            .child(div().absolute().inset_0().occlude());
+        // Clipped at the top of the stack as it slides down behind it, or
+        // into the chat input.
+        let height = SpringAnimation::new(ASK_SPRING)
+            .to(px(0.))
+            .from(closing.height);
+        let slide = div()
+            .id("ask-drawer-closing")
+            .absolute()
+            .left_0()
+            .right_0()
+            .bottom(self.drawer_bottom())
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .occlude()
+            .child(drawer);
+        // Lets UI tests find the drawer as it slides; inert in normal builds.
+        let slide = gpui_kit::TestSupportExt::test_support(slide).with_spring(
+            "ask-drawer-close",
+            height,
+            |this, height| this.h(height.max(px(0.))),
+        );
+        Some(slide.into_any_element())
+    }
+
     /// Copies the text selected in an answer, closing the popover.
     fn copy_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some((_, text)) = self.selection_popover.take() {
@@ -3882,8 +4138,27 @@ impl PromptMode {
         line_above: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let id = ask.id;
-        let task = &ask.task;
+        self.render_question_card(
+            ask.id,
+            &ask.task,
+            (&ask.table, ask.locked),
+            expanded,
+            line_above,
+            cx,
+        )
+    }
+
+    /// As [`Self::render_ask_card`], for the question `id`, wherever its task
+    /// and table are kept.
+    fn render_question_card(
+        &self,
+        id: usize,
+        task: &PromptTask,
+        (table, locked): (&TaskTable, bool),
+        expanded: bool,
+        line_above: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let done = task.reply.is_done();
         let close = Button::new(("close-ask", id))
             .ghost()
@@ -3915,8 +4190,7 @@ impl PromptMode {
                 let this = cx.entity().downgrade();
                 move |cx| {
                     let this = this.upgrade()?.read(cx);
-                    let ask = this.asks.iter().find(|ask| ask.id == id)?;
-                    Some(&ask.task.reply)
+                    Some(&this.question_task(id)?.reply)
                 }
             });
             let this = cx.entity().downgrade();
@@ -3934,7 +4208,7 @@ impl PromptMode {
                 })
                 .ok();
             });
-            let output = ask.table.render(
+            let output = table.render(
                 &task.reply,
                 reply_of,
                 TableView {
@@ -3943,7 +4217,7 @@ impl PromptMode {
                     table: ASK_IX - id,
                     open: Some(&open),
                     steps: Some(self.steps(ASK_IX - id, cx)),
-                    lock: Some((ask.locked, toggle)),
+                    lock: Some((locked, toggle)),
                     padding: Edges {
                         top: px(0.),
                         right: px(16.),
@@ -4016,13 +4290,21 @@ impl PromptMode {
                 })
                 .into_any_element();
         }
-        // Open, it fills the drawer: sliding there from wherever its row is,
-        // unless the drawer is being dragged to size.
+        // Open, it fills the drawer: sliding there from wherever its row is as
+        // the drawer opens, unless the drawer is being dragged to size or
+        // slides down closed with it.
         let fill = self.drawer_fill();
-        if self.drawer_follows_drag() {
+        if self.drawer_follows_drag() || self.drawer_closing.is_some() {
             return card.h(fill).into_any_element();
         }
-        let height = SpringAnimation::new(ASK_SPRING).to(fill).from(px(0.));
+        let height = SpringAnimation::new(ASK_SPRING).to(fill);
+        // Opened while the drawer already is, it changes what the drawer
+        // holds, rather than sliding up again.
+        let height = if self.drawer_opening {
+            height.from(px(0.))
+        } else {
+            height
+        };
         card.with_spring(("ask-slide", id), height, |this, height| this.h(height))
             .into_any_element()
     }
@@ -4033,12 +4315,11 @@ impl PromptMode {
     /// than covering it, so leaves it undimmed.
     fn render_ask_dim(&self, cx: &App) -> AnyElement {
         let dim = crate::theme::dimming(cx);
-        let shade = SpringAnimation::new(ASK_DIM_SPRING)
-            .to(if self.expanded().is_some() || self.ask_history_shown() {
-                dim.a
-            } else {
-                0.
-            })
+        // It fades in slower than the drawer slides, so the dimming is seen,
+        // and back out in step with the drawer sliding down.
+        let open = self.drawer_open();
+        let shade = SpringAnimation::new(if open { ASK_DIM_SPRING } else { ASK_SPRING })
+            .to(if open { dim.a } else { 0. })
             .from(0.);
         // Question rows the drawer sits on top of stay undimmed.
         let dim = div()
@@ -4313,7 +4594,9 @@ impl Render for PromptMode {
                 input.set_can_send_to_task(can_send_to_task, cx)
             });
         }
-        // The popover for text selected in an answer goes with the drawer.
+        self.follow_drawer(window);
+        // The popover for text selected in an answer goes with the drawer, as
+        // it starts to close.
         if !self.drawer_open() {
             self.selection_popover = None;
         }

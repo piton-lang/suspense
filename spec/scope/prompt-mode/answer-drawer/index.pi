@@ -37,7 +37,15 @@ shape AnswerDrawerShape:
         The drawer opens to 80% of the height of the space above the chat input
         by default: the open question's table, or the previous answers list,
         grows to fill whatever the drawer's other rows leave, rather than
-        stopping at a fixed height. It slides up as it opens.
+        stopping at a fixed height. It slides up as it opens, and slides back
+        down as it closes, whatever closes it: a question's heading clicked,
+        the previous answers collapsed, a question closed, or the Ask tab left.
+        It slides down to where it slid up from, the top of the question rows
+        in the stack, or the chat input when there are none, showing what it
+        held until it is gone, while the shade fades out. Opening another
+        question, or switching between a question and the previous answers,
+        changes what the drawer holds rather than sliding it down and up
+        again.
 
         While open, the drawer is resizable by dragging its top edge, which
         shows a resize cursor and a thin highlight when hovered. It follows the

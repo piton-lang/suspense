@@ -8,7 +8,7 @@
 //! measured again when they are new or changed, and drawing a row does the
 //! same little work whichever row it is.
 
-use std::cell::{OnceCell, RefCell};
+use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::VecDeque;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -36,10 +36,174 @@ use crate::scrollbar::{self, Scroll, SetLock};
 use crate::shell_format;
 use crate::theme::Hue;
 
-/// The widths of the output table's badge and status columns; the detail
-/// column takes the rest.
+/// The widths of the output table's badge and status columns at its roomiest;
+/// the detail column takes the rest.
 pub(crate) const KIND_WIDTH: Pixels = px(130.);
 pub(crate) const STATUS_WIDTH: Pixels = px(110.);
+
+/// The narrowest a table, with the space around it, is drawn at its roomiest,
+/// and the narrowest it is drawn at before it is drawn at its tightest.
+const REGULAR_FROM: Pixels = px(720.);
+const COMPACT_FROM: Pixels = px(480.);
+
+/// How roomy a task table is drawn, going by the width it has. As it narrows,
+/// the room inside its cells and around it tightens, and its Type and Status
+/// columns are only as wide as their widest labels, so its output keeps most
+/// of the width.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Density {
+    Regular,
+    Compact,
+    Tight,
+}
+
+impl Density {
+    /// The density for a table `width` wide, counting the space around it.
+    pub(crate) fn of(width: Pixels) -> Self {
+        if width >= REGULAR_FROM {
+            Self::Regular
+        } else if width >= COMPACT_FROM {
+            Self::Compact
+        } else {
+            Self::Tight
+        }
+    }
+
+    /// The density for a table whose rows are drawn in `list`, going by the
+    /// width the list was last laid out at and the `around` it; roomy until
+    /// the list has been laid out.
+    pub(crate) fn of_list(list: &MeasuredList, around: Pixels) -> Self {
+        let width = list.viewport().size.width;
+        if width <= px(0.) {
+            Self::Regular
+        } else {
+            Self::of(width + around)
+        }
+    }
+
+    /// The room either side of what each of its cells shows.
+    fn cell_padding(self) -> Pixels {
+        match self {
+            Self::Regular => px(8.),
+            Self::Compact => px(4.),
+            Self::Tight => px(2.),
+        }
+    }
+
+    /// How much of the `room` its use asks for around it the table keeps.
+    pub(crate) fn inset(self, room: Pixels) -> Pixels {
+        match self {
+            Self::Regular => room,
+            Self::Compact => room / 2.,
+            Self::Tight => room / 4.,
+        }
+    }
+
+    /// The narrowest its Type and Status columns are, beyond their widest
+    /// labels.
+    fn column_widths(self) -> (Pixels, Pixels) {
+        match self {
+            Self::Regular => (KIND_WIDTH, STATUS_WIDTH),
+            Self::Compact | Self::Tight => (px(0.), px(0.)),
+        }
+    }
+}
+
+/// Draws a table again at the density its latest width calls for, once that
+/// differs from the density `drawn` it was drawn at, with its rows measured
+/// anew as they are when its width changes. Goes after `list` in the tree, so
+/// it sees the width the list was laid out at this frame.
+pub(crate) fn follow_density(
+    list: &MeasuredList,
+    drawn: Density,
+    around: Pixels,
+) -> impl IntoElement {
+    let list = list.clone();
+    canvas(
+        move |_, window, _| {
+            if Density::of_list(&list, around) != drawn {
+                list.remeasure(0..list.count());
+                window.refresh();
+            }
+        },
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_0()
+}
+
+/// A Type or Status cell, or its column's head, at `density`: `shown`, over
+/// the column's `widest` label laid out unseen, so every row's cell is as wide
+/// as the widest label needs, and at the table's roomiest no narrower than it
+/// always was.
+fn label_cell<C: Styled + ParentElement>(
+    cell: C,
+    min: Pixels,
+    density: Density,
+    widest: AnyElement,
+    shown: Option<AnyElement>,
+) -> C {
+    cell.flex_none()
+        .flex_basis(auto())
+        .min_w(min)
+        .px(density.cell_padding())
+        .child(
+            v_flex()
+                .items_start()
+                .children(shown)
+                .child(div().h_0().min_h_0().invisible().child(widest)),
+        )
+}
+
+/// The widest of the Type column's badges.
+fn widest_badge(cx: &App) -> AnyElement {
+    let kind = ToolKind::Command;
+    badge(crate::theme::tag(kind.hue(), cx), kind.icon(), kind.label())
+}
+
+/// The widest of the Status column's states.
+fn widest_status(cx: &App) -> AnyElement {
+    v_flex()
+        .children(
+            [ToolState::Running, ToolState::Done, ToolState::Failed]
+                .map(|state| status_label(Icon::new(IconName::Check).small(), state, cx)),
+        )
+        .into_any_element()
+}
+
+/// A Type cell, or its head, at `density`.
+fn type_cell<C: Styled + ParentElement>(
+    cell: C,
+    density: Density,
+    shown: AnyElement,
+    cx: &App,
+) -> C {
+    label_cell(
+        cell,
+        density.column_widths().0,
+        density,
+        widest_badge(cx),
+        Some(shown),
+    )
+}
+
+/// A Status cell, or its head, at `density`.
+fn status_cell<C: Styled + ParentElement>(
+    cell: C,
+    density: Density,
+    shown: Option<AnyElement>,
+    cx: &App,
+) -> C {
+    label_cell(
+        cell,
+        density.column_widths().1,
+        density,
+        widest_status(cx),
+        shown,
+    )
+}
 
 /// How many lines of the harness's latest raw output stand in for output
 /// that has yet to arrive, and how much of each line is kept.
@@ -271,6 +435,18 @@ impl ToolKind {
     }
 }
 
+/// A row's kind as a badge: its icon and label in its own colour.
+fn badge(tag: Tag, icon: IconName, label: &'static str) -> AnyElement {
+    tag.text_sm()
+        .child(
+            h_flex()
+                .gap_1()
+                .child(Icon::new(icon).xsmall())
+                .child(label),
+        )
+        .into_any_element()
+}
+
 /// A row of a task's output table.
 #[derive(Debug, PartialEq)]
 pub(crate) enum OutputRow<'a> {
@@ -304,14 +480,7 @@ impl OutputRow<'_> {
                     .into_any_element();
             }
         };
-        tag.text_sm()
-            .child(
-                h_flex()
-                    .gap_1()
-                    .child(Icon::new(icon).xsmall())
-                    .child(label),
-            )
-            .into_any_element()
+        badge(tag, icon, label)
     }
 
     /// Whether the row is still waiting on part of what it shows: text with no
@@ -848,6 +1017,8 @@ pub(crate) struct TableView<'a> {
 pub(crate) struct TaskTable {
     list: MeasuredList,
     sync: RefCell<TableSync>,
+    /// The density it was last drawn at.
+    density: Cell<Density>,
 }
 
 impl TaskTable {
@@ -855,6 +1026,7 @@ impl TaskTable {
         Self {
             list: MeasuredList::new(OVERDRAW),
             sync: RefCell::default(),
+            density: Cell::new(Density::Regular),
         }
     }
 
@@ -900,7 +1072,17 @@ impl TaskTable {
         cx: &App,
     ) -> AnyElement {
         let theme = cx.theme();
-        let padding = view.padding;
+        // Its rows are laid out inside its border, beside its scrollbar, and
+        // within the room around it, which tightens as it narrows.
+        let around = |density: Density| {
+            px(2.)
+                + scrollbar::COLUMN_WIDTH
+                + density.inset(view.padding.left)
+                + density.inset(view.padding.right)
+        };
+        let density = Density::of_list(&self.list, around(self.density.get()));
+        self.density.set(density);
+        let padding = view.padding.map(|room| density.inset(*room));
         let fill = view.max_height.is_none();
         let output = div()
             .id(view.id.clone())
@@ -943,6 +1125,7 @@ impl TaskTable {
                 layout,
                 view.open.cloned(),
                 view.steps,
+                density,
                 cx,
             ));
             let rows = match view.max_height {
@@ -962,8 +1145,9 @@ impl TaskTable {
                 .border_1()
                 .border_color(theme.border)
                 .bg(theme.tokens.table)
-                .child(output_header(cx))
+                .child(output_header(density, cx))
                 .child(rows)
+                .child(follow_density(&self.list, density, around(density)))
                 .into_any_element()
         };
         // Lets UI tests find the output; inert in normal builds.
@@ -972,14 +1156,15 @@ impl TaskTable {
     }
 }
 
-/// Draws the items of a table laid out as `layout`, each a row of the table,
-/// with a line between one and the next, for a list.
+/// Draws the items of a table laid out as `layout`, each a row of the table
+/// at `density`, with a line between one and the next, for a list.
 pub(crate) fn table_rows(
     table: usize,
     reply_of: ReplyOf,
     layout: Layout,
     open: Option<OpenFile>,
     steps: Option<Steps>,
+    density: Density,
     cx: &App,
 ) -> RenderRow {
     let border = cx.theme().border;
@@ -990,7 +1175,7 @@ pub(crate) fn table_rows(
         ROWS_DRAWN.with(|drawn| drawn.set(drawn.get() + 1));
         let row = match layout.item(item) {
             Item::Steps => match (&steps, layout.steps) {
-                (Some(steps), Some((_, count, _))) => steps_row(table, count, steps, cx),
+                (Some(steps), Some((_, count, _))) => steps_row(table, count, steps, density, cx),
                 _ => div().into_any_element(),
             },
             Item::Row(ix) => {
@@ -1014,6 +1199,7 @@ pub(crate) fn table_rows(
                     &row,
                     open.as_ref(),
                     (*project_dir).as_deref(),
+                    density,
                     cx,
                 )
                 .into_any_element()
@@ -1040,7 +1226,7 @@ pub(crate) fn rows_drawn() -> usize {
 }
 
 /// The row that shows or hides a table's `count` steps.
-fn steps_row(table: usize, count: usize, steps: &Steps, cx: &App) -> AnyElement {
+fn steps_row(table: usize, count: usize, steps: &Steps, density: Density, cx: &App) -> AnyElement {
     let theme = cx.theme();
     let label = match (steps.shown, count) {
         (false, 1) => "Show 1 step".to_string(),
@@ -1068,6 +1254,7 @@ fn steps_row(table: usize, count: usize, steps: &Steps, cx: &App) -> AnyElement 
             TableCell::new()
                 .flex_1()
                 .min_w_0()
+                .px(density.cell_padding())
                 .child(gpui_kit::TestSupportExt::test_support(toggle_row)),
         )
         .into_any_element()
@@ -1205,13 +1392,33 @@ pub(crate) fn relative_to_project(text: &str, project_dir: Option<&Path>) -> Str
     out
 }
 
-/// The header of a task's output table, with the theme's bevel.
-pub(crate) fn output_header(cx: &App) -> TableHeader {
+/// The header of a task's output table at `density`, with the theme's bevel.
+pub(crate) fn output_header(density: Density, cx: &App) -> TableHeader {
+    let head = |id: &'static str, label: &'static str| {
+        // Lets UI tests find the head; inert in normal builds.
+        gpui_kit::TestSupportExt::test_support(div().id(id).child(label)).into_any_element()
+    };
     TableHeader::new().relative().child(
         TableRow::new()
-            .child(TableHead::new().w(KIND_WIDTH).flex_none().child("Type"))
-            .child(TableHead::new().flex_1().min_w_0().child("Output"))
-            .child(TableHead::new().w(STATUS_WIDTH).flex_none().child("Status"))
+            .child(type_cell(
+                TableHead::new(),
+                density,
+                head("output-head-type", "Type"),
+                cx,
+            ))
+            .child(
+                TableHead::new()
+                    .flex_1()
+                    .min_w_0()
+                    .px(density.cell_padding())
+                    .child(head("output-head-output", "Output")),
+            )
+            .child(status_cell(
+                TableHead::new(),
+                density,
+                Some(head("output-head-status", "Status")),
+                cx,
+            ))
             // Laid over the whole header, taking no room of the row's.
             .child(
                 TableHead::new()
@@ -1233,6 +1440,7 @@ fn output_row(
     row: &OutputRow,
     open: Option<&OpenFile>,
     project_dir: Option<&Path>,
+    density: Density,
     cx: &App,
 ) -> TableRow {
     let theme = cx.theme();
@@ -1339,29 +1547,33 @@ fn output_row(
 
     let status = row_status(row, cx);
 
+    // Lets UI tests find the badge; inert in normal builds.
+    let badge = gpui_kit::TestSupportExt::test_support(
+        div().id(("output-type", row_ix)).child(row.badge(cx)),
+    )
+    .into_any_element();
     TableRow::new()
-        .child(
-            TableCell::new()
-                .w(KIND_WIDTH)
-                .flex_none()
-                .items_start()
-                .child(row.badge(cx)),
-        )
+        .child(type_cell(
+            TableCell::new().items_start(),
+            density,
+            badge,
+            cx,
+        ))
         .child(
             TableCell::new()
                 .flex_1()
                 .min_w_0()
                 .items_start()
+                .px(density.cell_padding())
                 // Lets UI tests find the row; inert in normal builds.
                 .child(gpui_kit::TestSupportExt::test_support(detail)),
         )
-        .child(
-            TableCell::new()
-                .w(STATUS_WIDTH)
-                .flex_none()
-                .items_start()
-                .children(status),
-        )
+        .child(status_cell(
+            TableCell::new().items_start(),
+            density,
+            status,
+            cx,
+        ))
 }
 
 /// A message sent to a run while it works: its first line, the whole message
@@ -1404,21 +1616,25 @@ pub(crate) fn row_status(row: &OutputRow, cx: &App) -> Option<AnyElement> {
             .text_color(theme.danger)
             .into_any_element(),
     };
-    Some(
-        h_flex()
-            .gap_1p5()
-            .child(icon)
-            .child(
-                div()
-                    .map(|state| match call.state {
-                        // A failure reads at full strength.
-                        ToolState::Failed => state.font_medium(),
-                        _ => state.text_color(theme.muted_foreground),
-                    })
-                    .child(call.state.label()),
-            )
-            .into_any_element(),
-    )
+    Some(status_label(icon, call.state, cx))
+}
+
+/// A tool call's `state` as its `icon` and spelled out.
+fn status_label(icon: impl IntoElement, state: ToolState, cx: &App) -> AnyElement {
+    let muted = cx.theme().muted_foreground;
+    h_flex()
+        .gap_1p5()
+        .child(icon)
+        .child(
+            div()
+                .map(|label| match state {
+                    // A failure reads at full strength.
+                    ToolState::Failed => label.font_medium(),
+                    _ => label.text_color(muted),
+                })
+                .child(state.label()),
+        )
+        .into_any_element()
 }
 
 /// The harness's latest raw output, standing in for output that has yet to
@@ -1452,8 +1668,131 @@ pub(crate) fn json_highlights(line: &str, theme: &HighlightTheme) -> JsonStyles 
 
 #[cfg(test)]
 mod tests {
-    use super::{Item, Layout, OutputRow, Reply};
+    use gpui_kit::component::Root;
+    use gpui_kit::test::TestWindowExt as _;
+    use gpui_kit::{
+        AppContext as _, Context, Edges, IntoElement, ParentElement as _, Pixels, Render,
+        Styled as _, TestAppContext, Window, div, px,
+    };
+
+    use super::{Item, KIND_WIDTH, Layout, OutputRow, Reply, TableView, TaskTable, reply_of};
     use crate::harness::HarnessEvent;
+
+    /// A task table `width` wide, with the room its uses usually give it.
+    struct Shown {
+        table: TaskTable,
+        reply: Reply,
+        width: Pixels,
+    }
+
+    impl Render for Shown {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let this = cx.entity().downgrade();
+            let reply_of = reply_of(move |cx| this.upgrade().map(|shown| &shown.read(cx).reply));
+            let table = self.table.render(
+                &self.reply,
+                reply_of,
+                TableView {
+                    id: "output".into(),
+                    scrollbar: "output".into(),
+                    table: 0,
+                    open: None,
+                    steps: None,
+                    lock: None,
+                    padding: Edges::all(px(16.)),
+                    max_height: None,
+                },
+                cx,
+            );
+            div().w(self.width).h(px(600.)).child(table)
+        }
+    }
+
+    /// However narrow the table, its Output column keeps most of its width:
+    /// Type and Status are only as wide as their widest labels, the room in
+    /// its cells and around it tightens, and its header stays lined up with
+    /// its rows. At its roomiest it is drawn as it always was.
+    #[gpui_kit::test]
+    fn narrow_tables_keep_their_output_wide(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::project_directory::ProjectDirectory::set(std::env::temp_dir(), cx);
+        });
+        let mut reply = Reply::default();
+        for event in [
+            HarnessEvent::ToolStarted {
+                id: "t1".into(),
+                name: "Read".into(),
+            },
+            HarnessEvent::ToolStarted {
+                id: "t2".into(),
+                name: "Bash".into(),
+            },
+            HarnessEvent::TextDelta("All fine.".into()),
+            HarnessEvent::Finished {
+                is_error: false,
+                result: "All fine.".into(),
+            },
+        ] {
+            reply.apply(event);
+        }
+        let mut shown = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|_| Shown {
+                table: TaskTable::new(),
+                reply,
+                width: px(1000.),
+            });
+            shown = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let shown = shown.unwrap();
+        // Type's width, Output's width, and Output's share of the whole.
+        let columns = |cx: &mut TestAppContext, width: Pixels| {
+            shown.update(cx, |shown, cx| {
+                shown.width = width;
+                cx.notify();
+            });
+            cx.run_until_parked();
+            cx.update_window(window.into(), |_, window, cx| {
+                for _ in 0..4 {
+                    window.render_frame(cx);
+                }
+                let head_type = window.find("output-head-type").bounds();
+                let head_output = window.find("output-head-output").bounds();
+                let head_status = window.find("output-head-status").bounds();
+                for row in 0..3usize {
+                    let detail = window.find(("output-row", row)).bounds();
+                    assert_eq!(detail.left(), head_output.left(), "row {row} at {width:?}");
+                    // Status starts where the output's cell ends, as in the header.
+                    let gap = head_status.left() - detail.right();
+                    assert!(
+                        gap >= px(0.) && gap <= px(16.),
+                        "row {row} at {width:?}: {gap:?}"
+                    );
+                }
+                let kind = head_output.left() - head_type.left();
+                let output = head_status.left() - head_output.left();
+                (kind, output, output / width)
+            })
+            .unwrap()
+        };
+
+        let (kind, _, share) = columns(cx, px(1000.));
+        assert_eq!(kind, KIND_WIDTH);
+        assert!(share > 0.6, "{share}");
+
+        let (kind, _, share) = columns(cx, px(600.));
+        assert!(kind < KIND_WIDTH, "{kind:?}");
+        assert!(share > 0.5, "{share}");
+
+        // Its labels spelled out take what they need; the output has the rest,
+        // where it once had a sliver of 32px.
+        let (narrow, output, share) = columns(cx, px(340.));
+        assert!(narrow < kind, "{narrow:?}");
+        assert!(output > px(110.), "{output:?}");
+        assert!(share > 0.33, "{share}");
+    }
 
     /// A message sent to a run is never collapsed among the steps leading up
     /// to its answer: the steps collapsed are those after the last message
