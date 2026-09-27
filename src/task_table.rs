@@ -167,8 +167,13 @@ fn widest_badge(cx: &App) -> AnyElement {
 fn widest_status(cx: &App) -> AnyElement {
     v_flex()
         .children(
-            [ToolState::Running, ToolState::Done, ToolState::Failed]
-                .map(|state| status_label(Icon::new(IconName::Check).small(), state, cx)),
+            [
+                ToolState::Running,
+                ToolState::Done,
+                ToolState::Failed,
+                ToolState::Cancelled,
+            ]
+            .map(|state| status_label(Icon::new(IconName::Check).small(), state, cx)),
         )
         .into_any_element()
 }
@@ -352,6 +357,8 @@ pub(crate) enum ToolState {
     Running,
     Done,
     Failed,
+    /// Still running when its run was cancelled.
+    Cancelled,
 }
 
 impl ToolState {
@@ -360,6 +367,7 @@ impl ToolState {
             Self::Running => "running",
             Self::Done => "done",
             Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
         }
     }
 }
@@ -795,6 +803,14 @@ impl Reply {
     pub(crate) fn stop(&mut self) {
         self.done = true;
         self.settle_tools(ToolState::Failed);
+        self.refresh();
+    }
+
+    /// Ends a run that was cancelled: tool calls still running were
+    /// cancelled with it.
+    pub(crate) fn cancel(&mut self) {
+        self.done = true;
+        self.settle_tools(ToolState::Cancelled);
         self.refresh();
     }
 
@@ -1615,6 +1631,10 @@ pub(crate) fn row_status(row: &OutputRow, cx: &App) -> Option<AnyElement> {
             .small()
             .text_color(theme.danger)
             .into_any_element(),
+        ToolState::Cancelled => Icon::new(IconName::CircleStop)
+            .small()
+            .text_color(crate::theme::Hue::Orange.of(crate::theme::palette(cx)))
+            .into_any_element(),
     };
     Some(status_label(icon, call.state, cx))
 }
@@ -1786,12 +1806,13 @@ mod tests {
         assert!(kind < KIND_WIDTH, "{kind:?}");
         assert!(share > 0.5, "{share}");
 
-        // Its labels spelled out take what they need; the output has the rest,
-        // where it once had a sliver of 32px.
+        // Its labels spelled out take what they need, "cancelled" the widest
+        // of Status's; the output has the rest, where it once had a sliver of
+        // 32px.
         let (narrow, output, share) = columns(cx, px(340.));
         assert!(narrow < kind, "{narrow:?}");
-        assert!(output > px(110.), "{output:?}");
-        assert!(share > 0.33, "{share}");
+        assert!(output >= px(96.), "{output:?}");
+        assert!(share > 0.28, "{share}");
     }
 
     /// A message sent to a run is never collapsed among the steps leading up

@@ -2,5 +2,6 @@ use /lib
 
 export shape TaskTableStatusShape:
     description:
-        A tool call's status is "running", "done", or "failed", and a call still
-        running when the run ends takes the state the run ended in.
+        A tool call's status is "running", "done", "failed", or "cancelled",
+        and a call still running when the run ends takes the state the run
+        ended in, "cancelled" for a run that was cancelled.

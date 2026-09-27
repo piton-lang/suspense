@@ -47,6 +47,7 @@ pub struct Palette {
     pub error: u32,
     pub purple: u32,
     pub cyan: u32,
+    pub orange: u32,
     /// How much black dims the window behind a modal surface.
     pub dim: f32,
     /// How much white lights, and black shades, a bevel's edges.
@@ -76,6 +77,7 @@ pub const DARK: Palette = Palette {
     error: 0xf0928a,
     purple: 0xbba0e6,
     cyan: 0x78c8ce,
+    orange: 0xf2a168,
     dim: 0.4,
     bevel_light: 0.08,
     bevel_shade: 0.06,
@@ -103,6 +105,7 @@ pub const LIGHT: Palette = Palette {
     error: 0xb3261e,
     purple: 0x6b4aa6,
     cyan: 0x1f6f78,
+    orange: 0x9a3f00,
     dim: 0.25,
     bevel_light: 0.55,
     bevel_shade: 0.03,
@@ -132,6 +135,7 @@ pub enum Hue {
     Purple,
     Green,
     Amber,
+    Orange,
     Red,
     Grey,
 }
@@ -144,6 +148,7 @@ impl Hue {
             Self::Purple => palette.purple,
             Self::Green => palette.success,
             Self::Amber => palette.warning,
+            Self::Orange => palette.orange,
             Self::Red => palette.error,
             Self::Grey => palette.text_tertiary,
         })
@@ -546,7 +551,14 @@ mod tests {
                     "{name}: text on {control:06x}"
                 );
             }
-            for hue in [p.text_tertiary, p.success, p.warning, p.error, p.accent] {
+            for hue in [
+                p.text_tertiary,
+                p.success,
+                p.warning,
+                p.error,
+                p.accent,
+                p.orange,
+            ] {
                 assert!(contrast(hue, base) >= 3., "{name}: {hue:06x} on the base");
             }
             assert!(

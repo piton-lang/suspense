@@ -32,6 +32,9 @@ pub struct RunRecord {
     /// Why the run failed, when the harness's output does not say.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// The task was cancelled, whatever its output says.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub cancelled: bool,
 }
 
 impl RunRecord {

@@ -7,7 +7,7 @@
 
 use std::io::{BufRead as _, BufReader, Write as _};
 use std::path::{Path, PathBuf};
-use std::process::{ChildStdin, Command, Stdio};
+use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context as _, Result, bail};
@@ -107,11 +107,12 @@ pub fn send(
     start(prompt, system_prompt, resume, project_dir, false).events
 }
 
-/// A task's run of the harness: its events, and, where the harness can be
-/// fed more while it works, what feeds it.
+/// A task's run of the harness: its events, where the harness can be fed
+/// more while it works, what feeds it, and what stops it.
 pub struct Run {
     pub events: mpsc::UnboundedReceiver<HarnessEvent>,
     pub feed: Option<Feed>,
+    pub stop: Stop,
 }
 
 /// Runs the harness for a task, as [`send`] does, but where the harness can
@@ -136,31 +137,170 @@ fn start(
     fed: bool,
 ) -> Run {
     let agent = agent::current();
+    let program = program(agent);
     let (tx, rx) = mpsc::unbounded();
     let feed = (fed && agent.can_be_fed()).then(|| Feed::new(tx.clone()));
+    let stop = Stop::new(feed.clone());
     std::thread::spawn({
         let feed = feed.clone();
+        let stop = stop.clone();
         move || {
             let result = run(
                 agent,
+                &program,
                 &prompt,
                 system_prompt.as_deref(),
                 resume.as_ref(),
                 &project_dir,
                 &tx,
                 feed.as_ref(),
+                &stop,
             );
             // Nothing more can be sent once the run is over, however it ended.
             if let Some(feed) = &feed {
                 feed.end();
             }
-            if let Err(err) = result {
+            // A run stopped on purpose ended as it was asked to.
+            if let Err(err) = result
+                && !stop.is_stopped()
+            {
                 tx.unbounded_send(HarnessEvent::Failed(format!("{err:#}")))
                     .ok();
             }
         }
     });
-    Run { events: rx, feed }
+    Run {
+        events: rx,
+        feed,
+        stop,
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// A program each test's runs start in place of the agent's own, so
+    /// tests can stand in a harness of their own.
+    static TEST_PROGRAM: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Has this test's runs start `program` in place of the agent's harness.
+#[cfg(test)]
+pub fn use_program_for_test(program: Option<PathBuf>) {
+    TEST_PROGRAM.set(program);
+}
+
+/// The program a run of `agent` starts.
+fn program(agent: Agent) -> PathBuf {
+    #[cfg(test)]
+    if let Some(program) = TEST_PROGRAM.with_borrow(Clone::clone) {
+        return program;
+    }
+    PathBuf::from(agent.command())
+}
+
+/// Stops a run straight away, whatever the harness is in the middle of: its
+/// input is closed, and its process, and everything that process started,
+/// ended, rather than left to finish its turn. Its events end with what it
+/// printed so far, without a result or a failure.
+#[derive(Clone)]
+pub struct Stop(Arc<Mutex<Stopping>>);
+
+struct Stopping {
+    stopped: bool,
+    /// The harness's process, once started, until the run is over.
+    child: Option<Child>,
+    feed: Option<Feed>,
+}
+
+impl Stop {
+    fn new(feed: Option<Feed>) -> Self {
+        Self(Arc::new(Mutex::new(Stopping {
+            stopped: false,
+            child: None,
+            feed,
+        })))
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Stopping> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Stops the run: see [`Stop`]. A run not yet started never starts.
+    pub fn stop(&self) {
+        let mut stopping = self.lock();
+        if std::mem::replace(&mut stopping.stopped, true) {
+            return;
+        }
+        if let Some(feed) = &stopping.feed {
+            feed.close();
+        }
+        if let Some(child) = stopping.child.as_mut() {
+            kill(child);
+        }
+    }
+
+    /// Whether the run was stopped.
+    pub fn is_stopped(&self) -> bool {
+        self.lock().stopped
+    }
+
+    /// Keeps the run's process, to be ended once it is stopped; one stopped
+    /// already is ended at once.
+    fn hold(&self, mut child: Child) {
+        let mut stopping = self.lock();
+        if stopping.stopped {
+            kill(&mut child);
+        }
+        stopping.child = Some(child);
+    }
+
+    /// Waits for the run's process to end, however it ends, reaping it.
+    fn wait(&self) -> Result<std::process::ExitStatus> {
+        loop {
+            if let Some(child) = self.lock().child.as_mut()
+                && let Some(status) = child.try_wait()?
+            {
+                return Ok(status);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+
+    /// The harness's process id, once it has started.
+    #[cfg(test)]
+    pub fn pid(&self) -> Option<u32> {
+        self.lock().child.as_ref().map(Child::id)
+    }
+}
+
+/// Ends `child`, the leader of its own process group, and everything it
+/// started, then reaps it, so no zombie is left.
+fn kill(child: &mut Child) {
+    // Over and reaped already, its id may since have gone to another.
+    if matches!(child.try_wait(), Ok(Some(_))) {
+        return;
+    }
+    #[cfg(unix)]
+    {
+        let group = format!("-{}", child.id());
+        Command::new("kill")
+            .args(["-TERM", "--", &group])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .ok();
+    }
+    #[cfg(windows)]
+    {
+        Command::new("taskkill")
+            .args(["/T", "/F", "/PID", &child.id().to_string()])
+            .status()
+            .ok();
+    }
+    child.kill().ok();
+    child.wait().ok();
 }
 
 /// Sends a fed run more messages while it works: each is written to the
@@ -356,14 +496,17 @@ impl Messages {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run(
     agent: Agent,
+    program: &Path,
     prompt: &str,
     system_prompt: Option<&str>,
     resume: Option<&Resume>,
     project_dir: &Path,
     tx: &mpsc::UnboundedSender<HarnessEvent>,
     feed: Option<&Feed>,
+    stop: &Stop,
 ) -> Result<()> {
     // A conversation is only carried on by the agent it began with, and only
     // Claude Code can carry on a copy of one; otherwise a new one starts.
@@ -372,7 +515,7 @@ fn run(
         (began == agent && (!resume.fork || agent == Agent::Claude))
             .then(|| (id.to_string(), resume.fork))
     });
-    let mut command = Command::new(agent.command());
+    let mut command = Command::new(program);
     let mut input = prompt.to_string();
     match agent {
         Agent::Claude => {
@@ -428,35 +571,45 @@ fn run(
         input = with_system_prompt(prompt, system_prompt);
     }
     let name = invocation(agent);
-    let mut child = command
+    if stop.is_stopped() {
+        return Ok(());
+    }
+    command
         .current_dir(project_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+    // Its own process group, so stopping it ends everything it started too.
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(&mut command, 0);
+    let mut child = command
         .spawn()
         .with_context(|| format!("could not run `{name}`"))?;
+    let stdin = child.stdin.take().context("the harness has no stdin");
+    let stdout = child.stdout.take().context("the harness has no stdout");
+    let stderr = child.stderr.take().context("the harness has no stderr");
+    // Held from here on, so stopping the run ends it wherever it is.
+    stop.hold(child);
+    let (mut stdin, stdout, stderr) = (stdin?, stdout?, stderr?);
 
     // The prompt goes over stdin so its length and leading characters never
     // collide with command-line parsing; dropping stdin ends it, unless the
     // run is fed, when it stays open for more.
-    let mut stdin = child.stdin.take().context("the harness has no stdin")?;
-    stdin.write_all(input.as_bytes())?;
+    let written = stdin.write_all(input.as_bytes());
+    if stop.is_stopped() {
+        return Ok(());
+    }
+    written?;
     if let Some(feed) = feed {
         stdin.flush()?;
         feed.lock().stdin = Some(stdin);
+        // Stopped meanwhile, its input stays closed.
+        if stop.is_stopped() {
+            feed.close();
+        }
     } else {
         drop(stdin);
     }
-    // Stopped, the run's input closes at once, and the harness with it.
-    let stop = |child: &mut std::process::Child| {
-        if let Some(feed) = feed {
-            feed.close();
-        }
-        child.kill().ok();
-        child.wait().ok();
-    };
-    let stdout = child.stdout.take().context("the harness has no stdout")?;
-    let stderr = child.stderr.take().context("the harness has no stderr")?;
     // Error output reaches the raw stream as it arrives, and is kept for the
     // error message should the run end without a result.
     let stderr = std::thread::spawn({
@@ -475,11 +628,16 @@ fn run(
 
     let mut replying = Replying::default();
     for line in BufReader::new(stdout).lines() {
+        // Stopped, nothing more it prints is taken.
+        if stop.is_stopped() {
+            break;
+        }
         let line = line?;
         if line.trim().is_empty() {
             // Nothing to parse, but the raw stream shows lines as they arrived.
+            // Once no one is listening, the run is stopped.
             if tx.unbounded_send(HarnessEvent::Output(line)).is_err() {
-                stop(&mut child);
+                stop.stop();
                 return Ok(());
             }
             continue;
@@ -498,13 +656,18 @@ fn run(
         };
         for event in std::iter::once(HarnessEvent::Output(line)).chain(events) {
             if tx.unbounded_send(replying.take(event)).is_err() {
-                stop(&mut child);
+                stop.stop();
                 return Ok(());
             }
         }
     }
 
-    let status = child.wait()?;
+    let status = stop.wait()?;
+    // Stopped, it ended as it was asked to; what it left writing to its error
+    // output is not waited on.
+    if stop.is_stopped() {
+        return Ok(());
+    }
     let stderr = stderr.join().unwrap_or_default();
     if !replying.finished() {
         // A harness that ends without saying it finished, as OpenCode may,
@@ -1090,10 +1253,135 @@ fn summarize(input: &Value) -> Option<String> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use serde_json::json;
 
     use super::{HarnessEvent, parse};
+
+    /// A stand-in harness, written to `dir`: it says which conversation it
+    /// is, starts a reply and a tool call, and then works on, leaving a
+    /// process of its own running, whose id it writes to `dir/grandchild`.
+    /// Each time it runs it adds its arguments as a line of `dir/args`, and
+    /// touches `dir/ran`.
+    #[cfg(unix)]
+    pub(crate) fn slow_harness(dir: &std::path::Path) -> std::path::PathBuf {
+        use std::os::unix::fs::PermissionsExt as _;
+        let script = dir.join("harness.sh");
+        std::fs::write(
+            &script,
+            format!(
+                r#"#!/bin/sh
+echo "$@" >> {args}
+echo '{{"type":"system","subtype":"init","session_id":"s1"}}'
+echo '{{"type":"stream_event","event":{{"type":"content_block_start","content_block":{{"type":"text"}}}}}}'
+echo '{{"type":"stream_event","event":{{"type":"content_block_delta","delta":{{"type":"text_delta","text":"Working on it."}}}}}}'
+echo '{{"type":"stream_event","event":{{"type":"content_block_start","content_block":{{"type":"tool_use","id":"t1","name":"Bash"}}}}}}'
+touch {ran}
+sleep 30 &
+echo $! > {grandchild}
+wait
+"#,
+                args = dir.join("args").display(),
+                ran = dir.join("ran").display(),
+                grandchild = dir.join("grandchild").display(),
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        script
+    }
+
+    /// Whether process `pid` is gone, reaped rather than left a zombie.
+    #[cfg(unix)]
+    pub(crate) fn gone(pid: u32) -> bool {
+        let start = std::time::Instant::now();
+        while start.elapsed() < std::time::Duration::from_secs(5) {
+            match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
+                Err(_) => return true,
+                // A zombie whose parent is gone too is soon reaped.
+                Ok(_) => std::thread::sleep(std::time::Duration::from_millis(20)),
+            }
+        }
+        false
+    }
+
+    /// Stopping a run, whichever harness it is, ends it straight away,
+    /// mid-turn: its input is closed, its process and everything it started
+    /// ended and reaped, and its events end with what it printed so far,
+    /// neither failing nor finishing.
+    #[cfg(unix)]
+    #[test]
+    fn stopping_a_run_ends_its_harness_at_once() {
+        use futures::StreamExt as _;
+
+        use crate::agent::{self, Agent};
+
+        for agent in [Agent::Claude, Agent::Codex, Agent::OpenCode] {
+            let dir = std::env::temp_dir().join(format!(
+                "suspense-stop-{}-{}",
+                agent.command(),
+                std::process::id()
+            ));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            agent::set(agent).unwrap();
+            super::use_program_for_test(Some(slow_harness(&dir)));
+            let super::Run {
+                mut events,
+                feed,
+                stop,
+            } = super::send_task("Do it".into(), None, None, dir.clone());
+            super::use_program_for_test(None);
+            assert_eq!(feed.is_some(), agent == Agent::Claude);
+
+            let mut seen = Vec::new();
+            futures::executor::block_on(async {
+                while let Some(event) = events.next().await {
+                    let started = matches!(event, HarnessEvent::ToolStarted { .. });
+                    seen.push(event);
+                    if started {
+                        break;
+                    }
+                }
+            });
+            assert!(seen.contains(&HarnessEvent::Session("s1".into())));
+            assert!(seen.contains(&HarnessEvent::TextDelta("Working on it.".into())));
+            let grandchild = loop {
+                if let Ok(pid) = std::fs::read_to_string(dir.join("grandchild"))
+                    && let Ok(pid) = pid.trim().parse::<u32>()
+                {
+                    break pid;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            };
+            let pid = stop.pid().unwrap();
+
+            let stopped = std::time::Instant::now();
+            stop.stop();
+            assert!(stop.is_stopped());
+            assert!(
+                std::fs::metadata(format!("/proc/{pid}")).is_err(),
+                "{agent:?}: the harness was not ended and reaped at once"
+            );
+            assert!(gone(grandchild), "{agent:?}: what it started runs on");
+            if let Some(feed) = &feed {
+                assert!(!feed.is_open(), "the run's input is still open");
+            }
+            let rest: Vec<_> = futures::executor::block_on(events.collect());
+            assert!(
+                stopped.elapsed() < std::time::Duration::from_secs(5),
+                "{agent:?}: the run did not end straight away"
+            );
+            assert!(
+                rest.iter().all(|event| !matches!(
+                    event,
+                    HarnessEvent::Failed(_) | HarnessEvent::Finished { .. }
+                )),
+                "{agent:?}: a stopped run ended with {rest:?}"
+            );
+            std::fs::remove_dir_all(&dir).ok();
+        }
+    }
 
     /// Shapes taken from a real `claude -p --output-format stream-json
     /// --verbose --include-partial-messages` run.

@@ -83,6 +83,24 @@ shape PromptSendingShape:
         chat input's selected tab. What is being written in the chat input, and
         attached to it, is left alone, and so is the Slice toggle.
 
+    cancelling:
+        The task under way can be cancelled, from a Cancel button: a small
+        ghost button with a stop icon, whose tooltip says "Cancel this task",
+        at the right of the latest task's header, beside its Resend button,
+        shown only while the task is building, compiling, or running. A task
+        is cancelled straight away, whatever the harness is in the middle of:
+        a build or compile under way is abandoned before the task is run, and
+        a run is stopped, the harness's process ended, not left to finish its
+        turn.
+
+        A cancelled task keeps the output it had so far, and its status reads
+        "Cancelled", as the @{MessageList} shows, in the history as much as in
+        its header. It adds no commit note, and any change the harness had
+        already made to files is left as it is. The queue carries on after it,
+        as it does after a task that fails, sending the next prompt waiting in
+        it, and the next task carries on the same conversation. Questions are
+        not cancelled with it.
+
     sendingToTheOtherMode:
         A task sent in Code alone can be sent to Spec, and one sent in Spec
         alone can be sent to Code, from a small ghost button beside its Resend

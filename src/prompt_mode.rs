@@ -31,10 +31,12 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use futures::StreamExt as _;
+use futures::channel::oneshot;
+use futures::{FutureExt as _, StreamExt as _};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::ElementExt as _;
 use gpui_kit::base::TextSelection;
@@ -187,6 +189,31 @@ struct PromptTask {
     sent: SentAs,
     /// Its spec slices are shown, rather than collapsed.
     slices_open: bool,
+    /// Cancels it while it is under way; none for a task not sent from here.
+    cancel: Option<Cancel>,
+}
+
+/// Cancels a task under way, from its Cancel button: see
+/// [`PromptMode::cancel_task`].
+struct Cancel {
+    /// Set once it is cancelled, for what compiles it, off the main thread.
+    cancelled: Arc<AtomicBool>,
+    /// Wakes what is sending it, to end it straight away.
+    signal: Option<oneshot::Sender<()>>,
+    /// Stops its run, once it has one.
+    stop: Option<harness::Stop>,
+}
+
+impl Cancel {
+    fn cancel(&mut self) {
+        self.cancelled.store(true, Ordering::SeqCst);
+        if let Some(stop) = &self.stop {
+            stop.stop();
+        }
+        if let Some(signal) = self.signal.take() {
+            signal.send(()).ok();
+        }
+    }
 }
 
 /// How a prompt was sent, besides its text.
@@ -292,6 +319,8 @@ enum TaskStatus {
     Running,
     Done,
     Failed,
+    /// Cancelled while under way, from its Cancel button.
+    Cancelled,
     /// From the history, with no record of what came of it.
     Unrecorded,
 }
@@ -304,6 +333,7 @@ impl TaskStatus {
             Self::Running => "Running",
             Self::Done => "Done",
             Self::Failed => "Failed",
+            Self::Cancelled => "Cancelled",
             Self::Unrecorded => "Not recorded",
         }
     }
@@ -322,6 +352,7 @@ impl TaskStatus {
                 Self::Running => Hue::Amber,
                 Self::Done => Hue::Green,
                 Self::Failed => Hue::Red,
+                Self::Cancelled => Hue::Orange,
                 Self::Unrecorded => Hue::Grey,
             },
             cx,
@@ -346,6 +377,7 @@ impl PromptTask {
             _understanding_watch: Task::ready(()),
             sent: SentAs::default(),
             slices_open: false,
+            cancel: None,
         }
     }
 
@@ -369,16 +401,21 @@ impl PromptTask {
         for event in record.events() {
             task.apply(event);
         }
-        if let Some(error) = record.error {
+        if record.cancelled {
+            task.cancel();
+        } else if let Some(error) = record.error {
             task.apply(HarnessEvent::Failed(error));
         }
         task.end();
         task
     }
 
+    /// Compiled, it runs, unless it was cancelled meanwhile.
     fn set_compiled(&mut self, compiled: Compiled) {
         self.compiled = Some(compiled);
-        self.status = TaskStatus::Running;
+        if self.status.is_active() {
+            self.status = TaskStatus::Running;
+        }
     }
 
     /// Folds a harness event into the task's output and status.
@@ -395,12 +432,33 @@ impl PromptTask {
 
     fn fail(&mut self, error: String) {
         self.reply.push_error(error);
-        self.status = TaskStatus::Failed;
+        // A task cancelled stays cancelled, whatever its harness says after.
+        if self.status != TaskStatus::Cancelled {
+            self.status = TaskStatus::Failed;
+        }
+    }
+
+    /// Cancels it, keeping the output it had so far: tool calls still running
+    /// were cancelled with it.
+    fn cancel(&mut self) {
+        self.status = TaskStatus::Cancelled;
+        self.reply.cancel();
+    }
+
+    /// Whether it can be cancelled: it is under way, sent from here.
+    fn can_cancel(&self) -> bool {
+        self.status.is_active() && self.cancel.is_some()
     }
 
     /// The run is over. One that ended without a result, as when the harness
     /// was stopped, failed, and nothing still running in it finished.
     fn end(&mut self) {
+        // Cancelled, what it printed before it stopped is kept, and any call
+        // in it still running was cancelled with it.
+        if self.status == TaskStatus::Cancelled {
+            self.reply.cancel();
+            return;
+        }
         if self.reply.done {
             return;
         }
@@ -2320,6 +2378,21 @@ impl PromptMode {
     /// Sends the task at `ix` of `tasks_of` again as [`Self::resend`] does,
     /// but in the other mode ([`SendMode::other`]): a Code task to Spec, a
     /// Spec task to Code. A task with no other mode isn't sent.
+    /// Cancels the task at `ix` straight away, if it is under way: a build or
+    /// compile is abandoned before it runs, and a run stopped, its harness's
+    /// process ended. It keeps its output, reads "Cancelled", and the queue
+    /// carries on after it as after a failure; questions run on.
+    fn cancel_task(&mut self, ix: usize, cx: &mut Context<Self>) {
+        let Some(task) = self.tasks.get_mut(ix).filter(|task| task.can_cancel()) else {
+            return;
+        };
+        task.cancel();
+        if let Some(cancel) = task.cancel.as_mut() {
+            cancel.cancel();
+        }
+        cx.notify();
+    }
+
     fn send_to_other_mode(
         &mut self,
         tasks_of: fn(&PromptMode) -> &Vec<PromptTask>,
@@ -3153,6 +3226,28 @@ impl PromptMode {
         // What the task asked, for its commit note.
         let asked = text.clone();
         let summarize = self.summarize;
+        // Its Cancel button ends it wherever it is: see `cancel_task`.
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let (signal, on_cancel) = oneshot::channel();
+        self.tasks[task_ix].cancel = Some(Cancel {
+            cancelled: cancelled.clone(),
+            signal: Some(signal),
+            stop: None,
+        });
+        let on_cancel = on_cancel.shared();
+        // Resolves once the task is cancelled, and never otherwise.
+        let until_cancelled = move || {
+            let on_cancel = on_cancel.clone();
+            async move {
+                if on_cancel.await.is_err() {
+                    std::future::pending::<()>().await
+                }
+            }
+        };
+        let is_cancelled = {
+            let cancelled = cancelled.clone();
+            move || cancelled.load(Ordering::SeqCst)
+        };
         let build = builds.then(|| {
             let project_dir = project_dir.clone();
             cx.background_spawn(async move { piton_build::build(&project_dir) })
@@ -3171,18 +3266,33 @@ impl PromptMode {
                     }
                 };
                 let file = hidden_anchor::save(&anchor, &text, &project_dir)?;
+                // Cancelled by now, it is saved to the history as cancelled,
+                // but never compiled, nor run.
+                if cancelled.load(Ordering::SeqCst) {
+                    return Ok((anchor.name().to_string(), file, None));
+                }
                 let compiled = hidden_anchor::compile(&anchor, &file, &project_dir);
                 let imported = (
                     hidden_anchor::spec_files(&anchor.imports, &project_dir),
                     hidden_anchor::spec_dir(&project_dir),
                 );
-                anyhow::Ok((anchor.name().to_string(), file, compiled, imported))
+                anyhow::Ok((anchor.name().to_string(), file, Some((compiled, imported))))
             }
         };
 
         self._pending = cx.spawn(async move |this, cx| {
-            if let Some(build) = build {
-                let built = build.await;
+            // A build cancelled is abandoned: the task goes on without it.
+            let build = match build {
+                Some(build) => {
+                    match futures::future::select(build, std::pin::pin!(until_cancelled())).await
+                    {
+                        futures::future::Either::Left((built, _)) => Some(built),
+                        futures::future::Either::Right(_) => None,
+                    }
+                }
+                None => None,
+            };
+            if let Some(built) = build {
                 // A failed build doesn't stop the prompt, which may well be the
                 // one to fix the spec; it says so in the task's output.
                 let failure = match built {
@@ -3216,12 +3326,23 @@ impl PromptMode {
             let mut prompt_file = None;
             // The harness's final summary, once the run finished without error.
             let mut finished: Option<String> = None;
-            let compiled = compile.await.and_then(|(anchor, file, compiled, imported)| {
+            let compiled = compile.await.and_then(|(anchor, file, compiled)| {
                 prompt_file = Some(file);
-                Ok((anchor, compiled?, imported))
+                Ok(match compiled {
+                    Some((compiled, imported)) => Some((anchor, compiled?, imported)),
+                    None => None,
+                })
             });
+            // Cancelled before it could run, it never runs.
+            let compiled = match compiled {
+                Ok(Some(compiled)) if !is_cancelled() => Ok(Some(compiled)),
+                Ok(_) => Ok(None),
+                Err(_) if is_cancelled() => Ok(None),
+                Err(err) => Err(err),
+            };
             match compiled {
-                Ok((anchor, compiled, imported)) => {
+                Ok(None) => {}
+                Ok(Some((anchor, compiled, imported))) => {
                     let prompt = compiled.user_prompt;
                     record.user_prompt = Some(prompt.clone());
                     // A Code, Chain, or Spec task keeps its understanding
@@ -3239,7 +3360,11 @@ impl PromptMode {
                     let system_prompt = compiled.system_prompt.map(|system_prompt| {
                         system_prompts::fill_understanding(&system_prompt, shown_path.as_deref())
                     });
-                    let harness::Run { mut events, feed } = harness::send_task(
+                    let harness::Run {
+                        mut events,
+                        feed,
+                        stop,
+                    } = harness::send_task(
                         prompt.clone(),
                         system_prompt,
                         resume.clone().map(|session| harness::Resume {
@@ -3253,6 +3378,18 @@ impl PromptMode {
                             this.in_project(&project_dir, cx, |this, cx| {
                                 // More can be sent to it while it runs.
                                 this.feed = feed;
+                                // Cancelled, its run is stopped.
+                                if let Some(cancel) = this
+                                    .tasks
+                                    .get_mut(task_ix)
+                                    .and_then(|task| task.cancel.as_mut())
+                                {
+                                    cancel.stop = Some(stop.clone());
+                                }
+                                // Cancelled meanwhile, it stops at once.
+                                if is_cancelled() {
+                                    stop.stop();
+                                }
                                 if let Some(file) = understanding_file {
                                     let watch = Self::watch_understanding(
                                         task_ix,
@@ -3277,7 +3414,32 @@ impl PromptMode {
                     let mut started = false;
                     // The conversation this run reported.
                     let mut run_session = None;
-                    while let Some(event) = events.next().await {
+                    loop {
+                        // What the harness printed before it was cancelled is
+                        // taken first, and kept; then, cancelled, the run is
+                        // over, not waiting on the harness.
+                        let event = match futures::future::select(
+                            events.next(),
+                            std::pin::pin!(until_cancelled()),
+                        )
+                        .await
+                        {
+                            futures::future::Either::Left((Some(event), _)) => event,
+                            futures::future::Either::Left((None, _))
+                            | futures::future::Either::Right(_) => break,
+                        };
+                        // Nothing it says after it was cancelled ends it
+                        // otherwise.
+                        if is_cancelled()
+                            && matches!(
+                                event,
+                                HarnessEvent::Failed(_)
+                                    | HarnessEvent::Finished { .. }
+                                    | HarnessEvent::Answered { .. }
+                            )
+                        {
+                            continue;
+                        }
                         record.note(&event);
                         if let HarnessEvent::Finished {
                             is_error: false,
@@ -3315,7 +3477,9 @@ impl PromptMode {
                             return;
                         }
                     }
-                    if let Some(resume) = resume.filter(|_| !started) {
+                    // Cancelled, the conversation it carried on is still carried
+                    // on by the next task, however far it got.
+                    if let Some(resume) = resume.filter(|_| !started && !is_cancelled()) {
                         this.update(cx, |this, cx| {
                             this.in_project(&project_dir, cx, |this, _| {
                                 Session::forget(&mut this.session, &resume)
@@ -3338,6 +3502,7 @@ impl PromptMode {
                 }
             }
 
+            record.cancelled = is_cancelled();
             // Unsaved (the prompt itself could not be saved) there is nothing
             // to save it beside.
             let saved = match prompt_file {
@@ -3355,6 +3520,7 @@ impl PromptMode {
                 // queued as a task instead.
                 this.feed = None;
                 if let Some(task) = this.tasks.get_mut(task_ix) {
+                    task.cancel = None;
                     task.end();
                     if let Err(err) = saved {
                         // Shown without failing the task: the run itself is
@@ -3373,8 +3539,10 @@ impl PromptMode {
                         .update(cx, |input, cx| input.set_busy(false, cx));
                 }
                 // A Code, Chain, or Spec task that finished well adds a note to
-                // the next commit, written in the background.
+                // the next commit, written in the background; one cancelled
+                // adds none.
                 if builds
+                    && !is_cancelled()
                     && let Some(result) = finished.take()
                     && this
                         .tasks
@@ -4419,6 +4587,11 @@ impl PromptMode {
                         h_flex()
                             .flex_none()
                             .gap_1()
+                            .when(task.can_cancel(), |row| {
+                                row.child(cancel_button(("cancel-latest", ix)).on_click(
+                                    cx.listener(move |this, _, _, cx| this.cancel_task(ix, cx)),
+                                ))
+                            })
                             .children(other_mode(task).map(|to| {
                                 other_mode_button(
                                     ("send-to-other-latest", ix),
@@ -4998,6 +5171,15 @@ fn resend_button(id: impl Into<ElementId>) -> Button {
         .xsmall()
         .icon(IconName::RotateCcw)
         .tooltip("Send this prompt again, as it was sent")
+}
+
+/// The button that cancels the task under way.
+fn cancel_button(id: impl Into<ElementId>) -> Button {
+    Button::new(id)
+        .ghost()
+        .xsmall()
+        .icon(IconName::CircleStop)
+        .tooltip("Cancel this task")
 }
 
 /// The mode `task` can be sent to instead of the one it was sent in: Spec
@@ -8926,6 +9108,320 @@ mod tests {
             cx.try_global::<crate::commit_notes::NotesVersion>()
                 .is_some()
         }));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A project that builds and compiles, with a stand-in harness that
+    /// works on until it is stopped, and a note written for every task that
+    /// finishes; the project's directory as prompt mode knows it.
+    #[cfg(unix)]
+    fn cancel_project(
+        name: &str,
+        prompt_mode: &Entity<PromptMode>,
+        cx: &mut TestAppContext,
+    ) -> std::path::PathBuf {
+        fn summarize(_: &std::path::Path, asked: &str, _: &str) -> anyhow::Result<Option<String>> {
+            Ok(Some(format!("Did {asked}")))
+        }
+        let dir = std::env::temp_dir().join(format!("suspense-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("spec")).unwrap();
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(
+            dir.join("piton.config.pi"),
+            "use @piton/belay\nuse @piton/config\n\n\
+             from @piton/belay import ClaudeCodeAdapter\n\n\
+             export piton-config Project:\n    root: ./spec\n    frameworks:\n        - {Belay}\n\n\
+             belay-config Belay:\n    codeRoot: ./src\n    adapters:\n        - {ClaudeCodeAdapter}\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("spec/index.pi"), "export a: 1\n").unwrap();
+        crate::harness::use_program_for_test(Some(crate::harness::tests::slow_harness(&dir)));
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        prompt_mode.update(cx, |this, _| this.summarize = summarize);
+        prompt_mode.read_with(cx, |this, _| this.project_dir.clone().unwrap())
+    }
+
+    /// Lets the referenced spec sidebar's slide settle, and the view be laid
+    /// out beside it.
+    fn settle_sidebar(cx: &mut TestAppContext, handle: AnyWindowHandle) {
+        for _ in 0..2 {
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                .unwrap();
+            std::thread::sleep(super::PANE_SLIDE_TIME);
+            cx.run_until_parked();
+        }
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+            .unwrap();
+    }
+
+    /// Runs prompt mode until `done`, failing after a while.
+    fn run_until(
+        cx: &mut TestAppContext,
+        prompt_mode: &Entity<PromptMode>,
+        what: &str,
+        done: impl Fn(&PromptMode) -> bool,
+    ) {
+        let start = std::time::Instant::now();
+        while !prompt_mode.read_with(cx, |this, _| done(this)) {
+            if start.elapsed() > Duration::from_secs(30) {
+                let tasks = prompt_mode.read_with(cx, |this, _| {
+                    this.tasks
+                        .iter()
+                        .map(|task| {
+                            let errors: Vec<&String> = task
+                                .reply
+                                .parts
+                                .iter()
+                                .filter_map(|part| match part {
+                                    ReplyPart::Error(error) => Some(error),
+                                    _ => None,
+                                })
+                                .collect();
+                            format!("{} {errors:?}", task.status.label())
+                        })
+                        .collect::<Vec<_>>()
+                });
+                panic!("{what} never happened: {tasks:?}");
+            }
+            cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// The latest task's header offers Cancel only while the task is under
+    /// way: building, compiling, or running.
+    #[gpui_kit::test]
+    async fn only_a_task_under_way_offers_cancel(cx: &mut TestAppContext) {
+        let dir =
+            std::env::temp_dir().join(format!("suspense-cancel-shown-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        for status in [
+            TaskStatus::Building,
+            TaskStatus::Compiling,
+            TaskStatus::Running,
+            TaskStatus::Done,
+            TaskStatus::Failed,
+            TaskStatus::Cancelled,
+            TaskStatus::Unrecorded,
+        ] {
+            let ix = prompt_mode.update(cx, |this, cx| {
+                let ix = this.push_task("Fix it".into(), cx);
+                this.tasks[ix].status = status;
+                this.tasks[ix].cancel = Some(super::Cancel {
+                    cancelled: Default::default(),
+                    signal: None,
+                    stop: None,
+                });
+                cx.notify();
+                ix
+            });
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                assert!(window.try_find(("resend-latest", ix)).is_some());
+                assert_eq!(
+                    window.try_find(("cancel-latest", ix)).is_some(),
+                    status.is_active(),
+                    "Cancel is wrongly shown for a task {}",
+                    status.label()
+                );
+            })
+            .unwrap();
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Cancelling a running task stops its harness straight away, and all it
+    /// started, mid-turn. The task keeps its output, its tool call still
+    /// running reads "cancelled", and it reads "Cancelled", in the history
+    /// too, with no commit note. The queue carries on with the next prompt,
+    /// which carries on the same conversation.
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn cancelling_a_run_keeps_its_output_and_the_queue_carries_on(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        let (prompt_mode, handle) = open(cx);
+        let dir = cancel_project("cancel-run", &prompt_mode, cx);
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send("First".into(), SendMode::Code, Vec::new(), window, cx);
+                this.send("Second".into(), SendMode::Code, Vec::new(), window, cx);
+                assert_eq!(this.queue.len(), 1, "the second prompt was not queued");
+            });
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the first run's tool call", |this| {
+            this.tasks[0].status == TaskStatus::Running
+                && this.tasks[0]
+                    .reply
+                    .parts
+                    .iter()
+                    .any(|part| matches!(part, ReplyPart::Tool(_)))
+        });
+        let grandchild = loop {
+            if let Ok(pid) = std::fs::read_to_string(dir.join("grandchild"))
+                && let Ok(pid) = pid.trim().parse::<u32>()
+            {
+                break pid;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        let pid = prompt_mode.read_with(cx, |this, _| {
+            this.tasks[0]
+                .cancel
+                .as_ref()
+                .unwrap()
+                .stop
+                .as_ref()
+                .unwrap()
+                .pid()
+                .unwrap()
+        });
+
+        // The referenced spec sidebar slides out as the task runs; once it
+        // settles, the header is laid out beside it, its buttons in reach.
+        settle_sidebar(cx, handle);
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("cancel-latest", 0usize), cx);
+        })
+        .unwrap();
+        // Straight away: the task reads Cancelled, and its harness is gone.
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.tasks[0].status, TaskStatus::Cancelled);
+            assert!(!this.tasks[0].can_cancel());
+        });
+        assert!(
+            std::fs::metadata(format!("/proc/{pid}")).is_err(),
+            "the harness was not ended at once"
+        );
+        assert!(
+            crate::harness::tests::gone(grandchild),
+            "what it started runs on"
+        );
+
+        run_until(
+            cx,
+            &prompt_mode,
+            "the queue sending the next prompt",
+            |this| this.tasks.len() == 2 && this.tasks[1].status == TaskStatus::Running,
+        );
+        prompt_mode.read_with(cx, |this, _| {
+            let task = &this.tasks[0];
+            assert_eq!(task.status, TaskStatus::Cancelled);
+            assert!(this.queue.is_empty());
+            let rows = task.reply.rows();
+            assert!(
+                matches!(
+                    rows.as_slice(),
+                    [OutputRow::Text("Working on it."), OutputRow::Tool(call)]
+                        if call.state == ToolState::Cancelled
+                ),
+                "the output was not kept as it was: {} rows",
+                rows.len()
+            );
+        });
+        // The next task carries on the conversation the first reported.
+        let start = std::time::Instant::now();
+        // The first run began a conversation of its own.
+        while !std::fs::read_to_string(dir.join("args"))
+            .unwrap_or_default()
+            .contains("--resume s1")
+        {
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "the next task did not carry on the conversation"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+
+        settle_sidebar(cx, handle);
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("cancel-latest", 1usize), cx);
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the second task ending", |this| {
+            !this.working
+        });
+        crate::harness::use_program_for_test(None);
+
+        // It reads Cancelled from the history, with its output.
+        let saved = prompt_history::load(&dir);
+        assert_eq!(saved.len(), 2);
+        assert!(
+            saved
+                .iter()
+                .all(|saved| saved.record.as_ref().unwrap().cancelled)
+        );
+        let first = saved
+            .into_iter()
+            .find(|saved| saved.text == "First")
+            .unwrap();
+        let restored = PromptTask::restore(first);
+        assert_eq!(restored.status, TaskStatus::Cancelled);
+        assert!(matches!(
+            restored.reply.rows().as_slice(),
+            [OutputRow::Text("Working on it."), OutputRow::Tool(call)]
+                if call.state == ToolState::Cancelled
+        ));
+        // No commit note, however long it is given.
+        std::thread::sleep(Duration::from_millis(300));
+        cx.run_until_parked();
+        assert!(
+            crate::commit_notes::load(&dir).is_empty(),
+            "a cancelled task added a note"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A task cancelled while the spec builds is abandoned there: its
+    /// harness never runs, it reads "Cancelled", in the history too, and
+    /// the harness is free for the next.
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn cancelling_a_build_never_runs_the_harness(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        let (prompt_mode, handle) = open(cx);
+        let dir = cancel_project("cancel-build", &prompt_mode, cx);
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send("Change it".into(), SendMode::Code, Vec::new(), window, cx);
+                assert_eq!(this.tasks[0].status, TaskStatus::Building);
+            });
+            window.render_frame(cx);
+            window.click(("cancel-latest", 0usize), cx);
+        })
+        .unwrap();
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.tasks[0].status, TaskStatus::Cancelled)
+        });
+        run_until(cx, &prompt_mode, "the task ending", |this| !this.working);
+        // Long enough for a run to have started, had one been.
+        std::thread::sleep(Duration::from_millis(300));
+        cx.run_until_parked();
+        crate::harness::use_program_for_test(None);
+        assert!(!dir.join("ran").exists(), "the harness ran");
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.tasks[0].status, TaskStatus::Cancelled);
+            assert!(this.tasks[0].compiled.is_none(), "it was compiled");
+        });
+        let saved = prompt_history::load(&dir);
+        assert_eq!(saved.len(), 1);
+        assert!(saved[0].record.as_ref().unwrap().cancelled);
+        assert_eq!(
+            PromptTask::restore(saved.into_iter().next().unwrap()).status,
+            TaskStatus::Cancelled
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 }
