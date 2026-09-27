@@ -42,6 +42,7 @@ pub enum Prompt {
 
 impl Prompt {
     /// Every prompt: the modes' templates, in order, then the injected one.
+    /// Freeform, which sends no system prompt, has none.
     pub const ALL: [Prompt; 5] = [
         Prompt::Mode(SendMode::ALL[0]),
         Prompt::Mode(SendMode::ALL[1]),
@@ -94,6 +95,8 @@ pub fn default_prompt(prompt: impl Into<Prompt>) -> &'static str {
         Prompt::Mode(SendMode::Both) => baked!("combined"),
         Prompt::Mode(SendMode::Spec) => baked!("spec"),
         Prompt::Mode(SendMode::Ask) => baked!("ask"),
+        // Freeform sends no system prompt, so it has no template.
+        Prompt::Mode(SendMode::Freeform) => "",
         Prompt::SpecReading => baked!("spec-reading"),
     }
     .trim_end()
@@ -189,6 +192,26 @@ mod tests {
         fill_understanding, load, save, save_missing,
     };
     use crate::chat_input::SendMode;
+
+    /// Freeform sends no system prompt: it has no template, none is saved
+    /// for it, and a prompt sent in it is given none.
+    #[test]
+    fn freeform_has_no_system_prompt() {
+        assert!(!Prompt::ALL.contains(&Prompt::Mode(SendMode::Freeform)));
+        assert_eq!(default_prompt(SendMode::Freeform), "");
+        let dir =
+            std::env::temp_dir().join(format!("suspense-freeform-prompt-{}", std::process::id()));
+        fs::remove_dir_all(&dir).ok();
+        fs::create_dir_all(&dir).unwrap();
+        save_missing(&dir).unwrap();
+        assert!(!file(SendMode::Freeform, &dir).exists());
+        assert!(
+            crate::hidden_anchor::system_prompt(SendMode::Freeform, &dir, "")
+                .unwrap()
+                .is_none()
+        );
+        fs::remove_dir_all(&dir).ok();
+    }
 
     /// Each mode's default is this repository's own saved template for it,
     /// injects the spec-reading prompt, which tells the harness to follow

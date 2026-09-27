@@ -18,7 +18,7 @@ concept PromptModesConcept:
 
 shape PromptModesShape:
     description:
-        There are four modes, and wherever they are listed, they are in this
+        There are five modes, and wherever they are listed, they are in this
         order.
 
     modes:
@@ -26,6 +26,7 @@ shape PromptModesShape:
         - Chain: changes the code and the spec together; purple
         - Spec: changes the spec, leaving the code as it is; a subtle blue
         - Ask: asks a question about the code and the spec, changing neither; a subtle green
+        - Freeform: passes the prompt to the agent just as it is written; grey
 
     colours:
         Whatever shows a mode, or something sent in it, takes the mode's
@@ -34,7 +35,7 @@ shape PromptModesShape:
         together, so wherever it shows Code and Spec as well, both are purple.
 
     tasks:
-        A prompt sent in Code, Chain, or Spec is a task, sent as the
+        A prompt sent in Code, Chain, Spec, or Freeform is a task, sent as the
         @{PromptSendingScope} says. Tasks carry on one conversation, one at a
         time, and queue while the harness is working. Before one is sent, the
         spec is built ahead of it, as the @{SpecBuildScope} says. Once one
@@ -47,7 +48,19 @@ shape PromptModesShape:
         adds a commit note. Questions carry on a conversation of their own,
         apart from the tasks', as the @{HarnessIntegrationScope} says.
 
+    freeform:
+        A prompt sent in Freeform is passed to the harness exactly as it was
+        typed, with anything attached to it, and nothing else: no system
+        prompt, no hidden anchor compiled from it, no spec built ahead of it,
+        no slices, whatever the Slice toggle says, and no understanding file.
+        Otherwise it is a task like any other: it queues while the harness is
+        working, carries on the tasks' conversation, heads the message list,
+        is saved in the prompt history, can be cancelled or resent, and adds a
+        commit note once it finishes having changed files. Its header shows
+        the prompt as it was sent, with no hidden anchor named. It is never
+        sent to another mode, alone or in a batch.
+
     systemPrompts:
-        Each mode sends its own system prompt, from the
+        Each mode but Freeform sends its own system prompt, from the
         @{ModeSystemPromptsScope}. A prompt keeps the mode it was sent in while
         it waits in the queue.

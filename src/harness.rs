@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 
 use crate::agent::{self, Agent};
 use crate::harness_mentions;
-use crate::usage::{PlanLimit, Spend};
+use crate::usage::{PlanLimit, Spend, Tally};
 
 /// The directory the harness in use reads its agentic Markdown and reference
 /// files from, which a system prompt's `${HARNESS_DIRECTORY}` stands for.
@@ -85,12 +85,11 @@ pub enum HarnessEvent {
     Usage {
         context: u64,
     },
-    /// Tokens and cost the run reported: its totals so far when `total`,
-    /// or more on top of what it reported before otherwise. A figure left
-    /// `None` wasn't reported.
+    /// Tokens and cost the run reported, counted as its `tally` says. A
+    /// figure left `None` wasn't reported.
     Spent {
         spend: Spend,
-        total: bool,
+        tally: Tally,
     },
     /// The plan limits the harness reported, each with the share used so
     /// far; a limit not among them is as it was.
@@ -893,21 +892,32 @@ fn parse_codex(event: &Value) -> Vec<HarnessEvent> {
 }
 
 /// The tokens a Codex turn used, from its `usage`: its input, of which
-/// `cached_input_tokens` were read from the cache, and its output. Codex
-/// reports no cost and nothing written to the cache.
+/// `cached_input_tokens` were read from the cache and
+/// `cache_write_input_tokens` written into it, and its output, its reasoning
+/// among it. They are its thread's totals so far, earlier runs of it
+/// included, since a resumed thread picks its totals up again. Codex reports
+/// no cost.
 fn codex_spent(event: &Value) -> Option<HarnessEvent> {
     let usage = event.get("usage")?;
     let tokens = |key: &str| usage.get(key).and_then(Value::as_u64);
-    let cached = tokens("cached_input_tokens");
+    let (cached, written) = (
+        tokens("cached_input_tokens"),
+        tokens("cache_write_input_tokens"),
+    );
     let spend = Spend {
-        input: tokens("input_tokens").map(|input| input.saturating_sub(cached.unwrap_or(0))),
+        input: tokens("input_tokens").map(|input| {
+            input
+                .saturating_sub(cached.unwrap_or(0))
+                .saturating_sub(written.unwrap_or(0))
+        }),
         output: tokens("output_tokens"),
         cache_read: cached,
-        ..Spend::default()
+        cache_write: written,
+        cost: None,
     };
     (!spend.is_empty()).then_some(HarnessEvent::Spent {
         spend,
-        total: false,
+        tally: Tally::Conversation,
     })
 }
 
@@ -1053,7 +1063,7 @@ fn parse_opencode(event: &Value) -> Vec<HarnessEvent> {
             if !spend.is_empty() {
                 events.push(HarnessEvent::Spent {
                     spend,
-                    total: false,
+                    tally: Tally::More,
                 });
             }
             if str_at(part, "/reason").as_deref() == Some("stop") {
@@ -1257,7 +1267,10 @@ fn claude_spent(event: &Value) -> Vec<HarnessEvent> {
                     .reduce(|a, b| a + b)
             }),
         };
-        return vec![HarnessEvent::Spent { spend, total: true }];
+        return vec![HarnessEvent::Spent {
+            spend,
+            tally: Tally::Run,
+        }];
     }
     let mut events = Vec::new();
     if let Some(usage) = event.get("usage") {
@@ -1272,7 +1285,7 @@ fn claude_spent(event: &Value) -> Vec<HarnessEvent> {
         if !spend.is_empty() {
             events.push(HarnessEvent::Spent {
                 spend,
-                total: false,
+                tally: Tally::More,
             });
         }
     }
@@ -1282,7 +1295,7 @@ fn claude_spent(event: &Value) -> Vec<HarnessEvent> {
                 cost,
                 ..Spend::default()
             },
-            total: true,
+            tally: Tally::Run,
         });
     }
     events
@@ -1419,7 +1432,7 @@ pub(crate) mod tests {
     use serde_json::json;
 
     use super::{HarnessEvent, parse};
-    use crate::usage::{PlanLimit, Spend};
+    use crate::usage::{PlanLimit, Spend, Tally};
 
     /// A stand-in harness, written to `dir`: it says which conversation it
     /// is, starts a reply and a tool call, and then works on, leaving a
@@ -1546,8 +1559,6 @@ wait
         }
     }
 
-    /// Shapes taken from a real `claude -p --output-format stream-json
-    /// --verbose --include-partial-messages` run.
     /// What Claude Code reports of usage, in the shapes of a real
     /// `claude -p --output-format stream-json --verbose` run (2.1.281): the
     /// model at its start, its plan limits in a `rate_limit_event`, and a
@@ -1636,7 +1647,7 @@ wait
                         cache_write: Some(5136),
                         cost: Some(0.0148501),
                     },
-                    total: true,
+                    tally: Tally::Run,
                 },
                 HarnessEvent::Finished {
                     is_error: false,
@@ -1657,14 +1668,14 @@ wait
                         output: Some(4),
                         ..Spend::default()
                     },
-                    total: false,
+                    tally: Tally::More,
                 },
                 HarnessEvent::Spent {
                     spend: Spend {
                         cost: Some(0.5),
                         ..Spend::default()
                     },
-                    total: true,
+                    tally: Tally::Run,
                 },
             ]
         );
@@ -1695,7 +1706,26 @@ wait
                     cache_read: Some(24448),
                     ..Spend::default()
                 },
-                total: false,
+                tally: Tally::Conversation,
+            }
+        );
+        // Newer Codex also says what was written into the cache, out of its
+        // input, and its reasoning, which its output already counts.
+        let turn = json!({ "type": "turn.completed", "usage": {
+            "input_tokens": 1000, "cached_input_tokens": 600,
+            "cache_write_input_tokens": 300, "output_tokens": 50,
+            "reasoning_output_tokens": 20 } });
+        assert_eq!(
+            parse(&turn)[0],
+            HarnessEvent::Spent {
+                spend: Spend {
+                    input: Some(100),
+                    output: Some(50),
+                    cache_read: Some(600),
+                    cache_write: Some(300),
+                    cost: None,
+                },
+                tally: Tally::Conversation,
             }
         );
         assert_eq!(
@@ -1720,7 +1750,7 @@ wait
                     cache_write: Some(0),
                     cost: Some(0.0123),
                 },
-                total: false,
+                tally: Tally::More,
             }
         );
         let bare = json!({ "type": "step_finish", "sessionID": "ses",
@@ -1816,7 +1846,7 @@ wait
                         output: Some(2),
                         ..Spend::default()
                     },
-                    total: false,
+                    tally: Tally::Conversation,
                 },
                 HarnessEvent::Finished {
                     is_error: false,
@@ -1890,7 +1920,7 @@ wait
                         cache_write: Some(10),
                         cost: None,
                     },
-                    total: false,
+                    tally: Tally::More,
                 },
                 HarnessEvent::Finished {
                     is_error: false,

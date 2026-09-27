@@ -185,11 +185,12 @@ pub fn bind_keys(cx: &mut App) {
 const DEFAULT_TAB: usize = 1;
 
 /// The tabs the input sits in, in the order Ctrl+Tab cycles them.
-const TABS: [SendMode; 4] = [
+const TABS: [SendMode; 5] = [
     SendMode::Code,
     SendMode::Both,
     SendMode::Spec,
     SendMode::Ask,
+    SendMode::Freeform,
 ];
 
 /// Index of the chain tab in `TABS`.
@@ -197,6 +198,9 @@ const BOTH_TAB: usize = 1;
 
 /// Index of the Ask tab in `TABS`.
 const ASK_TAB: usize = 3;
+
+/// Index of the Freeform tab in `TABS`.
+const FREEFORM_TAB: usize = 4;
 
 /// How far the cover over the seam between two locked tabs reaches either
 /// side of it: past both 1px borders, with a pixel to spare.
@@ -211,16 +215,47 @@ const CHAIN_WIDTH_ESTIMATE: Pixels = px(40.);
 const CHAIN_SPRING: SpringConfig = SpringConfig::new(400., 40., 1.);
 
 /// How strongly the selected tabs and their body are tinted: red for Code,
-/// blue for Spec, purple for both, and green for Ask.
+/// blue for Spec, purple for both, green for Ask, and grey for Freeform.
 const TINT_OPACITY: f32 = 0.1;
 
+/// The theme's hues the tabs are tinted with.
+#[derive(Clone, Copy)]
+struct Hues {
+    red: Hsla,
+    blue: Hsla,
+    green: Hsla,
+    /// The theme's tertiary grey, for Freeform.
+    grey: Hsla,
+}
+
+impl Hues {
+    fn of(cx: &App) -> Self {
+        let theme = cx.theme();
+        Self {
+            red: theme.red,
+            blue: theme.blue,
+            green: theme.green,
+            grey: crate::theme::Hue::Grey.of(crate::theme::palette(cx)),
+        }
+    }
+}
+
 /// The tint at `position` between the tabs: red at Code (0), blue at Spec
-/// (2), purple for both (1), where they meet, and green at Ask (3). The tabs
-/// wrap around, so past Ask it blends straight back to Code's red at 4.
-fn tint(red: Hsla, blue: Hsla, green: Hsla, position: f32) -> Hsla {
+/// (2), purple for both (1), where they meet, green at Ask (3), and grey at
+/// Freeform (4). The tabs wrap around, so past Freeform it blends straight
+/// back to Code's red at 5.
+fn tint(hues: Hues, position: f32) -> Hsla {
+    let Hues {
+        red,
+        blue,
+        green,
+        grey,
+    } = hues;
     let position = position.rem_euclid(TABS.len() as f32);
-    if position > 3. {
-        blend(green, red, position - 3.)
+    if position > 4. {
+        blend(grey, red, position - 4.)
+    } else if position > 3. {
+        blend(green, grey, position - 3.)
     } else if position > 2. {
         blend(blue, green, position - 2.)
     } else {
@@ -231,8 +266,7 @@ fn tint(red: Hsla, blue: Hsla, green: Hsla, position: f32) -> Hsla {
 /// The tint of the tab `mode` is sent from, as the chat input shows it.
 pub fn mode_tint(mode: SendMode, cx: &App) -> Hsla {
     let position = TABS.iter().position(|tab| *tab == mode).unwrap_or(0);
-    let theme = cx.theme();
-    tint(theme.red, theme.blue, theme.green, position as f32)
+    tint(Hues::of(cx), position as f32)
 }
 
 /// The colour of `mode` at full strength, where [`mode_tint`] is only a
@@ -247,10 +281,9 @@ pub fn mode_color(mode: SendMode, cx: &App) -> Hsla {
 /// The send button's colour: the selected tab's mode colour at full
 /// strength, where the tab and body have only a tint of it.
 fn send_color(position: f32, cx: &App) -> Hsla {
-    let theme = cx.theme();
     Hsla {
         a: 1.,
-        ..tint(theme.red, theme.blue, theme.green, position)
+        ..tint(Hues::of(cx), position)
     }
 }
 
@@ -298,6 +331,14 @@ fn send_colors(position: f32, cx: &App) -> ButtonCustomVariant {
 /// `from` blended `t` of the way to `to`, at the tint's opacity.
 fn blend(from: Hsla, to: Hsla, t: f32) -> Hsla {
     let t = t.clamp(0., 1.);
+    // A grey has no hue of its own, so blending to or from one keeps the
+    // other's hue, only fading its saturation, rather than passing through
+    // whatever hue the grey happens to be given.
+    const GREY: f32 = 0.05;
+    let from_h = if from.s < GREY { to.h } else { from.h };
+    let to_h = if to.s < GREY { from_h } else { to.h };
+    let from = Hsla { h: from_h, ..from };
+    let to = Hsla { h: to_h, ..to };
     // The shorter way round the hue circle, which from red to blue passes
     // through purple rather than green.
     let hue_step = (to.h - from.h + 0.5).rem_euclid(1.) - 0.5;
@@ -316,9 +357,9 @@ fn tab_tint_shown(ix: usize, position: f32) -> f32 {
     let (first, last) = match TABS[ix] {
         SendMode::Code => (0., 1.),
         SendMode::Spec => (1., 2.),
-        SendMode::Both | SendMode::Ask => (ix as f32, ix as f32),
+        SendMode::Both | SendMode::Ask | SendMode::Freeform => (ix as f32, ix as f32),
     };
-    // The tabs wrap around, so Code is as near Ask as Chain is to Code.
+    // The tabs wrap around, so Code is as near Freeform as Chain is to Code.
     let count = TABS.len() as f32;
     let position = position.rem_euclid(count);
     let distance = [position - count, position, position + count]
@@ -337,11 +378,14 @@ pub enum SendMode {
     Spec,
     /// A question, which edits neither the code nor the spec.
     Ask,
+    /// The prompt passed to the agent just as it is written: no system
+    /// prompt, hidden anchor, spec build, or slices.
+    Freeform,
 }
 
 impl SendMode {
     /// Every mode, in the order of their tabs.
-    pub const ALL: [SendMode; 4] = TABS;
+    pub const ALL: [SendMode; 5] = TABS;
 
     pub fn label(self) -> &'static str {
         match self {
@@ -349,16 +393,18 @@ impl SendMode {
             SendMode::Both => "Code and Spec",
             SendMode::Spec => "Spec",
             SendMode::Ask => "Ask",
+            SendMode::Freeform => "Freeform",
         }
     }
 
     /// The mode a task sent in this one can be sent to instead: Spec for
-    /// Code and Code for Spec. The chain and questions have none.
+    /// Code and Code for Spec. The chain, questions, and Freeform prompts
+    /// have none.
     pub fn other(self) -> Option<SendMode> {
         match self {
             SendMode::Code => Some(SendMode::Spec),
             SendMode::Spec => Some(SendMode::Code),
-            SendMode::Both | SendMode::Ask => None,
+            SendMode::Both | SendMode::Ask | SendMode::Freeform => None,
         }
     }
 
@@ -369,6 +415,7 @@ impl SendMode {
             SendMode::Both => "combined",
             SendMode::Spec => "spec",
             SendMode::Ask => "ask",
+            SendMode::Freeform => "freeform",
         }
     }
 
@@ -384,6 +431,7 @@ impl SendMode {
             SendMode::Both => "Changes the code and the spec together.",
             SendMode::Spec => "Changes the spec, leaving the code as it is.",
             SendMode::Ask => "Asks a question about the code and the spec, changing neither.",
+            SendMode::Freeform => "Passes the prompt to the agent just as it is written.",
         }
     }
 
@@ -393,6 +441,7 @@ impl SendMode {
             SendMode::Both => "both-tab",
             SendMode::Spec => "spec-tab",
             SendMode::Ask => "ask-tab",
+            SendMode::Freeform => "freeform-tab",
         }
     }
 }
@@ -428,7 +477,7 @@ pub struct ChatInput {
     selected_tab: usize,
     /// Where the tint is sliding to: the selected tab's index, counted on
     /// past the last tab when Ctrl+Tab wraps around, so the tint moves straight
-    /// from Ask to Code instead of back across Spec.
+    /// from Freeform to Code instead of back across Spec and Ask.
     tint_target: f32,
     lsp: Option<Arc<PitonSession>>,
     busy: bool,
@@ -668,6 +717,12 @@ impl ChatInput {
     /// Whether the Slice toggle is on, for prompts sent now.
     pub fn slices(&self) -> bool {
         self.slice
+    }
+
+    /// Turns the Slice toggle on or off, as clicking it does.
+    #[cfg(test)]
+    pub fn set_slices(&mut self, on: bool) {
+        self.slice = on;
     }
 
     /// Moves keyboard focus into the input.
@@ -1468,7 +1523,7 @@ impl Render for ChatInput {
                 &mut this.fit
             });
 
-        // Code, the chain, Spec, and Ask are tabs side by side, each its own
+        // Code, the chain, Spec, Ask, and Freeform are tabs side by side, each its own
         // bar so that selecting the chain can show Code and Spec selected
         // along with it, as one locked tab. The chain shows an icon: broken
         // and dimmed until selected, then joined. Selecting it pulls in half
@@ -1481,10 +1536,10 @@ impl Render for ChatInput {
         let join = SpringAnimation::new(CHAIN_SPRING).to(if unified { 1. } else { 0. });
         // The tint slides between the tabs, so going from Code to Spec passes
         // through purple. Its position is the selected tab's index: 0 for
-        // Code, 1 for the chain, 2 for Spec, 3 for Ask.
+        // Code, 1 for the chain, 2 for Spec, 3 for Ask, 4 for Freeform.
         let tint_slide = SpringAnimation::new(CHAIN_SPRING).to(self.tint_target);
-        let (red, blue, green) = (cx.theme().red, cx.theme().blue, cx.theme().green);
-        let tint = move |position| tint(red, blue, green, position);
+        let hues = Hues::of(cx);
+        let tint = move |position| tint(hues, position);
         // A joined chain once selected, and a broken one dimmed to half
         // opacity until then.
         let chain_icon = Icon::new(if unified {
@@ -1544,7 +1599,10 @@ impl Render for ChatInput {
                 .child(tab(ix));
             // The chain itself never shows as selected: once joined it sits
             // over Code and Spec, whose selection shows through around its icon.
-            if ix != BOTH_TAB && (selected == ix || (unified && ix != ASK_TAB)) {
+            if ix != BOTH_TAB
+                && (selected == ix
+                    || (unified && matches!(TABS[ix], SendMode::Code | SendMode::Spec)))
+            {
                 bar.selected_index(0)
             } else {
                 bar
@@ -1649,6 +1707,10 @@ impl Render for ChatInput {
             .relative()
             .child(full_tab(ASK_TAB))
             .child(tab_tint(ASK_TAB));
+        let freeform = div()
+            .relative()
+            .child(full_tab(FREEFORM_TAB))
+            .child(tab_tint(FREEFORM_TAB));
         // What the selected tab is for, in the rest of the bar: smaller and
         // fainter than the tab labels, so it reads as a note about the tab
         // rather than another tab.
@@ -1758,6 +1820,7 @@ impl Render for ChatInput {
                 .child(code)
                 .child(spec)
                 .child(ask)
+                .child(freeform)
                 .child(help)
                 .child(session),
         );
@@ -2503,6 +2566,45 @@ mod tests {
         })
         .unwrap();
         assert!(!open(cx));
+
+        // Never cut off: in a narrow bar, the help text gives way to it.
+        let (wide, wide_help) = cx
+            .update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                (
+                    window.find("chat-usage").bounds().size.width,
+                    window.find("tab-help").bounds().size.width,
+                )
+            })
+            .unwrap();
+        cx.simulate_window_resize(
+            handle,
+            // As narrow as the five tabs leave room for the controls beside
+            // them.
+            gpui_kit::size(gpui_kit::px(700.), gpui_kit::px(400.)),
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let (help, context, usage, new_session, bar) = (
+                window.find("tab-help").bounds(),
+                window.find("chat-context").bounds(),
+                window.find("chat-usage").bounds(),
+                window.find("new-conversation").bounds(),
+                window.find("chat-tabs").bounds(),
+            );
+            assert_eq!(usage.size.width, wide, "the usage {usage:?} is cut off");
+            assert!(
+                usage.left() > context.right()
+                    && new_session.left() > usage.right()
+                    && new_session.right() <= bar.right(),
+                "the usage {usage:?} doesn't fit between {context:?} and {new_session:?} in {bar:?}"
+            );
+            assert!(
+                help.size.width < wide_help && help.right() <= context.left(),
+                "the help {help:?} doesn't give way"
+            );
+        })
+        .unwrap();
     }
 
     /// The chain has no line along its bottom while it is joined over Code
@@ -2536,7 +2638,7 @@ mod tests {
                     chat_input.update(cx, |input, cx| input.select_tab(tab, window, cx));
                 })
                 .unwrap();
-                let [_, chain, _, _] = settle_tabs(handle, joined, cx);
+                let [_, chain, _, _, _] = settle_tabs(handle, joined, cx);
                 cx.update_window(handle, |_, window, cx| {
                     window.refresh();
                     window.render_frame(cx);
@@ -2602,7 +2704,7 @@ mod tests {
     }
 
     /// Ctrl+Tab in the input moves to the next tab, chain then Spec then Ask
-    /// then back to Code, and Ctrl+Shift+Tab back the other way, without
+    /// then Freeform then back to Code, and Ctrl+Shift+Tab back the other way, without
     /// changing the text or taking focus out of the input. Plain Tab moves
     /// focus out instead.
     #[gpui_kit::test]
@@ -2637,20 +2739,23 @@ mod tests {
         })
         .unwrap();
         cx.run_until_parked();
-        // From Code, with where the tint slides to: on past Ask to Code (4) and back
-        // before Code to Ask (-1), rather than across the tabs between.
+        // From Code, with where the tint slides to: on past Freeform to Code
+        // (5) and back before Code to Freeform (-1), rather than across the
+        // tabs between.
         let presses = [
             ("ctrl-tab", 1, 1.),
             ("ctrl-tab", 2, 2.),
             ("ctrl-tab", 3, 3.),
-            ("ctrl-tab", 0, 4.),
-            ("ctrl-tab", 1, 5.),
-            ("ctrl-shift-tab", 0, 4.),
+            ("ctrl-tab", 4, 4.),
+            ("ctrl-tab", 0, 5.),
+            ("ctrl-tab", 1, 6.),
+            ("ctrl-shift-tab", 0, 5.),
+            ("ctrl-shift-tab", 4, 4.),
             ("ctrl-shift-tab", 3, 3.),
             ("ctrl-shift-tab", 2, 2.),
             ("ctrl-shift-tab", 1, 1.),
             ("ctrl-shift-tab", 0, 0.),
-            ("ctrl-shift-tab", 3, -1.),
+            ("ctrl-shift-tab", 4, -1.),
         ];
         for (key, expected, tint_target) in presses {
             cx.update_window(handle, |_, window, cx| window.press(key, cx))
@@ -2675,7 +2780,7 @@ mod tests {
         cx.run_until_parked();
         cx.update_window(handle, |_, window, cx| {
             let input = chat_input.read(cx);
-            assert_eq!(input.selected_tab, 3, "Tab switched the tab");
+            assert_eq!(input.selected_tab, 4, "Tab switched the tab");
             assert_eq!(input.value(cx).as_ref(), "hi", "Tab changed the text");
             assert!(!input.is_focused(window, cx), "Tab left focus in the input");
         })
@@ -3203,13 +3308,14 @@ mod tests {
     type Bounds = gpui_kit::Bounds<gpui_kit::Pixels>;
 
     /// The Code, chain, Spec, and Ask tabs, as last laid out.
-    fn tab_layout(window: &mut Window, cx: &mut gpui_kit::App) -> [Bounds; 4] {
+    fn tab_layout(window: &mut Window, cx: &mut gpui_kit::App) -> [Bounds; 5] {
         window.render_frame(cx);
         [
             window.within("code-tab").find(0usize).bounds(),
             window.within("both-tab").find(0usize).bounds(),
             window.within("spec-tab").find(0usize).bounds(),
             window.within("ask-tab").find(0usize).bounds(),
+            window.within("freeform-tab").find(0usize).bounds(),
         ]
     }
 
@@ -3220,13 +3326,13 @@ mod tests {
         handle: gpui_kit::AnyWindowHandle,
         joined: bool,
         cx: &mut TestAppContext,
-    ) -> [Bounds; 4] {
+    ) -> [Bounds; 5] {
         let start = std::time::Instant::now();
         loop {
             let layout = cx
                 .update_window(handle, |_, window, cx| tab_layout(window, cx))
                 .unwrap();
-            let [code, chain, spec, _] = layout;
+            let [code, chain, spec, _, _] = layout;
             let spec_offset = spec.left() - if joined { code.right() } else { chain.right() };
             if spec_offset.abs() <= super::px(0.5) {
                 return layout;
@@ -3265,11 +3371,12 @@ mod tests {
             .unwrap();
         settle_tabs(handle, false, cx);
         std::thread::sleep(Duration::from_millis(600));
-        let [code, chain, spec, ask] = settle_tabs(handle, false, cx);
+        let [code, chain, spec, ask, freeform] = settle_tabs(handle, false, cx);
         for (left, right, between) in [
             (code, chain, "Code and the chain"),
             (chain, spec, "the chain and Spec"),
             (spec, ask, "Spec and Ask"),
+            (ask, freeform, "Ask and Freeform"),
         ] {
             assert!(
                 (right.left() - left.right()).abs() <= super::px(0.5),
@@ -3286,7 +3393,7 @@ mod tests {
         // Ctrl+Tab moves to the chain, which selects Code and Spec with it.
         cx.update_window(handle, |_, window, cx| window.press("ctrl-tab", cx))
             .unwrap();
-        let [code, chain, _, _] = settle_tabs(handle, true, cx);
+        let [code, chain, _, _, _] = settle_tabs(handle, true, cx);
         let edge = code.right();
         assert!(
             (chain.center().x - edge).abs() <= super::px(0.5),
@@ -3313,17 +3420,50 @@ mod tests {
         settle_tabs(handle, false, cx);
     }
 
+    /// The tabs are the five modes, in their order: Code, Chain, Spec, Ask,
+    /// and Freeform, each with its own help and saved name. Only Code and
+    /// Spec can be sent to each other; Freeform is never sent on.
+    #[test]
+    fn tabs_are_the_modes_in_order() {
+        use super::SendMode::*;
+        assert_eq!(super::TABS, [Code, Both, Spec, Ask, Freeform]);
+        assert_eq!(super::SendMode::ALL, super::TABS);
+        assert_eq!(super::TABS[super::ASK_TAB], Ask);
+        assert_eq!(super::TABS[super::FREEFORM_TAB], Freeform);
+        assert_eq!(Freeform.label(), "Freeform");
+        assert_eq!(
+            Freeform.help(),
+            "Passes the prompt to the agent just as it is written."
+        );
+        for mode in super::TABS {
+            assert_eq!(super::SendMode::from_key(mode.key()), Some(mode));
+        }
+        assert_eq!(Code.other(), Some(Spec));
+        assert_eq!(Spec.other(), Some(Code));
+        for mode in [Both, Ask, Freeform] {
+            assert_eq!(mode.other(), None, "{mode:?}");
+        }
+    }
+
     /// Code is tinted red and Spec blue, faintly, both together purple, a hue
-    /// between the two, and Ask green. Each tab's own tint shows only while
-    /// it is selected.
+    /// between the two, Ask green, and Freeform grey. Each tab's own tint
+    /// shows only while it is selected.
     #[test]
     fn tints_are_red_blue_and_purple_between() {
         let (red, blue, green) = (gpui_kit::red(), gpui_kit::blue(), gpui_kit::green());
-        let (code, both, spec, ask) = (
-            super::tint(red, blue, green, 0.),
-            super::tint(red, blue, green, 1.),
-            super::tint(red, blue, green, 2.),
-            super::tint(red, blue, green, 3.),
+        let grey = crate::theme::color(0x9c9c9c);
+        let hues = super::Hues {
+            red,
+            blue,
+            green,
+            grey,
+        };
+        let (code, both, spec, ask, freeform) = (
+            super::tint(hues, 0.),
+            super::tint(hues, 1.),
+            super::tint(hues, 2.),
+            super::tint(hues, 3.),
+            super::tint(hues, 4.),
         );
         let same = |a: gpui_kit::Hsla, b: gpui_kit::Hsla| {
             [(a.h, b.h), (a.s, b.s), (a.l, b.l)]
@@ -3333,7 +3473,11 @@ mod tests {
         assert!(same(code, red), "Code {code:?} is not {red:?}");
         assert!(same(spec, blue), "Spec {spec:?} is not {blue:?}");
         assert!(same(ask, green), "Ask {ask:?} is not {green:?}");
-        for color in [code, both, spec, ask] {
+        assert!(
+            freeform.s < 0.05 && (freeform.l - grey.l).abs() < 1e-4,
+            "Freeform {freeform:?} is not {grey:?}"
+        );
+        for color in [code, both, spec, ask, freeform] {
             assert_eq!(color.a, super::TINT_OPACITY);
         }
         // Purple sits past blue, on the way round the hue circle to red.
@@ -3342,12 +3486,14 @@ mod tests {
             "{both:?} is not between {blue:?} and {red:?}"
         );
 
-        // Rows: Code, chain, Spec, Ask. Columns: the tint at each tab.
+        // Rows: Code, chain, Spec, Ask, Freeform. Columns: the tint at each
+        // tab.
         let shown = [
-            [1., 1., 0., 0.],
-            [0., 1., 0., 0.],
-            [0., 1., 1., 0.],
-            [0., 0., 0., 1.],
+            [1., 1., 0., 0., 0.],
+            [0., 1., 0., 0., 0.],
+            [0., 1., 1., 0., 0.],
+            [0., 0., 0., 1., 0.],
+            [0., 0., 0., 0., 1.],
         ];
         for (ix, row) in shown.iter().enumerate() {
             for (position, expected) in row.iter().enumerate() {
@@ -3359,21 +3505,18 @@ mod tests {
             }
         }
 
-        // Wrapping from Ask on to Code blends green straight into red, and
-        // never lights up Spec or the chain on the way.
-        assert!(same(super::tint(red, blue, green, 4.), red));
+        // Wrapping from Freeform on to Code fades grey straight into red,
+        // never passing through another hue, and never lights up Spec, the
+        // chain, or Ask on the way.
+        assert!(same(super::tint(hues, 5.), red));
         for step in 1..10 {
-            let position = 3. + step as f32 / 10.;
-            let color = super::tint(red, blue, green, position);
-            let between = |a: f32, b: f32, x: f32| {
-                let (span, off) = ((b - a).rem_euclid(1.), (x - a).rem_euclid(1.));
-                off <= span + 1e-4
-            };
+            let position = 4. + step as f32 / 10.;
+            let color = super::tint(hues, position);
             assert!(
-                between(green.h, red.h, color.h) || between(red.h, green.h, color.h),
-                "{color:?} at {position} is not between green and red"
+                (color.h - red.h).abs() < 1e-4,
+                "{color:?} at {position} is not a shade of red"
             );
-            for ix in [1, 2] {
+            for ix in [1, 2, 3] {
                 assert_eq!(
                     super::tab_tint_shown(ix, position),
                     0.,
@@ -3381,8 +3524,17 @@ mod tests {
                 );
             }
         }
-        assert_eq!(super::tab_tint_shown(0, 4.), 1.);
-        assert_eq!(super::tab_tint_shown(3, 4.), 0.);
+        // From Ask to Freeform, green fades to grey, keeping its hue.
+        for step in 1..10 {
+            let position = 3. + step as f32 / 10.;
+            let color = super::tint(hues, position);
+            assert!(
+                (color.h - green.h).abs() < 1e-4,
+                "{color:?} at {position} is not a shade of green"
+            );
+        }
+        assert_eq!(super::tab_tint_shown(0, 5.), 1.);
+        assert_eq!(super::tab_tint_shown(4, 5.), 0.);
     }
 
     /// With one line of text, the input is as tall as the Send button and

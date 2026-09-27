@@ -47,6 +47,28 @@ shape PromptEditorShape:
         "N previous tasks", and each offers Resend. Expanded, the list takes the place of the latest
         task and its output, and the row reads "Back to the latest task".
 
+        Every task in the list has a checkbox at the left of its heading,
+        before its status, and clicking it selects or deselects the task
+        without opening or closing it. Shift-clicking one selects every task
+        between it and the one last clicked. The selection is kept while the
+        list is closed and opened again, until it is cleared or sent.
+
+        While any task is selected, the row shows the batch actions at its
+        right, in place of nothing: how many are selected, "N selected", then
+        "Send N to Spec", sending the selected tasks that were sent in Code
+        alone, then "Send N to Code", sending those sent in Spec alone, each
+        tinted the colour of the mode it sends to and shown only while the
+        selection holds any such task, then "Clear", which deselects them all.
+        Clicking an action never opens or closes the list. Tasks sent in Chain,
+        or whose mode isn't known, can be selected but neither action sends
+        them.
+
+        A batch action sends each of its tasks to the other mode, as the
+        @{PromptSendingScope} says for one, oldest first, so they queue in
+        the order they were first sent, each saved in the history as a new
+        task. Once sent, the tasks it sent are deselected, and the list stays
+        as it was.
+
     header:
         The latest task heads the view whether or not the harness is working:
         its status, with a spinner while it is under way, the name of the

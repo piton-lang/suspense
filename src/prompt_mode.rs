@@ -27,7 +27,7 @@
 //! does the message list dim behind it.
 
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -41,6 +41,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::ElementExt as _;
 use gpui_kit::base::TextSelection;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::label::Label;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::resizable::{ResizableState, h_resizable, resizable_panel};
@@ -504,6 +505,15 @@ struct HistoryList {
     scroll_to_latest: Cell<bool>,
     /// Its tables collapse the steps leading up to the answer.
     collapse_steps: bool,
+    /// Its items can be selected, each by a checkbox in its heading, as
+    /// previous tasks can.
+    selectable: bool,
+    /// The items selected, by index, kept while the list is closed and opened
+    /// again until they are cleared or sent.
+    selected: BTreeSet<usize>,
+    /// The item whose checkbox was clicked last, the far end of a
+    /// shift-click's range.
+    last_selected: Option<usize>,
 }
 
 /// How many items a history list was laid out with, which was open, and what
@@ -541,6 +551,7 @@ impl HistoryList {
         (singular, plural, back): (&'static str, &'static str, &'static str),
         id_base: usize,
         collapse_steps: bool,
+        selectable: bool,
     ) -> Self {
         Self {
             toggle: ids.0,
@@ -557,16 +568,21 @@ impl HistoryList {
             opened: 0,
             scroll_to_latest: Cell::new(false),
             collapse_steps,
+            selectable,
+            selected: BTreeSet::new(),
+            last_selected: None,
         }
     }
 
-    /// The previous tasks, whose tables show whole.
+    /// The previous tasks, whose tables show whole, and which can be
+    /// selected to be sent to the other mode together.
     fn tasks() -> Self {
         Self::new(
             ("history-toggle", "task-list", "history-task"),
             ("previous task", "previous tasks", "Back to the latest task"),
             0,
             false,
+            true,
         )
     }
 
@@ -581,7 +597,29 @@ impl HistoryList {
             ),
             ASK_HISTORY_IX,
             true,
+            false,
         )
+    }
+
+    /// The checkbox of `item` was clicked: it is selected or deselected, or,
+    /// with `range` (a shift-click), it and every item between it and the one
+    /// clicked last are selected.
+    fn click_checkbox(&mut self, item: usize, range: bool) {
+        match self.last_selected.filter(|_| range) {
+            Some(last) => self.selected.extend(last.min(item)..=last.max(item)),
+            None => {
+                if !self.selected.remove(&item) {
+                    self.selected.insert(item);
+                }
+            }
+        }
+        self.last_selected = Some(item);
+    }
+
+    /// Deselects every item.
+    fn clear_selection(&mut self) {
+        self.selected.clear();
+        self.last_selected = None;
     }
 
     fn toggle(&mut self) {
@@ -596,18 +634,30 @@ impl HistoryList {
 
     /// The row: "No …", "1 …", or "N …", which does nothing while `enabled`
     /// is false, and expands the list when clicked.
+    /// At its right, `actions`, such as the batch actions on the selected
+    /// previous tasks, whose clicks are theirs and not the row's.
     fn render_row(
         &self,
         count: usize,
         enabled: bool,
         select: fn(&mut PromptMode) -> &mut HistoryList,
+        actions: Vec<AnyElement>,
         cx: &mut Context<PromptMode>,
     ) -> AnyElement {
-        self.render_row_as(self.toggle.into(), self.expanded, count, enabled, select, cx)
+        self.render_row_as(
+            self.toggle.into(),
+            self.expanded,
+            count,
+            enabled,
+            select,
+            actions,
+            cx,
+        )
     }
 
     /// The row as it reads while `expanded`, or not, whichever it is, its
-    /// toggle's element id `toggle`.
+    /// toggle's element id `toggle`, with `actions` at its right.
+    #[allow(clippy::too_many_arguments)]
     fn render_row_as(
         &self,
         toggle: ElementId,
@@ -615,6 +665,7 @@ impl HistoryList {
         count: usize,
         enabled: bool,
         select: fn(&mut PromptMode) -> &mut HistoryList,
+        actions: Vec<AnyElement>,
         cx: &mut Context<PromptMode>,
     ) -> AnyElement {
         let theme = cx.theme();
@@ -650,6 +701,16 @@ impl HistoryList {
                         cx.notify();
                     })),
             )
+            .when(!actions.is_empty(), |row| {
+                row.child(
+                    h_flex()
+                        .ml_auto()
+                        .flex_none()
+                        .gap_1()
+                        .items_center()
+                        .children(actions),
+                )
+            })
             .into_any_element()
     }
 
@@ -766,6 +827,8 @@ impl HistoryList {
         let (border, hover, muted) = (theme.border, theme.list_hover, theme.muted_foreground);
         let (table_background, radius) = (theme.tokens.table, theme.radius);
         let item_id = self.item;
+        // Which items are selected, when they can be.
+        let selected = self.selectable.then(|| self.selected.clone());
         let this = cx.entity().downgrade();
         let open_file = open_file.clone();
         // Its table tightens as the list narrows, counting the list's padding.
@@ -810,6 +873,19 @@ impl HistoryList {
                     };
                     let is_open = open == Some(item);
                     let task_ix = id_base + item;
+                    let checkbox = selected.as_ref().map(|selected| {
+                        let this = this.clone();
+                        history_checkbox(task_ix, selected.contains(&item), move |window, cx| {
+                            // A shift-click selects the range from the one
+                            // clicked last.
+                            let range = window.modifiers().shift;
+                            this.update(cx, |this, cx| {
+                                select(this).click_checkbox(item, range);
+                                cx.notify();
+                            })
+                            .ok();
+                        })
+                    });
                     let this_for_resend = this.clone();
                     let this = this.clone();
                     let trigger = h_flex()
@@ -833,6 +909,7 @@ impl HistoryList {
                             })
                             .ok();
                         })
+                        .children(checkbox)
                         .child(task_summary((item_id, item), task_ix, task, cx))
                         .children(other_mode(task).map(|to| {
                             let this = this_for_resend.clone();
@@ -2319,6 +2396,10 @@ impl PromptMode {
             preview.attached_text.clone(),
         );
         let compile = cx.background_spawn(async move {
+            // A Freeform prompt is sent as it is, with nothing to compile.
+            if mode == SendMode::Freeform {
+                return Ok(hidden_anchor::freeform(&text, &attached_text));
+            }
             let anchor = resolve_anchor(&text, mode, attached_text, sliced, lsp, &project_dir)?;
             hidden_anchor::preview(&anchor, &text, &project_dir)
         });
@@ -2418,6 +2499,110 @@ impl PromptMode {
         self.resend_in(tasks_of, ix, Some(to), window, cx);
     }
 
+    /// The selected previous tasks a batch action sends to `to`, oldest
+    /// first: those sent in the mode it is the other of. Chain tasks, and those
+    /// whose mode isn't known, are never among them.
+    fn selected_for(&self, to: SendMode) -> Vec<usize> {
+        self.task_history
+            .selected
+            .iter()
+            .copied()
+            .filter(|&ix| self.tasks.get(ix).and_then(other_mode) == Some(to))
+            .collect()
+    }
+
+    /// Sends each selected previous task that can go to `to` there, as
+    /// [`Self::send_to_other_mode`] does for one, oldest first, so they queue
+    /// in the order they were first sent; then deselects them, leaving the
+    /// list as it was.
+    fn send_selected_to(&mut self, to: SendMode, window: &mut Window, cx: &mut Context<Self>) {
+        if self.project_dir.is_none() {
+            window.push_notification(
+                Notification::error("Open a project before sending a prompt.")
+                    .title("No project open"),
+                cx,
+            );
+            return;
+        }
+        let sending = self.selected_for(to);
+        // The first starts at once if the harness is free, and so marks it
+        // working before the next is sent, which queues behind it.
+        for &ix in &sending {
+            self.send_to_other_mode(|this| &this.tasks, ix, window, cx);
+        }
+        for ix in sending {
+            self.task_history.selected.remove(&ix);
+        }
+        cx.notify();
+    }
+
+    /// The previous tasks' batch actions, at the right of their row while any
+    /// is selected: how many are, "Send N to Spec" and "Send N to Code", each
+    /// shown while the selection holds a task it sends, then "Clear".
+    fn render_selection_actions(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let count = self
+            .task_history
+            .selected
+            .iter()
+            .filter(|&&ix| ix < self.tasks.len())
+            .count();
+        if count == 0 {
+            return Vec::new();
+        }
+        let theme = cx.theme();
+        let mut actions = vec![
+            gpui_kit::TestSupportExt::test_support(
+                div()
+                    .id("history-selected-count")
+                    .flex_none()
+                    .px_1()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(format!("{count} selected")),
+            )
+            .into_any_element(),
+        ];
+        for (id, to) in [
+            ("history-send-selected-to-spec", SendMode::Spec),
+            ("history-send-selected-to-code", SendMode::Code),
+        ] {
+            let sending = self.selected_for(to).len();
+            if sending == 0 {
+                continue;
+            }
+            let color = chat_input::mode_color(to, cx);
+            let button = Button::new("send-selected")
+                .ghost()
+                .xsmall()
+                .icon(Icon::new(IconName::ArrowRightLeft).text_color(color))
+                .label(format!("Send {sending} to {}", to.label()))
+                .text_color(color)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.send_selected_to(to, window, cx);
+                }));
+            // Lets UI tests find and click the button; inert in normal builds.
+            actions.push(
+                gpui_kit::TestSupportExt::test_support(div().id(id).flex_none().child(button))
+                    .into_any_element(),
+            );
+        }
+        let clear = Button::new("clear-selected")
+            .ghost()
+            .xsmall()
+            .label("Clear")
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.task_history.clear_selection();
+                cx.notify();
+            }));
+        actions.push(
+            gpui_kit::TestSupportExt::test_support(
+                div().id("history-clear-selected").flex_none().child(clear),
+            )
+            .into_any_element(),
+        );
+        actions
+    }
+
     /// Sends the task at `ix` of `tasks_of` again, as it was sent, in `mode`
     /// when given, rather than the mode it was sent in.
     fn resend_in(
@@ -2488,8 +2673,13 @@ impl PromptMode {
             let project_dir = project_dir.clone();
             async move {
                 let _turn = feeding.lock().await;
-                let compiled = message_anchor(&text, attached_text, sliced, lsp)
-                    .and_then(|anchor| hidden_anchor::preview(&anchor, &text, &project_dir));
+                // From the Freeform tab it goes just as it was typed.
+                let compiled = if mode == SendMode::Freeform {
+                    Ok(hidden_anchor::freeform(&text, &attached_text))
+                } else {
+                    message_anchor(&text, attached_text, sliced, lsp)
+                        .and_then(|anchor| hidden_anchor::preview(&anchor, &text, &project_dir))
+                };
                 match compiled {
                     Ok(compiled) => match feed.send(text, compiled.user_prompt) {
                         Ok(()) => ToTask::Sent,
@@ -2584,6 +2774,8 @@ impl PromptMode {
                         return;
                     }
                     this.tasks = tasks;
+                    let count = this.tasks.len();
+                    this.task_history.selected.retain(|&ix| ix < count);
                     // The history's conversation, unless it was left for a new
                     // one here.
                     if this.session_epoch == 0 {
@@ -2633,11 +2825,15 @@ impl PromptMode {
         cx.notify();
 
         let lsp = self.chat_input.read(cx).lsp();
+        // Its place on disk is taken now, not once it has compiled, so prompts
+        // queued in a row, as a batch sent to the other mode is, come back in
+        // the order they were queued.
+        let queued_at = prompt_queue::stamp();
         let save = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
                 let anchor = resolve_anchor(&text, mode, attached_text, sliced, lsp, &project_dir)?;
-                prompt_queue::add(anchor, text, &project_dir)
+                prompt_queue::add_at(queued_at, anchor, text, &project_dir)
             }
         });
         cx.spawn_in(window, async move |this, cx| {
@@ -2911,13 +3107,13 @@ impl PromptMode {
     }
 
     /// Whether the referenced spec sidebar should show: while a task from the
-    /// Code, Chain, or Spec tab runs.
+    /// Code, Chain, or Spec tab runs. A Freeform prompt references nothing.
     fn refs_wanted(&self) -> bool {
         self.working
             && self
                 .tasks
                 .last()
-                .is_some_and(|task| task.mode != Some(SendMode::Ask))
+                .is_some_and(|task| !matches!(task.mode, Some(SendMode::Ask | SendMode::Freeform)))
     }
 
     /// The spec files the running task references.
@@ -3271,7 +3467,8 @@ impl PromptMode {
             Sending::Now(mode, attached_text, sliced) => SentAs {
                 mode: Some(*mode),
                 attached_text: attached_text.clone(),
-                sliced: *sliced,
+                // A Freeform prompt is never sliced, whatever the toggle says.
+                sliced: *sliced && *mode != SendMode::Freeform,
             },
             Sending::Queued(queued) => SentAs::of(&queued.anchor),
         };
@@ -3286,10 +3483,14 @@ impl PromptMode {
         let epoch = self.session_epoch;
         let lsp = self.chat_input.read(cx).lsp();
         // A prompt that works on the code or the spec is sent against a
-        // freshly built spec.
-        let builds = self.tasks[task_ix]
+        // freshly built spec. A Freeform prompt is a task too, but is sent
+        // just as it was typed: no build, compile, slices, system prompt, or
+        // understanding file.
+        let freeform = self.tasks[task_ix].mode == Some(SendMode::Freeform);
+        let is_task = self.tasks[task_ix]
             .mode
             .is_none_or(|mode| mode != SendMode::Ask);
+        let builds = is_task && !freeform;
         if builds {
             self.tasks[task_ix].status = TaskStatus::Building;
         }
@@ -3340,6 +3541,14 @@ impl PromptMode {
                 // but never compiled, nor run.
                 if cancelled.load(Ordering::SeqCst) {
                     return Ok((anchor.name().to_string(), file, None));
+                }
+                if freeform {
+                    let compiled = hidden_anchor::freeform(&text, &anchor.attached_text);
+                    return anyhow::Ok((
+                        anchor.name().to_string(),
+                        file,
+                        Some((Ok(compiled), (Vec::new(), None))),
+                    ));
                 }
                 let compiled = hidden_anchor::compile(&anchor, &file, &project_dir);
                 let imported = (
@@ -3614,10 +3823,10 @@ impl PromptMode {
                     this.chat_input
                         .update(cx, |input, cx| input.set_busy(false, cx));
                 }
-                // A Code, Chain, or Spec task that finished well adds a note to
-                // the next commit, written in the background; one cancelled
-                // adds none.
-                if builds
+                // A Code, Chain, Spec, or Freeform task that finished well
+                // adds a note to the next commit, written in the background;
+                // one cancelled adds none.
+                if is_task
                     && !is_cancelled()
                     && let Some(result) = finished.take()
                     && this
@@ -4160,6 +4369,7 @@ impl PromptMode {
             self.answers.len(),
             !self.answers.is_empty(),
             |this| &mut this.ask_history,
+            Vec::new(),
             cx,
         )
     }
@@ -4299,6 +4509,7 @@ impl PromptMode {
                 self.answers.len(),
                 !self.answers.is_empty(),
                 |this| &mut this.ask_history,
+                Vec::new(),
                 cx,
             ));
             let open_file = self.file_opener(cx);
@@ -4972,6 +5183,7 @@ impl Render for PromptMode {
                 self.tasks.len().saturating_sub(1),
                 !self.tasks.is_empty(),
                 |this| &mut this.task_history,
+                self.render_selection_actions(cx),
                 cx,
             ))
             .children(self.render_header(cx))
@@ -5151,6 +5363,11 @@ impl Render for PromptMode {
 /// what `piton lsp` resolved for it, with the mode's system prompt. Without `piton lsp`
 /// nothing is imported, and any spec name the prompt uses fails to compile
 /// with an explicit error.
+///
+/// A Freeform prompt is saved as an anchor too, so it joins the history and
+/// the queue as any task does, but one that imports nothing, has no system
+/// prompt, and is never sliced, whatever the Slice toggle says: it is sent
+/// just as it was typed (see [`hidden_anchor::freeform`]), never compiled.
 fn resolve_anchor(
     text: &str,
     mode: SendMode,
@@ -5159,6 +5376,12 @@ fn resolve_anchor(
     lsp: Option<Arc<PitonSession>>,
     project_dir: &Path,
 ) -> Result<HiddenAnchor> {
+    if mode == SendMode::Freeform {
+        let mut anchor = HiddenAnchor::random();
+        anchor.mode = Some(mode);
+        anchor.attached_text = attached_text;
+        return Ok(anchor);
+    }
     let mut anchor = match lsp {
         Some(lsp) => lsp.anchor_for(text)?,
         None => HiddenAnchor::random(),
@@ -5228,6 +5451,11 @@ fn first_line(text: &str) -> SharedString {
 /// the name of the hidden anchor it was compiled from once it has compiled.
 fn task_title(ix: usize, task: &PromptTask, cx: &App) -> Div {
     let theme = cx.theme();
+    // A Freeform prompt is sent as it is, with no hidden anchor to name.
+    let named = task
+        .compiled
+        .as_ref()
+        .filter(|_| task.sent.mode != Some(SendMode::Freeform));
     let status = div()
         .id(("task-status", ix))
         .flex_none()
@@ -5240,7 +5468,7 @@ fn task_title(ix: usize, task: &PromptTask, cx: &App) -> Div {
         .when(task.status.is_active(), |row| {
             row.child(div().flex_none().child(Spinner::new().small()))
         })
-        .when_some(task.compiled.as_ref(), |row, compiled| {
+        .when_some(named, |row, compiled| {
             let anchor = div()
                 .id(("prompt-anchor", ix))
                 .min_w_0()
@@ -5295,6 +5523,31 @@ fn other_mode_button(
     // Lets UI tests find and click the button; inert in normal builds.
     gpui_kit::TestSupportExt::test_support(div().id(id).flex_none().child(button))
         .into_any_element()
+}
+
+/// The checkbox, `checked` or not, at the left of the heading of the history
+/// item `task_ix`, before its status, which selects or deselects it with
+/// `on_click` without opening or closing it.
+fn history_checkbox(
+    task_ix: usize,
+    checked: bool,
+    on_click: impl Fn(&mut Window, &mut App) + 'static,
+) -> AnyElement {
+    let checkbox = Checkbox::new(("history-checkbox", task_ix))
+        .checked(checked)
+        .on_click(move |_, window, cx| {
+            // The checkbox's click isn't the heading's.
+            cx.stop_propagation();
+            on_click(window, cx);
+        });
+    // Lets UI tests find and click the checkbox; inert in normal builds.
+    gpui_kit::TestSupportExt::test_support(
+        div()
+            .id(("history-select", task_ix))
+            .flex_none()
+            .child(checkbox),
+    )
+    .into_any_element()
 }
 
 /// The prompt a task was sent as: the compiled markdown the harness received,
@@ -6610,7 +6863,7 @@ mod tests {
                 cost: Some(cost),
                 ..Spend::default()
             },
-            total: true,
+            tally: crate::usage::Tally::Run,
         };
         assert!(shown(cx).is_empty());
         assert_eq!(shown(cx).summary().0, "Usage");
@@ -9191,6 +9444,310 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// Every previous task has a checkbox before its status, which selects it
+    /// without opening it; a shift-click selects the range from the one
+    /// clicked last. While any is selected the row counts them and offers to
+    /// send the Code ones to Spec and the Spec ones to Code, and to clear
+    /// them. A batch sends oldest first, the first at once and the rest
+    /// queued behind it in order, each in the other mode, never a Chain task
+    /// or one of unknown mode, then deselects what it sent, leaving the list
+    /// as it was. The selection is the project's, and outlasts closing the
+    /// list.
+    #[gpui_kit::test]
+    async fn previous_tasks_can_be_selected_and_sent_to_the_other_mode(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        let dir = std::env::temp_dir().join(format!("suspense-batch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        let modes = [
+            Some(SendMode::Code),
+            Some(SendMode::Both),
+            Some(SendMode::Spec),
+            Some(SendMode::Code),
+            None,
+            Some(SendMode::Spec),
+            Some(SendMode::Code),
+        ];
+        prompt_mode.update(cx, |this, cx| {
+            for mode in modes {
+                let ix = this.push_task(format!("Task {}", this.tasks.len()).into(), cx);
+                this.tasks[ix].sent = super::SentAs {
+                    mode,
+                    attached_text: vec!["note".into()],
+                    sliced: true,
+                };
+                this.tasks[ix].mode = mode;
+            }
+            this.task_history.expanded = true;
+            cx.notify();
+        });
+        let shown = |id: &'static str, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.try_find(id).is_some()
+            })
+            .unwrap()
+        };
+        // The actions shown: to Spec, to Code, and the count and Clear.
+        let actions = |cx: &mut TestAppContext| {
+            (
+                shown("history-send-selected-to-spec", cx),
+                shown("history-send-selected-to-code", cx),
+                shown("history-selected-count", cx) && shown("history-clear-selected", cx),
+            )
+        };
+        let click = |id: gpui_kit::ElementId, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| window.click(id, cx))
+                .unwrap();
+        };
+        let shift_click = |item: usize, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                use gpui_kit::{
+                    Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+                    PlatformInput,
+                };
+                window.render_frame(cx);
+                let at = window.find(("history-select", item)).bounds().center();
+                let modifiers = Modifiers {
+                    shift: true,
+                    ..Modifiers::default()
+                };
+                for event in [
+                    PlatformInput::MouseMove(MouseMoveEvent {
+                        position: at,
+                        pressed_button: None,
+                        modifiers,
+                    }),
+                    PlatformInput::MouseDown(MouseDownEvent {
+                        position: at,
+                        button: MouseButton::Left,
+                        modifiers,
+                        click_count: 1,
+                        first_mouse: false,
+                    }),
+                    PlatformInput::MouseUp(MouseUpEvent {
+                        position: at,
+                        button: MouseButton::Left,
+                        modifiers,
+                        click_count: 1,
+                    }),
+                ] {
+                    window.dispatch_event(event, cx);
+                }
+            })
+            .unwrap();
+        };
+        let selected = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| {
+                this.task_history
+                    .selected
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>()
+            })
+        };
+        let still = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| {
+                assert!(this.task_history.expanded, "the list closed");
+                assert_eq!(this.task_history.open, None, "a heading opened");
+            })
+        };
+
+        // Nothing selected, no actions; nor does the ask list have checkboxes.
+        assert_eq!(actions(cx), (false, false, false));
+        assert!(prompt_mode.read_with(cx, |this, _| !this.ask_history.selectable));
+
+        // A click selects a task without opening it.
+        click(("history-select", 0usize).into(), cx);
+        still(cx);
+        assert_eq!(selected(cx), [0]);
+        assert_eq!(actions(cx), (true, false, true));
+
+        // A shift-click selects the range from the one clicked last.
+        shift_click(3, cx);
+        still(cx);
+        assert_eq!(selected(cx), [0, 1, 2, 3]);
+        assert_eq!(actions(cx), (true, true, true));
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.selected_for(SendMode::Spec), [0, 3]);
+            assert_eq!(
+                this.selected_for(SendMode::Code),
+                [2],
+                "the Chain task is sent"
+            );
+        });
+
+        // Clicking a selected one deselects it, and with it goes the only
+        // Spec task, and "Send to Code".
+        click(("history-select", 2usize).into(), cx);
+        assert_eq!(selected(cx), [0, 1, 3]);
+        assert_eq!(actions(cx), (true, false, true));
+
+        // Kept while the list is closed and opened again, with the row's
+        // toggle, and while another project is on screen.
+        click("history-toggle".into(), cx);
+        assert!(!prompt_mode.read_with(cx, |this, _| this.task_history.expanded));
+        click("history-toggle".into(), cx);
+        assert_eq!(selected(cx), [0, 1, 3]);
+        cx.update(|cx| {
+            let mut other = super::ProjectSession::new(None, cx);
+            prompt_mode.update(cx, |this, _| {
+                this.swap_session(&mut other);
+                assert!(
+                    this.task_history.selected.is_empty(),
+                    "shared with a project"
+                );
+                this.swap_session(&mut other);
+            });
+        });
+        assert_eq!(selected(cx), [0, 1, 3]);
+
+        // Clear deselects them all, leaving the list as it was.
+        click("history-clear-selected".into(), cx);
+        still(cx);
+        assert!(selected(cx).is_empty());
+        assert_eq!(actions(cx), (false, false, false));
+
+        // With the harness free, the first Code task starts at once and the
+        // next queues behind it, each to Spec; the Spec tasks then queue
+        // after them to Code, oldest first. Chain and unknown are left.
+        click(("history-select", 0usize).into(), cx);
+        shift_click(5, cx);
+        assert_eq!(selected(cx), [0, 1, 2, 3, 4, 5]);
+        click("history-send-selected-to-spec".into(), cx);
+        still(cx);
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.tasks.len(), 8);
+            assert_eq!(this.tasks[7].text.as_ref(), "Task 0");
+            assert_eq!(this.tasks[7].sent.mode, Some(SendMode::Spec));
+            let queued: Vec<_> = this
+                .queue
+                .iter()
+                .map(|item| item.text.to_string())
+                .collect();
+            assert_eq!(queued, ["Task 3"]);
+        });
+        assert_eq!(selected(cx), [1, 2, 4, 5]);
+        assert_eq!(actions(cx), (false, true, true));
+        click("history-send-selected-to-code".into(), cx);
+        still(cx);
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.tasks.len(), 8);
+            let queued: Vec<_> = this
+                .queue
+                .iter()
+                .map(|item| item.text.to_string())
+                .collect();
+            assert_eq!(queued, ["Task 3", "Task 2", "Task 5"]);
+        });
+        assert_eq!(selected(cx), [1, 4]);
+        assert_eq!(actions(cx), (false, false, true));
+
+        // What was queued here can't compile outside a project; see
+        // `batch_sent_tasks_run_in_order_in_the_other_mode` for them running.
+        prompt_mode.update(cx, |this, _| this.queue.clear());
+        let start = std::time::Instant::now();
+        while prompt_mode.read_with(cx, |this, _| this.working) {
+            assert!(
+                start.elapsed() < Duration::from_secs(20),
+                "the task never ended"
+            );
+            cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A batch sent to the other mode runs each of its tasks in turn, in the
+    /// order they were first sent, each in the other mode and saved in the
+    /// history as a new task: the first straight away, the rest from the
+    /// queue as the harness comes free.
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn batch_sent_tasks_run_in_order_in_the_other_mode(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        use std::os::unix::fs::PermissionsExt as _;
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        let (prompt_mode, handle) = open(cx);
+        let dir = cancel_project("batch-send", &prompt_mode, cx);
+        // A harness that is done at once.
+        let script = dir.join("quick-harness.sh");
+        std::fs::write(&script, "#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::harness::use_program_for_test(Some(script));
+        let modes = [
+            Some(SendMode::Spec),
+            Some(SendMode::Code),
+            Some(SendMode::Both),
+            Some(SendMode::Spec),
+            Some(SendMode::Code),
+        ];
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                for mode in modes {
+                    let ix = this.push_task(format!("Task {}", this.tasks.len()).into(), cx);
+                    this.tasks[ix].sent = super::SentAs {
+                        mode,
+                        attached_text: Vec::new(),
+                        sliced: false,
+                    };
+                    this.tasks[ix].mode = mode;
+                    this.tasks[ix].status = TaskStatus::Done;
+                }
+                for item in 0..modes.len() {
+                    this.task_history.click_checkbox(item, false);
+                }
+                this.send_selected_to(SendMode::Code, window, cx);
+                this.send_selected_to(SendMode::Spec, window, cx);
+                assert_eq!(this.tasks.len(), 6, "more than one started");
+                assert_eq!(this.queue.len(), 3);
+                assert_eq!(
+                    this.task_history
+                        .selected
+                        .iter()
+                        .copied()
+                        .collect::<Vec<_>>(),
+                    [2],
+                    "the Chain task was sent, or a sent one kept"
+                );
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the batch running", |this| {
+            !this.working && this.queue.is_empty() && this.tasks.len() == 9
+        });
+        crate::harness::use_program_for_test(None);
+        prompt_mode.read_with(cx, |this, _| {
+            let sent: Vec<_> = this.tasks[5..]
+                .iter()
+                .map(|task| (task.text.to_string(), task.sent.mode))
+                .collect();
+            assert_eq!(
+                sent,
+                [
+                    ("Task 0".to_string(), Some(SendMode::Code)),
+                    ("Task 3".to_string(), Some(SendMode::Code)),
+                    ("Task 1".to_string(), Some(SendMode::Spec)),
+                    ("Task 4".to_string(), Some(SendMode::Spec)),
+                ]
+            );
+        });
+        // Each is saved in the history as a new task. (Its files are named
+        // to the second, so tasks this quick may load back in any order.)
+        let mut saved: Vec<_> = prompt_history::load(&dir)
+            .into_iter()
+            .map(|saved| saved.text)
+            .collect();
+        saved.sort();
+        assert_eq!(saved, ["Task 0", "Task 1", "Task 3", "Task 4"]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// A Code, Chain, or Spec prompt runs `piton build` before it is sent,
     /// showing "Building" meanwhile; a build that fails says so in the task's
     /// output without stopping the prompt. A question doesn't build.
@@ -9611,6 +10168,245 @@ mod tests {
             PromptTask::restore(saved.into_iter().next().unwrap()).status,
             TaskStatus::Cancelled
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A project with no `piton.config.pi`, so any `piton build`, compile, or
+    /// slice would fail, and a stand-in harness that records each run's
+    /// arguments and the prompt it was given, one line per run, then
+    /// finishes after a moment; the project's directory as prompt mode knows
+    /// it.
+    #[cfg(unix)]
+    fn freeform_project(
+        name: &str,
+        prompt_mode: &Entity<PromptMode>,
+        cx: &mut TestAppContext,
+    ) -> std::path::PathBuf {
+        use std::os::unix::fs::PermissionsExt as _;
+        fn summarize(_: &std::path::Path, asked: &str, _: &str) -> anyhow::Result<Option<String>> {
+            Ok(Some(format!("Did {asked}")))
+        }
+        let dir = std::env::temp_dir().join(format!("suspense-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("harness.sh");
+        std::fs::write(
+            &script,
+            format!(
+                r#"#!/bin/sh
+echo "$@" >> {args}
+IFS= read -r line
+printf '%s\n' "$line" >> {stdin}
+echo '{{"type":"system","subtype":"init","session_id":"s1"}}'
+echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
+"#,
+                args = dir.join("args").display(),
+                stdin = dir.join("stdin").display(),
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::harness::use_program_for_test(Some(script));
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        prompt_mode.update(cx, |this, _| this.summarize = summarize);
+        prompt_mode.read_with(cx, |this, _| this.project_dir.clone().unwrap())
+    }
+
+    /// The prompt each run of [`freeform_project`]'s harness was given, in
+    /// order, as the text of the user message it read.
+    #[cfg(unix)]
+    fn prompts_given(dir: &std::path::Path) -> Vec<String> {
+        std::fs::read_to_string(dir.join("stdin"))
+            .unwrap_or_default()
+            .lines()
+            .map(|line| {
+                let message: serde_json::Value = serde_json::from_str(line).unwrap();
+                message["message"]["content"][0]["text"]
+                    .as_str()
+                    .unwrap()
+                    .to_string()
+            })
+            .collect()
+    }
+
+    /// A Freeform prompt goes to the harness exactly as it was typed, with
+    /// the text attached to it, and nothing else: no system prompt, no spec
+    /// built or prompt compiled (the project has no config, so either would
+    /// fail), no slices though the Slice toggle is on, and no understanding
+    /// file. Otherwise it is a task: one sent while the harness works
+    /// queues, it carries on the tasks' conversation, heads the message list
+    /// with no hidden anchor named, adds a commit note, and is saved in the
+    /// history as Freeform, from which it restores, and resends, as
+    /// Freeform.
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn freeform_prompts_go_to_the_harness_as_typed(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        // The stand-in harness is a real process, whose events arrive from
+        // its own thread.
+        cx.executor().allow_parking();
+        let (prompt_mode, handle) = open(cx);
+        let dir = freeform_project("freeform", &prompt_mode, cx);
+        let typed = "Fix @{Button.color} and ${Name}: {1 + 2}\n    - keep `this`\n// as is";
+        let attached = vec!["some context".to_string()];
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.chat_input
+                    .update(cx, |input, _| input.set_slices(true));
+                this.send(
+                    typed.into(),
+                    SendMode::Freeform,
+                    attached.clone(),
+                    window,
+                    cx,
+                );
+                let task = this.tasks.last().unwrap();
+                assert_ne!(task.status, TaskStatus::Building, "it builds the spec");
+                assert_eq!(task.sent.mode, Some(SendMode::Freeform));
+                assert!(!task.sent.sliced, "it was sent sliced");
+                // Sent while the harness works, it queues.
+                this.send(
+                    "Then this".into(),
+                    SendMode::Freeform,
+                    Vec::new(),
+                    window,
+                    cx,
+                );
+                assert_eq!(this.tasks.len(), 1, "the second didn't queue");
+                assert_eq!(this.queue.len(), 1);
+            });
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "both prompts running", |this| {
+            !this.working && this.queue.is_empty() && this.tasks.len() == 2
+        });
+
+        let sent = hidden_anchor::with_attached_text(typed, &attached);
+        assert_eq!(prompts_given(&dir), [sent.clone(), "Then this".to_string()]);
+        let args = std::fs::read_to_string(dir.join("args")).unwrap();
+        assert!(
+            !args.contains("--append-system-prompt"),
+            "a system prompt was sent: {args}"
+        );
+        // The second carried on the tasks' conversation.
+        assert!(
+            args.lines().nth(1).unwrap().contains("--resume s1"),
+            "{args}"
+        );
+        prompt_mode.read_with(cx, |this, _| {
+            for task in &this.tasks {
+                assert_eq!(task.status, TaskStatus::Done);
+                assert_eq!(task.sent.mode, Some(SendMode::Freeform));
+                assert!(
+                    !task
+                        .reply
+                        .parts
+                        .iter()
+                        .any(|part| matches!(part, ReplyPart::Error(_))),
+                    "it failed, or built the spec"
+                );
+            }
+            // Its header shows the prompt as it was sent.
+            assert_eq!(this.tasks[0].compiled.as_ref().unwrap().markdown, sent);
+        });
+        // With no hidden anchor named.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find(("resend-latest", 1usize)).is_some());
+            assert!(window.try_find(("prompt-anchor", 1usize)).is_none());
+            assert!(window.try_find(("send-to-other-latest", 1usize)).is_none());
+        })
+        .unwrap();
+
+        // Saved in the history as Freeform, unsliced, with no system prompt
+        // or understanding file, and restored as it was sent.
+        let history = hidden_anchor::history_dir(&dir);
+        let understanding = std::fs::read_dir(&history)
+            .unwrap()
+            .flatten()
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .contains("understanding")
+            })
+            .count();
+        assert_eq!(understanding, 0, "an understanding file was written");
+        let first = prompt_history::load(&dir)
+            .into_iter()
+            .find(|saved| saved.text == typed)
+            .unwrap();
+        assert_eq!(first.anchor.mode, Some(SendMode::Freeform));
+        assert!(!first.anchor.sliced);
+        assert!(first.anchor.system_prompt.is_none());
+        assert_eq!(first.anchor.attached_text, attached);
+        let restored = PromptTask::restore(first);
+        assert_eq!(restored.sent.mode, Some(SendMode::Freeform));
+        assert_eq!(restored.sent.attached_text, attached);
+        assert_eq!(restored.compiled.as_ref().unwrap().markdown, sent);
+
+        // Finished well, each added a commit note.
+        run_until(cx, &prompt_mode, "the commit notes", |_| {
+            crate::commit_notes::load(&dir).len() == 2
+        });
+
+        // Resent, it goes as Freeform again, just as it was typed.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.resend(|this| &this.tasks, 0, window, cx)
+            });
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the resent prompt running", |this| {
+            !this.working && this.tasks.len() == 3
+        });
+        crate::harness::use_program_for_test(None);
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.tasks[2].sent.mode, Some(SendMode::Freeform));
+            assert_eq!(this.tasks[2].status, TaskStatus::Done);
+        });
+        assert_eq!(prompts_given(&dir)[2], sent);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A Freeform task is never offered to Spec or Code: not from the latest
+    /// task's header, and not in a batch of selected previous tasks.
+    #[gpui_kit::test]
+    async fn freeform_tasks_are_never_sent_to_another_mode(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        let dir =
+            std::env::temp_dir().join(format!("suspense-freeform-other-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        prompt_mode.update(cx, |this, cx| {
+            for mode in [SendMode::Freeform, SendMode::Freeform] {
+                let ix = this.push_task(format!("Task {}", this.tasks.len()).into(), cx);
+                this.tasks[ix].sent.mode = Some(mode);
+                this.tasks[ix].mode = Some(mode);
+                this.tasks[ix].status = TaskStatus::Done;
+                assert_eq!(super::other_mode(&this.tasks[ix]), None);
+            }
+            this.task_history.click_checkbox(0, false);
+            assert!(this.selected_for(SendMode::Spec).is_empty());
+            assert!(this.selected_for(SendMode::Code).is_empty());
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find(("resend-latest", 1usize)).is_some());
+            assert!(window.try_find(("send-to-other-latest", 1usize)).is_none());
+            prompt_mode.update(cx, |this, cx| {
+                this.send_selected_to(SendMode::Spec, window, cx);
+                this.send_selected_to(SendMode::Code, window, cx);
+                this.send_to_other_mode(|this| &this.tasks, 1, window, cx);
+                assert_eq!(this.tasks.len(), 2, "a Freeform task was sent on");
+                assert!(this.queue.is_empty());
+            });
+        })
+        .unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 }

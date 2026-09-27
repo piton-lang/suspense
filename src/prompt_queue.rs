@@ -6,6 +6,7 @@
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context as _, Result};
@@ -25,13 +26,35 @@ fn queue_dir(project_dir: &Path) -> PathBuf {
     project_dir.join(APP_DIR).join(QUEUE_DIR)
 }
 
-/// Saves `text`, as `anchor`'s source, to the end of the project's queue.
-pub fn add(anchor: HiddenAnchor, text: String, project_dir: &Path) -> Result<QueuedPrompt> {
-    let dir = queue_dir(project_dir);
-    fs::create_dir_all(&dir).with_context(|| format!("could not create {}", dir.display()))?;
-    let queued_at = SystemTime::now()
+/// A mark of when a prompt is queued, later than every mark before it, so
+/// prompts queued one straight after another keep their order however long
+/// each then takes to save.
+pub fn stamp() -> u128 {
+    static LAST: Mutex<u128> = Mutex::new(0);
+    let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_nanos());
+    let mut last = LAST.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    *last = now.max(*last + 1);
+    *last
+}
+
+/// Saves `text`, as `anchor`'s source, to the end of the project's queue.
+#[cfg(test)]
+pub fn add(anchor: HiddenAnchor, text: String, project_dir: &Path) -> Result<QueuedPrompt> {
+    add_at(stamp(), anchor, text, project_dir)
+}
+
+/// Saves `text`, as `anchor`'s source, in the project's queue at the place
+/// `queued_at`, a [`stamp`] taken when it was queued.
+pub fn add_at(
+    queued_at: u128,
+    anchor: HiddenAnchor,
+    text: String,
+    project_dir: &Path,
+) -> Result<QueuedPrompt> {
+    let dir = queue_dir(project_dir);
+    fs::create_dir_all(&dir).with_context(|| format!("could not create {}", dir.display()))?;
     // Zero-padded, so names sort in the order they were queued.
     let file = dir.join(format!("{queued_at:020}-{}.pi", anchor.name()));
     fs::write(&file, anchor.source(&text))
@@ -82,8 +105,35 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    use super::{add, load, remove, replace};
+    use super::{add, add_at, load, remove, replace, stamp};
     use crate::hidden_anchor::HiddenAnchor;
+
+    /// Prompts queued in a row keep the order they were queued in, whatever
+    /// order they are then saved in, as when a batch is sent to the other
+    /// mode and each compiles in the background.
+    #[test]
+    fn queued_prompts_keep_the_order_they_were_queued_in() {
+        let project_dir =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("target/prompt-queue-order-test");
+        fs::remove_dir_all(&project_dir).ok();
+        let stamps: Vec<u128> = (0..3).map(|_| stamp()).collect();
+        assert!(
+            stamps.windows(2).all(|pair| pair[0] < pair[1]),
+            "{stamps:?}"
+        );
+        for (n, queued_at) in stamps.into_iter().enumerate().rev() {
+            add_at(
+                queued_at,
+                HiddenAnchor::random(),
+                format!("{n}"),
+                &project_dir,
+            )
+            .unwrap();
+        }
+        let texts: Vec<String> = load(&project_dir).into_iter().map(|q| q.text).collect();
+        assert_eq!(texts, ["0", "1", "2"]);
+        fs::remove_dir_all(&project_dir).ok();
+    }
 
     /// Queued prompts load back in the order they were queued, imports and
     /// all, and are gone once removed.

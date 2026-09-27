@@ -567,6 +567,22 @@ mod tests {
                 "{prompt:?} was not saved"
             );
         }
+        // Every tab's system prompt is listed, in order, but Freeform's,
+        // which sends none; nor is a file saved for it.
+        let listed: Vec<Prompt> = settings.read_with(cx, |this, _| {
+            this.prompts.iter().map(|p| p.prompt).collect()
+        });
+        assert_eq!(
+            listed,
+            [
+                Prompt::Mode(SendMode::Code),
+                Prompt::Mode(SendMode::Both),
+                Prompt::Mode(SendMode::Spec),
+                Prompt::Mode(SendMode::Ask),
+                Prompt::SpecReading,
+            ]
+        );
+        assert!(!system_prompts::file(SendMode::Freeform, &dir).exists());
 
         settings.update_in(cx, |this, window, cx| {
             this.prompts[0]

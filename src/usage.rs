@@ -3,6 +3,7 @@
 //! and of the whole project since it was opened. Nothing here asks the
 //! harness for anything; it only adds up what the runs already report.
 
+use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use gpui_kit::component::{ActiveTheme as _, h_flex, v_flex};
@@ -54,6 +55,23 @@ impl Spend {
         add(&mut self.cost, other.cost);
     }
 
+    /// What was spent since `earlier`, figure by figure: a figure `earlier`
+    /// didn't report counts whole, and one this doesn't stays unreported.
+    pub fn since(&self, earlier: &Spend) -> Spend {
+        fn less(a: Option<u64>, b: Option<u64>) -> Option<u64> {
+            a.map(|a| a.saturating_sub(b.unwrap_or(0)))
+        }
+        Spend {
+            input: less(self.input, earlier.input),
+            output: less(self.output, earlier.output),
+            cache_read: less(self.cache_read, earlier.cache_read),
+            cache_write: less(self.cache_write, earlier.cache_write),
+            cost: self
+                .cost
+                .map(|cost| (cost - earlier.cost.unwrap_or(0.)).max(0.)),
+        }
+    }
+
     /// Takes each figure `other` reports as the total so far.
     pub fn replace(&mut self, other: &Spend) {
         fn replace<T: Copy>(a: &mut Option<T>, b: Option<T>) {
@@ -67,6 +85,19 @@ impl Spend {
         replace(&mut self.cache_write, other.cache_write);
         replace(&mut self.cost, other.cost);
     }
+}
+
+/// How what a run reports spending counts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tally {
+    /// More, on top of what the run reported before, as OpenCode reports
+    /// each step.
+    More,
+    /// The run's totals so far, as Claude Code reports each result.
+    Run,
+    /// The totals so far of the conversation it carries on, earlier runs of
+    /// it included, as Codex reports each turn.
+    Conversation,
 }
 
 /// One of the plan's usage limits, as the harness reported it.
@@ -124,6 +155,11 @@ struct Run {
     /// Which of its conversations, counted up each time it is left for a new
     /// one.
     epoch: u64,
+    /// The conversation the harness said it is, once it has.
+    session: Option<String>,
+    /// What its conversation had spent as it began, for a harness that
+    /// reports the conversation's totals, once it has.
+    before: Option<Spend>,
     spend: Spend,
 }
 
@@ -131,6 +167,9 @@ struct Run {
 #[derive(Clone, Debug, Default)]
 pub struct ProjectUsage {
     runs: Vec<Run>,
+    /// The totals a harness last reported of each conversation, by the
+    /// conversation it said it is.
+    conversations: HashMap<String, Spend>,
     /// The harness and model of the latest report, and when it came.
     harness: Option<Agent>,
     model: Option<String>,
@@ -144,6 +183,8 @@ impl ProjectUsage {
         self.runs.push(Run {
             conversation,
             epoch,
+            session: None,
+            before: None,
             spend: Spend::default(),
         });
         self.runs.len() - 1
@@ -152,12 +193,29 @@ impl ProjectUsage {
     /// Follows what run `run`, of `agent`, reports, at `now`.
     pub fn follow(&mut self, run: usize, agent: Agent, event: &HarnessEvent, now: u64) {
         match event {
-            HarnessEvent::Spent { spend, total } => {
+            HarnessEvent::Session(session) => {
                 if let Some(run) = self.runs.get_mut(run) {
-                    if *total {
-                        run.spend.replace(spend);
-                    } else {
-                        run.spend.add(spend);
+                    run.session = Some(session.clone());
+                }
+                return;
+            }
+            HarnessEvent::Spent { spend, tally } => {
+                if let Some(run) = self.runs.get_mut(run) {
+                    match tally {
+                        Tally::More => run.spend.add(spend),
+                        Tally::Run => run.spend.replace(spend),
+                        // What the conversation spent before this run, as
+                        // last reported, isn't this run's. A conversation
+                        // carried on from before the project was opened
+                        // counts whole, not being known.
+                        Tally::Conversation => {
+                            let before = match &run.session {
+                                Some(session) => self.conversations.insert(session.clone(), *spend),
+                                None => None,
+                            };
+                            let before = run.before.get_or_insert(before.unwrap_or_default());
+                            run.spend = spend.since(before);
+                        }
                     }
                 }
             }
@@ -548,7 +606,7 @@ pub fn now() -> u64 {
 mod tests {
     use super::{
         Agent, Conversation, HarnessEvent, Level, PlanLimit, PlanLimits, ProjectUsage, Spend,
-        UsageReport, cost_label, until,
+        Tally, UsageReport, cost_label, until,
     };
 
     fn limit(name: &str, used: f64, resets_at: Option<u64>) -> PlanLimit {
@@ -559,8 +617,8 @@ mod tests {
         }
     }
 
-    fn spent(spend: Spend, total: bool) -> HarnessEvent {
-        HarnessEvent::Spent { spend, total }
+    fn spent(spend: Spend, tally: Tally) -> HarnessEvent {
+        HarnessEvent::Spent { spend, tally }
     }
 
     #[test]
@@ -621,7 +679,7 @@ mod tests {
                     cost: Some(0.01),
                     ..Spend::default()
                 },
-                true,
+                Tally::Run,
             ),
             5,
         );
@@ -636,7 +694,7 @@ mod tests {
                     cost: Some(0.015),
                     ..Spend::default()
                 },
-                true,
+                Tally::Run,
             ),
             6,
         );
@@ -649,7 +707,7 @@ mod tests {
                     cache_read: Some(100),
                     ..Spend::default()
                 },
-                false,
+                Tally::More,
             ),
             7,
         );
@@ -661,7 +719,7 @@ mod tests {
                     input: Some(5),
                     ..Spend::default()
                 },
-                false,
+                Tally::More,
             ),
             8,
         );
@@ -690,6 +748,71 @@ mod tests {
         assert_eq!(usage.runs(), 2);
         assert_eq!(usage.harness, Some(Agent::Codex));
         assert_eq!(usage.reported, Some(8));
+    }
+
+    /// Codex reports its thread's totals, earlier runs of it included, so a
+    /// run of it counts only what was spent since the thread's totals were
+    /// last reported; a thread not reported since the project was opened
+    /// counts whole.
+    #[test]
+    fn a_conversations_totals_count_only_what_each_run_added() {
+        let thread = |input: u64, cache_read: u64| {
+            spent(
+                Spend {
+                    input: Some(input),
+                    output: Some(input / 10),
+                    cache_read: Some(cache_read),
+                    ..Spend::default()
+                },
+                Tally::Conversation,
+            )
+        };
+        let mut usage = ProjectUsage::default();
+        let first = usage.start_run(Conversation::Tasks, 0);
+        usage.follow(first, Agent::Codex, &HarnessEvent::Session("t".into()), 1);
+        usage.follow(first, Agent::Codex, &thread(300, 1_000), 2);
+        let second = usage.start_run(Conversation::Tasks, 0);
+        usage.follow(second, Agent::Codex, &HarnessEvent::Session("t".into()), 3);
+        usage.follow(second, Agent::Codex, &thread(500, 4_000), 4);
+        // Another thread, begun apart.
+        let other = usage.start_run(Conversation::Questions, 0);
+        usage.follow(other, Agent::Codex, &HarnessEvent::Session("u".into()), 5);
+        usage.follow(other, Agent::Codex, &thread(70, 0), 6);
+
+        assert_eq!(usage.runs[first].spend.input, Some(300));
+        assert_eq!(usage.runs[second].spend.input, Some(200));
+        assert_eq!(usage.runs[second].spend.output, Some(20));
+        assert_eq!(usage.runs[second].spend.cache_read, Some(3_000));
+        let tasks = usage.conversation(Conversation::Tasks, 0);
+        assert_eq!(tasks.input, Some(500));
+        assert_eq!(tasks.cache_read, Some(4_000));
+        assert_eq!(tasks.cost, None);
+        assert_eq!(usage.project().input, Some(570));
+    }
+
+    #[test]
+    fn spend_since_leaves_the_unreported_out() {
+        let now = Spend {
+            input: Some(10),
+            output: Some(5),
+            cost: Some(0.5),
+            ..Spend::default()
+        };
+        let before = Spend {
+            input: Some(4),
+            cost: Some(0.75),
+            cache_read: Some(9),
+            ..Spend::default()
+        };
+        assert_eq!(
+            now.since(&before),
+            Spend {
+                input: Some(6),
+                output: Some(5),
+                cost: Some(0.),
+                ..Spend::default()
+            }
+        );
     }
 
     #[test]

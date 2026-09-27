@@ -449,6 +449,16 @@ pub fn with_attached_text(user_prompt: &str, attached_text: &[String]) -> String
     prompt
 }
 
+/// What the harness receives for a Freeform prompt: `prompt` just as it was
+/// typed, then any text attached to it, and no system prompt. Nothing is
+/// compiled, so neither `piton compile` nor `piton slice` is run.
+pub fn freeform(prompt: &str, attached_text: &[String]) -> CompiledPrompt {
+    CompiledPrompt {
+        user_prompt: with_attached_text(prompt, attached_text),
+        system_prompt: None,
+    }
+}
+
 /// The start of each piece of a line, as earlier versions wrote them.
 const PIECE_PREFIX: &str = "            - ";
 
@@ -1108,7 +1118,11 @@ mod tests {
         )
         .unwrap();
 
-        for mode in SendMode::ALL {
+        // Freeform sends no system prompt at all.
+        for mode in SendMode::ALL
+            .into_iter()
+            .filter(|mode| *mode != SendMode::Freeform)
+        {
             let prompt = system_prompt(mode, &project_dir, "# Piton fluency")
                 .unwrap()
                 .unwrap();
@@ -1463,5 +1477,35 @@ mod tests {
             )
         );
         assert_eq!(compiled.system_prompt.as_deref(), Some("Answer."));
+    }
+
+    /// A Freeform prompt is sent just as it was typed, then its attached
+    /// text, with no system prompt, and saved with its mode, which reads
+    /// back; a prompt saved before Freeform was, with no mode, still does.
+    #[test]
+    fn freeform_prompts_are_sent_as_typed() {
+        let typed = "Fix @{Button.color}: {1 + 2}\n    - as is";
+        let compiled = super::freeform(typed, &[]);
+        assert_eq!(compiled.user_prompt, typed);
+        assert!(compiled.system_prompt.is_none());
+        let attached = vec!["context".to_string()];
+        assert_eq!(
+            super::freeform(typed, &attached).user_prompt,
+            super::with_attached_text(typed, &attached)
+        );
+
+        let mut anchor = HiddenAnchor::random();
+        anchor.mode = Some(SendMode::Freeform);
+        anchor.attached_text = attached.clone();
+        let source = anchor.source(typed);
+        assert!(source.contains("    mode: freeform"), "{source}");
+        let (parsed, prompt) = HiddenAnchor::parse(&source).unwrap();
+        assert_eq!(prompt, typed);
+        assert_eq!(parsed.mode, Some(SendMode::Freeform));
+        assert_eq!(parsed.attached_text, attached);
+        assert!(parsed.system_prompt.is_none());
+
+        let (old, _) = HiddenAnchor::parse(&HiddenAnchor::random().source("Old")).unwrap();
+        assert_eq!(old.mode, None);
     }
 }
