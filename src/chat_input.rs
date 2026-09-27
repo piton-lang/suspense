@@ -233,6 +233,15 @@ pub fn mode_tint(mode: SendMode, cx: &App) -> Hsla {
     tint(theme.red, theme.blue, theme.green, position as f32)
 }
 
+/// The colour of `mode` at full strength, where [`mode_tint`] is only a
+/// tint of it: for a mark, such as an icon, that stands for the mode.
+pub fn mode_color(mode: SendMode, cx: &App) -> Hsla {
+    Hsla {
+        a: 1.,
+        ..mode_tint(mode, cx)
+    }
+}
+
 /// The send button's colour: the selected tab's mode colour at full
 /// strength, where the tab and body have only a tint of it.
 fn send_color(position: f32, cx: &App) -> Hsla {
@@ -338,6 +347,16 @@ impl SendMode {
             SendMode::Both => "Code and Spec",
             SendMode::Spec => "Spec",
             SendMode::Ask => "Ask",
+        }
+    }
+
+    /// The mode a task sent in this one can be sent to instead: Spec for
+    /// Code and Code for Spec. The chain and questions have none.
+    pub fn other(self) -> Option<SendMode> {
+        match self {
+            SendMode::Code => Some(SendMode::Spec),
+            SendMode::Spec => Some(SendMode::Code),
+            SendMode::Both | SendMode::Ask => None,
         }
     }
 

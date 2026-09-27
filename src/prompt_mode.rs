@@ -775,6 +775,22 @@ impl HistoryList {
                             .ok();
                         })
                         .child(task_summary((item_id, item), task_ix, task, cx))
+                        .children(other_mode(task).map(|to| {
+                            let this = this_for_resend.clone();
+                            other_mode_button(
+                                ("send-to-other-previous", task_ix),
+                                to,
+                                move |_, window, cx| {
+                                    // The button's click isn't the heading's.
+                                    cx.stop_propagation();
+                                    this.update(cx, |this, cx| {
+                                        this.send_to_other_mode(tasks_of, item, window, cx)
+                                    })
+                                    .ok();
+                                },
+                                cx,
+                            )
+                        }))
                         .child({
                             let this = this_for_resend.clone();
                             resend_button(("resend-previous", task_ix)).on_click(
@@ -2298,11 +2314,42 @@ impl PromptMode {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.resend_in(tasks_of, ix, None, window, cx);
+    }
+
+    /// Sends the task at `ix` of `tasks_of` again as [`Self::resend`] does,
+    /// but in the other mode ([`SendMode::other`]): a Code task to Spec, a
+    /// Spec task to Code. A task with no other mode isn't sent.
+    fn send_to_other_mode(
+        &mut self,
+        tasks_of: fn(&PromptMode) -> &Vec<PromptTask>,
+        ix: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(to) = tasks_of(self).get(ix).and_then(other_mode) else {
+            return;
+        };
+        self.resend_in(tasks_of, ix, Some(to), window, cx);
+    }
+
+    /// Sends the task at `ix` of `tasks_of` again, as it was sent, in `mode`
+    /// when given, rather than the mode it was sent in.
+    fn resend_in(
+        &mut self,
+        tasks_of: fn(&PromptMode) -> &Vec<PromptTask>,
+        ix: usize,
+        mode: Option<SendMode>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(task) = tasks_of(self).get(ix) else {
             return;
         };
         let (text, sent) = (task.text.to_string(), task.sent.clone());
-        let mode = sent.mode.unwrap_or_else(|| self.chat_input.read(cx).mode());
+        let mode = mode
+            .or(sent.mode)
+            .unwrap_or_else(|| self.chat_input.read(cx).mode());
         if self.project_dir.is_none() {
             window.push_notification(
                 Notification::error("Open a project before sending a prompt.")
@@ -4368,9 +4415,26 @@ impl PromptMode {
                     .justify_between()
                     .gap_2()
                     .child(task_title(ix, task, cx))
-                    .child(resend_button(("resend-latest", ix)).on_click(cx.listener(
-                        move |this, _, window, cx| this.resend(|this| &this.tasks, ix, window, cx),
-                    ))),
+                    .child(
+                        h_flex()
+                            .flex_none()
+                            .gap_1()
+                            .children(other_mode(task).map(|to| {
+                                other_mode_button(
+                                    ("send-to-other-latest", ix),
+                                    to,
+                                    cx.listener(move |this, _, window, cx| {
+                                        this.send_to_other_mode(|this| &this.tasks, ix, window, cx)
+                                    }),
+                                    cx,
+                                )
+                            }))
+                            .child(resend_button(("resend-latest", ix)).on_click(cx.listener(
+                                move |this, _, window, cx| {
+                                    this.resend(|this| &this.tasks, ix, window, cx)
+                                },
+                            ))),
+                    ),
             )
             .child(match &task.compiled {
                 Some(compiled) => {
@@ -4934,6 +4998,32 @@ fn resend_button(id: impl Into<ElementId>) -> Button {
         .xsmall()
         .icon(IconName::RotateCcw)
         .tooltip("Send this prompt again, as it was sent")
+}
+
+/// The mode `task` can be sent to instead of the one it was sent in: Spec
+/// for a Code task, Code for a Spec task. Chain tasks, questions, and prompts
+/// whose mode isn't known have none.
+fn other_mode(task: &PromptTask) -> Option<SendMode> {
+    task.sent.mode.and_then(SendMode::other)
+}
+
+/// The button, `id`, that sends a task again in the other mode, `to`,
+/// tinted that mode's colour, beside its Resend button.
+fn other_mode_button(
+    id: impl Into<ElementId>,
+    to: SendMode,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    cx: &App,
+) -> AnyElement {
+    let button = Button::new("send-to-other-mode")
+        .ghost()
+        .xsmall()
+        .icon(Icon::new(IconName::ArrowRightLeft).text_color(chat_input::mode_color(to, cx)))
+        .tooltip(format!("Send to {}", to.label()))
+        .on_click(on_click);
+    // Lets UI tests find and click the button; inert in normal builds.
+    gpui_kit::TestSupportExt::test_support(div().id(id).flex_none().child(button))
+        .into_any_element()
 }
 
 /// The prompt a task was sent as: the compiled markdown the harness received,
@@ -8583,6 +8673,150 @@ mod tests {
         })
         .unwrap();
         cx.run_until_parked();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Only a task sent in Code or Spec offers to be sent to the other mode,
+    /// at the right of the latest task's header and of each previous task's
+    /// heading; not one sent in Chain, a question, or one of unknown mode.
+    /// Clicking it sends the task again as resending does, but in the other
+    /// mode, leaving the heading closed and the task where it was.
+    #[gpui_kit::test]
+    async fn code_and_spec_tasks_can_be_sent_to_the_other_mode(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        let dir = std::env::temp_dir().join(format!("suspense-other-mode-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        let push = |mode: Option<SendMode>, cx: &mut TestAppContext| {
+            prompt_mode.update(cx, |this, cx| {
+                let ix = this.push_task(format!("Task {}", this.tasks.len()).into(), cx);
+                this.tasks[ix].sent = super::SentAs {
+                    mode,
+                    attached_text: vec!["note".into()],
+                    sliced: true,
+                };
+                this.tasks[ix].mode = mode;
+            })
+        };
+        let offered = |id: (&'static str, usize), cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.try_find(id).is_some()
+            })
+            .unwrap()
+        };
+        let settle = |cx: &mut TestAppContext| {
+            let start = std::time::Instant::now();
+            while prompt_mode.read_with(cx, |this, _| this.working) {
+                assert!(
+                    start.elapsed() < Duration::from_secs(20),
+                    "the task never ended"
+                );
+                cx.run_until_parked();
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        };
+
+        let modes = [
+            Some(SendMode::Code),
+            Some(SendMode::Both),
+            Some(SendMode::Spec),
+            None,
+        ];
+        for mode in modes {
+            push(mode, cx);
+        }
+        // The latest, of unknown mode, doesn't offer it.
+        assert!(!offered(("send-to-other-latest", 3), cx));
+        push(Some(SendMode::Spec), cx);
+        assert!(offered(("send-to-other-latest", 4), cx));
+
+        // Nor does a question.
+        prompt_mode.update(cx, |this, _| {
+            let mut answer = PromptTask::new("Why?".into());
+            answer.sent.mode = Some(SendMode::Ask);
+            assert_eq!(super::other_mode(&answer), None);
+            this.answers.push(answer);
+        });
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send_to_other_mode(|this| &this.answers, 0, window, cx);
+                assert!(this.asks.is_empty(), "a question was sent to another mode");
+            })
+        })
+        .unwrap();
+
+        prompt_mode.update(cx, |this, cx| {
+            this.task_history.expanded = true;
+            cx.notify();
+        });
+        for (item, mode) in modes.into_iter().enumerate() {
+            assert_eq!(
+                offered(("send-to-other-previous", item), cx),
+                matches!(mode, Some(SendMode::Code | SendMode::Spec)),
+                "previous task {item}, sent in {mode:?}"
+            );
+        }
+
+        // A Code task goes to Spec, as it was otherwise sent.
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("send-to-other-previous", 0usize), cx)
+        })
+        .unwrap();
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.task_history.open, None, "the click opened the heading");
+            assert_eq!(this.tasks.len(), 6);
+            assert_eq!(this.tasks[0].sent.mode, Some(SendMode::Code));
+            let sent = &this.tasks[5];
+            assert_eq!(sent.text.as_ref(), "Task 0");
+            assert_eq!(
+                sent.sent,
+                super::SentAs {
+                    mode: Some(SendMode::Spec),
+                    attached_text: vec!["note".into()],
+                    sliced: true,
+                }
+            );
+        });
+        settle(cx);
+
+        // And the latest, now that Spec task, goes to Code.
+        prompt_mode.update(cx, |this, cx| {
+            this.task_history.expanded = false;
+            cx.notify();
+        });
+        // The referenced spec sidebar, over the header's right while the
+        // task ran, slides back first.
+        cx.wait_for(handle, Duration::from_secs(2), |window, _| {
+            window.try_find("referenced-files").is_none()
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click(("send-to-other-latest", 5usize), cx)
+        })
+        .unwrap();
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.tasks.len(), 7);
+            assert_eq!(this.tasks[6].text.as_ref(), "Task 0");
+            assert_eq!(this.tasks[6].sent.mode, Some(SendMode::Code));
+        });
+
+        // While the harness works, it queues.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send_to_other_mode(|this| &this.tasks, 2, window, cx);
+                assert_eq!(this.tasks.len(), 7);
+                assert_eq!(this.queue.len(), 1);
+                assert_eq!(this.queue[0].text.as_ref(), "Task 2");
+                this.queue.clear();
+            })
+        })
+        .unwrap();
+        settle(cx);
         std::fs::remove_dir_all(&dir).ok();
     }
 

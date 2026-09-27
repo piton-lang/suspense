@@ -82,3 +82,17 @@ shape PromptSendingShape:
         whose mode isn't known, saved before modes were, is resent from the
         chat input's selected tab. What is being written in the chat input, and
         attached to it, is left alone, and so is the Slice toggle.
+
+    sendingToTheOtherMode:
+        A task sent in Code alone can be sent to Spec, and one sent in Spec
+        alone can be sent to Code, from a small ghost button beside its Resend
+        button, tinted the colour of the mode it sends to, whose tooltip says
+        "Send to Spec" or "Send to Code". It sits wherever Resend does for a
+        task, at the right of the latest task's header and of the heading of
+        each previous task, and clicking it never opens or closes the item.
+        Tasks sent in Chain, questions, and prompts whose mode isn't known
+        don't offer it.
+
+        Sending to the other mode is resending, as above, in every way but the
+        mode: the prompt is sent in the other mode, with that mode's system
+        prompt, and saved in the history as a new task in that mode.
