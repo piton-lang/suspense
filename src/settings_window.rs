@@ -1,6 +1,7 @@
 //! The settings, shown in the main window's inset panel, in sections picked
 //! from a sidebar of vertical tabs: the system prompt each tab gives a prompt,
-//! and the spec-reading prompt injected into them, for the open project, and
+//! the spec-reading prompt injected into them, and the code-to-spec prompt
+//! added to a Code task sent to Spec, for the open project, and
 //! the harness every run goes to, for the user (see [`crate::agent`]). Every
 //! edit is saved straight away to the project's `.suspense/system-prompts`
 //! (see [`crate::system_prompts`]), and the prompts are read from there each
@@ -21,7 +22,8 @@ use crate::growing_input::GrowToFit;
 use crate::piton_syntax;
 use crate::project_directory::ProjectDirectory;
 use crate::system_prompts::{
-    self, CODE_LOCATION, HARNESS_DIRECTORY, PITON_FLUENCY, Prompt, SPEC_LOCATION, SPEC_READING,
+    self, CODE_LOCATION, CODE_PROMPT, CODE_RESULT, HARNESS_DIRECTORY, PITON_FLUENCY, Prompt,
+    SPEC_LOCATION, SPEC_READING,
 };
 
 actions!(suspense, [OpenSettings]);
@@ -69,7 +71,10 @@ impl Section {
         matches!(
             (self, prompt),
             (Section::SystemPrompts, Prompt::Mode(_))
-                | (Section::InjectedPrompts, Prompt::SpecReading)
+                | (
+                    Section::InjectedPrompts,
+                    Prompt::SpecReading | Prompt::CodeToSpec
+                )
         )
     }
 }
@@ -281,6 +286,20 @@ impl SettingsWindow {
                         ),
                     ),
             )
+            .when(which == Prompt::CodeToSpec, |column| {
+                // Lets UI tests find it; inert in normal builds.
+                column.child(gpui_kit::TestSupportExt::test_support(
+                    div()
+                        .id("code-to-spec-note")
+                        .text_sm()
+                        .text_color(theme.muted_foreground)
+                        .child(format!(
+                            "Added to a Code task sent to Spec, after Spec's system \
+                             prompt. {CODE_PROMPT} and {CODE_RESULT} stand for the code \
+                             task's prompt and its final output."
+                        )),
+                ))
+            })
             .child({
                 let (height, _) = prompt.fit.heights(&prompt.editor, window, cx);
                 div()
@@ -580,6 +599,7 @@ mod tests {
                 Prompt::Mode(SendMode::Spec),
                 Prompt::Mode(SendMode::Ask),
                 Prompt::SpecReading,
+                Prompt::CodeToSpec,
             ]
         );
         assert!(!system_prompts::file(SendMode::Freeform, &dir).exists());
@@ -634,6 +654,54 @@ mod tests {
             system_prompts::load(Prompt::SpecReading, &dir).unwrap(),
             system_prompts::default_prompt(Prompt::SpecReading)
         );
+        // Beneath it, the code-to-spec prompt, saved beside the templates,
+        // with a line saying what it is for, and reset in the same way.
+        assert_eq!(
+            system_prompts::file(Prompt::CodeToSpec, &dir),
+            dir.join(".suspense/system-prompts/code-to-spec.md")
+        );
+        let shown = |id: &'static str, cx: &mut VisualTestContext| {
+            cx.update(|window, cx| {
+                window.render_frame(cx);
+                window.try_find(id).is_some()
+            })
+        };
+        assert!(shown("reset-spec-reading-system-prompt", cx));
+        assert!(shown("reset-code-to-spec-system-prompt", cx));
+        assert!(shown("code-to-spec-note", cx));
+        let order: Vec<Prompt> = settings.read_with(cx, |this, _| {
+            this.prompts
+                .iter()
+                .map(|p| p.prompt)
+                .filter(|p| Section::InjectedPrompts.holds(*p))
+                .collect()
+        });
+        assert_eq!(order, [Prompt::SpecReading, Prompt::CodeToSpec]);
+        system_prompts::save(Prompt::CodeToSpec, "Say ${CODE_RESULT}.", &dir).unwrap();
+        settings.update_in(cx, |this, window, cx| this.load(window, cx));
+        cx.run_until_parked();
+        assert_eq!(
+            text(&settings, Prompt::CodeToSpec, cx),
+            "Say ${CODE_RESULT}."
+        );
+        settings.update_in(cx, |this, window, cx| {
+            this.reset(Prompt::CodeToSpec, window, cx)
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            system_prompts::load(Prompt::CodeToSpec, &dir).unwrap(),
+            system_prompts::default_prompt(Prompt::CodeToSpec)
+        );
+        assert_eq!(
+            text(&settings, Prompt::CodeToSpec, cx),
+            system_prompts::default_prompt(Prompt::CodeToSpec)
+        );
+        // Not among the system prompts.
+        settings.update(cx, |this, cx| this.pick(Section::SystemPrompts, cx));
+        assert!(!shown("reset-code-to-spec-system-prompt", cx));
+        assert!(!shown("code-to-spec-note", cx));
+        settings.update(cx, |this, cx| this.pick(Section::InjectedPrompts, cx));
+
         // Kept by the application rather than the window, so it outlives it.
         assert_eq!(
             cx.update(|_, cx| SettingsWindow::section(cx)),

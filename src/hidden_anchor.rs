@@ -118,12 +118,45 @@ pub struct HiddenAnchor {
     pub attached_text: Vec<String>,
     /// The `systemPrompt` written after the attached text, if any.
     pub system_prompt: Option<String>,
+    /// For a Code task sent to Spec, the code task it was sent from, written
+    /// as `codeTask` after the system prompt, so it is sent the same way
+    /// again.
+    pub code_task: Option<CodeTask>,
+}
+
+/// The code task a Spec task was sent from: its prompt as typed, and its
+/// final output, none if it left none. Each fills in the code-to-spec
+/// prompt's placeholder as text (see [`system_prompts::fill_code_task`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct CodeTask {
+    pub prompt: String,
+    pub result: Option<String>,
 }
 
 /// A compiled hidden anchor.
 pub struct CompiledPrompt {
     pub user_prompt: String,
     pub system_prompt: Option<String>,
+    /// The code task it was sent from, which fills in its system prompt as it
+    /// is sent (see [`Self::system_prompt_as_sent`]).
+    pub code_task: Option<CodeTask>,
+}
+
+impl CompiledPrompt {
+    /// The system prompt as the harness is sent it: `${UNDERSTANDING_FILE}`
+    /// filled in with `understanding`, the understanding file's path from the
+    /// project directory, or nothing for a question; then the code task it was
+    /// sent from, last, so nothing in what that holds is filled in.
+    pub fn system_prompt_as_sent(&self, understanding: Option<&str>) -> Option<String> {
+        let system_prompt = self.system_prompt.as_deref()?;
+        let filled = system_prompts::fill_understanding(system_prompt, understanding);
+        Some(match &self.code_task {
+            Some(code) => {
+                system_prompts::fill_code_task(&filled, &code.prompt, code.result.as_deref())
+            }
+            None => filled,
+        })
+    }
 }
 
 impl HiddenAnchor {
@@ -139,6 +172,7 @@ impl HiddenAnchor {
             sliced: false,
             attached_text: Vec::new(),
             system_prompt: None,
+            code_task: None,
         }
     }
 
@@ -177,6 +211,17 @@ impl HiddenAnchor {
             source.push_str(SYSTEM_PROMPT_LINE);
             source.push('\n');
             push_block(&mut source, PROMPT_INDENT, system_prompt);
+        }
+        if let Some(code_task) = &self.code_task {
+            source.push('\n');
+            source.push_str(CODE_TASK_LINE);
+            source.push('\n');
+            writeln!(source, "{PROMPT_INDENT}{CODE_PROMPT_KEY}").ok();
+            push_block(&mut source, ATTACHMENT_INDENT, &code_task.prompt);
+            if let Some(result) = &code_task.result {
+                writeln!(source, "{PROMPT_INDENT}{CODE_RESULT_KEY}").ok();
+                push_block(&mut source, ATTACHMENT_INDENT, result);
+            }
         }
         let references = self.references(prompt);
         if !references.is_empty() {
@@ -322,15 +367,39 @@ impl HiddenAnchor {
         }
         let system_prompt = match rest.first() {
             Some(&SYSTEM_PROMPT_LINE) => Some(match read_escaped(&rest[1..], PROMPT_INDENT) {
-                Some((text, _)) => text,
+                Some((text, after)) => {
+                    rest = after.strip_prefix(&[""]).unwrap_or(after);
+                    text
+                }
                 None => {
                     let end = rest[1..]
                         .iter()
                         .position(|line| *line == REFERENCES_LINE)
                         .map_or(rest.len(), |end| end + 1);
-                    read_block(&rest[1..end])
+                    let text = read_block(&rest[1..end]);
+                    rest = &rest[end..];
+                    text
                 }
             }),
+            _ => None,
+        };
+        // Saved only by versions that send a Code task to Spec with it.
+        let code_task = match rest.first() {
+            Some(&CODE_TASK_LINE) => {
+                let key = |line: Option<&&str>, key: &str| {
+                    line.and_then(|line| line.strip_prefix(PROMPT_INDENT)) == Some(key)
+                };
+                if !key(rest.get(1), CODE_PROMPT_KEY) {
+                    return None;
+                }
+                let (prompt, after) = read_escaped(&rest[2..], ATTACHMENT_INDENT)?;
+                let result = if key(after.first(), CODE_RESULT_KEY) {
+                    Some(read_escaped(&after[1..], ATTACHMENT_INDENT)?.0)
+                } else {
+                    None
+                };
+                Some(CodeTask { prompt, result })
+            }
             _ => None,
         };
         Some((
@@ -341,6 +410,7 @@ impl HiddenAnchor {
                 sliced,
                 attached_text,
                 system_prompt,
+                code_task,
             },
             prompt,
         ))
@@ -360,6 +430,13 @@ const SLICED_LINE: &str = "    sliced: true";
 
 /// The line opening the `systemPrompt` property of [`HiddenAnchor::source`].
 const SYSTEM_PROMPT_LINE: &str = "    systemPrompt:";
+
+/// The line opening the `codeTask` property of [`HiddenAnchor::source`], and
+/// the keys of the code task's prompt and final output in it, each followed
+/// by its escape block.
+const CODE_TASK_LINE: &str = "    codeTask:";
+const CODE_PROMPT_KEY: &str = "prompt:";
+const CODE_RESULT_KEY: &str = "result:";
 
 /// The line opening the `references` property of [`HiddenAnchor::source`].
 const REFERENCES_LINE: &str = "    references:";
@@ -456,6 +533,7 @@ pub fn freeform(prompt: &str, attached_text: &[String]) -> CompiledPrompt {
     CompiledPrompt {
         user_prompt: with_attached_text(prompt, attached_text),
         system_prompt: None,
+        code_task: None,
     }
 }
 
@@ -585,7 +663,33 @@ fn blank_for_lsp(line: &str) -> String {
 /// `piton.config.pi` and the harness's directory, and with the project's Piton
 /// `fluency`. A template that is empty once filled in gives none.
 pub fn system_prompt(mode: SendMode, project_dir: &Path, fluency: &str) -> Result<Option<String>> {
-    let template = system_prompts::load(mode, project_dir)?;
+    filled_prompt(mode.into(), project_dir, fluency)
+}
+
+/// The system prompt a Code task sent to Spec is given: Spec's, as
+/// [`system_prompt`] gives it, then, on a paragraph of its own, the project's
+/// code-to-spec prompt, filled in as a template is. Its `${CODE_PROMPT}` and
+/// `${CODE_RESULT}` are left as written, to be filled in with the code task
+/// as it is sent (see [`CompiledPrompt::system_prompt_as_sent`]), so nothing
+/// the code task said is compiled. Either left empty once filled in leaves
+/// the other alone.
+pub fn code_to_spec_system_prompt(project_dir: &Path, fluency: &str) -> Result<Option<String>> {
+    let spec = system_prompt(SendMode::Spec, project_dir, fluency)?;
+    let handoff = filled_prompt(system_prompts::Prompt::CodeToSpec, project_dir, fluency)?;
+    Ok(match (spec, handoff) {
+        (Some(spec), Some(handoff)) => Some(format!("{spec}\n\n{handoff}")),
+        (spec, handoff) => spec.or(handoff),
+    })
+}
+
+/// `prompt`, the project's own, filled in as [`system_prompts::fill`] fills
+/// a template in; none when it is empty once filled in.
+fn filled_prompt(
+    prompt: system_prompts::Prompt,
+    project_dir: &Path,
+    fluency: &str,
+) -> Result<Option<String>> {
+    let template = system_prompts::load(prompt, project_dir)?;
     if template.trim().is_empty() {
         return Ok(None);
     }
@@ -747,6 +851,7 @@ pub fn compile(anchor: &HiddenAnchor, file: &Path, project_dir: &Path) -> Result
             .system_prompt
             .as_deref()
             .map(|text| saved.resolve(text, &resolved)),
+        code_task: saved.code_task,
     })
 }
 
@@ -1030,8 +1135,8 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        HiddenAnchor, Imports, MODE_PREFIX, PROMPT_INDENT, SYSTEM_PROMPT_LINE, compile, mode_of,
-        spec_files, system_prompt,
+        CodeTask, HiddenAnchor, Imports, MODE_PREFIX, PROMPT_INDENT, SYSTEM_PROMPT_LINE,
+        code_to_spec_system_prompt, compile, mode_of, spec_files, system_prompt,
     };
     use crate::chat_input::SendMode;
     use crate::project_directory::CONFIG_FILE_NAME;
@@ -1052,6 +1157,7 @@ mod tests {
             sliced: false,
             attached_text: Vec::new(),
             system_prompt: None,
+            code_task: None,
         };
         assert_eq!(
             anchor.source("hi"),
@@ -1183,6 +1289,186 @@ mod tests {
             spec_files(&imports, &dir),
             [dir.join("spec/a.pi"), dir.join("spec/b/index.pi")]
         );
+    }
+
+    /// Text a code task might well hold that Piton would read as more than
+    /// text: braces, interpolations, a reference to a name the prompt
+    /// imports, the placeholders themselves, comments, keys, list items, and
+    /// lines of backslashes that would close an escape block.
+    const TRICKY: &str = concat!(
+        "Made `{a: 1}` and ${x} from @{ApplicationScope}, \\ {1 + 2} \\.\n",
+        "\\\\\\\n",
+        "\\\\\\\\\\\\\n",
+        "${UNDERSTANDING_FILE}, ${CODE_PROMPT}, ${CODE_RESULT}, ${SPEC_LOCATION}\n",
+        "\n",
+        "  - item: value // not a comment\n",
+        "    codeTask:\n",
+        "            \\\\\\\n",
+        "ends with \\",
+    );
+
+    /// A Code task sent to Spec is given Spec's system prompt, then, on a
+    /// paragraph of its own, the code-to-spec prompt, filled in as a template
+    /// is but for CODE_PROMPT and CODE_RESULT, left for when it is sent.
+    /// Either one left empty leaves the other alone.
+    #[test]
+    fn code_tasks_sent_to_spec_are_given_the_handoff() {
+        let project_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/code-to-spec-test");
+        fs::remove_dir_all(&project_dir).ok();
+        fs::create_dir_all(&project_dir).unwrap();
+        fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join(CONFIG_FILE_NAME),
+            project_dir.join(CONFIG_FILE_NAME),
+        )
+        .unwrap();
+
+        let spec = system_prompt(SendMode::Spec, &project_dir, "# Fluency")
+            .unwrap()
+            .unwrap();
+        let handoff = system_prompts::fill(
+            system_prompts::default_prompt(system_prompts::Prompt::CodeToSpec),
+            "./src",
+            "./spec",
+            system_prompts::default_prompt(system_prompts::Prompt::SpecReading),
+            "# Fluency",
+        );
+        assert!(handoff.starts_with("This prompt was first sent to change the code"));
+        assert!(handoff.contains("change the spec at ./spec\nso it describes"));
+        assert!(handoff.contains("the code at\n./src."));
+        assert!(handoff.ends_with(&format!(
+            "sent:\n\n{}\n\nWhat the code task said it built, its final output:\n\n{}",
+            system_prompts::CODE_PROMPT,
+            system_prompts::CODE_RESULT
+        )));
+        let given = code_to_spec_system_prompt(&project_dir, "# Fluency")
+            .unwrap()
+            .unwrap();
+        assert_eq!(given, format!("{spec}\n\n{handoff}"));
+        // A Spec task sent from Spec alone is given Spec's alone.
+        assert!(!spec.contains("first sent to change the code"));
+
+        system_prompts::save(system_prompts::Prompt::CodeToSpec, "  \n", &project_dir).unwrap();
+        assert_eq!(
+            code_to_spec_system_prompt(&project_dir, "# Fluency").unwrap(),
+            Some(spec)
+        );
+        system_prompts::save(
+            system_prompts::Prompt::CodeToSpec,
+            "Built: ${CODE_RESULT}",
+            &project_dir,
+        )
+        .unwrap();
+        system_prompts::save(SendMode::Spec, "", &project_dir).unwrap();
+        assert_eq!(
+            code_to_spec_system_prompt(&project_dir, "")
+                .unwrap()
+                .as_deref(),
+            Some("Built: ${CODE_RESULT}")
+        );
+        fs::remove_dir_all(&project_dir).ok();
+    }
+
+    /// The code task a Spec task was sent from is saved with its anchor, and
+    /// reads back exactly, with a final output or without one; an anchor
+    /// saved without one, as every anchor was before, reads back without.
+    #[test]
+    fn code_tasks_are_saved_with_the_anchor() {
+        for result in [Some(TRICKY.to_string()), Some(String::new()), None] {
+            let mut anchor = HiddenAnchor::random();
+            anchor.mode = Some(SendMode::Spec);
+            anchor.attached_text = vec!["note".into()];
+            anchor.system_prompt = Some("Spec.\n\nWas: ${CODE_PROMPT}".into());
+            anchor.code_task = Some(CodeTask {
+                prompt: format!("Change it.\n{TRICKY}"),
+                result: result.clone(),
+            });
+            let source = anchor.source("Change it.");
+            let (parsed, text) = HiddenAnchor::parse(&source).unwrap();
+            assert_eq!(text, "Change it.");
+            assert_eq!(parsed.code_task, anchor.code_task, "{source}");
+            assert_eq!(parsed.system_prompt, anchor.system_prompt);
+            assert_eq!(parsed.attached_text, anchor.attached_text);
+            assert_eq!(parsed.source(&text), source);
+
+            // Without a system prompt, as when both prompts are left empty.
+            anchor.system_prompt = None;
+            let (parsed, _) = HiddenAnchor::parse(&anchor.source("Change it.")).unwrap();
+            assert_eq!(parsed.code_task, anchor.code_task);
+            assert_eq!(parsed.system_prompt, None);
+        }
+        let mut anchor = HiddenAnchor::random();
+        anchor.system_prompt = Some("Spec.".into());
+        let (parsed, _) = HiddenAnchor::parse(&anchor.source("x")).unwrap();
+        assert_eq!(parsed.code_task, None);
+    }
+
+    /// A Spec task sent from a Code task compiles, whatever the code task
+    /// holds, and is sent the code task's prompt and final output exactly as
+    /// they were: never compiled, a reference to a name the prompt imports
+    /// left as written, and nothing in them filled in, the understanding file
+    /// filled in only where the template asks for it. One that left no final
+    /// output is sent a line saying so.
+    #[test]
+    fn code_tasks_reach_the_harness_as_text() {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        let project_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut anchor = HiddenAnchor::random();
+        anchor
+            .imports
+            .add_from_source("from ./scope/application import ApplicationScope");
+        anchor.mode = Some(SendMode::Spec);
+        let template = format!(
+            "Spec, see @{{ApplicationScope}}, understood in {}.\n\n{}",
+            system_prompts::UNDERSTANDING_FILE,
+            system_prompts::default_prompt(system_prompts::Prompt::CodeToSpec)
+        );
+        anchor.system_prompt = Some(system_prompts::fill(&template, "./src", "./spec", "", ""));
+        let prompt = format!("Change @{{ApplicationScope}}.\n{TRICKY}");
+        let result = format!("Done.\n{TRICKY}");
+        anchor.code_task = Some(CodeTask {
+            prompt: prompt.clone(),
+            result: Some(result.clone()),
+        });
+
+        let dir = project_dir.join("target/hidden-anchor-code-task-test");
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("compile.pi");
+        fs::write(&file, anchor.source("Write the spec.")).unwrap();
+        let compiled = compile(&anchor, &file, project_dir).unwrap();
+        assert_eq!(compiled.code_task, anchor.code_task);
+        let sent = compiled.system_prompt_as_sent(Some("u.md")).unwrap();
+        assert!(
+            sent.starts_with("Spec, see [ApplicationScope]("),
+            "the template's reference isn't resolved: {sent}"
+        );
+        assert!(sent.contains("understood in u.md."), "{sent}");
+        assert!(
+            sent.ends_with(&format!(
+                "The prompt the code task was sent:\n\n{prompt}\n\n\
+                 What the code task said it built, its final output:\n\n{result}"
+            )),
+            "{sent}"
+        );
+
+        anchor.code_task = Some(CodeTask {
+            prompt: "Change it.".into(),
+            result: None,
+        });
+        fs::write(&file, anchor.source("Write the spec.")).unwrap();
+        let sent = compile(&anchor, &file, project_dir)
+            .unwrap()
+            .system_prompt_as_sent(None)
+            .unwrap();
+        assert!(
+            sent.ends_with(&format!(
+                "final output:\n\n{}",
+                system_prompts::NO_CODE_RESULT
+            )),
+            "{sent}"
+        );
+        fs::remove_file(&file).ok();
     }
 
     /// A prompt's escape block is fenced beyond any line of backslashes in

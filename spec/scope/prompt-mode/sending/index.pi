@@ -4,6 +4,7 @@ from /scope/project-data import ProjectDataScope
 from /scope/prompt-mode import PromptEditor
 from /scope/prompt-mode/chat-input import ChatInputScope
 from /scope/prompt-mode/message-list import MessageList
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from /scope/prompt-mode/modes import PromptModesScope
 from /scope/spec-build import SpecBuildScope
 
@@ -114,3 +115,21 @@ shape PromptSendingShape:
         Sending to the other mode is resending, as above, in every way but the
         mode: the prompt is sent in the other mode, with that mode's system
         prompt, and saved in the history as a new task in that mode.
+
+        A Code task sent to Spec is also told what the code task did, so the
+        spec can be written from it. Its system prompt is Spec's, followed, on
+        a paragraph of its own, by the code-to-spec prompt of the
+        @{ModeSystemPromptsScope}, which says that the prompt was first sent to
+        change the code, and now the spec is to be written to describe what was
+        built, and holds the code task's prompt, as it was typed, and its final
+        output: the reply text after the code task's last tool call, all of it
+        when it made none. A code task that left no final output, having
+        failed, been cancelled, or said nothing after its last tool call, is
+        said to have left none. Its user prompt is the prompt as typed, as for
+        any resend.
+
+        The new Spec task remembers the code task it was sent from, in its
+        history record, so resending it sends it the same way, with the same
+        prompt and final output, and its header shows, beneath the hidden
+        anchor's name, that it was sent from Code. A Spec task sent to Code is
+        sent with Code's system prompt alone.

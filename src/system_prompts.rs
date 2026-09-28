@@ -12,7 +12,10 @@
 //! task's understanding file (see [`crate::understanding`]); it reaches the
 //! compiled prompt as written, and is filled in as the prompt is sent, once
 //! the task's history record is named. Otherwise, like the prompt it is sent with, a template is Piton
-//! prose, so it can reference the spec.
+//! prose, so it can reference the spec. A Code task sent to Spec is also given
+//! the code-to-spec prompt, saved beside the templates, whose `${CODE_PROMPT}`
+//! and `${CODE_RESULT}` are filled in with the code task's prompt and final
+//! output as it is sent, as text (see [`fill_code_task`]).
 
 use std::fs;
 use std::io::ErrorKind;
@@ -29,26 +32,38 @@ pub const HARNESS_DIRECTORY: &str = "${HARNESS_DIRECTORY}";
 pub const SPEC_READING: &str = "${SPEC_READING}";
 pub const PITON_FLUENCY: &str = "${PITON_FLUENCY}";
 pub const UNDERSTANDING_FILE: &str = "${UNDERSTANDING_FILE}";
+/// In the code-to-spec prompt, the code task's prompt as it was typed, and its
+/// final output: filled in as the prompt is sent, never read as Piton.
+pub const CODE_PROMPT: &str = "${CODE_PROMPT}";
+pub const CODE_RESULT: &str = "${CODE_RESULT}";
+
+/// What CODE_RESULT is filled in with for a code task that left no final
+/// output.
+pub const NO_CODE_RESULT: &str = "The code task left no final output: it failed, was \
+    cancelled, or said nothing after its last tool call.";
 
 const DIR: &str = "system-prompts";
 
-/// A prompt saved in `.suspense/system-prompts`: a mode's template, or the
-/// spec-reading prompt injected into them.
+/// A prompt saved in `.suspense/system-prompts`: a mode's template, the
+/// spec-reading prompt injected into them, or the code-to-spec prompt added to
+/// a Code task sent to Spec.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Prompt {
     Mode(SendMode),
     SpecReading,
+    CodeToSpec,
 }
 
 impl Prompt {
-    /// Every prompt: the modes' templates, in order, then the injected one.
+    /// Every prompt: the modes' templates, in order, then the injected ones.
     /// Freeform, which sends no system prompt, has none.
-    pub const ALL: [Prompt; 5] = [
+    pub const ALL: [Prompt; 6] = [
         Prompt::Mode(SendMode::ALL[0]),
         Prompt::Mode(SendMode::ALL[1]),
         Prompt::Mode(SendMode::ALL[2]),
         Prompt::Mode(SendMode::ALL[3]),
         Prompt::SpecReading,
+        Prompt::CodeToSpec,
     ];
 
     /// The name its file is saved under.
@@ -56,6 +71,7 @@ impl Prompt {
         match self {
             Prompt::Mode(mode) => mode.key(),
             Prompt::SpecReading => "spec-reading",
+            Prompt::CodeToSpec => "code-to-spec",
         }
     }
 
@@ -64,6 +80,7 @@ impl Prompt {
         match self {
             Prompt::Mode(mode) => mode.label(),
             Prompt::SpecReading => "Spec reading",
+            Prompt::CodeToSpec => "Code to spec",
         }
     }
 }
@@ -98,6 +115,7 @@ pub fn default_prompt(prompt: impl Into<Prompt>) -> &'static str {
         // Freeform sends no system prompt, so it has no template.
         Prompt::Mode(SendMode::Freeform) => "",
         Prompt::SpecReading => baked!("spec-reading"),
+        Prompt::CodeToSpec => baked!("code-to-spec"),
     }
     .trim_end()
 }
@@ -175,6 +193,37 @@ pub fn fill(template: &str, code: &str, spec: &str, reading: &str, fluency: &str
         .to_string()
 }
 
+/// A compiled system prompt with the code task a Spec task was sent from
+/// filled in: `${CODE_PROMPT}` with its prompt as typed, and `${CODE_RESULT}`
+/// with its final output, or with [`NO_CODE_RESULT`] when it left none. Both
+/// are taken as text: filled in at once, in one pass, so neither is filled in
+/// again from what the other holds, and after compiling, so nothing in them is
+/// ever read as Piton.
+pub fn fill_code_task(system_prompt: &str, prompt: &str, result: Option<&str>) -> String {
+    let result = result
+        .map(str::trim_end)
+        .filter(|result| !result.trim().is_empty())
+        .unwrap_or(NO_CODE_RESULT);
+    let prompt = prompt.trim_end();
+    let mut filled = String::with_capacity(system_prompt.len() + prompt.len() + result.len());
+    let mut rest = system_prompt;
+    loop {
+        let next = [(CODE_PROMPT, prompt), (CODE_RESULT, result)]
+            .into_iter()
+            .filter_map(|(placeholder, value)| {
+                rest.find(placeholder).map(|at| (at, placeholder, value))
+            })
+            .min_by_key(|(at, ..)| *at);
+        let Some((at, placeholder, value)) = next else {
+            filled.push_str(rest);
+            return filled;
+        };
+        filled.push_str(&rest[..at]);
+        filled.push_str(value);
+        rest = &rest[at + placeholder.len()..];
+    }
+}
+
 /// A compiled system prompt with `${UNDERSTANDING_FILE}` filled in with
 /// `path`, the understanding file's path from the project directory, or with
 /// nothing for a question, which has none.
@@ -188,8 +237,9 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        PITON_FLUENCY, Prompt, SPEC_READING, UNDERSTANDING_FILE, default_prompt, file, fill,
-        fill_understanding, load, save, save_missing,
+        CODE_PROMPT, CODE_RESULT, NO_CODE_RESULT, PITON_FLUENCY, Prompt, SPEC_READING,
+        UNDERSTANDING_FILE, default_prompt, file, fill, fill_code_task, fill_understanding, load,
+        save, save_missing,
     };
     use crate::chat_input::SendMode;
 
@@ -286,6 +336,67 @@ mod tests {
         assert!(
             fill(default_prompt(SendMode::Code), "./src", "./spec", "", "").contains("./src"),
             "the code location isn't filled in"
+        );
+    }
+
+    /// The code-to-spec prompt's default is this repository's own saved
+    /// one, which says what the spec gives it to say; it is filled in as a
+    /// template is, but for its own two placeholders.
+    #[test]
+    fn code_to_spec_default_is_this_repositorys() {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let default = default_prompt(Prompt::CodeToSpec);
+        let saved = fs::read_to_string(file(Prompt::CodeToSpec, manifest)).unwrap();
+        assert_eq!(default, saved.trim_end());
+        assert_eq!(
+            default,
+            "This prompt was first sent to change the code, and the code has been\n\
+             changed to meet it. Now write the spec to describe what was built:\n\
+             read the code the task changed, and change the spec at ${SPEC_LOCATION}\n\
+             so it describes that code as it now is, without changing the code at\n\
+             ${CODE_LOCATION}. Where the code did something the prompt didn't ask\n\
+             for, describe what the code does, and say so in your reply.\n\
+             \n\
+             The prompt the code task was sent:\n\
+             \n\
+             ${CODE_PROMPT}\n\
+             \n\
+             What the code task said it built, its final output:\n\
+             \n\
+             ${CODE_RESULT}"
+        );
+        assert_eq!(Prompt::CodeToSpec.key(), "code-to-spec");
+        assert_eq!(Prompt::CodeToSpec.label(), "Code to spec");
+        assert_eq!(Prompt::ALL.last(), Some(&Prompt::CodeToSpec));
+        let filled = fill(default, "./src", "./spec", "Read.", "");
+        assert!(filled.contains("the spec at ./spec\n") && filled.contains("\n./src."));
+        assert!(filled.contains(CODE_PROMPT) && filled.contains(CODE_RESULT));
+    }
+
+    /// The code task fills in its two placeholders as text, in one pass, so
+    /// neither is filled in from what the other holds; one that left no final
+    /// output gives a line saying so.
+    #[test]
+    fn code_tasks_fill_in_as_text() {
+        let template = "Asked:\n\n${CODE_PROMPT}\n\nDid:\n\n${CODE_RESULT}\n\n${CODE_PROMPT}";
+        assert_eq!(
+            fill_code_task(
+                template,
+                "Put ${CODE_RESULT} {here}\n",
+                Some("Said ${CODE_PROMPT} \\ ")
+            ),
+            "Asked:\n\nPut ${CODE_RESULT} {here}\n\nDid:\n\nSaid ${CODE_PROMPT} \\\n\n\
+             Put ${CODE_RESULT} {here}"
+        );
+        for none in [None, Some(""), Some(" \n ")] {
+            assert_eq!(
+                fill_code_task("Did: ${CODE_RESULT}", "x", none),
+                format!("Did: {NO_CODE_RESULT}")
+            );
+        }
+        assert_eq!(
+            fill_code_task("Nothing to fill.", "x", None),
+            "Nothing to fill."
         );
     }
 

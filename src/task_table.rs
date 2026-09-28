@@ -853,6 +853,27 @@ impl Reply {
         self.refresh();
     }
 
+    /// The run's final output, its answer (see [`Layout::of`]): the reply
+    /// text after its last tool call, or all of it when it made none, each
+    /// piece on a paragraph of its own. None when there is no text there.
+    pub(crate) fn final_output(&self) -> Option<String> {
+        let after = self
+            .parts
+            .iter()
+            .rposition(|part| matches!(part, ReplyPart::Tool(_)))
+            .map_or(0, |last| last + 1);
+        let text: Vec<&str> = self.parts[after..]
+            .iter()
+            .filter_map(|part| match part {
+                ReplyPart::Text(text) if !text.trim().is_empty() => {
+                    Some(text.trim_start_matches(['\n', '\r']).trim_end())
+                }
+                _ => None,
+            })
+            .collect();
+        (!text.is_empty()).then(|| text.join("\n\n"))
+    }
+
     fn has_text(&self) -> bool {
         self.parts
             .iter()
@@ -1816,6 +1837,64 @@ mod tests {
         assert!(narrow < kind, "{narrow:?}");
         assert!(output >= px(96.), "{output:?}");
         assert!(share > 0.28, "{share}");
+    }
+
+    /// A run's final output is its answer: the reply text after its last
+    /// tool call, each piece on a paragraph of its own, or all its reply text
+    /// when it made none. With nothing said after its last call, or nothing
+    /// said at all, it has none.
+    #[test]
+    fn final_output_is_the_text_after_the_last_tool_call() {
+        /// A reply to `events`, a tool call written as `tool:<id>`, the end
+        /// of the run as `end`, and anything else as a piece of reply text.
+        fn reply(events: &[&str]) -> Reply {
+            let mut reply = Reply::default();
+            for event in events {
+                let events = match *event {
+                    "end" => vec![HarnessEvent::Finished {
+                        is_error: false,
+                        result: String::new(),
+                    }],
+                    tool if tool.starts_with("tool:") => vec![HarnessEvent::ToolStarted {
+                        id: tool.into(),
+                        name: "Edit".into(),
+                    }],
+                    text => vec![
+                        HarnessEvent::TextStarted,
+                        HarnessEvent::TextDelta(text.into()),
+                    ],
+                };
+                for event in events {
+                    reply.apply(event);
+                }
+            }
+            reply
+        }
+
+        let after_tools = reply(&[
+            "Looking first.",
+            "tool:1",
+            "tool:2",
+            "  Built `{a}`.\n",
+            "   ",
+            "\nAnd a \\ too.  ",
+            "end",
+        ]);
+        assert_eq!(
+            after_tools.final_output().as_deref(),
+            Some("  Built `{a}`.\n\nAnd a \\ too.")
+        );
+
+        let no_tools = reply(&["One.", "Two.", "end"]);
+        assert_eq!(no_tools.final_output().as_deref(), Some("One.\n\nTwo."));
+
+        let nothing_after = reply(&["Looking first.", "tool:1", "  ", "end"]);
+        assert_eq!(nothing_after.final_output(), None);
+        assert_eq!(reply(&["end"]).final_output(), None);
+        // An error after the last call is no output.
+        let mut failed = reply(&["Looking first.", "tool:1"]);
+        failed.apply(HarnessEvent::Failed("it broke".into()));
+        assert_eq!(failed.final_output(), None);
     }
 
     /// A message sent to a run is never collapsed among the steps leading up

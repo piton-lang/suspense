@@ -63,7 +63,7 @@ use crate::conversations;
 use crate::file_link::OpenFile;
 use crate::file_view::{CloseFile, FileView, OpenDefinition, SendToPrompt};
 use crate::harness::{self, HarnessEvent};
-use crate::hidden_anchor::{self, HiddenAnchor};
+use crate::hidden_anchor::{self, CodeTask, HiddenAnchor};
 use crate::markdown;
 use crate::markdown::{MarkdownKey, MarkdownKind, MarkdownStates};
 use crate::measured_list::{MeasuredList, RenderRow};
@@ -160,9 +160,10 @@ struct QueueItem {
 
 /// A prompt on its way to the harness.
 enum Sending {
-    /// Typed and sent straight away, in a mode, with any text attached, and
-    /// whether it is sent sliced.
-    Now(SendMode, Vec<String>, bool),
+    /// Typed and sent straight away, in a mode, with any text attached,
+    /// whether it is sent sliced, and, for a Code task sent to Spec, the code
+    /// task it was sent from.
+    Now(SendMode, Vec<String>, bool, Option<CodeTask>),
     /// Out of the queue, saved with its anchor.
     Queued(QueuedPrompt),
 }
@@ -225,6 +226,9 @@ struct SentAs {
     mode: Option<SendMode>,
     attached_text: Vec<String>,
     sliced: bool,
+    /// Sent to Spec from a Code task, that code task, told to it again
+    /// whenever it is resent.
+    code_task: Option<CodeTask>,
 }
 
 impl SentAs {
@@ -233,6 +237,7 @@ impl SentAs {
             mode: anchor_mode(anchor),
             attached_text: anchor.attached_text.clone(),
             sliced: anchor.sliced,
+            code_task: anchor.code_task.clone(),
         }
     }
 }
@@ -1800,7 +1805,16 @@ impl PromptMode {
                         && this.project_dir.is_some()
                     {
                         let sliced = this.chat_input.read(cx).slices();
-                        this.enqueue(text, true, submit.mode, attached_text, sliced, window, cx);
+                        this.enqueue(
+                            text,
+                            true,
+                            submit.mode,
+                            attached_text,
+                            sliced,
+                            None,
+                            window,
+                            cx,
+                        );
                     } else {
                         this.send(text, submit.mode, attached_text, window, cx)
                     }
@@ -2400,7 +2414,8 @@ impl PromptMode {
             if mode == SendMode::Freeform {
                 return Ok(hidden_anchor::freeform(&text, &attached_text));
             }
-            let anchor = resolve_anchor(&text, mode, attached_text, sliced, lsp, &project_dir)?;
+            let anchor =
+                resolve_anchor(&text, mode, attached_text, sliced, None, lsp, &project_dir)?;
             hidden_anchor::preview(&anchor, &text, &project_dir)
         });
         self._preview = cx.spawn(async move |_, cx| {
@@ -2431,16 +2446,19 @@ impl PromptMode {
             return;
         }
         let sliced = self.chat_input.read(cx).slices();
-        self.send_as(text, mode, attached_text, sliced, window, cx);
+        self.send_as(text, mode, attached_text, sliced, None, window, cx);
     }
 
-    /// Sends `text` in `mode`, sliced or not, as [`Self::send`] does.
+    /// Sends `text` in `mode`, sliced or not, as [`Self::send`] does; in Spec,
+    /// told what `code_task`, the Code task it was sent from, if any, did.
+    #[allow(clippy::too_many_arguments)]
     fn send_as(
         &mut self,
         text: String,
         mode: SendMode,
         attached_text: Vec<String>,
         sliced: bool,
+        code_task: Option<CodeTask>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -2450,9 +2468,22 @@ impl PromptMode {
         if mode == SendMode::Ask {
             self.ask(text, attached_text, sliced, cx);
         } else if self.working {
-            self.enqueue(text, false, mode, attached_text, sliced, window, cx);
+            self.enqueue(
+                text,
+                false,
+                mode,
+                attached_text,
+                sliced,
+                code_task,
+                window,
+                cx,
+            );
         } else {
-            self.start(text, Sending::Now(mode, attached_text, sliced), cx);
+            self.start(
+                text,
+                Sending::Now(mode, attached_text, sliced, code_task),
+                cx,
+            );
         }
     }
 
@@ -2604,7 +2635,10 @@ impl PromptMode {
     }
 
     /// Sends the task at `ix` of `tasks_of` again, as it was sent, in `mode`
-    /// when given, rather than the mode it was sent in.
+    /// when given, rather than the mode it was sent in. A Code task sent to
+    /// Spec is sent with what it did (see [`code_task_of`]); a task sent from
+    /// Code, resent to Spec, is told the same code task again; a Spec task
+    /// sent to Code is told nothing of one.
     fn resend_in(
         &mut self,
         tasks_of: fn(&PromptMode) -> &Vec<PromptTask>,
@@ -2617,9 +2651,15 @@ impl PromptMode {
             return;
         };
         let (text, sent) = (task.text.to_string(), task.sent.clone());
+        let code_task = match mode {
+            Some(SendMode::Spec) if sent.mode == Some(SendMode::Code) => Some(code_task_of(task)),
+            Some(_) => None,
+            None => sent.code_task.clone(),
+        };
         let mode = mode
             .or(sent.mode)
             .unwrap_or_else(|| self.chat_input.read(cx).mode());
+        let code_task = code_task.filter(|_| mode == SendMode::Spec);
         if self.project_dir.is_none() {
             window.push_notification(
                 Notification::error("Open a project before sending a prompt.")
@@ -2628,7 +2668,15 @@ impl PromptMode {
             );
             return;
         }
-        self.send_as(text, mode, sent.attached_text, sent.sliced, window, cx);
+        self.send_as(
+            text,
+            mode,
+            sent.attached_text,
+            sent.sliced,
+            code_task,
+            window,
+            cx,
+        );
     }
 
     /// Whether the latest task is running with a harness that can be fed
@@ -2663,7 +2711,7 @@ impl PromptMode {
         };
         let sliced = self.chat_input.read(cx).slices();
         let Some(feed) = self.feed.clone().filter(harness::Feed::is_open) else {
-            self.enqueue(text, false, mode, attached_text, sliced, window, cx);
+            self.enqueue(text, false, mode, attached_text, sliced, None, window, cx);
             return;
         };
         let lsp = self.chat_input.read(cx).lsp();
@@ -2695,7 +2743,7 @@ impl PromptMode {
                 ToTask::Sent => {}
                 ToTask::Over => {
                     this.in_project(&project_dir, cx, |this, cx| {
-                        this.enqueue(text, false, mode, attached_text, sliced, window, cx)
+                        this.enqueue(text, false, mode, attached_text, sliced, None, window, cx)
                     });
                 }
                 ToTask::Failed(error) => {
@@ -2799,8 +2847,9 @@ impl PromptMode {
     }
 
     /// Adds `text` to the end of the queue, then resolves its hidden anchor,
-    /// with the system prompt of `mode`, and saves it with the project in the
-    /// background.
+    /// with the system prompt of `mode`, told what `code_task` did if it was
+    /// sent from one, and saves it with the project in the background.
+    #[allow(clippy::too_many_arguments)]
     fn enqueue(
         &mut self,
         text: String,
@@ -2808,6 +2857,7 @@ impl PromptMode {
         mode: SendMode,
         attached_text: Vec<String>,
         sliced: bool,
+        code_task: Option<CodeTask>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -2832,7 +2882,15 @@ impl PromptMode {
         let save = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
-                let anchor = resolve_anchor(&text, mode, attached_text, sliced, lsp, &project_dir)?;
+                let anchor = resolve_anchor(
+                    &text,
+                    mode,
+                    attached_text,
+                    sliced,
+                    code_task,
+                    lsp,
+                    &project_dir,
+                )?;
                 prompt_queue::add_at(queued_at, anchor, text, &project_dir)
             }
         });
@@ -2948,7 +3006,18 @@ impl PromptMode {
         let save = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
-                match resolve_anchor(&text, mode, attached_text, sliced, lsp, &project_dir) {
+                // Sent to Spec from a Code task, it is still told what that
+                // did while it stays in Spec.
+                let code_task = old.anchor.code_task.clone();
+                match resolve_anchor(
+                    &text,
+                    mode,
+                    attached_text,
+                    sliced,
+                    code_task,
+                    lsp,
+                    &project_dir,
+                ) {
                     Ok(anchor) => prompt_queue::replace(old.file.clone(), anchor, text)
                         .map_err(|err| (old, err)),
                     Err(err) => Err((old, err)),
@@ -3464,11 +3533,12 @@ impl PromptMode {
         };
         let task_ix = self.push_task(text.clone().into(), cx);
         self.tasks[task_ix].sent = match &sending {
-            Sending::Now(mode, attached_text, sliced) => SentAs {
+            Sending::Now(mode, attached_text, sliced, code_task) => SentAs {
                 mode: Some(*mode),
                 attached_text: attached_text.clone(),
                 // A Freeform prompt is never sliced, whatever the toggle says.
                 sliced: *sliced && *mode != SendMode::Freeform,
+                code_task: code_task.clone().filter(|_| *mode == SendMode::Spec),
             },
             Sending::Queued(queued) => SentAs::of(&queued.anchor),
         };
@@ -3532,9 +3602,15 @@ impl PromptMode {
                         prompt_queue::remove(&queued.file)?;
                         queued.anchor
                     }
-                    Sending::Now(mode, attached_text, sliced) => {
-                        resolve_anchor(&text, mode, attached_text, sliced, lsp, &project_dir)?
-                    }
+                    Sending::Now(mode, attached_text, sliced, code_task) => resolve_anchor(
+                        &text,
+                        mode,
+                        attached_text,
+                        sliced,
+                        code_task,
+                        lsp,
+                        &project_dir,
+                    )?,
                 };
                 let file = hidden_anchor::save(&anchor, &text, &project_dir)?;
                 // Cancelled by now, it is saved to the history as cancelled,
@@ -3622,7 +3698,7 @@ impl PromptMode {
             match compiled {
                 Ok(None) => {}
                 Ok(Some((anchor, compiled, imported))) => {
-                    let prompt = compiled.user_prompt;
+                    let prompt = compiled.user_prompt.clone();
                     record.user_prompt = Some(prompt.clone());
                     // A Code, Chain, or Spec task keeps its understanding
                     // beside its history record; a question has none.
@@ -3636,9 +3712,9 @@ impl PromptMode {
                             .display()
                             .to_string()
                     });
-                    let system_prompt = compiled.system_prompt.map(|system_prompt| {
-                        system_prompts::fill_understanding(&system_prompt, shown_path.as_deref())
-                    });
+                    // Its understanding file filled in, then, for one sent
+                    // from Code, what the code task did.
+                    let system_prompt = compiled.system_prompt_as_sent(shown_path.as_deref());
                     // The harness the run goes to, which its usage came from.
                     let agent = crate::agent::current();
                     let mut usage_run = None;
@@ -3871,6 +3947,7 @@ impl PromptMode {
                 mode: Some(SendMode::Ask),
                 attached_text: attached_text.clone(),
                 sliced,
+                code_task: None,
             };
         }
         // Questions run at once. One that starts while another carries on the
@@ -3894,6 +3971,7 @@ impl PromptMode {
                     SendMode::Ask,
                     attached_text.clone(),
                     sliced,
+                    None,
                     lsp,
                     &project_dir,
                 ) {
@@ -4686,7 +4764,11 @@ impl PromptMode {
                 .py_1p5()
                 .cursor_pointer()
                 .on_click(cx.listener(move |this, _, _, cx| this.collapse_ask(id, cx)))
-                .child(div().flex_none().child(task_title(ASK_IX - id, task, cx)))
+                .child(
+                    div()
+                        .flex_none()
+                        .child(task_title(ASK_IX - id, task, false, cx)),
+                )
                 .child(
                     div()
                         .flex_1()
@@ -4743,7 +4825,11 @@ impl PromptMode {
                 // Over: its status and the question, opening onto its table.
                 h_flex()
                     .gap_3()
-                    .child(div().flex_none().child(task_title(ASK_IX - id, task, cx)))
+                    .child(
+                        div()
+                            .flex_none()
+                            .child(task_title(ASK_IX - id, task, false, cx)),
+                    )
                     .child(
                         div()
                             .flex_1()
@@ -4876,7 +4962,7 @@ impl PromptMode {
                 h_flex()
                     .justify_between()
                     .gap_2()
-                    .child(task_title(ix, task, cx))
+                    .child(task_title(ix, task, true, cx))
                     .child(
                         h_flex()
                             .flex_none()
@@ -5373,6 +5459,7 @@ fn resolve_anchor(
     mode: SendMode,
     attached_text: Vec<String>,
     sliced: bool,
+    code_task: Option<CodeTask>,
     lsp: Option<Arc<PitonSession>>,
     project_dir: &Path,
 ) -> Result<HiddenAnchor> {
@@ -5396,7 +5483,13 @@ fn resolve_anchor(
     // Waits for the project's fluency if it is still being printed; every
     // caller is already off the UI thread.
     let fluency = crate::piton_fluency::get(project_dir);
-    anchor.system_prompt = hidden_anchor::system_prompt(mode, project_dir, &fluency)?;
+    // A Code task sent to Spec is also told what the code task did; in any
+    // other mode, a code task is nothing to it.
+    anchor.code_task = code_task.filter(|_| mode == SendMode::Spec);
+    anchor.system_prompt = match anchor.code_task {
+        Some(_) => hidden_anchor::code_to_spec_system_prompt(project_dir, &fluency)?,
+        None => hidden_anchor::system_prompt(mode, project_dir, &fluency)?,
+    };
     Ok(anchor)
 }
 
@@ -5448,8 +5541,10 @@ fn first_line(text: &str) -> SharedString {
 }
 
 /// A task's status as a coloured label, a spinner while it is under way, and
-/// the name of the hidden anchor it was compiled from once it has compiled.
-fn task_title(ix: usize, task: &PromptTask, cx: &App) -> Div {
+/// the name of the hidden anchor it was compiled from once it has compiled;
+/// with `origin`, as in the latest task's header, beneath the name, that a
+/// task sent to Spec from a Code task was sent from Code.
+fn task_title(ix: usize, task: &PromptTask, origin: bool, cx: &App) -> Div {
     let theme = cx.theme();
     // A Freeform prompt is sent as it is, with no hidden anchor to name.
     let named = task
@@ -5477,9 +5572,26 @@ fn task_title(ix: usize, task: &PromptTask, cx: &App) -> Div {
                 .font_family(theme.mono_font_family.clone())
                 .child(compiled.anchor.clone());
             // Lets UI tests find the anchor; inert in normal builds.
-            row.child(gpui_kit::TestSupportExt::test_support(anchor))
+            let anchor = gpui_kit::TestSupportExt::test_support(anchor);
+            let from_code = (origin && task.sent.code_task.is_some()).then(|| {
+                // Lets UI tests find it; inert in normal builds.
+                gpui_kit::TestSupportExt::test_support(
+                    div()
+                        .id(("prompt-sent-from", ix))
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(SENT_FROM_CODE),
+                )
+            });
+            match from_code {
+                Some(from_code) => row.child(v_flex().min_w_0().child(anchor).child(from_code)),
+                None => row.child(anchor),
+            }
         })
 }
+
+/// What a task sent to Spec from a Code task says beneath its anchor's name.
+const SENT_FROM_CODE: &str = "Sent from Code";
 
 /// The button that sends a prompt again, as it was sent.
 fn resend_button(id: impl Into<ElementId>) -> Button {
@@ -5497,6 +5609,20 @@ fn cancel_button(id: impl Into<ElementId>) -> Button {
         .xsmall()
         .icon(IconName::CircleStop)
         .tooltip("Cancel this task")
+}
+
+/// What a Code task sent to Spec tells it of the code task: its prompt as
+/// typed, and its final output, the reply text after its last tool call (see
+/// [`crate::task_table::Reply::final_output`]). Only a task that finished has
+/// one: one that failed, was cancelled, is still under way, or wasn't
+/// recorded left none.
+fn code_task_of(task: &PromptTask) -> CodeTask {
+    CodeTask {
+        prompt: task.text.to_string(),
+        result: (task.status == TaskStatus::Done)
+            .then(|| task.reply.final_output())
+            .flatten(),
+    }
 }
 
 /// The mode `task` can be sent to instead of the one it was sent in: Spec
@@ -5615,7 +5741,7 @@ fn task_summary(id: (&'static str, usize), ix: usize, task: &PromptTask, cx: &Ap
         .flex_1()
         .min_w_0()
         .gap_3()
-        .child(div().flex_none().child(task_title(ix, task, cx)))
+        .child(div().flex_none().child(task_title(ix, task, false, cx)))
         .child(
             div()
                 .flex_1()
@@ -9273,12 +9399,14 @@ mod tests {
                     mode: Some(SendMode::Spec),
                     attached_text: vec!["note".into()],
                     sliced: false,
+                    code_task: None,
                 };
                 let mut answer = PromptTask::new("Why?".into());
                 answer.sent = super::SentAs {
                     mode: Some(SendMode::Ask),
                     attached_text: vec!["context".into()],
                     sliced: true,
+                    code_task: None,
                 };
                 this.answers.push(answer);
                 this.working = true;
@@ -9321,6 +9449,7 @@ mod tests {
                     mode,
                     attached_text: vec!["note".into()],
                     sliced: true,
+                    code_task: None,
                 };
                 this.tasks[ix].mode = mode;
             })
@@ -9402,6 +9531,11 @@ mod tests {
                     mode: Some(SendMode::Spec),
                     attached_text: vec!["note".into()],
                     sliced: true,
+                    // Told of the code task, which never finished.
+                    code_task: Some(crate::hidden_anchor::CodeTask {
+                        prompt: "Task 0".into(),
+                        result: None,
+                    }),
                 }
             );
         });
@@ -9478,6 +9612,7 @@ mod tests {
                     mode,
                     attached_text: vec!["note".into()],
                     sliced: true,
+                    code_task: None,
                 };
                 this.tasks[ix].mode = mode;
             }
@@ -9695,6 +9830,7 @@ mod tests {
                         mode,
                         attached_text: Vec::new(),
                         sliced: false,
+                        code_task: None,
                     };
                     this.tasks[ix].mode = mode;
                     this.tasks[ix].status = TaskStatus::Done;
@@ -9745,6 +9881,291 @@ mod tests {
             .collect();
         saved.sort();
         assert_eq!(saved, ["Task 0", "Task 1", "Task 3", "Task 4"]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A Code task sent to Spec, from its button or in a batch, is told what
+    /// the code task did: its system prompt is Spec's, then, on a paragraph
+    /// of its own, the code-to-spec prompt holding the code task's prompt as
+    /// typed and its final output, the reply text after its last tool call,
+    /// exactly as they were, or a line saying it left none when it didn't
+    /// finish. It remembers the code task in its history record, is told it
+    /// again when resent, and says beneath its anchor's name that it was sent
+    /// from Code. Sent on to Code, it is given Code's system prompt alone.
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn code_tasks_sent_to_spec_are_told_what_the_code_task_did(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        use crate::hidden_anchor::CodeTask;
+        use crate::system_prompts;
+        use std::os::unix::fs::PermissionsExt as _;
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        // The stand-in harness is a real process, whose events arrive from
+        // its own thread.
+        cx.executor().allow_parking();
+        let (prompt_mode, handle) = open(cx);
+        let dir = cancel_project("code-to-spec", &prompt_mode, cx);
+        // A harness that is done at once, keeping the system prompt of each
+        // run, in turn, in a file of its own.
+        let runs = dir.join("runs");
+        std::fs::create_dir_all(&runs).unwrap();
+        let script = dir.join("recording-harness.sh");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\n\
+                 file={runs}/$(ls {runs} | wc -l | tr -d ' ')\n\
+                 : > \"$file\"\n\
+                 while [ $# -gt 0 ]; do\n\
+                 \x20 if [ \"$1\" = --append-system-prompt ]; then printf '%s' \"$2\" > \"$file\"; fi\n\
+                 \x20 shift\n\
+                 done\n\
+                 exit 0\n",
+                runs = runs.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::harness::use_program_for_test(Some(script));
+        let run = |n: usize| std::fs::read_to_string(runs.join(n.to_string())).unwrap();
+
+        let asked = "Make `{it}` do \\ {1 + 2} \\, per @{Nowhere}.\n\\\\\\\n  - ${CODE_RESULT}";
+        let answer =
+            "  Built `{a: 1}`, ${x} and \\ {y} \\.\n\\\\\\\\\n${UNDERSTANDING_FILE} ${CODE_PROMPT}";
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let push = |this: &mut PromptMode,
+                            text: &str,
+                            mode: SendMode,
+                            status: TaskStatus,
+                            events: Vec<HarnessEvent>,
+                            cx: &mut gpui_kit::Context<PromptMode>| {
+                    let ix = this.push_task(text.to_string().into(), cx);
+                    this.tasks[ix].sent = super::SentAs {
+                        mode: Some(mode),
+                        attached_text: vec!["note".into()],
+                        sliced: false,
+                        code_task: None,
+                    };
+                    this.tasks[ix].mode = Some(mode);
+                    for event in events {
+                        this.tasks[ix].reply.apply(event);
+                    }
+                    this.tasks[ix].status = status;
+                };
+                let text = |text: &str| {
+                    [
+                        HarnessEvent::TextStarted,
+                        HarnessEvent::TextDelta(text.into()),
+                    ]
+                };
+                let tool = |id: &str| HarnessEvent::ToolStarted {
+                    id: id.into(),
+                    name: "Edit".into(),
+                };
+                push(
+                    this,
+                    asked,
+                    SendMode::Code,
+                    TaskStatus::Done,
+                    text("Looking first.")
+                        .into_iter()
+                        .chain([tool("t1")])
+                        .chain(text("Checking."))
+                        .chain([tool("t2")])
+                        .chain(text(answer))
+                        .chain([HarnessEvent::Finished {
+                            is_error: false,
+                            result: String::new(),
+                        }])
+                        .collect(),
+                    cx,
+                );
+                // Cancelled, it said something after its last call, but
+                // didn't finish.
+                push(
+                    this,
+                    "Half of it.",
+                    SendMode::Code,
+                    TaskStatus::Cancelled,
+                    [tool("t1")]
+                        .into_iter()
+                        .chain(text("Partly done."))
+                        .collect(),
+                    cx,
+                );
+                push(
+                    this,
+                    "Spec it.",
+                    SendMode::Spec,
+                    TaskStatus::Done,
+                    Vec::new(),
+                    cx,
+                );
+                this.send_to_other_mode(|this| &this.tasks, 0, window, cx);
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the code task sent to Spec", |this| {
+            !this.working && this.tasks.len() == 4
+        });
+        let told = CodeTask {
+            prompt: asked.to_string(),
+            result: Some(answer.trim_end().to_string()),
+        };
+        let handoff = |result: &str| {
+            format!(
+                "\n\nThis prompt was first sent to change the code, and the code has been\n\
+                 changed to meet it. Now write the spec to describe what was built:\n\
+                 read the code the task changed, and change the spec at ./spec\n\
+                 so it describes that code as it now is, without changing the code at\n\
+                 ./src. Where the code did something the prompt didn't ask\n\
+                 for, describe what the code does, and say so in your reply.\n\
+                 \n\
+                 The prompt the code task was sent:\n\
+                 \n\
+                 {asked}\n\
+                 \n\
+                 What the code task said it built, its final output:\n\
+                 \n\
+                 {result}"
+            )
+        };
+        let told_spec = |sent: &str, result: &str| {
+            assert!(
+                sent.starts_with("We're working on the spec "),
+                "not Spec's system prompt: {sent}"
+            );
+            assert!(sent.ends_with(&handoff(result)), "{sent}");
+            assert_eq!(
+                sent.matches("This prompt was first sent").count(),
+                1,
+                "{sent}"
+            );
+            // Spec's understanding file is filled in, and nothing else.
+            assert!(
+                sent.contains(".suspense/history/")
+                    && sent.contains(".understanding.md, and keep it current"),
+                "{sent}"
+            );
+        };
+        prompt_mode.read_with(cx, |this, _| {
+            let sent = &this.tasks[3];
+            assert_eq!(sent.text.as_ref(), asked);
+            assert_eq!(
+                sent.sent,
+                super::SentAs {
+                    mode: Some(SendMode::Spec),
+                    attached_text: vec!["note".into()],
+                    sliced: false,
+                    code_task: Some(told.clone()),
+                }
+            );
+            assert!(
+                sent.reply.parts.iter().all(|part| !matches!(
+                    part,
+                    ReplyPart::Error(error) if error.contains("compile")
+                )),
+                "it didn't compile"
+            );
+        });
+        told_spec(&run(0), answer.trim_end());
+        // Its header says, beneath its anchor's name, that it came from Code;
+        // a task that didn't, doesn't.
+        let from_code = |ix: usize, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.try_find(("prompt-sent-from", ix)).is_some()
+            })
+            .unwrap()
+        };
+        assert!(prompt_mode.read_with(cx, |this, _| this.tasks[3].compiled.is_some()));
+        assert!(from_code(3, cx), "the header doesn't say it came from Code");
+
+        // Resent, it is told the same.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.resend(|this| &this.tasks, 3, window, cx)
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the Spec task resent", |this| {
+            !this.working && this.tasks.len() == 5
+        });
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.tasks[4].sent, this.tasks[3].sent);
+        });
+        told_spec(&run(1), answer.trim_end());
+
+        // Sent on to Code, it is given Code's system prompt alone.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send_to_other_mode(|this| &this.tasks, 4, window, cx)
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the Spec task sent to Code", |this| {
+            !this.working && this.tasks.len() == 6
+        });
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.tasks[5].sent.mode, Some(SendMode::Code));
+            assert_eq!(this.tasks[5].sent.code_task, None);
+        });
+        let code = run(2);
+        assert!(code.starts_with("We're working on the code "), "{code}");
+        assert!(!code.contains("first sent to change the code"), "{code}");
+        assert!(!from_code(5, cx));
+
+        // A batch sent to Spec is told the same, one after the other, the
+        // second from the queue; a code task that didn't finish left none.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.task_history.click_checkbox(0, false);
+                this.task_history.click_checkbox(1, false);
+                this.send_selected_to(SendMode::Spec, window, cx);
+                assert_eq!(this.queue.len(), 1);
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the batch sent to Spec", |this| {
+            !this.working && this.queue.is_empty() && this.tasks.len() == 8
+        });
+        crate::harness::use_program_for_test(None);
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.tasks[6].sent.code_task, Some(told.clone()));
+            assert_eq!(
+                this.tasks[7].sent.code_task,
+                Some(CodeTask {
+                    prompt: "Half of it.".into(),
+                    result: None,
+                })
+            );
+        });
+        told_spec(&run(3), answer.trim_end());
+        let none = run(4);
+        assert!(
+            none.ends_with(&format!(
+                "The prompt the code task was sent:\n\nHalf of it.\n\n\
+                 What the code task said it built, its final output:\n\n{}",
+                system_prompts::NO_CODE_RESULT
+            )),
+            "{none}"
+        );
+
+        // Each remembers its code task in the history, and loads back with it.
+        let restored: Vec<Option<CodeTask>> = prompt_history::load(&dir)
+            .into_iter()
+            .map(|saved| PromptTask::restore(saved).sent.code_task)
+            .collect();
+        assert_eq!(restored.len(), 5);
+        assert_eq!(
+            restored.iter().filter(|told| told.is_some()).count(),
+            4,
+            "{restored:?}"
+        );
+        assert!(restored.contains(&Some(told)));
         std::fs::remove_dir_all(&dir).ok();
     }
 

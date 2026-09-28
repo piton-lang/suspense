@@ -4,6 +4,7 @@ from /scope/new-project import NewProjectScope
 from /scope/project-data import ProjectDataScope
 from /scope/project-locations import ProjectLocationsScope
 from /scope/prompt-mode/modes import PromptModesScope
+from /scope/prompt-mode/sending import PromptSendingScope
 from /scope/settings-window import SettingsWindowScope
 from /ui/components/referenced-spec-sidebar import ReferencedSpecSidebarScope
 
@@ -73,6 +74,36 @@ shape ModeSystemPromptsShape:
         data, as the @{ProjectDataScope} says, in spec-reading.md beside them,
         and edited in the @{SettingsWindowScope}; with no file yet the project
         uses its default.
+
+    codeToSpec:
+        The code-to-spec prompt is given to a Code task sent to Spec, as the
+        @{PromptSendingScope} says, after the Spec template. It may use every
+        placeholder a template may, filled in the same way, and two of its own:
+        CODE_PROMPT, filled in with the code task's prompt as it was typed, and
+        CODE_RESULT, with the code task's final output, or with a line saying
+        the code task left none. What fills them in is taken as text, never
+        read as Piton. Like the spec-reading prompt, each project has its own,
+        saved with its data in code-to-spec.md beside the templates, and edited
+        in the @{SettingsWindowScope}; with no file yet the project uses its
+        default, saved in `.suspense/system-prompts/code-to-spec.md` and baked
+        in as the other defaults are. It says:
+
+        \\
+        This prompt was first sent to change the code, and the code has been
+        changed to meet it. Now write the spec to describe what was built:
+        read the code the task changed, and change the spec at ${SPEC_LOCATION}
+        so it describes that code as it now is, without changing the code at
+        ${CODE_LOCATION}. Where the code did something the prompt didn't ask
+        for, describe what the code does, and say so in your reply.
+
+        The prompt the code task was sent:
+
+        ${CODE_PROMPT}
+
+        What the code task said it built, its final output:
+
+        ${CODE_RESULT}
+        \\
 
     saving:
         Each project has its own templates, saved with its data, as the
