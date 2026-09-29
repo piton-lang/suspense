@@ -10,3 +10,15 @@ export shape MessageListBackgroundsShape:
         doesn't say which tab it was sent from keeps the tab bar's colour. The
         queue along the bottom and the previous tasks row along the top both
         have the same background colour as the tab bar.
+
+        Each task in the previous tasks list hints at the mode it was sent in:
+        its heading's background is a faint tint of that mode's colour, of the
+        @{PromptModesScope}, red for Code, purple for Chain, blue for Spec,
+        green for Ask, and grey for Freeform, far fainter than the latest
+        task's header, so the list reads as a column of the list's own
+        background with each task only touched by its colour. A task whose
+        mode isn't known, as one from the history that doesn't say, keeps the
+        list's background untinted. Its status label, prompt, checkbox, and
+        buttons stay readable over the tint, in light and dark mode, and its
+        hover and open states still show over it. An open task's prompt and
+        output beneath its heading are not tinted.

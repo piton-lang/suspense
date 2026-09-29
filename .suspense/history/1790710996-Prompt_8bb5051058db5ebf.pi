@@ -1,0 +1,71 @@
+from /scope/application/Body import BodyScope
+from /scope/editor import EditorScope
+
+export anchor Prompt_8bb5051058db5ebf:
+    userPrompt:
+        \\\
+        @{EditorScope} tabs in the @{BodyScope} shouldn't have so much gap between the file name and the close button.  You should also be able to drag to reorder them.  However chat remains the first tab.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            @{EditorScope} tabs in the @{BodyScope} shouldn't have so much gap between the file name and the close button.  You should also be able to drag to reorder them.  However chat remains the first tab.
+            \\\
+        result:
+            \\\
+            I've updated the spec for the body's file tabs; the code isn't changed yet. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            **What I changed:** the `tabs` section of `BodyScope` in `spec/scope/application/Body.pi`, which compiles to `.claude/reference/scope/application/Body.md`.
+
+            - **Tighter tabs:** a file tab's close button now sits 4 px after the name, or after the unsaved dot. The tab is only as wide as its name, dot and close button need, however long or short the name is. The 4 px figure is my choice; say if you'd like a different gap.
+            - **Drag to reorder:**
+              - You can drag a file tab along the tab bar. Dropped on another file's tab, it takes that place, and the tabs in between shift over by one.
+              - While you drag, the tab it would land on is highlighted.
+              - Dragging a tab also selects it, and the selection moves with it.
+              - Pressing the close button still closes the tab rather than starting a drag.
+              - A newly opened file still gets its tab just after the selected one.
+              - I also changed "in the order they were opened" to "…unless they have been dragged since".
+            - **Chat stays first:** a file tab can't be dropped on Chat or before it, and Chat itself can't be dragged. Chat still can't be closed.
+
+            **Anchors the code should follow:**
+            - **`BodyScope.tabs`** in `spec/scope/application/Body.pi`: the close-button spacing, tab width, reordering rules and Chat staying first.
+            - **`BodyScope.openFile`** (same file, unchanged): where a newly opened file's tab goes, and which tab is selected after one closes.
+            - **In the code:** the tab bar and open-file tabs are built in `src/prompt_mode.rs` (the tab bar's `Tab`/`TabBar` rendering and the list of open files). A drag type and drop handler like the queue's `QueuedDrag` would fit, and the drop highlight can use the theme's `drop_target` colour, as the queue does.
+
+            The constraints are in `.suspense/history/1790710961-Prompt_fcad5de724adc2e4.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_fcad5de724adc2e4
+
+    references:
+        - @{EditorScope}
+        - @{BodyScope}

@@ -1,0 +1,86 @@
+from /scope/application/Body import BodyScope
+
+export anchor Prompt_603e5f7555fa1433:
+    userPrompt:
+        \\\
+        Let's revamp the @{BodyScope} to roughly match this styling
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    attachedImages:
+        image1:
+            \\\
+            .suspense/images/1790712471-1be1da17dca9.png
+            \\\
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Let's revamp the @{BodyScope} to roughly match this styling
+            \\\
+        result:
+            \\\
+            I've revamped the body and chat input styling in the spec to match your mockup; the code isn't changed yet. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            **What changes, in `ChatInputScope`** (`spec/scope/prompt-mode/chat-input/index.pi`):
+            - **Tab strip:** a flat 32 px strip on #222222 with no lines anywhere. Each tab is just its label in its mode's colour, with no border.
+            - **Selected tab:** marked only by its background, the same #333333 surface as the chat input area below it, so it reads as joined to it.
+            - **No mode tint:** the selected tab and the input area are no longer tinted by the mode. Only the tab labels and the Send button carry the mode colour.
+            - **Input box:** #111111, 4 px rounded corners, no border.
+            - **Buttons:** the column is 88 px wide (was 120), with buttons 8 px apart, flat, with 2 px corners.
+              - **Send** has a paper-plane icon and a semibold label. It's a muted slate made from the mode's colour mixed into the base grey (about #3b4252 for Spec), instead of the full mode colour. It keeps its split chevron.
+              - **Queue and Preview** are flat on #444444.
+            - **Chain:** it no longer has bottom-line rules, since the strip has no lines. Selecting it still joins Code and Spec under one background.
+
+            **In `BodyScope`** (`spec/scope/application/Body.pi`): the message list or open file sits on the flat #444444 base grey, edge to edge. The chat input is separated from it only by its darker tab strip.
+
+            **Things to check:**
+            - **Your own instruction changed.** Your `src/CLAUDE.md` rule, from `spec/shape/ChatInput.pi`, said Chain should have a bottom border in separate mode. A strip with no lines contradicts that, so I changed it to "no bottom border in either mode". Revert it if you want to keep that line.
+            - **What I didn't copy:** the mockup shows only Spec/Code/Ask/Agent, with no Chain tab, no Freeform, no help text and none of the right-hand controls. I read "roughly match this styling" as styling only, so I kept the existing tabs, modes and controls. If "Agent" is meant to replace Freeform, or Chain should go, tell me.
+            - **Pre-existing formatting problem:** the `tabs` section had a wrapped line starting `either:` that Piton read as a key. Fixing it made the section fold into a code block in the compiled reference. So I reworded that sentence and added a one-line intro under `tabs:`, which keeps each sub-section as its own heading.
+
+            **Anchors the code should follow:**
+            - **`ChatInputShape.description`:** the input box and button column.
+            - **`ChatInputShape.tabs.overview`, `.chain` and `.colour`:** the strip, labels, selection, no tint and the slate Send button.
+            - **`BodyShape.description`:** the base surface.
+            - **`ChatInputInstruction`:** no Chain border.
+            - **In the code, `src/chat_input.rs` is where most of this lives:**
+              - the tab bar, and Chain's border handling;
+              - `mode_tint`, where the body tint is applied;
+              - `send_color`, which becomes the muted slate;
+              - the button column's width and spacing.
+
+            The constraints are in `.suspense/history/1790714101-Prompt_98b144b88c058611.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_98b144b88c058611
+
+    references:
+        - @{BodyScope}

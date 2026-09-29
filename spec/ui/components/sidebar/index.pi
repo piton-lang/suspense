@@ -45,3 +45,14 @@ shape SidebarShape:
         viewer, and the body on its base surface, as the sidebar is, so the
         header reads as part of the panel, marked off from its body, with no
         line between them.
+
+        Every panel header, in any sidebar or anywhere else a panel has one,
+        has a border 1 pixel tall along its bottom, inside the header's own
+        height, in exactly the colour of the body of the panel it heads. It
+        never reads as a line: it is the body's colour carried up one pixel,
+        so the header ends a pixel above the body, and where the header's own
+        colour would otherwise meet something else first, as a scrolled list
+        or the next panel's edge, that pixel is always the body's. It is
+        drawn at every display scale and in light and dark mode alike, and
+        follows the body's colour wherever it changes, as when the theme's
+        brightness is changed.

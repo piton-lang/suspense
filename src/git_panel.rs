@@ -801,6 +801,10 @@ impl Render for GitPanel {
             .gap_1()
             .items_center()
             .bg(crate::theme::color(palette.ribbon_tabs))
+            // Along its bottom, inside its height, a pixel of the body's
+            // colour, as every panel header has.
+            .border_b_1()
+            .border_color(crate::theme::color(palette.ribbon))
             .child(branch)
             .child(pull)
             .child(push);
@@ -876,16 +880,16 @@ impl Render for GitPanel {
             .disabled(busy.is_some() || !has_message || !summary.has_changes())
             .on_click(cx.listener(|this, _, window, cx| this.commit(window, cx)));
 
-        let body = v_flex()
-            .id("git-body")
-            .flex_none()
-            .px(PADDING)
-            .pb(PADDING)
+        // Each note in a box of its own, wrapping, with a button to remove
+        // it at its top right while it is hovered.
+        let notes = v_flex()
+            .id("git-scroll")
+            .w_full()
+            .flex_shrink(1.)
+            .min_h_0()
             .gap(GAP)
-            .bg(crate::theme::color(palette.ribbon))
-            .child(summary_row)
-            // Each note in a box of its own, wrapping, with a button to remove
-            // it at its top right while it is hovered.
+            .overflow_y_scroll()
+            .track_scroll(&self.scroll)
             .children(self.notes.iter().map(|row| {
                 let id = row.id;
                 let group = SharedString::from(format!("commit-note-{id}"));
@@ -923,7 +927,12 @@ impl Render for GitPanel {
                                     ),
                             ),
                     )
-            }))
+            }));
+        // The message, Generate, and Commit, fixed along the bottom.
+        let footer = v_flex()
+            .id("git-footer")
+            .flex_none()
+            .gap(GAP)
             .child({
                 let (height, _) = self.message_fit.heights(&self.message, window, cx);
                 let message = div()
@@ -953,19 +962,50 @@ impl Render for GitPanel {
                     .child(commit),
             );
 
-        // No line above it, nor between its header and body: the change of
-        // colour is the edge.
-        // It is as tall as its contents, and its body scrolls beneath the
-        // header when its sidebar gives it less than that, on the body's
-        // colour all the way down.
-        let scrolled = div()
-            .id("git-scroll")
+        // Only the notes scroll, between the summary and the message, with a
+        // scrollbar only while they overflow; the rest is always as tall as
+        // it needs, so the notes give up their room first.
+        let overflows = self.scroll.max_offset().y >= px(1.);
+        if !overflows && self.scroll.offset() != Point::default() {
+            self.scroll.set_offset(Point::default());
+        }
+        let watch = {
+            let scroll = self.scroll.clone();
+            canvas(
+                |_, _, _| {},
+                move |_, _, window, _| {
+                    if (scroll.max_offset().y >= px(1.)) != overflows {
+                        window.refresh();
+                    }
+                },
+            )
+            .absolute()
+            .size_0()
+        };
+        // Lets UI tests find the notes; inert in normal builds.
+        let notes = gpui_kit::TestSupportExt::test_support(notes);
+        let notes = if overflows {
+            crate::scrollbar::with_fitted_scrollbar("git-scroll", &self.scroll, notes, cx)
+        } else {
+            notes.into_any_element()
+        };
+        let body = v_flex()
+            .id("git-body")
+            .relative()
             .w_full()
             .flex_shrink(1.)
             .min_h_0()
-            .overflow_y_scroll()
-            .track_scroll(&self.scroll)
-            .child(gpui_kit::TestSupportExt::test_support(body));
+            .px(PADDING)
+            .pb(PADDING)
+            .gap(GAP)
+            .bg(crate::theme::color(palette.ribbon))
+            .child(div().flex_none().child(summary_row))
+            .when(!self.notes.is_empty(), |body| body.child(notes))
+            .child(gpui_kit::TestSupportExt::test_support(footer))
+            .child(watch);
+        // No line above it, nor between its header and body: the change of
+        // colour is the edge. It is as tall as its contents until its sidebar
+        // gives it less, on the body's colour all the way down.
         let panel = v_flex()
             .id("git-panel")
             .w_full()
@@ -974,13 +1014,7 @@ impl Render for GitPanel {
             .text_sm()
             .bg(crate::theme::color(palette.ribbon))
             .child(gpui_kit::TestSupportExt::test_support(header))
-            .child(crate::scrollbar::with_fitted_scrollbar(
-                "git-scroll",
-                &self.scroll,
-                // Lets UI tests find it; inert in normal builds.
-                gpui_kit::TestSupportExt::test_support(scrolled),
-                cx,
-            ));
+            .child(gpui_kit::TestSupportExt::test_support(body));
         // Lets UI tests find the panel; inert in normal builds.
         gpui_kit::TestSupportExt::test_support(panel).into_any_element()
     }
@@ -1440,16 +1474,19 @@ mod tests {
                     "{mode:?}: header"
                 );
                 assert_eq!(frame.at(inside(body)), palette.ribbon, "{mode:?}: body");
-                // No line between the header and the body.
+                // No line between the header and the body: the header's last
+                // pixel row is the body's own colour.
                 let x = header.left() + px(40.);
-                for dy in [-2., -1.] {
-                    let y = header.bottom() + px(dy + 0.5);
-                    assert_eq!(
-                        frame.at(gpui_kit::point(x, y)),
-                        palette.ribbon_tabs,
-                        "{mode:?}"
-                    );
-                }
+                assert_eq!(
+                    frame.at(gpui_kit::point(x, header.bottom() - px(1.5))),
+                    palette.ribbon_tabs,
+                    "{mode:?}"
+                );
+                assert_eq!(
+                    frame.at(gpui_kit::point(x, header.bottom() - px(0.5))),
+                    palette.ribbon,
+                    "{mode:?}: the header's bottom border isn't the body's colour"
+                );
                 assert_eq!(
                     frame.at(gpui_kit::point(x, header.bottom() + px(0.5))),
                     palette.ribbon,

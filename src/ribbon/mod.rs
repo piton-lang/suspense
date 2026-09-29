@@ -23,7 +23,6 @@ use crate::project_indicator::ProjectIndicator;
 mod application_tab;
 mod code_tab;
 mod project_tab;
-mod research_tab;
 mod spec_tab;
 
 pub use application_tab::set_dark_mode;
@@ -36,7 +35,6 @@ actions!(
         ShowTab2,
         ShowTab3,
         ShowTab4,
-        ShowTab5,
         RunPrimary,
         RunRelease
     ]
@@ -95,12 +93,11 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-shift-f5", RunRelease, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-shift-f5", RunRelease, None),
-        // Alt+1 to Alt+5 open the tabs in the order they are shown.
+        // Alt+1 to Alt+4 open the tabs in the order they are shown.
         KeyBinding::new("alt-1", ShowTab1, None),
         KeyBinding::new("alt-2", ShowTab2, None),
         KeyBinding::new("alt-3", ShowTab3, None),
         KeyBinding::new("alt-4", ShowTab4, None),
-        KeyBinding::new("alt-5", ShowTab5, None),
     ]);
 }
 
@@ -110,17 +107,15 @@ pub enum RibbonTab {
     Project,
     Code,
     Spec,
-    Research,
     Application,
 }
 
 impl RibbonTab {
     /// Every tab, in order.
-    pub const ALL: [RibbonTab; 5] = [
+    pub const ALL: [RibbonTab; 4] = [
         RibbonTab::Project,
         RibbonTab::Code,
         RibbonTab::Spec,
-        RibbonTab::Research,
         RibbonTab::Application,
     ];
 
@@ -129,7 +124,6 @@ impl RibbonTab {
             RibbonTab::Project => "Project",
             RibbonTab::Code => "Code",
             RibbonTab::Spec => "Spec",
-            RibbonTab::Research => "Research",
             RibbonTab::Application => "Application",
         }
     }
@@ -140,7 +134,7 @@ impl RibbonTab {
         match self {
             RibbonTab::Code => Some(crate::chat_input::SendMode::Code),
             RibbonTab::Spec => Some(crate::chat_input::SendMode::Spec),
-            RibbonTab::Project | RibbonTab::Research | RibbonTab::Application => None,
+            RibbonTab::Project | RibbonTab::Application => None,
         }
     }
 
@@ -150,7 +144,6 @@ impl RibbonTab {
             RibbonTab::Project => project_tab::COMMANDS.to_vec(),
             RibbonTab::Code => code_tab::commands(cx),
             RibbonTab::Spec => spec_tab::COMMANDS.to_vec(),
-            RibbonTab::Research => research_tab::COMMANDS.to_vec(),
             RibbonTab::Application => application_tab::COMMANDS.to_vec(),
         }
     }

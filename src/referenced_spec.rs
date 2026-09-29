@@ -7,10 +7,13 @@
 //! Its panels' headers are on the darkest surface and its body on the
 //! ribbon's command area colour, with no line anywhere in it.
 
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use gpui_kit::assets::IconName;
+use gpui_kit::base::ElementExt as _;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, h_flex, v_flex};
@@ -123,6 +126,15 @@ impl References {
         }
     }
 
+    /// Every file the run's tool calls edited or wrote, wherever it is.
+    pub fn edited_paths(&self) -> Vec<PathBuf> {
+        self.files
+            .iter()
+            .filter(|file| file.edited)
+            .map(|file| file.path.clone())
+            .collect()
+    }
+
     fn note(&mut self, path: PathBuf, edited: bool, by_subagent: bool) {
         match self.files.iter_mut().find(|file| file.path == path) {
             Some(file) => {
@@ -216,6 +228,103 @@ pub struct Layout<'a> {
     pub files_scroll: &'a ScrollHandle,
     pub subagents_scroll: &'a ScrollHandle,
     pub understanding_scroll: &'a ScrollHandle,
+    pub heights: &'a PanelHeights,
+}
+
+/// The shortest a panel can be dragged: its header and a row beneath it.
+pub const PANEL_MIN_HEIGHT: Pixels = px(32. + 32.);
+
+/// How tall the hit area of the edge between two panels is, centred on it.
+const PANEL_HANDLE_HEIGHT: Pixels = px(6.);
+
+/// The subagents one task started, shown by the mode that started them: a
+/// chain's step labelled by what it did, its mode's colour, and who started
+/// them, as their tooltips say.
+#[derive(Clone, Debug, Default)]
+pub struct SubagentGroup {
+    /// "Spec", "Code", or "Spec follow-up" for a chain's step; none for a
+    /// task of its own.
+    pub label: Option<SharedString>,
+    /// Who started them, as "the Code task" or "the Spec step".
+    pub started_by: SharedString,
+    /// The colour of the mode that started them, when known.
+    pub color: Option<Hsla>,
+    pub agents: Subagents,
+}
+
+/// Which edge between the panels is dragged: the one below the referenced
+/// files, or the one above the subagents along the bottom.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelEdge {
+    Files,
+    Subagents,
+}
+
+/// Dragged by the edge between two panels to resize them.
+pub struct PanelResize(pub PanelEdge);
+
+/// The heights the panels were dragged to, kept while the application runs,
+/// and what they were last laid out at. None where a panel hasn't been
+/// dragged, and is as tall as its rows need.
+#[derive(Clone, Default)]
+pub struct PanelHeights(Rc<Cell<Heights>>);
+
+#[derive(Clone, Copy, Default)]
+struct Heights {
+    files: Option<Pixels>,
+    subagents: Option<Pixels>,
+    /// As last laid out.
+    laid_files: Pixels,
+    laid_subagents: Pixels,
+    /// The edge being dragged.
+    dragging: Option<PanelEdge>,
+}
+
+impl PanelHeights {
+    /// The height the referenced files were dragged to, if they were.
+    #[cfg(test)]
+    pub fn files(&self) -> Option<Pixels> {
+        self.0.get().files
+    }
+
+    /// Puts both panels back as they start.
+    pub fn reset(&self) {
+        self.0.set(Heights::default());
+    }
+
+    /// Moves `edge` to `y` from the top of the sidebar, `total` tall: the
+    /// panel above it grows or shrinks, and the one below the other way,
+    /// neither shorter than a header and a row, nor pushed out.
+    pub fn drag(&self, edge: PanelEdge, y: Pixels, total: Pixels, subagents_shown: bool) {
+        let mut heights = self.0.get();
+        match edge {
+            // Between the referenced files and the understanding beneath
+            // them, which keeps its header and a row, above any subagents.
+            PanelEdge::Files => {
+                let below = if subagents_shown {
+                    heights.laid_subagents
+                } else {
+                    px(0.)
+                };
+                let most = (total - below - PANEL_MIN_HEIGHT).max(PANEL_MIN_HEIGHT);
+                heights.files = Some(y.max(PANEL_MIN_HEIGHT).min(most));
+            }
+            // Between the understanding and the subagents along the bottom,
+            // whose bottom stays put against the sidebar's.
+            PanelEdge::Subagents => {
+                let most = (total - heights.laid_files - PANEL_MIN_HEIGHT).max(PANEL_MIN_HEIGHT);
+                heights.subagents = Some((total - y).max(PANEL_MIN_HEIGHT).min(most));
+            }
+        }
+        heights.dragging = Some(edge);
+        self.0.set(heights);
+    }
+
+    fn update(&self, change: impl FnOnce(&mut Heights)) {
+        let mut heights = self.0.get();
+        change(&mut heights);
+        self.0.set(heights);
+    }
 }
 
 /// How tall the referenced files' panel is to show `rows` rows, before it
@@ -285,7 +394,7 @@ fn placeholder(text: &'static str, cx: &App) -> Div {
 /// per constraint, opening the file it links to.
 pub fn render(
     files: &[Referenced],
-    subagents: &Subagents,
+    subagents: &[SubagentGroup],
     understanding: &Understanding,
     layout: Layout,
     open: OpenFile,
@@ -345,60 +454,110 @@ pub fn render(
     // Each subagent the run started: a spinner while it is at work, then how
     // it ended, beside what it was started to do; its kind and what it last
     // did are in its tooltip.
-    let agent_rows = subagents.list.iter().enumerate().map(|(ix, agent)| {
-        let icon: AnyElement = match agent.state {
-            State::Running => Spinner::new().xsmall().into_any_element(),
-            State::Completed => Icon::new(IconName::Check)
-                .xsmall()
-                .text_color(theme.success)
-                .into_any_element(),
-            State::Failed => Icon::new(IconName::X)
-                .xsmall()
-                .text_color(theme.danger)
-                .into_any_element(),
-            State::Stopped => Icon::new(IconName::Minus)
-                .xsmall()
-                .text_color(theme.muted_foreground)
-                .into_any_element(),
-        };
-        let state = match agent.state {
-            State::Running => agent.activity.clone().unwrap_or_else(|| "Running".into()),
-            State::Completed => "Done".into(),
-            State::Failed => "Failed".into(),
-            State::Stopped => "Stopped".into(),
-        };
-        let (description, kind) = (agent.description.clone(), agent.kind.clone());
-        // Lets UI tests find each row; inert in normal builds.
-        gpui_kit::TestSupportExt::test_support(h_flex().id(("subagent", ix)))
+    // Each is shown by the mode that started it: a bar down its left, and
+    // its spinner and tick, in that mode's colour; grouped by a chain's
+    // steps, each group headed by its label.
+    let agent_count: usize = subagents.iter().map(|group| group.agents.list.len()).sum();
+    let groups = subagents
+        .iter()
+        .filter(|group| !group.agents.list.is_empty());
+    let labels = groups.clone().filter(|group| group.label.is_some()).count();
+    let mut next = 0;
+    let agent_rows = groups.flat_map(|group| {
+        let color = group.color;
+        let started_by = group.started_by.clone();
+        let label = group.label.clone().map(|label| {
+            gpui_kit::TestSupportExt::test_support(
+                div().id(SharedString::from(format!("subagent-group-{label}"))),
+            )
             .flex_none()
             .h(ROW_HEIGHT)
-            .gap_2()
-            .text_sm()
-            .child(div().flex_none().child(icon))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .when(agent.state != State::Running, |this| {
-                        this.text_color(theme.muted_foreground)
-                    })
-                    .child(agent.description.clone()),
-            )
-            .tooltip(move |window, cx| {
-                let (description, kind, state) = (description.clone(), kind.clone(), state.clone());
-                Tooltip::element(move |_, cx| {
-                    v_flex().child(description.clone()).child(
+            .flex()
+            .items_center()
+            .text_xs()
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(color.unwrap_or(theme.muted_foreground))
+            .child(label)
+            .into_any_element()
+        });
+        let first = next;
+        next += group.agents.list.len();
+        let rows = group
+            .agents
+            .list
+            .iter()
+            .enumerate()
+            .map(move |(at, agent)| {
+                let ix = first + at;
+                let started_by = started_by.clone();
+                let icon: AnyElement = match agent.state {
+                    State::Running => match color {
+                        Some(color) => Spinner::new().xsmall().color(color).into_any_element(),
+                        None => Spinner::new().xsmall().into_any_element(),
+                    },
+                    State::Completed => Icon::new(IconName::Check)
+                        .xsmall()
+                        .text_color(color.unwrap_or(theme.success))
+                        .into_any_element(),
+                    State::Failed => Icon::new(IconName::X)
+                        .xsmall()
+                        .text_color(theme.danger)
+                        .into_any_element(),
+                    State::Stopped => Icon::new(IconName::Minus)
+                        .xsmall()
+                        .text_color(theme.muted_foreground)
+                        .into_any_element(),
+                };
+                let state = match agent.state {
+                    State::Running => agent.activity.clone().unwrap_or_else(|| "Running".into()),
+                    State::Completed => "Done".into(),
+                    State::Failed => "Failed".into(),
+                    State::Stopped => "Stopped".into(),
+                };
+                let (description, kind) = (agent.description.clone(), agent.kind.clone());
+                // Lets UI tests find each row; inert in normal builds.
+                gpui_kit::TestSupportExt::test_support(h_flex().id(("subagent", ix)))
+                    .flex_none()
+                    .h(ROW_HEIGHT)
+                    .gap_2()
+                    .pl_1p5()
+                    .border_l_2()
+                    .border_color(color.unwrap_or(transparent_black()))
+                    .text_sm()
+                    .child(div().flex_none().child(icon))
+                    .child(
                         div()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(match &kind {
-                                Some(kind) => format!("{kind} · {state}"),
-                                None => state.to_string(),
-                            }),
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .when(agent.state != State::Running, |this| {
+                                this.text_color(theme.muted_foreground)
+                            })
+                            .child(agent.description.clone()),
                     )
-                })
-                .build(window, cx)
-            })
+                    .tooltip(move |window, cx| {
+                        let (description, kind, state) =
+                            (description.clone(), kind.clone(), state.clone());
+                        let started_by = started_by.clone();
+                        Tooltip::element(move |_, cx| {
+                            let muted = cx.theme().muted_foreground;
+                            v_flex()
+                                .child(description.clone())
+                                .child(div().text_color(muted).child(match &kind {
+                                    Some(kind) => format!("{kind} · {state}"),
+                                    None => state.to_string(),
+                                }))
+                                .child(
+                                    div()
+                                        .text_color(muted)
+                                        .child(format!("Started by {started_by}")),
+                                )
+                        })
+                        .build(window, cx)
+                    })
+                    .into_any_element()
+            });
+        label.into_iter().chain(rows).collect::<Vec<_>>()
     });
     // Lets UI tests find the list; inert in normal builds.
     let agents_list = gpui_kit::TestSupportExt::test_support(v_flex().id("subagents-list"))
@@ -457,19 +616,89 @@ pub fn render(
     // Lets UI tests find each part; inert in normal builds.
     let find =
         |id: &'static str, element: Div| gpui_kit::TestSupportExt::test_support(element.id(id));
+    let heights = layout.heights.clone();
+    // A drag over, the edge's line goes once it isn't hovered.
+    if !cx.has_active_drag() && heights.0.get().dragging.is_some() {
+        heights.update(|heights| heights.dragging = None);
+    }
+    let dragging = heights.0.get().dragging;
+    let (dragged_files, dragged_agents) = (heights.0.get().files, heights.0.get().subagents);
+    let agents_shown = agent_count > 0;
+    let accent = theme.accent;
+    // The edge above a panel, `edge` being the one below the panel above:
+    // dragged, it resizes them; double-clicked, it puts both back.
+    let handle = |edge: PanelEdge, id: &'static str| {
+        let heights = heights.clone();
+        let shown = dragging == Some(edge);
+        find(id, div())
+            .group(id)
+            .absolute()
+            .top(-PANEL_HANDLE_HEIGHT / 2.)
+            .left_0()
+            .right_0()
+            .h(PANEL_HANDLE_HEIGHT)
+            .flex()
+            .items_center()
+            .cursor_row_resize()
+            .occlude()
+            .on_prepaint(move |bounds, _, cx| {
+                crate::hit_areas::register_resize(id.into(), bounds, cx)
+            })
+            .child(
+                div()
+                    .w_full()
+                    .h(px(1.))
+                    .when(shown, |line| line.bg(accent))
+                    .group_hover(id, move |line| line.bg(accent)),
+            )
+            .on_click(move |event, window, _| {
+                if event.click_count() == 2 {
+                    heights.reset();
+                    window.refresh();
+                }
+            })
+            .on_drag(PanelResize(edge), |_, _, _, cx| cx.new(|_| EmptyView))
+    };
+    let laid = |which: fn(&mut Heights, Pixels)| {
+        let heights = heights.clone();
+        move |bounds: Bounds<Pixels>, _: &mut Window, _: &mut App| {
+            heights.update(|heights| which(heights, bounds.size.height))
+        }
+    };
+    let drag_heights = heights.clone();
+    // The panels' bodies, which their headers' bottom borders take.
+    let panel_body = crate::theme::color(palette.ribbon);
     find("referenced-files", v_flex())
         .size_full()
         .overflow_hidden()
         .bg(crate::theme::color(palette.ribbon))
+        .on_drag_move(move |event: &DragMoveEvent<PanelResize>, window, cx| {
+            let bounds = event.bounds;
+            drag_heights.drag(
+                event.drag(cx).0,
+                event.event.position.y - bounds.top(),
+                bounds.size.height,
+                agents_shown,
+            );
+            window.refresh();
+        })
         .child(
             find("referenced-files-panel", v_flex())
-                .flex_none()
                 .w_full()
-                .h(files_height(files.len()))
-                .max_h(relative(FILES_MAX_SHARE))
+                .min_h(PANEL_MIN_HEIGHT)
+                .map(|panel| match dragged_files {
+                    // Dragged, it keeps its height, giving way only to keep
+                    // the panels below in the sidebar.
+                    Some(height) => panel.flex_shrink(1.).h(height),
+                    None => panel
+                        .flex_none()
+                        .h(files_height(files.len()))
+                        .max_h(relative(FILES_MAX_SHARE)),
+                })
+                .on_prepaint(laid(|heights, height| heights.laid_files = height))
                 .child(find(
                     "referenced-files-header",
-                    crate::sidebar::header("Referenced Spec", cx),
+                    crate::sidebar::header("Referenced Spec", panel_body, cx),
                 ))
                 .child(body(
                     "referenced-files",
@@ -478,37 +707,48 @@ pub fn render(
                     cx,
                 )),
         )
-        // Only once the run has started a subagent.
-        .when(!subagents.list.is_empty(), |this| {
-            this.child(
-                find("subagents-panel", v_flex())
-                    .flex_none()
-                    .w_full()
-                    .h(files_height(subagents.list.len()))
-                    .max_h(relative(SUBAGENTS_MAX_SHARE))
-                    .child(find(
-                        "subagents-header",
-                        crate::sidebar::header("Subagents", cx),
-                    ))
-                    .child(body("subagents", layout.subagents_scroll, agents_list, cx)),
-            )
-        })
         .child(
             find("understanding-panel", v_flex())
+                .relative()
                 .flex_1()
-                .min_h_0()
+                .min_h(PANEL_MIN_HEIGHT)
                 .w_full()
                 .child(find(
                     "understanding-header",
-                    crate::sidebar::header("Understanding", cx),
+                    crate::sidebar::header("Understanding", panel_body, cx),
                 ))
                 .child(body(
                     "understanding",
                     layout.understanding_scroll,
                     understanding_list,
                     cx,
-                )),
+                ))
+                .child(handle(PanelEdge::Files, "referenced-files-resize")),
         )
+        // Along the bottom, beneath the understanding, only once the run has
+        // started a subagent.
+        .when(agents_shown, |this| {
+            this.child(
+                find("subagents-panel", v_flex())
+                    .relative()
+                    .w_full()
+                    .min_h(PANEL_MIN_HEIGHT)
+                    .map(|panel| match dragged_agents {
+                        Some(height) => panel.flex_shrink(1.).h(height),
+                        None => panel
+                            .flex_none()
+                            .h(files_height(agent_count + labels))
+                            .max_h(relative(SUBAGENTS_MAX_SHARE)),
+                    })
+                    .on_prepaint(laid(|heights, height| heights.laid_subagents = height))
+                    .child(find(
+                        "subagents-header",
+                        crate::sidebar::header("Subagents", panel_body, cx),
+                    ))
+                    .child(body("subagents", layout.subagents_scroll, agents_list, cx))
+                    .child(handle(PanelEdge::Subagents, "subagents-resize")),
+            )
+        })
         .into_any_element()
 }
 

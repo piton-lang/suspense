@@ -1,0 +1,65 @@
+
+export anchor Prompt_d21629ee1cca281c:
+    userPrompt:
+        \\\
+        The wait time on the scroll switching is WAY too long.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            The wait time on the scroll switching is WAY too long.
+            \\\
+        result:
+            \\\
+            I've shortened the scroll-switching wait in the spec; the code isn't changed yet. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            **Why it feels long:** the code waits for the wheel to be still for 250 ms before counting a scroll as new. During the 450 ms slide, every wheel event also restarts that wait. So if you keep scrolling while it slides, crossing back can take close to 700 ms or more.
+
+            **What I changed:** two edits to `MessageListScrollingShape.scrollingPast` in `spec/scope/prompt-mode/message-list/Scrolling.pi`:
+
+            - **The pause is now fixed and short.** The wheel or trackpad being still for 80 ms makes the next scroll new, and lifting your fingers off the trackpad and putting them back counts as new straight away. The spec also says there's no other delay: nothing extra after reaching an end, and nothing before the view switches once the new scroll starts.
+            - **Scrolling during the slide no longer adds to the wait.** Once the slide settles, the same 80 ms pause is all that's needed, counted from your last scroll whether it came during the slide or after. The wheel still scrolls neither view while the slide runs, and a scroll carried on in the same motion still never crosses over.
+
+            I left the slide's own length alone, since it's the wait you said is too long, not the animation. If the slide also feels slow once the pause is fixed, shortening it is a separate change.
+
+            **Anchors the code should follow:**
+            - **`MessageListScrollingShape.scrollingPast`**, as above.
+            - **In `src/prompt_mode.rs`:**
+              - `SCROLL_REST` should become 80 ms.
+              - In `scroll_past_ends`, the check that a slide is still running blocks the wheel; that part stays.
+              - The rule that a trackpad touch starting (`TouchPhase::Started`) counts as a new scroll stays.
+              - The test `scrolling_past_an_end_crosses_over` sleeps `PANE_SLIDE_TIME + SCROLL_REST` and should still hold.
+
+            I checked the wording in the compiled reference, `.claude/reference/scope/prompt-mode/message-list/index.md`. The constraints are in `.suspense/history/1790709281-Prompt_e6e09fa8dc9bb7b4.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_e6e09fa8dc9bb7b4

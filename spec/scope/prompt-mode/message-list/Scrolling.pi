@@ -1,5 +1,7 @@
 use /lib
 from /scope/open-projects import OpenProjectsScope
+from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/prompt-mode/modes import PromptModesScope
 from /ui/components/history-list import HistoryListScope
 
 export shape MessageListScrollingShape:
@@ -19,16 +21,50 @@ export shape MessageListScrollingShape:
         previous tasks, from one to the other, but only on purpose: a scroll
         that reaches an end stops there, however hard it was flung, and only
         a new scroll, begun after the scrolling has come to rest at that end,
-        goes on past it.
+        goes on past it, and only once it has pushed far enough against the
+        end to get past a barrier there.
+
+        The rest that tells a new scroll from one carried on is barely a
+        pause, so crossing over feels immediate: the wheel or trackpad still
+        for 80 milliseconds is enough, and fingers lifted from the trackpad
+        and put back make a new scroll at once, with no pause at all. Nothing
+        else is waited for: there is no delay after reaching an end beyond
+        that pause.
+
+        The barrier is a distance to scroll past. A new scroll that pushes
+        against an end doesn't cross over straight away; the distance it
+        scrolls past the end builds up, and it crosses over the moment that
+        reaches 200 pixels, about two notches of a mouse wheel or a short
+        swipe on a trackpad, however quickly or slowly it gets there.
+        Scrolling back the other way takes the build-up down again, and
+        scrolls the view once it is gone. The build-up drains away on its own
+        once the scrolling pauses, back to nothing within half a second of
+        the last scroll, so a nudge against an end that goes no further never
+        crosses over later. Momentum carried on in the same motion, and any
+        scroll during a slide, add nothing to it. The view doesn't move while
+        the build-up grows: the end holds, and only the glow shows it.
+
+        While anything has built up against an end, a glow shows where the
+        crossing will happen: a soft radial glow, centred in the space between
+        the previous tasks row and the queue, fading from its middle to
+        nothing at its edge, in the colour of the mode selected in the
+        @{ChatInputScope}, as the @{PromptModesScope} colours it. It starts
+        small and faint and grows larger and slightly brighter as the build-up
+        nears the barrier, at its largest a little under the height of that
+        space and still only a subtle wash of colour, never hiding what is
+        beneath it. It follows the build-up as it grows and drains, smoothly
+        rather than in steps. It never takes a click or a scroll. As the view
+        crosses over, the glow fades out quickly while the slide begins; with
+        nothing built up, there is no glow at all.
 
         With the latest task's output scrolled to its top, a new scroll up
-        expands the previous tasks, as clicking their row does, opening
+        past the barrier expands the previous tasks, as clicking their row does, opening
         scrolled to the bottom, on the tasks sent most recently, as the
         @{HistoryListScope} says. Before any task has been sent, or with no previous
-        tasks, scrolling up does nothing more.
+        tasks, scrolling up does nothing more, and no glow shows.
 
         With the previous tasks expanded and scrolled to their bottom, a new
-        scroll down closes them, as clicking "Back to the latest task" does,
+        scroll down past the barrier closes them, as clicking "Back to the latest task" does,
         bringing back the latest task and its output as they were left.
 
         However the previous tasks are closed, by a scroll or by clicking
@@ -44,7 +80,7 @@ export shape MessageListScrollingShape:
         A scroll carried on in the same motion, such as a fling's momentum
         still running when an end is reached, never crosses over. Output or a
         list too short to scroll is always at both its ends, so any new scroll
-        over it that leads somewhere crosses over. Only the wheel or trackpad
+        over it that leads somewhere builds up against the barrier. Only the wheel or trackpad
         crosses over. Scrolling sideways, dragging a scrollbar to an end, and
         scrolling anything inside that scrolls on its own, such as an open
         task's table in the list, never do.
@@ -60,6 +96,10 @@ export shape MessageListScrollingShape:
         between the previous tasks row and the queue moves, and nothing is
         drawn outside it; the row and the queue stay where they are, the row reading what it will once the slide settles, from the
         moment it starts. While it slides, the wheel scrolls neither view, and
-        no scroll then crosses back; a new scroll once it settles can.
+        no scroll then crosses back. Scrolling during the slide doesn't make
+        the wait after it any longer: once it settles, the same 80 millisecond
+        pause, counted from the last scroll whether that came during the
+        slide or after, is all that is needed before a new scroll can build up
+        against the barrier to cross back.
         Expanding or closing the previous tasks by clicking their row is not
         animated.

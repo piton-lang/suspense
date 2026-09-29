@@ -1,0 +1,44 @@
+use /lib
+from /scope/project-data import ProjectDataScope
+from /ui/components/diff-view import DiffViewScope
+
+export shape MessageListChangedFilesShape:
+    description:
+        In a project that is a git repository, every task, the latest and each
+        of the previous tasks, lists the files that changed while it ran,
+        between the two snapshots of the working tree taken as it started and
+        ended, as the @{ProjectDataScope}'s task snapshots say. In a project
+        that isn't one, no task shows any of this.
+
+    list:
+        The files are those `git diff --name-status` gives between the two
+        snapshots, each one added, modified, deleted, or renamed. Each is a
+        row with its path in the project, a small letter for how it changed,
+        A, M, D, or R, in the colour the git panel gives that change, and, for
+        a renamed file, the path it was renamed from, muted, before an arrow.
+        They are listed in path order, below the task's output, beneath the
+        latest task's output table, and beneath an open previous task's table,
+        headed "Files changed" with how many there are. The list is collapsed
+        to its heading to start with, and expands when the heading is clicked.
+
+        While a task is still running, it has only its first snapshot, so it
+        shows no list yet. A task whose run changed nothing reads "No files
+        changed", muted. A task with no snapshots, as one from before they
+        were taken or one whose snapshot couldn't be taken, shows no list.
+
+    whoChanged:
+        The snapshots catch everything that changed while the task ran,
+        including the user's own edits made meanwhile, as in the side editor.
+        Each file is compared with the files the harness's tool calls reported
+        writing or editing, as the referenced spec works them out, from its
+        file tools and its shell commands, a subagent's included. A file the
+        agent reported is shown as changed by the agent, its row plain; any
+        other is shown as changed during the task, its row muted, with a small
+        clock icon and a tooltip saying it changed while the task ran but not
+        through the agent.
+
+    opening:
+        Clicking a file opens its diff between the two snapshots, the file as
+        it was when the task started against the file as it was when it
+        ended, in the @{DiffViewScope}, as the git panel opens a file's
+        uncommitted changes.

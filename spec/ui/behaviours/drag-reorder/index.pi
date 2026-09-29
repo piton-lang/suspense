@@ -1,0 +1,60 @@
+use /lib
+from /ui/theme import ThemeScope
+
+export scope DragReorderBehaviour:
+    concept: {DragReorderBehaviourConcept}
+
+concept DragReorderBehaviourConcept:
+    pitch:
+        How anything that can be reordered by dragging shows where it will
+        end up, as macOS lists and tab bars do: with a line in the gap between
+        two items, never a highlighted item that leaves the drop ambiguous.
+        Every list, tab bar, or row of items that is reordered by drag and
+        drop behaves this way.
+
+    shape: {DragReorderBehaviourShape}
+
+shape DragReorderBehaviourShape:
+    description:
+        While an item is dragged over the items it can be reordered among,
+        what it would be dropped into is always a gap between two items, or
+        before the first or after the last, never an item itself. That gap is
+        shown by an insertion indicator, and nothing else marks the drop: no
+        item is highlighted, tinted, or outlined as a target.
+
+    indicator:
+        The indicator is a line 2 pixels thick in the @{ThemeScope}'s accent,
+        with rounded ends and a small open circle, 6 pixels across and in the
+        same colour, at its leading end. It lies across the gap, centred on
+        the gap, horizontal between the rows of a list, running the list's
+        width less its padding, and vertical between the tabs of a tab bar or
+        the items of a row, running their height. It is drawn over the items,
+        taking no room of its own, so nothing moves to make space while the
+        drag is under way, and it never takes the mouse.
+
+    choosingTheGap:
+        Which gap is shown follows the pointer: over the first half of an
+        item, the gap before it; over the second half, the gap after it,
+        halves taken along the direction the items run. Past the last item,
+        the gap after it; before the first, the gap before it. The two gaps
+        either side of the dragged item itself are where it already is, so
+        neither shows an indicator, and dropping there changes nothing. A gap
+        an item may not be dropped into, as its user says, shows no indicator
+        either, and nothing is marked while the pointer is over it.
+
+        The indicator moves from gap to gap at once as the pointer crosses the
+        middle of an item, with no animation, so it is always exactly where a
+        drop would land.
+
+    dragging:
+        The item dragged follows the pointer as a small floating copy, the
+        item's own label on a raised surface with a soft shadow, as its user
+        says. The item stays where it was in the list, dimmed to half its
+        opacity, until it is dropped.
+
+    dropping:
+        Released over a gap that shows the indicator, the item moves into that
+        gap, the items between shifting over by one. Released anywhere else,
+        outside the items, over a gap it may not go into, or back where it
+        started, nothing changes. Either way the indicator and the dimming go
+        at once.

@@ -1,0 +1,63 @@
+
+export anchor Prompt_0b032869d7a9e13f:
+    userPrompt:
+        \\\
+        Let's remove the research tab for now since there's literally nothing.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Let's remove the research tab for now since there's literally nothing.
+            \\\
+        result:
+            \\\
+            I've removed the Research tab from the spec; the code isn't changed yet. `piton check` finds no problems, formatting is clean, and `piton build` succeeded. The build also deleted the Research tab's compiled reference page, and nothing else in the spec or the compiled reference mentions Research any more.
+
+            **What I changed:**
+            - I deleted `spec/ui/components/ribbon/research-tab/`, which defined the empty `RibbonResearchTabScope`.
+            - In `spec/ui/components/ribbon/index.pi`:
+              - I removed that scope's import and its `research` entry under `tabs`.
+              - The tab order is now Project, Code, Spec, Application.
+              - The keyboard shortcuts now end at Alt+4 for Application, which was Alt+5. Alt+5 now does nothing, since a number past the last tab does nothing.
+
+            **Anchors the code should follow:**
+            - **`RibbonScope`** in `spec/ui/components/ribbon/index.pi`: its tab order, `keyboard` and `tabs` properties.
+            - **In the code:**
+              - `src/ribbon/mod.rs`: `RibbonTab::Research`, its entry in the tab list and in the label, command and colour matches, and `mod research_tab`.
+              - Delete `src/ribbon/research_tab.rs`.
+              - Alt+N handling should follow the shorter tab list.
+              - `src/main_window.rs` refers to `RibbonTab::Research` around lines 1910, 2568, 2658 and 5068–5155, mostly in tests. Those need removing or updating. The tab-order test and the test for Ctrl+clicking a tab with no commands use Research as their example.
+
+            The constraints are in `.suspense/history/1790709583-Prompt_1d5fea48d547024c.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_1d5fea48d547024c

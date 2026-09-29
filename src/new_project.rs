@@ -35,6 +35,7 @@ const GITIGNORE: &str = "\
 /.suspense/queue/
 /.suspense/commit-notes.json
 /.suspense/conversations.json
+/.suspense/snapshot-index
 .suspense-draft.pi
 ";
 
@@ -863,6 +864,7 @@ belay-config BelayConfiguration:
         for ignored in [
             "/.suspense/commit-notes.json",
             "/.suspense/conversations.json",
+            "/.suspense/snapshot-index",
             "/.suspense/queue/",
             "/.suspense/harness.json",
         ] {

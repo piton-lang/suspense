@@ -1,0 +1,47 @@
+use /lib
+use /ui
+use /ui/components/sidebar/Panel
+from .. import RightSidebarScope
+from /scope/open-file import OpenFileScope
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
+
+export panel UnderstandingPanel:
+    title: Understanding
+    counted: false
+    height: fill
+    scrolls: true
+    scrollbar: overflowing
+
+    concept: {UnderstandingConcept}
+
+concept UnderstandingConcept:
+    pitch:
+        The panel beneath the referenced files in the @{RightSidebarScope},
+        above the subagents once there are any: the constraints
+        the harness has taken from the spec for the running task.
+
+    shape: {UnderstandingShape}
+
+shape UnderstandingShape:
+    description:
+        It shows the running task's understanding file, as the
+        @{ModeSystemPromptsScope} says, as it is written: one row per item of
+        its Markdown list, in the file's order, its text wrapping rather than
+        cut off. Each row is a box on the ribbon's tab row colour, #333333 in
+        dark mode, with corners rounded 4 pixels, its text in small text with
+        a 20 pixel line height, 8 pixels of padding either side and 6 above
+        and below, so it is 32 pixels tall for a single line;
+        the boxes sit 8 pixels in from the panel's edges and 4 pixels apart. Anything in the file that isn't a list item is left out.
+
+        A row's text is its item's, with any link shown as its text alone.
+        Clicking a row opens the file its link points to, read from the
+        project directory, as the @{OpenFileScope} says. A row whose link
+        points to a file that doesn't exist shows its text muted, and clicking
+        it does nothing; a row with no link does nothing either.
+
+        It follows the file as it changes on disk while the task runs. A row
+        that is added, or whose text changes, is briefly highlighted, fading
+        back to its box's colour. Until the file exists, it reads
+        "Nothing understood yet", muted. Once it exists but has no list items
+        yet, as when it has just been created, the panel shows nothing beneath
+        its header, and has nothing to scroll and no scrollbar.

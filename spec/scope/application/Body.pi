@@ -6,6 +6,7 @@ from ../open-file import OpenFileScope
 from ../prompt-mode import PromptEditor
 from ../prompt-mode/chat-input import ChatInputScope
 from ../prompt-mode/message-list import MessageList
+from /ui/behaviours/drag-reorder import DragReorderBehaviour
 from /ui/components/file-tree import FileTreeScope
 from /ui/components/inset-panel import InsetPanelScope
 from /ui/components/project-sidebar import ProjectSidebarScope
@@ -38,6 +39,26 @@ shape BodyShape:
         never runs beneath the right sidebar. While that sidebar isn't there,
         the chat input reaches the window's right edge.
 
+        The body is flat and quiet: the selected tab's contents, the message
+        list or an open file, sit on the theme's base surface, #444444 in dark
+        mode, running edge to edge with no border, and the chat input along
+        the bottom is set apart from them only by its own darker tab strip, as
+        the @{ChatInputScope} says, with no line between them.
+
+    sliding:
+        Whenever something slides out or back along one of the body's edges,
+        as the @{RightSidebarScope} does, everything else in the body moves
+        smoothly with it, frame by frame, rather than jumping once the slide
+        is over: the tab bar, the selected tab's contents, and the chat input
+        all keep their right edge against the sliding edge throughout, so
+        they narrow or widen together, in step with it and with each other.
+        None of them lags behind another, is left at its old width until the
+        slide settles, or runs beneath what is sliding. Their contents are
+        laid out anew at each width as it changes, text wrapping and rows
+        reflowing as they go: the tab bar's tabs, the chat input's text and
+        buttons, the message list's table, and an open file's editor. A slide
+        that reverses partway moves them back from wherever it had reached.
+
     contents:
         Everything that can be in the body:
 
@@ -57,8 +78,9 @@ shape BodyShape:
         sidebar to the right sidebar while a task runs, and to the
         window's right edge otherwise. Its first tab, Chat, shows the message
         list, and is always there: it can't be closed or moved. After it comes
-        a tab for each open file, in the order they were opened, scrolling
-        sideways once there are more than fit.
+        a tab for each open file, in the order they were opened unless they
+        have been dragged since, scrolling sideways once there are more than
+        fit.
 
         Just one tab's contents show at a time, filling the space between the
         tab bar and the chat input. The chat input stays along the bottom
@@ -66,9 +88,38 @@ shape BodyShape:
         shows. The body starts with Chat selected, and clicking a tab selects
         it.
 
+        Every tab in the bar, Chat and each file's alike, is laid out the
+        same plain way, with nothing extra around it: the bar's full height,
+        32 pixels, its contents centred up and down in it, 12 pixels of
+        padding at its left, and 12 at its right, and no margin of its own
+        above, below, or beside it, so one tab ends where the next begins,
+        with only the tab styling's own line between them. Nothing is inset
+        from the bar's top or bottom, and the first tab starts at the bar's
+        left edge.
+
         A file's tab shows the file's name, then, while it has unsaved
-        changes, a dot, and at its right a small close button. Hovering it
-        shows the file's path in the project as its tooltip.
+        changes, a dot, and then a small close button, an icon button 16
+        pixels square, set close beside the name, 4 pixels from it or from
+        the dot, with no more room between them however long or short the
+        name is. Since the button has room of its own around its icon, a file
+        tab's right padding is 6 pixels rather than 12, so the icon sits as
+        far from the tab's right edge as the name does from its left; the tab
+        is only as wide as its padding, name, dot, and close button need.
+        Chat's spinner, while something runs, sits 6 pixels after its label,
+        inside the same padding. Hovering a file's tab shows the file's path
+        in the project as its tooltip.
+
+        A file's tab can be dragged along the tab bar to reorder the files, as
+        the @{DragReorderBehaviour} says, a vertical line showing the gap
+        between two tabs it will land in, and the tab dragged following the
+        pointer as the file's name. Chat stays first: no gap before a file's
+        first tab, between Chat and it, shows the indicator, and Chat itself
+        can't be dragged.
+        Dragging a tab selects it, as clicking it does, and the selection
+        follows the tab to its new place; nothing else about its editor
+        changes. A press on a tab's close button closes it rather than
+        starting a drag. A file opened afterwards still gets its new tab just
+        after the one selected.
 
     openFile:
         A file opened, from the @{FileTreeScope} or anywhere else the

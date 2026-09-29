@@ -225,6 +225,14 @@ impl MainWindow {
         let mut subscriptions = vec![
             // The ribbon's activity spinner follows whatever is running.
             cx.observe(&prompt_mode, |this, _, cx| this.refresh_jobs(cx)),
+            // A file a task changed, between its snapshots.
+            cx.subscribe_in(
+                &prompt_mode,
+                window,
+                |this, _, open: &crate::prompt_mode::OpenSnapshotDiff, window, cx| {
+                    this.open_snapshot_diff(open, window, cx)
+                },
+            ),
             cx.observe(&ribbon, |this, _, cx| this.refresh_jobs(cx)),
             // The project indicator's "Open Project…".
             cx.subscribe_in(
@@ -471,6 +479,32 @@ impl MainWindow {
     /// already there. Any file open in a tab is left as it is.
     pub fn open_diff(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         let diff = cx.new(|cx| DiffView::new(path, cx));
+        self.show_diff(diff, window, cx);
+    }
+
+    /// Opens a file's changes while a task ran, between the snapshots taken
+    /// as it started and ended, as [`Self::open_diff`] opens its uncommitted
+    /// ones.
+    fn open_snapshot_diff(
+        &mut self,
+        open: &crate::prompt_mode::OpenSnapshotDiff,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let diff = cx.new(|cx| {
+            DiffView::between(
+                open.top.clone(),
+                open.path.clone(),
+                open.from.clone(),
+                open.before.clone(),
+                open.after.clone(),
+                cx,
+            )
+        });
+        self.show_diff(diff, window, cx);
+    }
+
+    fn show_diff(&mut self, diff: Entity<DiffView>, window: &mut Window, cx: &mut Context<Self>) {
         self.new_project = None;
         self.spec_component = None;
         self.new_instruction = None;
@@ -1786,7 +1820,6 @@ impl Render for MainWindow {
             .on_action(cx.listener(|this, _: &ribbon::ShowTab2, _, cx| this.show_ribbon_tab(1, cx)))
             .on_action(cx.listener(|this, _: &ribbon::ShowTab3, _, cx| this.show_ribbon_tab(2, cx)))
             .on_action(cx.listener(|this, _: &ribbon::ShowTab4, _, cx| this.show_ribbon_tab(3, cx)))
-            .on_action(cx.listener(|this, _: &ribbon::ShowTab5, _, cx| this.show_ribbon_tab(4, cx)))
             .on_action(cx.listener(|this, _: &ribbon::ToggleRibbon, _, cx| {
                 // The ribbon is beneath the inset panel while it is open.
                 if !this.panel_open() {
@@ -1907,14 +1940,13 @@ mod tests {
         );
         // Brightness, beside a full button.
         let application = body_of(RibbonTab::Application, &["brightness", "settings"], cx);
-        let empty = body_of(RibbonTab::Research, &[], cx);
         // Two slim buttons stacked, padded, is as tall as the body gets.
         let most = gpui_kit::px(27.) * 2. + gpui_kit::px(4.) + padding * 2.;
         assert_eq!(most, gpui_kit::px(74.));
         assert!(
-            empty < project && project == most && spec == most && application == most,
+            project == most && spec == most && application == most,
             "the tabs' bodies don't fit their commands: \
-             empty {empty:?}, two stacked {project:?}, many {spec:?}, \
+             two stacked {project:?}, many {spec:?}, \
              Application {application:?}"
         );
 
@@ -2301,14 +2333,12 @@ mod tests {
     }
 
     /// Drawn as the window would draw it, the chat input's chain has no line
-    /// beneath it while joined over Code and Spec, and while apart has one
-    /// just like any other unselected tab's, the same colour, thickness, and
-    /// place, wherever the window's size and display scale put the chat input,
-    /// in dark and light mode alike. A line hidden by clipping, rather than
-    /// never drawn, shows at some of these, where the clip's edge rounds onto
-    /// it, and a line drawn unlike the tabs' own can come out thinner.
+    /// beneath it, joined over Code and Spec or apart, since its tab bar
+    /// draws no lines; apart, beneath it looks just as beneath Ask, wherever
+    /// the window's size and display scale put the chat input, in dark and
+    /// light mode alike.
     #[gpui_kit::test]
-    async fn the_chain_has_a_line_beneath_it_only_apart_at_any_size(cx: &mut TestAppContext) {
+    async fn the_chain_never_has_a_line_beneath_it_at_any_size(cx: &mut TestAppContext) {
         use gpui_kit::component::{ActiveTheme as _, Theme, ThemeMode};
         cx.update(|cx| {
             gpui_kit::init(cx);
@@ -2388,14 +2418,10 @@ mod tests {
                                     ));
                                 }
                             }
-                            if line == joined {
+                            if line {
                                 wrong.push(format!(
-                                    "{} at {scale}x, {mode:?}, {height}px tall: chain {chain:?}",
-                                    if joined {
-                                        "joined, a line"
-                                    } else {
-                                        "apart, no line"
-                                    }
+                                    "a line beneath the chain ({}) at {scale}x, {mode:?}, {height}px tall: {chain:?}",
+                                    if joined { "joined" } else { "apart" }
                                 ));
                             }
                         })
@@ -2565,7 +2591,7 @@ mod tests {
                 let body = window.find("ribbon-controls").bounds();
                 assert_eq!(row.size.height, gpui_kit::px(32.), "{mode:?}: the tab row");
                 assert_eq!(body.top(), row.bottom(), "{mode:?}: a gap under the tabs");
-                // Project is open; Research, closed, has no background.
+                // Project is open; Application, closed, has no background.
                 let open = window.find(("ribbon-tab", 0usize)).bounds();
                 let closed = window.find(("ribbon-tab", 3usize)).bounds();
                 let middle = row.top() + row.size.height / 2.;
@@ -2655,7 +2681,7 @@ mod tests {
             (
                 RibbonTab::Spec,
                 crate::chat_input::SendMode::Spec,
-                RibbonTab::Research,
+                RibbonTab::Application,
             ),
         ] {
             for mode in [ThemeMode::Dark, ThemeMode::Light] {
@@ -3118,6 +3144,176 @@ mod tests {
             })
             .unwrap();
         }
+    }
+
+    /// A file's tab has its close button just after its name, and can be
+    /// dragged along the tab bar: dropped on another file's tab it takes its
+    /// place, selected, while Chat stays first.
+    #[gpui_kit::test]
+    async fn file_tabs_are_tight_and_can_be_dragged(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-drag-tabs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["a.md", "b.md", "c.md"] {
+            std::fs::write(dir.join(name), "# x\n").unwrap();
+        }
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        let prompt_mode = main.read_with(cx, |main, _| main.prompt_mode.clone());
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        // Each opens just after the one selected, so they open in order.
+        for name in ["a.md", "b.md", "c.md"] {
+            cx.update_window(handle, |_, window, cx| {
+                prompt_mode.update(cx, |p, cx| p.open_file(dir.join(name), window, cx))
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+        let order = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |p, cx| {
+                p.open_file_views()
+                    .iter()
+                    .map(|file| {
+                        file.read(cx)
+                            .path()
+                            .file_name()
+                            .unwrap()
+                            .to_string_lossy()
+                            .into_owned()
+                    })
+                    .collect::<Vec<_>>()
+            })
+        };
+        let shown = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |p, cx| {
+                p.open_file_view().map(|file| {
+                    file.read(cx)
+                        .path()
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned()
+                })
+            })
+        };
+        assert_eq!(order(cx), ["a.md", "b.md", "c.md"]);
+
+        // Each tab is the bar's height, one after another from its left
+        // edge; a file's has 12px of padding at its left, and its 16px close
+        // button leaves 6px at its right.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let bar = window.find("body-tabs-row").bounds();
+            let chat = window.within("body-tabs").find(0usize).bounds();
+            let tab = window.within("body-tabs").find(1usize).bounds();
+            let name = window.find(("file-tab-name", 0usize)).bounds();
+            let close = window.find(("close-file-tab-box", 0usize)).bounds();
+            assert_eq!(chat.left(), bar.left(), "Chat isn't at the bar's left edge");
+            assert_eq!(
+                tab.left(),
+                chat.right(),
+                "a gap between Chat and the first file"
+            );
+            for t in [chat, tab] {
+                assert_eq!((t.top(), t.size.height), (bar.top(), bar.size.height));
+            }
+            let left = name.left() - tab.left();
+            let right = tab.right() - (close.left() + gpui_kit::px(16.));
+            assert!(
+                (left - gpui_kit::px(12.)).abs() <= gpui_kit::px(1.)
+                    && (right - gpui_kit::px(6.)).abs() <= gpui_kit::px(1.),
+                "the tab's padding is {left:?} and {right:?}"
+            );
+            assert_eq!(close.size.height, gpui_kit::px(16.));
+            assert!(
+                (close.center().y - tab.center().y).abs() <= gpui_kit::px(1.)
+                    && (name.center().y - tab.center().y).abs() <= gpui_kit::px(1.),
+                "the tab's contents aren't centred up and down"
+            );
+        })
+        .unwrap();
+        // The close button sits 4px after the name.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let name = window.find(("file-tab-name", 0usize)).bounds();
+            let close = window.find(("close-file-tab-box", 0usize)).bounds();
+            let gap = close.left() - name.right();
+            assert!(
+                gap >= gpui_kit::px(0.) && gap <= gpui_kit::px(4.5),
+                "the close button is {gap:?} from the name"
+            );
+        })
+        .unwrap();
+
+        // Drags the name of tab `from` into the gap past tab `to`, over its
+        // far half, so it takes that tab's place.
+        let drag = |cx: &mut TestAppContext, from: usize, to: usize| {
+            let (start, end) = cx
+                .update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    let tab = window.within("body-tabs").find(to + 1).bounds();
+                    let share = if to > from { 0.85 } else { 0.15 };
+                    (
+                        window.find(("file-tab-name", from)).bounds().center(),
+                        gpui_kit::point(tab.left() + tab.size.width * share, tab.center().y),
+                    )
+                })
+                .unwrap();
+            let mut visual = gpui_kit::VisualTestContext::from_window(handle, cx);
+            visual.simulate_mouse_move(start, None, Default::default());
+            visual.simulate_mouse_down(start, gpui_kit::MouseButton::Left, Default::default());
+            let halfway = start + (end - start) / 2.;
+            visual.simulate_mouse_move(halfway, gpui_kit::MouseButton::Left, Default::default());
+            visual.simulate_mouse_move(end, gpui_kit::MouseButton::Left, Default::default());
+            visual.simulate_mouse_up(end, gpui_kit::MouseButton::Left, Default::default());
+            cx.run_until_parked();
+        };
+        drag(cx, 0, 2);
+        assert_eq!(order(cx), ["b.md", "c.md", "a.md"]);
+        assert_eq!(
+            shown(cx).as_deref(),
+            Some("a.md"),
+            "the dragged tab isn't selected"
+        );
+        drag(cx, 2, 1);
+        assert_eq!(order(cx), ["b.md", "a.md", "c.md"]);
+        assert_eq!(shown(cx).as_deref(), Some("a.md"));
+        // Chat stays first: a drop on it moves nothing.
+        let chat = cx
+            .update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let first = window.find(("file-tab", 0usize)).bounds();
+                gpui_kit::point(
+                    window.find("body-tabs-row").bounds().left() + gpui_kit::px(12.),
+                    first.center().y,
+                )
+            })
+            .unwrap();
+        let start = cx
+            .update_window(handle, |_, window, _| {
+                window.find(("file-tab-name", 2usize)).bounds().center()
+            })
+            .unwrap();
+        let mut visual = gpui_kit::VisualTestContext::from_window(handle, cx);
+        visual.simulate_mouse_move(start, None, Default::default());
+        visual.simulate_mouse_down(start, gpui_kit::MouseButton::Left, Default::default());
+        visual.simulate_mouse_move(chat, gpui_kit::MouseButton::Left, Default::default());
+        visual.simulate_mouse_up(chat, gpui_kit::MouseButton::Left, Default::default());
+        cx.run_until_parked();
+        assert_eq!(order(cx), ["b.md", "a.md", "c.md"]);
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// Clicking files in the project tree opens each in a tab of its own
@@ -5065,10 +5261,10 @@ mod tests {
 
     /// Esc in the chat input takes focus out of it, and the window's own Esc
     /// does not hand focus straight back: typing no longer lands in it.
-    /// The ribbon's tabs are Project, Code, Spec, Research, and Application,
+    /// The ribbon's tabs are Project, Code, Spec, and Application,
     /// each showing only its own controls: opening a project under Project,
     /// Build Spec under Spec, dark mode and settings under Application, and
-    /// nothing under Code or Research.
+    /// none of those under Code.
     #[gpui_kit::test]
     async fn ribbon_tabs_hold_their_controls(cx: &mut TestAppContext) {
         use crate::ribbon::RibbonTab;
@@ -5094,7 +5290,6 @@ mod tests {
             (RibbonTab::Project, Some("project-directory")),
             (RibbonTab::Code, None),
             (RibbonTab::Spec, Some("build")),
-            (RibbonTab::Research, None),
             (RibbonTab::Application, Some("brightness")),
         ] {
             ribbon.update(cx, |ribbon, cx| ribbon.select_tab(tab, cx));
@@ -5144,17 +5339,11 @@ mod tests {
         ribbon.update(cx, |ribbon, cx| {
             ribbon.tab_clicked(RibbonTab::Application, 1, false, cx);
             ribbon.tab_clicked(RibbonTab::Project, 1, true, cx);
-            // Research has no commands, so adds nothing between the others.
-            ribbon.tab_clicked(RibbonTab::Research, 1, true, cx);
         });
         cx.run_until_parked();
         assert_eq!(
             ribbon.read_with(cx, |ribbon, _| ribbon.open_tabs().to_vec()),
-            [
-                RibbonTab::Project,
-                RibbonTab::Research,
-                RibbonTab::Application
-            ]
+            [RibbonTab::Project, RibbonTab::Application]
         );
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
@@ -5540,17 +5729,28 @@ mod tests {
         );
 
         // With more in it than fits there, it grows as far as it was dragged,
-        // its body scrolling beneath its header.
+        // only its notes scrolling: the message and buttons stay fixed along
+        // its bottom.
         notes(40, cx);
         let dragged = bounds("git-panel", cx);
         assert!(
             (dragged.size.height - start.size.height - px(100.)).abs() < px(2.),
             "with more notes than fit, the git panel is {dragged:?}"
         );
-        let (scroll, body) = (bounds("git-scroll", cx), bounds("git-body", cx));
+        let first_note = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, _| {
+                (0..200usize)
+                    .filter_map(|id| window.try_find(("commit-note", id)))
+                    .map(|note| note.bounds())
+                    .min_by(|a, b| a.top().partial_cmp(&b.top()).unwrap())
+                    .unwrap()
+            })
+            .unwrap()
+        };
+        let (footer, note) = (bounds("git-footer", cx), first_note(cx));
         assert!(
-            body.size.height > scroll.size.height,
-            "its body {body:?} fits in {scroll:?}"
+            footer.bottom() <= dragged.bottom() && footer.top() >= dragged.top(),
+            "the message and buttons {footer:?} aren't within the panel {dragged:?}"
         );
         cx.update_window(handle, |_, window, cx| {
             window.scroll(
@@ -5561,15 +5761,18 @@ mod tests {
         })
         .unwrap();
         frame(cx);
-        let scrolled = bounds("git-body", cx);
         assert!(
-            scrolled.top() < body.top(),
-            "its body didn't scroll: {body:?} then {scrolled:?}"
+            first_note(cx).top() < note.top(),
+            "the notes didn't scroll: {note:?} then {:?}",
+            first_note(cx)
         );
-        assert!(
-            (scrolled.bottom() - scroll.bottom()).abs() < px(1.),
-            "scrolled to its end, the body {scrolled:?} ends where {scroll:?} does"
+        assert_eq!(
+            bounds("git-footer", cx),
+            footer,
+            "the message and buttons moved as the notes scrolled"
         );
+        let summary = bounds("git-summary", cx);
+        assert!(summary.top() >= dragged.top(), "the summary scrolled away");
 
         // Dragged past half the sidebar, it grows past half too.
         cx.update_window(handle, |_, window, cx| {

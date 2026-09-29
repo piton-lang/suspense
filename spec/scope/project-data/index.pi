@@ -22,7 +22,8 @@ shape ProjectDataShape:
         Nothing about a project is kept anywhere else, apart from the draft.
 
     contents:
-        - `history/`: every task sent, as its hidden anchor's source, named by the second it was sent and the anchor's name, and beside it, once its run is over, a `.json` record of the same name holding the compiled userPrompt the harness received, the system prompt as it received it and the harness it went to, whether it has been marked done by hand for sending to the other mode, each line the harness printed, each message sent to the task while it ran, in its place among those lines, and any error
+        - `history/`: every task sent, as its hidden anchor's source, named by the second it was sent and the anchor's name, and beside it, once its run is over, a `.json` record of the same name holding the compiled userPrompt the harness received, the system prompt as it received it and the harness it went to, whether it has been marked done by hand for sending to the other mode, each line the harness printed, each message sent to the task while it ran, in its place among those lines, any error, and, in a git repository, the hashes of the two snapshots of the working tree taken as it started and ended, as the task snapshots below say
+        - `snapshot-index`: in a git repository, the private index the task snapshots are built with, as they say
         - `images/`: every image attached to a task or question, saved when it is sent or queued, named by the second it was saved and a short hash of its content, with its own extension, so the same image attached twice is saved once
         - `asks/`: every question asked from the Ask tab, saved the same way as a task but apart from them
         - `queue/`: each queued prompt, as its hidden anchor's source, imports included, named so they list in the order they were queued, marked when each was queued rather than when it was saved, so prompts queued one straight after another keep their order however long each takes to save
@@ -43,11 +44,44 @@ shape ProjectDataShape:
         harness report `.suspense/harness.json`, the queue `.suspense/queue/`,
         the commit notes `.suspense/commit-notes.json`, the conversations left
         `.suspense/conversations.json`, whose conversations only this machine's
-        harness knows, and the draft
+        harness knows, the snapshot index `.suspense/snapshot-index`, and the
+        draft
         `.suspense-draft.pi` wherever it is, should it ever be written. Git
         ignores these, so they are never committed. Everything else, the prompt
         history, the questions, the divergence reports, and the system prompts,
         is kept with the project.
+
+    taskSnapshots:
+        In a project that is a git repository, every task the harness runs
+        keeps a record of the files that changed while it ran. When the harness
+        actually starts the task, not when it is sent or queued, the project's
+        working tree is snapshotted, and it is snapshotted again when the run
+        is over, however it ends: done, failed, or cancelled. In a project that
+        isn't a git repository, nothing is snapshotted or recorded, and nothing
+        about it is shown anywhere.
+
+        A snapshot is a git tree, made with git's plumbing alone: `git add -A`
+        and then `git write-tree`, run with `GIT_INDEX_FILE` pointing at a
+        private index, `.suspense/snapshot-index`, so the repository's own
+        index, HEAD, branches, stash, and working tree are never read from or
+        written to. The private index is kept between snapshots, so each one
+        hashes again only the files whose timestamps changed since the last.
+        A snapshot follows `.gitignore`, as git does, so ignored files,
+        `.suspense`'s machine-only data among them, are never in it. No commit,
+        branch, worktree, or stash is ever made, nothing is added to the
+        user's history, and no tool but git is needed.
+
+        Both trees are pinned so git's garbage collection never deletes them,
+        each under a private ref, `refs/suspense/<task>/before` and
+        `refs/suspense/<task>/after`, `<task>` being the task's hidden anchor's
+        name, and their hashes are kept in the task's history record. A
+        snapshot that can't be taken, as when git fails, is left out rather
+        than stopping the task; a task missing either snapshot shows no changed
+        files.
+
+        The private index and the refs belong to this machine: `snapshot-index`
+        is ignored by git like the other machine-only data, and the refs are
+        never pushed, since nothing pushes `refs/suspense/`.
 
     reading:
         What can't be read is left out, or shown as missing, rather than

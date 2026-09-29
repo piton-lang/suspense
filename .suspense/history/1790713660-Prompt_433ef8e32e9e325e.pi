@@ -1,0 +1,66 @@
+
+export anchor Prompt_433ef8e32e9e325e:
+    userPrompt:
+        \\\
+        Subagents should be displayed according to what mode triggered them.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Subagents should be displayed according to what mode triggered them.
+            \\\
+        result:
+            \\\
+            I've specified mode-based display for subagents; the code isn't changed yet. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            **What I changed:** the spec had no Subagents panel at all, even though the code already shows one in the right sidebar. So I added `SubagentsPanel` to `spec/ui/components/right-sidebar/index.pi`, listed between Referenced Spec and Understanding.
+            - **`description`** writes down what the panel already does: rows with a spinner or how it ended, what each subagent was started to do, and a tooltip. It fits its rows up to 30% of the sidebar.
+            - **`byMode`** is the new part:
+              - **Colour:** each subagent row has a 2 px bar down its left in the colour of the mode that started it. Its spinner and tick are in that colour too; failed and stopped keep their own colours.
+              - **Chain steps use their own mode:** the spec step and the spec follow-up show as Spec (blue), the code step as Code (red), never Chain purple. That's what makes "which mode triggered them" meaningful inside a chain.
+              - **Tooltip:** it names the source, such as "Started by the Code task" or "Started by the Spec step".
+              - **During a chain:** the panel keeps the subagents of every step so far, grouped by step under small mode-coloured labels ("Spec", "Code", "Spec follow-up"), instead of clearing at each step. A task outside a chain has one unlabelled group.
+
+            My reading of your request is that you want to see which mode started each subagent, especially across a chain's steps. The bar, tinting and grouping are my choices. If you meant something else, such as showing Ask questions' subagents too (the sidebar never appears for Ask), tell me.
+
+            **Anchors the code should follow:**
+            - **`SubagentsPanel`** (`SubagentsShape.description` and `.byMode`) in `spec/ui/components/right-sidebar/index.pi`.
+            - **`PromptModesScope.colours`:** the mode colours (`chat_input::mode_color` in code).
+            - **`PromptEditorShape.chainedTasks`:** which tasks are steps of one chain (`chain_steps` in code).
+            - **In the code:**
+              - `src/referenced_spec.rs` renders the Subagents panel.
+              - `running_subagents` in `src/prompt_mode.rs` currently returns only the latest task's subagents. It would need to gather every step of the running chain, with each step's mode, so the panel can group and colour them.
+
+            The constraints are in `.suspense/history/1790713606-Prompt_dfa18e196a228b0f.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_dfa18e196a228b0f

@@ -15,14 +15,18 @@ pub const HEADER_HEIGHT: Pixels = px(32.);
 pub const PADDING: Pixels = px(8.);
 
 /// A panel's header: its title in semibold regular text, 8 pixels from the
-/// left, on the darkest surface, as the file tree is, with no count.
-pub fn header(title: &'static str, cx: &App) -> Div {
+/// left, on the darkest surface, as the file tree is, with no count. Along
+/// its bottom, inside its height, a 1 pixel border in `body`, the colour of
+/// the body of the panel it heads, so it reads as no line.
+pub fn header(title: &'static str, body: Hsla, cx: &App) -> Div {
     h_flex()
         .flex_none()
         .w_full()
         .h(HEADER_HEIGHT)
         .px(PADDING)
         .bg(theme::color(theme::palette(cx).darkest))
+        .border_b_1()
+        .border_color(body)
         .text_color(cx.theme().foreground)
         .text_sm()
         .font_semibold()

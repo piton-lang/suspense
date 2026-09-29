@@ -18,7 +18,6 @@ use gpui_kit::component::input::{
 };
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::spinner::Spinner;
-use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{
     ActiveTheme, Disableable, Icon, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex,
@@ -222,16 +221,12 @@ const ASK_TAB: usize = 3;
 /// Index of the Freeform tab in `TABS`.
 const FREEFORM_TAB: usize = 4;
 
-/// How far the cover over the seam between two locked tabs reaches either
-/// side of it: past both 1px borders, with a pixel to spare.
-const SEAM_COVER_REACH: Pixels = px(2.);
-
 /// The chain's width until its tab has been laid out: an icon tab is a square
 /// a little wider than the icon it centres.
 const CHAIN_WIDTH_ESTIMATE: Pixels = px(40.);
 
 /// How wide the column of send, queue, and preview buttons is.
-const SEND_COLUMN_WIDTH: Pixels = px(120.);
+const SEND_COLUMN_WIDTH: Pixels = px(88.);
 
 /// How far the text sits in from the edges of the dark inset it is typed,
 /// or previewed, in: the editor's own padding above and below its text.
@@ -332,14 +327,25 @@ pub fn mode_color(mode: SendMode, cx: &App) -> Hsla {
     }
 }
 
-/// The send button's colour: the selected tab's mode colour at full
-/// strength, where the tab and body have only a tint of it.
+/// The send button's colour: a muted slate, the selected tab's mode colour
+/// mixed well down into the theme's base surface, about #3b4252 for Spec's
+/// blue in dark mode.
 fn send_color(position: f32, cx: &App) -> Hsla {
+    let mode = tint(Hues::of(cx), position);
+    let base = cx.theme().background;
     Hsla {
+        h: mode.h,
+        s: mode.s * SEND_SATURATION,
+        l: base.l * if cx.theme().is_dark() { 0.93 } else { 1.03 },
         a: 1.,
-        ..tint(Hues::of(cx), position)
     }
 }
+
+/// How much of its mode's saturation the send button keeps.
+const SEND_SATURATION: f32 = 0.25;
+
+/// The chat input's tab bar: a flat strip this tall.
+const TAB_STRIP_HEIGHT: Pixels = px(32.);
 
 /// How far the line between the send button's halves steps from its colour:
 /// half as far as its hover, just enough to part them.
@@ -377,8 +383,8 @@ fn send_colors(position: f32, cx: &App) -> ButtonCustomVariant {
     let color = send_color(position, cx);
     ButtonCustomVariant::new(cx)
         .color(color)
-        .foreground(cx.theme().danger_foreground)
-        .hover(send_step(color, 0.06, cx))
+        .foreground(cx.theme().foreground)
+        .hover(send_step(color, -0.04, cx))
         .active(send_step(color, 0.12, cx))
 }
 
@@ -1845,36 +1851,47 @@ impl Render for ChatInput {
         } else {
             cx.theme().tab_foreground.opacity(0.5)
         });
-        // A tab's contents: its label, or the chain's icon. An icon tab is a
-        // small square with none of a label's padding, so no room has to be
-        // made for the chain: it sits between Code and Spec the way any two
-        // tabs sit side by side.
-        let tab = |ix: usize| match TABS[ix] {
-            SendMode::Both => Tab::new()
-                .icon(chain_icon.clone())
-                .tooltip(|window, cx| Tooltip::new(SendMode::Both.label()).build(window, cx)),
-            mode => Tab::new().child(div().text_color(label_color(ix)).child(mode.label())),
-        };
+        // The strip, the selected tab, and the body beneath it: flat
+        // surfaces with no line anywhere, the selected tab joined to the body.
+        let palette = crate::theme::palette(cx);
+        let strip = crate::theme::color(palette.ribbon);
+        let surface = crate::theme::color(palette.ribbon_tabs);
+        let hover = crate::theme::color(palette.hover);
         let chat_input = cx.entity().downgrade();
+        // A tab: its label in its mode's colour, or the chain's icon, marked
+        // selected only by its background. The chain has none of its own, so
+        // the joined Code and Spec show through beneath it.
         let full_tab = |ix: usize| {
             let chat_input = chat_input.clone();
-            let bar = TabBar::new(TABS[ix].id())
+            let is_selected = ix != BOTH_TAB
+                && (selected == ix
+                    || (unified && matches!(TABS[ix], SendMode::Code | SendMode::Spec)));
+            let inner = gpui_kit::TestSupportExt::test_support(h_flex().id(0usize))
+                .h(TAB_STRIP_HEIGHT)
+                .items_center()
+                .px_2()
+                .text_sm()
+                .cursor_pointer()
+                .when(is_selected, |tab| tab.bg(surface))
+                .when(!is_selected && ix != BOTH_TAB, |tab| {
+                    tab.hover(move |tab| tab.bg(hover))
+                })
+                .map(|tab| match TABS[ix] {
+                    SendMode::Both => {
+                        tab.px_1p5()
+                            .child(chain_icon.clone().small())
+                            .tooltip(|window, cx| {
+                                Tooltip::new(SendMode::Both.label()).build(window, cx)
+                            })
+                    }
+                    mode => tab.child(div().text_color(label_color(ix)).child(mode.label())),
+                })
                 .on_click(move |_, window, cx| {
                     chat_input
                         .update(cx, |this, cx| this.select_tab(ix, window, cx))
                         .ok();
-                })
-                .child(tab(ix));
-            // The chain itself never shows as selected: once joined it sits
-            // over Code and Spec, whose selection shows through around its icon.
-            if ix != BOTH_TAB
-                && (selected == ix
-                    || (unified && matches!(TABS[ix], SendMode::Code | SendMode::Spec)))
-            {
-                bar.selected_index(0)
-            } else {
-                bar
-            }
+                });
+            gpui_kit::TestSupportExt::test_support(div().id(TABS[ix].id())).child(inner)
         };
         let measure_chain = {
             let chat_input = chat_input.clone();
@@ -1911,23 +1928,8 @@ impl Render for ChatInput {
             .absolute()
             .top_0()
             .bottom_0()
-            .child({
-                let chat_input = chat_input.clone();
-                gpui_kit::TestSupportExt::test_support(div().id(TABS[BOTH_TAB].id())).child(
-                    tab(BOTH_TAB).on_click(move |_, window, cx| {
-                        chat_input
-                            .update(cx, |this, cx| this.select_tab(BOTH_TAB, window, cx))
-                            .ok();
-                    }),
-                )
-            })
+            .child(full_tab(BOTH_TAB))
             .child(measure_chain);
-        // Once Code and Spec meet, Code's facing border is covered, in their
-        // own background, so the joined tab shows no outline beneath the chain. The
-        // cover reaches past the border so that, at fractional display scales,
-        // no sliver of it is left showing at its edges.
-        let seam_cover = cx.theme().tab_active;
-        let border = cx.theme().border;
         let spec = div().relative().child(full_tab(2)).with_spring(
             "chain-join",
             join,
@@ -1936,38 +1938,7 @@ impl Render for ChatInput {
                 // What is left of the gap the chain holds open between Code
                 // and Spec, as it gives up half its width either side.
                 let gap = chain_width * (1. - joined);
-                let seam = gpui_kit::TestSupportExt::test_support(
-                    div()
-                        .id("seam")
-                        .absolute()
-                        .top_0()
-                        .bottom_0()
-                        .left(-gap - SEAM_COVER_REACH)
-                        .w(SEAM_COVER_REACH * 2.)
-                        .when(unified && gap <= SEAM_COVER_REACH, |this| {
-                            this.bg(seam_cover)
-                        }),
-                );
-                // The line along the bottom of the gap, beneath the chain while
-                // it sits apart, as wide as what is left of the gap, so there is
-                // none once Code and Spec meet. Drawn as every tab bar draws its
-                // line, the bottom border of a box the bar's full height: a box
-                // no taller than its own border has no inside, and the renderer
-                // draws nothing of it.
-                let gap_line = gpui_kit::TestSupportExt::test_support(
-                    div()
-                        .id("chain-gap-line")
-                        .absolute()
-                        .top_0()
-                        .bottom_0()
-                        .left(-gap)
-                        .w(gap)
-                        .border_b_1()
-                        .border_color(border),
-                );
                 this.ml(gap)
-                    .child(gap_line)
-                    .child(seam)
                     .child(both.left(-gap - chain_width * 0.5 * joined))
             },
         );
@@ -1988,8 +1959,6 @@ impl Render for ChatInput {
                 .flex()
                 .items_center()
                 .px_4()
-                .border_b_1()
-                .border_color(cx.theme().border)
                 .text_xs()
                 .text_color(cx.theme().muted_foreground.opacity(0.7))
                 .child(div().min_w_0().truncate().child(TABS[selected].help())),
@@ -2114,8 +2083,9 @@ impl Render for ChatInput {
                 .id("chat-tabs")
                 .relative()
                 .flex()
+                .h(TAB_STRIP_HEIGHT)
                 .items_center()
-                .bg(cx.theme().tab_bar)
+                .bg(strip)
                 .child(code)
                 .child(spec)
                 .child(ask)
@@ -2159,7 +2129,13 @@ impl Render for ChatInput {
         // colour of its own: the mode shows in the tab labels and the send
         // button.
         let body = gpui_kit::TestSupportExt::test_support(
-            div().id("body-tint").flex().flex_col().gap_2().p_2(),
+            div()
+                .id("body-tint")
+                .flex()
+                .flex_col()
+                .gap_2()
+                .p_2()
+                .bg(surface),
         );
         let input_row = div().flex().flex_row().items_start().gap_2();
         let previewing = self.preview.is_some();
@@ -2197,6 +2173,8 @@ impl Render for ChatInput {
                     // As tall as the input's single line, so the two line up.
                     .h(one_row)
                     .flex_1()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .rounded_l(px(2.))
                     .rounded_r_none()
                     .tooltip(if editing {
                         format!("Save the queued prompt ({SEND_SHORTCUT})")
@@ -2215,6 +2193,7 @@ impl Render for ChatInput {
                     .icon(IconName::ChevronDown)
                     .h(one_row)
                     .px_1p5()
+                    .rounded_r(px(2.))
                     .rounded_l_none()
                     .border_l_1()
                     .border_color(send_seam(
@@ -2233,15 +2212,24 @@ impl Render for ChatInput {
         // or a preview shows, and Queue never on Ask, where a question never
         // queues.
         let unoffered = empty || previewing || editing;
+        let flat = ButtonCustomVariant::new(cx)
+            .color(cx.theme().background)
+            .foreground(cx.theme().foreground)
+            .hover(crate::theme::color(palette.hover))
+            .active(crate::theme::color(palette.pressed));
         let queue = Button::new("queue")
+            .custom(flat)
             .label(SendOption::Queue.label())
+            .rounded(px(2.))
             .h(one_row)
             .w_full()
             .tooltip("Queue the prompt, even while the harness is free")
             .disabled(unoffered || !SendOption::Queue.enabled(self.mode()))
             .on_click(cx.listener(|this, _, window, cx| this.send(Sent::Queued, window, cx)));
         let preview = Button::new("preview")
+            .custom(flat)
             .label("Preview")
+            .rounded(px(2.))
             .h(one_row)
             .w_full()
             .tooltip("Preview the compiled prompt")
@@ -2250,7 +2238,7 @@ impl Render for ChatInput {
         let buttons = v_flex()
             .flex_none()
             .w(SEND_COLUMN_WIDTH)
-            .gap_1p5()
+            .gap_2()
             .child(send)
             .child(queue)
             .child(preview);
@@ -2302,8 +2290,8 @@ impl Render for ChatInput {
                         window.prevent_default();
                     })
             })
-            .rounded(cx.theme().radius)
-            .bg(crate::theme::color(crate::theme::palette(cx).darkest))
+            .rounded(px(4.))
+            .bg(crate::theme::color(palette.darkest))
             .child(input_area);
         // Lets UI tests find the box; inert in normal builds.
         let input_area = gpui_kit::TestSupportExt::test_support(input_area);
@@ -2312,8 +2300,6 @@ impl Render for ChatInput {
             .track_focus(&self.focus_handle)
             .flex()
             .flex_col()
-            .border_t_1()
-            .border_color(cx.theme().border)
             .key_context(CONTEXT)
             // Ctrl+Tab and Ctrl+Shift+Tab cycle the tabs, and the input keeps
             // focus.
@@ -2500,11 +2486,11 @@ mod tests {
         }
     }
 
-    /// The send button is each tab's mode colour, the chain's purple
-    /// included, at full strength where the tab has only a tint of it, with
-    /// the theme's text for a solid hue, in both modes.
+    /// The send button is a muted slate of each tab's mode colour, the
+    /// chain's purple included: that hue, far less saturated, close to the
+    /// theme's base surface, in both modes.
     #[gpui_kit::test]
-    fn the_send_button_is_the_tabs_colour_at_full_strength(cx: &mut TestAppContext) {
+    fn the_send_button_is_a_muted_slate_of_the_mode(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
             crate::theme::init(cx);
@@ -2513,8 +2499,17 @@ mod tests {
                 for (ix, tab) in super::TABS.into_iter().enumerate() {
                     let tint = super::mode_tint(tab, cx);
                     let color = super::send_color(ix as f32, cx);
-                    assert!(tint.a < 1., "{mode:?} {tab:?}: the tab isn't a tint");
-                    assert_eq!(color, Hsla { a: 1., ..tint }, "{mode:?} {tab:?}");
+                    let base = gpui_kit::component::ActiveTheme::theme(cx).background;
+                    assert!(
+                        (color.h - tint.h).abs() < 1e-3,
+                        "{mode:?} {tab:?}: not its hue"
+                    );
+                    assert!(color.s < tint.s * 0.5 + 1e-3, "{mode:?} {tab:?}: not muted");
+                    assert!(
+                        (color.l - base.l).abs() < 0.05,
+                        "{mode:?} {tab:?}: far from the base"
+                    );
+                    assert_eq!(color.a, 1.);
                     let seam = super::send_seam(ix as f32, false, cx);
                     // Disabled, it fades with the button rather than staying
                     // solid across it.
@@ -3002,11 +2997,10 @@ mod tests {
         .unwrap();
     }
 
-    /// The chain has no line along its bottom while it is joined over Code
-    /// and Spec, in combined mode, and has one, like any other tab, while it
-    /// sits between them unselected, in separate mode, at any display scale.
+    /// The chat input's tab bar draws no lines: none under the chain,
+    /// joined or apart, nor under the help text, at any display scale.
     #[gpui_kit::test]
-    async fn the_chain_has_a_bottom_line_only_apart(cx: &mut TestAppContext) {
+    async fn the_tab_bar_draws_no_lines(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
             super::bind_keys(cx);
@@ -3079,18 +3073,17 @@ mod tests {
                     };
                     // Clear of Code's and Spec's own edges.
                     let (left, right) = (chain.left().as_f32() + 8., chain.right().as_f32() - 8.);
-                    assert_eq!(
-                        line_at(left, right, chain.bottom().as_f32()),
-                        !joined,
-                        "tab {tab} at {scale}x: the line under the chain {chain:?}"
+                    assert!(
+                        !line_at(left, right, chain.bottom().as_f32()),
+                        "tab {tab} at {scale}x: a line under the chain {chain:?}"
                     );
                     assert!(
-                        line_at(
+                        !line_at(
                             help.left().as_f32(),
                             help.right().as_f32(),
                             bar.bottom().as_f32()
                         ),
-                        "tab {tab} at {scale}x: no line under the help text"
+                        "tab {tab} at {scale}x: a line under the help text"
                     );
                 })
                 .unwrap();
@@ -4118,20 +4111,6 @@ mod tests {
         assert!(
             (chain.center().x - edge).abs() <= super::px(0.5),
             "the chain {chain:?} is not centred on the seam at {edge:?}"
-        );
-        // The border where Code meets Spec is covered, with room to spare, so
-        // no outline shows beneath the chain.
-        let seam = cx
-            .update_window(handle, |_, window, _| window.find("seam").bounds())
-            .unwrap();
-        assert!(
-            seam.left() <= edge - super::px(2.) && seam.right() >= edge + super::px(2.),
-            "the border between Code and Spec, at {edge:?}, is not covered: {seam:?}"
-        );
-        assert_eq!(
-            (seam.top(), seam.bottom()),
-            (chain.top(), chain.bottom()),
-            "the cover is not as tall as the tabs"
         );
 
         // Tab again moves to Spec alone, and the chain opens up between them.

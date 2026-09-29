@@ -1,0 +1,68 @@
+
+export anchor Prompt_c17ca0f03e011be6:
+    userPrompt:
+        \\\
+        @{RightSidebarScope} the panels/palettes themselves should be resiable
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            @{RightSidebarScope} the panels/palettes themselves should be resiable
+            \\\
+        result:
+            \\\
+            I've written panel resizing for the right sidebar into the spec; the code isn't changed yet. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            **What I changed:** a new `resizingPanels` section on `RightSidebarShape` in `spec/ui/components/right-sidebar/index.pi`, plus two small wording edits to `description` and `look`:
+
+            - **Dragging:** the edge between two panels is a drag handle. Moving it grows one panel as the other shrinks, and both reflow as you drag.
+            - **What you see:** hovering the edge shows an up-and-down resize cursor and a thin accent-coloured line. Otherwise there's still no line between panels, just the change of colour. I added an exception to the "no line anywhere" rule in `look` to allow this.
+            - **Limits:** no panel can go below its header plus 32 px, and none can be pushed out of the sidebar.
+            - **After a drag:** the Referenced Spec panel keeps the height you gave it. It no longer shrinks to fit its rows or stops at half the sidebar, and it scrolls if its rows need more room.
+            - **Remembered:** heights you drag to last until the app closes, including the next time the sidebar slides out, as its width already does. If the window's height changes, the top panel keeps its height and Understanding gets the rest.
+            - **Reset:** double-clicking the edge puts both panels back to their starting layout.
+
+            The 32 px minimum, the hover line and double-click-to-reset are my choices; the spec didn't have them before.
+
+            **Anchors the code should follow:**
+            - **`RightSidebarShape.resizingPanels`**, as above.
+            - **`RightSidebarShape.description`:** the starting layout, which also applies after a reset.
+            - **`RightSidebarShape.look`:** no lines except the sidebar's left edge and the hover line.
+            - **In the code** (`src/prompt_mode.rs` and `src/referenced_spec.rs`):
+              - The sidebar's contents are built by the `contents` closure in `with_referenced_spec`, which lays out the files panel above the understanding panel.
+              - The files panel's height currently comes from `referenced_spec::files_height`. The dragged height should be stored on `PromptMode`, like `refs_width`, and replace it once set.
+              - The existing test `referenced_spec_shows_the_understanding` asserts the files panel is exactly `files_height(0)` tall and that no `referenced-spec-split` exists ("the panels can still be dragged apart"). That second check has to change, since the panels can now be dragged apart on purpose.
+
+            The constraints are in `.suspense/history/1790711949-Prompt_ee682b8b43f59a90.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_ee682b8b43f59a90

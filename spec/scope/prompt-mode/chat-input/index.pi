@@ -33,9 +33,12 @@ shape ChatInputShape:
     description:
         Input on the left, send button on the right.
 
-        The body beneath the tabs has 8 pixels of padding. In it, the text
-        input sits in a dark box on the theme's darkest surface, #111111 in
-        dark mode, with rounded corners and no border, as tall as the column
+        The body beneath the tabs has 8 pixels of padding, on the same flat
+        surface as the selected tab, the ribbon's tab row colour, #333333 in
+        dark mode, untinted by the mode, and joined to the selected tab with
+        no line between them. In it, the text input sits in a dark box on the
+        theme's darkest surface, #111111 in dark mode, with corners rounded 4
+        pixels and no border, as tall as the column
         of buttons beside it, 8 pixels from it, and taller when its text
         needs more. The text sits 8 pixels in from the box's top, left, and
         right, and grows down through the box. Clicking anywhere in the box
@@ -43,12 +46,15 @@ shape ChatInputShape:
         shows. The preview shows in the same box, its content inset 8 pixels
         all round.
 
-        At the right, a column of three buttons, 120 pixels wide, 6 pixels
+        At the right, a column of three buttons, 88 pixels wide, 8 pixels
         apart, each as tall as the input's single row: Send at the top, then
-        Queue, then Preview, each the column's full width. Send has
-        a send icon before its label, and keeps its split chevron, the send
-        menu staying the only way to reach "Send to task". Queue and Preview
-        are buttons in gpui-kit's default style, doing what the
+        Queue, then Preview, each the column's full width, flat, with no
+        border or shadow and corners rounded 2 pixels. Send has a paper-plane
+        send icon before its label, in semibold text, and keeps its split
+        chevron, the send menu staying the only way to reach "Send to task".
+        Queue and Preview are flat buttons on the theme's base surface,
+        #444444 in dark mode, their labels in the theme's text colour, a step
+        lighter on hover, doing what the
         send menu's options of those names do, with tooltips saying that
         Queue queues the prompt even while the harness is free, and that
         Preview previews the compiled prompt. They are offered just as the
@@ -134,12 +140,20 @@ shape ChatInputShape:
         to the text input too, since the prompt would compile differently.
 
     tabs:
+        The tabs along the top of the chat input, one for each mode.
+
         overview:
-            The input and buttons live inside the body of a tab bar, using
-            gpui-kit's default tab styling, except that each tab's label is
-            always in its mode's colour at full strength, of the
+            The input and buttons live inside the body of a tab bar, a flat
+            strip 32 pixels tall on the ribbon's command area colour, #222222
+            in dark mode, with no line anywhere in it, whether beneath it,
+            between its tabs, or around them. Each tab is only its label, in
+            small text, with 8 pixels to each side of it and no border, and
+            its label is always in its mode's colour at full strength, of the
             @{PromptModesScope}, whether selected or not: Code red, Spec blue,
-            Ask green, and Freeform grey. There is a tab for each of the
+            Ask green, and Freeform grey. The selected tab is marked only by
+            its background, the same surface as the body beneath it, so it
+            reads as a tab joined to that body; unselected tabs have none, and
+            show the strip, lightening a little on hover. There is a tab for each of the
             @{PromptModesScope}, in their order: Code, Chain, Spec, Ask, and
             Freeform. Code, Spec, Ask, and Freeform are ordinary tabs. Chain is also a tab, just a
             small one, because it only shows an icon. All five sit flush against
@@ -156,7 +170,7 @@ shape ChatInputShape:
             not <Cmd>.
 
             <Tab> and <Shift+Tab> don't switch tabs, and don't indent the text
-            either: they move keyboard focus out of the chat input to the next
+            either. They move keyboard focus out of the chat input to the next
             or previous control, as they do everywhere else. While the
             completion menu is open, <Tab> is still the menu's.
 
@@ -171,26 +185,21 @@ shape ChatInputShape:
             between Code and Spec like any other tab, overlapping neither of
             them.
 
-            In combined mode, with Chain selected, Chain has no line along its
-            bottom, just as the joined Code and Spec beneath it have none. In
-            separate mode, unselected, it has one, like any other unselected
-            tab: the tab bar's bottom line runs beneath it, the same colour and
-            thickness, in the same place, as beneath any other unselected tab,
-            at any display scale. This holds at every
-            window size and display scale, in light and dark mode: in combined
-            mode nothing draws a line beneath Chain at all, rather than a line
-            being drawn and then hidden, since a hidden line can show again
-            wherever rounding to the display's pixels uncovers it.
+            Chain, like every tab, has no line along its bottom or sides, in
+            combined mode or separate, since the tab bar draws no lines at all.
+            Nothing draws a line beneath Chain and then hides it, since a
+            hidden line can show again wherever rounding to the display's
+            pixels uncovers it.
 
             Selected, it shows a joined chain at full opacity. Selecting it
             animates as though it took a margin of -50% of its own width on both
             its left and right sides: Code and Spec slide together until they
             meet underneath it, so it ends up sitting on top of both.
             Deselecting it animates them apart again. While Chain is selected,
-            Code and Spec both show as selected and read as a single unified
-            tab, with no line between them. Chain itself has a transparent
-            background and no left or right borders, so the joined Code and Spec
-            show through underneath it.
+            Code and Spec both show as selected, one continuous background
+            beneath the two of them and Chain, reading as a single unified
+            tab. Chain itself has a transparent background, so the joined Code
+            and Spec show through underneath it.
 
         help:
             To the right of the tabs, filling the rest of the bar, a line of
@@ -320,11 +329,12 @@ shape ChatInputShape:
             the session controls.
 
         colour:
-            The selected tab and the tab body holding the input are tinted the
-            colour of its mode, of the @{PromptModesScope}. With Chain selected,
-            Code, Spec, and the body are all purple. The colour transitions
-            smoothly whenever the selected tab changes, straight from the old
-            tab's colour to the new one's. The tabs wrap around, so pressing
+            The selected tab and the tab body holding the input are not tinted:
+            they stay the flat surface the description gives, whatever the
+            mode, the mode showing in the tab labels' colours and the send
+            button's. The send button's colour transitions smoothly whenever
+            the selected tab changes, straight from the old tab's colour to the
+            new one's. The tabs wrap around, so pressing
             <Ctrl+Tab> on Freeform fades grey straight to Code's red, and
             <Ctrl+Shift+Tab> on Code fades red straight to Freeform's grey;
             neither lights up Chain, Spec, or Ask on the way. A fade to or from
@@ -333,9 +343,11 @@ shape ChatInputShape:
             and Spec it passes through Chain's colour, whatever colours they
             have been given in the theme editor.
 
-            The send button, both its halves, takes the same colour as the
-            selected tab, purple with Chain selected, but at full strength
-            rather than as a tint, so it stands out against the tinted body.
+            The send button, both its halves, is a muted slate: the selected
+            mode's colour, purple with Chain selected, mixed well down into the
+            theme's base surface, so it reads as a quiet hint of the mode,
+            about #3b4252 for Spec's blue in dark mode, standing apart from
+            Queue and Preview without shouting.
             Its label and chevron are in the theme's text colour for a solid
             hue, and the line between its halves is only faintly darker or
             lighter than it, half as far as its hover, just enough to part

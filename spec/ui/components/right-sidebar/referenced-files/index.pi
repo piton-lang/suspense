@@ -1,0 +1,69 @@
+use /lib
+use /ui
+use /ui/components/sidebar/Panel
+from .. import RightSidebarScope
+from /scope/open-file import OpenFileScope
+from /scope/project-locations import ProjectLocationsScope
+
+export panel ReferencedFilesPanel:
+    title: Referenced Spec
+    counted: false
+    height: fit
+    scrolls: true
+    scrollbar: overflowing
+
+    concept: {ReferencedFilesConcept}
+
+concept ReferencedFilesConcept:
+    pitch:
+        The top panel of the @{RightSidebarScope}: the spec files the
+        running task references.
+
+    shape: {ReferencedFilesShape}
+
+shape ReferencedFilesShape:
+    description:
+        One row per spec file the running task references, each listed once: first those its prompt imports from, then
+        the rest in the order they are first referenced. The rows sit 8
+        pixels in from the panel's edges, above and below as well as at the
+        sides, each 24 pixels tall, with no icon: each shows its file name
+        alone, in small text, without its folders, cut off with
+        an ellipsis when the sidebar is too narrow, its full path in its
+        tooltip. A file named index, whatever its extension, such as
+        `index.pi`, shows the folder it is in before its name, as
+        `chat-input/index.pi`, and no folder above that.
+
+    referencing:
+        A spec file is one in the spec location, as the
+        @{ProjectLocationsScope} says; a compiled spec file is one under
+        `.claude/reference`, which stands for part of the spec. Both are
+        listed, and files anywhere else are not. A file's full path counts
+        however long it is, and a relative path is read from the project
+        directory.
+
+        A file is referenced, however the harness reads it, when:
+
+        - the task's prompt imports from it, its hidden anchor naming it
+        - the harness reads, edits, or writes it with a file tool
+        - a shell command reads it, such as cat, head, tail, sed, less, grep,
+            rg, awk, or diff naming it, or a pattern or folder that takes it in,
+            as far as the command shows
+        - a shell command edits or writes it, such as sed -i, a redirect (> or
+            >>), tee, mv, or cp onto it
+        - a search tool, Grep or Glob, searches a folder or pattern that takes
+            it in and its results name it
+        - a subagent the harness starts does any of the above
+
+        A file taken in only by a folder or pattern, without the results
+        naming it, is not listed. A command whose target can't be worked out
+        is skipped rather than guessed at. A file referenced again isn't listed
+        again.
+
+        A file edited or written in any of these ways, rather than only read
+        or imported, shows a small pencil icon at the right of its row. A row
+        a subagent referenced shows the same way, with "Read by a subagent" in
+        its tooltip beneath its full path.
+
+        Clicking a row opens its file, as the @{OpenFileScope} says. While no
+        spec file is referenced yet, the list reads
+        "No spec files referenced yet", muted.

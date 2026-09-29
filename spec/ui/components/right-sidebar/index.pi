@@ -1,10 +1,10 @@
 use /lib
 use /ui
-use /ui/components/sidebar/Panel
 use /ui/components/sidebar/Sidebar
-from /scope/open-file import OpenFileScope
-from /scope/project-locations import ProjectLocationsScope
-from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
+from ./referenced-files import ReferencedFilesPanel
+from ./subagents import SubagentsPanel
+from ./understanding import UnderstandingPanel
+from /scope/application/Body import BodyScope
 from /ui/components/scrollbar import ScrollbarScope
 from /ui/components/sidebar import SidebarScope
 
@@ -14,6 +14,7 @@ export sidebar RightSidebarScope:
     panels:
         - @{ReferencedFilesPanel}
         - @{UnderstandingPanel}
+        - @{SubagentsPanel}
 
     concept: {RightSidebarConcept}
 
@@ -34,10 +35,41 @@ shape RightSidebarShape:
         running beneath it. It keeps the width it was dragged to while the
         application runs.
 
-        Its two panels, the referenced files above the understanding, sit one
-        above the other: the referenced files only as tall as their rows need,
-        up to half the sidebar's height, scrolling beyond that, and the
-        understanding filling the rest.
+        Its panels sit one above the other, in this order: the referenced
+        files at the top, the understanding beneath them, and the subagents
+        last, along the bottom of the sidebar, beneath both. The referenced
+        files are only as tall as their rows need, up to half the sidebar's
+        height, scrolling beyond that; the subagents, once there are any, are
+        only as tall as their rows need, up to 30% of the sidebar's height;
+        and the understanding fills what is left between them, until they are
+        resized. While the run has started no subagent, the understanding
+        reaches the sidebar's bottom.
+
+    resizingPanels:
+        The panels themselves can be resized, as the sidebar can. The edge
+        between one panel and the next, where the lower panel's header meets
+        the body of the one above, is a handle: dragging it up or down moves
+        that edge, the panel above growing as the one below shrinks, or the
+        other way, their contents laid out anew at each height as it changes.
+        Hovering the handle shows the resize cursor for up and down and a thin
+        line along the edge in the theme's accent, which goes once the pointer
+        leaves and the drag is over; otherwise no line is drawn there, the
+        change of colour still being the edge.
+
+        No panel can be dragged shorter than its header and one row of its
+        contents, 32 pixels below its header, nor can one be pushed out of
+        the sidebar. Once a panel has been dragged, it keeps its height rather
+        than being only as tall as its rows need: the referenced files no
+        longer fit their rows or stop at half the sidebar, and scroll once
+        their rows are taller than the height they were given. The heights
+        they were dragged to are kept while the application runs, the next
+        time the sidebar slides out included, as its width is; when the
+        sidebar's height changes, as when the window is resized, the
+        referenced files and the subagents keep their heights and the
+        understanding takes what is left, as far as the smallest heights
+        allow. Double-clicking the handle puts
+        both panels back as they start, the referenced files fitting their
+        rows again.
 
     look:
         The sidebar's body is on the ribbon's command area colour, #222222 in
@@ -46,9 +78,13 @@ shape RightSidebarShape:
         small semibold text, 8 pixels from the left, with no count beside it.
         There is no line anywhere in it, not between a header and its body,
         nor between one panel and the next: the change of colour is the edge.
+        Each header has, along its bottom, the 1 pixel border in its panel
+        body's colour that every panel header has, as the @{SidebarScope}
+        says, which is no line, since it is the body's own colour.
         The only line is the one down its left edge, where it meets the
         message list and the chat input, which is the handle it is resized
-        by. In light mode the
+        by, apart from the line that shows along the edge between two panels
+        while it is hovered or dragged, as resizing the panels says. In light mode the
         same steps are taken, as the ribbon's are.
 
         Neither panel has a permanent scrollbar, since its column would break
@@ -73,108 +109,15 @@ shape RightSidebarShape:
         list and the chat input, growing from nothing to its width, its
         contents sliding into view from behind that edge as it does. When the
         run is over, it slides back the same way. The slide is quick and
-        settles without bouncing. The message list and the chat input take
-        the rest of the width, laid out anew only once the slide settles.
+        settles without bouncing. It pushes rather than covers: from the
+        first frame of the slide to the last, the body's tab bar, the message
+        list or open file beneath it, and the chat input end exactly at the
+        sidebar's left edge, narrowing as it grows and widening as it
+        shrinks, laid out again each frame, as the @{BodyScope} says. Nothing
+        runs beneath the sliding sidebar, nothing is clipped by it, and
+        nothing jumps to a new width once the slide settles.
 
-export panel ReferencedFilesPanel:
-    title: Referenced Spec
-    counted: false
-    height: fit
-    scrolls: true
-    scrollbar: overflowing
 
-    concept: {ReferencedFilesConcept}
-
-concept ReferencedFilesConcept:
-    pitch:
-        The top panel of the @{RightSidebarScope}: the spec files the
-        running task references.
-
-    shape: {ReferencedFilesShape}
-
-shape ReferencedFilesShape:
-    description:
-        One row per spec file the running task references, each listed once: first those its prompt imports from, then
-        the rest in the order they are first referenced. The rows sit 8
-        pixels in from the panel's edges, above and below as well as at the
-        sides, each 24 pixels tall, with no icon: each shows its file name
-        alone, in small text, without its folders, cut off with
-        an ellipsis when the sidebar is too narrow, its full path in its
-        tooltip. A file named index, whatever its extension, such as
-        `index.pi`, shows the folder it is in before its name, as
-        `chat-input/index.pi`, and no folder above that.
-
-    referencing:
-        A spec file is one in the spec location, as the
-        @{ProjectLocationsScope} says; a compiled spec file is one under
-        `.claude/reference`, which stands for part of the spec. Both are
-        listed, and files anywhere else are not. A file's full path counts
-        however long it is, and a relative path is read from the project
-        directory.
-
-        A file is referenced, however the harness reads it, when:
-
-        - the task's prompt imports from it, its hidden anchor naming it
-        - the harness reads, edits, or writes it with a file tool
-        - a shell command reads it, such as cat, head, tail, sed, less, grep,
-            rg, awk, or diff naming it, or a pattern or folder that takes it in,
-            as far as the command shows
-        - a shell command edits or writes it, such as sed -i, a redirect (> or
-            >>), tee, mv, or cp onto it
-        - a search tool, Grep or Glob, searches a folder or pattern that takes
-            it in and its results name it
-        - a subagent the harness starts does any of the above
-
-        A file taken in only by a folder or pattern, without the results
-        naming it, is not listed. A command whose target can't be worked out
-        is skipped rather than guessed at. A file referenced again isn't listed
-        again.
-
-        A file edited or written in any of these ways, rather than only read
-        or imported, shows a small pencil icon at the right of its row. A row
-        a subagent referenced shows the same way, with "Read by a subagent" in
-        its tooltip beneath its full path.
-
-        Clicking a row opens its file, as the @{OpenFileScope} says. While no
-        spec file is referenced yet, the list reads
-        "No spec files referenced yet", muted.
-
-export panel UnderstandingPanel:
-    title: Understanding
-    counted: false
-    height: fill
-    scrolls: true
-    scrollbar: overflowing
-
-    concept: {UnderstandingConcept}
-
-concept UnderstandingConcept:
-    pitch:
-        The bottom panel of the @{RightSidebarScope}: the constraints
-        the harness has taken from the spec for the running task.
-
-    shape: {UnderstandingShape}
-
-shape UnderstandingShape:
-    description:
-        It shows the running task's understanding file, as the
-        @{ModeSystemPromptsScope} says, as it is written: one row per item of
-        its Markdown list, in the file's order, its text wrapping rather than
-        cut off. Each row is a box on the ribbon's tab row colour, #333333 in
-        dark mode, with corners rounded 4 pixels, its text in small text with
-        a 20 pixel line height, 8 pixels of padding either side and 6 above
-        and below, so it is 32 pixels tall for a single line;
-        the boxes sit 8 pixels in from the panel's edges and 4 pixels apart. Anything in the file that isn't a list item is left out.
-
-        A row's text is its item's, with any link shown as its text alone.
-        Clicking a row opens the file its link points to, read from the
-        project directory, as the @{OpenFileScope} says. A row whose link
-        points to a file that doesn't exist shows its text muted, and clicking
-        it does nothing; a row with no link does nothing either.
-
-        It follows the file as it changes on disk while the task runs. A row
-        that is added, or whose text changes, is briefly highlighted, fading
-        back to its box's colour. Until the file exists, it reads
-        "Nothing understood yet", muted. Once it exists but has no list items
-        yet, as when it has just been created, the panel shows nothing beneath
-        its header, and has nothing to scroll and no scrollbar.
+export ReferencedFilesPanel
+export UnderstandingPanel
+export SubagentsPanel

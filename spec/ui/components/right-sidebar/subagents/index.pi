@@ -1,0 +1,54 @@
+use /lib
+use /ui
+use /ui/components/sidebar/Panel
+from .. import RightSidebarScope
+from /scope/prompt-mode/modes import PromptModesScope
+
+export panel SubagentsPanel:
+    title: Subagents
+    counted: false
+    height: fit
+    scrolls: true
+    scrollbar: overflowing
+
+    concept: {SubagentsConcept}
+
+concept SubagentsConcept:
+    pitch:
+        The bottom panel of the @{RightSidebarScope}, beneath the referenced
+        files and the understanding: the subagents the harness started for
+        the running task, each shown in the colour of the mode that started
+        it.
+
+    shape: {SubagentsShape}
+
+shape SubagentsShape:
+    description:
+        It is shown only once the run has started a subagent, and takes no
+        room before. One row per subagent, in the order they started, each 24
+        pixels tall, 8 pixels in from the panel's edges: a spinner while it is
+        at work, then a tick, a cross, or a dash for how it ended, done,
+        failed, or stopped, beside what it was started to do, in small text,
+        cut off with an ellipsis, muted once it has ended. Its tooltip gives
+        what it was started to do, and beneath, muted, its kind and what it
+        is doing or how it ended. The panel is only as tall as its rows need,
+        up to 30% of the sidebar's height, scrolling beyond that.
+
+    byMode:
+        Each subagent is shown according to the mode of the task that started
+        it, as the @{PromptModesScope} colours modes: its row has a bar 2
+        pixels wide down its left edge in that mode's colour, and its spinner
+        and tick are drawn in it too, while a cross or dash keeps its own
+        colour. A subagent's mode is the mode its task was sent in, and for a
+        step of a chain, the step's own: the spec step and a spec follow-up
+        are Spec's, and the code step is Code's, never Chain's purple. Its
+        tooltip names the mode, "Started by the Code task", "Started by the
+        Spec step", and so on.
+
+        While a chain runs, the panel keeps the subagents of each of its
+        steps, not only the step running: they are grouped by step, in the
+        order the steps ran, each group headed by a small label in its mode's
+        colour, "Spec", "Code", or "Spec follow-up", with the step running
+        last. A task that isn't part of a chain has one group, and no label.
+        Once the run is over, the sidebar slides back with them all, as it
+        says.

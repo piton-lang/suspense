@@ -3,6 +3,7 @@ use /ui
 from /scope/project-data import ProjectDataScope
 from /scope/prompt-mode/chat-input import ChatInputScope
 from /scope/prompt-mode/sending import PromptSendingScope
+from /ui/behaviours/drag-reorder import DragReorderBehaviour
 from /ui/components/scrollbar import ScrollbarScope
 
 export ui-component QueueListScope:
@@ -42,14 +43,25 @@ shape QueueListShape:
         in the queue.
 
     newConversation:
-        Each queued prompt in the list has a small ghost button with a
-        sparkles icon, first of its buttons, shown as selected while the
-        prompt will start a new conversation rather than carry on the tasks',
-        as its hidden anchor records, as the @{ChatInputScope} says. Clicking
-        it switches between the two, saving the prompt again with the project.
-        Its tooltip says which the prompt does, and that clicking does the
-        other instead. The choice stays with the prompt wherever it is moved
-        in the queue.
+        Each queued prompt in the list has a small toggle switch, a slider,
+        first of its controls, switched on while the prompt will start a new
+        conversation rather than carry on the tasks', as its hidden anchor
+        records, as the @{ChatInputScope} says. Clicking it switches between
+        the two, saving the prompt again with the project. Its tooltip says
+        which the prompt does, and that clicking does the other instead. The
+        choice stays with the prompt wherever it is moved in the queue.
+
+        Prompts that will share a context are joined by a subtle connector
+        line drawn between their switches: a vertical line 1 pixel wide in
+        the theme's line colour, centred on the switches, running from the
+        bottom of one prompt's switch to the top of the next one's, across
+        the gap between their rows. A prompt that carries on is joined to the
+        one above it; one that starts a new conversation is not, so each run
+        of joined switches is one context. The first prompt in the queue is
+        never joined to anything above it. Nothing else marks the grouping:
+        there is no gutter, dot, or line at the row's left edge. The line
+        follows the prompts as they are moved or switched, and is never under
+        a switch, only between them.
 
         The toggle can only make a prompt start a new conversation; it can't
         bring back one that was left. Once New conversation has been pressed
@@ -58,15 +70,13 @@ shape QueueListShape:
         further down or switched back to carrying on.
 
     reorder:
-        After the new conversation button, each queued prompt in the list has
-        two small ghost buttons, one with an up chevron, whose tooltip says it
-        moves the prompt up, and one with a down chevron, whose tooltip says
-        it moves the prompt down. Each swaps the prompt with its neighbour
-        above or below it, and the order is saved with the project, so the
-        queue comes back in its new order when the project is opened again.
-        Move up is disabled on the first prompt and move down on the last, and
-        both are disabled while either prompt they would swap is still being
-        saved, as its spinner shows. A prompt being edited can still be moved,
+        Queued prompts are reordered by dragging them, as the
+        @{DragReorderBehaviour} says: each row starts with a grip, and the
+        prompt dragged follows the pointer as a line of its text. Dropped in a
+        gap, it moves there, and the order is saved with the project, so the
+        queue comes back in its new order when the project is opened again. A
+        prompt still being saved, as its spinner shows, can't be dragged, and
+        no gap past a prompt still being saved shows the indicator. A prompt being edited can still be moved,
         and the chat input's "Editing queued prompt N" follows it to its new
         place. A move that can't be saved leaves the queue as it was, and a
         notification titled "Could not move the prompt" says why.

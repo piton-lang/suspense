@@ -1,0 +1,76 @@
+
+export anchor Prompt_f5cae26d07b01d20:
+    userPrompt:
+        \\\
+        In the Previous task list, we want things sent from Chain to be grouped.  Ok to keep them as individual items, but they should clearly be "part" of one parent item.  So arguably, chain holds both spec and prompt and possible spec followup
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            In the Previous task list, we want things sent from Chain to be grouped.  Ok to keep them as individual items, but they should clearly be "part" of one parent item.  So arguably, chain holds both spec and prompt and possible spec followup
+            \\\
+        result:
+            \\\
+            I've written Chain grouping for the Previous tasks list into the spec; the code isn't changed yet. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            **What I changed:** a new `chainedTasks` section on `PromptEditorShape` in `spec/scope/prompt-mode/index.pi`, which compiles to "Chained Tasks" in `.claude/reference/scope/prompt-mode/index.md`.
+
+            The spec never described how a Chain prompt runs, so the section starts there, matching what the code already does:
+            - **The steps:** the Chain task writes the spec, then the same prompt goes to Code. If the chain asks for a post-build spec update, it then goes to Spec again. Each step records the one it came from.
+            - **What belongs to a chain:** only the steps the chain sends itself. A task you send to the other mode or resend from a step by hand stands on its own.
+
+            Then the grouping:
+            - **Parent item:** a heading row tinted a little more strongly in the Chain colour. It shows a joined-chain icon, the prompt's first line and "2 steps" or "3 steps".
+              - Its status is the chain's overall one: Running if any step runs, Failed or Cancelled if one was, otherwise the last step's.
+              - It has no checkbox or buttons of its own, and clicking it opens nothing.
+            - **Steps:** each is still a full item, with its own checkbox, status, Resend, output and changed files. They're indented under the parent and joined by a thin Chain-coloured line down the left. Each is labelled "Spec", "Code" or "Spec follow-up" in its mode colour, and listed in the order they ran.
+            - **Edge cases:**
+              - A chain is listed where its first step was sent, and nothing else is ever mixed into it.
+              - A running or partial chain shows the steps sent so far. If the latest task is a chain step, its earlier steps stay grouped and the parent notes that the rest is the latest task.
+              - A session divider never splits a chain; it goes above the parent.
+              - A step whose chain can't be traced is listed on its own.
+
+            The parent's look, the step labels and making the parent not clickable are my choices; you only asked that the steps clearly belong to one parent. I kept the parent always expanded; say if you'd rather it could collapse.
+
+            **A slip I caught:** my first edit accidentally removed the existing `header:` key, which merged the header's text into the new section. I restored it and checked that the rest of the file is identical to the committed version.
+
+            **Anchors the code should follow:**
+            - **`PromptEditorShape.chainedTasks`**, as above, together with **`PromptEditorShape.previousTasks`** (checkboxes and batch actions work per step).
+            - **`PromptModesScope.colours`:** the Chain colour and the step mode colours.
+            - **In `src/prompt_mode.rs`:**
+              - A chain's steps can be identified from what the code already records, in `chain_next` and each task's `sent` (`mode`, `code_task`, `sent_from`, `post_build_update`). A step's `sent_from` names the step before it.
+              - The rendering belongs in `HistoryList::render_list`'s `HistoryRow::Heading`. The parent needs rows of its own in the list's row mapping (`row_at`/`block`), alongside the session groups from `session_groups`.
+
+            The constraints are in `.suspense/history/1790712220-Prompt_8ee1d1249dd6be5c.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_8ee1d1249dd6be5c

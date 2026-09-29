@@ -22,6 +22,16 @@ shape DiffViewShape:
         a @{ScrollbarScope}. It fills whatever holds it, and follows the
         file as it changes on disk.
 
+    snapshots:
+        It can also show one file's changes between two snapshots of the
+        working tree, as a task's changed files are opened. Then its left side
+        is the file in the earlier snapshot and its right the file in the
+        later, both read from git's trees, not from disk, so it doesn't follow
+        the file as it changes on disk. A file added has nothing on its left,
+        and a file deleted nothing on its right. A renamed file shows its old
+        path's contents against its new path's. Its header reads the same, and
+        its button that opens the file opens it as it is on disk now.
+
     header:
         The file's path in the project, beside a diff icon, and how many lines
         were added (+, in green) and removed (−, in red). At the right end:

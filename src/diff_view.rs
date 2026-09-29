@@ -22,6 +22,7 @@ use gpui_kit::*;
 
 use crate::diff::{FileDiff, Kind, Line, SideRow, UnifiedRow, change_starts};
 use crate::project_directory::ProjectDirectory;
+use crate::task_snapshot;
 
 actions!(diff_view, [NextChange, PreviousChange]);
 
@@ -129,6 +130,42 @@ impl DiffView {
             focus_handle: cx.focus_handle(),
             _refresh: refresh,
         }
+    }
+
+    /// The changes to `path`, from the repository's top `top`, between two
+    /// snapshots of the working tree, the trees `before` and `after`, read
+    /// from git rather than from disk, so it doesn't follow the file. A
+    /// renamed file's left side is its old path, `from`, in `before`.
+    pub fn between(
+        top: PathBuf,
+        path: PathBuf,
+        from: Option<PathBuf>,
+        before: String,
+        after: String,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut view = Self::new(top.join(&path), cx);
+        let load = cx.spawn(async move |this, cx| {
+            let content = cx
+                .background_spawn(async move {
+                    let old =
+                        task_snapshot::contents(&top, &before, from.as_deref().unwrap_or(&path))
+                            .unwrap_or_default();
+                    let new = task_snapshot::contents(&top, &after, &path).unwrap_or_default();
+                    if new.contains(&0) || old.contains(&0) {
+                        return Content::Binary;
+                    }
+                    Content::Diff {
+                        old: String::from_utf8_lossy(&old).into_owned(),
+                        new: String::from_utf8_lossy(&new).into_owned(),
+                    }
+                })
+                .await;
+            this.update(cx, |this, cx| this.show(content, cx)).ok();
+        });
+        // Read once, from the snapshots, in place of following the disk.
+        view._refresh = load;
+        view
     }
 
     #[cfg(test)]

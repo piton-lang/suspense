@@ -1,0 +1,75 @@
+
+export anchor Prompt_e967f9676346b222:
+    userPrompt:
+        \\\
+        Previous task list should have top filters in the header.  Filter by send to mode, filter by send to spec/send to code, etc.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Previous task list should have top filters in the header.  Filter by send to mode, filter by send to spec/send to code, etc.
+            \\\
+        result:
+            \\\
+            I've added filters for Previous tasks to the spec; the code isn't changed yet. `piton check` finds no problems, formatting is clean, `piton build` succeeded, and the section headings in the compiled reference are all intact.
+
+            **What I changed:** a new `previousTaskFilters` section on `PromptEditorShape` in `spec/scope/prompt-mode/index.pi`. It compiles to "Previous Task Filters" in `.claude/reference/scope/prompt-mode/index.md`.
+
+            - **Where:** a filter bar at the top of the expanded list, under the "Back to the latest task" row. It stays put while the list scrolls.
+            - **Chips:** each chip shows how many tasks it would match. They come in two groups:
+              - **Mode sent in:** Code, Chain, Spec, Freeform, each tinted its mode's colour when on.
+              - **Other-mode state:** "Can send to Spec", "Can send to Code", "Sent" (already sent or being sent), "Marked done".
+            - **How they combine:**
+              - With nothing on, everything shows.
+              - Chips in the same group mean either, so Code and Spec together shows both.
+              - Across groups they mean both, so Code with "Can send to Spec" shows only Code tasks that can still go to Spec.
+              - A "Clear" button appears while any chip is on.
+            - **Effects:**
+              - Filtering only hides tasks.
+              - A partly hidden chain keeps its parent row, and session dividers only show above sessions that still have something visible.
+              - The row still counts all tasks, plus "N shown" while filtering.
+              - Hidden tasks stay selected and the batch actions still send them; an open task that gets filtered out closes.
+              - If nothing matches, the list reads "No previous tasks match these filters".
+            - **Kept:** the filters stay while you close and reopen the list, separately for each open project, but aren't saved when the app closes. Previous answers get no filter bar.
+
+            I read "filter by send to mode" as the mode a task was sent in, and "send to spec/send to code" as where it stands with the other mode. The chip names, the either/both logic, and keeping hidden selections in batch sends are my choices; say if you'd rather batch actions only send what's visible.
+
+            **Anchors the code should follow:**
+            - **`PromptEditorShape.previousTaskFilters`**, as above, alongside `previousTasks` (selection and batch actions) and `chainedTasks` (the chain parent rows).
+            - **`PromptModesScope.colours`:** the chip tints.
+            - **`PromptSendingScope.sendingToTheOtherMode`:** what "can send", "sent" and "marked done" mean. In `src/prompt_mode.rs` that's `other_mode_state`, `offers_other_mode` and `marked_done`.
+            - **In the code:** the list is `HistoryList::render_list`. Filtering changes which task indices it lays out, so the row mapping (`row_at`, `rows.reset`) has to work over the visible tasks rather than all of them. The filter state belongs on `HistoryList`, swapped per project with the rest of `task_history`.
+
+            The constraints are in `.suspense/history/1790713271-Prompt_e206c1782df65798.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_e206c1782df65798

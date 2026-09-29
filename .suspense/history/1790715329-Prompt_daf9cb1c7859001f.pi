@@ -1,0 +1,66 @@
+
+export anchor Prompt_daf9cb1c7859001f:
+    userPrompt:
+        \\\
+        Any panel header should have a 1px bottom border that matches the background of the panel it is attached to.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Any panel header should have a 1px bottom border that matches the background of the panel it is attached to.
+            \\\
+        result:
+            \\\
+            I've added a rule to the spec that every panel header gets a 1px bottom border matching its panel's body colour; the code isn't changed yet. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            **What I changed:**
+            - **The general rule** is in `SidebarShape.headers` in `spec/ui/components/sidebar/index.pi`:
+              - Every panel header, in a sidebar or anywhere else a panel has one, has a 1px border along its bottom, inside the header's own height.
+              - The border is exactly the colour of the body of the panel it heads.
+              - It shows at every display scale and in light and dark mode, and it follows the body's colour when that changes, for example with the brightness slider.
+            - **Panel keyword** (`spec/ui/components/sidebar/Panel.pi`): the header sentence every panel inherits now mentions the border.
+            - **`RightSidebarShape.look`** (`spec/ui/components/right-sidebar/index.pi`) and **`GitPanelShape.look`** (`spec/ui/components/git-panel/index.pi`): both point to the rule. The Git panel's is #222222 in dark mode, and the Git panel now imports `SidebarScope` to link to it.
+
+            Both of those files say there's "no line" between a header and its body. I kept that wording and added that the border doesn't count as a line, since it's the body's own colour.
+
+            **Anchors the code should follow:**
+            - **`SidebarShape.headers`**, plus the panel sentence in **`Panel`**, **`RightSidebarShape.look`** and **`GitPanelShape.look`**.
+            - **In the code, there are two places that draw panel headers:**
+              - `crate::sidebar::header` in `src/sidebar.rs`, used by the right sidebar's panels and the file tree. It needs a bottom border in the body colour of the panel it's used in; for the right sidebar that's `palette.ribbon`. It may need a parameter, since panel bodies differ.
+              - `render` in `src/git_panel.rs`, which builds its own header row (`git-header`). It needs `.border_b_1()` in `palette.ribbon`.
+
+              In both, the border should sit inside the existing 32px height, so layouts and tests that measure header height stay the same.
+
+            The constraints are in `.suspense/history/1790715227-Prompt_b9ee60dfcd1ee7b4.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_b9ee60dfcd1ee7b4

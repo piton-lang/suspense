@@ -9,6 +9,7 @@ from /scope/prompt-mode/modes import PromptModesScope
 from /ui/components/file-tree import FileTreeScope
 from /ui/components/growing-text-input import GrowingTextInputScope
 from /ui/components/scrollbar import ScrollbarScope
+from /ui/components/sidebar import SidebarScope
 
 export panel GitPanelScope:
     height: fit
@@ -37,7 +38,9 @@ shape GitPanelShape:
         with 8 pixels of padding at either side and at the bottom, and 4
         pixels between one thing and the next. There is no line between the
         header and the body, nor between the file tree and the header: the
-        change of colour is the edge. Every box and button in it is square,
+        change of colour is the edge. The header has, along its bottom, the 1
+        pixel border in the body's colour, #222222 in dark mode, that every
+        panel header has, as the @{SidebarScope} says. Every box and button in it is square,
         with no rounded corners and no border, and the Pull and Push buttons
         are square too.
 
@@ -63,11 +66,17 @@ shape GitPanelShape:
         is a row-resize cursor.
 
     scrolling:
-        When the panel is shorter than its contents, its header, the branch
-        with Pull and Push, stays where it is, and its body, the summary,
-        commit notes, message, Generate, and Commit, scrolls beneath it, with a
-        @{ScrollbarScope} along its right. The body's colour runs all the way
-        down the panel.
+        When the panel is shorter than its contents, only the commit notes
+        scroll. Its header, the branch with Pull and Push, stays at its top,
+        and the summary stays beneath it; the message box, Generate, and
+        Commit stay fixed along its bottom, always in view, however many notes
+        there are. The notes, between the summary and the message box, fill
+        what is left and scroll within it, with a @{ScrollbarScope} along
+        their right only while they overflow. Everything else is always as
+        tall as it needs, so shrinking the panel takes room from the notes
+        first, down to nothing; only once the notes have no room left does the
+        rest give way, the summary last before the header. The body's colour
+        runs all the way down the panel.
 
     branch:
         The top row shows a branch icon, then the branch from the

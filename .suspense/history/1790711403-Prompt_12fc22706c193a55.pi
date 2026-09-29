@@ -1,0 +1,74 @@
+from /scope/application/Body import BodyScope
+from /ui/components/right-sidebar import RightSidebarScope
+
+export anchor Prompt_12fc22706c193a55:
+    userPrompt:
+        \\\
+        When anything slides out @{RightSidebarScope} in particular, everything else should smoothly animate.  I'm currently seeing a specific issue with @{BodyScope}
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            When anything slides out @{RightSidebarScope} in particular, everything else should smoothly animate.  I'm currently seeing a specific issue with @{BodyScope}
+            \\\
+        result:
+            \\\
+            I've changed the spec so the right sidebar pushes everything else in the body smoothly as it slides; the code isn't changed yet. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            **What was wrong in the spec:** it said the sidebar slides out *over* the body, and the message list and chat input are "laid out anew only once the slide settles". So everything stayed at its old width through the animation and then jumped at the end. That's probably the problem you're seeing in the body. You didn't say exactly what it looks like, so if it's something else, tell me.
+
+            **What I changed:**
+            - **The right sidebar** (`RightSidebarScope.showing`, in `spec/ui/components/right-sidebar/index.pi`): it now pushes rather than covers. On every frame of the slide, the body's tab bar, the message list or open file, and the chat input end exactly at the sidebar's left edge. Nothing runs underneath it or gets cut off by it, and nothing jumps once the slide settles.
+              - I added an import of `BodyScope` to that file so it can link to the body.
+            - **The body** (a new `sliding` section on `BodyScope`, in `spec/scope/application/Body.pi`): it covers the general case you asked for, "when anything slides out", not just the right sidebar:
+              - Whenever something slides along one of the body's edges, the tab bar, the selected tab's contents and the chat input all move with it, frame by frame and in step with each other.
+              - None lags behind or waits at its old width.
+              - Their contents reflow as the width changes: the tabs, the chat input's text and buttons, the message table and the file editor.
+              - A slide that reverses partway moves everything back from wherever it had reached.
+
+            **Anchors the code should follow:**
+            - `RightSidebarScope.showing` and `BodyScope.sliding`, as above.
+            - `BodyScope.description` (unchanged): the chat input never runs beneath the right sidebar.
+            - **In the code** (`with_referenced_spec` in `src/prompt_mode.rs`):
+              - During the slide, the sidebar is drawn over the body at a fixed width (`covered_right(history, pane, host_width, cx)`, with the width held in `history_width`).
+              - It should instead become a side-by-side row. The body would take the leftover width, and the sidebar's width would follow the same `PANE_SPRING` animation (`slide_pane`), so the body shrinks and grows with it each frame.
+              - The resizable split used once the slide settles should start from the same width, so nothing jumps when the slide ends.
+              - This applies to both opening and closing (`refs_closing`).
+
+            The constraints are in `.suspense/history/1790711352-Prompt_e6404f87a5b894c5.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_e6404f87a5b894c5
+
+    references:
+        - @{RightSidebarScope}
+        - @{BodyScope}

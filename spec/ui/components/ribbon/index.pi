@@ -3,7 +3,6 @@ use /ui
 from ./application-tab import RibbonApplicationTabScope
 from ./code-tab import RibbonCodeTabScope
 from ./project-tab import RibbonProjectTabScope
-from ./research-tab import RibbonResearchTabScope
 from ./spec-tab import RibbonSpecTabScope
 from /scope/running-activity import RunningActivityScope
 from /scope/user-preferences import UserPreferencesScope
@@ -40,13 +39,13 @@ shape RibbonShape:
         colour while the tab is closed, and while open, the tab is tinted with
         it instead and its label is the tab's own colour. Each such tab says
         more. Its tabs are, in order: Project,
-        Code, Spec, Research, and Application. The window always opens on
+        Code, Spec, and Application. The window always opens on
         Project. Beneath the tabs, the selected tab's commands sit in groups.
         There is no raw output view and no toggle for one.
 
     keyboard:
         <Alt+1> opens the first tab, <Alt+2> the second, and so on, through
-        each tab in the order the tabs are shown, <Alt+5> opening Application.
+        each tab in the order the tabs are shown, <Alt+4> opening Application.
         Each opens its tab alone, as clicking it does, and expands the ribbon
         first if it is collapsed. A number past the last tab does nothing. Like
         the ribbon's other shortcuts, they do nothing while an inset panel is
@@ -134,8 +133,6 @@ shape RibbonShape:
         code: @{RibbonCodeTabScope}
 
         spec: @{RibbonSpecTabScope}
-
-        research: @{RibbonResearchTabScope}
 
         application: @{RibbonApplicationTabScope}
 

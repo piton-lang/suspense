@@ -52,6 +52,15 @@ pub struct RunRecord {
     /// this was kept load as not marked.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub marked_done: bool,
+    /// In a git repository, the tree the working tree was snapshotted as
+    /// when the harness started the task, pinned under
+    /// `refs/suspense/<task>/before`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot_before: Option<String>,
+    /// The tree it was snapshotted as when the run was over, pinned under
+    /// `refs/suspense/<task>/after`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot_after: Option<String>,
 }
 
 impl RunRecord {

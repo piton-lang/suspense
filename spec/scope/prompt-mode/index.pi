@@ -82,6 +82,89 @@ shape PromptEditorShape:
         a notification says a project must be opened first, and the selection
         is kept.
 
+    previousTaskFilters:
+        While the previous tasks are expanded, a filter bar sits along the top
+        of the list, beneath their row and above the first item, on the tab
+        bar's background with the theme's line beneath it, and scrolls with
+        nothing: it stays put as the list scrolls. It holds two groups of
+        small toggle chips, each chip reading its label and, muted after it,
+        how many previous tasks it would show.
+
+        The first group filters by the mode each task was sent in, one chip
+        per task mode in the @{PromptModesScope}'s order, "Code", "Chain",
+        "Spec", and "Freeform", each tinted its mode's colour while on. The
+        second filters by where a task stands with the other mode, as the
+        @{PromptSendingScope} says, with "Can send to Spec" for tasks that
+        offer Send to Spec, "Can send to Code" for those that offer Send to
+        Code, "Sent" for those already sent to the other mode or being sent
+        there, and "Marked done" for those marked done by hand.
+
+        With no chip on, which is how the list starts, every previous task
+        shows. Within a group, the chips on combine as either, so a task
+        shows when it matches any of them, and the two groups combine as
+        both, so with chips on in each, a task shows only when it matches one
+        in each. Clicking a chip turns it on or off, and a "Clear" button at
+        the bar's right end, shown only while any chip is on, turns them all
+        off. A chip that would show no tasks is still shown, its count 0, and
+        can still be turned on.
+
+        Filtering only hides tasks from the list; it changes nothing about
+        them. A chain whose steps are hidden in part keeps its parent row
+        above the steps still shown, and is hidden with its parent only when
+        none of its steps shows. Session dividers show only above a session
+        with a task shown. The row's count still counts every previous task,
+        and while any chip is on it reads, after it, "N shown". A hidden task
+        stays selected if it was, and is still counted in "N selected" and
+        sent by the batch actions; an open task that is filtered out closes.
+        With every task filtered out, the list reads "No previous tasks match
+        these filters", muted, centred. The filters are kept while the list is
+        closed and opened again, and each open project keeps its own, as the
+        @{OpenProjectsScope} says, but they are not saved with the project.
+        Previous answers have no filter bar.
+
+    chainedTasks:
+        A prompt sent in Chain runs as steps, each saved in the history as a
+        task of its own: first the Chain task itself, which writes the spec;
+        then the same prompt sent to Code, told what the spec step did; and,
+        when the chain asks for a post-build spec update, the same prompt sent
+        to Spec once more, told what the code step did. Each step knows the
+        one it was sent from, as the @{PromptSendingScope} says. Only the
+        steps the chain sends itself belong to it; a task sent to the other
+        mode by hand, or resent, from one of its steps is a task of its own.
+
+        In the previous tasks list, a chain's steps are grouped under one
+        parent item, so they read as parts of a single chain. The parent is a
+        heading row in the list, tinted the Chain colour, as the
+        @{PromptModesScope} colours it, a little more strongly than a single
+        task's tint: a joined chain icon, the first line of the prompt, and at
+        its right how many steps it has, "2 steps" or "3 steps". Its status is
+        the chain's as a whole: Running while any step runs, Failed or
+        Cancelled if a step was, and otherwise that of its last step. It has
+        no checkbox, Resend, or Send to the other mode of its own, and
+        clicking it doesn't open anything.
+
+        Beneath it, each step stays an item of its own, exactly as any
+        previous task is, with its checkbox, status, Resend, and whatever
+        else a task offers, opening onto its own prompt, table, and changed
+        files. The steps are indented from the parent, joined to it by a
+        thin line in the Chain colour down their left, from the parent's
+        heading to the last step, and each is labelled by what it did,
+        "Spec", "Code", or "Spec follow-up", in that step's mode colour,
+        before its prompt, which leaves out the prompt's first line when it
+        is the parent's. They are listed in the order they ran.
+
+        A chain is listed where its first step was sent, oldest first like
+        every other item; tasks sent while it ran, such as questions, are
+        never listed within it. A chain still running, or one whose later
+        steps haven't been sent yet, shows as many steps as have been, and
+        a step still running shows as it would anywhere. When the latest
+        task, heading the view, is a step of a chain, that chain's earlier
+        steps are still grouped under its parent in the list, the parent
+        saying the rest is the latest task. A session divider never falls
+        between a chain's steps: it goes above the chain's parent. A step
+        from the history whose chain can't be worked out, as when the step
+        it was sent from is missing, is listed as a task of its own.
+
     header:
         The latest task heads the view whether or not the harness is working:
         its status, with a spinner while it is under way, the name of the

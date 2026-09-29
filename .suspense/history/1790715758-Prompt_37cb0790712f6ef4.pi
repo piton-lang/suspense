@@ -1,0 +1,65 @@
+from /scope/editor import EditorScope
+
+export anchor Prompt_37cb0790712f6ef4:
+    userPrompt:
+        \\\
+        The padding/margin etc all around the @{EditorScope} tab is still all weird.  Just make it normal.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            The padding/margin etc all around the @{EditorScope} tab is still all weird.  Just make it normal.
+            \\\
+        result:
+            \\\
+            I've pinned down plain, consistent spacing for the body's tabs in the spec; the code isn't changed yet. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            I took "the Editor tab" to mean the file tabs in the body's tab bar, next to Chat. If you meant the space around the editor itself under the tab, tell me and I'll spec that instead.
+
+            **What I changed:** the `tabs` section of `BodyShape` in `spec/scope/application/Body.pi`. It used to say only "gpui-kit's default tab styling" plus a 4px gap before the close button, which left gpui-kit's own padding and margins to stack up. It now spells out the spacing:
+            - **Every tab, Chat and files alike:** the bar's full 32px height, contents vertically centred, 12px padding on each side, and no margins. Each tab starts where the last one ends, and the first sits against the bar's left edge.
+            - **File tabs:** name, the unsaved dot if there is one, then a 16px close button 4px after it. The right padding is 6px instead of 12, because the button has its own space around the icon. That way the ✕ sits as far from the right edge as the name does from the left. Tabs are only as wide as that content.
+            - **Chat:** its spinner sits 6px after the label, inside the same padding.
+
+            The exact numbers are my picks for "normal"; adjust them if they look off.
+
+            **Anchors the code should follow:**
+            - **`BodyShape.tabs`** in `spec/scope/application/Body.pi`, as above.
+            - **In the code:** `render_tabs` in `src/prompt_mode.rs` builds these tabs with gpui-kit's `Tab`, which adds its own padding and inner margins. The file tab's close button was put inside the tab's content earlier, on top of that. The simplest fix is to give the tabs the explicit padding above and zero out gpui-kit's extra inner margins, or to draw them as plain elements the way the chat input's tabs now are. The test `file_tabs_are_tight_and_can_be_dragged` in `src/main_window.rs` checks the close button's gap and will need its expectations checked.
+
+            The constraints are in `.suspense/history/1790715670-Prompt_e62cb290399eb13a.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_e62cb290399eb13a
+
+    references:
+        - @{EditorScope}

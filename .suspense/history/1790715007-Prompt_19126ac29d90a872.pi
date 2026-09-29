@@ -1,0 +1,71 @@
+from /ui/components/git-panel import GitPanelScope
+
+export anchor Prompt_19126ac29d90a872:
+    userPrompt:
+        \\\
+        for the @{GitPanelScope} The commit message and buttons should actually be fixed to the bottom.  It's the list of automatically generated messages that should scroll.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            for the @{GitPanelScope} The commit message and buttons should actually be fixed to the bottom.  It's the list of automatically generated messages that should scroll.
+            \\\
+        result:
+            \\\
+            I've updated the Git panel spec so the commit message and buttons stay fixed at the bottom and only the commit notes scroll. The code isn't changed yet. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            **What I changed:** the `scrolling` section of `GitPanelShape` in `spec/ui/components/git-panel/index.pi`. It previously said everything below the header scrolls together.
+
+            - **Fixed at the top:** the header (branch, Pull, Push) and the change summary beneath it.
+            - **Fixed at the bottom:** the message box, Generate and Commit, always visible however many notes there are.
+            - **Scrolls:** only the generated commit notes, filling the space between the summary and the message box. Their scrollbar shows only while they overflow.
+            - **When the panel shrinks:** the notes lose space first, down to nothing. Only then does anything else give way, with the summary last before the header.
+
+            The panel's sizing rules are unchanged: it's only as tall as its contents, up to half the sidebar or the height you dragged it to.
+
+            **Anchors the code should follow:**
+            - **`GitPanelShape.scrolling`**, as above.
+            - **`GitPanelShape.sizing`** and **`.commitNotes`**, both unchanged.
+            - **In the code:** the panel is rendered in `src/git_panel.rs`. At the moment its whole body (summary, notes, message, Generate, Commit) is one scrolling area under the header. It needs splitting into three parts:
+              - the summary, fixed;
+              - the notes, in their own scrolling area that takes the remaining height;
+              - the message box and buttons, fixed at the bottom.
+
+              The scrollbar moves onto the notes area.
+
+            The constraints are in `.suspense/history/1790714968-Prompt_dc7f2f3c22adb0cd.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_dc7f2f3c22adb0cd
+
+    references:
+        - @{GitPanelScope}

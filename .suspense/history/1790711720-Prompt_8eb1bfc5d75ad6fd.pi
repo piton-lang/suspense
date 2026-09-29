@@ -1,0 +1,78 @@
+
+export anchor Prompt_8eb1bfc5d75ad6fd:
+    userPrompt:
+        \\\
+        And you know what, for scroll-based switching between messages and previous tasks, let's make it both the timing things, but also like a barrier you have to "scroll past" so if you scroll enough it will switch over.
+
+        We need a visual overlay for this, kind of like a subtle central radial glow that gets slightly brighter and bigger as it is about to switch.  Colour should be based off the currently selected mode.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            And you know what, for scroll-based switching between messages and previous tasks, let's make it both the timing things, but also like a barrier you have to "scroll past" so if you scroll enough it will switch over.
+
+            We need a visual overlay for this, kind of like a subtle central radial glow that gets slightly brighter and bigger as it is about to switch.  Colour should be based off the currently selected mode.
+            \\\
+        result:
+            \\\
+            I've written the scroll barrier and the glow into the spec; the code isn't changed yet. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            **What I changed:** `MessageListScrollingShape.scrollingPast` in `spec/scope/prompt-mode/message-list/Scrolling.pi`, which compiles to "Scrolling Past" in `.claude/reference/scope/prompt-mode/message-list/index.md`. I also added imports of `ChatInputScope` and `PromptModesScope` to that file so the glow's colour can link to them.
+
+            - **Timing still applies.** Only a new scroll can cross over: one started after the scrolling has rested at the end for 80 ms, or after a fresh trackpad touch. Momentum never counts.
+            - **Then a barrier.** A new scroll against an end no longer switches straight away.
+              - The distance it scrolls past the end builds up, and it switches once that reaches 200 px, about two wheel notches or a short swipe.
+              - The view holds still while the build-up grows.
+              - Scrolling back the other way reduces the build-up, and scrolls the view normally once it's gone.
+              - The build-up drains to nothing within half a second of your last scroll, so a small nudge never switches later.
+              - Scrolls during the slide add nothing.
+            - **The glow.** While anything has built up, a soft radial glow sits in the middle of the space between the "previous tasks" row and the queue.
+              - It fades to nothing at its edges and uses the colour of the mode selected in the chat input.
+              - It starts small and faint and grows larger and slightly brighter as you near the barrier. At its largest it's a little under that space's height, and still only a faint tint that never hides what's underneath.
+              - It follows the build-up smoothly, ignores clicks and scrolls, and fades out quickly as the slide begins.
+              - With no previous tasks to switch to, there's no glow.
+
+            The numbers are my choices, since you didn't give any: 200 px to cross, half a second to drain, and the glow's size and strength.
+
+            **Anchors the code should follow:**
+            - **`MessageListScrollingShape.scrollingPast`**, as above.
+            - **`PromptModesScope.colours`** (`spec/scope/prompt-mode/modes/index.pi`): the glow's colour. In code that's `chat_input::mode_color` for the chat input's selected mode.
+            - **In `src/prompt_mode.rs`:**
+              - `scroll_past_ends` currently crosses on the first new wheel event. It should instead add each new event's delta to a build-up, drained over time, and call `scroll_past` once it reaches the threshold.
+              - `SCROLL_REST` stays at 80 ms.
+              - The glow is a new non-interactive overlay layered in the same content box as `scroll_past_ends`, redrawn every frame while anything is built up.
+              - The test `scrolling_past_an_end_crosses_over` will need its single 40 px scrolls replaced by enough scrolling to pass the barrier.
+
+            The constraints are in `.suspense/history/1790711671-Prompt_ce93991394047c73.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_ce93991394047c73

@@ -1,0 +1,153 @@
+
+export anchor Prompt_cc4ec037349e746e:
+    userPrompt:
+        \\\
+        For every task the harness runs, keep a record of which files changed while it
+        ran, and let me see them.
+
+        Only git repositories get this. In a project that isn't one, the feature
+        doesn't exist: nothing is recorded and nothing about it is shown.
+
+        How it works:
+        - When the harness actually starts a task (not when it's queued), snapshot the
+          project's working tree, and snapshot it again when the task ends. Use git
+          plumbing with a private index file under .suspense/, so the user's own
+          index, HEAD, branches, and working tree are never touched:
+          GIT_INDEX_FILE=<private index> git add -A, then git write-tree. Reuse that
+          index between snapshots so only files whose timestamps changed get hashed
+          again.
+        - The snapshots follow .gitignore, like everything else in git.
+        - Pin both trees so git gc can't delete them, under a private ref namespace
+          (e.g. refs/suspense/<task-id>/before and /after), and keep the two tree hashes
+          with the task in its history.
+        - The changed files are git diff --name-status between the two trees: added,
+          modified, deleted, renamed.
+
+        What it shows:
+        - Each task, the latest and the previous ones, lists the files changed while it
+          ran. Clicking one opens its diff between the two snapshots in the existing
+          diff view.
+        - The snapshots catch everything that changed during the task, including the
+          user's own edits in the side editor. Compare them with the files the agent's
+          tool calls reported (harness.rs and shell_paths.rs already work these out):
+          files the agent reported are shown as changed by the agent, and any others as
+          changed during the task.
+
+        Spec first: describe this in the spec, in the scope that covers what a task
+        keeps in the project's data and in the scope where tasks are shown, then
+        implement it to match. Don't use branches, worktrees, or commits in the user's
+        history. Don't require jj.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            For every task the harness runs, keep a record of which files changed while it
+            ran, and let me see them.
+
+            Only git repositories get this. In a project that isn't one, the feature
+            doesn't exist: nothing is recorded and nothing about it is shown.
+
+            How it works:
+            - When the harness actually starts a task (not when it's queued), snapshot the
+              project's working tree, and snapshot it again when the task ends. Use git
+              plumbing with a private index file under .suspense/, so the user's own
+              index, HEAD, branches, and working tree are never touched:
+              GIT_INDEX_FILE=<private index> git add -A, then git write-tree. Reuse that
+              index between snapshots so only files whose timestamps changed get hashed
+              again.
+            - The snapshots follow .gitignore, like everything else in git.
+            - Pin both trees so git gc can't delete them, under a private ref namespace
+              (e.g. refs/suspense/<task-id>/before and /after), and keep the two tree hashes
+              with the task in its history.
+            - The changed files are git diff --name-status between the two trees: added,
+              modified, deleted, renamed.
+
+            What it shows:
+            - Each task, the latest and the previous ones, lists the files changed while it
+              ran. Clicking one opens its diff between the two snapshots in the existing
+              diff view.
+            - The snapshots catch everything that changed during the task, including the
+              user's own edits in the side editor. Compare them with the files the agent's
+              tool calls reported (harness.rs and shell_paths.rs already work these out):
+              files the agent reported are shown as changed by the agent, and any others as
+              changed during the task.
+
+            Spec first: describe this in the spec, in the scope that covers what a task
+            keeps in the project's data and in the scope where tasks are shown, then
+            implement it to match. Don't use branches, worktrees, or commits in the user's
+            history. Don't require jj.
+            \\\
+        result:
+            \\\
+            Every task the harness runs in a git project now records which files changed while it ran, and lists them under the task. Clicking a file opens its before/after diff in the existing diff view. In a project that isn't a git repository, nothing is recorded or shown. The code builds without warnings and `piton check` is clean, but I haven't tried it in the app.
+
+            **How it works**
+            - **When:** a snapshot is taken just before the harness is launched (not when the task is queued), and another when the run ends however it ends. The second one comes after the mode guard has restored anything the task's mode isn't allowed to change, so it reflects what was actually left.
+            - **How:** exactly the plumbing you described: `GIT_INDEX_FILE=.suspense/snapshot-index git add -A`, then `git write-tree`. The index is reused between snapshots and `.gitignore` is followed. No commits, branches, stash or worktrees, and jj isn't needed.
+            - **Kept:** both trees are pinned under `refs/suspense/<task name>/before` and `/after`, and their hashes are saved in the task's history record.
+            - **Failures:** if a snapshot fails, the task still runs; it just shows no list.
+
+            **What you see**
+            - **Where:** a collapsed "Files changed N" heading under the latest task's output, and under an open previous task's table. Expanded, each file shows A, M, D or R, and a renamed file shows its old path → new path.
+            - **Who changed it:** files the agent's tool calls reported editing or writing, as `harness.rs`/`shell_paths.rs` work them out, are shown plainly. Anything else, such as your own edits in the side editor, is muted with a clock icon and a tooltip saying so.
+            - **The diff:** clicking a file shows it as it was when the task started against how the task left it, read from the two snapshots rather than from disk.
+            - **Colours:** the git panel has no per-letter colours to reuse, so I used green for A, amber for M and R, and red for D.
+
+            **Spec:** described first, as you asked, in three places:
+            - `ProjectDataScope` (`spec/scope/project-data/index.pi`) has a new `taskSnapshots` section, plus the record's two hashes and `snapshot-index` in its contents and machine-only lists.
+            - A new `MessageListChangedFilesShape` (`spec/scope/prompt-mode/message-list/ChangedFiles.pi`), linked from `MessageList`, covers what's shown.
+            - `DiffViewScope` has a new `snapshots` section for diffing between two trees.
+
+            **Things to know**
+            - **Existing projects will see a new untracked file.** `.suspense/snapshot-index` shows up in `git status` until you add `/.suspense/snapshot-index` to that project's `.gitignore`. I added it to this repo's `.gitignore` and to the template new projects get. The snapshots themselves always leave it out.
+            - **A pitfall I hit and fixed:** where `.suspense/` is already ignored, excluding the index by name makes `git add` refuse. It now excludes it only when it isn't already ignored.
+            - **Start-up cost:** each task now runs `git add -A` before the harness starts. After the first time that's usually quick, since the index is reused, but the very first snapshot in a big repository hashes every tracked and untracked file.
+            - **Refs accumulate:** the `refs/suspense/` refs are never deleted, so the snapshots stay in the repository indefinitely.
+            - **Questions from the Ask tab aren't snapshotted**, since they aren't tasks.
+
+            **Tests:** I added four, and they pass:
+            - `task_snapshot.rs` tests: real repositories and every kind of change, checking that the index, HEAD and history are untouched.
+            - `a_task_lists_the_files_changed_while_it_ran`: the list and clicking a file.
+            - `restored_tasks_list_their_changed_files`: restoring from history, and nothing outside git.
+            - `a_run_is_snapshotted_in_a_git_repository`: an end-to-end run with a stand-in harness.
+
+            The full suite has 7 failures:
+            - Four were failing before this work: the three prompt-wording tests and `code_tasks_sent_to_spec_are_told_what_the_code_task_did`.
+            - `batch_sent_tasks_run_in_order_in_the_other_mode` and `selected_answer_text_can_be_copied_or_attached` passed on their own earlier.
+            - `quitting_while_a_task_runs_asks_first` is new in the list but passed twice on its own.
+
+            To check that last one against the old code, I briefly ran `git stash` and `git stash pop` on your working tree. It came back intact, with the stash empty afterwards.
+
+            The constraints are in `.suspense/history/1790709883-Prompt_5ce5de0bc2f9b771.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_5ce5de0bc2f9b771
