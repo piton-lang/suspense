@@ -6900,6 +6900,12 @@ mod tests {
                     bounds("understanding-header"),
                 ];
                 let rows = [0usize, 1].map(|ix| window.find(("referenced-file", ix)).bounds());
+                let this = prompt_mode.read(cx);
+                assert_eq!(
+                    (this.refs_scroll.max_offset().y, this.understanding_scroll.max_offset().y),
+                    (px(0.), px(0.)),
+                    "{mode:?}: a panel whose rows fit scrolls"
+                );
                 let boxes = [0usize, 1].map(|ix| window.find(("understanding-row", ix)).bounds());
                 assert!(
                     window.try_find(("referenced-file", 2usize)).is_none(),
@@ -7109,6 +7115,24 @@ mod tests {
                 assert!(near(right, raised), "the column's right side at {y:?} is {right:06x}");
             }
             assert_eq!(at(8., low), body, "the track isn't the body's colour");
+        })
+        .unwrap();
+
+        // An understanding with no list items has nothing to scroll, nor a
+        // scrollbar.
+        std::fs::write(&file, "Notes that aren't a list item.\n").unwrap();
+        settle(cx);
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find(("understanding-row", 0usize)).is_none());
+            assert!(window.try_find("understanding-scroll-column").is_none());
+            prompt_mode.read_with(cx, |this, _| {
+                assert_eq!(
+                    this.understanding_scroll.max_offset().y,
+                    px(0.),
+                    "the empty understanding scrolls"
+                )
+            });
         })
         .unwrap();
         std::fs::remove_dir_all(&dir).ok();

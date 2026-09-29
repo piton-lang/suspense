@@ -1,6 +1,7 @@
 //! The ribbon's Application tab, for the application rather than the project:
 //! the Brightness slider, which runs the interface from its darkest to its
-//! lightest, and Settings, which opens the settings window.
+//! lightest, Theme, which opens the theme editor, and Settings, which opens
+//! the settings window.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::Button;
@@ -13,6 +14,7 @@ use gpui_kit::*;
 
 use super::{Command, CommandPlace, CommandSize, Ribbon};
 use crate::settings_window::OpenSettings;
+use crate::theme_editor::OpenThemeEditor;
 use crate::{theme, theme_preference};
 
 pub(super) const COMMANDS: &[CommandPlace] = &[
@@ -22,6 +24,12 @@ pub(super) const COMMANDS: &[CommandPlace] = &[
         group: "Appearance",
         size: CommandSize::Slim,
         primary: true,
+    },
+    CommandPlace {
+        command: Command::Theme,
+        group: "Colours",
+        size: CommandSize::Full,
+        primary: false,
     },
     CommandPlace {
         command: Command::Settings,
@@ -40,6 +48,9 @@ const BRIGHTNESS_SLIDER_WIDTH: Pixels = px(120.);
 pub(super) struct BrightnessSlider {
     /// The appearance the thumb was last put on or dragged to.
     shown: usize,
+    /// How many appearances the track runs through, which a mode's base
+    /// colour changes.
+    count: usize,
     state: Entity<SliderState>,
     _subscription: Subscription,
 }
@@ -62,6 +73,15 @@ fn current_position(cx: &App) -> usize {
 /// a drag under way alone.
 pub(super) fn sync_brightness(ribbon: &mut Ribbon, window: &mut Window, cx: &mut Context<Ribbon>) {
     let position = current_position(cx);
+    let count = theme::appearances().len();
+    // A new base for a mode gives the track new steps: made afresh for them.
+    if ribbon
+        .brightness
+        .as_ref()
+        .is_some_and(|slider| slider.count != count)
+    {
+        ribbon.brightness = None;
+    }
     if let Some(slider) = ribbon.brightness.as_mut() {
         if slider.shown != position {
             slider.shown = position;
@@ -71,7 +91,7 @@ pub(super) fn sync_brightness(ribbon: &mut Ribbon, window: &mut Window, cx: &mut
         }
         return;
     }
-    let last = (theme::appearances().len() - 1) as f32;
+    let last = (count - 1) as f32;
     let state = cx.new(|_| {
         SliderState::new()
             .min(0.)
@@ -102,6 +122,7 @@ pub(super) fn sync_brightness(ribbon: &mut Ribbon, window: &mut Window, cx: &mut
     );
     ribbon.brightness = Some(BrightnessSlider {
         shown: position,
+        count,
         state,
         _subscription: subscription,
     });
@@ -135,6 +156,15 @@ pub(super) fn reset_brightness(ribbon: &mut Ribbon, window: &mut Window, cx: &mu
     let dark = cx.theme().is_dark();
     theme::set_brightness(dark, 0, cx);
     let position = current_position(cx);
+    let count = theme::appearances().len();
+    // A new base for a mode gives the track new steps: made afresh for them.
+    if ribbon
+        .brightness
+        .as_ref()
+        .is_some_and(|slider| slider.count != count)
+    {
+        ribbon.brightness = None;
+    }
     if let Some(slider) = ribbon.brightness.as_mut() {
         slider.shown = position;
         slider
@@ -200,6 +230,14 @@ pub(super) fn brightness(
         CommandSize::Full => block.py_1(),
     }
     .into_any_element()
+}
+
+/// Theme: opens the theme editor in the inset panel.
+pub(super) fn theme(button: impl Fn(&'static str, IconName, SharedString) -> Button) -> AnyElement {
+    button("theme", IconName::Palette, "Theme".into())
+        .tooltip("Choose the base colour, and the colours of Code, Chain, Spec, and Ask")
+        .on_click(|_, window, cx| window.dispatch_action(Box::new(OpenThemeEditor), cx))
+        .into_any_element()
 }
 
 /// Settings: opens the settings in the inset panel.

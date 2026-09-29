@@ -37,9 +37,9 @@ pub const COLOUR_IS_EDGE: bool = true;
 /// How tall the header, the branch's row, is.
 pub const HEADER_HEIGHT: Pixels = px(32.);
 
-/// How tall the panel starts, until the edge above it is dragged: room for
-/// the summary, the message, and a few commit notes.
-pub const START_HEIGHT: Pixels = px(200.);
+/// The most of its sidebar's height the panel grows to, until the edge above
+/// it is dragged; it is never taller than its contents need.
+pub const MAX_SHARE: f32 = 0.5;
 
 /// The shortest it can be dragged: its header alone, the body scrolling
 /// beneath it.
@@ -955,35 +955,32 @@ impl Render for GitPanel {
 
         // No line above it, nor between its header and body: the change of
         // colour is the edge.
-        // It fills the height its sidebar gives it, and its body scrolls
-        // beneath the header when it is taller than that, on the body's
+        // It is as tall as its contents, and its body scrolls beneath the
+        // header when its sidebar gives it less than that, on the body's
         // colour all the way down.
         let scrolled = div()
             .id("git-scroll")
-            .size_full()
+            .w_full()
+            .flex_shrink(1.)
+            .min_h_0()
             .overflow_y_scroll()
             .track_scroll(&self.scroll)
             .child(gpui_kit::TestSupportExt::test_support(body));
         let panel = v_flex()
             .id("git-panel")
-            .size_full()
+            .w_full()
+            .flex_shrink(1.)
+            .min_h_0()
             .text_sm()
             .bg(crate::theme::color(palette.ribbon))
             .child(gpui_kit::TestSupportExt::test_support(header))
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .child(crate::scrollbar::with_scrollbar(
-                        "git-scroll",
-                        &self.scroll,
-                        // Lets UI tests find it; inert in normal builds.
-                        gpui_kit::TestSupportExt::test_support(scrolled),
-                        true,
-                        None,
-                        cx,
-                    )),
-            );
+            .child(crate::scrollbar::with_fitted_scrollbar(
+                "git-scroll",
+                &self.scroll,
+                // Lets UI tests find it; inert in normal builds.
+                gpui_kit::TestSupportExt::test_support(scrolled),
+                cx,
+            ));
         // Lets UI tests find the panel; inert in normal builds.
         gpui_kit::TestSupportExt::test_support(panel).into_any_element()
     }

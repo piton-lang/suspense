@@ -40,6 +40,7 @@ use crate::spec_component_form::{
     CloseSpecComponent, ComponentCreated, RunComponentSkill, SpecComponentForm,
 };
 use crate::spec_components::{ComponentKind, NewConcept, NewScope, NewShape};
+use crate::theme_editor::{CloseThemeEditor, OpenThemeEditor, ThemeEditor};
 use crate::theme_preference;
 
 /// Size the window restores to when it is un-maximized.
@@ -89,9 +90,10 @@ pub struct MainWindow {
     palette: Option<Entity<Palette>>,
     _palette_subscription: Option<Subscription>,
     sidebar_split: Entity<ResizableState>,
-    /// How tall the git panel is, beneath the file tree, until the edge
-    /// between them is dragged again.
-    git_height: Pixels,
+    /// The tallest the git panel grows, beneath the file tree, once the edge
+    /// between them has been dragged; until then, half the sidebar. It is
+    /// never taller than its contents need.
+    git_height: Option<Pixels>,
     /// A changed file's diff, or the new project form, floating over the
     /// window in an inset panel.
     diff: Option<Entity<DiffView>>,
@@ -101,6 +103,8 @@ pub struct MainWindow {
     /// The panel writing a new instruction.
     new_instruction: Option<Entity<NewInstructionForm>>,
     settings: Option<Entity<SettingsWindow>>,
+    /// The theme editor.
+    theme_editor: Option<Entity<ThemeEditor>>,
     /// The Generate Skills panel.
     generate_skills: Option<Entity<GenerateSkillsView>>,
     /// The file browser for opening a project.
@@ -171,6 +175,7 @@ impl MainWindow {
         cx.open_window(options, |window, cx| {
             // Start in the saved light or dark mode, else the system's; the
             // ribbon can switch; each mode at its saved brightness.
+            theme_preference::restore_colors(cx);
             theme_preference::restore_brightness(cx);
             theme_preference::apply(window, cx);
             let view = cx.new(|cx| MainWindow::new(window, cx));
@@ -288,12 +293,13 @@ impl MainWindow {
             palette: None,
             _palette_subscription: None,
             sidebar_split: cx.new(|_| ResizableState::default()),
-            git_height: crate::git_panel::START_HEIGHT,
+            git_height: None,
             diff: None,
             new_project: None,
             spec_component: None,
             new_instruction: None,
             settings: None,
+            theme_editor: None,
             generate_skills: None,
             project_picker: None,
             divergence: None,
@@ -350,6 +356,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.theme_editor = None;
         self.generate_skills = None;
         self.project_picker = None;
         self.divergence_minimized = self.divergence.is_some();
@@ -406,6 +413,24 @@ impl MainWindow {
         cx.notify();
     }
 
+    /// Opens the theme editor in the inset panel, in place of anything else
+    /// there; already open, it stays as it is.
+    pub fn open_theme_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.theme_editor.is_some() {
+            return;
+        }
+        let editor = cx.new(|cx| ThemeEditor::new(window, cx));
+        self.clear_panel();
+        self._panel_subscriptions = vec![cx.subscribe_in(
+            &editor,
+            window,
+            |this, _, _: &CloseThemeEditor, window, cx| this.close_panel(window, cx),
+        )];
+        editor.read(cx).focus_handle(cx).focus(window, cx);
+        self.theme_editor = Some(editor);
+        cx.notify();
+    }
+
     /// Opens a changed file's diff in the floating panel, replacing any diff
     /// already there. Any file open in the split is left as it is.
     pub fn open_diff(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
@@ -414,6 +439,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.theme_editor = None;
         self.generate_skills = None;
         self.project_picker = None;
         self.divergence_minimized = self.divergence.is_some();
@@ -496,6 +522,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.theme_editor = None;
         self.generate_skills = None;
         self.project_picker = None;
         self._panel_subscriptions.clear();
@@ -596,6 +623,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.theme_editor = None;
         self.generate_skills = None;
         self.project_picker = None;
         self._panel_subscriptions.clear();
@@ -740,6 +768,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.theme_editor = None;
         self.generate_skills = None;
         self.project_picker = None;
         self._panel_subscriptions.clear();
@@ -1078,6 +1107,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.theme_editor = None;
         self.generate_skills = None;
         self.project_picker = None;
         self.divergence_minimized = self.divergence.is_some();
@@ -1231,6 +1261,8 @@ impl MainWindow {
             form.read(cx).focus_handle(cx)
         } else if let Some(settings) = &self.settings {
             settings.read(cx).focus_handle(cx)
+        } else if let Some(editor) = &self.theme_editor {
+            editor.read(cx).focus_handle(cx)
         } else if let Some(view) = &self.generate_skills {
             view.read(cx).focus_handle(cx)
         } else if let Some(picker) = &self.project_picker {
@@ -1264,6 +1296,7 @@ impl MainWindow {
             || self.spec_component.is_some()
             || self.new_instruction.is_some()
             || self.settings.is_some()
+            || self.theme_editor.is_some()
             || self.generate_skills.is_some()
             || self.project_picker.is_some()
             || self.showing_divergence()
@@ -1298,6 +1331,7 @@ impl MainWindow {
             && self.spec_component.is_none()
             && self.new_instruction.is_none()
             && self.settings.is_none()
+            && self.theme_editor.is_none()
             && self.generate_skills.is_none()
             && self.project_picker.is_none()
         {
@@ -1317,6 +1351,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.theme_editor = None;
         self.generate_skills = None;
         self.project_picker = None;
         self.panel_last_focus = None;
@@ -1354,6 +1389,9 @@ impl MainWindow {
         }
         if let Some(settings) = &self.settings {
             return Some(("settings", settings.clone().into()));
+        }
+        if let Some(editor) = &self.theme_editor {
+            return Some(("theme-editor", editor.clone().into()));
         }
         if let Some(form) = &self.spec_component {
             return Some(("spec-component", form.clone().into()));
@@ -1497,9 +1535,10 @@ impl MainWindow {
 }
 
 impl MainWindow {
-    /// The file tree, with the git panel beneath it while it shows, the edge
-    /// between them dragged to resize the git panel, the tree taking what it
-    /// leaves. The git panel's header's change of colour is that edge, so no
+    /// The file tree, with the git panel beneath it while it shows, the tree
+    /// taking what it leaves. The git panel shrinks to fit its contents,
+    /// growing up to half the sidebar, or, once the edge between them is
+    /// dragged, up to where it was dragged. The git panel's header's change of colour is that edge, so no
     /// line is drawn there, but one shows while it is hovered or dragged.
     fn render_project_sidebar(&self, cx: &mut Context<Self>) -> AnyElement {
         if !self.git_panel.read(cx).is_shown() {
@@ -1531,8 +1570,8 @@ impl MainWindow {
                     .group_hover("git-resize", |line| line.bg(ring)),
             )
             .on_drag(GitResize, |_, _, _, cx| cx.new(|_| gpui_kit::EmptyView));
-        gpui_kit::component::v_flex()
-            .id("project-sidebar")
+        // Lets UI tests find the sidebar; inert in normal builds.
+        gpui_kit::TestSupportExt::test_support(gpui_kit::component::v_flex().id("project-sidebar"))
             .size_full()
             .on_drag_move(
                 cx.listener(|this, event: &DragMoveEvent<GitResize>, _, cx| {
@@ -1542,8 +1581,8 @@ impl MainWindow {
                         .max(crate::git_panel::MIN_HEIGHT);
                     let height = (bounds.bottom() - event.event.position.y)
                         .clamp(crate::git_panel::MIN_HEIGHT, most);
-                    if height != this.git_height {
-                        this.git_height = height;
+                    if this.git_height != Some(height) {
+                        this.git_height = Some(height);
                         cx.notify();
                     }
                 }),
@@ -1555,13 +1594,17 @@ impl MainWindow {
                 cx,
             ))
             .child(
-                div()
+                gpui_kit::component::v_flex()
                     .relative()
-                    .flex_none()
-                    .h(self.git_height)
-                    // Never taller than the sidebar leaves it, the tree its
-                    // least height, however the window is resized.
-                    .max_h(relative(1.))
+                    .w_full()
+                    // As tall as its contents, up to its most, giving way to
+                    // the tree however the window is resized.
+                    .flex_shrink(1.)
+                    .min_h(crate::git_panel::MIN_HEIGHT)
+                    .max_h(match self.git_height {
+                        Some(most) => most.into(),
+                        None => relative(crate::git_panel::MAX_SHARE),
+                    })
                     .child(self.git_panel.clone())
                     .child(gpui_kit::TestSupportExt::test_support(edge)),
             )
@@ -1688,6 +1731,9 @@ impl Render for MainWindow {
             .on_action(
                 cx.listener(|this, _: &OpenSettings, window, cx| this.open_settings(window, cx)),
             )
+            .on_action(cx.listener(|this, _: &OpenThemeEditor, window, cx| {
+                this.open_theme_editor(window, cx)
+            }))
             .on_action(cx.listener(|this, _: &Rescope, window, cx| this.open_rescope(window, cx)))
             .on_action(cx.listener(|this, _: &NewScope, window, cx| {
                 this.open_spec_component(ComponentKind::Scope, window, cx)
@@ -1940,7 +1986,10 @@ mod tests {
         // The group's one control, with nothing behind it.
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
-            assert!(window.try_find("dark-mode").is_none(), "Dark mode is still there");
+            assert!(
+                window.try_find("dark-mode").is_none(),
+                "Dark mode is still there"
+            );
             let group = window.find("Appearance").bounds();
             let brightness = window.find("brightness").bounds();
             let slider = window.find("brightness-slider").bounds();
@@ -1996,29 +2045,29 @@ mod tests {
         cx.update(|cx| {
             assert!(!cx.theme().is_dark(), "it didn't reach light mode");
             assert_eq!(theme::brightness(cx), light_high);
-            assert_eq!(
-                *theme::palette(cx),
-                theme::brightened(false, light_high)
-            );
+            assert_eq!(*theme::palette(cx), theme::brightened(false, light_high));
             assert_eq!(
                 Theme::global(cx).foreground,
                 theme::color(theme::LIGHT.text),
                 "the text changed"
             );
         });
-        assert_eq!(ribbon.read_with(cx, |r, cx| r.brightness_slider(cx)), Some(last));
+        assert_eq!(
+            ribbon.read_with(cx, |r, cx| r.brightness_slider(cx)),
+            Some(last)
+        );
 
         // All the way left: dark mode at its darkest.
         drag(cx, false);
         cx.update(|cx| {
             assert!(cx.theme().is_dark(), "it didn't reach dark mode");
             assert_eq!(theme::brightness(cx), dark_low);
-            assert_eq!(
-                *theme::palette(cx),
-                theme::brightened(true, dark_low)
-            );
+            assert_eq!(*theme::palette(cx), theme::brightened(true, dark_low));
         });
-        assert_eq!(ribbon.read_with(cx, |r, cx| r.brightness_slider(cx)), Some(0.));
+        assert_eq!(
+            ribbon.read_with(cx, |r, cx| r.brightness_slider(cx)),
+            Some(0.)
+        );
 
         // Set some other way, the thumb follows. At the brightest dark mode
         // allows, the command area has moved, and a button on it still shows
@@ -2454,8 +2503,16 @@ mod tests {
                 let open = window.find(("ribbon-tab", 0usize)).bounds();
                 let closed = window.find(("ribbon-tab", 3usize)).bounds();
                 let middle = row.top() + row.size.height / 2.;
-                same(at(open.left() + gpui_kit::px(2.), middle), area, "the open tab");
-                same(at(closed.left() + gpui_kit::px(2.), middle), tab_row, "a closed tab");
+                same(
+                    at(open.left() + gpui_kit::px(2.), middle),
+                    area,
+                    "the open tab",
+                );
+                same(
+                    at(closed.left() + gpui_kit::px(2.), middle),
+                    tab_row,
+                    "a closed tab",
+                );
                 same(
                     at(row.right() - gpui_kit::px(40.), middle),
                     tab_row,
@@ -2466,18 +2523,28 @@ mod tests {
                 let x = open.left() + open.size.width / 2.;
                 let mut y = open.top() + gpui_kit::px(1.);
                 while y < body.top() + gpui_kit::px(6.) {
-                    same(at(x, y), area, &format!("the open tab and commands at {y:?}"));
+                    same(
+                        at(x, y),
+                        area,
+                        &format!("the open tab and commands at {y:?}"),
+                    );
                     y += gpui_kit::px(1.) / scale;
                 }
                 // Beside the open tab, the row's colour runs right down to the
                 // commands.
                 same(
-                    at(closed.left() + gpui_kit::px(2.), row.bottom() - gpui_kit::px(1.)),
+                    at(
+                        closed.left() + gpui_kit::px(2.),
+                        row.bottom() - gpui_kit::px(1.),
+                    ),
                     tab_row,
                     "the bottom of a closed tab",
                 );
                 same(
-                    at(closed.left() + gpui_kit::px(2.), body.top() + gpui_kit::px(1.)),
+                    at(
+                        closed.left() + gpui_kit::px(2.),
+                        body.top() + gpui_kit::px(1.),
+                    ),
                     area,
                     "the commands beneath a closed tab",
                 );
@@ -2784,7 +2851,10 @@ mod tests {
                 .unwrap_or_else(|| panic!("{mode:?}: {button:?} has no background of its own"));
             let widths = quad.border_widths;
             assert!(
-                widths.top.0 == 0. && widths.bottom.0 == 0. && widths.left.0 == 0. && widths.right.0 == 0.,
+                widths.top.0 == 0.
+                    && widths.bottom.0 == 0.
+                    && widths.left.0 == 0.
+                    && widths.right.0 == 0.,
                 "{mode:?}: {button:?} has a border"
             );
             let radii = quad.corner_radii;
@@ -2859,7 +2929,11 @@ mod tests {
                     px(8.),
                     "{mode:?}: no 8px padding above the buttons"
                 );
-                assert_eq!(slim.left(), group.left(), "{mode:?}: space before New Project");
+                assert_eq!(
+                    slim.left(),
+                    group.left(),
+                    "{mode:?}: space before New Project"
+                );
                 for button in [slim, below] {
                     assert_eq!(
                         button.size.height,
@@ -2947,7 +3021,10 @@ mod tests {
                     let divider = window.find(("ribbon-divider", ix + 1)).bounds();
                     assert_eq!(divider.size.width, px(4.), "{mode:?}: {pair:?}'s divider");
                     assert_eq!(
-                        (divider.left() - before.right(), after.left() - divider.right()),
+                        (
+                            divider.left() - before.right(),
+                            after.left() - divider.right()
+                        ),
                         (px(4.), px(4.)),
                         "{mode:?}: {pair:?}'s divider isn't 4px from their buttons"
                     );
@@ -4185,6 +4262,82 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// Theme, on the Application tab, opens the theme editor in the inset
+    /// panel; a colour chosen shows in the mode's colour at once, and its
+    /// Reset puts the theme's own back; the close button closes it.
+    #[gpui_kit::test]
+    async fn the_theme_editor_opens_in_the_inset_panel(cx: &mut TestAppContext) {
+        use crate::chat_input::{SendMode, mode_color};
+        use crate::ribbon::RibbonTab;
+        use gpui_kit::component::ActiveTheme as _;
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        let ribbon = main.read_with(cx, |main, _| main.ribbon.clone());
+        ribbon.update(cx, |ribbon, cx| {
+            ribbon.select_tab(RibbonTab::Application, cx)
+        });
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("theme", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(main.read_with(cx, |main, _| main.theme_editor.is_some()));
+        let own = cx.update(|cx| mode_color(SendMode::Code, cx));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("theme-editor-panel").is_some());
+            assert!(window.try_find("theme-base").is_some());
+            assert!(window.try_find("theme-ask").is_some());
+        })
+        .unwrap();
+
+        // Chosen, Code takes it everywhere, and its Reset puts it back.
+        cx.update(|cx| {
+            let dark = cx.theme().is_dark();
+            let mut colors = crate::theme::custom_colors();
+            colors.of_mut(dark).code = Some(0x00aa00);
+            crate::theme::set_custom_colors(colors, cx);
+            assert_eq!(
+                mode_color(SendMode::Code, cx),
+                crate::theme::color(0x00aa00)
+            );
+        });
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("theme-code-reset", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update(|cx| {
+            assert_eq!(crate::theme::custom_colors(), Default::default());
+            assert_eq!(mode_color(SendMode::Code, cx), own);
+        });
+
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("theme-editor-close", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(main.read_with(cx, |main, _| main.theme_editor.is_none()));
+    }
+
     /// Ctrl/Cmd+, opens the settings in the inset panel, in the main window
     /// rather than a window of their own; opening them again keeps the one
     /// panel, and the close button closes it.
@@ -4877,15 +5030,25 @@ mod tests {
         // none before the first.
         cx.update_window(handle, |_, window, _| {
             let appearance = window.find("Appearance").bounds();
+            let colours = window.find("Colours").bounds();
             let preferences = window.find("Preferences").bounds();
             let divider = window.find(("ribbon-divider", 1usize)).bounds();
             assert_eq!(
                 (
                     divider.left() - appearance.right(),
+                    colours.left() - divider.right()
+                ),
+                (gpui_kit::px(4.), gpui_kit::px(4.)),
+                "the divider {divider:?} isn't 4px from {appearance:?} and {colours:?}"
+            );
+            let divider = window.find(("ribbon-divider", 2usize)).bounds();
+            assert_eq!(
+                (
+                    divider.left() - colours.right(),
                     preferences.left() - divider.right()
                 ),
                 (gpui_kit::px(4.), gpui_kit::px(4.)),
-                "the divider {divider:?} isn't 4px from {appearance:?} and {preferences:?}"
+                "the divider {divider:?} isn't 4px from {colours:?} and {preferences:?}"
             );
             assert!(window.try_find(("ribbon-divider", 0usize)).is_none());
         })
@@ -5121,11 +5284,12 @@ mod tests {
         cx.update(|cx| assert_eq!(chat.read(cx).value(cx).as_ref(), ""));
     }
 
-    /// The git panel starts at its starting height beneath the file tree, the
-    /// edge between them dragged to resize it, and its body scrolls beneath
-    /// its header once it is shorter than what it holds.
+    /// The git panel shrinks to fit its contents beneath the file tree. With
+    /// more than fits, it grows to half the sidebar, its body scrolling
+    /// beneath its header; once the edge above it is dragged, it grows up to
+    /// where it was dragged instead, but never past what its contents need.
     #[gpui_kit::test]
-    async fn the_git_panel_resizes_and_scrolls(cx: &mut TestAppContext) {
+    async fn the_git_panel_fits_its_contents(cx: &mut TestAppContext) {
         use gpui_kit::{point, px};
         let dir = std::env::temp_dir().join(format!("suspense-git-resize-{}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
@@ -5171,52 +5335,53 @@ mod tests {
                     .unwrap();
             }
         };
-        frame(cx);
-        let panel = |cx: &mut TestAppContext| {
-            cx.update_window(handle, |_, window, _| window.find("git-panel").bounds())
+        let bounds = |id: &'static str, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, _| window.find(id).bounds())
                 .unwrap()
         };
-        let start = panel(cx);
-        assert!(
-            (start.size.height - crate::git_panel::START_HEIGHT).abs() < px(1.),
-            "the git panel starts {start:?}"
-        );
+        let notes = |count: usize, cx: &mut TestAppContext| {
+            for ix in 0..count {
+                crate::commit_notes::add(&dir, &format!("Note {ix}")).unwrap();
+            }
+            cx.update(crate::commit_notes::changed);
+            frame(cx);
+        };
+        let fits = |cx: &mut TestAppContext| {
+            let (panel, body) = (bounds("git-panel", cx), bounds("git-body", cx));
+            (panel.size.height - crate::git_panel::HEADER_HEIGHT - body.size.height).abs() < px(1.)
+        };
+        frame(cx);
+        let sidebar = bounds("project-sidebar", cx);
+        let half = sidebar.size.height * crate::git_panel::MAX_SHARE;
 
-        // Dragged up, it grows, and the file tree gives way.
+        // With little in it, it is only as tall as that, along the bottom.
+        let start = bounds("git-panel", cx);
+        assert!(fits(cx), "the git panel {start:?} doesn't fit its contents");
+        assert!(start.size.height < half, "the git panel starts {start:?}");
+        assert_eq!(start.bottom(), sidebar.bottom());
+
+        // Dragged up, it grows no taller than its contents need.
         cx.update_window(handle, |_, window, cx| {
             let edge = point(start.center().x, start.top());
             window.drag(edge, edge - point(px(0.), px(100.)), cx);
         })
         .unwrap();
         frame(cx);
-        let grown = panel(cx);
-        assert!(
-            (grown.size.height - start.size.height - px(100.)).abs() < px(2.),
-            "dragged up, the git panel is {grown:?}"
+        assert_eq!(
+            bounds("git-panel", cx),
+            start,
+            "dragged up past its contents"
         );
-        assert_eq!(grown.bottom(), start.bottom());
 
-        // Dragged down to just below its header, its body scrolls beneath it.
-        cx.update_window(handle, |_, window, cx| {
-            let edge = point(grown.center().x, grown.top());
-            let to = point(
-                edge.x,
-                grown.bottom() - crate::git_panel::HEADER_HEIGHT - px(40.),
-            );
-            window.drag(edge, to, cx);
-        })
-        .unwrap();
-        frame(cx);
-        let short = panel(cx);
-        let (scroll, body) = cx
-            .update_window(handle, |_, window, _| {
-                (
-                    window.find("git-scroll").bounds(),
-                    window.find("git-body").bounds(),
-                )
-            })
-            .unwrap();
-        assert!(short.size.height < px(100.), "the git panel is {short:?}");
+        // With more in it than fits there, it grows as far as it was dragged,
+        // its body scrolling beneath its header.
+        notes(40, cx);
+        let dragged = bounds("git-panel", cx);
+        assert!(
+            (dragged.size.height - start.size.height - px(100.)).abs() < px(2.),
+            "with more notes than fit, the git panel is {dragged:?}"
+        );
+        let (scroll, body) = (bounds("git-scroll", cx), bounds("git-body", cx));
         assert!(
             body.size.height > scroll.size.height,
             "its body {body:?} fits in {scroll:?}"
@@ -5224,15 +5389,13 @@ mod tests {
         cx.update_window(handle, |_, window, cx| {
             window.scroll(
                 "git-scroll",
-                gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-200.))),
+                gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-2000.))),
                 cx,
             );
         })
         .unwrap();
         frame(cx);
-        let scrolled = cx
-            .update_window(handle, |_, window, _| window.find("git-body").bounds())
-            .unwrap();
+        let scrolled = bounds("git-body", cx);
         assert!(
             scrolled.top() < body.top(),
             "its body didn't scroll: {body:?} then {scrolled:?}"
@@ -5240,6 +5403,95 @@ mod tests {
         assert!(
             (scrolled.bottom() - scroll.bottom()).abs() < px(1.),
             "scrolled to its end, the body {scrolled:?} ends where {scroll:?} does"
+        );
+
+        // Dragged past half the sidebar, it grows past half too.
+        cx.update_window(handle, |_, window, cx| {
+            let edge = point(dragged.center().x, dragged.top());
+            window.drag(edge, point(edge.x, sidebar.top() + half - px(50.)), cx);
+        })
+        .unwrap();
+        frame(cx);
+        let tall = bounds("git-panel", cx);
+        assert!(tall.size.height > half, "dragged past half, it is {tall:?}");
+
+        // Once its notes are gone, it shrinks to fit again.
+        std::fs::remove_file(crate::commit_notes::file(&dir)).unwrap();
+        cx.update(crate::commit_notes::changed);
+        frame(cx);
+        assert_eq!(bounds("git-panel", cx), start, "without its notes");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Until the edge above it is dragged, the git panel grows to half the
+    /// sidebar at most.
+    #[gpui_kit::test]
+    async fn the_git_panel_grows_to_half_the_sidebar(cx: &mut TestAppContext) {
+        use gpui_kit::px;
+        let dir = std::env::temp_dir().join(format!("suspense-git-half-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(dir.join("spec")).unwrap();
+        std::fs::write(dir.join("piton.config.pi"), "root: ./spec\n").unwrap();
+        std::fs::write(dir.join("spec/index.pi"), "a: 1\n").unwrap();
+        let git = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
+                .args(args)
+                .current_dir(&dir)
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "git {args:?}: {output:?}");
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "first"]);
+        std::fs::write(dir.join("spec/index.pi"), "a: 2\n").unwrap();
+        for ix in 0..40 {
+            crate::commit_notes::add(&dir, &format!("Note {ix}")).unwrap();
+        }
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            ProjectDirectory::set(dir.clone(), cx);
+        });
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            Root::new(view, window, cx)
+        });
+        let handle: gpui_kit::AnyWindowHandle = window.into();
+        cx.wait_for(handle, Duration::from_secs(5), |window, _| {
+            window.try_find("git-header").is_some()
+        })
+        .await;
+        gpui_kit::VisualTestContext::from_window(handle, cx)
+            .simulate_resize(gpui_kit::size(px(1000.), px(800.)));
+        for _ in 0..3 {
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                .unwrap();
+        }
+        let (sidebar, panel, scroll, body) = cx
+            .update_window(handle, |_, window, _| {
+                (
+                    window.find("project-sidebar").bounds(),
+                    window.find("git-panel").bounds(),
+                    window.find("git-scroll").bounds(),
+                    window.find("git-body").bounds(),
+                )
+            })
+            .unwrap();
+        let half = sidebar.size.height * crate::git_panel::MAX_SHARE;
+        assert!(
+            (panel.size.height - half).abs() < px(1.),
+            "the git panel is {panel:?} in {sidebar:?}"
+        );
+        assert_eq!(panel.bottom(), sidebar.bottom());
+        assert!(
+            body.size.height > scroll.size.height,
+            "its body {body:?} fits in {scroll:?}"
         );
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -5947,8 +6199,7 @@ mod tests {
     ) {
         use gpui_kit::component::{ActiveTheme as _, Theme, ThemeMode};
         use gpui_kit::{Bounds, Pixels, point, px};
-        let dir =
-            std::env::temp_dir().join(format!("suspense-tree-column-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("suspense-tree-column-{}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
         std::fs::create_dir_all(dir.join("spec")).unwrap();
         std::fs::write(dir.join("piton.config.pi"), "root: ./spec\n").unwrap();
@@ -6039,7 +6290,11 @@ mod tests {
                 let at = |x: f32, y: f32, from: Bounds<Pixels>| {
                     frame.at(point(from.left() + px(x + 0.5), from.top() + px(y + 0.5)))
                 };
-                assert_eq!(column.right(), tree.right(), "{case}: the column isn't at the tree's right");
+                assert_eq!(
+                    column.right(),
+                    tree.right(),
+                    "{case}: the column isn't at the tree's right"
+                );
                 let height = track.size.height.as_f32() as i32;
 
                 // The thumb, at the top with the tree unscrolled, and the

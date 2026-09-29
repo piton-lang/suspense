@@ -218,18 +218,29 @@ pub fn files_height(rows: usize) -> Pixels {
     crate::sidebar::HEADER_HEIGHT + crate::sidebar::PADDING * 2. + ROW_HEIGHT * rows.max(1) as f32
 }
 
+/// Whether a list scrolling with `scroll` is taller than its panel: by a
+/// pixel or more, so that what rounding to the device's pixels leaves over
+/// doesn't count.
+fn overflows(scroll: &ScrollHandle) -> bool {
+    scroll.max_offset().y >= px(1.)
+}
+
 /// A panel's body: its `list`, which scrolls on its own with `scroll`, with a scrollbar at
 /// its right only while it is taller than the panel, so that nothing draws a
-/// line beside rows that all fit. Whether it overflows is known once it is
-/// laid out, so the frame is drawn again when that changes.
+/// line beside rows that all fit, and nothing scrolls them. Whether it
+/// overflows is known once it is laid out, so the frame is drawn again when
+/// that changes.
 fn body(id: &'static str, scroll: &ScrollHandle, list: impl IntoElement, cx: &App) -> AnyElement {
-    let overflows = scroll.max_offset().y > px(0.);
+    let overflows = overflows(scroll);
+    if !overflows && scroll.offset() != Point::default() {
+        scroll.set_offset(Point::default());
+    }
     let watch = {
         let scroll = scroll.clone();
         canvas(
             |_, _, _| {},
             move |_, _, window, _| {
-                if (scroll.max_offset().y > px(0.)) != overflows {
+                if self::overflows(&scroll) != overflows {
                     window.refresh();
                 }
             },
@@ -359,6 +370,12 @@ pub fn render(
             .gap(BOX_GAP)
             .when(!understanding.exists, |list| {
                 list.child(placeholder("Nothing understood yet", cx))
+            })
+            // With no rows, an empty child: a list with no children at all
+            // counts its whole box as its contents, and its padding beyond
+            // that, so it would scroll by its padding.
+            .when(understanding.exists && understanding.rows.is_empty(), |list| {
+                list.child(div())
             })
             .children(constraints);
 

@@ -1,0 +1,12 @@
+use /lib
+from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/prompt-mode/modes import PromptModesScope
+
+export shape MessageListBackgroundsShape:
+    description:
+        The header for the latest task is coloured like the tab the task was
+        sent from, the colour of its mode, of the @{PromptModesScope}, as the
+        @{ChatInputScope} body shows for that tab. A task from the history that
+        doesn't say which tab it was sent from keeps the tab bar's colour. The
+        queue along the bottom and the previous tasks row along the top both
+        have the same background colour as the tab bar.

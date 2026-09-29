@@ -1,5 +1,5 @@
 use /lib
-from /scope/application/MainWindow import MainWindowScope
+from /scope/application/Body import BodyScope
 from /scope/editor import EditorScope
 from /scope/palette import PaletteScope
 from /scope/prompt-mode/message-list import MessageList
@@ -19,7 +19,7 @@ concept OpenFileConcept:
 shape OpenFileShape:
     description:
         A file opens in an @{EditorScope}, in the split beside the chat history
-        that the @{MainWindowScope} lays out. Opening a file while another is
+        that the @{BodyScope} lays out. Opening a file while another is
         showing shows it in that one's place, the editor first asking to
         discard any unsaved changes.
 

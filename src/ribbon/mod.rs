@@ -13,9 +13,7 @@
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonRounded, ButtonVariants};
-use gpui_kit::component::{
-    ActiveTheme, Icon, Sizable as _, Size, StyledExt as _, h_flex, v_flex,
-};
+use gpui_kit::component::{ActiveTheme, Icon, Sizable as _, Size, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
@@ -177,6 +175,7 @@ enum Command {
     RunTarget(usize),
     FindRunAgain,
     Brightness,
+    Theme,
     Settings,
 }
 
@@ -546,6 +545,7 @@ impl Ribbon {
             Command::GenerateSkills => spec_tab::generate_skills(button, cx),
             Command::Rescope => spec_tab::rescope(button, cx),
             Command::Brightness => application_tab::brightness(self, size, cx),
+            Command::Theme => application_tab::theme(button),
             Command::Settings => application_tab::settings(button),
         }
     }
@@ -576,8 +576,7 @@ impl Render for Ribbon {
         // The Brightness slider shows the appearance showing.
         application_tab::sync_brightness(self, window, cx);
         let theme = cx.theme();
-        let (border, muted, foreground) =
-            (theme.border, theme.muted_foreground, theme.foreground);
+        let (border, muted, foreground) = (theme.border, theme.muted_foreground, theme.foreground);
         let (area, tab_row) = ribbon_colors(cx);
 
         // Square, and the same size expanded or collapsed: only the way it
@@ -675,47 +674,55 @@ impl Render for Ribbon {
         // handles its own clicks, so a double-click can be told apart: it
         // collapses the ribbon.
         let hover = tab_hover(cx);
-        let tabs = RibbonTab::ALL.into_iter().enumerate().map(|(ix, tab)| {
-            let open = self.open_tabs.contains(&tab);
-            let tint = tab
-                .mode()
-                .map(|mode| crate::chat_input::mode_tint(mode, cx));
-            // A tab with a mode's colour shows it in its label while closed,
-            // the hue at full strength; open, its label is the tab's own
-            // colour. The label is the same text in the same place either
-            // way, only its colour changing, so it never moves.
-            let label = match tint {
-                Some(tint) if !open => Hsla { a: 1., ..tint },
-                _ => foreground,
-            };
-            // Lets UI tests find the tab; inert in normal builds.
-            gpui_kit::TestSupportExt::test_support(div().id(("ribbon-tab", ix)))
-                .relative()
-                .flex()
-                .flex_none()
-                .items_center()
-                .h_full()
-                .px(TAB_PADDING)
-                .text_sm()
-                .whitespace_nowrap()
-                .cursor_pointer()
-                .role(Role::Tab)
-                .aria_label(tab.label())
-                .aria_selected(open)
-                .when(open, |this| this.bg(area))
-                .when(!open, |this| this.hover(|this| this.bg(hover)))
-                // An open Code or Spec tab is tinted as the chat input's tab
-                // of that mode is: the tint laid over it, beneath its label,
-                // taking no room, so the tab keeps its own size and its label
-                // stays put.
-                .when_some(tint.filter(|_| open), |this, tint| {
-                    this.child(div().absolute().inset_0().bg(tint))
-                })
-                .child(div().relative().text_color(label).child(tab.label()))
-                .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
-                    this.tab_clicked(tab, event.click_count(), event.modifiers().secondary(), cx)
-                }))
-        })
+        let tabs = RibbonTab::ALL
+            .into_iter()
+            .enumerate()
+            .map(|(ix, tab)| {
+                let open = self.open_tabs.contains(&tab);
+                let tint = tab
+                    .mode()
+                    .map(|mode| crate::chat_input::mode_tint(mode, cx));
+                // A tab with a mode's colour shows it in its label while closed,
+                // the hue at full strength; open, its label is the tab's own
+                // colour. The label is the same text in the same place either
+                // way, only its colour changing, so it never moves.
+                let label = match tint {
+                    Some(tint) if !open => Hsla { a: 1., ..tint },
+                    _ => foreground,
+                };
+                // Lets UI tests find the tab; inert in normal builds.
+                gpui_kit::TestSupportExt::test_support(div().id(("ribbon-tab", ix)))
+                    .relative()
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .h_full()
+                    .px(TAB_PADDING)
+                    .text_sm()
+                    .whitespace_nowrap()
+                    .cursor_pointer()
+                    .role(Role::Tab)
+                    .aria_label(tab.label())
+                    .aria_selected(open)
+                    .when(open, |this| this.bg(area))
+                    .when(!open, |this| this.hover(|this| this.bg(hover)))
+                    // An open Code or Spec tab is tinted as the chat input's tab
+                    // of that mode is: the tint laid over it, beneath its label,
+                    // taking no room, so the tab keeps its own size and its label
+                    // stays put.
+                    .when_some(tint.filter(|_| open), |this, tint| {
+                        this.child(div().absolute().inset_0().bg(tint))
+                    })
+                    .child(div().relative().text_color(label).child(tab.label()))
+                    .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
+                        this.tab_clicked(
+                            tab,
+                            event.click_count(),
+                            event.modifiers().secondary(),
+                            cx,
+                        )
+                    }))
+            })
             .collect::<Vec<_>>();
         // The left container, holding the open project's name, the chevron,
         // and the activity spinner, left of the tabs, and the right container
@@ -931,8 +938,8 @@ pub(crate) fn command_shades(cx: &App) -> (Hsla, Hsla, Hsla) {
     if cx.theme().is_dark() {
         let palette = crate::theme::palette(cx);
         let channel = |color: u32| (color & 0xff) as f32;
-        let rest = (channel(palette.base) - channel(palette.ribbon))
-            / (255. - channel(palette.ribbon));
+        let rest =
+            (channel(palette.base) - channel(palette.ribbon)) / (255. - channel(palette.ribbon));
         (
             white.opacity(rest),
             white.opacity(rest + 0.08),
@@ -1040,9 +1047,7 @@ mod layout_tests {
                 };
                 // Each in a row of its own, so neither stretches the other.
                 let row = |id: &'static str, content: gpui_kit::Pixels| {
-                    div()
-                        .flex()
-                        .child(group("Group", vec![full(id, content)]))
+                    div().flex().child(group("Group", vec![full(id, content)]))
                 };
                 div()
                     .flex()

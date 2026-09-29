@@ -137,6 +137,112 @@ const SELECTION_ALPHA: u8 = 0x59;
 pub const DARK_NAME: &str = "Suspense Dark";
 pub const LIGHT_NAME: &str = "Suspense Light";
 
+/// The colours of one mode the user has chosen in place of the theme's own,
+/// from the theme editor; each is the theme's own while it is none.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ModeColors {
+    /// The base grey the mode's whole ladder of greys is laid out from, at
+    /// brightness 0.
+    pub base: Option<u32>,
+    pub code: Option<u32>,
+    /// The chain's colour; the theme's own is midway between Code's and
+    /// Spec's.
+    pub chain: Option<u32>,
+    pub spec: Option<u32>,
+    pub ask: Option<u32>,
+}
+
+/// The colours the user has chosen, for dark and light mode apart.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct CustomColors {
+    pub dark: ModeColors,
+    pub light: ModeColors,
+}
+
+impl CustomColors {
+    pub fn of(&self, dark: bool) -> &ModeColors {
+        if dark { &self.dark } else { &self.light }
+    }
+
+    pub fn of_mut(&mut self, dark: bool) -> &mut ModeColors {
+        if dark {
+            &mut self.dark
+        } else {
+            &mut self.light
+        }
+    }
+}
+
+thread_local! {
+    /// The colours chosen: kept apart from the application's globals, since
+    /// the brightness ranges they change are asked for with no `App` at hand.
+    /// Everything that reads them runs on the main thread.
+    static CUSTOM: std::cell::Cell<CustomColors> = std::cell::Cell::new(CustomColors::default());
+}
+
+/// The colours the user has chosen in place of the theme's own.
+pub fn custom_colors() -> CustomColors {
+    CUSTOM.get()
+}
+
+/// The chosen colours of dark or light mode.
+pub fn mode_colors(dark: bool) -> ModeColors {
+    *custom_colors().of(dark)
+}
+
+/// Makes `colors` the ones chosen, and has every window take them at once:
+/// each mode's greys laid out from its base, its brightness kept within what
+/// that base allows.
+pub fn set_custom_colors(colors: CustomColors, cx: &mut App) {
+    if custom_colors() == colors {
+        return;
+    }
+    CUSTOM.set(colors);
+    for dark in [true, false] {
+        let range = mode_brightness_range(dark);
+        let brightness = cx.default_global::<Brightness>();
+        let step = if dark {
+            &mut brightness.dark
+        } else {
+            &mut brightness.light
+        };
+        *step = (*step).clamp(*range.start(), *range.end());
+        install_brightness(dark, cx);
+    }
+    if cx.has_global::<Theme>() {
+        let mode = cx.theme().mode;
+        Theme::change(mode, None, cx);
+    }
+    cx.refresh_windows();
+}
+
+/// Dark or light mode's palette at brightness 0: the theme's own, its greys
+/// moved with the base chosen for it, if one has been.
+pub fn reference(dark: bool) -> Palette {
+    let own = if dark { DARK } else { LIGHT };
+    match mode_colors(dark).base {
+        Some(base) => rebased(&own, base),
+        None => own,
+    }
+}
+
+/// `own` with its base at `base`, and every other grey as far from it, in
+/// each channel, as it was from its own base.
+fn rebased(own: &Palette, base: u32) -> Palette {
+    let mut p = *own;
+    for grey in greys_mut(&mut p) {
+        *grey = from_channels(|at| {
+            (channel(*grey, at) + channel(base, at) - channel(own.base, at)) as f32
+        });
+    }
+    p
+}
+
+/// A colour's channels, averaged: its lightness, as far as brightness goes.
+fn level(color: u32) -> i32 {
+    (channel(color, 16) + channel(color, 8) + channel(color, 0)) / 3
+}
+
 /// The palette of the mode showing, at that mode's brightness.
 pub fn palette(cx: &App) -> &'static Palette {
     let dark = cx.theme().is_dark();
@@ -230,8 +336,7 @@ fn mix(a: u32, b: u32, amount: f32) -> u32 {
 /// How near the middle grey dark or light mode's base is at `step`, from 0,
 /// out of the middle band, to 1, on the middle grey, easing in and out.
 fn nearness_to_middle(dark: bool, step: i32) -> f32 {
-    let reference = if dark { &DARK } else { &LIGHT };
-    let base = channel(reference.base, 0) + brightness_shift(step);
+    let base = level(reference(dark).base) + brightness_shift(step);
     let t = (1. - (base - MIDDLE_GREY as i32).abs() as f32 / MIDDLE_BAND).clamp(0., 1.);
     t * t * (3. - 2. * t)
 }
@@ -266,7 +371,7 @@ fn legible(color: u32, toward: u32, ok: impl Fn(u32) -> bool) -> u32 {
 /// mode, or black, in light mode, as it takes. The bevel keeps the lift it
 /// has at 0.
 pub fn brightened(dark: bool, step: i32) -> Palette {
-    let own = if dark { DARK } else { LIGHT };
+    let own = reference(dark);
     let shift = brightness_shift(step);
     let width = 1. - MIDDLE_NARROWING * nearness_to_middle(dark, step);
     let mut p = own;
@@ -372,10 +477,14 @@ pub fn keeps_contrast(p: &Palette) -> bool {
 
 /// Whether dark or light mode can be at brightness `step`: no grey pushed
 /// below black or above white, and its base on its own side of the middle
-/// grey, dark mode's below it and light mode's on it or above.
+/// grey, dark mode's below it and light mode's on it or above. 0 is always
+/// allowed, as the base was chosen, wherever that is.
 pub fn brightness_allowed(dark: bool, step: i32) -> bool {
-    let reference = if dark { &DARK } else { &LIGHT };
-    let base = channel(reference.base, 0) + brightness_shift(step);
+    if step == 0 {
+        return true;
+    }
+    let reference = &reference(dark);
+    let base = level(reference.base) + brightness_shift(step);
     let side = if dark {
         base < MIDDLE_GREY as i32
     } else {
@@ -403,23 +512,46 @@ pub fn brightness_range(dark: bool) -> std::ops::RangeInclusive<i32> {
     reach(-1)..=reach(1)
 }
 
-/// The brightness range of dark or light mode, worked out once.
+thread_local! {
+    /// Each mode's brightness range, for each base it has had.
+    static RANGES: std::cell::RefCell<
+        std::collections::HashMap<(bool, Option<u32>), std::ops::RangeInclusive<i32>>,
+    > = Default::default();
+    /// The appearances, for each pair of bases the modes have had.
+    static APPEARANCES: std::cell::RefCell<
+        std::collections::HashMap<(Option<u32>, Option<u32>), Rc<[(bool, i32)]>>,
+    > = Default::default();
+    /// Each palette asked for, by its mode, base, and brightness.
+    static PALETTES: std::cell::RefCell<
+        std::collections::HashMap<(bool, Option<u32>, i32), &'static Palette>,
+    > = Default::default();
+}
+
+/// The brightness range of dark or light mode, from its base, worked out
+/// once for each base.
 pub fn mode_brightness_range(dark: bool) -> std::ops::RangeInclusive<i32> {
-    static RANGES: std::sync::LazyLock<[std::ops::RangeInclusive<i32>; 2]> =
-        std::sync::LazyLock::new(|| [brightness_range(false), brightness_range(true)]);
-    RANGES[dark as usize].clone()
+    let key = (dark, mode_colors(dark).base);
+    if let Some(range) = RANGES.with_borrow(|ranges| ranges.get(&key).cloned()) {
+        return range;
+    }
+    let range = brightness_range(dark);
+    RANGES.with_borrow_mut(|ranges| ranges.insert(key, range.clone()));
+    range
 }
 
 /// Every appearance the Brightness slider runs through, darkest first: dark
 /// mode from its darkest step to its lightest, then light mode from its
 /// darkest to its lightest, each as whether it is dark mode and its step.
-pub fn appearances() -> &'static [(bool, i32)] {
-    static ALL: std::sync::LazyLock<Vec<(bool, i32)>> = std::sync::LazyLock::new(|| {
-        let dark = mode_brightness_range(true).map(|step| (true, step));
-        let light = mode_brightness_range(false).map(|step| (false, step));
-        dark.chain(light).collect()
-    });
-    &ALL
+pub fn appearances() -> Rc<[(bool, i32)]> {
+    let key = (mode_colors(true).base, mode_colors(false).base);
+    if let Some(all) = APPEARANCES.with_borrow(|all| all.get(&key).cloned()) {
+        return all;
+    }
+    let dark = mode_brightness_range(true).map(|step| (true, step));
+    let light = mode_brightness_range(false).map(|step| (false, step));
+    let all: Rc<[(bool, i32)]> = dark.chain(light).collect();
+    APPEARANCES.with_borrow_mut(|appearances| appearances.insert(key, all.clone()));
+    all
 }
 
 /// Where dark or light mode at brightness `step` falls among the
@@ -433,21 +565,19 @@ pub fn appearance_index(dark: bool, step: i32) -> usize {
         .expect("every step a mode allows is an appearance")
 }
 
-/// Dark or light mode's palette at brightness `step`, from every step worked
-/// out once, so the palette showing can still be borrowed for the life of
-/// the application.
+/// Dark or light mode's palette at brightness `step`, each worked out once,
+/// when first asked for, and kept for the life of the application, so the
+/// palette showing can still be borrowed for as long.
 fn shifted(dark: bool, step: i32) -> &'static Palette {
-    static PALETTES: std::sync::LazyLock<[Vec<Palette>; 2]> = std::sync::LazyLock::new(|| {
-        let every = |dark: bool| {
-            mode_brightness_range(dark)
-                .map(|step| brightened(dark, step))
-                .collect()
-        };
-        [every(false), every(true)]
-    });
     let range = mode_brightness_range(dark);
     let step = step.clamp(*range.start(), *range.end());
-    &PALETTES[dark as usize][(step - range.start()) as usize]
+    let key = (dark, mode_colors(dark).base, step);
+    if let Some(palette) = PALETTES.with_borrow(|palettes| palettes.get(&key).copied()) {
+        return palette;
+    }
+    let palette: &'static Palette = Box::leak(Box::new(brightened(dark, step)));
+    PALETTES.with_borrow_mut(|palettes| palettes.insert(key, palette));
+    palette
 }
 
 /// Each mode's brightness, and the gpui-kit themes built for the steps taken
@@ -456,7 +586,8 @@ fn shifted(dark: bool, step: i32) -> &'static Palette {
 struct Brightness {
     dark: i32,
     light: i32,
-    configs: std::collections::HashMap<(bool, i32), Rc<ThemeConfig>>,
+    /// By mode, base, and step.
+    configs: std::collections::HashMap<(bool, Option<u32>, i32), Rc<ThemeConfig>>,
 }
 
 impl Global for Brightness {}
@@ -502,9 +633,10 @@ fn install_brightness(dark: bool, cx: &mut App) {
         return;
     }
     let step = brightness_of(dark, cx);
+    let key = (dark, mode_colors(dark).base, step);
     let cached = cx
         .try_global::<Brightness>()
-        .and_then(|b| b.configs.get(&(dark, step)).cloned());
+        .and_then(|b| b.configs.get(&key).cloned());
     let config = match cached {
         Some(config) => config,
         None => {
@@ -528,7 +660,7 @@ fn install_brightness(dark: bool, cx: &mut App) {
             );
             cx.default_global::<Brightness>()
                 .configs
-                .insert((dark, step), config.clone());
+                .insert(key, config.clone());
             config
         }
     };
@@ -1127,7 +1259,7 @@ mod tests {
     #[test]
     fn text_stays_readable_through_the_middle() {
         use super::{appearances, brightened};
-        for &(dark, step) in appearances() {
+        for &(dark, step) in appearances().iter() {
             let p = brightened(dark, step);
             let given = if dark { DARK } else { LIGHT };
             assert!(
@@ -1201,6 +1333,57 @@ mod tests {
             assert_eq!(Theme::global(cx).background, color(0x494949));
             assert_eq!(set_brightness(true, 500, cx), 0x32, "past the end");
             assert_eq!(set_brightness(true, 0, cx), 0);
+            assert_eq!(Theme::global(cx).background, color(DARK.base));
+        });
+    }
+
+    /// A base chosen for a mode lays its greys out from it, each as far from
+    /// it in every channel as from the theme's own; the brightness range
+    /// follows the new base, and the mode's brightness is kept within it;
+    /// the other mode is left as it was, and putting the theme's own base
+    /// back puts everything back.
+    #[gpui_kit::test]
+    fn a_chosen_base_moves_the_greys(cx: &mut TestAppContext) {
+        use super::{
+            CustomColors, ModeColors, appearances, brightness, custom_colors,
+            mode_brightness_range, palette, reference, set_brightness, set_custom_colors,
+        };
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            super::init(cx);
+            Theme::change(ThemeMode::Dark, None, cx);
+            let (range, count) = (mode_brightness_range(true), appearances().len());
+            assert_eq!(set_brightness(true, *range.start(), cx), -0x11);
+
+            let base = 0x383c44;
+            let chosen = CustomColors {
+                dark: ModeColors {
+                    base: Some(base),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            set_custom_colors(chosen, cx);
+            assert_eq!(custom_colors(), chosen);
+            let moved = reference(true);
+            assert_eq!(moved.base, base);
+            assert_eq!(moved.well, 0x22262e, "the well didn't keep its step");
+            assert_eq!(moved.text, DARK.text, "the text moved");
+            assert_eq!(reference(false), LIGHT, "light mode moved too");
+            // Its red is 0x0c darker, so the darkest grey's red, 0x05 now,
+            // can only go that far before it clips.
+            let range = mode_brightness_range(true);
+            assert_eq!(*range.start(), -0x05);
+            assert_eq!(brightness(cx), *range.start(), "kept past the range");
+            assert_ne!(appearances().len(), count);
+            let base = super::brightened(true, brightness(cx)).base;
+            assert_eq!(*palette(cx), super::brightened(true, brightness(cx)));
+            assert_eq!(Theme::global(cx).background, color(base));
+
+            set_custom_colors(CustomColors::default(), cx);
+            assert_eq!(reference(true), DARK);
+            assert_eq!(appearances().len(), count);
+            set_brightness(true, 0, cx);
             assert_eq!(Theme::global(cx).background, color(DARK.base));
         });
     }

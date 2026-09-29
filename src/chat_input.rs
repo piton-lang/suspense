@@ -226,6 +226,9 @@ const SEAM_COVER_REACH: Pixels = px(2.);
 /// a little wider than the icon it centres.
 const CHAIN_WIDTH_ESTIMATE: Pixels = px(40.);
 
+/// How wide the column of send, queue, and preview buttons is.
+const SEND_COLUMN_WIDTH: Pixels = px(120.);
+
 /// How the tint and the chain's icon slide between tabs: critically damped,
 /// so they settle without bouncing past.
 const CHAIN_SPRING: SpringConfig = SpringConfig::new(400., 40., 1.);
@@ -234,10 +237,13 @@ const CHAIN_SPRING: SpringConfig = SpringConfig::new(400., 40., 1.);
 /// blue for Spec, purple for both, green for Ask, and grey for Freeform.
 const TINT_OPACITY: f32 = 0.1;
 
-/// The theme's hues the tabs are tinted with.
+/// The hues the tabs are tinted with: the theme's, or those chosen in the
+/// theme editor in their place.
 #[derive(Clone, Copy)]
 struct Hues {
     red: Hsla,
+    /// The chain's, midway between Code's red and Spec's blue unless chosen.
+    purple: Hsla,
     blue: Hsla,
     green: Hsla,
     /// The theme's tertiary grey, for Freeform.
@@ -247,22 +253,36 @@ struct Hues {
 impl Hues {
     fn of(cx: &App) -> Self {
         let theme = cx.theme();
+        let chosen = crate::theme::mode_colors(theme.is_dark());
+        let pick = |chosen: Option<u32>, own: Hsla| chosen.map_or(own, crate::theme::color);
+        let (red, blue) = (pick(chosen.code, theme.red), pick(chosen.spec, theme.blue));
         Self {
-            red: theme.red,
-            blue: theme.blue,
-            green: theme.green,
+            red,
+            purple: pick(chosen.chain, midway(red, blue)),
+            blue,
+            green: pick(chosen.ask, theme.green),
             grey: crate::theme::Hue::Grey.of(crate::theme::palette(cx)),
         }
     }
 }
 
-/// The tint at `position` between the tabs: red at Code (0), blue at Spec
-/// (2), purple for both (1), where they meet, green at Ask (3), and grey at
-/// Freeform (4). The tabs wrap around, so past Freeform it blends straight
-/// back to Code's red at 5.
+/// The colour midway between `code` and `spec`, the shorter way round the
+/// hue circle, at full strength: the chain's own colour.
+pub fn midway(code: Hsla, spec: Hsla) -> Hsla {
+    Hsla {
+        a: 1.,
+        ..blend(code, spec, 0.5)
+    }
+}
+
+/// The tint at `position` between the tabs: red at Code (0), the chain's
+/// purple (1), blue at Spec (2), green at Ask (3), and grey at Freeform (4).
+/// The tabs wrap around, so past Freeform it blends straight back to Code's
+/// red at 5.
 fn tint(hues: Hues, position: f32) -> Hsla {
     let Hues {
         red,
+        purple,
         blue,
         green,
         grey,
@@ -274,8 +294,10 @@ fn tint(hues: Hues, position: f32) -> Hsla {
         blend(green, grey, position - 3.)
     } else if position > 2. {
         blend(blue, green, position - 2.)
+    } else if position > 1. {
+        blend(purple, blue, position - 1.)
     } else {
-        blend(red, blue, position / 2.)
+        blend(red, purple, position)
     }
 }
 
@@ -1791,6 +1813,12 @@ impl Render for ChatInput {
         let tint_slide = SpringAnimation::new(CHAIN_SPRING).to(self.tint_target);
         let hues = Hues::of(cx);
         let tint = move |position| tint(hues, position);
+        // Each tab's label is in its mode's colour at full strength, selected
+        // or not.
+        let label_color = move |ix: usize| Hsla {
+            a: 1.,
+            ..tint(ix as f32)
+        };
         // A joined chain once selected, and a broken one dimmed to half
         // opacity until then.
         let chain_icon = Icon::new(if unified {
@@ -1811,7 +1839,11 @@ impl Render for ChatInput {
             SendMode::Both => Tab::new()
                 .icon(chain_icon.clone())
                 .tooltip(|window, cx| Tooltip::new(SendMode::Both.label()).build(window, cx)),
-            mode => Tab::new().label(mode.label()),
+            mode => Tab::new().child(
+                div()
+                    .text_color(label_color(ix))
+                    .child(mode.label()),
+            ),
         };
         // A tint laid over a tab, as wide as the tab itself (an invisible copy
         // of it) rather than its bar, fading out as the tab is deselected.
@@ -1826,7 +1858,7 @@ impl Render for ChatInput {
                 .child(
                     TabBar::new(("tint-width", ix))
                         .selected_index(0)
-                        .child(Tab::new().label(TABS[ix].label()))
+                        .child(tab(ix))
                         .invisible(),
                 )
                 .with_spring(("tab-tint", ix), tint_slide, move |this, position| {
@@ -2124,7 +2156,7 @@ impl Render for ChatInput {
             // Lets UI tests find the row; inert in normal builds.
             gpui_kit::TestSupportExt::test_support(row)
         });
-        let body = div().flex().flex_col().gap_2().p_3().with_spring(
+        let body = div().flex().flex_col().gap_2().p_2().with_spring(
             "body-tint",
             tint_slide,
             move |this, position| this.bg(tint(position)),
@@ -2144,7 +2176,7 @@ impl Render for ChatInput {
         let send = h_flex()
             .id("send-split")
             .relative()
-            .flex_none()
+            .w_full()
             .child(
                 Button::new("send")
                     .custom(send_colors)
@@ -2154,6 +2186,7 @@ impl Render for ChatInput {
                     .when(!empty, |button| button.bg(send_fill))
                     // While the harness works, sending queues the prompt; while a
                     // queued prompt is edited, it saves the edit.
+                    .icon(IconName::Send)
                     .label(if editing {
                         "Save"
                     } else if queues {
@@ -2163,6 +2196,7 @@ impl Render for ChatInput {
                     })
                     // As tall as the input's single line, so the two line up.
                     .h(one_row)
+                    .flex_1()
                     .rounded_r_none()
                     .tooltip(if editing {
                         format!("Save the queued prompt ({SEND_SHORTCUT})")
@@ -2194,6 +2228,32 @@ impl Render for ChatInput {
             )
             .children(self.render_send_menu(cx));
         let send = gpui_kit::TestSupportExt::test_support(send);
+        // Above it, the send menu's Queue and Preview as buttons of their
+        // own, offered when the menu is: not while a queued prompt is edited
+        // or a preview shows, and Queue never on Ask, where a question never
+        // queues.
+        let unoffered = empty || previewing || editing;
+        let queue = Button::new("queue")
+            .label(SendOption::Queue.label())
+            .h(one_row)
+            .w_full()
+            .tooltip("Queue the prompt, even while the harness is free")
+            .disabled(unoffered || !SendOption::Queue.enabled(self.mode()))
+            .on_click(cx.listener(|this, _, window, cx| this.send(Sent::Queued, window, cx)));
+        let preview = Button::new("preview")
+            .label("Preview")
+            .h(one_row)
+            .w_full()
+            .tooltip("Preview the compiled prompt")
+            .disabled(unoffered)
+            .on_click(cx.listener(|this, _, window, cx| this.start_preview(window, cx)));
+        let buttons = v_flex()
+            .flex_none()
+            .w(SEND_COLUMN_WIDTH)
+            .gap_1p5()
+            .child(queue)
+            .child(preview)
+            .child(send);
         let input_area = match &self.preview {
             Some(preview) => self.render_preview(&preview.clone(), window, cx),
             None => gpui_kit::TestSupportExt::test_support(
@@ -2202,12 +2262,23 @@ impl Render for ChatInput {
                     .relative()
                     .flex_1()
                     .min_w_0()
-                    .child(Editor::new(&self.editor).h(height))
+                    .child(Editor::new(&self.editor).appearance(false).h(height))
                     .child(track_layout)
                     .child(self.completion.clone()),
             )
             .into_any_element(),
         };
+        // The input sits at the bottom of a dark inset as tall as the buttons
+        // beside it, its single row level with Send, and grows up through it.
+        let input_area = div()
+            .flex_1()
+            .min_w_0()
+            .self_stretch()
+            .flex()
+            .items_end()
+            .rounded(cx.theme().radius)
+            .bg(crate::theme::color(crate::theme::palette(cx).darkest))
+            .child(input_area);
 
         div()
             .track_focus(&self.focus_handle)
@@ -2305,7 +2376,7 @@ impl Render for ChatInput {
             .child(
                 body.children(editing_row)
                     .children(attachments)
-                    .child(input_row.child(input_area).child(send)),
+                    .child(input_row.child(input_area).child(buttons)),
             )
     }
 }
@@ -3954,6 +4025,7 @@ mod tests {
         let grey = crate::theme::color(0x9c9c9c);
         let hues = super::Hues {
             red,
+            purple: super::midway(red, blue),
             blue,
             green,
             grey,

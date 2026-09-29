@@ -1,12 +1,13 @@
 use /lib
 use /ui
-from /scope/open-file import OpenFileScope
-from /scope/open-projects import OpenProjectsScope
-from /scope/prompt-mode/answer-drawer import AnswerDrawerScope
-from /scope/prompt-mode/chat-input import ChatInputScope
-from /scope/prompt-mode/modes import PromptModesScope
-from /ui/components/referenced-spec-sidebar import ReferencedSpecSidebarScope
-from /ui/components/task-table import TaskTableScope
+from ./AskDimming import MessageListAskDimmingShape
+from ./Backgrounds import MessageListBackgroundsShape
+from ./Links import MessageListLinksShape
+from ./OutputTable import MessageListOutputTableShape
+from ./ReferencedSpec import MessageListReferencedSpecShape
+from ./Scrolling import MessageListScrollingShape
+from ./SentPrompt import MessageListSentPromptShape
+from ./Status import MessageListStatusShape
 
 export ui-component MessageList:
     concept: {MessageListConcept}
@@ -24,54 +25,11 @@ shape MessageListShape:
         on the right with responses on the left, and tool calls aren't gathered
         into groups.
 
-    sentPrompt:
-        A task's header shows the compiled markdown that was actually sent to
-        the harness, rendered as markdown, once it has compiled, along with the
-        name of the hidden anchor it was compiled from.
-
-    status:
-        A task's status is a coloured label that spells it out: "Building" in
-        blue, "Compiling" in cyan, "Running" in yellow, "Done" in green,
-        "Failed" in red, "Cancelled" in orange, and "Not recorded" in grey for a task from the history
-        with no record of its run. The labels are readable in both light and
-        dark mode.
-
-    outputTable:
-        A task's output is a @{TaskTableScope}, whose rows are what the harness
-        did for the task. While the task is under way, its table ends in the
-        waiting row for whatever the harness does next. Tasks never collapse
-        their steps, since their whole chain is of interest.
-
-    links:
-        Links in the compiled prompt and in reply text are clickable. A link to
-        a file opens it, as the @{OpenFileScope} says, and a web link opens in
-        the browser. The file path on a Read, Edit, Write, or MultiEdit row is
-        shown as a link and opens that file the same way.
-
-    backgrounds:
-        The header for the latest task is coloured like the tab the task was
-        sent from, the colour of its mode, of the @{PromptModesScope}, as the
-        @{ChatInputScope} body shows for that tab. A task from the history that
-        doesn't say which tab it was sent from keeps the tab bar's colour. The
-        queue along the bottom and the previous tasks row along the top both
-        have the same background colour as the tab bar.
-
-    referencedSpec:
-        While a task is running, a @{ReferencedSpecSidebarScope} slides out from
-        the message list's right edge, listing the spec files the task
-        references, and slides back once the run is over.
-
-    askDimming:
-        While the @{AnswerDrawerScope} is open, it dims the message list beneath
-        it.
-
-    scrolling:
-        The latest task's table scrolls with its lock to the bottom off to
-        start with, until switched on. Each open project keeps how far its
-        latest task's table was scrolled and whether it was locked, and the
-        rest of its message list as it was left, as the @{OpenProjectsScope}
-        says, so switching back to it shows the list just as it was.
-
-        However long the list of previous tasks grows, drawing it costs no more
-        than drawing the tasks in view, so scrolling, animations, and new output
-        stay smooth.
+    sentPrompt: {MessageListSentPromptShape}
+    status: {MessageListStatusShape}
+    outputTable: {MessageListOutputTableShape}
+    links: {MessageListLinksShape}
+    backgrounds: {MessageListBackgroundsShape}
+    referencedSpec: {MessageListReferencedSpecShape}
+    askDimming: {MessageListAskDimmingShape}
+    scrolling: {MessageListScrollingShape}

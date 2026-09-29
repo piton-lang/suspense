@@ -162,6 +162,26 @@ pub fn with_scrollbar(
     row.into_any_element()
 }
 
+/// `content`, which scrolls with `handle`, beside its scroll column, as tall
+/// as `content` until the flex column it is in gives it less, when it shrinks
+/// and `content` scrolls. `content` is expected to shrink too.
+pub fn with_fitted_scrollbar(
+    id: impl Into<SharedString>,
+    handle: impl Into<Scroll>,
+    content: impl IntoElement,
+    cx: &App,
+) -> AnyElement {
+    let handle: Scroll = handle.into();
+    h_flex()
+        .items_stretch()
+        .w_full()
+        .flex_shrink(1.)
+        .min_h_0()
+        .child(v_flex().flex_1().min_w_0().min_h_0().child(content))
+        .child(scrollbar(id.into(), &handle, None, cx))
+        .into_any_element()
+}
+
 /// After the list is scrolled by hand: locks the scroll when the list is left
 /// at the bottom, and unlocks it when it isn't. A list with nothing to scroll
 /// keeps its lock as it is.

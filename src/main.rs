@@ -3,9 +3,9 @@
 
 mod activity;
 mod agent;
-mod attached_image;
 mod animations;
 mod app;
+mod attached_image;
 mod baked_prompts;
 mod chat_input;
 mod checkbox;
@@ -73,6 +73,7 @@ mod spec_components;
 mod system_prompts;
 mod task_table;
 mod theme;
+mod theme_editor;
 mod theme_preference;
 mod understanding;
 mod usage;

@@ -15,6 +15,7 @@ from ../run-targets import RunTargetsScope
 from ../running-activity import RunningActivityScope
 from ../settings-window import SettingsWindowScope
 from ../user-preferences import UserPreferencesScope
+from ./Body import BodyScope
 from /ui/components/diff-view import DiffViewScope
 from /ui/components/file-tree import FileTreeScope
 from /ui/components/inset-panel import InsetPanelScope
@@ -93,39 +94,10 @@ shape MainWindowShape:
     header:
         ribbon: @{RibbonScope}
 
-    body:
+    layout:
         sidebar: @{ProjectSidebarScope}
 
-        openFile:
-            A file opened, from the @{FileTreeScope} or anywhere else the
-            @{OpenFileScope} says, shows in an @{EditorScope}, in a split beside
-            the chat history: the file on the left taking 50%
-            of the width, the chat history on the right taking the rest. The
-            split can be resized by dragging its edge. Closing the file closes
-            the split.
-
-            When the split opens, it slides in from the sidebar, so it's clear
-            where it came from: the file's side grows out of the sidebar's edge
-            to its share of the width, the file sliding into view from behind
-            that edge as it does, over the chat history. The chat history keeps
-            its width while the file slides over it, so nothing in it is laid
-            out anew each frame, and takes the rest of the width once the slide
-            settles.
-
-            The slide is quick and settles without bouncing, and only then can
-            the split be dragged. A file opened in place of one already showing
-            doesn't slide, since the split is already open. The
-            @{ChatInputScope} is never split: it stays along the bottom, across
-            the full width of prompt mode.
-
-            Closing the file plays the slide in reverse, back into the
-            sidebar: the file's side shrinks from whatever width it was
-            dragged to down to nothing at the sidebar's edge, the file sliding
-            out of view behind that edge as it does, uncovering the chat
-            history, which is back across the full width beneath it from the
-            start of the slide. It is as quick as the slide in,
-            and settles without bouncing. Opening a file while one is still
-            sliding out slides the new one in straight away.
+        body: @{BodyScope}
 
         openDiff:
             A file's @{DiffViewScope}, opened from the @{FileTreeScope}, opens
@@ -174,5 +146,6 @@ shape MainWindowShape:
             in an @{InsetPanelScope}, in place of whatever else is open there.
 
         promptMode:
-            The body displays the @{PromptEditor} and any splits, to the right
-            of the @{ProjectSidebarScope}.
+            The @{PromptEditor} fills the rest of the window, to the right of
+            the @{ProjectSidebarScope}: the @{BodyScope}, and the chat input
+            beneath it.

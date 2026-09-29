@@ -1,0 +1,9 @@
+use /lib
+from /ui/components/task-table import TaskTableScope
+
+export shape MessageListOutputTableShape:
+    description:
+        A task's output is a @{TaskTableScope}, whose rows are what the harness
+        did for the task. While the task is under way, its table ends in the
+        waiting row for whatever the harness does next. Tasks never collapse
+        their steps, since their whole chain is of interest.

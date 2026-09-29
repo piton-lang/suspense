@@ -1,4 +1,5 @@
-//! The user's light or dark mode choice, and each mode's brightness, saved in
+//! The user's light or dark mode choice, each mode's brightness, and the
+//! colours chosen in the theme editor, saved in
 //! the platform's per-user config directory so they carry across launches and
 //! projects.
 
@@ -8,6 +9,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context as _, Result, anyhow};
 use gpui_kit::component::{ActiveTheme as _, Theme, ThemeMode};
 use gpui_kit::*;
+
+use crate::theme::{CustomColors, ModeColors};
 
 /// Where the application keeps its per-user files, inside the config directory.
 const APP_DIR: &str = "suspense";
@@ -115,6 +118,96 @@ fn save_brightness_to(dark: i32, light: i32, file: &Path) -> Result<()> {
         .with_context(|| format!("could not save {}", file.display()))
 }
 
+/// Where the colours chosen in the theme editor are kept, beside the rest.
+const COLORS_FILE_NAME: &str = "colors";
+
+/// The names each mode's chosen colours are saved under, after the mode's.
+const COLOR_NAMES: [&str; 5] = ["base", "code", "chain", "spec", "ask"];
+
+fn color_slots(colors: &mut ModeColors) -> [&mut Option<u32>; 5] {
+    [
+        &mut colors.base,
+        &mut colors.code,
+        &mut colors.chain,
+        &mut colors.spec,
+        &mut colors.ask,
+    ]
+}
+
+/// Restores the colours chosen in the theme editor, the theme's own where
+/// none were. Call before the theme's mode is applied, so the window opens
+/// in them.
+pub fn restore_colors(cx: &mut App) {
+    let colors = colors_file()
+        .and_then(|file| load_colors(&file))
+        .unwrap_or_default();
+    crate::theme::set_custom_colors(colors, cx);
+}
+
+/// Saves the colours chosen in the theme editor. Like brightness, they are
+/// only a convenience, so failing to is ignored, and they still hold for the
+/// session.
+pub fn save_colors() {
+    if let Some(file) = colors_file() {
+        save_colors_to(&crate::theme::custom_colors(), &file).ok();
+    }
+}
+
+/// The colours file; none in tests, which neither read nor write it.
+fn colors_file() -> Option<PathBuf> {
+    let file = dirs::config_dir()?.join(APP_DIR).join(COLORS_FILE_NAME);
+    (!cfg!(test)).then_some(file)
+}
+
+/// The chosen colours from `file`, a line for each, such as
+/// `dark-code #f0928a`; a colour missing or unreadable is the theme's own.
+fn load_colors(file: &Path) -> Option<CustomColors> {
+    let text = fs::read_to_string(file).ok()?;
+    let mut colors = CustomColors::default();
+    for line in text.lines() {
+        let mut words = line.split_whitespace();
+        let (Some(key), Some(value)) = (words.next(), words.next()) else {
+            continue;
+        };
+        let Some((mode, name)) = key.split_once('-') else {
+            continue;
+        };
+        let dark = match mode {
+            "dark" => true,
+            "light" => false,
+            _ => continue,
+        };
+        let Some(ix) = COLOR_NAMES.iter().position(|known| *known == name) else {
+            continue;
+        };
+        let Some(color) = value
+            .strip_prefix('#')
+            .filter(|hex| hex.len() == 6)
+            .and_then(|hex| u32::from_str_radix(hex, 16).ok())
+        else {
+            continue;
+        };
+        *color_slots(colors.of_mut(dark))[ix] = Some(color);
+    }
+    Some(colors)
+}
+
+fn save_colors_to(colors: &CustomColors, file: &Path) -> Result<()> {
+    if let Some(dir) = file.parent() {
+        fs::create_dir_all(dir).with_context(|| format!("could not create {}", dir.display()))?;
+    }
+    let mut colors = *colors;
+    let mut text = String::new();
+    for (mode, dark) in [("dark", true), ("light", false)] {
+        for (name, color) in COLOR_NAMES.iter().zip(color_slots(colors.of_mut(dark))) {
+            if let Some(color) = color {
+                text.push_str(&format!("{mode}-{name} #{color:06x}\n"));
+            }
+        }
+    }
+    fs::write(file, text).with_context(|| format!("could not save {}", file.display()))
+}
+
 fn load(file: &Path) -> Option<ThemeMode> {
     match fs::read_to_string(file).ok()?.trim() {
         "light" => Some(ThemeMode::Light),
@@ -137,7 +230,44 @@ mod tests {
 
     use gpui_kit::component::ThemeMode;
 
-    use super::{load, load_brightness, save, save_brightness_to};
+    use super::{load, load_brightness, load_colors, save, save_brightness_to, save_colors_to};
+    use crate::theme::{CustomColors, ModeColors};
+
+    /// The colours chosen for each mode are saved, and load back as they
+    /// were; one never chosen, or unreadable, is the theme's own.
+    #[test]
+    fn colors_are_saved_per_mode_and_restored() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/colors-preference-test");
+        let file = dir.join("colors");
+        fs::remove_dir_all(&dir).ok();
+
+        assert_eq!(load_colors(&file), None);
+        let colors = CustomColors {
+            dark: ModeColors {
+                base: Some(0x3a3f44),
+                chain: Some(0xbba0e6),
+                ..Default::default()
+            },
+            light: ModeColors {
+                code: Some(0xb3261e),
+                ask: Some(0x000000),
+                ..Default::default()
+            },
+        };
+        save_colors_to(&colors, &file).unwrap();
+        assert_eq!(load_colors(&file), Some(colors));
+        save_colors_to(&CustomColors::default(), &file).unwrap();
+        assert_eq!(load_colors(&file), Some(CustomColors::default()));
+        fs::write(
+            &file,
+            "dark-spec #12345\nlight-hue #123456\nlight-spec #0a0b0c\n",
+        )
+        .unwrap();
+        let loaded = load_colors(&file).unwrap();
+        assert_eq!(loaded.dark, ModeColors::default());
+        assert_eq!(loaded.light.spec, Some(0x0a0b0c));
+        fs::remove_dir_all(&dir).ok();
+    }
 
     /// Each mode's brightness is saved on its own, and loads back as it was;
     /// never saved, both are at 0 once anything is; a mode missing is at 0.
