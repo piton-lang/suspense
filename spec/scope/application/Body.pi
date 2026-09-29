@@ -17,26 +17,33 @@ export ui-component BodyScope:
 
 concept BodyConcept:
     pitch:
-        The main window's body: the area between its two sidebars, where the
-        tasks sent to the harness, and any file opened beside them, are shown.
+        The main window's body: the area to the right of the project sidebar,
+        where the tasks sent to the harness, and any file opened beside them,
+        are shown, and the chat input they are sent from.
 
     shape: {BodyShape}
 
 shape BodyShape:
     description:
-        Beneath the @{RibbonScope} and above the @{ChatInputScope}, between
-        the @{ProjectSidebarScope} on its left and, while a task runs, the
-        @{ReferencedSpecSidebarScope} on its right. While that sidebar isn't
-        there, the body reaches the window's right edge. It is part of the
-        @{PromptEditor}, whose chat input runs beneath it and beneath the
-        right sidebar, across the full width of prompt mode.
+        Beneath the @{RibbonScope}, to the right of the
+        @{ProjectSidebarScope}, which runs the full height beside it, and
+        reaching the window's right edge. It is part of the @{PromptEditor}.
+
+        The @{ChatInputScope} lives within the body, along its bottom, across
+        its full width: its left edge against the project sidebar, and its
+        right edge at the window's. Above it, the message list, with, while a
+        task runs, the @{ReferencedSpecSidebarScope} at its right; the chat
+        input runs beneath both, the right sidebar never reaching down beside
+        it.
 
     contents:
         Everything that can be in the body:
 
-        - the @{MessageList}, the chat history, which fills it whenever no file is open
+        - the @{MessageList}, the chat history, which fills the space above the chat input whenever no file is open
         - the hint shown in the message list's place before any task has been sent, or while no project is open, as the @{PromptEditor} and the @{NoProjectStateScope} say
         - an @{EditorScope}, in a split beside the message list, while a file is open
+        - the @{ReferencedSpecSidebarScope}, at the message list's right while a task runs
+        - the @{ChatInputScope}, along the bottom beneath all of these
 
         An @{InsetPanelScope} floats over the whole window, the body included,
         but is never part of it.

@@ -18,7 +18,8 @@ shape ThemeShape:
         #444444. Dark mode is the reference: every colour below is chosen for
         it first, and light mode is its reasonable interpretation on a light
         base, keeping the same roles, the same order, and steps of about the
-        same size. The greys are true neutrals, with no hint of blue or warmth.
+        same size. The greys are true neutrals, with no hint of blue or warmth,
+        unless a base of another colour is chosen, as chosen colours say.
         There are no gradients, and no texture. Everything that uses a colour
         names its role here rather than a value of its own, so the two modes
         stay coherent.
@@ -110,8 +111,8 @@ shape ThemeShape:
 
     bevel:
         A surface that should lift slightly off what it sits on, such as a
-        table's header or a hovered scrollbar button, can have the theme's bevel: a
-        very slight 1 pixel edge around it, just enough to lift it. Its top and
+        table's header, can have the theme's bevel: a very slight 1 pixel edge
+        around it, just enough to lift it. Its top and
         left edges are a touch lighter, as white laid faintly over the surface,
         8% in dark mode and 55% in light mode; its bottom and right edges only
         barely darker, as black laid very faintly over it, 6% in dark mode and
@@ -138,46 +139,95 @@ shape ThemeShape:
         4.5 to 1 against the base, recessed, well, and overlay surfaces, and
         primary text at least 4 to 1 on controls in any state. Tertiary text,
         status colours, and the accent keep at least 3 to 1 on the base. Edges
-        keep about 1.5 to 1 against the base, and lines less.
+        keep about 1.5 to 1 against the base, and lines less. Only near the
+        middle grey, where brightness brings the base, is less kept, as
+        brightness says.
 
     brightness:
         The whole interface can be made lighter or darker, from the Brightness
         slider of the ribbon's Application tab, without changing how it reads.
         Brightness moves the mode's whole ladder of neutral greys together, by
-        the same amount in lightness, every surface, line, bevel, and overlay
-        with it: the ribbon's greys, the file tree's darkest surface, the
-        wells, the base, raised, hover, pressed, and selected surfaces, and
-        the scrollbar's track, since it is laid over them. The steps between
-        them stay the size they are at 0, and their order never changes: in
+        the same amount in lightness, every surface, line, and overlay with
+        it: the ribbon's greys, the file tree's darkest surface, the wells, the
+        base, raised, hover, pressed, and selected surfaces, and the
+        scrollbar, since it is laid over them. Their order never changes: in
         dark mode what is lighter than what it sits on stays lighter, however
         bright it is made, and in light mode what is darker stays darker. A
         raised box never becomes darker than its ground, nor a well lighter
         than the base.
 
-        Each mode has its own brightness, running from -10 to +10, each step
-        moving every channel of every grey by 2% of the way from black to
-        white, rounded to a whole value, but only as far as the mode allows:
-        a mode's brightness stops at whichever step would first push a grey
-        below black or above white, since clipping would close the steps up,
-        or bring text or a hue below the contrast asked of it above. At 0 the
-        greys are exactly those given above. With these greys, dark mode runs
-        from -3 to +1 and light mode from -4 to +2.
+        Each mode has its own brightness, 0 until set, each step moving every
+        channel of every grey by one value, from 0 to 255, so the interface
+        moves as finely as a colour can. At 0 the greys are exactly those
+        given above. A mode's brightness stops at whichever step would first
+        push a grey below black or above white, and where its base would cross
+        to the other side of the middle grey, #777777, lightness 50 to the eye,
+        halfway between black and white: dark mode's base stays below it, and
+        light mode's on it or above. With these greys, dark mode runs from -17
+        to +50, its base from #333333 to #767676, and light mode from -89 to
+        +10, its base from #777777 to #dadada.
 
         The Brightness slider runs through both modes as one scale, dark
         mode's steps from its darkest to its lightest, then light mode's, so
         the interface goes from its darkest to its lightest with no switch
-        between modes. Where it crosses from dark mode's lightest step to
-        light mode's darkest, the greys jump, the base from about #494949 to
-        #bcbcbc, rather than blending through the mid greys between, on which
-        neither mode's text would keep its contrast.
+        between modes, and the base rises one value at every position, from
+        #333333 through the middle grey to #dadada, with no jump where the
+        modes meet.
 
-        Text keeps its colours as the greys move, unless moving them would
-        bring it below that contrast, in which case the brightness stops there
-        rather than recolouring it. The accent, the mode colours, and the
-        status colours keep their hues; tints laid over a surface, such as a
-        mode's, are laid over the moved surface and so move with it.
-        Everything takes the new brightness at once, while the slider is
-        dragged, with no flicker and nothing laid out anew.
+        Away from the middle grey, the steps between the greys stay the size
+        they are at 0. Within 48 values of it, they narrow, all alike, easing
+        in and out, to half their size with the base on the middle grey
+        itself. Since the steps turn round between the modes, what is lighter
+        than the base in dark mode being darker in light mode, this halves how
+        far each surface moves where the modes meet, and every grey changes
+        gently from one position of the slider to the next.
+
+        Text and colours keep exactly the values given above until the base
+        comes near enough to cost them their contrast, and then move only as
+        far toward white, in dark mode, or black, in light mode, as it takes to
+        keep it: primary and secondary text 4.5 to 1 on the base, recessed,
+        well, and overlay surfaces, primary text 4 to 1 on controls, tertiary
+        text, the accent, the status colours, and the other hues 3 to 1 on the
+        base, and disabled text the contrast it has at 0; or, where a colour
+        had less than asked at 0, what it had then. A colour that can't reach
+        it even at white or black is white or black. So a mode made darker
+        than 0 in dark mode, or lighter than 0 in light mode, changes no text
+        at all, and primary text keeps 4.5 to 1 on the base all the way along.
+        Near the middle grey no colour can keep all of that: text goes almost
+        white just before the modes meet and almost black just after, primary
+        and secondary text all but alike, and the hues paler on the dark side
+        and deeper on the light. The text turns from light to dark at a single
+        position of the slider, where the modes meet, never fading through
+        grey.
+
+        The accent, the mode colours, and the status colours keep their hues;
+        tints laid over a surface, such as a mode's, are laid over the moved
+        surface and so move with it. The bevel's light and shade are made
+        stronger or weaker as the base moves, so a bevelled surface lifts off
+        its ground as much at every brightness as at 0. Everything takes the
+        new brightness at once, while the slider is dragged, with no flicker
+        and nothing laid out anew.
+
+    chosenColours:
+        Each mode's base, and the colours of Code, Chain, Spec, and Ask, can
+        be chosen in place of the theme's own, in the theme editor of the
+        ribbon's Application tab. Dark and light mode each keep their own, as
+        the theme's own differ between them, and one never chosen is the
+        theme's own.
+
+        A chosen base is the base at brightness 0, and may be any colour,
+        tinted or not. Every other grey of the mode keeps the step it has from
+        the theme's own base, in every channel, so the ladder is laid out from
+        the chosen base, and brightness moves it from there. How far a mode's
+        brightness can go follows its base, as brightness says, and the
+        Brightness slider then runs through the steps it allows. Text and hues
+        are kept readable against the moved greys as brightness says.
+
+        The colours of Code, Spec, and Ask take the place of the theme's red,
+        blue, and green wherever a mode is shown, and a chosen Chain takes the
+        place of the purple midway between Code and Spec. They are used just
+        as they were picked, never adjusted for contrast as the theme's own
+        hues are near the middle grey.
 
     gpuiKit:
         The application's gpui-kit theme is set from these roles in both

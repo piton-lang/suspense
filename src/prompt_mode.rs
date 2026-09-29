@@ -3784,8 +3784,8 @@ impl PromptMode {
         })
     }
 
-    /// The task view with the referenced spec sidebar at its right while a
-    /// task runs: sliding out from behind its right edge as the task starts,
+    /// The task view, with the chat input beneath it, and the referenced spec
+    /// sidebar at the right of both while a task runs: sliding out from behind its right edge as the task starts,
     /// over the task view, which keeps its width until the slide settles; then
     /// a split that can be dragged; and sliding back once the run is over.
     fn with_referenced_spec(
@@ -5959,7 +5959,6 @@ impl Render for PromptMode {
         // Lets UI tests find the history; inert in normal builds.
         let history = gpui_kit::TestSupportExt::test_support(history);
         let history = div().relative().size_full().child(history);
-        let history = self.with_referenced_spec(history, window, cx);
 
         // The task view, and any file split off it.
         let body = div().relative().flex_1().min_h_0().on_prepaint({
@@ -6120,10 +6119,14 @@ impl Render for PromptMode {
         // builds.
         let body = gpui_kit::TestSupportExt::test_support(body);
 
-        v_flex()
+        // The chat input stays within the body, beneath the task view and any
+        // file split off it, with the referenced spec sidebar beside both,
+        // never reaching over it.
+        let column = v_flex()
             .size_full()
             .child(body)
-            .child(self.chat_input.clone())
+            .child(self.chat_input.clone());
+        self.with_referenced_spec(column, window, cx)
     }
 }
 
@@ -7245,6 +7248,17 @@ mod tests {
             assert!(
                 refs.left() >= history.right() - gpui_kit::px(1.),
                 "{refs:?} isn't right of {history:?}"
+            );
+            // The chat input, beneath the space above it, stays left of the
+            // sidebar, which runs down beside it rather than above it.
+            let body = window.find("prompt-body").bounds();
+            assert!(
+                refs.left() >= body.right() - gpui_kit::px(1.),
+                "{refs:?} isn't right of the body and chat input {body:?}"
+            );
+            assert!(
+                refs.bottom() > body.bottom() + gpui_kit::px(20.),
+                "the sidebar {refs:?} stops above the chat input, beneath {body:?}"
             );
             assert!(window.try_find(("referenced-file", 0usize)).is_some());
             assert!(

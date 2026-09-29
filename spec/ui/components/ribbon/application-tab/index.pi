@@ -2,6 +2,7 @@ use /lib
 use /ui
 from /scope/settings-window import SettingsWindowScope
 from /scope/user-preferences import UserPreferencesScope
+from /ui/components/theme-editor import ThemeEditorScope
 from /ui/theme import ThemeScope
 
 export ui-component RibbonApplicationTabScope:
@@ -23,6 +24,10 @@ shape RibbonApplicationTabShape:
             An "Appearance" group holds the Brightness command, its one
             control; there is no Dark mode switch, since the slider reaches
             both modes.
+
+        colours:
+            A "Colours" group, between Appearance and Preferences, holds the
+            Theme command.
 
         preferences:
             A "Preferences" group holds the Settings command.
@@ -62,6 +67,14 @@ shape RibbonApplicationTabShape:
             It is primary, so the collapsed ribbon keeps it: its icons and
             track as they are, only as wide as they are, as tall as a small
             button.
+
+        theme:
+            A "Theme" button with a palette icon. Clicking it opens the
+            @{ThemeEditorScope}. Its tooltip says it chooses the base colour,
+            and the colours of Code, Chain, Spec, and Ask.
+
+            It is a full button, and not primary, so the collapsed ribbon
+            leaves it out.
 
         settings:
             A "Settings" button with a gear icon. Clicking it opens the

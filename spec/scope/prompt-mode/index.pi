@@ -156,8 +156,9 @@ shape PromptEditorShape:
     queue:
         overview:
             The queue holds the tasks sent while the harness is working, as the
-            @{PromptSendingScope} says, in the order they were sent, and sends
-            them one at a time.
+            @{PromptSendingScope} says, in the order they were sent unless
+            they have been moved since, and sends them one at a time, first
+            to last.
 
         placement:
             The queue sits along the bottom of the view, below the output and
@@ -178,9 +179,41 @@ shape PromptEditorShape:
             removes it from the queue for good. A prompt already sent is no
             longer in the queue.
 
+        newConversation:
+            Each queued prompt in the list has a small ghost button with a
+            sparkles icon, first of its buttons, shown as selected while the prompt will start a new
+            conversation rather than carry on the tasks', as its hidden anchor
+            records, as the @{ChatInputScope} says. Clicking it switches
+            between the two, saving the prompt again with the project. Its
+            tooltip says which the prompt does, and that clicking does the
+            other instead. The choice stays with the prompt wherever it is
+            moved in the queue.
+
+            The toggle can only make a prompt start a new conversation; it
+            can't bring back one that was left. Once New conversation has been
+            pressed for the tasks, the next task to run starts a new
+            conversation whichever prompt it is, even when the prompt it
+            marked has been moved further down or switched back to carrying
+            on.
+
+        reorder:
+            After the new conversation button, each queued prompt in the list
+            has two small ghost buttons, one with an up chevron, whose tooltip
+            says it moves the prompt up, and one with a down chevron, whose
+            tooltip says it moves the prompt down. Each swaps the prompt with
+            its neighbour above or below it, and the order is saved with the
+            project, so the queue comes back in its new order when the project
+            is opened again. Move up is disabled on the first prompt and move
+            down on the last, and both are disabled while either prompt they
+            would swap is still being saved, as its spinner shows. A prompt
+            being edited can still be moved, and the chat input's "Editing
+            queued prompt N" follows it to its new place. A move that can't be
+            saved leaves the queue as it was, and a notification titled
+            "Could not move the prompt" says why.
+
         editing:
             Each queued prompt in the list also has a button with a pencil icon,
-            before its cancel button, whose tooltip says it edits the prompt.
+            after its move buttons and before its cancel button, whose tooltip says it edits the prompt.
             Clicking it edits the prompt in the @{ChatInputScope}, as it says,
             and its row is highlighted while it is being edited. While it is,
             it is held where it is: it is never sent, and a queue waiting on it

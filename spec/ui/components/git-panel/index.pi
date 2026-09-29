@@ -8,10 +8,11 @@ from /scope/project-directory import ProjectDirectoryScope
 from /scope/prompt-mode/modes import PromptModesScope
 from /ui/components/file-tree import FileTreeScope
 from /ui/components/growing-text-input import GrowingTextInputScope
+from /ui/components/scrollbar import ScrollbarScope
 
 export panel GitPanelScope:
     height: fit
-    scrolls: false
+    scrolls: true
 
     concept: {GitPanelConcept}
 
@@ -39,6 +40,34 @@ shape GitPanelShape:
         change of colour is the edge. Every box and button in it is square,
         with no rounded corners and no border, and the Pull and Push buttons
         are square too.
+
+    sizing:
+        The panel is only as tall as its header and body need, along the
+        bottom of its sidebar, up to half the sidebar's height; the file tree
+        takes the rest. It is never taller than its contents need, however it
+        is sized: as its contents grow, such as when a commit note is added,
+        it grows with them up to its most, its body scrolling beyond that,
+        and as they shrink, such as when the notes are cleared by a commit,
+        it shrinks straight back down to fit them.
+
+        The edge between the file tree and the panel's header can be dragged
+        to resize it: dragged up, the panel may grow up to where the edge was
+        dragged, but no taller than its contents need, and dragged down, it
+        shrinks, as far as its header alone. The file tree always keeps at
+        least 80 pixels. Once dragged, the panel's most is the height it was
+        dragged to rather than half the sidebar, and it stays that height as
+        the window is resized, giving way to the file tree's least height
+        when the window is too short. The edge shows no line at rest, since
+        the change of colour is the edge: while the pointer is over it, or it
+        is being dragged, a line in the accent shows along it, and the cursor
+        is a row-resize cursor.
+
+    scrolling:
+        When the panel is shorter than its contents, its header, the branch
+        with Pull and Push, stays where it is, and its body, the summary,
+        commit notes, message, Generate, and Commit, scrolls beneath it, with a
+        @{ScrollbarScope} along its right. The body's colour runs all the way
+        down the panel.
 
     branch:
         The top row shows a branch icon, then the branch from the

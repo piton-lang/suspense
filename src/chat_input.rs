@@ -229,6 +229,12 @@ const CHAIN_WIDTH_ESTIMATE: Pixels = px(40.);
 /// How wide the column of send, queue, and preview buttons is.
 const SEND_COLUMN_WIDTH: Pixels = px(120.);
 
+/// How far the text sits in from the edges of the dark inset it is typed,
+/// or previewed, in: the editor's own padding above and below its text.
+fn input_inset() -> Pixels {
+    gpui_kit::component::Size::Medium.input_py()
+}
+
 /// How the tint and the chain's icon slide between tabs: critically damped,
 /// so they settle without bouncing past.
 const CHAIN_SPRING: SpringConfig = SpringConfig::new(400., 40., 1.);
@@ -1305,6 +1311,7 @@ impl ChatInput {
             .id("prompt-preview")
             .flex_1()
             .min_w_0()
+            .p(input_inset())
             .gap_1()
             .child(heading)
             .child(body);
@@ -2262,6 +2269,10 @@ impl Render for ChatInput {
                     .relative()
                     .flex_1()
                     .min_w_0()
+                    // The editor pads its text more at the sides than above
+                    // and below; drawing it out sideways by the difference
+                    // insets the text evenly all round.
+                    .mx(input_inset() - gpui_kit::component::Size::Medium.input_px())
                     .child(Editor::new(&self.editor).appearance(false).h(height))
                     .child(track_layout)
                     .child(self.completion.clone()),

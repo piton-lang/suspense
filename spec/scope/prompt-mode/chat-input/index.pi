@@ -33,6 +33,29 @@ shape ChatInputShape:
     description:
         Input on the left, send button on the right.
 
+        The body beneath the tabs has 8 pixels of padding. In it, the text
+        input sits in a dark box on the theme's darkest surface, #111111 in
+        dark mode, with rounded corners and no border, as tall as the column
+        of buttons beside it, 8 pixels from it, and taller when its text
+        needs more. The text sits 8 pixels in from the box's top, left, and
+        right, and grows down through the box. Clicking anywhere in the box
+        beneath the text puts focus in the text, except while a preview
+        shows. The preview shows in the same box, its content inset 8 pixels
+        all round.
+
+        At the right, a column of three buttons, 120 pixels wide, 6 pixels
+        apart, each as tall as the input's single row: Send at the top, then
+        Queue, then Preview, each the column's full width. Send has
+        a send icon before its label, and keeps its split chevron, the send
+        menu staying the only way to reach "Send to task". Queue and Preview
+        are buttons in gpui-kit's default style, doing what the
+        send menu's options of those names do, with tooltips saying that
+        Queue queues the prompt even while the harness is free, and that
+        Preview previews the compiled prompt. They are offered just as the
+        menu is: both are disabled while the input is empty, while a preview
+        shows, and while a queued prompt is edited, and Queue is also
+        disabled on the Ask tab, since a question never queues.
+
         <Enter> allows for creating new lines, like Ctrl/Cmd+Enter sends it to
         the ${HarnessIntegrationScope}
 
@@ -112,8 +135,11 @@ shape ChatInputShape:
 
     tabs:
         overview:
-            The input and send button live inside the body of a tab bar, using
-            gpui-kit's default tab styling. There is a tab for each of the
+            The input and buttons live inside the body of a tab bar, using
+            gpui-kit's default tab styling, except that each tab's label is
+            always in its mode's colour at full strength, of the
+            @{PromptModesScope}, whether selected or not: Code red, Spec blue,
+            Ask green, and Freeform grey. There is a tab for each of the
             @{PromptModesScope}, in their order: Code, Chain, Spec, Ask, and
             Freeform. Code, Spec, Ask, and Freeform are ordinary tabs. Chain is also a tab, just a
             small one, because it only shows an icon. All five sit flush against
@@ -215,9 +241,24 @@ shape ChatInputShape:
             hasn't yet said which conversation it is: once it does, it isn't
             carried on either.
 
-            Its tooltip says which conversation it resets:
-            "Start a new conversation for tasks" or
-            "Start a new conversation for questions", adding, while a run in
+            Whether a task starts a new conversation is part of its prompt,
+            recorded in its hidden anchor. Pressed for the tasks with prompts
+            queued, New conversation marks the first in the queue, saving it
+            again with the project, so it still starts the new conversation
+            once the project is closed and opened again. With nothing queued,
+            the next task sent or queued takes the mark. Cancelling the marked
+            prompt passes the mark on to the one that now comes first, or,
+            with nothing left queued, to the next task sent or queued. A task
+            marked this way never carries on the conversation before it when it
+            runs.
+
+            <Ctrl+N> while in the chat input does just what pressing New
+            conversation does, for the selected tab, and nothing while the
+            button is disabled. It is <Ctrl> on macOS too, not <Cmd>.
+
+            Its tooltip says which conversation it resets, with its shortcut:
+            "Start a new conversation for tasks (Ctrl+N)" or
+            "Start a new conversation for questions (Ctrl+N)", adding, while a run in
             it is under way, that the run finishes in the conversation left.
             It is disabled only while that conversation has nothing to carry
             on and no run in it is under way, its tooltip then saying the next
@@ -288,7 +329,9 @@ shape ChatInputShape:
             <Ctrl+Shift+Tab> on Code fades red straight to Freeform's grey;
             neither lights up Chain, Spec, or Ask on the way. A fade to or from
             Freeform's grey keeps the other tab's hue, only draining or filling
-            its colour, so it never passes through another hue.
+            its colour, so it never passes through another hue. Between Code
+            and Spec it passes through Chain's colour, whatever colours they
+            have been given in the theme editor.
 
             The send button, both its halves, takes the same colour as the
             selected tab, purple with Chain selected, but at full strength
@@ -437,7 +480,8 @@ shape ChatInputShape:
 
     growToFit:
         The text input is a @{GrowingTextInputScope} growing to 12 rows at most.
-        Its single row lines up with the send button.
+        Its first row lines up with the send button, both at the top of the
+        input row, and it grows downward from there.
 
     autoFocus:
         The chat input should be auto-focused.
@@ -563,6 +607,17 @@ shape ChatInputShape:
             fenced code block, whose fence is longer than any run of backticks
             in the text itself. This is also the compiled prompt shown in the
             task's header.
+
+        newConversation:
+            The hidden anchor has a newConversation property, true or false,
+            after the one recording whether it was sliced: for a queued task,
+            whether it will start a new conversation rather than carry on the
+            tasks'; for the copy saved to the history, a task's or a
+            question's, whether it did start one. A task starts a new
+            conversation when it was marked to, as the session controls say,
+            and also when there was none to carry on. Editing a queued prompt
+            keeps what it says. A prompt saved by an earlier version, without
+            it, still reads back, as carrying on the conversation.
 
         sliced:
             A prompt sent with Slice on is still written as the hidden anchor,

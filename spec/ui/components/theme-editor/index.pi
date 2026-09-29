@@ -1,0 +1,74 @@
+use /lib
+use /ui
+from /scope/prompt-mode/modes import PromptModesScope
+from /scope/user-preferences import UserPreferencesScope
+from /ui/components/inset-panel import InsetPanelScope
+from /ui/components/scrollbar import ScrollbarScope
+from /ui/theme import ThemeScope
+
+export ui-component ThemeEditorScope:
+    concept: {ThemeEditorConcept}
+
+concept ThemeEditorConcept:
+    pitch:
+        Where the @{ThemeScope}'s base colour, and the colours of Code, Chain,
+        Spec, and Ask, of the @{PromptModesScope}, are chosen in place of the
+        theme's own, or put back to them.
+
+    shape: {ThemeEditorShape}
+
+shape ThemeEditorShape:
+    description:
+        Shown in an @{InsetPanelScope} over the main window, in place of
+        anything else there, like the settings. It is headed "Theme", with a
+        close button whose tooltip says it closes the theme editor, and a line
+        beneath the heading; closing the panel any way an inset panel closes
+        closes it too. Opening it while it is already open leaves it as it
+        is. Beneath the heading, its page scrolls when it is taller than the
+        panel.
+
+    page:
+        The page is headed "Colours", with the mode buttons at its right,
+        and beneath, a muted line saying that dark and light mode each keep
+        their own colours, that these are the mode showing's, and that a
+        colour shows everywhere as soon as it is chosen and is kept for the
+        next launch. Then a row for each colour, in order: Base, Code, Chain,
+        Spec, and Ask. Last, a "Reset all" button.
+
+    modes:
+        Two small ghost buttons, "Dark mode" with a moon icon and "Light mode"
+        with a sun icon, the one showing selected. The colours shown and
+        edited are always the mode showing's. Clicking the other shows that
+        mode, as the ribbon's brightness would, and the rows then show its
+        colours. Each tooltip says it shows that mode and edits its colours.
+
+    rows:
+        Each row has gpui-kit's colour picker, showing the colour, then the
+        colour's name, its value as a hex code such as #444444, muted, and,
+        while it hasn't been chosen, "Theme's own", muted; beneath them, a
+        muted line saying what it colours. At the right end, a small outline
+        "Reset" button puts back the theme's own colour, disabled while it is
+        already the theme's own, its tooltip saying which.
+
+        What each colours:
+
+        - Base: the window and its panels. Every other grey keeps its step from it, and brightness moves them all from here. It shows the base at brightness 0.
+        - Code: Code's tab, and whatever shows Code or was sent in it.
+        - Chain: the chain's tab, Code and Spec together. Unless chosen, it is midway between Code and Spec.
+        - Spec: Spec's tab, and whatever shows Spec or was sent in it.
+        - Ask: Ask's tab, and the questions asked in it.
+
+        Picking a colour chooses it for the mode showing: it shows
+        everywhere at once, the row showing its new hex code, and is saved
+        among the @{UserPreferencesScope}. A colour that can't be saved
+        still holds for the session, and fails quietly.
+
+    resetAll:
+        "Reset all" puts every colour of the mode showing back to the
+        theme's own, leaving the other mode's as they are. It is disabled
+        while the mode showing has none chosen, its tooltip saying so.
+
+    following:
+        The pickers follow the mode showing and its colours however they are
+        changed, such as by the ribbon's Brightness slider crossing into the
+        other mode, or a Reset.

@@ -19,6 +19,7 @@ shape UserPreferencesShape:
     preferences:
         - light or dark mode, which, until chosen, follows the operating system's appearance
         - the interface's brightness, one for dark mode and one for light, each starting at 0
+        - the colours chosen in the theme editor, the base and Code, Chain, Spec, and Ask, for dark mode and for light, each the theme's own until chosen; restored before brightness, which they bound
         - whether the ribbon is collapsed, which starts expanded
         - the layout of a file's diff, which starts side by side
         - the recent projects
@@ -26,10 +27,11 @@ shape UserPreferencesShape:
         - the harness runs go to, which starts as Claude Code
 
         A preference is saved as soon as it is chosen, and restored on the next
-        launch.
+        launch. A brightness saved by an earlier version, in its steps of 2% of
+        the way from black to white, is restored as the same brightness.
 
     failing:
         A preference that can't be saved still holds for the rest of the
         session. Only light or dark mode says so, as the commands that change
-        it do; the others, brightness among them, fail quietly, being only a
+        it do; the others, brightness and the chosen colours among them, fail quietly, being only a
         convenience.

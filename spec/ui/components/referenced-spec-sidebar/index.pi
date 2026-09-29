@@ -53,6 +53,14 @@ shape ReferencedSpecSidebarShape:
         are taller than it, and none otherwise. When it shows, it is the
         same scrollbar as every other, as the @{ScrollbarScope} says.
 
+        A panel whose contents fit doesn't scroll at all, not even by a
+        pixel, at any display scale or window size: it counts as taller than
+        its contents need only once they overflow it by a whole pixel or
+        more, so what is left over from rounding to the display's pixels
+        never counts, and while they fit, it stays scrolled to its top. So
+        neither the wheel nor a drag moves rows that all fit, and no
+        scrollbar shows for them.
+
     showing:
         It is only there while a task is running: from the moment a task is
         sent from the Code, Chain, or Spec tab until its run is over. Questions
@@ -70,6 +78,7 @@ export panel ReferencedFilesPanel:
     counted: false
     height: fit
     scrolls: true
+    scrollbar: overflowing
 
     concept: {ReferencedFilesConcept}
 
@@ -132,6 +141,7 @@ export panel UnderstandingPanel:
     counted: false
     height: fill
     scrolls: true
+    scrollbar: overflowing
 
     concept: {UnderstandingConcept}
 
@@ -162,4 +172,6 @@ shape UnderstandingShape:
         It follows the file as it changes on disk while the task runs. A row
         that is added, or whose text changes, is briefly highlighted, fading
         back to its box's colour. Until the file exists, it reads
-        "Nothing understood yet", muted.
+        "Nothing understood yet", muted. Once it exists but has no list items
+        yet, as when it has just been created, the panel shows nothing beneath
+        its header, and has nothing to scroll and no scrollbar.
