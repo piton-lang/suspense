@@ -15,7 +15,9 @@
 //! prose, so it can reference the spec. A Code task sent to Spec is also given
 //! the code-to-spec prompt, saved beside the templates, whose `${CODE_PROMPT}`
 //! and `${CODE_RESULT}` are filled in with the code task's prompt and final
-//! output as it is sent, as text (see [`fill_code_task`]).
+//! output as it is sent, as text (see [`fill_code_task`]). The code task a
+//! Chain task hands on to is given the spec-to-code prompt in the same way,
+//! its `${SPEC_PROMPT}` and `${SPEC_RESULT}` filled in with the Chain task's.
 
 use std::fs;
 use std::io::ErrorKind;
@@ -36,34 +38,46 @@ pub const UNDERSTANDING_FILE: &str = "${UNDERSTANDING_FILE}";
 /// final output: filled in as the prompt is sent, never read as Piton.
 pub const CODE_PROMPT: &str = "${CODE_PROMPT}";
 pub const CODE_RESULT: &str = "${CODE_RESULT}";
+/// In the spec-to-code prompt, the spec task's prompt as it was typed, and its
+/// final output, filled in as the code task's are in the code-to-spec prompt.
+pub const SPEC_PROMPT: &str = "${SPEC_PROMPT}";
+pub const SPEC_RESULT: &str = "${SPEC_RESULT}";
 
 /// What CODE_RESULT is filled in with for a code task that left no final
 /// output.
 pub const NO_CODE_RESULT: &str = "The code task left no final output: it failed, was \
     cancelled, or said nothing after its last tool call.";
 
+/// What SPEC_RESULT is filled in with for a spec task that left no final
+/// output.
+pub const NO_SPEC_RESULT: &str = "The spec task left no final output: it said nothing after \
+    its last tool call.";
+
 const DIR: &str = "system-prompts";
 
 /// A prompt saved in `.suspense/system-prompts`: a mode's template, the
-/// spec-reading prompt injected into them, or the code-to-spec prompt added to
-/// a Code task sent to Spec.
+/// spec-reading prompt injected into them, the code-to-spec prompt added to
+/// a Code task sent to Spec, or the spec-to-code prompt added to the Code task
+/// a Chain task hands on to.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Prompt {
     Mode(SendMode),
     SpecReading,
     CodeToSpec,
+    SpecToCode,
 }
 
 impl Prompt {
     /// Every prompt: the modes' templates, in order, then the injected ones.
     /// Freeform, which sends no system prompt, has none.
-    pub const ALL: [Prompt; 6] = [
+    pub const ALL: [Prompt; 7] = [
         Prompt::Mode(SendMode::ALL[0]),
         Prompt::Mode(SendMode::ALL[1]),
         Prompt::Mode(SendMode::ALL[2]),
         Prompt::Mode(SendMode::ALL[3]),
         Prompt::SpecReading,
         Prompt::CodeToSpec,
+        Prompt::SpecToCode,
     ];
 
     /// The name its file is saved under.
@@ -72,6 +86,7 @@ impl Prompt {
             Prompt::Mode(mode) => mode.key(),
             Prompt::SpecReading => "spec-reading",
             Prompt::CodeToSpec => "code-to-spec",
+            Prompt::SpecToCode => "spec-to-code",
         }
     }
 
@@ -81,6 +96,7 @@ impl Prompt {
             Prompt::Mode(mode) => mode.label(),
             Prompt::SpecReading => "Spec reading",
             Prompt::CodeToSpec => "Code to spec",
+            Prompt::SpecToCode => "Spec to code",
         }
     }
 }
@@ -116,6 +132,7 @@ pub fn default_prompt(prompt: impl Into<Prompt>) -> &'static str {
         Prompt::Mode(SendMode::Freeform) => "",
         Prompt::SpecReading => baked!("spec-reading"),
         Prompt::CodeToSpec => baked!("code-to-spec"),
+        Prompt::SpecToCode => baked!("spec-to-code"),
     }
     .trim_end()
 }
@@ -193,27 +210,35 @@ pub fn fill(template: &str, code: &str, spec: &str, reading: &str, fluency: &str
         .to_string()
 }
 
-/// A compiled system prompt with the code task a Spec task was sent from
-/// filled in: `${CODE_PROMPT}` with its prompt as typed, and `${CODE_RESULT}`
-/// with its final output, or with [`NO_CODE_RESULT`] when it left none. Both
-/// are taken as text: filled in at once, in one pass, so neither is filled in
-/// again from what the other holds, and after compiling, so nothing in them is
-/// ever read as Piton.
+/// A compiled system prompt with the task it was handed from filled in: for a
+/// Spec task sent from a Code task, `${CODE_PROMPT}` with its prompt as typed,
+/// and `${CODE_RESULT}` with its final output, or with [`NO_CODE_RESULT`] when
+/// it left none; for the Code task a Chain task hands on to, `${SPEC_PROMPT}`
+/// and `${SPEC_RESULT}` in the same way, with [`NO_SPEC_RESULT`]. All are
+/// taken as text: filled in at once, in one pass, so none is filled in again
+/// from what another holds, and after compiling, so nothing in them is ever
+/// read as Piton.
 pub fn fill_code_task(system_prompt: &str, prompt: &str, result: Option<&str>) -> String {
     let result = result
         .map(str::trim_end)
-        .filter(|result| !result.trim().is_empty())
-        .unwrap_or(NO_CODE_RESULT);
+        .filter(|result| !result.trim().is_empty());
+    let code_result = result.unwrap_or(NO_CODE_RESULT);
+    let spec_result = result.unwrap_or(NO_SPEC_RESULT);
     let prompt = prompt.trim_end();
-    let mut filled = String::with_capacity(system_prompt.len() + prompt.len() + result.len());
+    let mut filled = String::with_capacity(system_prompt.len() + prompt.len() + code_result.len());
     let mut rest = system_prompt;
     loop {
-        let next = [(CODE_PROMPT, prompt), (CODE_RESULT, result)]
-            .into_iter()
-            .filter_map(|(placeholder, value)| {
-                rest.find(placeholder).map(|at| (at, placeholder, value))
-            })
-            .min_by_key(|(at, ..)| *at);
+        let next = [
+            (CODE_PROMPT, prompt),
+            (CODE_RESULT, code_result),
+            (SPEC_PROMPT, prompt),
+            (SPEC_RESULT, spec_result),
+        ]
+        .into_iter()
+        .filter_map(|(placeholder, value)| {
+            rest.find(placeholder).map(|at| (at, placeholder, value))
+        })
+        .min_by_key(|(at, ..)| *at);
         let Some((at, placeholder, value)) = next else {
             filled.push_str(rest);
             return filled;
@@ -237,9 +262,9 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        CODE_PROMPT, CODE_RESULT, NO_CODE_RESULT, PITON_FLUENCY, Prompt, SPEC_READING,
-        UNDERSTANDING_FILE, default_prompt, file, fill, fill_code_task, fill_understanding, load,
-        save, save_missing,
+        CODE_PROMPT, CODE_RESULT, NO_CODE_RESULT, NO_SPEC_RESULT, PITON_FLUENCY, Prompt,
+        SPEC_PROMPT, SPEC_READING, SPEC_RESULT, UNDERSTANDING_FILE, default_prompt, file, fill,
+        fill_code_task, fill_understanding, load, save, save_missing,
     };
     use crate::chat_input::SendMode;
 
@@ -367,10 +392,40 @@ mod tests {
         );
         assert_eq!(Prompt::CodeToSpec.key(), "code-to-spec");
         assert_eq!(Prompt::CodeToSpec.label(), "Code to spec");
-        assert_eq!(Prompt::ALL.last(), Some(&Prompt::CodeToSpec));
+        assert_eq!(Prompt::ALL[Prompt::ALL.len() - 2], Prompt::CodeToSpec);
         let filled = fill(default, "./src", "./spec", "Read.", "");
         assert!(filled.contains("the spec at ./spec\n") && filled.contains("\n./src."));
         assert!(filled.contains(CODE_PROMPT) && filled.contains(CODE_RESULT));
+    }
+
+    /// The spec-to-code prompt, given to the Code task a Chain task hands on
+    /// to, is this repository's own saved one, the last prompt, filled in as a
+    /// template is but for the spec task's prompt and final output, which the
+    /// spec task fills in as a code task fills in its own.
+    #[test]
+    fn spec_to_code_default_is_this_repositorys() {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let default = default_prompt(Prompt::SpecToCode);
+        let saved = fs::read_to_string(file(Prompt::SpecToCode, manifest)).unwrap();
+        assert_eq!(default, saved.trim_end());
+        assert_eq!(Prompt::SpecToCode.key(), "spec-to-code");
+        assert_eq!(Prompt::SpecToCode.label(), "Spec to code");
+        assert_eq!(Prompt::ALL.last(), Some(&Prompt::SpecToCode));
+        let filled = fill(default, "./src", "./spec", "Read.", "");
+        assert!(filled.contains("./src") && filled.contains("./spec"));
+        assert!(filled.contains(SPEC_PROMPT) && filled.contains(SPEC_RESULT));
+        assert_eq!(
+            fill_code_task(
+                "Asked ${SPEC_PROMPT}; did ${SPEC_RESULT}",
+                "it",
+                Some("that")
+            ),
+            "Asked it; did that"
+        );
+        assert_eq!(
+            fill_code_task("Did: ${SPEC_RESULT}", "it", None),
+            format!("Did: {NO_SPEC_RESULT}")
+        );
     }
 
     /// The code task fills in its two placeholders as text, in one pass, so

@@ -6,8 +6,7 @@
 //! their labels, tooltips explain rather than repeat the label and give
 //! any shortcut, a command that can't run is disabled rather than hidden,
 //! groups are set apart by dividers named for them, and the ribbon collapses by
-//! double-clicking a tab, its chevron beside the project indicator, or
-//! Ctrl/Cmd+F1, which is remembered
+//! double-clicking a tab or Ctrl/Cmd+F1, which is remembered
 //! across launches. Collapsed, the tabs go too, and the
 //! commands marked primary (for now, all of them) sit small in a single row.
 
@@ -175,6 +174,7 @@ enum Command {
     RunTarget(usize),
     FindRunAgain,
     Brightness,
+    ResetBrightness,
     Theme,
     Settings,
 }
@@ -301,21 +301,16 @@ impl Ribbon {
         )
     }
 
-    /// The left container: the project indicator, the collapse chevron, and
-    /// the activity spinner while anything is running, leading the bar
-    /// whether expanded or collapsed.
-    fn render_left(&self, collapse: Button, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let items = [
-            Some(self.render_indicator().into_any_element()),
-            Some(collapse.into_any_element()),
-            self.render_activity(cx),
-        ];
-        container("ribbon-left", items.into_iter().flatten().collect())
+    /// The left container: the project indicator, leading the bar whether
+    /// expanded or collapsed.
+    fn render_left(&self) -> Option<AnyElement> {
+        container("ribbon-left", vec![self.render_indicator().into_any_element()])
     }
 
-    /// The right container, ending the bar; it holds nothing yet.
-    fn render_right(&self) -> Option<AnyElement> {
-        container("ribbon-right", Vec::new())
+    /// The right container, ending the bar: the activity spinner while
+    /// anything is running, and nothing otherwise.
+    fn render_right(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        container("ribbon-right", self.render_activity(cx).into_iter().collect())
     }
 
     /// The spinner beside the project's name while anything is running, with
@@ -545,14 +540,12 @@ impl Ribbon {
             Command::GenerateSkills => spec_tab::generate_skills(button, cx),
             Command::Rescope => spec_tab::rescope(button, cx),
             Command::Brightness => application_tab::brightness(self, size, cx),
+            Command::ResetBrightness => application_tab::reset_brightness_button(button, cx),
             Command::Theme => application_tab::theme(button),
             Command::Settings => application_tab::settings(button),
         }
     }
 }
-
-/// The collapse chevron's width and height.
-const CHEVRON_SIZE: Pixels = px(22.);
 
 /// A container at either end of the bar: what it holds side by side,
 /// vertically centred, with no gap between them or padding around them,
@@ -579,28 +572,6 @@ impl Render for Ribbon {
         let (border, muted, foreground) = (theme.border, theme.muted_foreground, theme.foreground);
         let (area, tab_row) = ribbon_colors(cx);
 
-        // Square, and the same size expanded or collapsed: only the way it
-        // points changes.
-        let collapse = Button::new("ribbon-collapse")
-            .ghost()
-            .xsmall()
-            .flex_none()
-            .size(CHEVRON_SIZE)
-            .icon(if self.collapsed {
-                IconName::ChevronDown
-            } else {
-                IconName::ChevronUp
-            })
-            .tooltip_with_action(
-                if self.collapsed {
-                    "Expand the ribbon"
-                } else {
-                    "Collapse the ribbon to its primary commands"
-                },
-                &ToggleRibbon,
-                None,
-            )
-            .on_click(cx.listener(|this, _, _, cx| this.toggle_collapsed(cx)));
         let ribbon = div()
             .id("ribbon")
             .flex()
@@ -639,7 +610,7 @@ impl Render for Ribbon {
                 row.push(self.render_command(place.command, CommandSize::Small, cx));
             }
             // Lets UI tests find the row; inert in normal builds. The
-            // indicator and the chevron after it stay put; what follows them
+            // indicator stays put; what follows them
             // scrolls sideways when it's wider than the room left. It holds
             // commands, so it is the command area's colour, and its buttons
             // stand apart from it as they do there.
@@ -650,7 +621,7 @@ impl Render for Ribbon {
                     .h(TAB_ROW_HEIGHT)
                     .items_stretch()
                     .bg(area)
-                    .children(self.render_left(collapse, cx))
+                    .children(self.render_left())
                     .child(gpui_kit::TestSupportExt::test_support(
                         h_flex()
                             .id("ribbon-primary-commands")
@@ -663,7 +634,7 @@ impl Render for Ribbon {
                             .px_2()
                             .children(row),
                     ))
-                    .children(self.render_right()),
+                    .children(self.render_right(cx)),
             ));
         }
 
@@ -724,16 +695,16 @@ impl Render for Ribbon {
                     }))
             })
             .collect::<Vec<_>>();
-        // The left container, holding the open project's name, the chevron,
-        // and the activity spinner, left of the tabs, and the right container
-        // after them, all on the tab row's own background.
+        // The left container, holding the open project's name, left of the
+        // tabs, and the right container, holding the activity spinner, at the
+        // far right, all on the tab row's own background.
         let tab_bar = h_flex()
             .w_full()
             .h(TAB_ROW_HEIGHT)
             .overflow_hidden()
             .items_start()
             .bg(tab_row)
-            .children(self.render_left(collapse, cx))
+            .children(self.render_left())
             .child(
                 h_flex()
                     .id("ribbon-tabs")
@@ -743,7 +714,7 @@ impl Render for Ribbon {
                     .h_full()
                     .children(tabs),
             )
-            .children(self.render_right());
+            .children(self.render_right(cx));
 
         // With a Code or Spec tab open alone, the body is tinted as the chat
         // input's is for that mode.

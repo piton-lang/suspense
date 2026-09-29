@@ -126,15 +126,19 @@ pub struct HiddenAnchor {
     pub attached_images: Vec<String>,
     /// The `systemPrompt` written after the attached images, if any.
     pub system_prompt: Option<String>,
-    /// For a Code task sent to Spec, the code task it was sent from, written
-    /// as `codeTask` after the system prompt, so it is sent the same way
-    /// again.
+    /// For a Code task sent to Spec, the code task it was sent from, and for
+    /// a chain's code step, the chain's spec step, written as `codeTask` after
+    /// the system prompt, so it is sent the same way again.
     pub code_task: Option<CodeTask>,
     /// For a task sent to the other mode, from Code or from Spec, the name of
     /// the hidden anchor of the task it was sent from, written as `sentFrom`
     /// after the code task; none for any other prompt, and for one saved
     /// before this was kept.
     pub sent_from: Option<String>,
+    /// For a Chain task, and the code step it goes on to, that the code step
+    /// is followed by a post-build spec update, written as
+    /// `postBuildSpecUpdate: true` after `sentFrom`.
+    pub post_build_update: bool,
 }
 
 /// What is attached to a prompt: pieces of text, and images saved in the
@@ -155,9 +159,11 @@ impl From<Vec<String>> for Attached {
     }
 }
 
-/// The code task a Spec task was sent from: its prompt as typed, and its
-/// final output, none if it left none. Each fills in the code-to-spec
-/// prompt's placeholder as text (see [`system_prompts::fill_code_task`]).
+/// The task a task was handed on from: for a Spec task sent from Code, the
+/// code task, and for a chain's code step, the chain's spec step. Its prompt
+/// as typed, and its final output, none if it left none, fill in the
+/// code-to-spec or spec-to-code prompt's placeholders as text (see
+/// [`system_prompts::fill_code_task`]).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CodeTask {
     pub prompt: String,
@@ -207,6 +213,7 @@ impl HiddenAnchor {
             system_prompt: None,
             code_task: None,
             sent_from: None,
+            post_build_update: false,
         }
     }
 
@@ -302,6 +309,10 @@ impl HiddenAnchor {
         if let Some(sent_from) = &self.sent_from {
             source.push('\n');
             writeln!(source, "{SENT_FROM_PREFIX}{sent_from}").ok();
+        }
+        if self.post_build_update {
+            source.push('\n');
+            writeln!(source, "{POST_BUILD_UPDATE_LINE}").ok();
         }
         let references = self.references(prompt);
         if !references.is_empty() {
@@ -522,6 +533,15 @@ impl HiddenAnchor {
             .and_then(|line| line.strip_prefix(SENT_FROM_PREFIX))
             .map(|name| name.trim().to_string())
             .filter(|name| !name.is_empty());
+        if rest
+            .first()
+            .is_some_and(|line| line.starts_with(SENT_FROM_PREFIX))
+        {
+            rest = &rest[1..];
+            rest = rest.strip_prefix(&[""]).unwrap_or(rest);
+        }
+        // Saved only by versions that send a chain as its steps.
+        let post_build_update = rest.first() == Some(&POST_BUILD_UPDATE_LINE);
         Some((
             Self {
                 name,
@@ -534,6 +554,7 @@ impl HiddenAnchor {
                 system_prompt,
                 code_task,
                 sent_from,
+                post_build_update,
             },
             prompt,
         ))
@@ -566,6 +587,10 @@ const CODE_RESULT_KEY: &str = "result:";
 
 /// The start of the `sentFrom` line of [`HiddenAnchor::source`].
 const SENT_FROM_PREFIX: &str = "    sentFrom: ";
+
+/// The line of [`HiddenAnchor::source`] saying a chain's code step is
+/// followed by a post-build spec update.
+const POST_BUILD_UPDATE_LINE: &str = "    postBuildSpecUpdate: true";
 
 /// The line opening the `references` property of [`HiddenAnchor::source`].
 const REFERENCES_LINE: &str = "    references:";
@@ -820,6 +845,20 @@ pub fn code_to_spec_system_prompt(project_dir: &Path, fluency: &str) -> Result<O
     Ok(match (spec, handoff) {
         (Some(spec), Some(handoff)) => Some(format!("{spec}\n\n{handoff}")),
         (spec, handoff) => spec.or(handoff),
+    })
+}
+
+/// The system prompt a chain's code step is given: Code's, as
+/// [`system_prompt`] gives it, then, on a paragraph of its own, the project's
+/// spec-to-code prompt, filled in as a template is. Its `${SPEC_PROMPT}` and
+/// `${SPEC_RESULT}` are left as written, to be filled in with the spec step
+/// as it is sent, as a code task sent to Spec fills in its own.
+pub fn spec_to_code_system_prompt(project_dir: &Path, fluency: &str) -> Result<Option<String>> {
+    let code = system_prompt(SendMode::Code, project_dir, fluency)?;
+    let handoff = filled_prompt(system_prompts::Prompt::SpecToCode, project_dir, fluency)?;
+    Ok(match (code, handoff) {
+        (Some(code), Some(handoff)) => Some(format!("{code}\n\n{handoff}")),
+        (code, handoff) => code.or(handoff),
     })
 }
 
@@ -1277,9 +1316,9 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        CodeTask, HiddenAnchor, Imports, MODE_PREFIX, NEW_CONVERSATION_PREFIX, PROMPT_INDENT,
-        SYSTEM_PROMPT_LINE, code_to_spec_system_prompt, compile, mode_of, spec_files,
-        system_prompt,
+        CodeTask, HiddenAnchor, Imports, MODE_PREFIX, NEW_CONVERSATION_PREFIX,
+        POST_BUILD_UPDATE_LINE, PROMPT_INDENT, SYSTEM_PROMPT_LINE, code_to_spec_system_prompt,
+        compile, mode_of, spec_files, system_prompt,
     };
     use crate::chat_input::SendMode;
     use crate::project_directory::CONFIG_FILE_NAME;
@@ -1304,6 +1343,7 @@ mod tests {
             system_prompt: None,
             code_task: None,
             sent_from: None,
+            post_build_update: false,
         };
         assert_eq!(
             anchor.source("hi"),
@@ -1618,6 +1658,42 @@ mod tests {
             let (parsed, _) = HiddenAnchor::parse(&anchor.source(prompt)).unwrap();
             assert_eq!(parsed.sent_from, None);
             assert_eq!(parsed.code_task, anchor.code_task);
+        }
+    }
+
+    /// A chain, and its code step, are saved with whether a post-build spec
+    /// update follows, after where the step was sent from; one saved before
+    /// this was kept reads back as followed by none.
+    #[test]
+    fn chains_are_saved_with_their_post_build_spec_update() {
+        for (mode, sent_from, code_task) in [
+            (SendMode::Both, None, None),
+            (
+                SendMode::Code,
+                Some(HiddenAnchor::random_name()),
+                Some(CodeTask {
+                    prompt: format!("Change it.\n{TRICKY}"),
+                    result: Some("Wrote the spec.".into()),
+                }),
+            ),
+        ] {
+            let mut anchor = HiddenAnchor::random();
+            anchor.mode = Some(mode);
+            anchor.system_prompt = Some("Chain.".into());
+            anchor.code_task = code_task;
+            anchor.sent_from = sent_from;
+            anchor.post_build_update = true;
+            let source = anchor.source("Change it.");
+            assert!(source.contains(POST_BUILD_UPDATE_LINE), "{source}");
+            let (parsed, text) = HiddenAnchor::parse(&source).unwrap();
+            assert!(parsed.post_build_update, "{source}");
+            assert_eq!(parsed.sent_from, anchor.sent_from);
+            assert_eq!(parsed.code_task, anchor.code_task);
+            assert_eq!(parsed.source(&text), source);
+
+            anchor.post_build_update = false;
+            let (parsed, _) = HiddenAnchor::parse(&anchor.source("Change it.")).unwrap();
+            assert!(!parsed.post_build_update);
         }
     }
 

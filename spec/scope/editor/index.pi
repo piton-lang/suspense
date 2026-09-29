@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /scope/application/Body import BodyScope
 from /scope/lsp import LSP
 from /scope/open-file import OpenFileScope
 from /ui/components/file-tree import FileTreeScope
@@ -17,9 +18,9 @@ concept EditorConcept:
 
 shape EditorShape:
     description:
-        Editable and syntax highlighted, under a header with the file's path in
-        the project, a dot while it has unsaved changes, a save button, and a
-        close button.
+        Editable and syntax highlighted, in its own tab of the @{BodyScope},
+        under a header with the file's path in the project, a dot while it has
+        unsaved changes, a save button, and a close button.
 
     syntaxHighlighting:
         Every file is highlighted in its language, using the grammars gpui-kit's
@@ -145,10 +146,12 @@ shape EditorShape:
             Ctrl+. (Cmd+. on macOS) lists the server's `textDocument/codeAction`
             fixes at the cursor, and picking one applies its edits to the file.
 
-    replacing:
-        Opening another file shows that file in its place. While there are
-        unsaved changes, it first asks whether to discard them.
+    otherFiles:
+        Each open file has an editor of its own. Opening another file opens
+        it in another tab, leaving this one as it is, its unsaved changes,
+        cursor, and scrolling kept for when its tab is selected again.
 
     closing:
-        A close button above the file closes it. While there are unsaved
-        changes, it first asks whether to discard them.
+        The close button above the file, or the one on its tab, closes it.
+        While there are unsaved changes, it first asks whether to discard
+        them.

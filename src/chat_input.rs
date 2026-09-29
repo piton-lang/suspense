@@ -607,6 +607,9 @@ pub struct ChatInput {
     /// Whether the Slice toggle is on: prompts are sent with the `piton
     /// slice` of each spec they reference rather than links to them.
     slice: bool,
+    /// Whether the Post-Build Spec Update toggle is on: a chain's code step,
+    /// once done, is sent to Spec to update it from what the code step did.
+    post_build_update: bool,
     /// The agent's usage, as its runs have reported it.
     usage: UsageReport,
     /// Whether the usage's popover is open.
@@ -714,6 +717,7 @@ impl ChatInput {
             preview_scroll: ScrollHandle::new(),
             editing: None,
             slice: false,
+            post_build_update: false,
             usage: UsageReport::default(),
             usage_open: false,
             usage_bounds: Rc::default(),
@@ -990,6 +994,17 @@ impl ChatInput {
     /// Whether the Slice toggle is on, for prompts sent now.
     pub fn slices(&self) -> bool {
         self.slice
+    }
+
+    /// Whether a chain sent now goes on to a post-build spec update.
+    pub fn post_build_update(&self) -> bool {
+        self.post_build_update
+    }
+
+    /// Turns the Post-Build Spec Update toggle on or off, as clicking it does.
+    #[cfg(test)]
+    pub fn set_post_build_update(&mut self, on: bool) {
+        self.post_build_update = on;
     }
 
     /// Turns the Slice toggle on or off, as clicking it does.
@@ -1852,11 +1867,7 @@ impl Render for ChatInput {
             SendMode::Both => Tab::new()
                 .icon(chain_icon.clone())
                 .tooltip(|window, cx| Tooltip::new(SendMode::Both.label()).build(window, cx)),
-            mode => Tab::new().child(
-                div()
-                    .text_color(label_color(ix))
-                    .child(mode.label()),
-            ),
+            mode => Tab::new().child(div().text_color(label_color(ix)).child(mode.label())),
         };
         // A tint laid over a tab, as wide as the tab itself (an invisible copy
         // of it) rather than its bar, fading out as the tab is deselected.
@@ -2056,6 +2067,26 @@ impl Render for ChatInput {
             .pr_2()
             .border_b_1()
             .border_color(cx.theme().border)
+            // On the Chain tab, whether the chain ends by updating the spec
+            // from what its code step did.
+            .when(self.mode() == SendMode::Both, |bar| {
+                bar.child(
+                    Button::new("post-build-update-toggle")
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::FilePen)
+                        .selected(self.post_build_update)
+                        .tooltip(if self.post_build_update {
+                            "Post-Build Spec Update: on. Once the chain's code step is done, the spec is updated from what it built"
+                        } else {
+                            "Post-Build Spec Update: off. The chain ends once its code step is done"
+                        })
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.post_build_update = !this.post_build_update;
+                            cx.notify();
+                        })),
+                )
+            })
             .child(
                 Button::new("slice-toggle")
                     .ghost()
@@ -2755,12 +2786,19 @@ mod tests {
                 help.left() >= ask.right() - gpui_kit::px(0.5),
                 "{help:?} is not right of {ask:?}"
             );
-            // The help fills the bar up to the Slice toggle, then the context,
-            // and New conversation ends it, a little in from its right edge.
-            let between = slice.left() - help.right();
+            // The help fills the bar up to the Slice toggle, after the
+            // Post-Build Spec Update toggle on the Chain tab, selected at
+            // first; then the context, and New conversation ends it, a
+            // little in from its right edge.
+            let post_build = window.find("post-build-update-toggle").bounds();
+            assert!(
+                post_build.right() <= slice.left(),
+                "the Post-Build Spec Update toggle {post_build:?} isn't before {slice:?}"
+            );
+            let between = post_build.left() - help.right();
             assert!(
                 between >= gpui_kit::px(0.) && between <= gpui_kit::px(8.),
-                "{help:?} does not fill the bar up to the Slice toggle {slice:?}"
+                "{help:?} does not fill the bar up to the toggles {post_build:?}"
             );
             assert!(
                 context.left() > slice.right(),
@@ -2980,8 +3018,8 @@ mod tests {
         cx.simulate_window_resize(
             handle,
             // As narrow as the five tabs leave room for the controls beside
-            // them.
-            gpui_kit::size(gpui_kit::px(700.), gpui_kit::px(400.)),
+            // them, the Chain tab's Post-Build Spec Update toggle among them.
+            gpui_kit::size(gpui_kit::px(720.), gpui_kit::px(400.)),
         );
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
@@ -3234,7 +3272,11 @@ mod tests {
                 text.right() - super::EDITOR_WRAP_MARGIN,
             );
             assert_eq!(
-                (left - boxed.left(), text.top() - boxed.top(), boxed.right() - right),
+                (
+                    left - boxed.left(),
+                    text.top() - boxed.top(),
+                    boxed.right() - right
+                ),
                 (px(8.), px(8.), px(8.)),
                 "the text's left, top, and right insets in {boxed:?}"
             );

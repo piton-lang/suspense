@@ -1,6 +1,6 @@
 //! The ribbon's Application tab, for the application rather than the project:
 //! the Brightness slider, which runs the interface from its darkest to its
-//! lightest, Theme, which opens the theme editor, and Settings, which opens
+//! lightest, Reset Brightness beneath it, Theme, which opens the theme editor, and Settings, which opens
 //! the settings window.
 
 use gpui_kit::assets::IconName;
@@ -8,7 +8,8 @@ use gpui_kit::component::button::Button;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::slider::{Slider, SliderEvent, SliderState};
 use gpui_kit::component::{
-    ActiveTheme as _, Icon, Sizable as _, Size, Theme, ThemeMode, WindowExt as _, h_flex,
+    ActiveTheme as _, Disableable as _, Icon, Sizable as _, Size, Theme, ThemeMode, WindowExt as _,
+    h_flex,
 };
 use gpui_kit::*;
 
@@ -24,6 +25,14 @@ pub(super) const COMMANDS: &[CommandPlace] = &[
         group: "Appearance",
         size: CommandSize::Slim,
         primary: true,
+    },
+    // Beneath the slider, in its column; the collapsed ribbon resets it by
+    // double-clicking the slider instead.
+    CommandPlace {
+        command: Command::ResetBrightness,
+        group: "Appearance",
+        size: CommandSize::Slim,
+        primary: false,
     },
     CommandPlace {
         command: Command::Theme,
@@ -230,6 +239,24 @@ pub(super) fn brightness(
         CommandSize::Full => block.py_1(),
     }
     .into_any_element()
+}
+
+/// Reset Brightness: puts the mode showing back to its brightness at 0, as
+/// double-clicking the slider does; disabled while it already is.
+pub(super) fn reset_brightness_button(
+    button: impl Fn(&'static str, IconName, SharedString) -> Button,
+    cx: &mut Context<Ribbon>,
+) -> AnyElement {
+    let at_default = theme::brightness(cx) == 0;
+    button("reset-brightness", IconName::RotateCcw, "Reset Brightness".into())
+        .disabled(at_default)
+        .tooltip(if at_default {
+            "The brightness is already where this mode starts"
+        } else {
+            "Put this mode's brightness back where it starts, keeping the mode"
+        })
+        .on_click(cx.listener(|ribbon, _, window, cx| reset_brightness(ribbon, window, cx)))
+        .into_any_element()
 }
 
 /// Theme: opens the theme editor in the inset panel.

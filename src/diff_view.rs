@@ -1,6 +1,5 @@
 //! The diff view: a file's uncommitted changes, the file as of the last
-//! commit against the file on disk, beside the task view in place of the
-//! editor. It lays them out side by side or unified, switchable and
+//! commit against the file on disk, in an inset panel. It lays them out side by side or unified, switchable and
 //! remembered; marks changed lines with a tint, a +/− marker, and both line
 //! numbers, and the words that changed within a line with a stronger tint;
 //! collapses unchanged lines far from any change into a row that expands them;

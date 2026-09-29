@@ -29,8 +29,8 @@ concept ReferencedSpecSidebarConcept:
 
 shape ReferencedSpecSidebarShape:
     description:
-        It runs the full height of the body, beside both the message list and
-        the chat input beneath it, which stops at its left edge rather than
+        It runs the full height of the body, beside the body's tab bar, the
+        message list or file beneath it, and the chat input beneath those, which stops at its left edge rather than
         running beneath it. It keeps the width it was dragged to while the
         application runs.
 
@@ -74,8 +74,7 @@ shape ReferencedSpecSidebarShape:
         contents sliding into view from behind that edge as it does. When the
         run is over, it slides back the same way. The slide is quick and
         settles without bouncing. The message list and the chat input take
-        the rest of the width, laid out anew only once the slide settles, as
-        when a file's split opens.
+        the rest of the width, laid out anew only once the slide settles.
 
 export panel ReferencedFilesPanel:
     title: Referenced Spec

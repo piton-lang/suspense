@@ -515,7 +515,16 @@ impl FileView {
         ))
     }
 
-    fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Moves the cursor to `position`, as when going to a definition in a
+    /// file already open.
+    pub fn go_to(&mut self, position: Position, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor.update(cx, |editor, cx| {
+            editor.set_cursor_position(position, window, cx)
+        });
+    }
+
+    /// Closes the file, first asking whether to discard any unsaved changes.
+    pub fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.dirty {
             cx.emit(CloseFile);
             return;

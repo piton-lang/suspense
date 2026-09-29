@@ -18,8 +18,8 @@ export ui-component BodyScope:
 concept BodyConcept:
     pitch:
         The main window's body: the area to the right of the project sidebar,
-        where the tasks sent to the harness, and any file opened beside them,
-        are shown, and the chat input they are sent from.
+        where the tasks sent to the harness, and the files opened in tabs
+        beside them, are shown, and the chat input they are sent from.
 
     shape: {BodyShape}
 
@@ -30,52 +30,62 @@ shape BodyShape:
         reaching the window's right edge. It is part of the @{PromptEditor}.
 
         The @{ChatInputScope} lives within the body, along its bottom: its
-        left edge against the project sidebar, and the message list above it.
-        While a task runs, the @{ReferencedSpecSidebarScope} runs the body's
-        full height at its right, beside both the message list and the chat
-        input, and the chat input's right edge is against it: the chat input
+        left edge against the project sidebar, and above it, beneath the
+        body's tab bar, the selected tab's contents: the message list, or an
+        open file. While a task runs, the @{ReferencedSpecSidebarScope} runs
+        the body's full height at its right, beside the tab bar, the selected
+        tab's contents, and the chat input, and the chat input's right edge is against it: the chat input
         never runs beneath the right sidebar. While that sidebar isn't there,
         the chat input reaches the window's right edge.
 
     contents:
         Everything that can be in the body:
 
-        - the @{MessageList}, the chat history, which fills the space above the chat input whenever no file is open
+        - a tab bar along its top, holding a Chat tab and a tab for each file open
+        - the @{MessageList}, the chat history, shown beneath the tab bar while the Chat tab is selected
         - the hint shown in the message list's place before any task has been sent, or while no project is open, as the @{PromptEditor} and the @{NoProjectStateScope} say
-        - an @{EditorScope}, in a split beside the message list, while a file is open
-        - the @{ChatInputScope}, along the bottom beneath the message list and any file open beside it
-        - the @{ReferencedSpecSidebarScope}, at the right of all of these, the chat input included, while a task runs
+        - an @{EditorScope} for each open file, shown beneath the tab bar while its tab is selected
+        - the @{ChatInputScope}, along the bottom beneath whichever tab is selected
+        - the @{ReferencedSpecSidebarScope}, at the right of all of these, the tab bar and the chat input included, while a task runs
 
         An @{InsetPanelScope} floats over the whole window, the body included,
         but is never part of it.
 
+    tabs:
+        Along the top of the body runs a tab bar, in gpui-kit's default tab
+        styling, across the width the message list takes: from the project
+        sidebar to the referenced spec sidebar while a task runs, and to the
+        window's right edge otherwise. Its first tab, Chat, shows the message
+        list, and is always there: it can't be closed or moved. After it comes
+        a tab for each open file, in the order they were opened, scrolling
+        sideways once there are more than fit.
+
+        Just one tab's contents show at a time, filling the space between the
+        tab bar and the chat input. The chat input stays along the bottom
+        whichever tab is selected, so a prompt can be written while a file
+        shows. The body starts with Chat selected, and clicking a tab selects
+        it.
+
+        A file's tab shows the file's name, then, while it has unsaved
+        changes, a dot, and at its right a small close button. Hovering it
+        shows the file's path in the project as its tooltip.
+
     openFile:
         A file opened, from the @{FileTreeScope} or anywhere else the
-        @{OpenFileScope} says, shows in an @{EditorScope}, in a split beside
-        the chat history: the file on the left taking 50%
-        of the width, the chat history on the right taking the rest. The
-        split can be resized by dragging its edge. Closing the file closes
-        the split.
+        @{OpenFileScope} says, shows in an @{EditorScope} in a tab of its own,
+        as many files open at once as are opened. A file not open yet gets a
+        new tab, just after the one selected, and is selected. Opening a file
+        that already has a tab selects that tab instead, leaving its editor
+        as it was, unsaved changes and all.
 
-        When the split opens, it slides in from the sidebar, so it's clear
-        where it came from: the file's side grows out of the sidebar's edge
-        to its share of the width, the file sliding into view from behind
-        that edge as it does, over the chat history. The chat history keeps
-        its width while the file slides over it, so nothing in it is laid
-        out anew each frame, and takes the rest of the width once the slide
-        settles.
+        Nothing slides: a file's tab is selected, and its editor shows, at
+        once, and closing it takes it away at once too. There is no split,
+        and no edge to drag; the file takes the tab bar's full width above the
+        chat input.
 
-        The slide is quick and settles without bouncing, and only then can
-        the split be dragged. A file opened in place of one already showing
-        doesn't slide, since the split is already open. The
-        @{ChatInputScope} is never split: it stays along the bottom, beneath
-        both the file and the chat history.
-
-        Closing the file plays the slide in reverse, back into the
-        sidebar: the file's side shrinks from whatever width it was
-        dragged to down to nothing at the sidebar's edge, the file sliding
-        out of view behind that edge as it does, uncovering the chat
-        history, which is back across the full width beneath it from the
-        start of the slide. It is as quick as the slide in,
-        and settles without bouncing. Opening a file while one is still
-        sliding out slides the new one in straight away.
+        Closing a file's tab, with its close button or the editor's, closes
+        the file, the editor first asking to discard any unsaved changes.
+        Closing the selected tab selects the tab to its right, or, with none
+        to its right, the one to its left, which is Chat once no file is
+        left. Closing a tab that isn't selected leaves the selection as it
+        is.

@@ -48,6 +48,7 @@ use gpui_kit::component::notification::Notification;
 use gpui_kit::component::resizable::{ResizableState, h_resizable, resizable_panel};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::switch::Switch;
+use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::table::{Table, TableBody, TableCell, TableRow};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
@@ -87,16 +88,14 @@ use crate::theme::Hue;
 use crate::understanding::{self, Understanding};
 use crate::usage::{self, Conversation, PlanLimits, ProjectUsage, UsageReport};
 
-/// The share of the width an opened file takes from the task view.
-const FILE_SHARE: f32 = 0.5;
-
 /// How long the file pane takes to slide in from the sidebar, or back into it
 /// when closed, and how it moves: critically damped, so it settles without
 /// bouncing.
 const PANE_SLIDE_TIME: Duration = Duration::from_millis(450);
 const PANE_SPRING: SpringConfig = SpringConfig::new(300., 35., 1.);
 
-/// The narrowest either side of the file split can be dragged.
+/// The narrowest the task view can be dragged beside the referenced spec
+/// sidebar.
 const MIN_SPLIT_WIDTH: Pixels = px(160.);
 
 /// The tallest the expanded queue gets before it scrolls.
@@ -230,8 +229,16 @@ enum Sending {
     /// Typed and sent straight away, in a mode, with anything attached,
     /// whether it is sent sliced, for a Code task sent to Spec, the code
     /// task it was sent from, and, for a task sent to the other mode, the
-    /// name of the task it was sent from.
-    Now(SendMode, Attached, bool, Option<CodeTask>, Option<String>),
+    /// name of the task it was sent from; for a chain or its code step,
+    /// whether a post-build spec update follows it.
+    Now(
+        SendMode,
+        Attached,
+        bool,
+        Option<CodeTask>,
+        Option<String>,
+        bool,
+    ),
     /// Out of the queue, saved with its anchor.
     Queued(QueuedPrompt),
 }
@@ -308,14 +315,16 @@ struct SentAs {
     /// Its attached images, by their paths from the project directory.
     attached_images: Vec<String>,
     sliced: bool,
-    /// Sent to Spec from a Code task, that code task, told to it again
-    /// whenever it is resent.
+    /// Sent to Spec from a Code task, that code task, and for a chain's code
+    /// step, the chain's spec step, told to it again whenever it is resent.
     code_task: Option<CodeTask>,
     /// Sent to the other mode, from Code or from Spec, the name of the task
     /// it was sent from (see [`PromptTask::name`]), kept whenever it is
     /// resent. That task no longer offers to be sent there while this one is
     /// under way or once it is done.
     sent_from: Option<String>,
+    /// A chain, or its code step, followed by a post-build spec update.
+    post_build_update: bool,
 }
 
 impl SentAs {
@@ -327,6 +336,7 @@ impl SentAs {
             sliced: anchor.sliced,
             code_task: anchor.code_task.clone(),
             sent_from: anchor.sent_from.clone(),
+            post_build_update: anchor.post_build_update,
         }
     }
 
@@ -1211,37 +1221,9 @@ impl HistoryList {
     }
 }
 
-/// The task view at `width`, its right edge at the body's, with a sliding
-/// `pane` laid over its left. The task view's width doesn't change as the pane
-/// slides, so nothing in it is laid out anew.
-fn covered(history: Div, pane: impl IntoElement, width: Pixels, cx: &App) -> Div {
-    div()
-        .relative()
-        .size_full()
-        .overflow_hidden()
-        .child(
-            div()
-                .absolute()
-                .top_0()
-                .bottom_0()
-                .right_0()
-                .w(width)
-                .child(history),
-        )
-        .child(
-            div()
-                .absolute()
-                .top_0()
-                .bottom_0()
-                .left_0()
-                .occlude()
-                .bg(cx.theme().background)
-                .child(pane),
-        )
-}
-
 /// The task view at `width`, its left edge at the body's, with a sliding
-/// `pane` laid over its right, as [`covered`] lays one over its left.
+/// `pane` laid over its right. The task view's width doesn't change as the
+/// pane slides, so nothing in it is laid out anew.
 fn covered_right(history: Div, pane: impl IntoElement, width: Pixels, cx: &App) -> Div {
     div()
         .relative()
@@ -1613,13 +1595,10 @@ struct RefsClosing {
     closed: Instant,
 }
 
-struct PaneClosing {
-    file: Entity<FileView>,
-    /// The width it slides closed from.
-    width: Pixels,
-    /// Which opening of the pane this closes, so each slide animates afresh.
-    slide: usize,
-    closed: Instant,
+/// A file open in a tab of the body.
+struct FileTab {
+    view: Entity<FileView>,
+    _subscriptions: Vec<Subscription>,
 }
 
 /// Dragged by the answer drawer's top edge to resize it.
@@ -1701,9 +1680,8 @@ struct ProjectSession {
     queue_scroll: ScrollHandle,
     ask_rows: MeasuredList,
     ask_row_ids: RefCell<Vec<usize>>,
-    file: Option<Entity<FileView>>,
-    _file_subscriptions: Vec<Subscription>,
-    file_split: Entity<ResizableState>,
+    files: Vec<FileTab>,
+    selected_file: Option<usize>,
 }
 
 /// The question rows in the stack, kept on the newest question as rows slide
@@ -1715,7 +1693,7 @@ fn ask_rows() -> MeasuredList {
 }
 
 impl ProjectSession {
-    fn new(project_dir: Option<PathBuf>, cx: &mut App) -> Self {
+    fn new(project_dir: Option<PathBuf>, _cx: &mut App) -> Self {
         Self {
             project_dir,
             tasks: Vec::new(),
@@ -1748,9 +1726,8 @@ impl ProjectSession {
             queue_scroll: ScrollHandle::new(),
             ask_rows: ask_rows(),
             ask_row_ids: RefCell::default(),
-            file: None,
-            _file_subscriptions: Vec::new(),
-            file_split: cx.new(|_| ResizableState::default()),
+            files: Vec::new(),
+            selected_file: None,
         }
     }
 }
@@ -1801,18 +1778,13 @@ pub struct PromptMode {
     /// A restored queue waits for "Send next" (or auto send being switched
     /// on) rather than sending on its own, until it has emptied.
     queue_held: bool,
-    /// The file opened from the project tree, beside the task view.
-    file: Option<Entity<FileView>>,
-    /// When the file pane last opened, and how many times it has, for its
-    /// slide in from the sidebar.
-    pane_opened: Option<(usize, Instant)>,
-    /// A file just closed, sliding back into the sidebar.
-    pane_closing: Option<PaneClosing>,
-    /// The file pane's width, as last laid out, for it to slide closed from.
-    pane_width: Rc<Cell<Pixels>>,
-    file_split: Entity<ResizableState>,
-    /// The width the task view and any file share, as last laid out.
-    body_width: Rc<Cell<Pixels>>,
+    /// The files open in the body's tabs, after Chat, in the order they
+    /// were opened.
+    files: Vec<FileTab>,
+    /// The file whose tab is selected, or none while Chat is.
+    selected_file: Option<usize>,
+    /// The tab bar's sideways scrolling, once its tabs don't fit.
+    tabs_scroll: ScrollHandle,
     /// Whether the referenced spec sidebar shows, as of the last frame.
     refs_shown: bool,
     /// When the referenced spec sidebar last slid out, and how many times it
@@ -1945,6 +1917,8 @@ impl PromptMode {
                         && this.project_dir.is_some()
                     {
                         let sliced = this.chat_input.read(cx).slices();
+                        let post_build_update = submit.mode == SendMode::Both
+                            && this.chat_input.read(cx).post_build_update();
                         this.enqueue(
                             text,
                             true,
@@ -1953,6 +1927,7 @@ impl PromptMode {
                             sliced,
                             None,
                             None,
+                            post_build_update,
                             window,
                             cx,
                         );
@@ -2000,12 +1975,9 @@ impl PromptMode {
             queue_expanded: false,
             auto_send: true,
             queue_held: false,
-            file: None,
-            pane_opened: None,
-            pane_closing: None,
-            pane_width: Rc::default(),
-            file_split: cx.new(|_| ResizableState::default()),
-            body_width: Rc::default(),
+            files: Vec::new(),
+            selected_file: None,
+            tabs_scroll: ScrollHandle::new(),
             refs_shown: false,
             refs_opened: None,
             refs_closing: None,
@@ -2093,12 +2065,8 @@ impl PromptMode {
         swap(&mut self.queue_scroll, &mut other.queue_scroll);
         swap(&mut self.ask_rows, &mut other.ask_rows);
         swap(&mut self.ask_row_ids, &mut other.ask_row_ids);
-        swap(&mut self.file, &mut other.file);
-        swap(
-            &mut self._file_subscriptions,
-            &mut other._file_subscriptions,
-        );
-        swap(&mut self.file_split, &mut other.file_split);
+        swap(&mut self.files, &mut other.files);
+        swap(&mut self.selected_file, &mut other.selected_file);
     }
 
     /// Follows the project on screen: the work of the one left keeps running
@@ -2131,19 +2099,15 @@ impl PromptMode {
             }
         }
         // The project switched to shows just as it was left, sliding nothing
-        // in: its file already beside the chat, and the referenced spec
-        // sidebar as it has it.
+        // in: its tabs as they were, and the referenced spec sidebar as it
+        // has it.
         self.refs_shown = self.refs_wanted();
         self.refs_opened = None;
         self.refs_closing = None;
-        self.pane_closing = None;
         // Likewise its answer drawer, open or not.
         self.drawer_closing = None;
         self.closed_question = None;
         self.drawer_shown = self.drawer_contents();
-        self.pane_opened = self
-            .pane_opened
-            .map(|(n, at)| (n, Instant::now().checked_sub(PANE_SLIDE_TIME).unwrap_or(at)));
         self.selection_popover = None;
         let working = self.working;
         self.chat_input
@@ -2345,21 +2309,29 @@ impl PromptMode {
         });
     }
 
-    /// The file open beside the chat, if any.
+    /// The file in the selected tab, if a file's tab is selected.
     pub fn open_file_view(&self) -> Option<Entity<FileView>> {
-        self.file.clone()
+        self.selected_file
+            .and_then(|ix| self.files.get(ix))
+            .map(|tab| tab.view.clone())
+    }
+
+    /// Every file open in a tab, in the tabs' order.
+    #[cfg(test)]
+    pub fn open_file_views(&self) -> Vec<Entity<FileView>> {
+        self.files.iter().map(|tab| tab.view.clone()).collect()
     }
 
     pub fn chat_input_view(&self) -> Entity<ChatInput> {
         self.chat_input.clone()
     }
 
-    /// Opens a file beside the task view, in place of any already open.
+    /// Opens a file in a tab of its own, or selects the tab it already has.
     pub fn open_file(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         self.open_file_at(path, None, window, cx)
     }
 
-    /// Opens a file clicked in a prompt or the output beside the task view.
+    /// Opens a file clicked in a prompt or the output in a tab.
     fn file_opener(&self, cx: &Context<Self>) -> OpenFile {
         let this = cx.entity().downgrade();
         Arc::new(move |path, window, cx| {
@@ -2368,8 +2340,9 @@ impl PromptMode {
         })
     }
 
-    /// Opens a file with the cursor at `position`, first asking whether to
-    /// discard any unsaved changes to the file it replaces.
+    /// Opens a file with the cursor at `position`: selecting the tab it
+    /// already has, the cursor moved there, or else in a new tab just after
+    /// the one selected, which is then selected.
     fn open_file_at(
         &mut self,
         path: PathBuf,
@@ -2377,89 +2350,47 @@ impl PromptMode {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(file) = self.file.as_ref().filter(|file| file.read(cx).is_dirty()) else {
-            return self.show_file(path, position, window, cx);
-        };
-        let title = file.read(cx).title();
-        let this = cx.entity().downgrade();
-        FileView::confirm_discard(title, window, cx, move |window, cx| {
-            this.update(cx, |this, cx| {
-                this.show_file(path.clone(), position, window, cx)
-            })
-            .ok();
-        });
-    }
-
-    /// Closes the file open beside the chat, which slides back into the
-    /// sidebar from the width it had.
-    fn close_file_pane(&mut self, cx: &mut Context<Self>) {
-        if let Some(file) = self.file.take() {
-            self.pane_closing = Some(PaneClosing {
-                file,
-                width: self.pane_width.get(),
-                slide: self.pane_opened.map_or(0, |(n, _)| n),
-                closed: Instant::now(),
-            });
-        }
-        cx.notify();
-    }
-
-    /// A file or folder was renamed to `to`, or deleted: the file open beside
-    /// the chat, when it is that file or inside that folder, opens again at
-    /// its new path unless it has unsaved changes, or closes without asking.
-    pub fn file_moved(
-        &mut self,
-        from: &Path,
-        to: Option<&Path>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(file) = self.file.as_ref().map(|file| file.read(cx)) else {
-            return;
-        };
-        let (open, dirty) = (file.path().to_path_buf(), file.is_dirty());
-        let Ok(within) = open.strip_prefix(from) else {
-            return;
-        };
-        match to {
-            Some(_) if dirty => {}
-            Some(to) => {
-                let moved = if within.as_os_str().is_empty() {
-                    to.to_path_buf()
-                } else {
-                    to.join(within)
-                };
-                self.show_file(moved, None, window, cx)
+        if let Some(ix) = self
+            .files
+            .iter()
+            .position(|tab| tab.view.read(cx).path() == path)
+        {
+            if let Some(position) = position {
+                self.files[ix]
+                    .view
+                    .update(cx, |view, cx| view.go_to(position, window, cx));
             }
-            None => self.close_file_pane(cx),
+            return self.select_tab(Some(ix), cx);
         }
+        let ix = self.selected_file.map_or(0, |ix| ix + 1);
+        let tab = self.file_tab(path, position, window, cx);
+        self.files.insert(ix, tab);
+        self.select_tab(Some(ix), cx);
     }
 
-    fn show_file(
+    /// An editor for the file at `path`, wired to the chat.
+    fn file_tab(
         &mut self,
         path: PathBuf,
         position: Option<lsp_types::Position>,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
-        if self.file.is_none() {
-            // Fresh split sizes, so the file opens at its share of the width.
-            self.file_split = cx.new(|_| ResizableState::default());
-            self.pane_opened = Some((self.pane_opened.map_or(0, |(n, _)| n) + 1, Instant::now()));
-            // A file still sliding closed gives way to this one.
-            self.pane_closing = None;
-        }
-        let file = cx.new(|cx| FileView::new(path, position, window, cx));
-        self._file_subscriptions = vec![
+    ) -> FileTab {
+        let view = cx.new(|cx| FileView::new(path, position, window, cx));
+        let subscriptions = vec![
+            // Its tab shows whether it has unsaved changes.
+            cx.observe(&view, |_, _, cx| cx.notify()),
             // Text selected in the file and sent to the prompt is attached to it.
-            cx.subscribe(&file, |this, _, SendToPrompt(text): &SendToPrompt, cx| {
+            cx.subscribe(&view, |this, _, SendToPrompt(text): &SendToPrompt, cx| {
                 let text = text.clone();
                 this.chat_input
                     .update(cx, |input, cx| input.attach_text(text, cx));
             }),
-            cx.subscribe(&file, |this, _, _: &CloseFile, cx| this.close_file_pane(cx)),
+            cx.subscribe(&view, |this, view, _: &CloseFile, cx| {
+                this.close_file_tab(view.entity_id(), cx)
+            }),
             cx.subscribe_in(
-                &file,
+                &view,
                 window,
                 |this, _, definition: &OpenDefinition, window, cx| {
                     this.open_file_at(
@@ -2471,8 +2402,153 @@ impl PromptMode {
                 },
             ),
         ];
-        self.file = Some(file);
+        FileTab {
+            view,
+            _subscriptions: subscriptions,
+        }
+    }
+
+    /// Selects the tab of the file at `ix`, or Chat for none.
+    fn select_tab(&mut self, file: Option<usize>, cx: &mut Context<Self>) {
+        self.selected_file = file.filter(|ix| *ix < self.files.len());
+        // Scrolled to, should it be past the edge of the tab bar.
+        self.tabs_scroll
+            .scroll_to_item(self.selected_file.map_or(0, |ix| ix + 1));
         cx.notify();
+    }
+
+    /// Closes the tab of the file `view`, with nothing asked. Closing the
+    /// selected tab selects the one to its right, else the one to its left.
+    fn close_file_tab(&mut self, view: EntityId, cx: &mut Context<Self>) {
+        let Some(ix) = self
+            .files
+            .iter()
+            .position(|tab| tab.view.entity_id() == view)
+        else {
+            return;
+        };
+        self.files.remove(ix);
+        let selected = match self.selected_file {
+            Some(selected) if selected == ix => {
+                if ix < self.files.len() {
+                    Some(ix)
+                } else {
+                    ix.checked_sub(1)
+                }
+            }
+            Some(selected) if selected > ix => Some(selected - 1),
+            selected => selected,
+        };
+        self.select_tab(selected, cx);
+    }
+
+    /// A file or folder was renamed to `to`, or deleted: each file open in a
+    /// tab, when it is that file or inside that folder, opens again at its
+    /// new path in the same tab unless it has unsaved changes, or its tab
+    /// closes without asking.
+    pub fn file_moved(
+        &mut self,
+        from: &Path,
+        to: Option<&Path>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let moved: Vec<(EntityId, PathBuf, bool)> = self
+            .files
+            .iter()
+            .filter_map(|tab| {
+                let view = tab.view.read(cx);
+                let within = view.path().strip_prefix(from).ok()?;
+                let moved = match to {
+                    Some(to) if within.as_os_str().is_empty() => to.to_path_buf(),
+                    Some(to) => to.join(within),
+                    None => PathBuf::new(),
+                };
+                Some((tab.view.entity_id(), moved, view.is_dirty()))
+            })
+            .collect();
+        for (view, moved, dirty) in moved {
+            match to {
+                Some(_) if dirty => {}
+                Some(_) => {
+                    let Some(ix) = self
+                        .files
+                        .iter()
+                        .position(|tab| tab.view.entity_id() == view)
+                    else {
+                        continue;
+                    };
+                    self.files[ix] = self.file_tab(moved, None, window, cx);
+                    cx.notify();
+                }
+                None => self.close_file_tab(view, cx),
+            }
+        }
+    }
+
+    /// The body's tab bar: Chat, then a tab for each open file, with its
+    /// name, a dot while it has unsaved changes, and a button closing it.
+    fn render_tabs(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let this = cx.entity().downgrade();
+        let muted = cx.theme().muted_foreground;
+        let file_tabs = self.files.iter().enumerate().map(|(ix, tab)| {
+            let file = tab.view.read(cx);
+            let name: SharedString = file
+                .path()
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default()
+                .into();
+            let title = file.title();
+            let view = tab.view.clone();
+            Tab::new()
+                .tooltip(move |window, cx| {
+                    gpui_kit::component::tooltip::Tooltip::new(title.clone()).build(window, cx)
+                })
+                .child(
+                    h_flex()
+                        .gap_1p5()
+                        .child(name)
+                        .when(file.is_dirty(), |this| {
+                            this.child(
+                                div()
+                                    .id(("file-tab-unsaved", ix))
+                                    .flex_none()
+                                    .size_2()
+                                    .rounded_full()
+                                    .bg(muted),
+                            )
+                        }),
+                )
+                .suffix(
+                    Button::new(("close-file-tab", ix))
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::X)
+                        .tooltip("Close file")
+                        // The tab isn't selected by the press closing it.
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .on_click(move |_, window, cx| {
+                            cx.stop_propagation();
+                            view.update(cx, |view, cx| view.close(window, cx));
+                        }),
+                )
+        });
+        let bar = TabBar::new("body-tabs")
+            .track_scroll(&self.tabs_scroll)
+            .selected_index(self.selected_file.map_or(0, |ix| ix + 1))
+            .on_click(move |ix, _, cx| {
+                this.update(cx, |this, cx| this.select_tab(ix.checked_sub(1), cx))
+                    .ok();
+            })
+            .child(Tab::new().label("Chat"))
+            .children(file_tabs);
+        // Lets UI tests find the tab bar; inert in normal builds.
+        gpui_kit::TestSupportExt::test_support(div().id("body-tabs-row"))
+            .flex_none()
+            .w_full()
+            .min_w_0()
+            .child(bar)
     }
 
     /// Adds a task for `text`, compiling, as the latest. Returns its index.
@@ -2632,7 +2708,20 @@ impl PromptMode {
             return;
         }
         let sliced = self.chat_input.read(cx).slices();
-        self.send_as(text, mode, attached, sliced, None, None, window, cx);
+        // Only a chain goes on to a post-build spec update.
+        let post_build_update =
+            mode == SendMode::Both && self.chat_input.read(cx).post_build_update();
+        self.send_as(
+            text,
+            mode,
+            attached,
+            sliced,
+            None,
+            None,
+            post_build_update,
+            window,
+            cx,
+        );
     }
 
     /// What is attached to a prompt as it is sent or queued: `attached_text`,
@@ -2673,7 +2762,8 @@ impl PromptMode {
     /// Sends `text` in `mode`, sliced or not, as [`Self::send`] does; in Spec,
     /// told what `code_task`, the Code task it was sent from, if any, did;
     /// sent to the other mode, knowing `sent_from`, the name of the task it
-    /// was sent from.
+    /// was sent from; a chain or its code step followed by a post-build spec
+    /// update or not.
     #[allow(clippy::too_many_arguments)]
     fn send_as(
         &mut self,
@@ -2683,6 +2773,7 @@ impl PromptMode {
         sliced: bool,
         code_task: Option<CodeTask>,
         sent_from: Option<String>,
+        post_build_update: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -2693,12 +2784,28 @@ impl PromptMode {
             self.ask(text, attached, sliced, cx);
         } else if self.working {
             self.enqueue(
-                text, false, mode, attached, sliced, code_task, sent_from, window, cx,
+                text,
+                false,
+                mode,
+                attached,
+                sliced,
+                code_task,
+                sent_from,
+                post_build_update,
+                window,
+                cx,
             );
         } else {
             self.start(
                 text,
-                Sending::Now(mode, attached, sliced, code_task, sent_from),
+                Sending::Now(
+                    mode,
+                    attached,
+                    sliced,
+                    code_task,
+                    sent_from,
+                    post_build_update,
+                ),
                 cx,
             );
         }
@@ -3059,10 +3166,12 @@ impl PromptMode {
             Some(_) => Some(task.name.to_string()),
             None => sent.sent_from.clone(),
         };
+        // Resent, a chain or its code step goes on as it did.
+        let post_build_update = mode.is_none() && sent.post_build_update;
         let mode = mode
             .or(sent.mode)
             .unwrap_or_else(|| self.chat_input.read(cx).mode());
-        let code_task = code_task.filter(|_| mode == SendMode::Spec);
+        let code_task = code_task.filter(|_| hands_on(mode));
         if self.project_dir.is_none() {
             window.push_notification(
                 Notification::error("Open a project before sending a prompt.")
@@ -3078,6 +3187,7 @@ impl PromptMode {
             sent.sliced,
             code_task,
             sent_from,
+            post_build_update,
             window,
             cx,
         );
@@ -3115,7 +3225,9 @@ impl PromptMode {
         };
         let sliced = self.chat_input.read(cx).slices();
         let Some(feed) = self.feed.clone().filter(harness::Feed::is_open) else {
-            self.enqueue(text, false, mode, attached, sliced, None, None, window, cx);
+            self.enqueue(
+                text, false, mode, attached, sliced, None, None, false, window, cx,
+            );
             return;
         };
         let lsp = self.chat_input.read(cx).lsp();
@@ -3149,7 +3261,9 @@ impl PromptMode {
                 ToTask::Sent => {}
                 ToTask::Over => {
                     this.in_project(&project_dir, cx, |this, cx| {
-                        this.enqueue(text, false, mode, attached, sliced, None, None, window, cx)
+                        this.enqueue(
+                            text, false, mode, attached, sliced, None, None, false, window, cx,
+                        )
                     });
                 }
                 ToTask::Failed(error) => {
@@ -3259,7 +3373,8 @@ impl PromptMode {
     /// Adds `text` to the end of the queue, then resolves its hidden anchor,
     /// with the system prompt of `mode`, told what `code_task` did if it was
     /// sent from one, knowing `sent_from`, the task it was sent from if sent
-    /// to the other mode, and saves it with the project in the background.
+    /// to the other mode, and whether a chain goes on to a post-build spec
+    /// update, and saves it with the project in the background.
     #[allow(clippy::too_many_arguments)]
     fn enqueue(
         &mut self,
@@ -3270,6 +3385,7 @@ impl PromptMode {
         sliced: bool,
         code_task: Option<CodeTask>,
         sent_from: Option<String>,
+        post_build_update: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -3303,6 +3419,7 @@ impl PromptMode {
                 let mut anchor =
                     resolve_anchor(&text, mode, attached, sliced, code_task, lsp, &project_dir)?;
                 anchor.sent_from = sent_from;
+                anchor.post_build_update = post_build_update;
                 anchor.new_conversation = Some(new_conversation);
                 prompt_queue::add_at(queued_at, anchor, text, &project_dir)
             }
@@ -3448,21 +3565,27 @@ impl PromptMode {
         };
         // Sent to the other mode, it is still sent from its task while it
         // stays in the mode it was sent to.
-        let sent_from = old
-            .anchor
-            .sent_from
-            .clone()
-            .filter(|_| anchor_mode(&old.anchor) == Some(mode));
+        let same_mode = anchor_mode(&old.anchor) == Some(mode);
+        let sent_from = old.anchor.sent_from.clone().filter(|_| same_mode);
+        // A chain edited in place keeps its post-build spec update; one moved
+        // to the Chain tab takes the toggle's.
+        let post_build_update = if same_mode {
+            old.anchor.post_build_update
+        } else {
+            mode == SendMode::Both && self.chat_input.read(cx).post_build_update()
+        };
         item.sent_from = sent_from.clone();
         let save = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
                 // Sent to Spec from a Code task, it is still told what that
-                // did while it stays in Spec.
-                let code_task = old.anchor.code_task.clone();
+                // did while it stays in Spec, as a chain's code step is told
+                // what its spec step did while it stays in Code.
+                let code_task = old.anchor.code_task.clone().filter(|_| same_mode);
                 match resolve_anchor(&text, mode, attached, sliced, code_task, lsp, &project_dir) {
                     Ok(mut anchor) => {
                         anchor.sent_from = sent_from;
+                        anchor.post_build_update = post_build_update;
                         anchor.new_conversation = old.anchor.new_conversation;
                         prompt_queue::replace(old.file.clone(), anchor, text)
                             .map_err(|err| (old, err))
@@ -4063,15 +4186,18 @@ impl PromptMode {
         };
         let task_ix = self.push_task(text.clone().into(), cx);
         self.tasks[task_ix].sent = match &sending {
-            Sending::Now(mode, attached, sliced, code_task, sent_from) => SentAs {
-                mode: Some(*mode),
-                attached_text: attached.text.clone(),
-                attached_images: attached.images.clone(),
-                // A Freeform prompt is never sliced, whatever the toggle says.
-                sliced: *sliced && *mode != SendMode::Freeform,
-                code_task: code_task.clone().filter(|_| *mode == SendMode::Spec),
-                sent_from: sent_from.clone(),
-            },
+            Sending::Now(mode, attached, sliced, code_task, sent_from, post_build_update) => {
+                SentAs {
+                    mode: Some(*mode),
+                    attached_text: attached.text.clone(),
+                    attached_images: attached.images.clone(),
+                    // A Freeform prompt is never sliced, whatever the toggle says.
+                    sliced: *sliced && *mode != SendMode::Freeform,
+                    code_task: code_task.clone().filter(|_| hands_on(*mode)),
+                    sent_from: sent_from.clone(),
+                    post_build_update: *post_build_update,
+                }
+            }
             Sending::Queued(queued) => SentAs::of(&queued.anchor),
         };
         // Known by its anchor's name from now on, before the anchor is
@@ -4148,7 +4274,14 @@ impl PromptMode {
                         prompt_queue::remove(&queued.file)?;
                         queued.anchor
                     }
-                    Sending::Now(mode, attached, sliced, code_task, sent_from) => {
+                    Sending::Now(
+                        mode,
+                        attached,
+                        sliced,
+                        code_task,
+                        sent_from,
+                        post_build_update,
+                    ) => {
                         let mut anchor = resolve_anchor(
                             &text,
                             mode,
@@ -4160,6 +4293,7 @@ impl PromptMode {
                         )?;
                         anchor.rename(name);
                         anchor.sent_from = sent_from;
+                        anchor.post_build_update = post_build_update;
                         anchor
                     }
                 };
@@ -4502,13 +4636,27 @@ impl PromptMode {
                 {
                     add_commit_note(summarize, project_dir.clone(), asked, result, cx);
                 }
+                // A chain step done goes on to the next step of its chain,
+                // ahead of the queue: see `chain_next`.
+                let next = this
+                    .tasks
+                    .get(task_ix)
+                    .filter(|task| task.status == TaskStatus::Done && !is_cancelled())
+                    .and_then(chain_next);
                 // Deferred: starting the next run replaces this task. Only this
                 // project's queue sends, whichever project is on screen.
                 let prompt_mode = cx.entity();
                 let dir = project_dir.clone();
                 cx.defer(move |cx| {
                     prompt_mode.update(cx, |this, cx| {
-                        this.in_project(&dir, cx, |this, cx| this.auto_send_next(cx));
+                        this.in_project(&dir, cx, |this, cx| {
+                            // Nothing else can have started since this task
+                            // ended: this runs before any other input.
+                            if let Some((text, sending)) = next.filter(|_| !this.working) {
+                                this.start(text, sending, cx);
+                            }
+                            this.auto_send_next(cx)
+                        });
                     })
                 });
                 cx.notify();
@@ -4534,6 +4682,7 @@ impl PromptMode {
                 sliced,
                 code_task: None,
                 sent_from: None,
+                post_build_update: false,
             };
         }
         // Questions run at once. One that starts while another carries on the
@@ -5202,18 +5351,21 @@ impl PromptMode {
                     .into_any_element(),
             );
         }
-        let card = closing.question.as_ref().and_then(|question| match question {
-            ClosingQuestion::Collapsed(id) => {
-                let ask = self.asks.iter().find(|ask| ask.id == *id)?;
-                Some(self.render_ask_card(ask, true, false, cx))
-            }
-            ClosingQuestion::Closed {
-                id, table, locked, ..
-            } => {
-                let task = self.question_task(*id)?;
-                Some(self.render_question_card(*id, task, (table, *locked), true, false, cx))
-            }
-        });
+        let card = closing
+            .question
+            .as_ref()
+            .and_then(|question| match question {
+                ClosingQuestion::Collapsed(id) => {
+                    let ask = self.asks.iter().find(|ask| ask.id == *id)?;
+                    Some(self.render_ask_card(ask, true, false, cx))
+                }
+                ClosingQuestion::Closed {
+                    id, table, locked, ..
+                } => {
+                    let task = self.question_task(*id)?;
+                    Some(self.render_question_card(*id, task, (table, *locked), true, false, cx))
+                }
+            });
         let theme = cx.theme();
         let drawer = v_flex()
             .relative()
@@ -5960,133 +6112,16 @@ impl Render for PromptMode {
         let history = gpui_kit::TestSupportExt::test_support(history);
         let history = div().relative().size_full().child(history);
 
-        // The task view, and any file split off it.
-        let body = div().relative().flex_1().min_h_0().on_prepaint({
-            let body_width = self.body_width.clone();
-            move |bounds, _, _| body_width.set(bounds.size.width)
-        });
-        // A file split off beside the task view, which can't be dragged
-        // narrower than its editor's 80 columns.
-        let pane = self
-            .file
-            .as_ref()
-            .map(|file| (file.clone(), file.read(cx).min_width(window, cx)));
-        // The width the pane opens at: its share of the body, or its narrowest.
-        let pane_width = |file_min: Pixels| {
-            if self.body_width.get() > px(0.) {
-                (self.body_width.get() * FILE_SHARE).max(file_min)
-            } else {
-                file_min
-            }
-        };
-        let sliding = self
-            .pane_opened
-            .filter(|(_, opened)| opened.elapsed() < PANE_SLIDE_TIME)
-            .map(|(n, _)| n);
-        if self
-            .pane_closing
-            .as_ref()
-            .is_some_and(|closing| closing.closed.elapsed() >= PANE_SLIDE_TIME)
-        {
-            self.pane_closing = None;
-        }
-        // Records the pane's width as laid out, for it to slide closed from.
-        let measured = |pane: AnyElement| {
-            let pane_width = self.pane_width.clone();
-            div()
+        // The selected tab's contents: the task view, or a file.
+        let shown = match self.open_file_view() {
+            Some(file) => div()
                 .size_full()
-                .on_prepaint(move |bounds, _, _| pane_width.set(bounds.size.width))
-                .child(pane)
-        };
-        let body = match pane {
-            // Just opened, the pane grows out of the sidebar at its left, with
-            // the file sliding into view from behind the sidebar's edge, over
-            // the task view, which keeps its width until the slide settles, so
-            // its rows aren't laid out anew each frame. Once it has, it is an
-            // ordinary split that can be dragged.
-            Some((file, file_min)) if sliding.is_some() && self.body_width.get() > px(0.) => {
-                window.request_animation_frame();
-                let width = pane_width(file_min);
-                let grow = SpringAnimation::new(PANE_SPRING).to(width).from(px(0.));
-                // Lets UI tests find the pane as it slides; inert in normal
-                // builds.
-                let pane = gpui_kit::TestSupportExt::test_support(
-                    div().id(("pane-slide", sliding.unwrap_or(0))),
-                )
-                .relative()
-                .flex_none()
-                .h_full()
                 .overflow_hidden()
-                .child(
-                    div()
-                        .absolute()
-                        .top_0()
-                        .bottom_0()
-                        .right_0()
-                        .w(width)
-                        .child(measured(file.into_any_element())),
-                )
-                .with_spring(
-                    ("pane-grow", sliding.unwrap_or(0)),
-                    grow,
-                    |this, width| this.w(width.max(px(0.))),
-                );
-                body.child(covered(history, pane, self.body_width.get(), cx))
-            }
-            Some((file, file_min)) => {
-                let mut file_panel = resizable_panel().size_range(file_min..Pixels::MAX);
-                // Not laid out yet: the split starts even, and can be dragged.
-                if self.body_width.get() > px(0.) {
-                    file_panel =
-                        file_panel.size((self.body_width.get() * FILE_SHARE).max(file_min));
-                }
-                body.child(
-                    h_resizable("file-split")
-                        .with_state(&self.file_split)
-                        .with_handle_appearance(crate::hit_areas::resize_edges("file-split"))
-                        .children([
-                            file_panel.child(measured(file.into_any_element())),
-                            resizable_panel()
-                                .size_range(MIN_SPLIT_WIDTH..Pixels::MAX)
-                                .child(history),
-                        ]),
-                )
-            }
-            // Just closed, the pane shrinks back into the sidebar, with the
-            // file sliding out of view behind the sidebar's edge, uncovering
-            // the task view, already at its full width beneath it.
-            None if let Some(closing) = &self.pane_closing => {
-                window.request_animation_frame();
-                let shrink = SpringAnimation::new(PANE_SPRING)
-                    .to(px(0.))
-                    .from(closing.width);
-                // Lets UI tests find the pane as it slides; inert in normal
-                // builds.
-                let pane = gpui_kit::TestSupportExt::test_support(
-                    div().id(("pane-slide-out", closing.slide)),
-                )
-                .relative()
-                .flex_none()
-                .h_full()
-                .overflow_hidden()
-                .child(
-                    div()
-                        .absolute()
-                        .top_0()
-                        .bottom_0()
-                        .right_0()
-                        .w(closing.width)
-                        .child(closing.file.clone()),
-                )
-                .with_spring(
-                    ("pane-shrink", closing.slide),
-                    shrink,
-                    |this, width| this.w(width.max(px(0.))),
-                );
-                body.child(covered(history, pane, self.body_width.get(), cx))
-            }
-            None => body.child(history),
+                .child(file)
+                .into_any_element(),
+            None => history.into_any_element(),
         };
+        let body = div().relative().flex_1().min_h_0().child(shown);
         // Above the chat input: the task view, pushed up by the stack of
         // questions beneath it, with the answer drawer sliding up over both
         // and dimming them.
@@ -6119,11 +6154,12 @@ impl Render for PromptMode {
         // builds.
         let body = gpui_kit::TestSupportExt::test_support(body);
 
-        // The chat input stays within the body, beneath the task view and any
-        // file split off it, with the referenced spec sidebar beside both,
-        // never reaching over it.
+        // The tab bar along the top, the selected tab's contents beneath it,
+        // and the chat input along the bottom, with the referenced spec
+        // sidebar beside them all, never reaching over the chat input.
         let column = v_flex()
             .size_full()
+            .child(self.render_tabs(cx))
             .child(body)
             .child(self.chat_input.clone());
         self.with_referenced_spec(column, window, cx)
@@ -6168,14 +6204,61 @@ fn resolve_anchor(
     // Waits for the project's fluency if it is still being printed; every
     // caller is already off the UI thread.
     let fluency = crate::piton_fluency::get(project_dir);
-    // A Code task sent to Spec is also told what the code task did; in any
-    // other mode, a code task is nothing to it.
-    anchor.code_task = code_task.filter(|_| mode == SendMode::Spec);
-    anchor.system_prompt = match anchor.code_task {
-        Some(_) => hidden_anchor::code_to_spec_system_prompt(project_dir, &fluency)?,
-        None => hidden_anchor::system_prompt(mode, project_dir, &fluency)?,
+    // A Code task sent to Spec is also told what the code task did, and a
+    // chain's code step what its spec step did; in any other mode, the task
+    // it was handed on from is nothing to it.
+    anchor.code_task = code_task.filter(|_| hands_on(mode));
+    anchor.system_prompt = match (&anchor.code_task, mode) {
+        (Some(_), SendMode::Spec) => {
+            hidden_anchor::code_to_spec_system_prompt(project_dir, &fluency)?
+        }
+        (Some(_), _) => hidden_anchor::spec_to_code_system_prompt(project_dir, &fluency)?,
+        (None, _) => hidden_anchor::system_prompt(mode, project_dir, &fluency)?,
     };
     Ok(anchor)
+}
+
+/// Whether a task sent in `mode` can be told what the task it was handed on
+/// from did: a Spec task sent from Code, or a chain's code step, told what
+/// its spec step did.
+fn hands_on(mode: SendMode) -> bool {
+    matches!(mode, SendMode::Spec | SendMode::Code)
+}
+
+/// The step a chain goes on to once `task`, a step of it, is done, and how
+/// it is sent. A Chain task writes the spec; then the same prompt goes to
+/// Code, with what attached to it, sliced as it was, built against the spec
+/// just written, and told what the spec step did. With a post-build spec
+/// update, the code step done goes on to Spec, just as a Code task sent to
+/// Spec does, told what the code step did. Each step knows the one it was
+/// sent from.
+fn chain_next(task: &PromptTask) -> Option<(String, Sending)> {
+    let sent = &task.sent;
+    let (mode, code_task, post_build_update) = match sent.mode? {
+        SendMode::Both => (
+            SendMode::Code,
+            CodeTask {
+                prompt: task.text.to_string(),
+                result: task.reply.final_output(),
+            },
+            sent.post_build_update,
+        ),
+        SendMode::Code if sent.code_task.is_some() && sent.post_build_update => {
+            (SendMode::Spec, code_task_of(task), false)
+        }
+        _ => return None,
+    };
+    Some((
+        task.text.to_string(),
+        Sending::Now(
+            mode,
+            sent.attached(),
+            sent.sliced,
+            Some(code_task),
+            Some(task.name.to_string()),
+            post_build_update,
+        ),
+    ))
 }
 
 /// The hidden anchor a message sent to a running task is compiled as: as
@@ -6265,7 +6348,11 @@ fn task_title(ix: usize, task: &PromptTask, origin: bool, cx: &App) -> Div {
                         .id(("prompt-sent-from", ix))
                         .text_xs()
                         .text_color(theme.muted_foreground)
-                        .child(SENT_FROM_CODE),
+                        .child(if task.sent.mode == Some(SendMode::Code) {
+                            SENT_FROM_CHAIN
+                        } else {
+                            SENT_FROM_CODE
+                        }),
                 )
             });
             match from_code {
@@ -6277,6 +6364,9 @@ fn task_title(ix: usize, task: &PromptTask, origin: bool, cx: &App) -> Div {
 
 /// What a task sent to Spec from a Code task says beneath its anchor's name.
 const SENT_FROM_CODE: &str = "Sent from Code";
+
+/// What a chain's code step says beneath its anchor's name.
+const SENT_FROM_CHAIN: &str = "Sent from Chain";
 
 /// The button that sends a prompt again, as it was sent.
 fn resend_button(id: impl Into<ElementId>) -> Button {
@@ -6793,7 +6883,7 @@ mod tests {
         .unwrap();
         cx.run_until_parked();
         prompt_mode.read_with(cx, |this, _| {
-            assert!(this.file.is_none(), "a missing file opened")
+            assert!(this.open_file_view().is_none(), "a missing file opened")
         });
         cx.update_window(handle, |_, window, cx| {
             window.click(("understanding-row", 0usize), cx)
@@ -6801,7 +6891,10 @@ mod tests {
         .unwrap();
         cx.run_until_parked();
         prompt_mode.read_with(cx, |this, _| {
-            assert!(this.file.is_some(), "the linked file didn't open")
+            assert!(
+                this.open_file_view().is_some(),
+                "the linked file didn't open"
+            )
         });
     }
 
@@ -6905,7 +6998,10 @@ mod tests {
                 let rows = [0usize, 1].map(|ix| window.find(("referenced-file", ix)).bounds());
                 let this = prompt_mode.read(cx);
                 assert_eq!(
-                    (this.refs_scroll.max_offset().y, this.understanding_scroll.max_offset().y),
+                    (
+                        this.refs_scroll.max_offset().y,
+                        this.understanding_scroll.max_offset().y
+                    ),
                     (px(0.), px(0.)),
                     "{mode:?}: a panel whose rows fit scrolls"
                 );
@@ -7109,13 +7205,22 @@ mod tests {
             let low = track.bottom() - px(2.5);
             let c: gpui_kit::Rgba = colors.raised.into();
             let channel = ((body >> 16) & 0xff) as f32;
-            let raised =
-                ((channel * (1. - c.a) + 255. * c.r * c.a).round() as u32) * 0x010101;
+            let raised = ((channel * (1. - c.a) + 255. * c.r * c.a).round() as u32) * 0x010101;
             let near = |a: u32, b: u32| (a as i32 - b as i32).abs() <= 0x010101;
-            for y in [column.top() + px(2.5), track.top() + track.size.height / 2., low] {
+            for y in [
+                column.top() + px(2.5),
+                track.top() + track.size.height / 2.,
+                low,
+            ] {
                 let (left, right) = (at(0., y), at(17., y));
-                assert!(near(left, raised), "the column's left side at {y:?} is {left:06x}");
-                assert!(near(right, raised), "the column's right side at {y:?} is {right:06x}");
+                assert!(
+                    near(left, raised),
+                    "the column's left side at {y:?} is {left:06x}"
+                );
+                assert!(
+                    near(right, raised),
+                    "the column's right side at {y:?} is {right:06x}"
+                );
             }
             assert_eq!(at(8., low), body, "the track isn't the body's colour");
         })
@@ -7275,7 +7380,7 @@ mod tests {
         .unwrap();
         cx.run_until_parked();
         prompt_mode.read_with(cx, |this, _| {
-            assert!(this.file.is_some(), "the file didn't open")
+            assert!(this.open_file_view().is_some(), "the file didn't open")
         });
 
         // Once the run is over, it slides back and is gone.
@@ -8464,6 +8569,7 @@ mod tests {
                         false,
                         None,
                         None,
+                        false,
                         window,
                         cx,
                     );
@@ -8704,7 +8810,7 @@ mod tests {
         .unwrap();
     }
 
-    /// Clicking the file a file tool read opens it beside the task view.
+    /// Clicking the file a file tool read opens it in a tab.
     #[gpui_kit::test]
     async fn clicking_a_tool_file_opens_it(cx: &mut TestAppContext) {
         let dir = std::env::temp_dir().join(format!("suspense-tool-file-{}", std::process::id()));
@@ -8741,10 +8847,10 @@ mod tests {
         })
         .unwrap();
         cx.run_until_parked();
-        assert!(prompt_mode.read_with(cx, |this, _| this.file.is_some()));
+        assert!(prompt_mode.read_with(cx, |this, _| this.open_file_view().is_some()));
 
         // Text the file sends to the prompt is attached to it.
-        let file_view = prompt_mode.read_with(cx, |this, _| this.file.clone().unwrap());
+        let file_view = prompt_mode.read_with(cx, |this, _| this.open_file_view().unwrap());
         file_view.update(cx, |_, cx| {
             cx.emit(crate::file_view::SendToPrompt("selected text".into()))
         });
@@ -10706,6 +10812,7 @@ mod tests {
                     sliced: false,
                     code_task: None,
                     sent_from: None,
+                    post_build_update: false,
                 };
                 let mut answer = PromptTask::new("Why?".into());
                 answer.sent = super::SentAs {
@@ -10715,6 +10822,7 @@ mod tests {
                     sliced: true,
                     code_task: None,
                     sent_from: None,
+                    post_build_update: false,
                 };
                 this.answers.push(answer);
                 this.working = true;
@@ -10761,6 +10869,7 @@ mod tests {
                     sliced: true,
                     code_task: None,
                     sent_from: None,
+                    post_build_update: false,
                 };
                 this.tasks[ix].mode = mode;
             })
@@ -10850,6 +10959,7 @@ mod tests {
                     }),
                     // Knowing the task it was sent from.
                     sent_from: Some(this.tasks[0].name.to_string()),
+                    post_build_update: false,
                 }
             );
         });
@@ -10939,6 +11049,7 @@ mod tests {
                         sliced: false,
                         code_task: None,
                         sent_from,
+                        post_build_update: false,
                     };
                     this.tasks[ix].mode = Some(mode);
                     this.tasks[ix].status = status;
@@ -11420,6 +11531,7 @@ mod tests {
                         sliced: false,
                         code_task: None,
                         sent_from,
+                        post_build_update: false,
                     };
                     this.tasks[ix].mode = Some(mode);
                     this.tasks[ix].status = status;
@@ -11651,6 +11763,7 @@ mod tests {
                         sliced: false,
                         code_task: None,
                         sent_from,
+                        post_build_update: false,
                     };
                     this.tasks[ix].mode = Some(mode);
                     this.tasks[ix].status = status;
@@ -12046,6 +12159,7 @@ mod tests {
                     sliced: true,
                     code_task: None,
                     sent_from: None,
+                    post_build_update: false,
                 };
                 this.tasks[ix].mode = mode;
             }
@@ -12266,6 +12380,7 @@ mod tests {
                         sliced: false,
                         code_task: None,
                         sent_from: None,
+                        post_build_update: false,
                     };
                     this.tasks[ix].mode = mode;
                     this.tasks[ix].status = TaskStatus::Done;
@@ -12386,6 +12501,7 @@ mod tests {
                         sliced: false,
                         code_task: None,
                         sent_from: None,
+                        post_build_update: false,
                     };
                     this.tasks[ix].mode = Some(mode);
                     for event in events {
@@ -12501,6 +12617,7 @@ mod tests {
                     sliced: false,
                     code_task: Some(told.clone()),
                     sent_from: Some(this.tasks[0].name.to_string()),
+                    post_build_update: false,
                 }
             );
             assert!(
@@ -12612,6 +12729,135 @@ mod tests {
             "{restored:?}"
         );
         assert!(restored.contains(&Some(told)));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A chain is sent as its steps: the Chain task writes the spec, then the
+    /// same prompt goes to Code, the spec built again first, told what the
+    /// spec step said; with Post-Build Spec Update on, the code step then
+    /// goes to Spec, as a Code task sent to Spec does. Each step knows the
+    /// one it was sent from.
+    #[gpui_kit::test]
+    async fn chains_are_sent_as_their_steps(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        use std::os::unix::fs::PermissionsExt as _;
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        cx.executor().allow_parking();
+        let (prompt_mode, handle) = open(cx);
+        let dir = cancel_project("chain-steps", &prompt_mode, cx);
+        // A harness that keeps each run's system prompt in a file of its
+        // own, and says which run it was before it is done.
+        let runs = dir.join("runs");
+        std::fs::create_dir_all(&runs).unwrap();
+        let script = dir.join("chain-harness.sh");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\n\
+                 n=$(ls {runs} | wc -l | tr -d ' ')\n\
+                 file={runs}/$n\n\
+                 : > \"$file\"\n\
+                 while [ $# -gt 0 ]; do\n\
+                 \x20 if [ \"$1\" = --append-system-prompt ]; then printf '%s' \"$2\" > \"$file\"; fi\n\
+                 \x20 shift\n\
+                 done\n\
+                 IFS= read -r line\n\
+                 echo '{{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"s1\"}}'\n\
+                 echo '{{\"type\":\"stream_event\",\"parent_tool_use_id\":null,\"event\":{{\"type\":\"content_block_start\",\"index\":0,\"content_block\":{{\"type\":\"text\",\"text\":\"\"}}}}}}'\n\
+                 echo '{{\"type\":\"stream_event\",\"parent_tool_use_id\":null,\"event\":{{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{{\"type\":\"text_delta\",\"text\":\"Said run '$n'.\"}}}}}}'\n\
+                 echo '{{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Done.\"}}'\n",
+                runs = runs.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::harness::use_program_for_test(Some(script));
+        let run = |n: usize| std::fs::read_to_string(runs.join(n.to_string())).unwrap();
+        let send = |post_build: bool, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                prompt_mode.update(cx, |this, cx| {
+                    this.chat_input
+                        .update(cx, |input, _| input.set_post_build_update(post_build));
+                    this.send("Make it so.".into(), SendMode::Both, Vec::new(), window, cx)
+                })
+            })
+            .unwrap();
+        };
+
+        // Without a post-build spec update, the chain ends with its code step.
+        send(false, cx);
+        run_until(cx, &prompt_mode, "the chain's code step", |this| {
+            !this.working && this.tasks.len() == 2 && this.tasks[1].status == TaskStatus::Done
+        });
+        let spec = run(0);
+        assert!(spec.contains("first step changes the spec only"), "{spec}");
+        let code = run(1);
+        assert!(code.starts_with("We're working on the code "), "{code}");
+        assert!(code.contains("second step of a chain"), "{code}");
+        assert!(
+            code.ends_with(
+                "The prompt the chain was sent:\n\nMake it so.\n\n\
+                 What the spec step said it changed, its final output:\n\nSaid run 0."
+            ),
+            "{code}"
+        );
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.tasks[0].sent.mode, Some(SendMode::Both));
+            let step = &this.tasks[1].sent;
+            assert_eq!(step.mode, Some(SendMode::Code));
+            assert_eq!(step.sent_from.as_deref(), Some(this.tasks[0].name.as_ref()));
+            assert_eq!(
+                step.code_task.as_ref().and_then(|task| task.result.as_deref()),
+                Some("Said run 0.")
+            );
+            assert!(!step.post_build_update);
+        });
+
+        // With one, the code step goes on to Spec, told what it did.
+        send(true, cx);
+        run_until(cx, &prompt_mode, "the chain's post-build spec update", |this| {
+            !this.working && this.tasks.len() == 5 && this.tasks[4].status == TaskStatus::Done
+        });
+        crate::harness::use_program_for_test(None);
+        let update = run(4);
+        assert!(update.starts_with("We're working on the spec "), "{update}");
+        assert!(
+            update.ends_with(
+                "The prompt the code task was sent:\n\nMake it so.\n\n\
+                 What the code task said it built, its final output:\n\nSaid run 3."
+            ),
+            "{update}"
+        );
+        prompt_mode.read_with(cx, |this, _| {
+            assert!(this.tasks[2].sent.post_build_update);
+            assert!(this.tasks[3].sent.post_build_update);
+            let step = &this.tasks[4].sent;
+            assert_eq!(step.mode, Some(SendMode::Spec));
+            assert_eq!(step.sent_from.as_deref(), Some(this.tasks[3].name.as_ref()));
+            assert!(!step.post_build_update);
+        });
+        // Each step is kept in the history as it was sent, in whatever order
+        // tasks sent in the same second load.
+        let mut restored: Vec<(Option<SendMode>, bool)> = prompt_history::load(&dir)
+            .into_iter()
+            .map(|saved| {
+                let task = PromptTask::restore(saved);
+                (task.sent.mode, task.sent.post_build_update)
+            })
+            .collect();
+        restored.sort_by_key(|(mode, post_build)| (mode.map(SendMode::key), *post_build));
+        assert_eq!(
+            restored,
+            [
+                (Some(SendMode::Code), false),
+                (Some(SendMode::Code), true),
+                (Some(SendMode::Both), false),
+                (Some(SendMode::Both), true),
+                (Some(SendMode::Spec), false),
+            ]
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -13834,6 +14080,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
                     sliced: false,
                     code_task: None,
                     sent_from: None,
+                    post_build_update: false,
                 };
                 this.tasks[ix].mode = Some(SendMode::Code);
                 for event in [

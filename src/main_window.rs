@@ -468,7 +468,7 @@ impl MainWindow {
     }
 
     /// Opens a changed file's diff in the floating panel, replacing any diff
-    /// already there. Any file open in the split is left as it is.
+    /// already there. Any file open in a tab is left as it is.
     pub fn open_diff(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         let diff = cx.new(|cx| DiffView::new(path, cx));
         self.new_project = None;
@@ -1205,7 +1205,7 @@ impl MainWindow {
                         .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx));
                     cx.notify();
                 }
-                // Once written, it opens beside the chat.
+                // Once written, it opens in a tab.
                 if let Some(file) = written {
                     this.prompt_mode.update(cx, |prompt_mode, cx| {
                         prompt_mode.open_file(file, window, cx)
@@ -1947,6 +1947,68 @@ mod tests {
         }
     }
 
+    /// Reset Brightness sits beneath the Brightness slider, in its column:
+    /// disabled while the mode showing is at its starting brightness, and
+    /// otherwise putting it back there, keeping the mode.
+    #[gpui_kit::test]
+    async fn reset_brightness_sits_beneath_the_slider(cx: &mut TestAppContext) {
+        use gpui_kit::component::{ActiveTheme as _, Theme, ThemeMode};
+
+        use crate::ribbon::RibbonTab;
+        use crate::theme;
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+            Theme::change(ThemeMode::Dark, None, cx);
+            theme::set_brightness(true, 0, cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let handle: gpui_kit::AnyWindowHandle = window.into();
+        let ribbon = main.unwrap().read_with(cx, |main, _| main.ribbon.clone());
+        ribbon.update(cx, |r, cx| r.select_tab(RibbonTab::Application, cx));
+        cx.run_until_parked();
+
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let (slider, reset) = (
+                window.find("brightness").bounds(),
+                window.find("reset-brightness").bounds(),
+            );
+            assert!(
+                reset.top() >= slider.bottom() && reset.left() == slider.left(),
+                "{reset:?} isn't beneath {slider:?}"
+            );
+            // Already at its start: clicking does nothing.
+            window.click("reset-brightness", cx);
+        })
+        .unwrap();
+        cx.update(|cx| {
+            let step = *theme::brightness_range(true).end();
+            theme::set_brightness(true, step, cx);
+        });
+        ribbon.update(cx, |_, cx| cx.notify());
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("reset-brightness", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update(|cx| {
+            assert_eq!(theme::brightness(cx), 0);
+            assert!(cx.theme().is_dark(), "resetting changed the mode");
+        });
+    }
+
     /// The Brightness slider is the Appearance group's one control, with no
     /// Dark mode switch: as tall as a slim button, its track 120px wide, with
     /// no background of its own. Its one track runs from the darkest
@@ -2342,7 +2404,7 @@ mod tests {
     }
 
     /// In the theme, dark and light, the ribbon's project indicator leads the
-    /// tab row in its own colour, with no border, then the chevron, then the
+    /// tab row in its own colour, with no border, then the
     /// Project tab, open when the window opens, the tab row's full height;
     /// nothing in the tab row has a border.
     #[gpui_kit::test]
@@ -2389,43 +2451,26 @@ mod tests {
                     background.border_widths.right.0 == 0. && background.border_widths.left.0 == 0.,
                     "{mode:?}: the indicator's area has a border"
                 );
-                // The chevron sits between the indicator and the tabs.
-                let chevron = window.find("ribbon-collapse").bounds();
-                assert_eq!(
-                    chevron.size,
-                    gpui_kit::size(gpui_kit::px(22.), gpui_kit::px(22.)),
-                    "{mode:?}: the chevron isn't square"
-                );
-                // The left container holds the indicator and chevron with no
-                // gap between them, vertically centred, shrunk to fit; the
-                // right container holds nothing, so isn't there.
+                // The left container holds only the indicator, vertically
+                // centred, shrunk to fit; with nothing running, the right
+                // container holds nothing, so isn't there. There is no
+                // collapse chevron.
                 let left = window.find("ribbon-left").bounds();
                 assert!(
-                    (chevron.left() - prefix.right()).abs() < gpui_kit::px(1.),
-                    "{mode:?}: a gap between {prefix:?} and {chevron:?}"
-                );
-                assert!(
-                    (left.right() - chevron.right()).abs() < gpui_kit::px(1.)
+                    (left.right() - prefix.right()).abs() < gpui_kit::px(1.)
                         && (left.left() - prefix.left()).abs() < gpui_kit::px(1.),
                     "{mode:?}: the left container {left:?} doesn't fit its contents"
                 );
-                assert!(
-                    (chevron.center().y - left.center().y).abs() < gpui_kit::px(1.),
-                    "{mode:?}: the chevron {chevron:?} isn't centred in {left:?}"
-                );
+                assert!(window.try_find("ribbon-collapse").is_none());
                 assert!(window.try_find("ribbon-right").is_none());
-                let chevron_right = chevron.right().as_f32() * scale;
-                assert!(
-                    chevron.left().as_f32() * scale >= right - 1.,
-                    "{mode:?}: the chevron {chevron:?} isn't after the indicator"
-                );
-                // The Project tab, open, starts straight after the chevron,
+                let indicator_right = right;
+                // The Project tab, open, starts straight after the indicator,
                 // the full height of the tab row.
                 let row = window.find("ribbon-tabs-row").bounds();
                 let project_tab = window.find(("ribbon-tab", 0usize)).bounds();
                 assert!(
-                    (project_tab.left().as_f32() * scale - chevron_right).abs() < 1.,
-                    "{mode:?}: the Project tab {project_tab:?} isn't right after the chevron"
+                    (project_tab.left().as_f32() * scale - indicator_right).abs() < 1.,
+                    "{mode:?}: the Project tab {project_tab:?} isn't right after the indicator"
                 );
                 assert_eq!(
                     (project_tab.top(), project_tab.size.height),
@@ -3076,29 +3121,58 @@ mod tests {
         }
     }
 
-    /// Clicking a file in the project tree opens it beside the chat history,
-    /// taking 50% of the width; the chat input stays unsplit below both.
+    /// Clicking files in the project tree opens each in a tab of its own
+    /// beneath the body's tab bar, after Chat, as wide as the bar, with the
+    /// chat input beneath it and nothing sliding. Clicking an open file again
+    /// selects its tab. Closing the selected tab selects the one to its
+    /// right, else its left, and Chat once no file is left.
     #[gpui_kit::test]
-    async fn clicking_a_file_opens_it_beside_the_chat_history(cx: &mut TestAppContext) {
+    async fn files_open_in_tabs_of_the_body(cx: &mut TestAppContext) {
         let dir = std::env::temp_dir().join(format!("suspense-open-file-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("notes.md"), "# Notes\n").unwrap();
+        std::fs::write(dir.join("a.md"), "# A\n").unwrap();
+        std::fs::write(dir.join("b.md"), "# B\n").unwrap();
 
         cx.update(|cx| {
             gpui_kit::init(cx);
             piton_syntax::init();
             ProjectDirectory::init(cx);
         });
+        let mut main = None;
         let window = cx.add_window(|window, cx| {
             let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
             Root::new(view, window, cx)
         });
+        let main = main.unwrap();
         let handle = window.into();
+        let prompt_mode = main.read_with(cx, |main, _| main.prompt_mode.clone());
+        let open = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |p, cx| {
+                p.open_file_views()
+                    .iter()
+                    .map(|file| file.read(cx).path().file_name().unwrap().to_owned())
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .collect::<Vec<_>>()
+            })
+        };
+        let shown = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |p, cx| {
+                p.open_file_view().map(|file| {
+                    file.read(cx)
+                        .path()
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned()
+                })
+            })
+        };
 
         cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
         cx.wait_for(handle, TIMEOUT, |window, _| {
-            window.try_find(("project-entry", 0usize)).is_some()
+            window.try_find(("project-entry", 1usize)).is_some()
         })
         .await;
         cx.update_window(handle, |_, window, cx| {
@@ -3110,139 +3184,82 @@ mod tests {
         })
         .await;
 
-        // The file slides in from the sidebar: its pane grows from the
-        // sidebar's edge, through widths in between, and the file sits at the
-        // pane's right edge as it does. It slides over the chat history, which
-        // keeps its width meanwhile, so its rows aren't laid out anew.
-        let sidebar = cx
-            .update_window(handle, |_, window, _| window.find("project-tree").bounds())
-            .unwrap();
-        let mut widths = Vec::new();
-        let mut history_widths = Vec::new();
-        let start = std::time::Instant::now();
-        while start.elapsed() < Duration::from_millis(350) {
-            let found = cx
-                .update_window(handle, |_, window, cx| {
-                    window.render_frame(cx);
-                    window.try_find(("pane-slide", 1usize)).map(|pane| {
-                        history_widths.push(window.find("history").bounds().size.width);
-                        pane.bounds()
-                    })
-                })
-                .unwrap();
-            if let Some(pane) = found {
-                assert!(
-                    (pane.left() - sidebar.right()).abs() <= gpui_kit::px(2.),
-                    "the pane {pane:?} doesn't grow from the sidebar {sidebar:?}"
-                );
-                widths.push(pane.size.width);
-            }
-            std::thread::sleep(Duration::from_millis(8));
-        }
-        let widest = widths
-            .iter()
-            .copied()
-            .fold(gpui_kit::px(0.), gpui_kit::Pixels::max);
-        assert!(
-            widths
-                .iter()
-                .any(|width| *width > gpui_kit::px(1.) && *width < widest - gpui_kit::px(1.)),
-            "the pane {widths:?} appeared without sliding in"
-        );
-        assert!(
-            history_widths
-                .windows(2)
-                .all(|pair| (pair[1] - pair[0]).abs() < gpui_kit::px(0.5)),
-            "the chat history {history_widths:?} changed width as the file slid in"
-        );
-
-        // Once it has, the split settles at its share of the width.
-        std::thread::sleep(Duration::from_millis(200));
-        for _ in 0..3 {
-            cx.run_until_parked();
-            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
-                .unwrap();
-        }
-
+        // Straight away, with nothing sliding, the file fills the space
+        // between the tab bar and the chat input, as wide as the bar, in
+        // place of the chat history.
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
+            let tabs = window.find("body-tabs-row").bounds();
             let file = window.find("file-view").bounds();
-            let history = window.find("history").bounds();
             let editor = window.find("prompt-editor").bounds();
-            let send = window.find("send").bounds();
-            let share = file.size.width / (file.size.width + history.size.width);
             assert!(
-                (share - 0.5).abs() < 0.02,
-                "file takes {share} of the width: {file:?} beside {history:?}"
+                window.try_find("history").is_none(),
+                "the history shows too"
+            );
+            assert!(window.try_find(("pane-slide", 1usize)).is_none());
+            assert!(
+                (file.top() - tabs.bottom()).abs() <= gpui_kit::px(1.)
+                    && (file.left() - tabs.left()).abs() <= gpui_kit::px(1.)
+                    && (file.right() - tabs.right()).abs() <= gpui_kit::px(1.),
+                "the file {file:?} isn't beneath the tab bar {tabs:?}, as wide"
             );
             assert!(
-                history.left() >= file.right() - gpui_kit::px(1.),
-                "history is not right of the file: {file:?} then {history:?}"
-            );
-            assert!(
-                editor.top() >= file.bottom()
-                    && editor.left() < file.right()
-                    && send.right() > history.left(),
-                "chat input (editor {editor:?}, Send {send:?}) is split with the file {file:?}"
+                editor.top() >= file.bottom(),
+                "the chat input {editor:?} isn't beneath the file {file:?}"
             );
         })
         .unwrap();
+        assert_eq!(open(cx), ["a.md"]);
 
-        // Closing it slides it back into the sidebar: the pane shrinks at the
-        // sidebar's edge, through widths in between, then is gone.
-        cx.update_window(handle, |_, window, cx| window.click("close-file", cx))
-            .unwrap();
-        let mut widths = Vec::new();
-        let mut history_widths = Vec::new();
-        let start = std::time::Instant::now();
-        while start.elapsed() < Duration::from_millis(350) {
-            let found = cx
-                .update_window(handle, |_, window, cx| {
-                    window.render_frame(cx);
-                    crate::double_borders::assert_none(window);
-                    window.try_find(("pane-slide-out", 1usize)).map(|pane| {
-                        history_widths.push(window.find("history").bounds().size.width);
-                        pane.bounds()
-                    })
-                })
-                .unwrap();
-            if let Some(pane) = found {
-                assert!(
-                    (pane.left() - sidebar.right()).abs() <= gpui_kit::px(2.),
-                    "the pane {pane:?} doesn't shrink into the sidebar {sidebar:?}"
-                );
-                widths.push(pane.size.width);
-            }
-            std::thread::sleep(Duration::from_millis(8));
-        }
-        assert!(
-            widths.windows(2).all(|pair| pair[1] <= pair[0] + gpui_kit::px(1.))
-                && widths
-                    .iter()
-                    .any(|width| *width > gpui_kit::px(1.) && *width < widths[0] - gpui_kit::px(1.)),
-            "the pane {widths:?} closed without sliding out"
-        );
-        assert!(
-            history_widths
-                .windows(2)
-                .all(|pair| (pair[1] - pair[0]).abs() < gpui_kit::px(0.5)),
-            "the chat history {history_widths:?} changed width as the file slid out"
-        );
-        std::thread::sleep(Duration::from_millis(200));
-        cx.update_window(handle, |_, window, cx| window.render_frame(cx))
-            .unwrap();
-        cx.wait_for(handle, TIMEOUT, |window, _| {
-            window.try_find("file-view").is_none()
+        // Another file opens in a tab of its own just after the one selected,
+        // leaving the first open; clicking the first again selects its tab.
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("project-entry", 1usize), cx)
         })
-        .await;
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(open(cx), ["a.md", "b.md"]);
+        assert_eq!(shown(cx).as_deref(), Some("b.md"));
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("project-entry", 0usize), cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(open(cx), ["a.md", "b.md"]);
+        assert_eq!(shown(cx).as_deref(), Some("a.md"));
+
+        // Closing the selected tab selects the one to its right; closing
+        // the last, Chat, where the history shows again.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click(("close-file-tab", 0usize), cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(open(cx), ["b.md"]);
+        assert_eq!(shown(cx).as_deref(), Some("b.md"));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click(("close-file-tab", 0usize), cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(open(cx).is_empty());
+        assert_eq!(shown(cx), None);
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("file-view").is_none());
+            assert!(window.try_find("history").is_some());
+        })
+        .unwrap();
 
         std::fs::remove_dir_all(&dir).ok();
     }
 
     /// A file's diff floats over the whole window, inset 32px from each edge,
-    /// leaving any file open in the split alone; Esc closes it, as does
+    /// leaving any file open in a tab alone; Esc closes it, as does
     /// clicking the dimmed window around it, and opening the file from it
-    /// closes it and opens the file in the split.
+    /// closes it and opens the file in a tab.
     #[gpui_kit::test]
     async fn diff_floats_over_the_window(cx: &mut TestAppContext) {
         let dir = std::env::temp_dir().join(format!("suspense-diff-panel-{}", std::process::id()));
@@ -3322,7 +3339,7 @@ mod tests {
             );
             assert!(
                 window.try_find("file-view").is_some(),
-                "the diff closed the file in the split"
+                "the diff closed the file in its tab"
             );
         })
         .unwrap();
@@ -3422,7 +3439,7 @@ mod tests {
             "clicking the dimmed window left the diff open"
         );
 
-        // Opening the file from it closes it, with the file in the split.
+        // Opening the file from it closes it, with the file in a tab.
         open(cx);
         cx.run_until_parked();
         let diff = main.read_with(cx, |main, _| main.diff.clone().unwrap());
@@ -4160,7 +4177,7 @@ mod tests {
     /// of the code, names the instruction after it, and shows the file it
     /// will be, mirrored under the shape location, in the editor before it is
     /// on disk. Closing the panel with it unsaved asks first; saving writes
-    /// it, and closing the editor then opens it beside the chat.
+    /// it, and closing the editor then opens it in a tab.
     #[gpui_kit::test]
     async fn new_instruction_is_written_in_the_editor(cx: &mut TestAppContext) {
         let dir = std::env::temp_dir().join(format!("suspense-instruction-{}", std::process::id()));
@@ -4754,6 +4771,17 @@ mod tests {
                 window.try_find("ribbon-activity").is_some(),
                 "no spinner while it runs"
             );
+            // It sits in the right container, at the far right of the bar.
+            let (spinner, right, row) = (
+                window.find("ribbon-activity").bounds(),
+                window.find("ribbon-right").bounds(),
+                window.find("ribbon-tabs-row").bounds(),
+            );
+            assert!(
+                (right.right() - row.right()).abs() < gpui_kit::px(1.)
+                    && (spinner.right() - right.right()).abs() < gpui_kit::px(1.),
+                "the spinner {spinner:?} isn't at the far right of {row:?}"
+            );
         })
         .unwrap();
         assert!(
@@ -5224,11 +5252,10 @@ mod tests {
                     "{control} is not in the row"
                 );
             }
-            // Every control, the chevron included, is vertically centred in
-            // the row.
+            // Every control is vertically centred in the row.
             let row = window.find("ribbon-primary").bounds();
             let row_middle = row.origin.y + row.size.height / 2.;
-            for control in controls.into_iter().chain(["ribbon-collapse"]) {
+            for control in controls {
                 let bounds = window.find(control).bounds();
                 let middle = bounds.origin.y + bounds.size.height / 2.;
                 assert!(
@@ -5272,8 +5299,8 @@ mod tests {
         .unwrap();
 
         // Too narrow for its commands, the row scrolls them sideways: the
-        // project indicator and the chevron after it stay whole and in the
-        // window, left of the commands.
+        // project indicator stays whole and in the window, left of the
+        // commands.
         let wide = cx
             .update_window(handle, |_, window, _| window.bounds().size)
             .unwrap();
@@ -5283,21 +5310,15 @@ mod tests {
             window.render_frame(cx);
             let row = window.find("ribbon-primary").bounds();
             let commands = window.find("ribbon-primary-commands").bounds();
-            let chevron = window.find("ribbon-collapse").bounds();
-            // The same square as beside the tabs.
-            assert_eq!(
-                chevron.size,
-                gpui_kit::size(gpui_kit::px(22.), gpui_kit::px(22.)),
-                "the collapsed chevron isn't square"
-            );
+            let left = window.find("ribbon-left").bounds();
             let name = window.find("ribbon-project-name").bounds();
             let settings = window.find("settings").bounds();
             assert!(
                 row.right() <= gpui_kit::px(360.),
                 "the row overflows: {row:?}"
             );
-            assert!(name.left() >= row.left() && name.right() <= chevron.left());
-            assert!(chevron.right() <= commands.left());
+            assert!(name.left() >= row.left() && name.right() <= left.right());
+            assert!(left.right() <= commands.left());
             assert!(
                 settings.right() > commands.right(),
                 "the commands squeeze to fit rather than scroll: {settings:?} in {commands:?}"

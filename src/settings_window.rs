@@ -23,7 +23,7 @@ use crate::piton_syntax;
 use crate::project_directory::ProjectDirectory;
 use crate::system_prompts::{
     self, CODE_LOCATION, CODE_PROMPT, CODE_RESULT, HARNESS_DIRECTORY, PITON_FLUENCY, Prompt,
-    SPEC_LOCATION, SPEC_READING,
+    SPEC_LOCATION, SPEC_PROMPT, SPEC_READING, SPEC_RESULT,
 };
 
 actions!(suspense, [OpenSettings]);
@@ -73,7 +73,7 @@ impl Section {
             (Section::SystemPrompts, Prompt::Mode(_))
                 | (
                     Section::InjectedPrompts,
-                    Prompt::SpecReading | Prompt::CodeToSpec
+                    Prompt::SpecReading | Prompt::CodeToSpec | Prompt::SpecToCode
                 )
         )
     }
@@ -297,6 +297,21 @@ impl SettingsWindow {
                             "Added to a Code task sent to Spec, after Spec's system \
                              prompt. {CODE_PROMPT} and {CODE_RESULT} stand for the code \
                              task's prompt and its final output."
+                        )),
+                ))
+            })
+            .when(which == Prompt::SpecToCode, |column| {
+                // Lets UI tests find it; inert in normal builds.
+                column.child(gpui_kit::TestSupportExt::test_support(
+                    div()
+                        .id("spec-to-code-note")
+                        .text_sm()
+                        .text_color(theme.muted_foreground)
+                        .child(format!(
+                            "Added to the Code task a Chain task hands on to once the \
+                             spec is written and built, after Code's system prompt. \
+                             {SPEC_PROMPT} and {SPEC_RESULT} stand for the prompt and the \
+                             spec task's final output."
                         )),
                 ))
             })
@@ -600,6 +615,7 @@ mod tests {
                 Prompt::Mode(SendMode::Ask),
                 Prompt::SpecReading,
                 Prompt::CodeToSpec,
+                Prompt::SpecToCode,
             ]
         );
         assert!(!system_prompts::file(SendMode::Freeform, &dir).exists());
@@ -676,7 +692,10 @@ mod tests {
                 .filter(|p| Section::InjectedPrompts.holds(*p))
                 .collect()
         });
-        assert_eq!(order, [Prompt::SpecReading, Prompt::CodeToSpec]);
+        assert_eq!(
+            order,
+            [Prompt::SpecReading, Prompt::CodeToSpec, Prompt::SpecToCode]
+        );
         system_prompts::save(Prompt::CodeToSpec, "Say ${CODE_RESULT}.", &dir).unwrap();
         settings.update_in(cx, |this, window, cx| this.load(window, cx));
         cx.run_until_parked();
