@@ -653,14 +653,10 @@ impl Render for Ribbon {
                 let tint = tab
                     .mode()
                     .map(|mode| crate::chat_input::mode_tint(mode, cx));
-                // A tab with a mode's colour shows it in its label while closed,
-                // the hue at full strength; open, its label is the tab's own
-                // colour. The label is the same text in the same place either
-                // way, only its colour changing, so it never moves.
-                let label = match tint {
-                    Some(tint) if !open => Hsla { a: 1., ..tint },
-                    _ => foreground,
-                };
+                // A tab with a mode's colour shows it in its label, the hue at
+                // full strength, open or closed; no tab has a coloured
+                // background.
+                let label = tint.map_or(foreground, |tint| Hsla { a: 1., ..tint });
                 // Lets UI tests find the tab; inert in normal builds.
                 gpui_kit::TestSupportExt::test_support(div().id(("ribbon-tab", ix)))
                     .relative()
@@ -677,13 +673,6 @@ impl Render for Ribbon {
                     .aria_selected(open)
                     .when(open, |this| this.bg(area))
                     .when(!open, |this| this.hover(|this| this.bg(hover)))
-                    // An open Code or Spec tab is tinted as the chat input's tab
-                    // of that mode is: the tint laid over it, beneath its label,
-                    // taking no room, so the tab keeps its own size and its label
-                    // stays put.
-                    .when_some(tint.filter(|_| open), |this, tint| {
-                        this.child(div().absolute().inset_0().bg(tint))
-                    })
                     .child(div().relative().text_color(label).child(tab.label()))
                     .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
                         this.tab_clicked(
@@ -715,15 +704,6 @@ impl Render for Ribbon {
                     .children(tabs),
             )
             .children(self.render_right(cx));
-
-        // With a Code or Spec tab open alone, the body is tinted as the chat
-        // input's is for that mode.
-        let body_tint = match self.open_tabs.as_slice() {
-            [tab] => tab
-                .mode()
-                .map(|mode| crate::chat_input::mode_tint(mode, cx)),
-            _ => None,
-        };
 
         // Each open tab's commands, gathered into their groups in order.
         let mut groups: Vec<(&'static str, Vec<(CommandSize, AnyElement)>)> = Vec::new();
@@ -780,9 +760,7 @@ impl Render for Ribbon {
                     .gap(GAP)
                     // No taller than its commands need.
                     .flex_none()
-                    // With the Code or Spec tab open alone, its body is tinted
-                    // as the chat input's body is for its mode.
-                    .bg(body_tint.map_or(area, |tint| area.blend(tint)))
+                    .bg(area)
                     .children(row),
             ))
     }

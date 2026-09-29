@@ -400,25 +400,6 @@ fn blend(from: Hsla, to: Hsla, t: f32) -> Hsla {
     }
 }
 
-/// How much of tab `ix`'s tint shows with the tint at `position`: all of it
-/// while the tab is selected, alone or (for Code and Spec) with the other,
-/// fading out over one tab either side.
-fn tab_tint_shown(ix: usize, position: f32) -> f32 {
-    let (first, last) = match TABS[ix] {
-        SendMode::Code => (0., 1.),
-        SendMode::Spec => (1., 2.),
-        SendMode::Both | SendMode::Ask | SendMode::Freeform => (ix as f32, ix as f32),
-    };
-    // The tabs wrap around, so Code is as near Freeform as Chain is to Code.
-    let count = TABS.len() as f32;
-    let position = position.rem_euclid(count);
-    let distance = [position - count, position, position + count]
-        .into_iter()
-        .map(|position| (first - position).max(position - last).max(0.))
-        .fold(f32::MAX, f32::min);
-    (1. - distance).clamp(0., 1.)
-}
-
 /// What a prompt is sent to work on: the selected tab.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SendMode {
@@ -1835,10 +1816,6 @@ impl Render for ChatInput {
         let unified = selected == BOTH_TAB;
         let chain_width = self.chain_width.unwrap_or(CHAIN_WIDTH_ESTIMATE);
         let join = SpringAnimation::new(CHAIN_SPRING).to(if unified { 1. } else { 0. });
-        // The tint slides between the tabs, so going from Code to Spec passes
-        // through purple. Its position is the selected tab's index: 0 for
-        // Code, 1 for the chain, 2 for Spec, 3 for Ask, 4 for Freeform.
-        let tint_slide = SpringAnimation::new(CHAIN_SPRING).to(self.tint_target);
         let hues = Hues::of(cx);
         let tint = move |position| tint(hues, position);
         // Each tab's label is in its mode's colour at full strength, selected
@@ -1868,31 +1845,6 @@ impl Render for ChatInput {
                 .icon(chain_icon.clone())
                 .tooltip(|window, cx| Tooltip::new(SendMode::Both.label()).build(window, cx)),
             mode => Tab::new().child(div().text_color(label_color(ix)).child(mode.label())),
-        };
-        // A tint laid over a tab, as wide as the tab itself (an invisible copy
-        // of it) rather than its bar, fading out as the tab is deselected.
-        let tab_tint = |ix: usize| {
-            let tint_slide = tint_slide.clone();
-            div()
-                .absolute()
-                .top_0()
-                .bottom_0()
-                .left_0()
-                .flex()
-                .child(
-                    TabBar::new(("tint-width", ix))
-                        .selected_index(0)
-                        .child(tab(ix))
-                        .invisible(),
-                )
-                .with_spring(("tab-tint", ix), tint_slide, move |this, position| {
-                    let shown = tab_tint_shown(ix, position);
-                    let color = tint(position);
-                    this.bg(Hsla {
-                        a: color.a * shown,
-                        ..color
-                    })
-                })
         };
         let chat_input = cx.entity().downgrade();
         let full_tab = |ix: usize| {
@@ -1937,7 +1889,7 @@ impl Render for ChatInput {
             .absolute()
             .size_full()
         };
-        let code = div().relative().child(full_tab(0)).child(tab_tint(0));
+        let code = div().relative().child(full_tab(0));
         // The chain is laid over the start of Spec, so that it paints above
         // both Code and Spec once they slide beneath it. It is a tab on its
         // own, with no bar, since a bar draws a line along its bottom that
@@ -1962,15 +1914,14 @@ impl Render for ChatInput {
             })
             .child(measure_chain);
         // Once Code and Spec meet, Code's facing border is covered, in their
-        // purple, so the joined tab shows no outline beneath the chain. The
+        // own background, so the joined tab shows no outline beneath the chain. The
         // cover reaches past the border so that, at fractional display scales,
         // no sliver of it is left showing at its edges.
-        let seam_cover = cx.theme().tab_active.blend(tint(BOTH_TAB as f32));
+        let seam_cover = cx.theme().tab_active;
         let border = cx.theme().border;
         let spec = div()
             .relative()
             .child(full_tab(2))
-            .child(tab_tint(2))
             .with_spring("chain-join", join, move |this, joined| {
                 let joined = joined.clamp(0., 1.);
                 // What is left of the gap the chain holds open between Code
@@ -2010,14 +1961,8 @@ impl Render for ChatInput {
                     .child(seam)
                     .child(both.left(-gap - chain_width * 0.5 * joined))
             });
-        let ask = div()
-            .relative()
-            .child(full_tab(ASK_TAB))
-            .child(tab_tint(ASK_TAB));
-        let freeform = div()
-            .relative()
-            .child(full_tab(FREEFORM_TAB))
-            .child(tab_tint(FREEFORM_TAB));
+        let ask = div().relative().child(full_tab(ASK_TAB));
+        let freeform = div().relative().child(full_tab(FREEFORM_TAB));
         // What the selected tab is for, in the rest of the bar: smaller and
         // fainter than the tab labels, so it reads as a note about the tab
         // rather than another tab.
@@ -2200,10 +2145,11 @@ impl Render for ChatInput {
             // Lets UI tests find the row; inert in normal builds.
             gpui_kit::TestSupportExt::test_support(row)
         });
-        let body = div().flex().flex_col().gap_2().p_2().with_spring(
-            "body-tint",
-            tint_slide,
-            move |this, position| this.bg(tint(position)),
+        // Lets UI tests find the body; inert in normal builds. It has no
+        // colour of its own: the mode shows in the tab labels and the send
+        // button.
+        let body = gpui_kit::TestSupportExt::test_support(
+            div().id("body-tint").flex().flex_col().gap_2().p_2(),
         );
         let input_row = div().flex().flex_row().items_start().gap_2();
         let previewing = self.preview.is_some();
@@ -4250,28 +4196,8 @@ mod tests {
             "{both:?} is not between {blue:?} and {red:?}"
         );
 
-        // Rows: Code, chain, Spec, Ask, Freeform. Columns: the tint at each
-        // tab.
-        let shown = [
-            [1., 1., 0., 0., 0.],
-            [0., 1., 0., 0., 0.],
-            [0., 1., 1., 0., 0.],
-            [0., 0., 0., 1., 0.],
-            [0., 0., 0., 0., 1.],
-        ];
-        for (ix, row) in shown.iter().enumerate() {
-            for (position, expected) in row.iter().enumerate() {
-                assert_eq!(
-                    super::tab_tint_shown(ix, position as f32),
-                    *expected,
-                    "tab {ix} with the tint at {position}"
-                );
-            }
-        }
-
         // Wrapping from Freeform on to Code fades grey straight into red,
-        // never passing through another hue, and never lights up Spec, the
-        // chain, or Ask on the way.
+        // never passing through another hue.
         assert!(same(super::tint(hues, 5.), red));
         for step in 1..10 {
             let position = 4. + step as f32 / 10.;
@@ -4280,13 +4206,6 @@ mod tests {
                 (color.h - red.h).abs() < 1e-4,
                 "{color:?} at {position} is not a shade of red"
             );
-            for ix in [1, 2, 3] {
-                assert_eq!(
-                    super::tab_tint_shown(ix, position),
-                    0.,
-                    "tab {ix} at {position}"
-                );
-            }
         }
         // From Ask to Freeform, green fades to grey, keeping its hue.
         for step in 1..10 {
@@ -4297,8 +4216,6 @@ mod tests {
                 "{color:?} at {position} is not a shade of green"
             );
         }
-        assert_eq!(super::tab_tint_shown(0, 5.), 1.);
-        assert_eq!(super::tab_tint_shown(4, 5.), 0.);
     }
 
     /// With one line of text, the input is as tall as the Send button and

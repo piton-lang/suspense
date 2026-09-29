@@ -2615,12 +2615,11 @@ mod tests {
         }
     }
 
-    /// The Code and Spec tabs, each open alone, and their body are tinted as
-    /// the chat input's tab and body of that mode are, in dark and light mode,
-    /// and the tint takes no room: the tab after it, open beside it, is where
-    /// it is beside the same tab untinted.
+    /// The Code and Spec tabs, each open alone, show their mode only in their
+    /// label: neither the tab nor its body has a coloured background, in dark
+    /// or light mode, and opening one moves no other tab.
     #[gpui_kit::test]
-    async fn ribbon_mode_tabs_are_tinted_like_the_chat_inputs(cx: &mut TestAppContext) {
+    async fn ribbon_mode_tabs_have_no_coloured_background(cx: &mut TestAppContext) {
         use crate::ribbon::RibbonTab;
         use gpui_kit::component::{Theme, ThemeMode};
         cx.update(|cx| {
@@ -2691,16 +2690,14 @@ mod tests {
                     let body = area.blend(tint);
                     let quads = window.painted_quads();
                     assert!(
-                        quads
+                        !quads
                             .iter()
-                            .any(|q| q.bounds.origin.y.0 < 4.
-                                && q.background.as_solid() == Some(tint)),
-                        "{tab:?} {mode:?}: the tab isn't tinted"
+                            .any(|q| q.background.as_solid() == Some(tint)),
+                        "{tab:?} {mode:?}: the tab is tinted"
                     );
                     assert!(
-                        quads.iter().any(|q| q.background.as_solid() == Some(body)
-                            && q.bounds.size.width.0 > 1000.),
-                        "{tab:?} {mode:?}: the tab's body isn't tinted"
+                        !quads.iter().any(|q| q.background.as_solid() == Some(body)),
+                        "{tab:?} {mode:?}: the tab's body is tinted"
                     );
                 })
                 .unwrap();
