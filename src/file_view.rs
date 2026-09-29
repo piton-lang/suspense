@@ -437,6 +437,13 @@ impl FileView {
         self.editor.read(cx).value()
     }
 
+    /// Whether the editor has keyboard focus.
+    #[cfg(test)]
+    pub fn editor_focused(&self, window: &Window, cx: &App) -> bool {
+        use gpui_kit::Focusable as _;
+        self.editor.read(cx).focus_handle(cx).is_focused(window)
+    }
+
     /// Whether the popover for selected text is showing.
     #[cfg(test)]
     pub fn selection_popover_shown(&self) -> bool {

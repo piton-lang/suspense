@@ -2,6 +2,7 @@ use /lib
 use /ui
 from ./chat-input import ChatInputScope
 from ./message-list import MessageList
+from ./queue-list import QueueListScope
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/no-project import NoProjectStateScope
 from /scope/open-projects import OpenProjectsScope
@@ -153,100 +154,7 @@ shape PromptEditorShape:
         from the history. A task saved before this was recorded shows its
         system prompt as "Not recorded".
 
-    queue:
-        overview:
-            The queue holds the tasks sent while the harness is working, as the
-            @{PromptSendingScope} says, in the order they were sent unless
-            they have been moved since, and sends them one at a time, first
-            to last.
-
-        placement:
-            The queue sits along the bottom of the view, below the output and
-            directly above the chat input, with a border along its top. It is
-            not part of the header. A row saying how many prompts are queued,
-            with a chevron, expands to list each queued prompt in order, a line
-            or two of each, with a button to cancel it. Each prompt in the list
-            is numbered, with its number, text, and cancel button vertically
-            centred in its row, and the list scrolls once it gets tall, with a
-            @{ScrollbarScope}. Each time it is expanded, it opens scrolled to
-            the bottom, on the prompts queued most recently, however it was
-            scrolled when last closed. The same area holds the auto-send switch
-            and the "Send next" button.
-            The queue is shown only while it has anything in it.
-
-        cancel:
-            A queued prompt that has not been sent yet can be cancelled, which
-            removes it from the queue for good. A prompt already sent is no
-            longer in the queue.
-
-        newConversation:
-            Each queued prompt in the list has a small ghost button with a
-            sparkles icon, first of its buttons, shown as selected while the prompt will start a new
-            conversation rather than carry on the tasks', as its hidden anchor
-            records, as the @{ChatInputScope} says. Clicking it switches
-            between the two, saving the prompt again with the project. Its
-            tooltip says which the prompt does, and that clicking does the
-            other instead. The choice stays with the prompt wherever it is
-            moved in the queue.
-
-            The toggle can only make a prompt start a new conversation; it
-            can't bring back one that was left. Once New conversation has been
-            pressed for the tasks, the next task to run starts a new
-            conversation whichever prompt it is, even when the prompt it
-            marked has been moved further down or switched back to carrying
-            on.
-
-        reorder:
-            After the new conversation button, each queued prompt in the list
-            has two small ghost buttons, one with an up chevron, whose tooltip
-            says it moves the prompt up, and one with a down chevron, whose
-            tooltip says it moves the prompt down. Each swaps the prompt with
-            its neighbour above or below it, and the order is saved with the
-            project, so the queue comes back in its new order when the project
-            is opened again. Move up is disabled on the first prompt and move
-            down on the last, and both are disabled while either prompt they
-            would swap is still being saved, as its spinner shows. A prompt
-            being edited can still be moved, and the chat input's "Editing
-            queued prompt N" follows it to its new place. A move that can't be
-            saved leaves the queue as it was, and a notification titled
-            "Could not move the prompt" says why.
-
-        editing:
-            Each queued prompt in the list also has a button with a pencil icon,
-            after its move buttons and before its cancel button, whose tooltip says it edits the prompt.
-            Clicking it edits the prompt in the @{ChatInputScope}, as it says,
-            and its row is highlighted while it is being edited. While it is,
-            it is held where it is: it is never sent, and a queue waiting on it
-            waits, even with auto-send on. Saving the edit puts the new text,
-            in the mode and with the attachments it was saved with, in its
-            place in the queue, saved with the project in place of what it
-            held, then lets the queue go on as before. An edit that can't be
-            saved leaves the prompt as it was, and a notification titled
-            "Could not save the queued prompt" says why. Cancelling the edit, or
-            cancelling the prompt from the list meanwhile, leaves the queue as
-            it was, less that prompt when it was cancelled.
-
-        queueingOnPurpose:
-            A prompt queued on purpose from the chat input's send menu, while
-            the harness is free, waits at the end of the queue rather than
-            being sent at once: it goes when "Send next" is clicked, or when
-            the next task is over and auto-send is on.
-
-        autoSend:
-            A "Send next automatically" switch picks between sending the next
-            queued prompt as soon as the harness is free, and waiting. It starts
-            switched on. Switching it on while the harness is free sends the
-            next queued prompt straight away. Whenever the harness is free and
-            the queue is not empty, a "Send next" button sends the first queued
-            prompt.
-
-        persistence:
-            Queued prompts are saved with the project's data as they are queued,
-            as the @{ProjectDataScope} says. The queue is restored the first time
-            the project is opened in a launch; a restored queue waits for "Send next" rather
-            than sending on its own. A queued prompt's file is removed when it
-            is cancelled, or when it is sent, at which point it is saved to the
-            prompt history like any other prompt.
+    queue: @{QueueListScope}
 
     projects:
         Tasks, the queue, and the auto-send switch belong to their project, as

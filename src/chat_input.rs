@@ -61,7 +61,8 @@ actions!(
         PreviousMode,
         ToggleSendMenu,
         SendPreviewed,
-        StartNewConversation
+        StartNewConversation,
+        FocusEditor
     ]
 );
 
@@ -194,6 +195,9 @@ pub fn bind_keys(cx: &mut App) {
         // Ctrl+N starts a new conversation for the selected tab, as its New
         // conversation button does.
         KeyBinding::new("ctrl-n", StartNewConversation, Some(CONTEXT)),
+        // Ctrl+Shift+Up moves focus to the editor of the file whose tab is
+        // selected.
+        KeyBinding::new("ctrl-shift-up", FocusEditor, Some(CONTEXT)),
     ]);
 }
 
@@ -616,6 +620,11 @@ impl EventEmitter<TabChanged> for ChatInput {}
 pub struct NewConversation;
 
 impl EventEmitter<NewConversation> for ChatInput {}
+
+/// Emitted to move focus to the editor of the file whose tab is selected.
+pub struct FocusActiveEditor;
+
+impl EventEmitter<FocusActiveEditor> for ChatInput {}
 
 /// A number of tokens, short: "850", "42.1k", "123k", "1.2M".
 pub fn tokens_label(tokens: u64) -> String {
@@ -2320,6 +2329,7 @@ impl Render for ChatInput {
                     cx.emit(NewConversation);
                 }
             }))
+            .on_action(cx.listener(|_, _: &FocusEditor, _, cx| cx.emit(FocusActiveEditor)))
             .on_action(cx.listener(|this, _: &SendPreviewed, window, cx| {
                 if this.preview.is_some() {
                     this.submit(window, cx);

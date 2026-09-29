@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use gpui_kit::assets::IconName;
+use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -20,6 +21,7 @@ use serde_json::Value;
 use crate::file_link::OpenFile;
 use crate::harness::HarnessEvent;
 use crate::shell_paths::{self, Scope};
+use crate::subagents::{State, Subagents};
 use crate::understanding::Understanding;
 
 /// How wide the sidebar starts, and how narrow it can be dragged.
@@ -205,9 +207,14 @@ const BOX_RADIUS: Pixels = px(4.);
 /// they scroll.
 const FILES_MAX_SHARE: f32 = 0.5;
 
+/// How much of the sidebar's height the subagents can take before they
+/// scroll.
+const SUBAGENTS_MAX_SHARE: f32 = 0.3;
+
 /// Where the sidebar's panels scroll.
 pub struct Layout<'a> {
     pub files_scroll: &'a ScrollHandle,
+    pub subagents_scroll: &'a ScrollHandle,
     pub understanding_scroll: &'a ScrollHandle,
 }
 
@@ -278,6 +285,7 @@ fn placeholder(text: &'static str, cx: &App) -> Div {
 /// per constraint, opening the file it links to.
 pub fn render(
     files: &[Referenced],
+    subagents: &Subagents,
     understanding: &Understanding,
     layout: Layout,
     open: OpenFile,
@@ -333,6 +341,72 @@ pub fn render(
             list.child(placeholder("No spec files referenced yet", cx))
         })
         .children(rows);
+
+    // Each subagent the run started: a spinner while it is at work, then how
+    // it ended, beside what it was started to do; its kind and what it last
+    // did are in its tooltip.
+    let agent_rows = subagents.list.iter().enumerate().map(|(ix, agent)| {
+        let icon: AnyElement = match agent.state {
+            State::Running => Spinner::new().xsmall().into_any_element(),
+            State::Completed => Icon::new(IconName::Check)
+                .xsmall()
+                .text_color(theme.success)
+                .into_any_element(),
+            State::Failed => Icon::new(IconName::X)
+                .xsmall()
+                .text_color(theme.danger)
+                .into_any_element(),
+            State::Stopped => Icon::new(IconName::Minus)
+                .xsmall()
+                .text_color(theme.muted_foreground)
+                .into_any_element(),
+        };
+        let state = match agent.state {
+            State::Running => agent.activity.clone().unwrap_or_else(|| "Running".into()),
+            State::Completed => "Done".into(),
+            State::Failed => "Failed".into(),
+            State::Stopped => "Stopped".into(),
+        };
+        let (description, kind) = (agent.description.clone(), agent.kind.clone());
+        // Lets UI tests find each row; inert in normal builds.
+        gpui_kit::TestSupportExt::test_support(h_flex().id(("subagent", ix)))
+            .flex_none()
+            .h(ROW_HEIGHT)
+            .gap_2()
+            .text_sm()
+            .child(div().flex_none().child(icon))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .when(agent.state != State::Running, |this| {
+                        this.text_color(theme.muted_foreground)
+                    })
+                    .child(agent.description.clone()),
+            )
+            .tooltip(move |window, cx| {
+                let (description, kind, state) = (description.clone(), kind.clone(), state.clone());
+                Tooltip::element(move |_, cx| {
+                    v_flex().child(description.clone()).child(
+                        div()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(match &kind {
+                                Some(kind) => format!("{kind} · {state}"),
+                                None => state.to_string(),
+                            }),
+                    )
+                })
+                .build(window, cx)
+            })
+    });
+    // Lets UI tests find the list; inert in normal builds.
+    let agents_list = gpui_kit::TestSupportExt::test_support(v_flex().id("subagents-list"))
+        .size_full()
+        .overflow_y_scroll()
+        .track_scroll(layout.subagents_scroll)
+        .p(crate::sidebar::PADDING)
+        .children(agent_rows);
 
     let boxes = crate::theme::color(palette.ribbon_tabs);
     let constraints = understanding.rows.iter().enumerate().map(|(ix, row)| {
@@ -404,6 +478,21 @@ pub fn render(
                     cx,
                 )),
         )
+        // Only once the run has started a subagent.
+        .when(!subagents.list.is_empty(), |this| {
+            this.child(
+                find("subagents-panel", v_flex())
+                    .flex_none()
+                    .w_full()
+                    .h(files_height(subagents.list.len()))
+                    .max_h(relative(SUBAGENTS_MAX_SHARE))
+                    .child(find(
+                        "subagents-header",
+                        crate::sidebar::header("Subagents", cx),
+                    ))
+                    .child(body("subagents", layout.subagents_scroll, agents_list, cx)),
+            )
+        })
         .child(
             find("understanding-panel", v_flex())
                 .flex_1()

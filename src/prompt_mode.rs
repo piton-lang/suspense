@@ -59,7 +59,8 @@ use gpui_kit::*;
 use crate::activity::{Job, JobKind};
 use crate::attached_image::{self, AttachedImage};
 use crate::chat_input::{
-    self, ChatInput, NewConversation, PreviewPrompt, QueuedEdit, SendMode, Submit, TabChanged,
+    self, ChatInput, FocusActiveEditor, NewConversation, PreviewPrompt, QueuedEdit, SendMode,
+    Submit, TabChanged,
 };
 use crate::commit_notes;
 use crate::conversations;
@@ -80,6 +81,7 @@ use crate::raw_prompt::{Given, RawPrompt, RawPromptView};
 use crate::referenced_spec;
 use crate::scrollbar::{self, SetLock};
 use crate::selection_popover::{SelectionAction, selection_popover};
+use crate::subagents::Subagents;
 use crate::system_prompts;
 use crate::task_table::{
     self, KIND_WIDTH, Layout as TableLayout, OutputRow, Reply, STATUS_WIDTH, Steps, TableSync,
@@ -267,6 +269,8 @@ struct PromptTask {
     understanding: Understanding,
     /// Follows its understanding file while it runs.
     _understanding_watch: Task<()>,
+    /// The subagents its run started, for the right sidebar.
+    subagents: Subagents,
     /// How it was sent, to send it again the same way.
     sent: SentAs,
     /// Its spec slices are shown, rather than collapsed.
@@ -282,6 +286,8 @@ struct PromptTask {
     /// it had been sent there, and the batch actions leave it out. Kept in
     /// its history record.
     marked_done: bool,
+    /// The conversation its run was in, once the harness has said.
+    session: Option<SharedString>,
 }
 
 /// Cancels a task under way, from its Cancel button: see
@@ -491,11 +497,13 @@ impl PromptTask {
             references: referenced_spec::References::default(),
             understanding: Understanding::default(),
             _understanding_watch: Task::ready(()),
+            subagents: Subagents::default(),
             sent: SentAs::default(),
             slices_open: false,
             cancel: None,
             given: None,
             marked_done: false,
+            session: None,
         }
     }
 
@@ -548,7 +556,11 @@ impl PromptTask {
 
     /// Folds a harness event into the task's output and status.
     fn apply(&mut self, event: HarnessEvent) {
+        if let HarnessEvent::Session(id) = &event {
+            self.session.get_or_insert_with(|| id.clone().into());
+        }
         self.references.apply(&event);
+        self.subagents.apply(&event);
         match self.reply.apply(event) {
             Some(error) => self.fail(error),
             None if self.reply.done && self.status == TaskStatus::Running => {
@@ -570,6 +582,7 @@ impl PromptTask {
     /// were cancelled with it.
     fn cancel(&mut self) {
         self.status = TaskStatus::Cancelled;
+        self.subagents.end();
         self.reply.cancel();
     }
 
@@ -581,6 +594,7 @@ impl PromptTask {
     /// The run is over. One that ended without a result, as when the harness
     /// was stopped, failed, and nothing still running in it finished.
     fn end(&mut self) {
+        self.subagents.end();
         // Cancelled, what it printed before it stopped is kept, and any call
         // in it still running was cancelled with it.
         if self.status == TaskStatus::Cancelled {
@@ -640,6 +654,9 @@ struct HistoryList {
     /// The item whose checkbox was clicked last, the far end of a
     /// shift-click's range.
     last_selected: Option<usize>,
+    /// Its items are grouped by the conversation they ran in, each group
+    /// headed by a divider, as previous tasks are.
+    by_session: bool,
 }
 
 /// How many items a history list was laid out with, which was open, and what
@@ -653,6 +670,8 @@ struct HistoryLaidOut {
     slices_open: bool,
     table: TableSync,
     markdown: u64,
+    /// The items that began a conversation, each heading a group.
+    groups: Vec<usize>,
 }
 
 /// What a row of a history list shows.
@@ -678,6 +697,7 @@ impl HistoryList {
         id_base: usize,
         collapse_steps: bool,
         selectable: bool,
+        by_session: bool,
     ) -> Self {
         Self {
             toggle: ids.0,
@@ -697,17 +717,19 @@ impl HistoryList {
             selectable,
             selected: BTreeSet::new(),
             last_selected: None,
+            by_session,
         }
     }
 
-    /// The previous tasks, whose tables show whole, and which can be
-    /// selected to be sent to the other mode together.
+    /// The previous tasks, whose tables show whole, which can be selected to
+    /// be sent to the other mode together, grouped by conversation.
     fn tasks() -> Self {
         Self::new(
             ("history-toggle", "task-list", "history-task"),
             ("previous task", "previous tasks", "Back to the latest task"),
             0,
             false,
+            true,
             true,
         )
     }
@@ -724,7 +746,24 @@ impl HistoryList {
             ASK_HISTORY_IX,
             true,
             false,
+            false,
         )
+    }
+
+    /// The items of `tasks` that began a conversation: the first, and each
+    /// whose conversation isn't the one before it. One whose conversation
+    /// isn't known, as when it had no record, stays in the group before it.
+    fn session_groups(tasks: &[PromptTask]) -> Vec<usize> {
+        let mut last = None;
+        (0..tasks.len())
+            .filter(|&ix| match &tasks[ix].session {
+                Some(session) if last != Some(session) => {
+                    last = Some(session);
+                    true
+                }
+                _ => ix == 0,
+            })
+            .collect()
     }
 
     /// The checkbox of `item` was clicked: it is selected or deselected, or,
@@ -945,6 +984,36 @@ impl HistoryList {
                     .update(&self.rows, open + 3, task_ix, reply, layout, cx);
             }
         }
+        // An item that begins a conversation is headed by a divider, so its
+        // heading is measured again whenever that changes, as when a running
+        // task reports a new one.
+        let groups = if self.by_session {
+            Self::session_groups(tasks)
+        } else {
+            Vec::new()
+        };
+        {
+            let mut laid_out = self.laid_out.borrow_mut();
+            if laid_out.groups != groups {
+                let table = laid_out.table.layout().map_or(0, |layout| layout.items());
+                let row_of = |item: usize| match open {
+                    Some(open) if item > open => item + Self::block(table),
+                    _ => item,
+                };
+                let changed: BTreeSet<usize> = laid_out
+                    .groups
+                    .iter()
+                    .chain(&groups)
+                    .filter(|item| laid_out.groups.contains(item) != groups.contains(item))
+                    .copied()
+                    .collect();
+                for item in changed.into_iter().filter(|&item| item < count) {
+                    let row = row_of(item);
+                    self.rows.remeasure(row..row + 1);
+                }
+                laid_out.groups = groups.clone();
+            }
+        }
         if self.scroll_to_latest.take() {
             self.rows.scroll_to_end();
         }
@@ -1090,10 +1159,24 @@ impl HistoryList {
                             .flex_none()
                             .text_color(muted),
                         );
+                    let group = groups.binary_search(&item).ok();
                     // An open item's line is below its end instead.
                     div()
                         .w_full()
                         .when(!is_open, |item| item.border_b_1().border_color(border))
+                        .children(group.map(|group| {
+                            h_flex()
+                                .id(("history-session", task_ix))
+                                .gap_2()
+                                .px_3()
+                                .pt(if group == 0 { px(6.) } else { px(14.) })
+                                .pb_1()
+                                .border_b_1()
+                                .border_color(border)
+                                .text_xs()
+                                .text_color(muted)
+                                .child(format!("Session {}", group + 1))
+                        }))
                         .child(trigger)
                         .into_any_element()
                 }
@@ -1588,6 +1671,7 @@ impl Session {
 /// view's right edge.
 struct RefsClosing {
     files: Vec<referenced_spec::Referenced>,
+    subagents: Subagents,
     understanding: Understanding,
     /// The width it slides closed from.
     width: Pixels,
@@ -1604,6 +1688,33 @@ struct FileTab {
 
 /// Dragged by the answer drawer's top edge to resize it.
 struct DrawerResize;
+
+/// A queued prompt being dragged to a new place in the queue, shown under
+/// the pointer as a line of its text.
+#[derive(Clone)]
+struct QueuedDrag {
+    id: usize,
+    text: SharedString,
+}
+
+impl Render for QueuedDrag {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        div()
+            .max_w(px(320.))
+            .px_2()
+            .py_1()
+            .rounded_md()
+            .border_1()
+            .border_color(theme.drag_border)
+            .bg(theme.popover)
+            .text_color(theme.popover_foreground)
+            .text_sm()
+            .shadow_md()
+            .line_clamp(1)
+            .child(self.text.clone())
+    }
+}
 
 /// What is open in the answer drawer: the question open onto its table, and
 /// which expanding of the previous answers is showing.
@@ -1799,6 +1910,7 @@ pub struct PromptMode {
     refs_split: Entity<ResizableState>,
     refs_scroll: ScrollHandle,
     understanding_scroll: ScrollHandle,
+    subagents_scroll: ScrollHandle,
     /// The task view's width beside the referenced spec sidebar, as last laid
     /// out.
     history_width: Rc<Cell<Pixels>>,
@@ -1952,6 +2064,11 @@ impl PromptMode {
             cx.subscribe(&chat_input, |this, _, _: &NewConversation, cx| {
                 this.new_conversation(cx)
             }),
+            cx.subscribe_in(
+                &chat_input,
+                window,
+                |this, _, _: &FocusActiveEditor, window, cx| this.focus_open_file(window, cx),
+            ),
             // A row whose markdown finished parsing is measured again.
             cx.observe_global::<MarkdownStates>(|_, cx| cx.notify()),
             cx.observe_global::<ProjectDirectory>(|this, cx| this.project_changed(cx)),
@@ -1986,6 +2103,7 @@ impl PromptMode {
             refs_split: cx.new(|_| ResizableState::default()),
             refs_scroll: ScrollHandle::new(),
             understanding_scroll: ScrollHandle::new(),
+            subagents_scroll: ScrollHandle::new(),
             history_width: Rc::default(),
             _pending: Task::ready(()),
             feed: None,
@@ -2102,6 +2220,7 @@ impl PromptMode {
         // The project switched to shows just as it was left, sliding nothing
         // in: its tabs as they were, and the referenced spec sidebar as it
         // has it.
+        self.refs_shown = false;
         self.refs_shown = self.refs_wanted();
         self.refs_opened = None;
         self.refs_closing = None;
@@ -2301,6 +2420,14 @@ impl PromptMode {
     pub fn focus_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.chat_input
             .update(cx, |chat_input, cx| chat_input.focus(window, cx));
+    }
+
+    /// Moves keyboard focus into the editor of the file in the selected tab,
+    /// and nowhere while Chat is selected.
+    fn focus_open_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(view) = self.open_file_view() {
+            view.update(cx, |view, cx| view.focus_editor(window, cx));
+        }
     }
 
     /// Inserts a harness mention into the chat input and focuses it.
@@ -2543,9 +2670,18 @@ impl PromptMode {
                 this.update(cx, |this, cx| this.select_tab(ix.checked_sub(1), cx))
                     .ok();
             })
-            .child(Tab::new().label("Chat").when(self.chat_running(), |tab| {
-                tab.suffix(Spinner::new().xsmall())
-            }))
+            // The spinner sits within the tab's padding, beside its label, as
+            // a file tab's unsaved dot does; a suffix would touch its edge.
+            .child(
+                Tab::new().child(
+                    h_flex()
+                        .gap_1p5()
+                        .child("Chat")
+                        .when(self.chat_running(), |this| {
+                            this.child(Spinner::new().xsmall())
+                        }),
+                ),
+            )
             .children(file_tabs);
         // Lets UI tests find the tab bar; inert in normal builds.
         gpui_kit::TestSupportExt::test_support(div().id("body-tabs-row"))
@@ -3693,33 +3829,55 @@ impl PromptMode {
         cx.notify();
     }
 
-    /// Moves the queued prompt `id` one place earlier, `up`, or later in the
-    /// queue, trading places with its neighbour there, on disk too. Both must
-    /// be saved.
-    fn move_queued(&mut self, id: usize, up: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(ix) = self.queue.iter().position(|item| item.id == id) else {
+    /// Moves the queued prompt `id` to place `to` in the queue, as dropping
+    /// it there does, walking it a neighbour at a time so each step renames
+    /// just two files. It moves only once it and every prompt it passes are
+    /// saved; a step that can't be saved puts back those already taken.
+    fn move_queued(&mut self, id: usize, to: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(from) = self.queue.iter().position(|item| item.id == id) else {
             return;
         };
-        let Some(other) = (if up { ix.checked_sub(1) } else { Some(ix + 1) })
-            .filter(|&other| other < self.queue.len())
-        else {
-            return;
-        };
-        let (low, high) = (ix.min(other), ix.max(other));
-        let (head, tail) = self.queue.split_at_mut(high);
-        let (Some(a), Some(b)) = (head[low].saved.as_mut(), tail[0].saved.as_mut()) else {
-            return;
-        };
-        if let Err(err) = prompt_queue::swap(a, b) {
-            window.push_notification(
-                Notification::error(format!("{err:#}")).title("Could not move the prompt"),
-                cx,
-            );
+        if to == from
+            || to >= self.queue.len()
+            || !self.queue[from.min(to)..=from.max(to)]
+                .iter()
+                .all(|item| item.saved.is_some())
+        {
             return;
         }
-        self.queue.swap(low, high);
+        let toward = |at: usize, end: usize| if end > at { at + 1 } else { at - 1 };
+        let mut at = from;
+        while at != to {
+            let next = toward(at, to);
+            if let Err(err) = self.swap_queued(at, next) {
+                while at != from {
+                    let back = toward(at, from);
+                    self.swap_queued(at, back).ok();
+                    at = back;
+                }
+                window.push_notification(
+                    Notification::error(format!("{err:#}")).title("Could not move the prompt"),
+                    cx,
+                );
+                cx.notify();
+                return;
+            }
+            at = next;
+        }
         self.sync_editing_position(cx);
         cx.notify();
+    }
+
+    /// Trades the saved queued prompts at `a` and `b` places, files and all.
+    fn swap_queued(&mut self, a: usize, b: usize) -> Result<()> {
+        let (low, high) = (a.min(b), a.max(b));
+        let (head, tail) = self.queue.split_at_mut(high);
+        let (Some(a), Some(b)) = (head[low].saved.as_mut(), tail[0].saved.as_mut()) else {
+            anyhow::bail!("the prompt is still being saved");
+        };
+        prompt_queue::swap(a, b)?;
+        self.queue.swap(low, high);
+        Ok(())
     }
 
     /// Removes a prompt that has not been sent from the queue, and its file.
@@ -3834,13 +3992,25 @@ impl PromptMode {
     }
 
     /// Whether the referenced spec sidebar should show: while a task from the
-    /// Code, Chain, or Spec tab runs. A Freeform prompt references nothing.
+    /// Code, Chain, or Spec tab runs, once it has anything to show. A
+    /// Freeform prompt references nothing.
     fn refs_wanted(&self) -> bool {
         self.working
             && self
                 .tasks
                 .last()
                 .is_some_and(|task| !matches!(task.mode, Some(SendMode::Ask | SendMode::Freeform)))
+            // It waits for something to show, and once out stays out until
+            // the run is over.
+            && (self.refs_shown || self.refs_have_contents())
+    }
+
+    /// Whether the running task has anything for the sidebar to show: a
+    /// spec file referenced, a constraint understood, or a subagent started.
+    fn refs_have_contents(&self) -> bool {
+        self.tasks.last().is_some_and(|task| {
+            !task.understanding.rows.is_empty() || !task.subagents.list.is_empty()
+        }) || !self.referenced_files().is_empty()
     }
 
     /// The spec files the running task references.
@@ -3858,6 +4028,14 @@ impl PromptMode {
     }
 
     /// The understanding of the running task, as last read.
+    /// The subagents the running task started.
+    fn running_subagents(&self) -> Subagents {
+        self.tasks
+            .last()
+            .map(|task| task.subagents.clone())
+            .unwrap_or_default()
+    }
+
     fn running_understanding(&self) -> Understanding {
         self.tasks
             .last()
@@ -3933,6 +4111,7 @@ impl PromptMode {
             } else {
                 self.refs_closing = Some(RefsClosing {
                     files: self.referenced_files(),
+                    subagents: self.running_subagents(),
                     understanding: self.running_understanding(),
                     width: self.refs_width.get(),
                     slide,
@@ -3953,14 +4132,17 @@ impl PromptMode {
         });
         let host_width = self.history_width.get();
         let contents = |files: &[referenced_spec::Referenced],
+                        subagents: &Subagents,
                         understanding: &Understanding,
                         this: &Self,
                         cx: &mut Context<Self>| {
             referenced_spec::render(
                 files,
+                subagents,
                 understanding,
                 referenced_spec::Layout {
                     files_scroll: &this.refs_scroll,
+                    subagents_scroll: &this.subagents_scroll,
                     understanding_scroll: &this.understanding_scroll,
                 },
                 this.file_opener(cx),
@@ -3973,6 +4155,7 @@ impl PromptMode {
             .map(|(n, _)| n);
         if shown {
             let files = self.referenced_files();
+            let subagents = self.running_subagents();
             let understanding = self.running_understanding();
             // Rows just added or changed fade back.
             if understanding.fading() {
@@ -3987,7 +4170,7 @@ impl PromptMode {
                     ("refs-grow", n),
                     grow,
                     width,
-                    contents(&files, &understanding, self, cx),
+                    contents(&files, &subagents, &understanding, self, cx),
                 );
                 return host.child(covered_right(history, pane, host_width, cx));
             }
@@ -3995,7 +4178,7 @@ impl PromptMode {
             let sidebar = div()
                 .size_full()
                 .on_prepaint(move |bounds, _, _| refs_width.set(bounds.size.width))
-                .child(contents(&files, &understanding, self, cx));
+                .child(contents(&files, &subagents, &understanding, self, cx));
             return host.child(
                 h_resizable("refs-split")
                     .with_state(&self.refs_split)
@@ -4016,13 +4199,14 @@ impl PromptMode {
             let (width, n) = (closing.width, closing.slide);
             let shrink = SpringAnimation::new(PANE_SPRING).to(px(0.)).from(width);
             let files = closing.files.clone();
+            let subagents = closing.subagents.clone();
             let understanding = closing.understanding.clone();
             let pane = slide_pane(
                 ("refs-slide-out", n),
                 ("refs-shrink", n),
                 shrink,
                 width,
-                contents(&files, &understanding, self, cx),
+                contents(&files, &subagents, &understanding, self, cx),
             );
             return host.child(covered_right(history, pane, host_width, cx));
         }
@@ -5902,13 +6086,23 @@ impl PromptMode {
                 )
         };
 
-        // Two prompts trade places once both are saved.
-        let movable = |a: usize, b: usize| {
+        // Where each prompt is and whether it is saved, for telling where a
+        // dragged prompt may be dropped: it moves only past saved prompts.
+        let saved: Rc<Vec<(usize, bool)>> = Rc::new(
             self.queue
-                .get(a)
-                .zip(self.queue.get(b))
-                .is_some_and(|(a, b)| a.saved.is_some() && b.saved.is_some())
+                .iter()
+                .map(|item| (item.id, item.saved.is_some()))
+                .collect(),
+        );
+        let droppable = |saved: &[(usize, bool)], dragged: usize, to: usize| {
+            saved
+                .iter()
+                .position(|&(id, _)| id == dragged)
+                .is_some_and(|from| {
+                    from != to && saved[from.min(to)..=from.max(to)].iter().all(|&(_, ok)| ok)
+                })
         };
+        let drop_target = theme.drop_target;
         let list = expanded.then(|| {
             v_flex()
                 .id("queue-list")
@@ -5917,14 +6111,78 @@ impl PromptMode {
                 .track_scroll(&self.queue_scroll)
                 .px_4()
                 .pb_2()
-                .gap_1()
                 .children(self.queue.iter().enumerate().map(|(ix, item)| {
                     let id = item.id;
                     let editing = self.editing_queued == Some(id);
+                    // Prompts sharing a context are joined by a line down
+                    // the gutter: each one after the first carries on.
+                    let joins_above = ix > 0 && !item.new_conversation;
+                    let joins_below = self.queue.get(ix + 1).is_some_and(|next| !next.new_conversation);
+                    let context_line = div()
+                        .flex_none()
+                        .self_stretch()
+                        .relative()
+                        .w_1p5()
+                        .when(joins_above, |gutter| {
+                            gutter.child(
+                                div().absolute().top_0().h_1_2().left(px(2.)).w(px(1.)).bg(border),
+                            )
+                        })
+                        .when(joins_below, |gutter| {
+                            gutter.child(
+                                div().absolute().bottom_0().h_1_2().left(px(2.)).w(px(1.)).bg(border),
+                            )
+                        })
+                        .when(joins_above || joins_below, |gutter| {
+                            gutter.child(
+                                div()
+                                    .absolute()
+                                    .top(relative(0.5))
+                                    .mt(px(-2.5))
+                                    .size(px(5.))
+                                    .rounded_full()
+                                    .bg(border),
+                            )
+                        });
                     let row = h_flex()
                         .id(("queued-prompt", ix))
                         .gap_2()
+                        .py_0p5()
                         .when(editing, |row| row.bg(theme.list_active))
+                        // Lit where the dragged prompt may land.
+                        .drag_over::<QueuedDrag>({
+                            let saved = saved.clone();
+                            move |style, drag, _, _| {
+                                if droppable(&saved, drag.id, ix) {
+                                    style.bg(drop_target)
+                                } else {
+                                    style
+                                }
+                            }
+                        })
+                        .on_drop(cx.listener(move |this, drag: &QueuedDrag, window, cx| {
+                            this.move_queued(drag.id, ix, window, cx)
+                        }))
+                        .when(item.saved.is_some(), |row| {
+                            row.cursor_grab().on_drag(
+                                QueuedDrag {
+                                    id,
+                                    text: item.text.clone().into(),
+                                },
+                                |drag, _, _, cx| cx.new(|_| drag.clone()),
+                            )
+                        })
+                        .child(context_line)
+                        .child(
+                            Icon::new(IconName::GripVertical)
+                                .xsmall()
+                                .flex_none()
+                                .text_color(if item.saved.is_some() {
+                                    muted
+                                } else {
+                                    transparent_black()
+                                }),
+                        )
                         .child(
                             div()
                                 .flex_none()
@@ -5950,40 +6208,16 @@ impl PromptMode {
                             row.child(div().flex_none().child(Spinner::new().small()))
                         })
                         .child(
-                            Button::new(("new-conversation-queued", ix))
-                                .ghost()
+                            Switch::new(("new-conversation-queued", ix))
                                 .xsmall()
-                                .icon(IconName::Sparkles)
-                                .selected(item.new_conversation)
+                                .checked(item.new_conversation)
                                 .tooltip(if item.new_conversation {
                                     "Starts a new conversation; click to carry on the conversation instead"
                                 } else {
                                     "Carries on the conversation; click to start a new one instead"
                                 })
-                                .on_click(cx.listener(move |this, _, _, cx| {
+                                .on_click(cx.listener(move |this, _: &bool, _, cx| {
                                     this.toggle_queued_new_conversation(id, cx)
-                                })),
-                        )
-                        .child(
-                            Button::new(("move-queued-up", ix))
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::ChevronUp)
-                                .tooltip("Move this prompt up")
-                                .disabled(ix == 0 || !movable(ix - 1, ix))
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.move_queued(id, true, window, cx)
-                                })),
-                        )
-                        .child(
-                            Button::new(("move-queued-down", ix))
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::ChevronDown)
-                                .tooltip("Move this prompt down")
-                                .disabled(ix + 1 >= count || !movable(ix, ix + 1))
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.move_queued(id, false, window, cx)
                                 })),
                         )
                         .child(
@@ -6882,11 +7116,12 @@ mod tests {
                 .unwrap();
         };
         settle(cx);
+        // With nothing to show yet, it stays in.
         cx.update_window(handle, |_, window, _| {
-            assert!(window.try_find("understanding-list").is_some());
-            assert!(window.try_find(("understanding-row", 0usize)).is_none());
+            assert!(window.try_find("referenced-files").is_none());
         })
         .unwrap();
+        prompt_mode.read_with(cx, |this, _| assert!(!this.refs_shown));
 
         std::fs::create_dir_all(file.parent().unwrap()).unwrap();
         std::fs::write(
@@ -7950,6 +8185,31 @@ mod tests {
 
     /// A task from the history replays its recorded output into the task it
     /// was; one with no record is shown as not recorded, with nothing pending.
+    /// Previous tasks are grouped by the conversation they ran in: a group
+    /// starts wherever the conversation changes, and a task whose
+    /// conversation isn't known stays with the group before it.
+    #[test]
+    fn previous_tasks_group_by_session() {
+        let task = |session: Option<&str>| {
+            let mut task = PromptTask::new("Do it".into());
+            if let Some(session) = session {
+                task.apply(HarnessEvent::Session(session.into()));
+            }
+            task
+        };
+        let tasks = [
+            task(None),
+            task(Some("a")),
+            task(Some("a")),
+            task(None),
+            task(Some("b")),
+            task(Some("a")),
+        ];
+        assert_eq!(super::HistoryList::session_groups(&tasks), [0, 1, 4, 5]);
+        assert_eq!(super::HistoryList::session_groups(&tasks[1..]), [0, 3, 4]);
+        assert!(super::HistoryList::session_groups(&[]).is_empty());
+    }
+
     #[test]
     fn restored_tasks_replay_their_records() {
         let mut record = RunRecord {
@@ -8522,6 +8782,58 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// Ctrl+Shift+Up in the chat input moves focus to the editor of the file
+    /// whose tab is selected, and leaves it where it is while Chat is.
+    #[gpui_kit::test]
+    async fn ctrl_shift_up_focuses_the_selected_file(cx: &mut TestAppContext) {
+        let dir =
+            std::env::temp_dir().join(format!("suspense-ctrl-shift-up-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("notes.md");
+        std::fs::write(&file, "# Notes\n").unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| {
+            crate::chat_input::bind_keys(cx);
+            ProjectDirectory::set(dir.clone(), cx)
+        });
+        cx.run_until_parked();
+        let chat = prompt_mode.read_with(cx, |this, _| this.chat_input_view());
+        let press = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                chat.update(cx, |input, cx| input.focus_editor_for_test(window, cx));
+                window.press("ctrl-shift-up", cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        };
+
+        // With Chat selected, the chat input keeps focus.
+        press(cx);
+        cx.update_window(handle, |_, window, cx| {
+            assert!(chat.read(cx).is_focused(window, cx));
+        })
+        .unwrap();
+
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| this.open_file(file.clone(), window, cx))
+        })
+        .unwrap();
+        cx.run_until_parked();
+        press(cx);
+        let view = prompt_mode.read_with(cx, |this, _| this.open_file_view().unwrap());
+        cx.update_window(handle, |_, window, cx| {
+            assert!(
+                view.read(cx).editor_focused(window, cx),
+                "the editor isn't focused"
+            );
+            assert!(!chat.read(cx).is_focused(window, cx));
+        })
+        .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// Ctrl+N in the chat input starts a new conversation, as New
     /// conversation does, and whether a task starts one is part of it: the
     /// first queued prompt's hidden anchor records it, passing it on to the
@@ -8638,7 +8950,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// Queued prompts can be moved up and down the queue, and each toggled to
+    /// Queued prompts can be dragged up and down the queue, and each toggled to
     /// start a new conversation or carry on the tasks', all kept with the
     /// project.
     #[gpui_kit::test]
@@ -8662,6 +8974,25 @@ mod tests {
             .unwrap();
             cx.run_until_parked();
         };
+        // Drags row `from` by the pointer and drops it on row `to`.
+        let drag = |cx: &mut TestAppContext, from: usize, to: usize| {
+            let centre = |cx: &mut TestAppContext, ix: usize| {
+                cx.update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    window.find(("queued-prompt", ix)).bounds().center()
+                })
+                .unwrap()
+            };
+            let (start, end) = (centre(cx, from), centre(cx, to));
+            let mut visual = gpui_kit::VisualTestContext::from_window(handle, cx);
+            visual.simulate_mouse_move(start, None, Default::default());
+            visual.simulate_mouse_down(start, gpui_kit::MouseButton::Left, Default::default());
+            let halfway = start + (end - start) / 2.;
+            visual.simulate_mouse_move(halfway, gpui_kit::MouseButton::Left, Default::default());
+            visual.simulate_mouse_move(end, gpui_kit::MouseButton::Left, Default::default());
+            visual.simulate_mouse_up(end, gpui_kit::MouseButton::Left, Default::default());
+            cx.run_until_parked();
+        };
         let on_disk = |dir: &std::path::Path| {
             prompt_queue::load(dir)
                 .into_iter()
@@ -8669,22 +9000,35 @@ mod tests {
                 .collect::<Vec<_>>()
         };
 
-        // The first can't move up, nor the last down.
-        click(cx, "move-queued-up", 0);
-        click(cx, "move-queued-down", 2);
+        // Dropped on itself, it stays put.
+        drag(cx, 1, 1);
         assert_eq!(
             prompt_mode.read_with(cx, |this, _| this.queued_texts()),
             ["first", "second", "third"]
         );
 
-        click(cx, "move-queued-down", 0);
+        drag(cx, 0, 1);
         assert_eq!(
             prompt_mode.read_with(cx, |this, _| this.queued_texts()),
             ["second", "first", "third"]
         );
-        click(cx, "move-queued-up", 2);
+        // Past more than one, it takes the place it is dropped on.
+        drag(cx, 1, 2);
+        drag(cx, 0, 2);
         assert_eq!(
             prompt_mode.read_with(cx, |this, _| this.queued_texts()),
+            ["third", "first", "second"]
+        );
+        drag(cx, 2, 0);
+        assert_eq!(
+            prompt_mode.read_with(cx, |this, _| this.queued_texts()),
+            ["second", "third", "first"]
+        );
+        assert_eq!(
+            on_disk(&dir)
+                .into_iter()
+                .map(|(text, _)| text)
+                .collect::<Vec<_>>(),
             ["second", "third", "first"]
         );
         click(cx, "new-conversation-queued", 1);
@@ -8697,7 +9041,7 @@ mod tests {
             ]
         );
         // Moved, it keeps its mark; toggled again, it carries on.
-        click(cx, "move-queued-up", 1);
+        drag(cx, 1, 0);
         assert_eq!(on_disk(&dir)[0], ("third".to_string(), Some(true)));
         click(cx, "new-conversation-queued", 0);
         assert_eq!(on_disk(&dir)[0], ("third".to_string(), Some(false)));

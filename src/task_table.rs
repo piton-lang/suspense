@@ -795,7 +795,10 @@ impl Reply {
             | HarnessEvent::Limits(_)
             | HarnessEvent::Model(_)
             | HarnessEvent::ToolCalled { .. }
-            | HarnessEvent::ToolOutput { .. } => return None,
+            | HarnessEvent::ToolOutput { .. }
+            | HarnessEvent::SubagentStarted { .. }
+            | HarnessEvent::SubagentProgress { .. }
+            | HarnessEvent::SubagentEnded { .. } => return None,
         }
         self.refresh();
         None

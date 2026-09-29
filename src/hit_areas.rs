@@ -81,16 +81,14 @@ pub fn wins_at(bounds: Bounds<Pixels>, point: Point<Pixels>, cx: &App) -> bool {
     })
 }
 
-/// Draws the line of a resize edge in group `group`, as gpui-kit does, and
+/// Draws the line of a resize edge in group `group`, as gpui-kit does, in the
+/// accent while it is hovered or dragged, as the git panel's edge is, and
 /// notes the edge's hit area, which reaches [`RESIZE_REACH`] either side of it.
 pub fn resize_edges(group: &'static str) -> ResizeHandleRenderer {
     Rc::new(move |edge: &ResizeHandleContext, _, cx| {
         let theme = cx.theme();
-        let color = if edge.is_active() {
-            theme.ring
-        } else {
-            theme.border
-        };
+        let ring = theme.ring;
+        let color = if edge.is_active() { ring } else { theme.border };
         let horizontal = edge.axis() == Axis::Horizontal;
         let report = canvas(
             |_, _, _| {},
@@ -119,6 +117,8 @@ pub fn resize_edges(group: &'static str) -> ResizeHandleRenderer {
                 .relative()
                 .flex_none()
                 .bg(color)
+                // gpui-kit's handle, the strip around the line, is the group.
+                .group_hover("handle", |line| line.bg(ring))
                 .when(horizontal, |line| line.h_full().w(px(1.)))
                 .when(!horizontal, |line| line.w_full().h(px(1.)))
                 .child(report)

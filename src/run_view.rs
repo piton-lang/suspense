@@ -151,6 +151,15 @@ impl RunView {
         &self.project_dir
     }
 
+    /// Whether it can be stopped: a target running, with its Stop button.
+    /// While it can, it can't be closed, only minimized or stopped.
+    pub fn can_stop(&self) -> bool {
+        matches!(
+            &self.holding,
+            Holding::Running { status, .. } if *status == RunStatus::Running
+        )
+    }
+
     pub fn is_running(&self) -> bool {
         match &self.holding {
             Holding::Finding { step, .. } => {
@@ -490,17 +499,20 @@ impl RunView {
                     .tooltip(minimize_tip)
                     .on_click(cx.listener(|_, _, _, cx| cx.emit(MinimizeRun))),
             )
-            .child(
-                Button::new("run-close")
-                    .ghost()
-                    .small()
-                    .icon(IconName::X)
-                    .tooltip("Close, stopping anything still going")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.stop_all();
-                        cx.emit(CloseRun);
-                    })),
-            )
+            // What can be stopped can't be closed: only minimized or stopped.
+            .when(!self.can_stop(), |this| {
+                this.child(
+                    Button::new("run-close")
+                        .ghost()
+                        .small()
+                        .icon(IconName::X)
+                        .tooltip("Close, stopping anything still going")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.stop_all();
+                            cx.emit(CloseRun);
+                        })),
+                )
+            })
     }
 
     fn render_finding(&self, cx: &mut Context<Self>) -> AnyElement {

@@ -81,6 +81,25 @@ pub enum HarnessEvent {
         compiled: String,
     },
     Failed(String),
+    /// The run started a subagent, which it counts as still at work until
+    /// the subagent ends.
+    SubagentStarted {
+        id: String,
+        /// What it was started to do.
+        description: String,
+        /// Which kind of agent it is, such as Explore or Plan, when known.
+        kind: Option<String>,
+    },
+    /// What a running subagent is doing now.
+    SubagentProgress {
+        id: String,
+        activity: String,
+    },
+    /// A subagent ended: completed, failed, or stopped.
+    SubagentEnded {
+        id: String,
+        state: SubagentState,
+    },
     /// How many tokens the conversation's context holds, as of the model's
     /// latest reply: all it was given, cached or not, and what it wrote.
     Usage {
@@ -97,6 +116,14 @@ pub enum HarnessEvent {
     Limits(Vec<PlanLimit>),
     /// The model the run uses.
     Model(String),
+}
+
+/// How a subagent ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SubagentState {
+    Completed,
+    Failed,
+    Stopped,
 }
 
 /// A conversation an earlier run reported, for a run to carry on.
@@ -543,11 +570,15 @@ fn image_args(agent: Agent, paths: &[PathBuf]) -> Vec<std::ffi::OsString> {
 /// finishes what it is doing, and says so by replaying it: one taken in while
 /// it is still at work joins what it is doing, and is answered by the same
 /// result.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Messages {
     sent: usize,
     taken: usize,
     results: usize,
+    /// The subagents started and not yet ended. While any is at work the
+    /// run goes on, however many results it has reported: the harness
+    /// answers again once they end.
+    subagents: std::collections::HashSet<String>,
 }
 
 impl Default for Messages {
@@ -556,6 +587,7 @@ impl Default for Messages {
             sent: 1,
             taken: 0,
             results: 0,
+            subagents: Default::default(),
         }
     }
 }
@@ -582,7 +614,22 @@ impl Messages {
             }
             Some("result") => {
                 self.results += 1;
-                Some(self.taken >= self.sent || self.results >= self.sent)
+                Some(
+                    self.subagents.is_empty()
+                        && (self.taken >= self.sent || self.results >= self.sent),
+                )
+            }
+            Some("system") => {
+                match subagent_event(line) {
+                    Some(HarnessEvent::SubagentStarted { id, .. }) => {
+                        self.subagents.insert(id);
+                    }
+                    Some(HarnessEvent::SubagentEnded { id, .. }) => {
+                        self.subagents.remove(&id);
+                    }
+                    _ => {}
+                }
+                None
             }
             _ => None,
         }
@@ -1283,6 +1330,40 @@ fn tool_call(
     events
 }
 
+/// The subagent event one of Claude Code's `system` reports on its tasks
+/// stands for. Only a task started of the `local_agent` kind is a subagent,
+/// rather than a shell command run in the background; later reports on a
+/// task don't say its kind, so they are given for every task, and are for a
+/// subagent only where their id is one that started as one.
+fn subagent_event(event: &Value) -> Option<HarnessEvent> {
+    if str_at(event, "/type").as_deref() != Some("system") {
+        return None;
+    }
+    let id = str_at(event, "/task_id")?;
+    match str_at(event, "/subtype").as_deref()? {
+        "task_started" if str_at(event, "/task_type").as_deref() == Some("local_agent") => {
+            Some(HarnessEvent::SubagentStarted {
+                id,
+                description: str_at(event, "/description").unwrap_or_default(),
+                kind: str_at(event, "/subagent_type"),
+            })
+        }
+        "task_progress" => Some(HarnessEvent::SubagentProgress {
+            id,
+            activity: str_at(event, "/description").unwrap_or_default(),
+        }),
+        "task_notification" => Some(HarnessEvent::SubagentEnded {
+            id,
+            state: match str_at(event, "/status").as_deref() {
+                Some("failed") => SubagentState::Failed,
+                Some("stopped" | "killed" | "cancelled") => SubagentState::Stopped,
+                _ => SubagentState::Completed,
+            },
+        }),
+        _ => None,
+    }
+}
+
 /// Translates one line of Claude Code's `stream-json` output. Of events from
 /// subagents (those with a `parent_tool_use_id`) only their tool calls'
 /// inputs and outputs are kept, so the reply reads as one thread.
@@ -1300,6 +1381,9 @@ fn parse_claude(event: &Value) -> Vec<HarnessEvent> {
     }
 
     match str_at(event, "/type").as_deref() {
+        Some("system") if subagent_event(event).is_some() => {
+            subagent_event(event).into_iter().collect()
+        }
         Some("system") if str_at(event, "/subtype").as_deref() == Some("init") => {
             str_at(event, "/session_id")
                 .map(HarnessEvent::Session)
@@ -2111,6 +2195,68 @@ wait
     /// answered by the result of what it was doing, and one taken in after
     /// is answered by a result of its own. Until then, a result is an
     /// answer, and the run goes on.
+    /// Claude Code's reports on a subagent become subagent events; its
+    /// reports on a shell command run in the background start none.
+    #[test]
+    fn subagents_are_read_from_task_reports() {
+        use super::SubagentState;
+        let started = json!({ "type": "system", "subtype": "task_started", "task_id": "a1",
+            "description": "Plan the code", "subagent_type": "Plan", "task_type": "local_agent" });
+        assert_eq!(
+            parse(&started),
+            [HarnessEvent::SubagentStarted {
+                id: "a1".into(),
+                description: "Plan the code".into(),
+                kind: Some("Plan".into()),
+            }]
+        );
+        let shell = json!({ "type": "system", "subtype": "task_started", "task_id": "b1",
+            "description": "cargo test", "task_type": "local_bash" });
+        assert!(parse(&shell).is_empty());
+        let progress = json!({ "type": "system", "subtype": "task_progress", "task_id": "a1",
+            "description": "Running Read files" });
+        assert_eq!(
+            parse(&progress),
+            [HarnessEvent::SubagentProgress {
+                id: "a1".into(),
+                activity: "Running Read files".into(),
+            }]
+        );
+        let failed = json!({ "type": "system", "subtype": "task_notification", "task_id": "a1",
+            "status": "failed" });
+        assert_eq!(
+            parse(&failed),
+            [HarnessEvent::SubagentEnded {
+                id: "a1".into(),
+                state: SubagentState::Failed,
+            }]
+        );
+    }
+
+    /// While a subagent it started is at work, a fed run goes on past its
+    /// results: the harness answers again once the subagent ends.
+    #[test]
+    fn a_fed_run_goes_on_while_a_subagent_works() {
+        use super::Messages;
+        let taken = json!({ "type": "user", "isReplay": true, "parent_tool_use_id": null,
+            "message": { "role": "user", "content": [{ "type": "text", "text": "m" }] } });
+        let started = json!({ "type": "system", "subtype": "task_started", "task_id": "a1",
+            "task_type": "local_agent" });
+        let shell = json!({ "type": "system", "subtype": "task_started", "task_id": "b1",
+            "task_type": "local_bash" });
+        let ended = json!({ "type": "system", "subtype": "task_notification", "task_id": "a1",
+            "status": "completed" });
+        let result = json!({ "type": "result", "is_error": false, "result": "ok" });
+        let mut messages = Messages::default();
+        messages.read(&taken);
+        messages.read(&started);
+        messages.read(&shell);
+        assert_eq!(messages.read(&result), Some(false));
+        messages.read(&ended);
+        // The shell command started nothing that holds the run open.
+        assert_eq!(messages.read(&result), Some(true));
+    }
+
     #[test]
     fn a_fed_run_ends_once_every_message_is_answered() {
         use super::Messages;

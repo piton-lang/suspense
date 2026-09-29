@@ -1372,11 +1372,15 @@ impl MainWindow {
             && self.project_picker.is_none()
         {
             // Only the divergence or Rescope panel is showing: closing it
-            // stops it.
+            // stops it. What can be stopped is minimized instead.
             if self.showing_rescope() {
                 self.close_rescope(window, cx);
             } else if self.showing_run() {
-                self.close_run(window, cx);
+                if self.run.as_ref().is_some_and(|run| run.read(cx).can_stop()) {
+                    self.minimize_run(window, cx);
+                } else {
+                    self.close_run(window, cx);
+                }
             } else {
                 self.close_divergence(window, cx);
             }
@@ -3723,6 +3727,49 @@ mod tests {
             panel.read_with(cx, |view, _| view.running_target()),
             Some(0)
         );
+        // While it can be stopped, it can't be closed: it has no close
+        // button, and Esc or clicking the dimmed window minimizes it, the
+        // target running on.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("run-stop").is_some());
+            assert!(window.try_find("run-minimize").is_some());
+            assert!(window.try_find("run-close").is_none());
+            window.press("escape", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(main.read_with(cx, |main, _| main.run.is_some() && !main.showing_run()));
+        assert_eq!(cx.update(|cx| ProjectTargets::get(cx).running), Some(0));
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| {
+                main.run_command(crate::ribbon::RunCommand::Target(0), window, cx)
+            });
+            window.render_frame(cx);
+            window.click_at(
+                "run-backdrop",
+                gpui_kit::point(gpui_kit::px(8.), gpui_kit::px(8.)),
+                cx,
+            );
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(main.read_with(cx, |main, _| main.run.is_some() && !main.showing_run()));
+        assert_eq!(cx.update(|cx| ProjectTargets::get(cx).running), Some(0));
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| {
+                main.run_command(crate::ribbon::RunCommand::Target(0), window, cx)
+            });
+        })
+        .unwrap();
+        // Once stopped, it can be closed.
+        panel.update(cx, |view, cx| view.stop(cx));
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("run-close").is_some());
+        })
+        .unwrap();
         // Closing stops it.
         cx.update_window(handle, |_, window, cx| {
             main.update(cx, |main, cx| main.close_run(window, cx))
