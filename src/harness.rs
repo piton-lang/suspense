@@ -120,6 +120,14 @@ pub fn send(
     send_with_images(prompt, system_prompt, Vec::new(), resume, project_dir)
 }
 
+/// Where a task's run may not change anything: `root`, which Claude Code is
+/// told it may not edit, so the harness knows at once; the application puts
+/// back whatever changes there all the same, as [`crate::mode_guard`] says.
+#[derive(Clone, Debug, Default)]
+pub struct Protected {
+    pub root: Option<PathBuf>,
+}
+
 /// Runs the harness once as [`send`] does, giving it `images` alongside the
 /// prompt, in order, as it takes images (see [`run`]).
 pub fn send_with_images(
@@ -129,7 +137,16 @@ pub fn send_with_images(
     resume: Option<Resume>,
     project_dir: PathBuf,
 ) -> mpsc::UnboundedReceiver<HarnessEvent> {
-    start(prompt, system_prompt, images, resume, project_dir, false).events
+    start(
+        prompt,
+        system_prompt,
+        images,
+        resume,
+        project_dir,
+        Protected::default(),
+        false,
+    )
+    .events
 }
 
 /// A task's run of the harness: its events, where the harness can be fed
@@ -152,8 +169,17 @@ pub fn send_task(
     images: Vec<PathBuf>,
     resume: Option<Resume>,
     project_dir: PathBuf,
+    protected: Protected,
 ) -> Run {
-    start(prompt, system_prompt, images, resume, project_dir, true)
+    start(
+        prompt,
+        system_prompt,
+        images,
+        resume,
+        project_dir,
+        protected,
+        true,
+    )
 }
 
 fn start(
@@ -162,6 +188,7 @@ fn start(
     images: Vec<PathBuf>,
     resume: Option<Resume>,
     project_dir: PathBuf,
+    protected: Protected,
     fed: bool,
 ) -> Run {
     let agent = agent::current();
@@ -181,6 +208,7 @@ fn start(
                 &images,
                 resume.as_ref(),
                 &project_dir,
+                &protected,
                 &tx,
                 feed.as_ref(),
                 &stop,
@@ -490,6 +518,13 @@ fn image_blocks(paths: &[PathBuf]) -> Result<Vec<Value>> {
 /// The arguments giving `agent` the images at `paths`, attached to the
 /// prompt: Codex takes an `--image` per image, and OpenCode a `--file` per
 /// image. Claude Code takes them in its input instead (see [`image_blocks`]).
+/// The Claude Code permission rule denying its file tools anything under
+/// `root`: an absolute path is written after a double slash.
+fn denied_edits(root: &Path) -> Option<String> {
+    let root = root.to_str()?.trim_end_matches('/');
+    root.starts_with('/').then(|| format!("Edit(/{root}/**)"))
+}
+
 fn image_args(agent: Agent, paths: &[PathBuf]) -> Vec<std::ffi::OsString> {
     let flag = match agent {
         Agent::Claude => return Vec::new(),
@@ -584,6 +619,7 @@ fn run(
     images: &[PathBuf],
     resume: Option<&Resume>,
     project_dir: &Path,
+    protected: &Protected,
     tx: &mpsc::UnboundedSender<HarnessEvent>,
     feed: Option<&Feed>,
     stop: &Stop,
@@ -629,6 +665,10 @@ fn run(
             }
             if let Some(system_prompt) = system_prompt {
                 command.args(["--append-system-prompt", system_prompt]);
+            }
+            if let Some(rule) = protected.root.as_deref().and_then(denied_edits) {
+                // Joined, as the flag takes any number of rules.
+                command.arg(format!("--disallowedTools={rule}"));
             }
             // Fed, the prompt is the first of a stream of messages, each of
             // which the harness replays as it takes it in. Images go in the
@@ -1533,6 +1573,15 @@ pub(crate) mod tests {
     use super::{HarnessEvent, parse};
     use crate::usage::{PlanLimit, Spend, Tally};
 
+    #[test]
+    fn claude_code_may_not_edit_a_protected_location() {
+        assert_eq!(
+            super::denied_edits(std::path::Path::new("/p/spec/")).as_deref(),
+            Some("Edit(//p/spec/**)")
+        );
+        assert_eq!(super::denied_edits(std::path::Path::new("spec")), None);
+    }
+
     /// A stand-in harness, written to `dir`: it says which conversation it
     /// is, starts a reply and a tool call, and then works on, leaving a
     /// process of its own running, whose id it writes to `dir/grandchild`.
@@ -1605,7 +1654,14 @@ wait
                 mut events,
                 feed,
                 stop,
-            } = super::send_task("Do it".into(), None, Vec::new(), None, dir.clone());
+            } = super::send_task(
+                "Do it".into(),
+                None,
+                Vec::new(),
+                None,
+                dir.clone(),
+                Default::default(),
+            );
             super::use_program_for_test(None);
             assert_eq!(feed.is_some(), agent == Agent::Claude);
 
@@ -2281,6 +2337,7 @@ done
             vec![images[0].clone()],
             None,
             dir.clone(),
+            Default::default(),
         );
         super::use_program_for_test(None);
         let feed = feed.expect("Claude Code is fed");

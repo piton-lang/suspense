@@ -8,16 +8,16 @@ from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from /ui/components/scrollbar import ScrollbarScope
 from /ui/components/sidebar import SidebarScope
 
-export sidebar ReferencedSpecSidebarScope:
+export sidebar RightSidebarScope:
     side: right
 
     panels:
         - @{ReferencedFilesPanel}
         - @{UnderstandingPanel}
 
-    concept: {ReferencedSpecSidebarConcept}
+    concept: {RightSidebarConcept}
 
-concept ReferencedSpecSidebarConcept:
+concept RightSidebarConcept:
     pitch:
         A second @{SidebarScope}, at the right of the message list and the
         chat input beneath it, that lists
@@ -25,9 +25,9 @@ concept ReferencedSpecSidebarConcept:
         the spec the harness is working from, and the constraints it has taken
         from it for the task.
 
-    shape: {ReferencedSpecSidebarShape}
+    shape: {RightSidebarShape}
 
-shape ReferencedSpecSidebarShape:
+shape RightSidebarShape:
     description:
         It runs the full height of the body, beside the body's tab bar, the
         message list or file beneath it, and the chat input beneath those, which stops at its left edge rather than
@@ -87,7 +87,7 @@ export panel ReferencedFilesPanel:
 
 concept ReferencedFilesConcept:
     pitch:
-        The top panel of the @{ReferencedSpecSidebarScope}: the spec files the
+        The top panel of the @{RightSidebarScope}: the spec files the
         running task references.
 
     shape: {ReferencedFilesShape}
@@ -150,7 +150,7 @@ export panel UnderstandingPanel:
 
 concept UnderstandingConcept:
     pitch:
-        The bottom panel of the @{ReferencedSpecSidebarScope}: the constraints
+        The bottom panel of the @{RightSidebarScope}: the constraints
         the harness has taken from the spec for the running task.
 
     shape: {UnderstandingShape}

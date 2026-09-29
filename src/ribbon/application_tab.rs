@@ -248,15 +248,19 @@ pub(super) fn reset_brightness_button(
     cx: &mut Context<Ribbon>,
 ) -> AnyElement {
     let at_default = theme::brightness(cx) == 0;
-    button("reset-brightness", IconName::RotateCcw, "Reset Brightness".into())
-        .disabled(at_default)
-        .tooltip(if at_default {
-            "The brightness is already where this mode starts"
-        } else {
-            "Put this mode's brightness back where it starts, keeping the mode"
-        })
-        .on_click(cx.listener(|ribbon, _, window, cx| reset_brightness(ribbon, window, cx)))
-        .into_any_element()
+    button(
+        "reset-brightness",
+        IconName::RotateCcw,
+        "Reset Brightness".into(),
+    )
+    .disabled(at_default)
+    .tooltip(if at_default {
+        "The brightness is already where this mode starts"
+    } else {
+        "Put this mode's brightness back where it starts, keeping the mode"
+    })
+    .on_click(cx.listener(|ribbon, _, window, cx| reset_brightness(ribbon, window, cx)))
+    .into_any_element()
 }
 
 /// Theme: opens the theme editor in the inset panel.

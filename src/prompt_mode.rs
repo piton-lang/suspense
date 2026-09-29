@@ -70,6 +70,7 @@ use crate::hidden_anchor::{self, Attached, CodeTask, HiddenAnchor};
 use crate::markdown;
 use crate::markdown::{MarkdownKey, MarkdownKind, MarkdownStates};
 use crate::measured_list::{MeasuredList, RenderRow};
+use crate::mode_guard;
 use crate::piton_build;
 use crate::piton_lsp::PitonSession;
 use crate::project_directory::ProjectDirectory;
@@ -2486,8 +2487,9 @@ impl PromptMode {
         }
     }
 
-    /// The body's tab bar: Chat, then a tab for each open file, with its
-    /// name, a dot while it has unsaved changes, and a button closing it.
+    /// The body's tab bar: Chat, with a spinner while a task or question
+    /// runs, then a tab for each open file, with its name, a dot while it has
+    /// unsaved changes, and a button closing it.
     fn render_tabs(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let this = cx.entity().downgrade();
         let muted = cx.theme().muted_foreground;
@@ -2541,7 +2543,9 @@ impl PromptMode {
                 this.update(cx, |this, cx| this.select_tab(ix.checked_sub(1), cx))
                     .ok();
             })
-            .child(Tab::new().label("Chat"))
+            .child(Tab::new().label("Chat").when(self.chat_running(), |tab| {
+                tab.suffix(Spinner::new().xsmall())
+            }))
             .children(file_tabs);
         // Lets UI tests find the tab bar; inert in normal builds.
         gpui_kit::TestSupportExt::test_support(div().id("body-tabs-row"))
@@ -4025,6 +4029,12 @@ impl PromptMode {
         host.child(history)
     }
 
+    /// Whether any run the Chat tab shows is under way: a task on Code,
+    /// Chain, or Spec, or a question on Ask.
+    fn chat_running(&self) -> bool {
+        self.working || self.asks.iter().any(|ask| ask.task.status.is_active())
+    }
+
     /// Whether a run of the selected tab's conversation is under way: a task
     /// on Code, Chain, or Spec, any question on Ask.
     fn conversation_running(&self) -> bool {
@@ -4233,6 +4243,8 @@ impl PromptMode {
             .mode
             .is_none_or(|mode| mode != SendMode::Ask);
         let builds = is_task && !freeform;
+        // Code may not change the spec, nor Spec the code.
+        let guarded = self.tasks[task_ix].mode;
         if builds {
             self.tasks[task_ix].status = TaskStatus::Building;
         }
@@ -4415,6 +4427,19 @@ impl PromptMode {
                         system_prompt: system_prompt.clone(),
                     };
                     let mut usage_run = None;
+                    // Whatever the harness does, what the task's mode may
+                    // not change is put back.
+                    let guard = match guarded {
+                        Some(mode) => {
+                            let dir = project_dir.clone();
+                            cx.background_spawn(async move { mode_guard::Guard::start(mode, &dir) })
+                                .await
+                        }
+                        None => None,
+                    };
+                    let protected = harness::Protected {
+                        root: guard.as_ref().map(mode_guard::Guard::root),
+                    };
                     let harness::Run {
                         mut events,
                         feed,
@@ -4428,6 +4453,7 @@ impl PromptMode {
                             fork: false,
                         }),
                         project_dir.clone(),
+                        protected,
                     );
                     if this
                         .update(cx, |this, cx| {
@@ -4535,6 +4561,29 @@ impl PromptMode {
                             .is_err()
                         {
                             return;
+                        }
+                    }
+                    if let Some(guard) = guard {
+                        let what = guard.what;
+                        let put_back = cx.background_spawn(async move { guard.finish() }).await;
+                        if !put_back.is_empty() {
+                            let files = put_back
+                                .iter()
+                                .map(|file| format!("- {}", file.display()))
+                                .collect::<Vec<_>>()
+                                .join("\n");
+                            let mode = guarded.map_or("", SendMode::label);
+                            this.update(cx, |this, cx| {
+                                this.in_project(&project_dir, cx, |this, cx| {
+                                    if let Some(task) = this.tasks.get_mut(task_ix) {
+                                        task.reply.push_error(format!(
+                                            "A {mode} task may not change the {what}, so what it changed there was put back:\n{files}"
+                                        ));
+                                    }
+                                    cx.notify();
+                                });
+                            })
+                            .ok();
                         }
                     }
                     // Cancelled, the conversation it carried on is still carried
@@ -12809,7 +12858,9 @@ mod tests {
             assert_eq!(step.mode, Some(SendMode::Code));
             assert_eq!(step.sent_from.as_deref(), Some(this.tasks[0].name.as_ref()));
             assert_eq!(
-                step.code_task.as_ref().and_then(|task| task.result.as_deref()),
+                step.code_task
+                    .as_ref()
+                    .and_then(|task| task.result.as_deref()),
                 Some("Said run 0.")
             );
             assert!(!step.post_build_update);
@@ -12817,9 +12868,14 @@ mod tests {
 
         // With one, the code step goes on to Spec, told what it did.
         send(true, cx);
-        run_until(cx, &prompt_mode, "the chain's post-build spec update", |this| {
-            !this.working && this.tasks.len() == 5 && this.tasks[4].status == TaskStatus::Done
-        });
+        run_until(
+            cx,
+            &prompt_mode,
+            "the chain's post-build spec update",
+            |this| {
+                !this.working && this.tasks.len() == 5 && this.tasks[4].status == TaskStatus::Done
+            },
+        );
         crate::harness::use_program_for_test(None);
         let update = run(4);
         assert!(update.starts_with("We're working on the spec "), "{update}");
@@ -13573,8 +13629,14 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         crate::harness::use_program_for_test(Some(crate::harness::tests::recording_harness(
             &dir, 2,
         )));
-        let crate::harness::Run { events, feed, .. } =
-            crate::harness::send_task("First".into(), None, Vec::new(), None, dir.clone());
+        let crate::harness::Run { events, feed, .. } = crate::harness::send_task(
+            "First".into(),
+            None,
+            Vec::new(),
+            None,
+            dir.clone(),
+            Default::default(),
+        );
         crate::harness::use_program_for_test(None);
         let feed = feed.unwrap();
         let start = std::time::Instant::now();

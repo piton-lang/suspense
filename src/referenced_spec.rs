@@ -374,9 +374,10 @@ pub fn render(
             // With no rows, an empty child: a list with no children at all
             // counts its whole box as its contents, and its padding beyond
             // that, so it would scroll by its padding.
-            .when(understanding.exists && understanding.rows.is_empty(), |list| {
-                list.child(div())
-            })
+            .when(
+                understanding.exists && understanding.rows.is_empty(),
+                |list| list.child(div()),
+            )
             .children(constraints);
 
     // Lets UI tests find each part; inert in normal builds.

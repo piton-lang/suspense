@@ -3,7 +3,7 @@ use /ui
 from ./Panel export *
 from ./Sidebar export *
 from /ui/components/project-sidebar import ProjectSidebarScope
-from /ui/components/referenced-spec-sidebar import ReferencedSpecSidebarScope
+from /ui/components/right-sidebar import RightSidebarScope
 from /ui/components/scrollbar import ScrollbarScope
 
 export ui-component SidebarScope:
@@ -28,7 +28,7 @@ shape SidebarShape:
 
     sidebars:
         - left: the @{ProjectSidebarScope}, to the left of the body, for finding your way around the project
-        - right: the @{ReferencedSpecSidebarScope}, at the right of the message list while a task runs
+        - right: the @{RightSidebarScope}, at the right of the message list while a task runs
 
     panels:
         A panel is one tool in a sidebar, as its own scope says. What it is

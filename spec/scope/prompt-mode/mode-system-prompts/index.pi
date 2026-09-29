@@ -6,7 +6,7 @@ from /scope/project-locations import ProjectLocationsScope
 from /scope/prompt-mode/modes import PromptModesScope
 from /scope/prompt-mode/sending import PromptSendingScope
 from /scope/settings-window import SettingsWindowScope
-from /ui/components/referenced-spec-sidebar import ReferencedSpecSidebarScope
+from /ui/components/right-sidebar import RightSidebarScope
 
 export scope ModeSystemPromptsScope:
     concept: {ModeSystemPromptsConcept}
@@ -113,7 +113,7 @@ shape ModeSystemPromptsShape:
     understandingFile:
         Each Code, Chain, or Spec task has an understanding file: the short
         list of constraints the harness has taken from the spec for it, which
-        the @{ReferencedSpecSidebarScope} shows as it changes. It is saved
+        the @{RightSidebarScope} shows as it changes. It is saved
         beside the task's history record, with the same name and the
         extension `.understanding.md`, written by the harness itself. Nothing
         else writes it, and nothing is there until the harness writes it.

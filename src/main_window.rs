@@ -2690,9 +2690,7 @@ mod tests {
                     let body = area.blend(tint);
                     let quads = window.painted_quads();
                     assert!(
-                        !quads
-                            .iter()
-                            .any(|q| q.background.as_solid() == Some(tint)),
+                        !quads.iter().any(|q| q.background.as_solid() == Some(tint)),
                         "{tab:?} {mode:?}: the tab is tinted"
                     );
                     assert!(

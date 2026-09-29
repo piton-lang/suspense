@@ -1541,11 +1541,20 @@ mod tests {
             };
             let raised = 0x222222;
             let near = |a: u32, b: u32| (a as i32 - b as i32).abs() <= 0x010101;
-            for y in [0., 8., 20., column.size.height.as_f32() / 2., column.size.height.as_f32() - 1.] {
+            for y in [
+                0.,
+                8.,
+                20.,
+                column.size.height.as_f32() / 2.,
+                column.size.height.as_f32() - 1.,
+            ] {
                 assert_eq!(at(-1., y, column), darkest, "beside the column at {y}");
                 for x in [0., 17.] {
                     let c = at(x, y, column);
-                    assert!(near(c, raised), "the column's side is {c:06x} at ({x}, {y})");
+                    assert!(
+                        near(c, raised),
+                        "the column's side is {c:06x} at ({x}, {y})"
+                    );
                 }
             }
             // The up button: its arrow, and raised around it.

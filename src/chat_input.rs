@@ -1919,10 +1919,10 @@ impl Render for ChatInput {
         // no sliver of it is left showing at its edges.
         let seam_cover = cx.theme().tab_active;
         let border = cx.theme().border;
-        let spec = div()
-            .relative()
-            .child(full_tab(2))
-            .with_spring("chain-join", join, move |this, joined| {
+        let spec = div().relative().child(full_tab(2)).with_spring(
+            "chain-join",
+            join,
+            move |this, joined| {
                 let joined = joined.clamp(0., 1.);
                 // What is left of the gap the chain holds open between Code
                 // and Spec, as it gives up half its width either side.
@@ -1960,7 +1960,8 @@ impl Render for ChatInput {
                     .child(gap_line)
                     .child(seam)
                     .child(both.left(-gap - chain_width * 0.5 * joined))
-            });
+            },
+        );
         let ask = div().relative().child(full_tab(ASK_TAB));
         let freeform = div().relative().child(full_tab(FREEFORM_TAB));
         // What the selected tab is for, in the rest of the bar: smaller and

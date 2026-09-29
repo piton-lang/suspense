@@ -9,8 +9,8 @@ from ../prompt-mode/message-list import MessageList
 from /ui/components/file-tree import FileTreeScope
 from /ui/components/inset-panel import InsetPanelScope
 from /ui/components/project-sidebar import ProjectSidebarScope
-from /ui/components/referenced-spec-sidebar import ReferencedSpecSidebarScope
 from /ui/components/ribbon import RibbonScope
+from /ui/components/right-sidebar import RightSidebarScope
 
 export ui-component BodyScope:
     concept: {BodyConcept}
@@ -32,7 +32,7 @@ shape BodyShape:
         The @{ChatInputScope} lives within the body, along its bottom: its
         left edge against the project sidebar, and above it, beneath the
         body's tab bar, the selected tab's contents: the message list, or an
-        open file. While a task runs, the @{ReferencedSpecSidebarScope} runs
+        open file. While a task runs, the @{RightSidebarScope} runs
         the body's full height at its right, beside the tab bar, the selected
         tab's contents, and the chat input, and the chat input's right edge is against it: the chat input
         never runs beneath the right sidebar. While that sidebar isn't there,
@@ -46,7 +46,7 @@ shape BodyShape:
         - the hint shown in the message list's place before any task has been sent, or while no project is open, as the @{PromptEditor} and the @{NoProjectStateScope} say
         - an @{EditorScope} for each open file, shown beneath the tab bar while its tab is selected
         - the @{ChatInputScope}, along the bottom beneath whichever tab is selected
-        - the @{ReferencedSpecSidebarScope}, at the right of all of these, the tab bar and the chat input included, while a task runs
+        - the @{RightSidebarScope}, at the right of all of these, the tab bar and the chat input included, while a task runs
 
         An @{InsetPanelScope} floats over the whole window, the body included,
         but is never part of it.
@@ -54,7 +54,7 @@ shape BodyShape:
     tabs:
         Along the top of the body runs a tab bar, in gpui-kit's default tab
         styling, across the width the message list takes: from the project
-        sidebar to the referenced spec sidebar while a task runs, and to the
+        sidebar to the right sidebar while a task runs, and to the
         window's right edge otherwise. Its first tab, Chat, shows the message
         list, and is always there: it can't be closed or moved. After it comes
         a tab for each open file, in the order they were opened, scrolling

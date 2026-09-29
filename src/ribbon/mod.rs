@@ -304,13 +304,19 @@ impl Ribbon {
     /// The left container: the project indicator, leading the bar whether
     /// expanded or collapsed.
     fn render_left(&self) -> Option<AnyElement> {
-        container("ribbon-left", vec![self.render_indicator().into_any_element()])
+        container(
+            "ribbon-left",
+            vec![self.render_indicator().into_any_element()],
+        )
     }
 
     /// The right container, ending the bar: the activity spinner while
     /// anything is running, and nothing otherwise.
     fn render_right(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        container("ribbon-right", self.render_activity(cx).into_iter().collect())
+        container(
+            "ribbon-right",
+            self.render_activity(cx).into_iter().collect(),
+        )
     }
 
     /// The spinner beside the project's name while anything is running, with

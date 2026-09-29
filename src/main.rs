@@ -38,6 +38,7 @@ mod inset_panel;
 mod main_window;
 mod markdown;
 mod measured_list;
+mod mode_guard;
 mod new_instruction;
 mod new_project;
 mod palette;

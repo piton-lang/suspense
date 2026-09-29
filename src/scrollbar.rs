@@ -266,10 +266,8 @@ fn scrollbar(
                 // end, between the track's colour and the thumb's, across the
                 // track. Nothing is laid twice.
                 let (body, ends) = thumb_ends(thumb, bounds, &colors);
-                for (top, bottom) in [
-                    (bounds.top(), body.top()),
-                    (body.bottom(), bounds.bottom()),
-                ] {
+                for (top, bottom) in [(bounds.top(), body.top()), (body.bottom(), bounds.bottom())]
+                {
                     for side in sides(bounds, top, bottom) {
                         window.paint_quad(fill(side, colors.raised));
                     }
@@ -463,7 +461,10 @@ fn sides(bounds: Bounds<Pixels>, top: Pixels, bottom: Pixels) -> Vec<Bounds<Pixe
     let height = bottom - top;
     vec![
         Bounds::new(point(bounds.left(), top), size(TRACK_INSET, height)),
-        Bounds::new(point(bounds.right() - TRACK_INSET, top), size(TRACK_INSET, height)),
+        Bounds::new(
+            point(bounds.right() - TRACK_INSET, top),
+            size(TRACK_INSET, height),
+        ),
     ]
 }
 
@@ -1085,7 +1086,10 @@ mod tests {
             }
             assert_eq!((up.top(), down.bottom()), (column.top(), column.bottom()));
             assert_eq!((track.top(), track.bottom()), (up.bottom(), down.top()));
-            assert_eq!((track.left(), track.right()), (column.left(), column.right()));
+            assert_eq!(
+                (track.left(), track.right()),
+                (column.left(), column.right())
+            );
             let scale = window.scale_factor();
             let border = gpui_kit::component::ActiveTheme::theme(cx).border;
             for q in window.painted_quads() {
@@ -1141,7 +1145,9 @@ mod tests {
                 };
                 let quads: Vec<_> = window.painted_quads().into_iter().filter(whole).collect();
                 let has = |color: gpui_kit::Hsla| {
-                    quads.iter().any(|quad| quad.background.as_solid() == Some(color))
+                    quads
+                        .iter()
+                        .any(|quad| quad.background.as_solid() == Some(color))
                 };
                 let bevel = window.painted_quads().into_iter().any(|quad| {
                     let b = &quad.bounds;
@@ -1177,7 +1183,11 @@ mod tests {
             gpui_kit::Modifiers::default(),
         );
         cx.run_until_parked();
-        assert_eq!(state(cx), (false, true, false), "not lightened while pressed");
+        assert_eq!(
+            state(cx),
+            (false, true, false),
+            "not lightened while pressed"
+        );
 
         cx.simulate_mouse_up(
             center,
@@ -1510,7 +1520,12 @@ mod tests {
     ) -> (i32, i32) {
         let x = track.left() + px(8.5);
         let rows: Vec<i32> = (0..track.size.height.as_f32() as i32)
-            .filter(|y| !same(frame.at(point(x, track.top() + px(*y as f32 + 0.5))), dark_track))
+            .filter(|y| {
+                !same(
+                    frame.at(point(x, track.top() + px(*y as f32 + 0.5))),
+                    dark_track,
+                )
+            })
             .collect();
         (*rows.first().unwrap(), *rows.last().unwrap())
     }
@@ -1638,14 +1653,23 @@ mod tests {
                 assert_ne!(hover, raised, "hovering doesn't lighten {surface:06x}");
                 for x in [0., 1., 9., 16., 17.] {
                     let c = frame.at(point(track.left() + px(x + 0.5), middle.y + px(0.5)));
-                    assert!(same(c, hover), "{surface:06x}: hovered, the thumb is {c:06x} at {x}");
+                    assert!(
+                        same(c, hover),
+                        "{surface:06x}: hovered, the thumb is {c:06x} at {x}"
+                    );
                 }
                 // The ends, lightened with it.
-                let end = frame.at(point(track.left() + px(8.5), track.top() + px(rows.0 as f32 + 0.5)));
+                let end = frame.at(point(
+                    track.left() + px(8.5),
+                    track.top() + px(rows.0 as f32 + 0.5),
+                ));
                 let expected = over(over(surface, colors.thumb_end), colors.hover);
                 assert!(same(end, expected), "{surface:06x}: hovered end {end:06x}");
                 // Just outside the thumb, the track is as it was.
-                let above = frame.at(point(track.left() + px(8.5), track.top() + px(rows.0 as f32 - 0.5)));
+                let above = frame.at(point(
+                    track.left() + px(8.5),
+                    track.top() + px(rows.0 as f32 - 0.5),
+                ));
                 assert!(same(above, surface));
             });
         }
@@ -1679,7 +1703,10 @@ mod tests {
             for x in 0..18 {
                 let c = at(x, -1);
                 let expected = if x == 0 || x == 17 { raised } else { surface };
-                assert!(same(c, expected), "{c:06x} at ({x}, -1), between the buttons");
+                assert!(
+                    same(c, expected),
+                    "{c:06x} at ({x}, -1), between the buttons"
+                );
             }
             let mut lit = 0;
             for y in 0..17 {

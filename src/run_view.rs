@@ -693,14 +693,16 @@ impl RunView {
             )
             // The well is the log's surface, beneath its scroll column too,
             // which has no colour of its own.
-            .child(div().flex_1().min_h_0().bg(gpui_kit::rgb(well)).child(scrollbar::with_scrollbar(
-                "run-output",
-                rows,
-                log,
-                true,
-                Some((*locked, toggle)),
-                cx,
-            )))
+            .child(div().flex_1().min_h_0().bg(gpui_kit::rgb(well)).child(
+                scrollbar::with_scrollbar(
+                    "run-output",
+                    rows,
+                    log,
+                    true,
+                    Some((*locked, toggle)),
+                    cx,
+                ),
+            ))
             .into_any_element()
     }
 }
@@ -905,7 +907,10 @@ pub mod tests {
                     .into_iter()
                     .fold(0u32, |rgb, c| rgb << 8 | (c * 255.).round() as u32);
                 let near = |a: u32, b: u32| {
-                    (0..3).all(|ix| (((a >> (ix * 8)) & 0xff) as i32 - ((b >> (ix * 8)) & 0xff) as i32).abs() <= 1)
+                    (0..3).all(|ix| {
+                        (((a >> (ix * 8)) & 0xff) as i32 - ((b >> (ix * 8)) & 0xff) as i32).abs()
+                            <= 1
+                    })
                 };
                 let frame = crate::frame_image::Frame::of(window);
                 let log = window.find("run-output").bounds();
@@ -916,7 +921,10 @@ pub mod tests {
                 let mut y = column.top() + px(0.5);
                 while y < bottom {
                     let c = frame.at(point(log.right() - px(4.), y));
-                    assert_eq!(c, well, "{mode:?}: {c:06x} at {y:?} in the log, not the well");
+                    assert_eq!(
+                        c, well,
+                        "{mode:?}: {c:06x} at {y:?} in the log, not the well"
+                    );
                     for x in [column.left() + px(0.5), column.right() - px(0.5)] {
                         let c = frame.at(point(x, y));
                         assert!(
