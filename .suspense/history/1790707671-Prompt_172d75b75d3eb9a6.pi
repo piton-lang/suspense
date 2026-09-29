@@ -1,0 +1,66 @@
+from /scope/prompt-mode/message-list import MessageList
+
+export anchor Prompt_172d75b75d3eb9a6:
+    userPrompt:
+        \\\
+        in the @{MessageList} when I scroll to the drop, if I stop scrolling, then scroll up again, it should autoexpand the previous tasks scroll to the bottom of that list.  Similarly, if I'm in previous tasks, scroll all the way down, then stop, scroll down again, it should bring back the @{MessageList}
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            in the @{MessageList} when I scroll to the drop, if I stop scrolling, then scroll up again, it should autoexpand the previous tasks scroll to the bottom of that list.  Similarly, if I'm in previous tasks, scroll all the way down, then stop, scroll down again, it should bring back the @{MessageList}
+            \\\
+        result:
+            \\\
+            I've written the scroll-to-switch behaviour into the spec; the code isn't changed yet. I read "scroll to the drop" as "scroll to the top". `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            **What I changed:** I added a `scrollingPast` property to `MessageListScrollingShape` in `spec/scope/prompt-mode/message-list/Scrolling.pi`. It compiles to the "Scrolling Past" section of `.claude/reference/scope/prompt-mode/message-list/index.md`, and the file now imports `HistoryListScope` so it can link to it. It says:
+
+            - **Only on purpose.** A scroll that reaches the top or bottom stops there, however hard it was flung. Only a new scroll, started after scrolling has come to rest at that end, carries past it. Momentum still running from the same motion never crosses over.
+            - **Up from the latest task.** With the latest task's output scrolled to its top, a new scroll up expands Previous tasks, as clicking their row does. The list opens scrolled to the bottom, on the most recent tasks. With no previous tasks, or before any task has been sent, nothing more happens.
+            - **Down from previous tasks.** With Previous tasks scrolled to their bottom, a new scroll down closes them, as clicking "Back to the latest task" does. The latest task and its output come back scrolled to the top.
+            - **Short content.** Output or a list too short to scroll counts as being at both ends, so any new scroll that leads somewhere crosses over.
+            - **What never crosses over.** Only the wheel or trackpad crosses over. Scrolling sideways, dragging a scrollbar to an end, or scrolling something inside that scrolls on its own (such as an open task's table in the list) never does.
+
+            **Anchors the code should follow:**
+            - `MessageListScrollingShape.scrollingPast` in `spec/scope/prompt-mode/message-list/Scrolling.pi`, as above.
+            - `HistoryListScope` (`spec/ui/components/history-list/index.pi`): the list opens scrolled to the bottom when expanded.
+            - `PromptModeScope`'s `previousTasks` (`spec/scope/prompt-mode/index.pi`): expanding the list replaces the latest task, and the row reads "Back to the latest task" while it's open.
+            - In the code, the latest task's output is drawn by `render_output`, and the list by `HistoryList::render_list` with its `toggle` and `scroll_to_latest`, all in `src/prompt_mode.rs`.
+
+            The constraints are in `.suspense/history/1790707611-Prompt_e12f0fcbddf4dd15.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_e12f0fcbddf4dd15
+
+    references:
+        - @{MessageList}

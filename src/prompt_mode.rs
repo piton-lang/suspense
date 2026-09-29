@@ -1686,6 +1686,10 @@ struct FileTab {
     _subscriptions: Vec<Subscription>,
 }
 
+/// How long the wheel must rest before a scroll counts as a new one, which
+/// can carry on past an end of the latest task or the previous tasks.
+const SCROLL_REST: Duration = Duration::from_millis(250);
+
 /// Dragged by the answer drawer's top edge to resize it.
 struct DrawerResize;
 
@@ -1868,6 +1872,9 @@ pub struct PromptMode {
     /// The latest task's output, which follows new rows while scrolled to
     /// the bottom, or always while locked there.
     output_table: TaskTable,
+    /// When the wheel last scrolled the latest task or the previous tasks,
+    /// telling a new scroll from one carried on.
+    last_wheel: Rc<Cell<Option<Instant>>>,
     output_locked: bool,
     queue_scroll: ScrollHandle,
     chat_input: Entity<ChatInput>,
@@ -2080,6 +2087,7 @@ impl PromptMode {
             in_background: false,
             tasks: Vec::new(),
             output_table: TaskTable::new(),
+            last_wheel: Rc::default(),
             output_locked: false,
             queue_scroll: ScrollHandle::new(),
             chat_input,
@@ -2727,6 +2735,68 @@ impl PromptMode {
             self.output_table.scroll_to_end();
         }
         cx.notify();
+    }
+
+    /// A new wheel scroll `up`, or down, carries on past the latest task's
+    /// top into the previous tasks, opening them on the latest, or past their
+    /// bottom back to the latest task, shown from its top. Returns whether
+    /// it did.
+    fn scroll_past(&mut self, up: bool, cx: &mut Context<Self>) -> bool {
+        if self.task_history.expanded {
+            let rows = &self.task_history.rows;
+            if up || rows.offset().y > -rows.max_offset().y + px(1.) {
+                return false;
+            }
+            self.task_history.toggle();
+            self.scroll_output_to_top();
+        } else {
+            let scroll = self.output_table.scroll();
+            if !up || self.tasks.len() < 2 || scroll.offset().y < -px(1.) {
+                return false;
+            }
+            self.task_history.toggle();
+        }
+        cx.notify();
+        true
+    }
+
+    /// Over the latest task's output or the previous tasks, hears the wheel
+    /// before they do, so a new scroll begun at an end carries on past it,
+    /// as [`Self::scroll_past`] says. A scroll carried on, as a fling's
+    /// momentum is, or a sideways one, never does.
+    fn scroll_past_ends(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let this = cx.entity().downgrade();
+        let last = self.last_wheel.clone();
+        canvas(
+            |bounds, window, _| window.insert_hitbox(bounds, HitboxBehavior::Normal),
+            move |_, hitbox, window, _| {
+                window.on_mouse_event(move |event: &ScrollWheelEvent, phase, window, cx| {
+                    if phase != DispatchPhase::Capture || !hitbox.should_handle_scroll(window) {
+                        return;
+                    }
+                    let now = Instant::now();
+                    let new = event.touch_phase == TouchPhase::Started
+                        || last
+                            .get()
+                            .is_none_or(|at| now.duration_since(at) >= SCROLL_REST);
+                    last.set(Some(now));
+                    let delta = event.delta.pixel_delta(window.line_height());
+                    if !new || delta.y.abs() <= delta.x.abs() {
+                        return;
+                    }
+                    let up = delta.y > px(0.);
+                    if this
+                        .update(cx, |this, cx| this.scroll_past(up, cx))
+                        .unwrap_or(false)
+                    {
+                        // The scroll that crosses over scrolls nothing.
+                        cx.stop_propagation();
+                    }
+                });
+            },
+        )
+        .absolute()
+        .size_full()
     }
 
     fn scroll_output_to_top(&self) {
@@ -6362,19 +6432,28 @@ impl Render for PromptMode {
                 // Lets UI tests find the hint; inert in normal builds.
                 .child(gpui_kit::TestSupportExt::test_support(hint))
                 .into_any_element()
-        } else if self.task_history.expanded {
-            let open_file = self.file_opener(cx);
-            self.task_history.render_list(
-                &self.tasks,
-                |this| &this.tasks,
-                |this| &mut this.tasks,
-                |this| &mut this.task_history,
-                &self.steps_shown,
-                &open_file,
-                cx,
-            )
         } else {
-            self.render_output(cx)
+            let view = if self.task_history.expanded {
+                let open_file = self.file_opener(cx);
+                self.task_history.render_list(
+                    &self.tasks,
+                    |this| &this.tasks,
+                    |this| &mut this.tasks,
+                    |this| &mut this.task_history,
+                    &self.steps_shown,
+                    &open_file,
+                    cx,
+                )
+            } else {
+                self.render_output(cx)
+            };
+            v_flex()
+                .relative()
+                .flex_1()
+                .min_h_0()
+                .child(view)
+                .child(self.scroll_past_ends(cx))
+                .into_any_element()
         };
 
         let history = v_flex()
@@ -8185,6 +8264,71 @@ mod tests {
 
     /// A task from the history replays its recorded output into the task it
     /// was; one with no record is shown as not recorded, with nothing pending.
+    /// A new wheel scroll up from the top of the latest task's output
+    /// expands the previous tasks, and a new scroll down from their bottom
+    /// brings the latest task back; a scroll carried on in the same motion,
+    /// or a sideways one, never crosses over.
+    #[gpui_kit::test]
+    async fn scrolling_past_an_end_crosses_over(cx: &mut TestAppContext) {
+        use super::SCROLL_REST;
+        use gpui_kit::{ScrollDelta, ScrollWheelEvent, point, px};
+        let (prompt_mode, handle) = open(cx);
+        prompt_mode.update(cx, |this, cx| {
+            for text in ["first", "second"] {
+                let ix = this.push_task(text.into(), cx);
+                this.tasks[ix].status = TaskStatus::Done;
+            }
+            cx.notify();
+        });
+        let wheel = |cx: &mut TestAppContext, x: f32, y: f32| {
+            let at = cx
+                .update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    window.viewport_size()
+                })
+                .unwrap();
+            let mut visual = gpui_kit::VisualTestContext::from_window(handle, cx);
+            visual.simulate_event(ScrollWheelEvent {
+                position: point(at.width / 2., at.height / 3.),
+                delta: ScrollDelta::Pixels(point(px(x), px(y))),
+                ..Default::default()
+            });
+            cx.run_until_parked();
+        };
+        let rest = || std::thread::sleep(SCROLL_REST + Duration::from_millis(50));
+        let expanded = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| this.task_history.expanded)
+        };
+
+        // Sideways, it stays.
+        wheel(cx, 40., 5.);
+        assert!(!expanded(cx));
+        rest();
+        wheel(cx, 0., 40.);
+        assert!(
+            expanded(cx),
+            "a new scroll up didn't open the previous tasks"
+        );
+        // Carried on, down, it stays in the previous tasks.
+        wheel(cx, 0., -40.);
+        assert!(expanded(cx), "a scroll carried on crossed back");
+        rest();
+        wheel(cx, 0., -40.);
+        assert!(
+            !expanded(cx),
+            "a new scroll down didn't bring back the latest task"
+        );
+
+        // With no previous tasks, nothing opens.
+        prompt_mode.update(cx, |this, cx| {
+            this.tasks.truncate(1);
+            cx.notify();
+        });
+        rest();
+        wheel(cx, 0., 40.);
+        assert!(!expanded(cx));
+    }
+
     /// Previous tasks are grouped by the conversation they ran in: a group
     /// starts wherever the conversation changes, and a task whose
     /// conversation isn't known stays with the group before it.

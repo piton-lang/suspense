@@ -1,5 +1,6 @@
 use /lib
 from /scope/open-projects import OpenProjectsScope
+from /ui/components/history-list import HistoryListScope
 
 export shape MessageListScrollingShape:
     description:
@@ -12,3 +13,28 @@ export shape MessageListScrollingShape:
         However long the list of previous tasks grows, drawing it costs no more
         than drawing the tasks in view, so scrolling, animations, and new output
         stay smooth.
+
+    scrollingPast:
+        Scrolling carries on past either end of the latest task and the
+        previous tasks, from one to the other, but only on purpose: a scroll
+        that reaches an end stops there, however hard it was flung, and only
+        a new scroll, begun after the scrolling has come to rest at that end,
+        goes on past it.
+
+        With the latest task's output scrolled to its top, a new scroll up
+        expands the previous tasks, as clicking their row does, opening
+        scrolled to the bottom, on the tasks sent most recently, as the
+        @{HistoryListScope} says. Before any task has been sent, or with no previous
+        tasks, scrolling up does nothing more.
+
+        With the previous tasks expanded and scrolled to their bottom, a new
+        scroll down closes them, as clicking "Back to the latest task" does,
+        bringing back the latest task and its output, scrolled to its top.
+
+        A scroll carried on in the same motion, such as a fling's momentum
+        still running when an end is reached, never crosses over. Output or a
+        list too short to scroll is always at both its ends, so any new scroll
+        over it that leads somewhere crosses over. Only the wheel or trackpad
+        crosses over. Scrolling sideways, dragging a scrollbar to an end, and
+        scrolling anything inside that scrolls on its own, such as an open
+        task's table in the list, never do.
