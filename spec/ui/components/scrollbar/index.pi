@@ -18,49 +18,67 @@ shape ScrollbarShape:
         is the list's only scrollbar: no scrollbar is laid over the list, or
         appears only while hovering or scrolling.
 
+    surface:
+        Every scrollbar is this one, wherever it is. It has no background of
+        its own: the column takes the colour of the surface it sits on, so on
+        the file tree it is the tree's colour, and on a panel's body the
+        body's. Nothing in it is a colour of its own; the track, the thumb's
+        ends, the arrows, and the thumb's lightening are all black or white
+        laid over that surface, so the scrollbar looks the same on any of
+        them.
+
+        The strengths given here are dark mode's. Light mode takes the same
+        steps, gentler: the track is black laid a fifth of the way over the
+        surface, the thumb's ends a tenth, and the thumb lightens with white
+        laid about a fifth of the way while hovered and about a third while
+        dragged. Its arrows are darker than the surface rather than lighter,
+        black laid about a third of the way over it, since white would all but
+        vanish on a light surface.
+
     buttons:
         A square button at the top of the column scrolls the list up a little,
         and a square button at the bottom scrolls it down a little. The column
-        is as wide as the buttons, with the track's line, are tall. Each button
-        sits just inside the track, as the thumb does, never over the track's
-        edges: the track's line runs down the column's side against the list
-        beside it too, unbroken from the top of the column to the bottom, the
-        button filling the width inside that line, and a pixel of the dark
-        track lies between the button and the rest of the track, and between
-        the down button and the lock button. The buttons draw no lines of their
-        own; whatever holds the column draws the lines around it. The buttons
-        have no background of their own: they are the colour of whatever the
-        column sits on, until hovered or pressed. While the pointer
-        is over the up or down button, it has the bevel of the @{ThemeScope},
-        and while it is pressed with the pointer still over it, its pressed
-        bevel instead; neither bevel shows otherwise, and neither takes the
-        mouse.
+        is 18 pixels wide, and each button is 17 pixels tall, as wide as the
+        column. A button shows only a small solid arrow, pointing up or down,
+        6 pixels wide and 4 tall, centred across it, 7 pixels from its top
+        pointing up and from its bottom pointing down, drawn crisp on whole
+        pixels rather than smoothed, in a faint grey, #4d4d4d on #222222 in
+        dark mode, white laid about a fifth of the way over the surface; it
+        has no background, border, or line of its own until the
+        pointer is over it, when it has the bevel of the @{ThemeScope}, and
+        while pressed with the pointer still over it, its pressed bevel
+        instead. Neither bevel takes the mouse.
 
     track:
-        Between the buttons, a track holds a thumb as tall as the share of the
-        list in view, and never too short to grab, placed as far down the track
-        as the list is scrolled. The thumb is a plain rectangle with no rounded
-        corners, filling the track inside the track's own line, never covering
-        it, so the line beside the list runs unbroken the track's full height,
-        beside the thumb too. It has the bevel of the @{ThemeScope}, whether or
-        not it is hovered or dragged. The track
-        is dark: black laid over whatever the column sits on, rather than a
-        colour of its own, so it is clearly darker than that surface, in both
-        modes, and looks the same on any surface. Beyond its bevel, the thumb
-        has no border or line of its own, and no background of its own: it is the
-        colour of whatever the column sits on, the same as the buttons, so it
-        reads as a gap of the surface in the dark track. It lightens a step
-        while the pointer is over it, as white laid over it, and another step
-        while it is being dragged, and goes back as soon as neither is true.
-        The track has a thin line down its side against the list, in the
-        theme's border colour, the column's full height, beside the buttons
-        as well as the thumb. With nothing
-        to scroll, the thumb fills the track. Pressing the thumb and dragging
-        scrolls the list with it for as long as the button is held, even once
-        the pointer leaves the column, and pressing the track elsewhere moves
-        the thumb there, from where it can be dragged straight away. Where a
-        resize edge beside the list overlaps the column, a press goes to
-        whichever of the two has the smaller hit area, as the main window says.
+        Between the buttons runs the track, from just beneath the top button
+        to just above the bottom one, inset one pixel from either side of the
+        column, so a pixel of the surface shows down both its sides. The track
+        is dark, black laid half way over the surface, #111111 on #222222 in
+        dark mode, and no line runs beside it or around it. The column has no
+        border at all, against the list or anywhere else.
+
+        The track holds a thumb as tall as the share of the list in view, and
+        never too short to grab, placed as far down the track as the list is
+        scrolled. The thumb is a plain rectangle, as wide as the column,
+        covering the track's inset, with no rounded corners, no border, no
+        bevel, and no background of its own: it is the surface's colour, so it
+        reads as a gap of the surface in the dark track. Its top and bottom
+        ends each have a single pixel between the track's colour and the
+        surface's, black laid a quarter of the way over the surface, #191919
+        on #222222 in dark mode, softening where the track meets it. It
+        lightens a step while the pointer is over it, as white laid over it,
+        and another step while it is being dragged, white laid about 3.5% and
+        7% of the way over it in dark mode, and goes back as soon as neither
+        is true. Nothing in the column lightens while something else, like a
+        sidebar's edge, is being dragged across it. With nothing to scroll, the
+        thumb fills the track.
+
+        Pressing the thumb and dragging scrolls the list with it for as long as
+        the button is held, even once the pointer leaves the column, and
+        pressing the track elsewhere moves the thumb there, from where it can
+        be dragged straight away. Where a resize edge beside the list overlaps
+        the column, a press goes to whichever of the two has the smaller hit
+        area, as the main window says.
 
     steadiness:
         The thumb never jumps. Its size and place always reflect the whole
@@ -87,9 +105,13 @@ shape ScrollbarShape:
 
     lockToBottom:
         A list that keeps receiving output, like a task's, adds one more square
-        button below the others that locks the scroll to the bottom. While it is
-        locked, the button shows as selected and the list stays scrolled to the
-        bottom as output arrives. Pressing it again unlocks it. Its tooltip says
+        button, drawn as the others are, below the others, with a pixel of the
+        surface between it and the down button, that locks the scroll to the
+        bottom. Its arrow is the down arrow with a short bar beneath it, the
+        same 6 pixels wide. While it is locked, the button shows as selected,
+        with the pressed bevel of the @{ThemeScope} whether or not the pointer
+        is over it, and the list stays scrolled to the bottom as output
+        arrives. Pressing it again unlocks it. Its tooltip says
         which it will do.
 
         lockPulse:

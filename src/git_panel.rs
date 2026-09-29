@@ -11,12 +11,13 @@ use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail};
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::input::{Editor, EditorState, Input, InputEvent, InputState};
+use gpui_kit::component::button::{
+    Button, ButtonCustomVariant, ButtonRounded, ButtonVariants as _,
+};
+use gpui_kit::component::input::{Editor, EditorState, InputEvent, Textarea, TextareaState};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::{
-    ActiveTheme as _, ColorName, Disableable as _, Icon, Sizable as _, StyledExt as _,
-    WindowExt as _, h_flex, v_flex,
+    ActiveTheme as _, Disableable as _, Icon, Sizable as _, WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -24,9 +25,35 @@ use gpui_kit::*;
 use crate::commit_notes::{self, Note, NotesVersion};
 use crate::growing_input::GrowToFit;
 use crate::project_directory::ProjectDirectory;
+use crate::theme::Hue;
 
 /// How often the summary is read again.
 const REFRESH_INTERVAL: Duration = Duration::from_secs(2);
+
+/// The panel's header is on a colour of its own, so that change of colour is
+/// the edge above it, with no line between it and the panel before.
+pub const COLOUR_IS_EDGE: bool = true;
+
+/// How tall the header, the branch's row, is.
+pub const HEADER_HEIGHT: Pixels = px(32.);
+
+/// The body's padding at either side and at the bottom.
+pub const PADDING: Pixels = px(8.);
+
+/// Between one thing in the body and the next.
+pub const GAP: Pixels = px(4.);
+
+/// How tall the summary's line is.
+const SUMMARY_HEIGHT: Pixels = px(22.);
+
+/// How tall Generate and Commit are.
+const BUTTON_HEIGHT: Pixels = px(22.);
+
+/// A commit note's lines, in its small text.
+const NOTE_LINE_HEIGHT: Pixels = px(16.);
+
+/// The most rows a commit note wraps onto before it scrolls.
+const NOTE_MAX_ROWS: usize = 12;
 
 /// The most rows the commit message grows to before it scrolls.
 const MESSAGE_MAX_ROWS: usize = 10;
@@ -348,7 +375,7 @@ enum Busy {
 /// A commit note, as its row's input.
 struct NoteRow {
     id: u64,
-    input: Entity<InputState>,
+    input: Entity<TextareaState>,
     _subscription: Subscription,
 }
 
@@ -379,7 +406,7 @@ impl GitPanel {
                 // No empty rows below the last line: the box is sized to its
                 // text.
                 .scroll_beyond_last_line(Some(0))
-                .placeholder("Commit message")
+                .placeholder("Commit Message…")
         });
         let subscriptions = vec![
             cx.observe_global_in::<ProjectDirectory>(window, |this, window, cx| {
@@ -439,7 +466,12 @@ impl GitPanel {
 
     fn note_row(&mut self, note: Note, window: &mut Window, cx: &mut Context<Self>) -> NoteRow {
         let id = note.id;
-        let input = cx.new(|cx| InputState::new(window, cx).default_value(note.text));
+        // Wraps onto as many lines as the note needs.
+        let input = cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .auto_grow(1, NOTE_MAX_ROWS)
+                .default_value(note.text)
+        });
         // Saved as it is edited.
         let subscription = cx.subscribe(&input, move |this, input, event: &InputEvent, cx| {
             if matches!(event, InputEvent::Change)
@@ -681,25 +713,36 @@ impl GitPanel {
     }
 }
 
+/// `input` without the padding a multi-line input keeps around its text,
+/// which can't be set, so the box around it pads it as it needs.
+fn flush(input: impl IntoElement) -> Div {
+    let (x, y) = (
+        gpui_kit::component::Size::Medium.input_px(),
+        gpui_kit::component::Size::Medium.input_py(),
+    );
+    div().relative().mx(-x).my(-y).child(input)
+}
+
 impl Render for GitPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let Some(summary) = self.summary.clone() else {
             return div().id("git-panel").into_any_element();
         };
-        let theme = cx.theme();
-        let muted = theme.muted_foreground;
+        let palette = *crate::theme::palette(cx);
+        let muted = cx.theme().muted_foreground;
         let busy = self.busy;
         let has_message =
             !commit_notes::message(&self.message.read(cx).value(), &self.current_notes(cx))
                 .is_empty();
 
+        // The header: the branch, on the ribbon's tab row colour.
         let branch = h_flex()
             .flex_1()
             .min_w_0()
-            .gap_1()
+            .gap_1p5()
             .child(Icon::new(IconName::GitBranch).small().text_color(muted))
             .child(
-                div().truncate().font_medium().child(
+                div().truncate().child(
                     summary
                         .branch
                         .clone()
@@ -719,6 +762,7 @@ impl Render for GitPanel {
         let pull = Button::new("git-pull")
             .ghost()
             .xsmall()
+            .rounded(ButtonRounded::None)
             .icon(IconName::CloudDownload)
             .tooltip("Pull, merging if there are no conflicts")
             .loading(busy == Some(Busy::Pull))
@@ -727,6 +771,7 @@ impl Render for GitPanel {
         let push = Button::new("git-push")
             .ghost()
             .xsmall()
+            .rounded(ButtonRounded::None)
             .icon(IconName::CloudUpload)
             .tooltip(if summary.has_upstream {
                 "Push"
@@ -736,7 +781,20 @@ impl Render for GitPanel {
             .loading(busy == Some(Busy::Push))
             .disabled(busy.is_some() || summary.branch.is_none())
             .on_click(cx.listener(|this, _, window, cx| this.push(window, cx)));
+        let header = h_flex()
+            .id("git-header")
+            .flex_none()
+            .h(HEADER_HEIGHT)
+            .px(PADDING)
+            .gap_1()
+            .items_center()
+            .bg(crate::theme::color(palette.ribbon_tabs))
+            .child(branch)
+            .child(pull)
+            .child(push);
 
+        // The summary: small and muted, with the lines added and removed at
+        // its right.
         let changes = summary.changes();
         let counts = if changes.is_empty() {
             "No changes".to_string()
@@ -745,79 +803,112 @@ impl Render for GitPanel {
         };
         let lines = (summary.insertions + summary.deletions > 0).then(|| {
             h_flex()
-                .gap_2()
+                .flex_none()
+                .gap_1p5()
                 .child(
                     div()
-                        .text_color(ColorName::Green.scale(if theme.is_dark() { 400 } else { 700 }))
+                        .text_color(Hue::Green.of(&palette))
                         .child(format!("+{}", summary.insertions)),
                 )
                 .child(
                     div()
-                        .text_color(ColorName::Red.scale(if theme.is_dark() { 400 } else { 700 }))
+                        .text_color(Hue::Red.of(&palette))
                         .child(format!("−{}", summary.deletions)),
                 )
         });
+        let summary_row = h_flex()
+            .id("git-summary")
+            .h(SUMMARY_HEIGHT)
+            .gap_2()
+            .items_center()
+            .justify_between()
+            .text_xs()
+            .child(div().min_w_0().truncate().text_color(muted).child(counts))
+            .children(lines);
+        // Lets UI tests find the summary; inert in normal builds.
+        let summary_row = gpui_kit::TestSupportExt::test_support(summary_row);
 
+        // Generate at the left of the row beneath the message, on the tab
+        // row's colour, and Commit at its right, as the ribbon's buttons are.
+        let tabs = crate::theme::color(palette.ribbon_tabs);
         let generate = Button::new("git-generate-message")
-            .ghost()
+            .custom(
+                ButtonCustomVariant::new(cx)
+                    .color(tabs)
+                    .hover(crate::theme::color(palette.base))
+                    .active(crate::theme::color(palette.ribbon))
+                    .foreground(cx.theme().foreground),
+            )
+            // gpui-kit keeps only a fifth of a custom button's resting
+            // colour, so the colour is given to the button itself, as the
+            // ribbon's commands do.
+            .bg(tabs)
             .xsmall()
+            .h(BUTTON_HEIGHT)
+            .rounded(ButtonRounded::None)
             .icon(IconName::Sparkles)
-            .label("Write message")
+            .label("Generate")
             .tooltip("Have the harness write a message from what has changed")
             .loading(busy == Some(Busy::Generate))
             .disabled(busy.is_some() || !summary.has_changes())
             .on_click(cx.listener(|this, _, window, cx| this.generate(window, cx)));
         let commit = Button::new("git-commit")
-            .primary()
+            .custom(crate::ribbon::command_colors(cx))
+            .bg(crate::ribbon::command_shades(cx).0)
             .xsmall()
-            .icon(IconName::GitCommitHorizontal)
+            .h(BUTTON_HEIGHT)
+            .rounded(ButtonRounded::None)
             .label("Commit")
             .tooltip("Commit every change, new files included, with the message and notes")
             .loading(busy == Some(Busy::Commit))
             .disabled(busy.is_some() || !has_message || !summary.has_changes())
             .on_click(cx.listener(|this, _, window, cx| this.commit(window, cx)));
 
-        let panel = v_flex()
-            .id("git-panel")
-            .flex_none()
-            .gap_2()
-            .p_2()
-            .text_sm()
-            .child(
-                h_flex()
-                    .gap_1()
-                    .items_center()
-                    .child(branch)
-                    .child(pull)
-                    .child(push),
-            )
-            .child(
-                h_flex()
-                    .gap_2()
-                    .justify_between()
-                    .text_xs()
-                    .child(div().min_w_0().text_color(muted).child(counts))
-                    .children(lines),
-            )
+        let body = v_flex()
+            .id("git-body")
+            .px(PADDING)
+            .pb(PADDING)
+            .gap(GAP)
+            .bg(crate::theme::color(palette.ribbon))
+            .child(summary_row)
+            // Each note in a box of its own, wrapping, with a button to remove
+            // it at its top right while it is hovered.
             .children(self.notes.iter().map(|row| {
                 let id = row.id;
-                h_flex()
-                    .id(("commit-note", id as usize))
-                    .gap_1()
-                    .items_center()
+                let group = SharedString::from(format!("commit-note-{id}"));
+                let note = div().id(("commit-note", id as usize));
+                // Lets UI tests find the note; inert in normal builds.
+                gpui_kit::TestSupportExt::test_support(note)
+                    .group(group.clone())
+                    .relative()
+                    .py_1()
+                    .pl_1p5()
+                    .pr_5()
+                    .bg(tabs)
+                    .child(flush(
+                        Textarea::new(&row.input)
+                            .appearance(false)
+                            .text_xs()
+                            .line_height(NOTE_LINE_HEIGHT),
+                    ))
                     .child(
                         div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(Input::new(&row.input).xsmall()),
-                    )
-                    .child(
-                        Button::new(("remove-commit-note", id as usize))
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::X)
-                            .tooltip("Remove this note")
-                            .on_click(cx.listener(move |this, _, _, cx| this.remove_note(id, cx))),
+                            .absolute()
+                            .top_0()
+                            .right_0()
+                            .opacity(0.)
+                            .group_hover(group, |style| style.opacity(1.))
+                            .child(
+                                Button::new(("remove-commit-note", id as usize))
+                                    .ghost()
+                                    .xsmall()
+                                    .rounded(ButtonRounded::None)
+                                    .icon(IconName::X)
+                                    .tooltip("Remove this note")
+                                    .on_click(
+                                        cx.listener(move |this, _, _, cx| this.remove_note(id, cx)),
+                                    ),
+                            ),
                     )
             }))
             .child({
@@ -825,22 +916,38 @@ impl Render for GitPanel {
                 let message = div()
                     .id("git-commit-message")
                     .relative()
-                    .child(Editor::new(&self.message).h(height))
-                    .child(GrowToFit::tracker(
-                        &self.message,
-                        cx.entity().downgrade(),
-                        |this: &mut Self| &mut this.message_fit,
-                    ));
+                    .py(px(3.))
+                    .px_1p5()
+                    .bg(crate::theme::color(palette.darkest))
+                    // The tracker over the editor alone, not its padding.
+                    .child(
+                        flush(Editor::new(&self.message).appearance(false).h(height)).child(
+                            GrowToFit::tracker(
+                                &self.message,
+                                cx.entity().downgrade(),
+                                |this: &mut Self| &mut this.message_fit,
+                            ),
+                        ),
+                    );
                 // Lets UI tests find the message; inert in normal builds.
                 gpui_kit::TestSupportExt::test_support(message)
             })
             .child(
                 h_flex()
-                    .gap_2()
+                    .gap(GAP)
                     .justify_between()
                     .child(generate)
                     .child(commit),
             );
+
+        // No line above it, nor between its header and body: the change of
+        // colour is the edge.
+        let panel = v_flex()
+            .id("git-panel")
+            .flex_none()
+            .text_sm()
+            .child(gpui_kit::TestSupportExt::test_support(header))
+            .child(gpui_kit::TestSupportExt::test_support(body));
         // Lets UI tests find the panel; inert in normal builds.
         gpui_kit::TestSupportExt::test_support(panel).into_any_element()
     }
@@ -1196,6 +1303,244 @@ mod tests {
             );
             std::fs::remove_dir_all(&dir).ok();
         }
+    }
+
+    /// A repository with a change and two commit notes, for the panel's look.
+    fn repository_with_notes(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("suspense-{name}-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).unwrap();
+        git(&dir, &["init", "-q", "-b", "main"]);
+        git(&dir, &["config", "user.name", "Test"]);
+        git(&dir, &["config", "user.email", "test@example.com"]);
+        std::fs::write(dir.join("readme.md"), "hello\n").unwrap();
+        git(&dir, &["add", "."]);
+        git(&dir, &["commit", "-q", "-m", "first"]);
+        std::fs::write(dir.join("readme.md"), "hello again\n").unwrap();
+        for note in [
+            "Rewrite Editor spec with marquee selection and push/pull",
+            "Fix scrolling",
+        ] {
+            crate::commit_notes::add(&dir, note).unwrap();
+        }
+        dir
+    }
+
+    /// Opens the panel on `dir` in a window 260 pixels wide, as the sidebar
+    /// starts, once it shows its notes.
+    async fn open_panel(
+        dir: &Path,
+        cx: &mut TestAppContext,
+    ) -> (gpui_kit::Entity<GitPanel>, gpui_kit::AnyWindowHandle) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            ProjectDirectory::set(dir.to_path_buf(), cx);
+        });
+        let mut panel = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| GitPanel::new(window, cx));
+            panel = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let handle: gpui_kit::AnyWindowHandle = window.into();
+        gpui_kit::VisualTestContext::from_window(handle, cx)
+            .simulate_resize(gpui_kit::size(gpui_kit::px(260.), gpui_kit::px(600.)));
+        cx.wait_for(handle, Duration::from_secs(5), |window, _| {
+            window.try_find(("commit-note", 1usize)).is_some()
+        })
+        .await;
+        (panel.unwrap(), handle)
+    }
+
+    /// Renders the panel's frame again until its layout settles.
+    fn settle(handle: gpui_kit::AnyWindowHandle, cx: &mut TestAppContext) {
+        for _ in 0..3 {
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                .unwrap();
+        }
+    }
+
+    /// The header is 32 pixels tall on the ribbon's tab row colour, the body
+    /// beneath it on the ribbon's command area colour, padded 8 pixels at
+    /// either side and at the bottom, with 4 between one thing and the next;
+    /// each note in a square box on the tab row's colour, wrapping, and the
+    /// message on the darkest surface, in dark and light mode alike.
+    #[gpui_kit::test]
+    async fn the_header_and_body_take_the_ribbons_colours(cx: &mut TestAppContext) {
+        use gpui_kit::component::{Theme, ThemeMode};
+        use gpui_kit::px;
+        let dir = repository_with_notes("git-panel-look");
+        let (_, handle) = open_panel(&dir, cx).await;
+        for mode in [ThemeMode::Dark, ThemeMode::Light] {
+            cx.update(|cx| Theme::change(mode, None, cx));
+            settle(handle, cx);
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let palette = crate::theme::palette(cx);
+                let frame = crate::frame_image::Frame::of(window);
+                let bounds = |id: &'static str| window.find(id).bounds();
+                let (panel, header, body) = (
+                    bounds("git-panel"),
+                    bounds("git-header"),
+                    bounds("git-body"),
+                );
+                let summary = bounds("git-summary");
+                let message = bounds("git-commit-message");
+                let notes = [0usize, 1].map(|ix| window.find(("commit-note", ix + 1)).bounds());
+                let inside = |b: gpui_kit::Bounds<gpui_kit::Pixels>| {
+                    gpui_kit::point(b.left() + px(2.), b.bottom() - px(2.))
+                };
+
+                assert_eq!(header.size.height, super::HEADER_HEIGHT, "{mode:?}: header");
+                assert_eq!(
+                    (header.top(), body.top()),
+                    (panel.top(), header.bottom()),
+                    "{mode:?}: the header and body aren't one after the other"
+                );
+                assert_eq!(
+                    frame.at(inside(header)),
+                    palette.ribbon_tabs,
+                    "{mode:?}: header"
+                );
+                assert_eq!(frame.at(inside(body)), palette.ribbon, "{mode:?}: body");
+                // No line between the header and the body.
+                let x = header.left() + px(40.);
+                for dy in [-2., -1.] {
+                    let y = header.bottom() + px(dy + 0.5);
+                    assert_eq!(
+                        frame.at(gpui_kit::point(x, y)),
+                        palette.ribbon_tabs,
+                        "{mode:?}"
+                    );
+                }
+                assert_eq!(
+                    frame.at(gpui_kit::point(x, header.bottom() + px(0.5))),
+                    palette.ribbon,
+                    "{mode:?}: a line lies between the header and the body"
+                );
+
+                // Padded at either side and the bottom, 4 apart.
+                for (name, b) in [
+                    ("summary", summary),
+                    ("note", notes[0]),
+                    ("message", message),
+                ] {
+                    assert_eq!(
+                        (b.left() - body.left(), body.right() - b.right()),
+                        (super::PADDING, super::PADDING),
+                        "{mode:?}: the {name} isn't inset 8px"
+                    );
+                }
+                assert_eq!(summary.top(), body.top(), "{mode:?}: summary");
+                assert_eq!(notes[0].top() - summary.bottom(), super::GAP, "{mode:?}");
+                assert_eq!(notes[1].top() - notes[0].bottom(), super::GAP, "{mode:?}");
+                assert_eq!(message.top() - notes[1].bottom(), super::GAP, "{mode:?}");
+                let commit = bounds("git-commit");
+                assert_eq!(body.bottom() - commit.bottom(), super::PADDING, "{mode:?}");
+
+                // The notes on the tab row's colour, the long one wrapping
+                // onto more lines than the short one, and the message on the
+                // darkest surface.
+                for note in notes {
+                    assert_eq!(
+                        frame.at(inside(note)),
+                        palette.ribbon_tabs,
+                        "{mode:?}: note"
+                    );
+                }
+                assert!(
+                    notes[0].size.height > notes[1].size.height,
+                    "{mode:?}: the long note doesn't wrap: {notes:?}"
+                );
+                assert!(
+                    notes[1].size.height <= px(28.),
+                    "{mode:?}: a one-line note is {:?} tall",
+                    notes[1].size.height
+                );
+                assert_eq!(
+                    frame.at(inside(message)),
+                    palette.darkest,
+                    "{mode:?}: message"
+                );
+
+                // Every box and button square.
+                for quad in window.painted_quads() {
+                    let scale = window.scale_factor();
+                    let (x, y) = (
+                        quad.bounds.origin.x.0 / scale,
+                        quad.bounds.origin.y.0 / scale,
+                    );
+                    if quad.background.as_solid().is_some_and(|c| c.a > 0.)
+                        && x >= body.left().as_f32() - 0.5
+                        && y >= header.top().as_f32() - 0.5
+                        && y < body.bottom().as_f32()
+                    {
+                        assert!(
+                            quad.corner_radii.top_left.0 == 0.
+                                && quad.corner_radii.bottom_right.0 == 0.,
+                            "{mode:?}: a rounded box in the panel at {:?}",
+                            quad.bounds
+                        );
+                    }
+                }
+            })
+            .unwrap();
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Generate, with a sparkles icon, on the tab row's colour, is at the left
+    /// of the row beneath the message, and Commit, on the ribbon's button
+    /// colour, at its right.
+    #[gpui_kit::test]
+    async fn generate_is_at_the_left_and_commit_at_the_right(cx: &mut TestAppContext) {
+        use gpui_kit::component::{Theme, ThemeMode};
+        use gpui_kit::px;
+        let dir = repository_with_notes("git-panel-buttons");
+        let (_, handle) = open_panel(&dir, cx).await;
+        cx.update(|cx| Theme::change(ThemeMode::Dark, None, cx));
+        settle(handle, cx);
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let palette = crate::theme::palette(cx);
+            let frame = crate::frame_image::Frame::of(window);
+            let body = window.find("git-body").bounds();
+            let message = window.find("git-commit-message").bounds();
+            let generate = window.find("git-generate-message").bounds();
+            let commit = window.find("git-commit").bounds();
+            assert_eq!(
+                generate.left() - body.left(),
+                super::PADDING,
+                "Generate isn't at the left"
+            );
+            assert_eq!(
+                body.right() - commit.right(),
+                super::PADDING,
+                "Commit isn't at the right"
+            );
+            assert_eq!(generate.top(), commit.top(), "they aren't on one row");
+            assert_eq!(
+                generate.top() - message.bottom(),
+                super::GAP,
+                "not beneath the message"
+            );
+            assert!(generate.right() < commit.left());
+            let middle = |b: gpui_kit::Bounds<gpui_kit::Pixels>| {
+                gpui_kit::point(b.left() + px(1.5), b.top() + px(1.5))
+            };
+            assert_eq!(
+                frame.at(middle(generate)),
+                palette.ribbon_tabs,
+                "Generate's colour"
+            );
+            assert_eq!(frame.at(middle(commit)), 0x444444, "Commit's colour");
+        })
+        .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// Commit notes saved with the project show as rows that can be removed,

@@ -4,12 +4,13 @@
 //! file tool, a shell command, or a search naming them, in the spec location
 //! or under `.claude/reference`, each once; and beneath them, the task's
 //! understanding: the constraints the harness has taken from the spec.
+//! Its panels' headers are on the darkest surface and its body on the
+//! ribbon's command area colour, with no line anywhere in it.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use gpui_kit::assets::IconName;
-use gpui_kit::component::resizable::{ResizableState, resizable_panel, v_resizable};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -185,53 +186,85 @@ fn shown_name(path: &Path) -> String {
     }
 }
 
-/// The height each half of the sidebar can be dragged down to.
-pub const MIN_HALF_HEIGHT: Pixels = px(80.);
+/// How tall a referenced file's row is.
+pub const ROW_HEIGHT: Pixels = px(24.);
 
-/// Where the sidebar's halves scroll, and how its height is shared between
-/// them.
+/// How tall an understanding row's box is for a single line, and how far
+/// apart the boxes are.
+pub const BOX_HEIGHT: Pixels = px(32.);
+pub const BOX_GAP: Pixels = px(4.);
+
+/// How tall a line of an understanding row's text is, so that a single line
+/// makes its box 32 pixels tall.
+const BOX_LINE_HEIGHT: Pixels = px(20.);
+
+/// How rounded an understanding row's box is.
+const BOX_RADIUS: Pixels = px(4.);
+
+/// How much of the sidebar's height the referenced files can take before
+/// they scroll.
+const FILES_MAX_SHARE: f32 = 0.5;
+
+/// Where the sidebar's panels scroll.
 pub struct Layout<'a> {
     pub files_scroll: &'a ScrollHandle,
     pub understanding_scroll: &'a ScrollHandle,
-    pub split: &'a Entity<ResizableState>,
 }
 
-/// A half of the sidebar: its header over its rows, which scroll on their
-/// own.
-fn half(
-    id: &'static str,
-    header: Div,
-    scroll: &ScrollHandle,
-    list: impl IntoElement,
-    cx: &App,
-) -> Div {
-    v_flex()
-        .size_full()
-        .child(header)
-        .child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .child(crate::scrollbar::with_scrollbar(
-                    id, scroll, list, true, None, cx,
-                )),
+/// How tall the referenced files' panel is to show `rows` rows, before it
+/// is held to half the sidebar: its header, and its rows inside its padding.
+/// While there are none, its placeholder takes a row.
+pub fn files_height(rows: usize) -> Pixels {
+    crate::sidebar::HEADER_HEIGHT + crate::sidebar::PADDING * 2. + ROW_HEIGHT * rows.max(1) as f32
+}
+
+/// A panel's body: its `list`, which scrolls on its own with `scroll`, with a scrollbar at
+/// its right only while it is taller than the panel, so that nothing draws a
+/// line beside rows that all fit. Whether it overflows is known once it is
+/// laid out, so the frame is drawn again when that changes.
+fn body(id: &'static str, scroll: &ScrollHandle, list: impl IntoElement, cx: &App) -> AnyElement {
+    let overflows = scroll.max_offset().y > px(0.);
+    let watch = {
+        let scroll = scroll.clone();
+        canvas(
+            |_, _, _| {},
+            move |_, _, window, _| {
+                if (scroll.max_offset().y > px(0.)) != overflows {
+                    window.refresh();
+                }
+            },
         )
+        .absolute()
+        .size_0()
+    };
+    let content = if overflows {
+        crate::scrollbar::with_scrollbar(id, scroll, list, true, None, cx)
+    } else {
+        list.into_any_element()
+    };
+    div()
+        .relative()
+        .flex_1()
+        .min_h_0()
+        .w_full()
+        .child(content)
+        .child(watch)
+        .into_any_element()
 }
 
 /// A muted line standing in for rows while there are none.
 fn placeholder(text: &'static str, cx: &App) -> Div {
-    div()
-        .px_3()
-        .py_1()
+    h_flex()
+        .h(ROW_HEIGHT)
         .text_sm()
         .text_color(cx.theme().muted_foreground)
         .child(text)
 }
 
-/// The sidebar's contents: the referenced files at the top, each row opening
-/// its file, and the task's understanding at the bottom, a row per
-/// constraint, opening the file it links to; the line between them shares
-/// the height out.
+/// The sidebar's contents, with no line anywhere: the referenced files at
+/// the top, only as tall as their rows need, up to half its height, each row
+/// opening its file; and the task's understanding filling the rest, a box
+/// per constraint, opening the file it links to.
 pub fn render(
     files: &[Referenced],
     understanding: &Understanding,
@@ -240,6 +273,7 @@ pub fn render(
     cx: &App,
 ) -> AnyElement {
     let theme = cx.theme();
+    let palette = crate::theme::palette(cx);
     let rows = files.iter().enumerate().map(|(ix, file)| {
         // Only the file's name, and for an index file the folder it is in;
         // its full path is in its tooltip.
@@ -249,17 +283,12 @@ pub fn render(
         let (path, open) = (file.path.clone(), open.clone());
         // Lets UI tests find each row; inert in normal builds.
         gpui_kit::TestSupportExt::test_support(h_flex().id(("referenced-file", ix)))
+            .flex_none()
+            .h(ROW_HEIGHT)
             .gap_2()
-            .px_3()
-            .py_1()
             .text_sm()
             .cursor_pointer()
             .hover(|row| row.bg(theme.list_hover))
-            .child(
-                Icon::new(IconName::File)
-                    .xsmall()
-                    .text_color(theme.muted_foreground),
-            )
             .child(div().flex_1().min_w_0().truncate().child(shown))
             .when(file.edited, |row| {
                 row.child(
@@ -284,27 +313,33 @@ pub fn render(
             .on_click(move |_, window, cx| open(path.clone(), window, cx))
     });
     // Lets UI tests find the list; inert in normal builds.
-    let files_list = gpui_kit::TestSupportExt::test_support(div().id("referenced-files-list"))
+    let files_list = gpui_kit::TestSupportExt::test_support(v_flex().id("referenced-files-list"))
         .size_full()
         .overflow_y_scroll()
         .track_scroll(layout.files_scroll)
+        .p(crate::sidebar::PADDING)
         .when(files.is_empty(), |list| {
             list.child(placeholder("No spec files referenced yet", cx))
         })
         .children(rows);
 
+    let boxes = crate::theme::color(palette.ribbon_tabs);
     let constraints = understanding.rows.iter().enumerate().map(|(ix, row)| {
         let highlight = Understanding::highlight(row);
         let missing = row.linked && row.target.is_none();
         // Lets UI tests find each row; inert in normal builds.
-        gpui_kit::TestSupportExt::test_support(div().id(("understanding-row", ix)))
+        gpui_kit::TestSupportExt::test_support(v_flex().id(("understanding-row", ix)))
+            .flex_none()
             .w_full()
-            .px_3()
-            .py_1()
+            .min_h(BOX_HEIGHT)
+            .justify_center()
+            .py((BOX_HEIGHT - BOX_LINE_HEIGHT) / 2.)
+            .px(crate::sidebar::PADDING)
+            .rounded(BOX_RADIUS)
             .text_sm()
-            .when(highlight > 0., |this| {
-                this.bg(theme.accent.opacity(highlight))
-            })
+            .line_height(BOX_LINE_HEIGHT)
+            // A row just added or changed is lit, fading back to its box.
+            .bg(boxes.blend(theme.accent.opacity(highlight.clamp(0., 1.))))
             .when(missing, |this| this.text_color(theme.muted_foreground))
             .child(row.text.clone())
             .when_some(row.target.clone(), |this, target| {
@@ -315,46 +350,57 @@ pub fn render(
             })
     });
     // Lets UI tests find the list; inert in normal builds.
-    let understanding_list = gpui_kit::TestSupportExt::test_support(div().id("understanding-list"))
-        .size_full()
-        .overflow_y_scroll()
-        .track_scroll(layout.understanding_scroll)
-        .when(!understanding.exists, |list| {
-            list.child(placeholder("Nothing understood yet", cx))
-        })
-        .children(constraints);
+    let understanding_list =
+        gpui_kit::TestSupportExt::test_support(v_flex().id("understanding-list"))
+            .size_full()
+            .overflow_y_scroll()
+            .track_scroll(layout.understanding_scroll)
+            .p(crate::sidebar::PADDING)
+            .gap(BOX_GAP)
+            .when(!understanding.exists, |list| {
+                list.child(placeholder("Nothing understood yet", cx))
+            })
+            .children(constraints);
 
-    // Each half starts with the same share of the height, until the line
-    // between them is dragged.
-    let panel = || {
-        resizable_panel()
-            .size_range(MIN_HALF_HEIGHT..Pixels::MAX)
-            .flex_basis(relative(0.))
-    };
-    // Lets UI tests find the sidebar; inert in normal builds.
-    gpui_kit::TestSupportExt::test_support(v_flex().id("referenced-files"))
+    // Lets UI tests find each part; inert in normal builds.
+    let find =
+        |id: &'static str, element: Div| gpui_kit::TestSupportExt::test_support(element.id(id));
+    find("referenced-files", v_flex())
         .size_full()
-        .bg(theme.background)
-        .border_l_1()
-        .border_color(theme.border)
+        .overflow_hidden()
+        .bg(crate::theme::color(palette.ribbon))
         .child(
-            v_resizable("referenced-spec-split")
-                .with_state(layout.split)
-                .with_handle_appearance(crate::hit_areas::resize_edges("referenced-spec-split"))
-                .child(panel().child(half(
+            find("referenced-files-panel", v_flex())
+                .flex_none()
+                .w_full()
+                .h(files_height(files.len()))
+                .max_h(relative(FILES_MAX_SHARE))
+                .child(find(
+                    "referenced-files-header",
+                    crate::sidebar::header("Referenced Spec", cx),
+                ))
+                .child(body(
                     "referenced-files",
-                    crate::sidebar::header("Referenced spec", Some(files.len()), cx),
                     layout.files_scroll,
                     files_list,
                     cx,
-                )))
-                .child(panel().child(half(
+                )),
+        )
+        .child(
+            find("understanding-panel", v_flex())
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .child(find(
+                    "understanding-header",
+                    crate::sidebar::header("Understanding", cx),
+                ))
+                .child(body(
                     "understanding",
-                    crate::sidebar::header("Understanding", Some(understanding.rows.len()), cx),
                     layout.understanding_scroll,
                     understanding_list,
                     cx,
-                ))),
+                )),
         )
         .into_any_element()
 }

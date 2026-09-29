@@ -2,9 +2,11 @@ use /lib
 use /ui
 from ./chat-input import ChatInputScope
 from ./message-list import MessageList
+from /scope/harness-integration import HarnessIntegrationScope
 from /scope/no-project import NoProjectStateScope
 from /scope/open-projects import OpenProjectsScope
 from /scope/project-data import ProjectDataScope
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from /scope/prompt-mode/modes import PromptModesScope
 from /scope/prompt-mode/sending import PromptSendingScope
 from /ui/components/history-list import HistoryListScope
@@ -50,24 +52,34 @@ shape PromptEditorShape:
         Every task in the list has a checkbox at the left of its heading,
         before its status, and clicking it selects or deselects the task
         without opening or closing it. Shift-clicking one selects every task
-        between it and the one last clicked. The selection is kept while the
-        list is closed and opened again, until it is cleared or sent.
+        between it and the one last clicked, never deselecting any; with none
+        clicked before, it selects or deselects that one as a plain click
+        does. The selection is kept while the list is closed and opened again,
+        until it is cleared or sent. Each open project keeps its own, as the
+        @{OpenProjectsScope} says. Previous answers have no checkboxes.
 
         While any task is selected, the row shows the batch actions at its
-        right, in place of nothing: how many are selected, "N selected", then
-        "Send N to Spec", sending the selected tasks that were sent in Code
-        alone, then "Send N to Code", sending those sent in Spec alone, each
-        tinted the colour of the mode it sends to and shown only while the
-        selection holds any such task, then "Clear", which deselects them all.
-        Clicking an action never opens or closes the list. Tasks sent in Chain,
-        or whose mode isn't known, can be selected but neither action sends
-        them.
+        right, in place of nothing: "N selected", muted, counting every task
+        selected, then "Send N to Spec" and "Send N to Code", small ghost
+        buttons with a swap icon, each tinted the colour of the mode it sends
+        to, then "Clear", which deselects them all. Send N to Spec counts, and
+        sends, the selected tasks that offer Send to Spec, and Send N to Code
+        those that offer Send to Code, as the @{PromptSendingScope} says; each
+        is shown only while its count isn't zero. Tasks that don't offer it,
+        sent in Chain or Freeform, whose mode isn't known, already sent to the
+        other mode or being sent there, marked done, or complete, can be
+        selected, and are counted in "N selected", but neither action sends
+        them. Clicking an action never opens or closes the list.
 
         A batch action sends each of its tasks to the other mode, as the
-        @{PromptSendingScope} says for one, oldest first, so they queue in
-        the order they were first sent, each saved in the history as a new
-        task. Once sent, the tasks it sent are deselected, and the list stays
-        as it was.
+        @{PromptSendingScope} says for one, oldest first: the first starts
+        straight away while the harness is free and the rest queue behind it,
+        so they run in the order they were first sent, each saved in the
+        history as a new task. Once sent, the tasks it sent are deselected,
+        the rest of the selection is kept, and the list stays as it was, still
+        expanded, with nothing opened. With no project open, it sends nothing,
+        a notification says a project must be opened first, and the selection
+        is kept.
 
     header:
         The latest task heads the view whether or not the harness is working:
@@ -86,6 +98,60 @@ shape PromptEditorShape:
         table are, so a long prompt costs no more to show, scroll, or
         animate than a short one. The header is as tall as the prompt up to
         where it starts to scroll.
+
+    rawPrompt:
+        Beside the latest task's Resend button, a small ghost button with a
+        code icon, whose tooltip says "View the raw prompt", opens a modal
+        showing exactly what the harness was given for the task, once it has
+        been sent: nothing rendered, nothing hidden. Clicking it never opens or
+        closes anything else in the header. Until the task has compiled, it
+        is disabled, its tooltip reading "No prompt sent yet". Only the
+        latest task's header has it; previous tasks and answers don't.
+
+        The modal is titled "Raw prompt", with the task's mode, its hidden
+        anchor's name, and the harness it was sent to beneath the title, or
+        "Harness not recorded" for a task saved before the harness was. The
+        anchor's name is shown for a Freeform task too, though its header
+        hides it. It shows two sections, each headed and each with a Copy
+        button that copies that section's whole text, disabled while the
+        section has none to copy:
+
+        \\
+        - System prompt: the system prompt as the harness received it, with
+          every placeholder filled in and every injected prompt in its place,
+          the spec-reading prompt, the Piton fluency, and the code-to-spec
+          prompt with the code task's prompt and final output, as the
+          @{ModeSystemPromptsScope} says; or "No system prompt" when none was
+          sent, as for Freeform.
+        - User prompt: the compiled prompt the harness received, with its spec
+          slices when it was sent with them.
+        \\
+
+        For a harness that takes no system prompt of its own, where it is given
+        ahead of the prompt, as the @{HarnessIntegrationScope} says, the modal
+        shows the one text it was given, headed "Prompt", with a single Copy
+        button. A prompt sent with attached images ends with a third section,
+        "Attached images", listing the path of each saved image, one to a
+        line, with its own Copy button. Messages sent to the task while it ran
+        are not part of it; they are shown in its output.
+
+        The text is shown as plain monospace text, wrapped, selectable, and
+        scrolling within the modal, laying out only what is in view however
+        long it is: it is drawn in rows of 16 lines, each laid out as it
+        scrolls into view, so a selection is made within one row and can't be
+        dragged across rows, while Copy always takes the whole section. The
+        modal is 85% of the window's height, and 90% of its width up to 1000
+        pixels. Pressing Escape,
+        clicking outside it, or its close button closes it.
+
+        What it shows is what was sent, not what the templates say now: the
+        system prompt as sent, and the harness it was sent to, are saved in the
+        task's history record beside its compiled user prompt, for questions as
+        much as tasks, and for a harness given one combined text, the system
+        prompt alone, the combined text built again from it exactly as it was
+        sent, so the modal shows the same for a task restored
+        from the history. A task saved before this was recorded shows its
+        system prompt as "Not recorded".
 
     queue:
         overview:

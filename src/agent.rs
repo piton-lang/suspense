@@ -94,6 +94,20 @@ impl Agent {
             .unwrap_or((Agent::Claude, session))
     }
 
+    /// The agent `command` runs, as [`Self::command`] names it.
+    pub fn of_command(command: &str) -> Option<Agent> {
+        Agent::ALL
+            .into_iter()
+            .find(|agent| agent.command() == command)
+    }
+
+    /// Whether it takes a system prompt of its own, apart from the prompt, as
+    /// Claude Code does with `--append-system-prompt`. Codex and OpenCode
+    /// don't, so theirs is given ahead of the prompt.
+    pub fn takes_system_prompt(self) -> bool {
+        self == Agent::Claude
+    }
+
     /// Whether a task's run can be fed more messages while it works: Claude
     /// Code's can, while `codex exec` and `opencode run` read a single prompt.
     pub fn can_be_fed(self) -> bool {
@@ -153,9 +167,7 @@ fn file() -> Result<PathBuf> {
 
 fn load(file: &Path) -> Option<Agent> {
     let name = fs::read_to_string(file).ok()?;
-    Agent::ALL
-        .into_iter()
-        .find(|agent| agent.command() == name.trim())
+    Agent::of_command(name.trim())
 }
 
 fn save(agent: Agent, file: &Path) -> Result<()> {

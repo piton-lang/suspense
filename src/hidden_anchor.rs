@@ -116,12 +116,39 @@ pub struct HiddenAnchor {
     /// Text attached to the prompt, written as `attachedText` after the mode:
     /// each piece a list of quoted lines, taken as it is rather than as Piton.
     pub attached_text: Vec<String>,
-    /// The `systemPrompt` written after the attached text, if any.
+    /// Images attached to the prompt, by their paths from the project
+    /// directory once saved in its data, written as `attachedImages` after
+    /// the attached text: each path an escape block, as attached text is.
+    pub attached_images: Vec<String>,
+    /// The `systemPrompt` written after the attached images, if any.
     pub system_prompt: Option<String>,
     /// For a Code task sent to Spec, the code task it was sent from, written
     /// as `codeTask` after the system prompt, so it is sent the same way
     /// again.
     pub code_task: Option<CodeTask>,
+    /// For a task sent to the other mode, from Code or from Spec, the name of
+    /// the hidden anchor of the task it was sent from, written as `sentFrom`
+    /// after the code task; none for any other prompt, and for one saved
+    /// before this was kept.
+    pub sent_from: Option<String>,
+}
+
+/// What is attached to a prompt: pieces of text, and images saved in the
+/// project's data, by their paths from the project directory, each in the
+/// order it was attached.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Attached {
+    pub text: Vec<String>,
+    pub images: Vec<String>,
+}
+
+impl From<Vec<String>> for Attached {
+    fn from(text: Vec<String>) -> Self {
+        Self {
+            text,
+            images: Vec::new(),
+        }
+    }
 }
 
 /// The code task a Spec task was sent from: its prompt as typed, and its
@@ -140,6 +167,9 @@ pub struct CompiledPrompt {
     /// The code task it was sent from, which fills in its system prompt as it
     /// is sent (see [`Self::system_prompt_as_sent`]).
     pub code_task: Option<CodeTask>,
+    /// The images attached to it, to give the harness alongside the prompt,
+    /// in the order they were attached; never part of the prompt's text.
+    pub images: Vec<PathBuf>,
 }
 
 impl CompiledPrompt {
@@ -163,21 +193,49 @@ impl HiddenAnchor {
     /// A freshly named anchor with no imports and no system prompt.
     pub fn random() -> Self {
         Self {
-            name: format!(
-                "Prompt_{:016x}",
-                RandomState::new().hash_one(SystemTime::now())
-            ),
+            name: Self::random_name(),
             imports: Imports::default(),
             mode: None,
             sliced: false,
             attached_text: Vec::new(),
+            attached_images: Vec::new(),
             system_prompt: None,
             code_task: None,
+            sent_from: None,
         }
+    }
+
+    /// What is attached to it.
+    #[cfg(test)]
+    pub fn attached(&self) -> Attached {
+        Attached {
+            text: self.attached_text.clone(),
+            images: self.attached_images.clone(),
+        }
+    }
+
+    /// Attaches `attached` to it, in place of anything attached before.
+    pub fn attach(&mut self, attached: Attached) {
+        self.attached_text = attached.text;
+        self.attached_images = attached.images;
+    }
+
+    /// A fresh name for an anchor, as [`Self::random`] gives it, so a prompt
+    /// can be known by its anchor's name before the anchor is resolved.
+    pub fn random_name() -> String {
+        format!(
+            "Prompt_{:016x}",
+            RandomState::new().hash_one(SystemTime::now())
+        )
     }
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// Names it `name`, one from [`Self::random_name`].
+    pub fn rename(&mut self, name: String) {
+        self.name = name;
     }
 
     /// The Piton source of this anchor with `prompt` as its `userPrompt`.
@@ -206,6 +264,15 @@ impl HiddenAnchor {
                 push_block(&mut source, ATTACHMENT_INDENT, text);
             }
         }
+        if !self.attached_images.is_empty() {
+            source.push('\n');
+            source.push_str(ATTACHED_IMAGES_LINE);
+            source.push('\n');
+            for (index, path) in self.attached_images.iter().enumerate() {
+                writeln!(source, "{PROMPT_INDENT}{IMAGE_KEY}{}:", index + 1).ok();
+                push_block(&mut source, ATTACHMENT_INDENT, path);
+            }
+        }
         if let Some(system_prompt) = &self.system_prompt {
             source.push('\n');
             source.push_str(SYSTEM_PROMPT_LINE);
@@ -222,6 +289,10 @@ impl HiddenAnchor {
                 writeln!(source, "{PROMPT_INDENT}{CODE_RESULT_KEY}").ok();
                 push_block(&mut source, ATTACHMENT_INDENT, result);
             }
+        }
+        if let Some(sent_from) = &self.sent_from {
+            source.push('\n');
+            writeln!(source, "{SENT_FROM_PREFIX}{sent_from}").ok();
         }
         let references = self.references(prompt);
         if !references.is_empty() {
@@ -317,6 +388,7 @@ impl HiddenAnchor {
                 let property = |line: &&str| {
                     *line == SYSTEM_PROMPT_LINE
                         || *line == ATTACHED_TEXT_LINE
+                        || *line == ATTACHED_IMAGES_LINE
                         || *line == SLICED_LINE
                         || line.starts_with(MODE_PREFIX)
                 };
@@ -365,6 +437,21 @@ impl HiddenAnchor {
             attached_text.extend(quoted.into_iter().map(|lines| lines.join("\n")));
             rest = rest.strip_prefix(&[""]).unwrap_or(rest);
         }
+        // Saved only by versions that attach images.
+        let mut attached_images = Vec::new();
+        if rest.first() == Some(&ATTACHED_IMAGES_LINE) {
+            rest = &rest[1..];
+            while rest.first().is_some_and(|line| {
+                line.strip_prefix(PROMPT_INDENT)
+                    .and_then(|key| key.strip_prefix(IMAGE_KEY))
+                    .is_some_and(|key| key.ends_with(':'))
+            }) {
+                let (path, after) = read_escaped(&rest[1..], ATTACHMENT_INDENT)?;
+                attached_images.push(path);
+                rest = after;
+            }
+            rest = rest.strip_prefix(&[""]).unwrap_or(rest);
+        }
         let system_prompt = match rest.first() {
             Some(&SYSTEM_PROMPT_LINE) => Some(match read_escaped(&rest[1..], PROMPT_INDENT) {
                 Some((text, after)) => {
@@ -393,15 +480,24 @@ impl HiddenAnchor {
                     return None;
                 }
                 let (prompt, after) = read_escaped(&rest[2..], ATTACHMENT_INDENT)?;
-                let result = if key(after.first(), CODE_RESULT_KEY) {
-                    Some(read_escaped(&after[1..], ATTACHMENT_INDENT)?.0)
+                let (result, after) = if key(after.first(), CODE_RESULT_KEY) {
+                    let (result, after) = read_escaped(&after[1..], ATTACHMENT_INDENT)?;
+                    (Some(result), after)
                 } else {
-                    None
+                    (None, after)
                 };
+                rest = after.strip_prefix(&[""]).unwrap_or(after);
                 Some(CodeTask { prompt, result })
             }
             _ => None,
         };
+        // Saved only by versions that keep which task a task sent to the other
+        // mode was sent from.
+        let sent_from = rest
+            .first()
+            .and_then(|line| line.strip_prefix(SENT_FROM_PREFIX))
+            .map(|name| name.trim().to_string())
+            .filter(|name| !name.is_empty());
         Some((
             Self {
                 name,
@@ -409,8 +505,10 @@ impl HiddenAnchor {
                 mode,
                 sliced,
                 attached_text,
+                attached_images,
                 system_prompt,
                 code_task,
+                sent_from,
             },
             prompt,
         ))
@@ -438,6 +536,9 @@ const CODE_TASK_LINE: &str = "    codeTask:";
 const CODE_PROMPT_KEY: &str = "prompt:";
 const CODE_RESULT_KEY: &str = "result:";
 
+/// The start of the `sentFrom` line of [`HiddenAnchor::source`].
+const SENT_FROM_PREFIX: &str = "    sentFrom: ";
+
 /// The line opening the `references` property of [`HiddenAnchor::source`].
 const REFERENCES_LINE: &str = "    references:";
 
@@ -447,6 +548,12 @@ const REFERENCES_LINE: &str = "    references:";
 const ATTACHED_TEXT_LINE: &str = "    attachedText:";
 const ATTACHMENT_KEY: &str = "text";
 const ATTACHMENT_INDENT: &str = "            ";
+
+/// The line opening the `attachedImages` property of
+/// [`HiddenAnchor::source`], and what each image's path in it is keyed by,
+/// followed by its number; each path is an escape block, as attached text is.
+const ATTACHED_IMAGES_LINE: &str = "    attachedImages:";
+const IMAGE_KEY: &str = "image";
 
 /// Adds `text` to `source` as a multi-line escape block at `indent`, which
 /// Piton keeps exactly as it is. Its fence is three backslashes, or one more
@@ -534,7 +641,13 @@ pub fn freeform(prompt: &str, attached_text: &[String]) -> CompiledPrompt {
         user_prompt: with_attached_text(prompt, attached_text),
         system_prompt: None,
         code_task: None,
+        images: Vec::new(),
     }
+}
+
+/// The images at `paths`, from `project_dir`, as files for the harness.
+pub fn image_files(paths: &[String], project_dir: &Path) -> Vec<PathBuf> {
+    paths.iter().map(|path| project_dir.join(path)).collect()
 }
 
 /// The start of each piece of a line, as earlier versions wrote them.
@@ -852,6 +965,7 @@ pub fn compile(anchor: &HiddenAnchor, file: &Path, project_dir: &Path) -> Result
             .as_deref()
             .map(|text| saved.resolve(text, &resolved)),
         code_task: saved.code_task,
+        images: image_files(&saved.attached_images, project_dir),
     })
 }
 
@@ -1156,8 +1270,10 @@ mod tests {
             mode: None,
             sliced: false,
             attached_text: Vec::new(),
+            attached_images: Vec::new(),
             system_prompt: None,
             code_task: None,
+            sent_from: None,
         };
         assert_eq!(
             anchor.source("hi"),
@@ -1400,6 +1516,99 @@ mod tests {
         anchor.system_prompt = Some("Spec.".into());
         let (parsed, _) = HiddenAnchor::parse(&anchor.source("x")).unwrap();
         assert_eq!(parsed.code_task, None);
+    }
+
+    /// A task sent to the other mode, from Code or from Spec, is saved with
+    /// the name of the task it was sent from, which reads back whatever else
+    /// it was saved with; one saved before this was kept reads back as sent
+    /// from none.
+    #[test]
+    fn tasks_sent_to_the_other_mode_are_saved_with_where_they_were_sent_from() {
+        let from = HiddenAnchor::random_name();
+        for (mode, code_task, system_prompt, attached) in [
+            (
+                SendMode::Spec,
+                Some(CodeTask {
+                    prompt: format!("Change it.\n{TRICKY}"),
+                    result: Some("Done.".into()),
+                }),
+                Some("Spec.".to_string()),
+                vec!["note".to_string()],
+            ),
+            (
+                SendMode::Spec,
+                Some(CodeTask {
+                    prompt: "Change it.".into(),
+                    result: None,
+                }),
+                None,
+                Vec::new(),
+            ),
+            (SendMode::Code, None, Some("Code.".to_string()), Vec::new()),
+            (SendMode::Code, None, None, Vec::new()),
+        ] {
+            let mut anchor = HiddenAnchor::random();
+            anchor
+                .imports
+                .add_from_source("from ./scope/application import ApplicationScope");
+            anchor.mode = Some(mode);
+            anchor.sliced = true;
+            anchor.attached_text = attached;
+            anchor.system_prompt = system_prompt;
+            anchor.code_task = code_task;
+            anchor.sent_from = Some(from.clone());
+            let prompt = "Change @{ApplicationScope}.";
+            let source = anchor.source(prompt);
+            let (parsed, text) = HiddenAnchor::parse(&source).unwrap();
+            assert_eq!(text, prompt);
+            assert_eq!(parsed.sent_from, anchor.sent_from, "{source}");
+            assert_eq!(parsed.code_task, anchor.code_task, "{source}");
+            assert_eq!(parsed.system_prompt, anchor.system_prompt, "{source}");
+            assert_eq!(parsed.source(&text), source);
+
+            // Saved before it was kept.
+            anchor.sent_from = None;
+            let (parsed, _) = HiddenAnchor::parse(&anchor.source(prompt)).unwrap();
+            assert_eq!(parsed.sent_from, None);
+            assert_eq!(parsed.code_task, anchor.code_task);
+        }
+    }
+
+    /// Where a task was sent from is kept with it, not sent: it compiles as
+    /// it would without it, its references resolved.
+    #[test]
+    fn where_a_task_was_sent_from_is_not_sent() {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        let project_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut anchor = HiddenAnchor::random();
+        anchor
+            .imports
+            .add_from_source("from ./scope/application import ApplicationScope");
+        anchor.mode = Some(SendMode::Code);
+        anchor.system_prompt = Some("Code, see @{ApplicationScope}.".into());
+        anchor.sent_from = Some(HiddenAnchor::random_name());
+        let dir = project_dir.join("target/hidden-anchor-sent-from-test");
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("compile.pi");
+        fs::write(&file, anchor.source("Change @{ApplicationScope}.")).unwrap();
+        let compiled = compile(&anchor, &file, project_dir).unwrap();
+        assert!(
+            compiled
+                .user_prompt
+                .starts_with("Change [ApplicationScope]("),
+            "{}",
+            compiled.user_prompt
+        );
+        assert!(!compiled.user_prompt.contains("sentFrom"));
+        let system_prompt = compiled.system_prompt.unwrap();
+        assert!(
+            system_prompt.starts_with("Code, see [ApplicationScope]("),
+            "{system_prompt}"
+        );
+        assert!(!system_prompt.contains("sentFrom"));
+        fs::remove_file(&file).ok();
     }
 
     /// A Spec task sent from a Code task compiles, whatever the code task
@@ -1763,6 +1972,89 @@ mod tests {
             )
         );
         assert_eq!(compiled.system_prompt.as_deref(), Some("Answer."));
+    }
+
+    /// Attached images are saved as their paths, from the project directory,
+    /// each an escape block keyed image1, image2, and so on, after the
+    /// attached text; they read back in order, alongside everything else,
+    /// and anchors saved before images could be attached read back with
+    /// none. The images reach the harness as files, never as text in the
+    /// compiled prompt.
+    #[test]
+    fn attached_images_are_saved_as_their_paths() {
+        let mut anchor = HiddenAnchor::random();
+        anchor.mode = Some(SendMode::Code);
+        anchor.sliced = true;
+        anchor.attached_text = vec!["log".into()];
+        // Even a path that looks like Piton is kept as it is.
+        let images = vec![
+            ".suspense/images/1-aaaaaaaaaaaa.png".to_string(),
+            ".suspense/images/2-{x} @{Y}: b.jpg".to_string(),
+        ];
+        anchor.attached_images = images.clone();
+        anchor.system_prompt = Some("Be brief.".into());
+        anchor.code_task = Some(CodeTask {
+            prompt: "Did it".into(),
+            result: None,
+        });
+        anchor.sent_from = Some("Prompt_from".into());
+        let source = anchor.source("Look at this");
+        assert!(
+            source.contains(
+                "    attachedImages:\n        image1:\n            \\\\\\\n            .suspense/images/1-aaaaaaaaaaaa.png\n            \\\\\\\n        image2:"
+            ),
+            "{source}"
+        );
+        let (parsed, prompt) = HiddenAnchor::parse(&source).unwrap();
+        assert_eq!(prompt, "Look at this");
+        assert_eq!(parsed.attached_images, images);
+        assert_eq!(parsed.attached_text, ["log"]);
+        assert!(parsed.sliced);
+        assert_eq!(parsed.system_prompt.as_deref(), Some("Be brief."));
+        assert_eq!(parsed.code_task, anchor.code_task);
+        assert_eq!(parsed.sent_from.as_deref(), Some("Prompt_from"));
+        assert_eq!(
+            parsed.attached(),
+            super::Attached {
+                text: vec!["log".into()],
+                images: images.clone(),
+            }
+        );
+
+        // Images alone, with nothing else attached.
+        let mut alone = HiddenAnchor::random();
+        alone.attached_images = vec!["a.png".into()];
+        let (parsed, _) = HiddenAnchor::parse(&alone.source("Hi")).unwrap();
+        assert_eq!(parsed.attached_images, ["a.png"]);
+        assert!(parsed.attached_text.is_empty());
+
+        // Saved before images could be attached: none.
+        let old = "anchor Prompt_old:\n    userPrompt:\n        \\\\\\\n        Hi\n        \\\\\\\n\n    mode: code\n\n    attachedText:\n        text1:\n            \\\\\\\n            x\n            \\\\\\\n\n    systemPrompt:\n        \\\\\\\n        Be.\n        \\\\\\\n";
+        let (parsed, prompt) = HiddenAnchor::parse(old).unwrap();
+        assert_eq!(prompt, "Hi");
+        assert!(parsed.attached_images.is_empty());
+        assert_eq!(parsed.attached_text, ["x"]);
+        assert_eq!(parsed.system_prompt.as_deref(), Some("Be."));
+        // Nothing attached, nothing written.
+        assert!(
+            !HiddenAnchor::random()
+                .source("Hi")
+                .contains("attachedImages")
+        );
+
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        let project_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let dir = project_dir.join("target/hidden-anchor-test");
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("images.pi");
+        let mut anchor = HiddenAnchor::random();
+        anchor.attached_images = images.clone();
+        fs::write(&file, anchor.source("Look at this")).unwrap();
+        let compiled = compile(&anchor, &file, project_dir).unwrap();
+        assert_eq!(compiled.user_prompt, "Look at this");
+        assert_eq!(compiled.images, super::image_files(&images, project_dir));
     }
 
     /// A Freeform prompt is sent just as it was typed, then its attached

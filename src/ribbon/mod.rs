@@ -2,10 +2,10 @@
 //! commands beneath them in labelled groups. Each tab is a module of its own,
 //! which says which commands it holds, and renders and runs them.
 //!
-//! Following the usual ribbon conventions: main commands are large icons
-//! above their labels, tooltips explain rather than repeat the label and give
+//! Following the usual ribbon conventions: main commands are icons above
+//! their labels, tooltips explain rather than repeat the label and give
 //! any shortcut, a command that can't run is disabled rather than hidden,
-//! groups are titled down their left edge, and the ribbon collapses by
+//! groups are set apart by dividers named for them, and the ribbon collapses by
 //! double-clicking a tab, its chevron beside the project indicator, or
 //! Ctrl/Cmd+F1, which is remembered
 //! across launches. Collapsed, the tabs go too, and the
@@ -13,9 +13,8 @@
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonRounded, ButtonVariants};
-use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{
-    ActiveTheme, Icon, Selectable as _, Sizable as _, Size, StyledExt as _, h_flex, v_flex,
+    ActiveTheme, Icon, Sizable as _, Size, StyledExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -46,32 +45,34 @@ actions!(
     ]
 );
 
-/// The height of the row of tabs: gpui-kit's tab bar, less the line along its
-/// bottom and a pixel more, so that at a fractional display scale, where the
-/// clip falls between device pixels, no softened edge of that line shows as a
-/// faint seam between the tabs and the commands beneath them.
-const TAB_ROW_HEIGHT: Pixels = px(30.);
+/// The height of the row of tabs, which the collapsed ribbon's row keeps.
+const TAB_ROW_HEIGHT: Pixels = px(32.);
 
-/// How long the box a group's title is drawn across is before it is turned:
-/// longer than any group is tall, so the title is centred in its strip
-/// whatever the group's height, and clipped by the strip if a group is ever
-/// shorter than its title is long.
-const GROUP_TITLE_LENGTH: Pixels = px(240.);
+/// The room either side of a tab's label, which is all a tab is.
+const TAB_PADDING: Pixels = px(8.);
 
-/// The padding at the right end of the commands, and above and below the buttons,
-/// though not the groups' title strips, which run the body's full height; and
-/// the gap between one command and the next, across and down.
+/// The padding around the commands, on every side.
 const BODY_PADDING: Pixels = px(8.);
 
+/// The gap between one command and the next, across and down, and between a
+/// group's buttons and the divider beside them.
+const GAP: Pixels = px(4.);
+
+/// How wide the divider between two groups is.
+const DIVIDER_WIDTH: Pixels = px(4.);
+
 /// A slim button's height.
-const SLIM_HEIGHT: Pixels = px(22.);
+const SLIM_HEIGHT: Pixels = px(27.);
+
+/// A small button's height, in the collapsed ribbon's row.
+const SMALL_HEIGHT: Pixels = px(22.);
 
 /// Slim buttons stacked in one column, at most.
 const SLIM_STACK: usize = 2;
 
 /// How tall a column of `slim` slim buttons is, with the gaps between them.
 fn stacked(slim: usize) -> Pixels {
-    SLIM_HEIGHT * slim as f32 + BODY_PADDING * (slim as f32 - 1.)
+    SLIM_HEIGHT * slim as f32 + GAP * (slim as f32 - 1.)
 }
 
 /// A full button is exactly two slim buttons tall, however much its icon and
@@ -79,13 +80,6 @@ fn stacked(slim: usize) -> Pixels {
 fn full_height() -> Pixels {
     stacked(SLIM_STACK)
 }
-
-/// The width of the strip down a group's left edge that holds its title,
-/// leaving room either side of the title.
-const GROUP_TITLE_WIDTH: Pixels = px(28.);
-
-/// The size of a group's title.
-const GROUP_TITLE_SIZE: f32 = 12.;
 
 /// Ctrl+F1 (Cmd+F1 on macOS) collapses or expands the ribbon, as in Office.
 pub fn bind_keys(cx: &mut App) {
@@ -182,7 +176,7 @@ enum Command {
     FindHowToRun,
     RunTarget(usize),
     FindRunAgain,
-    DarkMode,
+    Brightness,
     Settings,
 }
 
@@ -201,12 +195,12 @@ struct CommandPlace {
 /// How a command's button is laid out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum CommandSize {
-    /// The full height of the body, its icon large above its label.
+    /// Two slim buttons stacked tall, its small icon above its label.
     Full,
     /// Near enough half of that, its small icon left of its label; slim
     /// buttons side by side stack down, two to a column.
     Slim,
-    /// As tall as slim but only as wide as its icon and label, for the
+    /// Shorter than slim and only as wide as its icon and label, for the
     /// collapsed ribbon's row.
     Small,
 }
@@ -226,6 +220,8 @@ pub struct Ribbon {
     jobs_open: bool,
     /// Which project is open, and the recent projects when clicked.
     project_indicator: Entity<ProjectIndicator>,
+    /// The Application tab's Brightness slider, made for the mode showing.
+    brightness: Option<application_tab::BrightnessSlider>,
 }
 
 impl EventEmitter<RevealJob> for Ribbon {}
@@ -254,6 +250,7 @@ impl Ribbon {
             jobs: Vec::new(),
             jobs_open: false,
             project_indicator: cx.new(ProjectIndicator::new),
+            brightness: None,
         }
     }
 
@@ -479,6 +476,13 @@ impl Ribbon {
     pub fn open_tabs(&self) -> &[RibbonTab] {
         &self.open_tabs
     }
+
+    /// Where the Brightness slider's thumb is among the appearances, once
+    /// shown.
+    #[cfg(test)]
+    pub fn brightness_slider(&self, cx: &App) -> Option<f32> {
+        self.brightness.as_ref().map(|slider| slider.shown(cx))
+    }
 }
 
 impl Ribbon {
@@ -504,22 +508,22 @@ impl Ribbon {
                 // Slim fills its column; small, in a row, never stretches.
                 CommandSize::Slim | CommandSize::Small => button
                     .small()
-                    .h(SLIM_HEIGHT)
                     .map(|button| match size {
-                        CommandSize::Small => button.flex_none(),
-                        _ => button.w_full(),
+                        CommandSize::Small => button.h(SMALL_HEIGHT).flex_none(),
+                        _ => button.h(SLIM_HEIGHT).w_full(),
                     })
                     .px_2()
                     .icon(Icon::new(icon).with_size(Size::Small))
                     .label(label),
-                // As tall as its own icon and label need, rather than the
-                // height a button takes by default.
-                CommandSize::Full => button.flex_none().h_auto().px_3().py_1p5().child(
+                // Its small icon centred above its label, the pair centred in
+                // the two slim buttons' height its column gives it, rather
+                // than the height a button takes by default.
+                CommandSize::Full => button.flex_none().h_auto().px_2().child(
                     v_flex()
                         .items_center()
-                        .gap_1()
-                        .child(Icon::new(icon).with_size(Size::Large))
-                        .child(div().text_xs().child(label)),
+                        .gap_1p5()
+                        .child(Icon::new(icon).with_size(Size::Small))
+                        .child(div().text_sm().child(label)),
                 ),
             }
         };
@@ -541,30 +545,26 @@ impl Ribbon {
             Command::ViewDivergenceReports => spec_tab::view_divergence_reports(button, cx),
             Command::GenerateSkills => spec_tab::generate_skills(button, cx),
             Command::Rescope => spec_tab::rescope(button, cx),
-            Command::DarkMode => application_tab::dark_mode(size, cx),
+            Command::Brightness => application_tab::brightness(self, size, cx),
             Command::Settings => application_tab::settings(button),
         }
     }
 }
 
-/// A container at either end of the bar: what it holds side by side,
-/// vertically centred, with no gap between them or padding around them,
-/// only as wide as they are; nothing at all while it holds nothing. Lets UI
-/// tests find it; inert in normal builds.
 /// The collapse chevron's width and height.
 const CHEVRON_SIZE: Pixels = px(22.);
 
-/// How tall the containers, and the row the collapsed ribbon becomes, are:
-/// the tab row down to the line along its bottom, so the containers end on
-/// that line and are the same height, their contents in the same place,
-/// whether the ribbon is expanded or collapsed.
-const ABOVE_LINE_HEIGHT: Pixels = px(29.);
-
+/// A container at either end of the bar: what it holds side by side,
+/// vertically centred, with no gap between them or padding around them,
+/// only as wide as they are; nothing at all while it holds nothing. As tall
+/// as the tab row, which the collapsed ribbon's row keeps, so it is the same
+/// height, its contents in the same place, whether the ribbon is expanded or
+/// collapsed. Lets UI tests find it; inert in normal builds.
 fn container(id: &'static str, items: Vec<AnyElement>) -> Option<AnyElement> {
     (!items.is_empty()).then(|| {
         gpui_kit::TestSupportExt::test_support(h_flex().id(id))
             .flex_none()
-            .h(ABOVE_LINE_HEIGHT)
+            .h(TAB_ROW_HEIGHT)
             .items_center()
             .children(items)
             .into_any_element()
@@ -572,10 +572,13 @@ fn container(id: &'static str, items: Vec<AnyElement>) -> Option<AnyElement> {
 }
 
 impl Render for Ribbon {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // The Brightness slider shows the appearance showing.
+        application_tab::sync_brightness(self, window, cx);
         let theme = cx.theme();
-        let (border, muted) = (theme.border, theme.muted_foreground);
-        let (title_background, font) = (theme.muted, theme.font_family.clone());
+        let (border, muted, foreground) =
+            (theme.border, theme.muted_foreground, theme.foreground);
+        let (area, tab_row) = ribbon_colors(cx);
 
         // Square, and the same size expanded or collapsed: only the way it
         // points changes.
@@ -638,14 +641,16 @@ impl Render for Ribbon {
             }
             // Lets UI tests find the row; inert in normal builds. The
             // indicator and the chevron after it stay put; what follows them
-            // scrolls sideways when it's wider than the room left.
+            // scrolls sideways when it's wider than the room left. It holds
+            // commands, so it is the command area's colour, and its buttons
+            // stand apart from it as they do there.
             return ribbon.child(gpui_kit::TestSupportExt::test_support(
                 h_flex()
                     .id("ribbon-primary")
-                    // As tall as the tab row, down to the ribbon's bottom line
-                    // as the tab row is to its own, so collapsing moves nothing.
-                    .h(ABOVE_LINE_HEIGHT)
+                    // As tall as the tab row, so collapsing moves nothing.
+                    .h(TAB_ROW_HEIGHT)
                     .items_stretch()
+                    .bg(area)
                     .children(self.render_left(collapse, cx))
                     .child(gpui_kit::TestSupportExt::test_support(
                         h_flex()
@@ -663,74 +668,72 @@ impl Render for Ribbon {
             ));
         }
 
-        // Each tab handles its own clicks, so a double-click can be told
-        // apart: it collapses the ribbon. The tabs are gpui-kit's own, with
-        // their default borders and spacing, in the theme's colours.
-        let tabs = RibbonTab::ALL.map(|tab| {
+        // Flat tabs, each only its label with room either side, and no
+        // border, corner, or line anywhere. A closed tab has no background of
+        // its own, showing the tab row's; an open one takes the command
+        // area's, so it and the commands beneath read as one piece. Each
+        // handles its own clicks, so a double-click can be told apart: it
+        // collapses the ribbon.
+        let hover = tab_hover(cx);
+        let tabs = RibbonTab::ALL.into_iter().enumerate().map(|(ix, tab)| {
             let open = self.open_tabs.contains(&tab);
             let tint = tab
                 .mode()
                 .map(|mode| crate::chat_input::mode_tint(mode, cx));
-            let tab_ui = match tint {
-                // A tab with a mode's colour shows it in its label while closed,
-                // the hue at full strength; open, its label is the tab's own
-                // colour. The label is the same text in the same place either
-                // way, only its colour changing, so it never moves.
-                Some(tint) => Tab::new().aria_label(tab.label()).child(
-                    div()
-                        .when(!open, |label| label.text_color(Hsla { a: 1., ..tint }))
-                        .child(tab.label()),
-                ),
-                None => Tab::new().label(tab.label()),
+            // A tab with a mode's colour shows it in its label while closed,
+            // the hue at full strength; open, its label is the tab's own
+            // colour. The label is the same text in the same place either
+            // way, only its colour changing, so it never moves.
+            let label = match tint {
+                Some(tint) if !open => Hsla { a: 1., ..tint },
+                _ => foreground,
             };
-            tab_ui
-                // An open Code or Spec tab is tinted as the chat input's tab of
-                // that mode is: the tint laid over it, taking no room, so the
-                // tab keeps its own size and its label stays put.
+            // Lets UI tests find the tab; inert in normal builds.
+            gpui_kit::TestSupportExt::test_support(div().id(("ribbon-tab", ix)))
+                .relative()
+                .flex()
+                .flex_none()
+                .items_center()
+                .h_full()
+                .px(TAB_PADDING)
+                .text_sm()
+                .whitespace_nowrap()
+                .cursor_pointer()
+                .role(Role::Tab)
+                .aria_label(tab.label())
+                .aria_selected(open)
+                .when(open, |this| this.bg(area))
+                .when(!open, |this| this.hover(|this| this.bg(hover)))
+                // An open Code or Spec tab is tinted as the chat input's tab
+                // of that mode is: the tint laid over it, beneath its label,
+                // taking no room, so the tab keeps its own size and its label
+                // stays put.
                 .when_some(tint.filter(|_| open), |this, tint| {
                     this.child(div().absolute().inset_0().bg(tint))
                 })
-                .selected(open)
+                .child(div().relative().text_color(label).child(tab.label()))
                 .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
                     this.tab_clicked(tab, event.click_count(), event.modifiers().secondary(), cx)
                 }))
-        });
+        })
+            .collect::<Vec<_>>();
         // The left container, holding the open project's name, the chevron,
-        // and the activity spinner, left of the tab bar, and the right
-        // container after it. gpui-kit's tab
-        // bar draws a line along its bottom, which the tabs have none of here:
-        // the row is a pixel shorter than the bar, clipping that line away and
-        // leaving the tabs as they are.
-        //
-        // In its place, a line of the tabs' own border colour runs along the
-        // bottom of the row, across the indicator and the whole bar. It is
-        // drawn beneath the tabs, over a bar with no background of its own, so
-        // each open tab's background covers it: the line runs from the far
-        // left to an open tab's side border, and on from its other side
-        // border to the far right, and the open tab meets the commands
-        // beneath it with no line between them.
+        // and the activity spinner, left of the tabs, and the right container
+        // after them, all on the tab row's own background.
         let tab_bar = h_flex()
-            .relative()
             .w_full()
             .h(TAB_ROW_HEIGHT)
             .overflow_hidden()
             .items_start()
-            .bg(cx.theme().tab_bar)
+            .bg(tab_row)
             .children(self.render_left(collapse, cx))
-            .child(gpui_kit::TestSupportExt::test_support(
-                div()
-                    .id("ribbon-tabs-line")
-                    .absolute()
-                    .left_0()
-                    .right_0()
-                    .bottom_0()
-                    .h(px(1.))
-                    .bg(border),
-            ))
             .child(
-                TabBar::new("ribbon-tabs")
+                h_flex()
+                    .id("ribbon-tabs")
+                    .role(Role::TabList)
                     .flex_1()
-                    .bg(cx.theme().transparent)
+                    .min_w_0()
+                    .h_full()
                     .children(tabs),
             )
             .children(self.render_right());
@@ -745,27 +748,28 @@ impl Render for Ribbon {
         };
 
         // Each open tab's commands, gathered into their groups in order.
-        let mut row = Vec::new();
+        let mut groups: Vec<(&'static str, Vec<(CommandSize, AnyElement)>)> = Vec::new();
         for tab in &self.open_tabs {
-            let mut groups: Vec<(&'static str, Vec<(CommandSize, AnyElement)>)> = Vec::new();
+            let start = groups.len();
             for place in tab.commands(cx) {
                 let element = (
                     place.size,
                     self.render_command(place.command, place.size, cx),
                 );
-                match groups.last_mut() {
+                match groups[start..].last_mut() {
                     Some((group, commands)) if *group == place.group => commands.push(element),
                     _ => groups.push((place.group, vec![element])),
                 }
             }
-            if groups.is_empty() {
-                continue;
+        }
+        // A divider between one group and the next, within a tab or between
+        // tabs alike, named for the group it starts.
+        let mut row = Vec::new();
+        for (ix, (label, commands)) in groups.into_iter().enumerate() {
+            if ix > 0 {
+                row.push(divider(ix, label, tab_row));
             }
-            // No dividers, within a tab or between tabs: each group's title
-            // strip marks where it starts.
-            for (label, commands) in groups {
-                row.push(group(label, commands, muted, title_background, &font));
-            }
+            row.push(group(label, commands));
         }
         if row.is_empty() {
             row.push(
@@ -773,8 +777,6 @@ impl Render for Ribbon {
                     .flex()
                     .items_center()
                     .text_sm()
-                    .pl(BODY_PADDING)
-                    .py(BODY_PADDING)
                     .text_color(muted)
                     .child("No commands yet")
                     .into_any_element(),
@@ -794,20 +796,15 @@ impl Render for Ribbon {
                     // Scrolls sideways when the open tabs' groups are wider
                     // than the window.
                     .overflow_x_scroll()
+                    // The dividers run the buttons' full height.
                     .items_stretch()
-                    // Padding at the right only, so the first group's title
-                    // strip starts at the body's left edge; the buttons are
-                    // padded above and below within their groups, so the
-                    // groups' title strips run the body's full height.
-                    .pr(BODY_PADDING)
-                    .gap(BODY_PADDING)
+                    .p(BODY_PADDING)
+                    .gap(GAP)
                     // No taller than its commands need.
                     .flex_none()
-                    // With the Code tab open alone, its body is tinted as the
-                    // chat input's body is for its mode.
-                    .when_some(body_tint, |this, tint| {
-                        this.bg(cx.theme().background.blend(tint))
-                    })
+                    // With the Code or Spec tab open alone, its body is tinted
+                    // as the chat input's body is for its mode.
+                    .bg(body_tint.map_or(area, |tint| area.blend(tint)))
                     .children(row),
             ))
     }
@@ -833,15 +830,9 @@ pub fn toggle_open(open: &[RibbonTab], tab: RibbonTab) -> Vec<RibbonTab> {
         .collect()
 }
 
-/// A group of related commands, titled along its left edge, reading bottom to
-/// top, on a strip of its own.
-fn group(
-    label: &'static str,
-    commands: Vec<(CommandSize, AnyElement)>,
-    muted: Hsla,
-    title_background: Hsla,
-    font: &str,
-) -> AnyElement {
+/// A group of related commands, named for assistive technology though not
+/// titled on screen.
+fn group(label: &'static str, commands: Vec<(CommandSize, AnyElement)>) -> AnyElement {
     // Full buttons stand alone; slim ones side by side stack down, two to a
     // column, top aligned.
     let mut columns: Vec<AnyElement> = Vec::new();
@@ -851,7 +842,7 @@ fn group(
             columns.push(
                 v_flex()
                     .flex_none()
-                    .gap(BODY_PADDING)
+                    .gap(GAP)
                     .children(stack.drain(..))
                     .into_any_element(),
             );
@@ -882,38 +873,71 @@ fn group(
         }
     }
     flush(&mut stack, &mut columns);
-    // Lets UI tests find the group; inert in normal builds.
+    // Each command takes the height it needs, a full button two slim buttons,
+    // all from the top. Lets UI tests find the group; inert in normal builds.
     gpui_kit::TestSupportExt::test_support(h_flex().id(label))
-        .items_stretch()
-        .gap(BODY_PADDING)
-        .child(
-            div()
-                .relative()
-                .flex()
-                .flex_none()
-                .items_center()
-                .overflow_hidden()
-                .w(GROUP_TITLE_WIDTH)
-                .bg(title_background)
-                .child(group_title(label, muted, font)),
-        )
-        .child(
-            // Each command takes the height it needs, a full button two slim
-            // buttons.
-            h_flex()
-                .items_stretch()
-                .py(BODY_PADDING)
-                .gap(BODY_PADDING)
-                .children(columns),
-        )
+        .flex_none()
+        .items_start()
+        .gap(GAP)
+        .role(Role::Group)
+        .aria_label(label)
+        .children(columns)
         .into_any_element()
 }
 
-/// A ribbon command's background at rest, hovered, and pressed.
-fn command_shades(cx: &App) -> (Hsla, Hsla, Hsla) {
+/// The divider starting the group `label`, the `ix`th group of the open tabs:
+/// a bar in the tab row's colour, as tall as the buttons, its ends softly
+/// rounded, with the group's name as its tooltip. Lets UI tests find it;
+/// inert in normal builds.
+fn divider(ix: usize, label: &'static str, color: Hsla) -> AnyElement {
+    gpui_kit::TestSupportExt::test_support(div().id(("ribbon-divider", ix)))
+        .flex_none()
+        .w(DIVIDER_WIDTH)
+        .rounded(DIVIDER_WIDTH / 2.)
+        .bg(color)
+        .role(Role::Splitter)
+        .aria_label(label)
+        .tooltip(move |window, cx| {
+            gpui_kit::component::tooltip::Tooltip::new(label).build(window, cx)
+        })
+        .into_any_element()
+}
+
+/// The ribbon's command area, and the tab row above it, in the mode showing.
+fn ribbon_colors(cx: &App) -> (Hsla, Hsla) {
+    let palette = crate::theme::palette(cx);
+    (
+        crate::theme::color(palette.ribbon),
+        crate::theme::color(palette.ribbon_tabs),
+    )
+}
+
+/// A closed tab under the pointer: a faint step lighter in dark mode, darker
+/// in light mode, laid over the tab row.
+fn tab_hover(cx: &App) -> Hsla {
+    if cx.theme().is_dark() {
+        gpui_kit::white().opacity(0.06)
+    } else {
+        gpui_kit::black().opacity(0.06)
+    }
+}
+
+/// A ribbon command's background at rest, hovered, and pressed, laid over the
+/// command area. At rest in dark mode, white laid just far enough over the
+/// area to reach the base, #444444 on #222222; in light mode, not quite half
+/// way.
+pub(crate) fn command_shades(cx: &App) -> (Hsla, Hsla, Hsla) {
     let (white, black) = (hsla(0., 0., 1., 1.), hsla(0., 0., 0., 1.));
     if cx.theme().is_dark() {
-        (white.opacity(0.14), white.opacity(0.22), black.opacity(0.2))
+        let palette = crate::theme::palette(cx);
+        let channel = |color: u32| (color & 0xff) as f32;
+        let rest = (channel(palette.base) - channel(palette.ribbon))
+            / (255. - channel(palette.ribbon));
+        (
+            white.opacity(rest),
+            white.opacity(rest + 0.08),
+            black.opacity(0.2),
+        )
     } else {
         (white.opacity(0.45), white.opacity(0.7), black.opacity(0.12))
     }
@@ -922,7 +946,7 @@ fn command_shades(cx: &App) -> (Hsla, Hsla, Hsla) {
 /// The colours of a ribbon command: its background laid over the body rather
 /// than a colour of its own, so it contrasts a little with the body whatever
 /// tint the body has, more while hovered, and more again while pressed.
-fn command_colors(cx: &App) -> ButtonCustomVariant {
+pub(crate) fn command_colors(cx: &App) -> ButtonCustomVariant {
     let theme = cx.theme();
     let (rest, hover, active) = command_shades(cx);
     ButtonCustomVariant::new(cx)
@@ -930,45 +954,6 @@ fn command_colors(cx: &App) -> ButtonCustomVariant {
         .hover(hover)
         .active(active)
         .foreground(theme.foreground)
-}
-
-/// A group's title, turned -90deg. gpui can only turn an SVG, so the title is
-/// drawn as SVG text: laid out across a long box, centred in it, then turned
-/// about its own centre. The box is centred in the strip, so the title is
-/// centred whatever the group's height.
-fn group_title(label: &str, color: Hsla, font: &str) -> impl IntoElement {
-    let (long, short) = (GROUP_TITLE_LENGTH, GROUP_TITLE_WIDTH);
-    let escape = |text: &str| {
-        text.replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-    };
-    let source = format!(
-        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}"><text x="{x}" y="{y}" font-family="{font}" font-size="{GROUP_TITLE_SIZE}" text-anchor="middle" dominant-baseline="central" fill="black">{label}</text></svg>"#,
-        w = f32::from(long),
-        h = f32::from(short),
-        x = f32::from(long) / 2.,
-        y = f32::from(short) / 2.,
-        // The SVG renderer doesn't know gpui's own names, like
-        // ".SystemUIFont", so those take the usual sans serif.
-        font = if font.starts_with('.') {
-            "sans-serif".to_string()
-        } else {
-            format!("'{}', sans-serif", escape(font))
-        },
-        label = escape(label),
-    );
-    svg()
-        .data(source.as_bytes())
-        .flex_none()
-        .ml((short - long) / 2.)
-        .w(long)
-        .h(short)
-        .text_color(color)
-        .with_transformation(Transformation::rotate(radians(
-            -std::f32::consts::FRAC_PI_2,
-        )))
 }
 
 /// Whether the user collapsed the ribbon, saved in the platform's per-user
@@ -1055,13 +1040,9 @@ mod layout_tests {
                 };
                 // Each in a row of its own, so neither stretches the other.
                 let row = |id: &'static str, content: gpui_kit::Pixels| {
-                    div().flex().child(group(
-                        "Group",
-                        vec![full(id, content)],
-                        gpui_kit::black(),
-                        gpui_kit::black(),
-                        "sans-serif",
-                    ))
+                    div()
+                        .flex()
+                        .child(group("Group", vec![full(id, content)]))
                 };
                 div()
                     .flex()
@@ -1091,8 +1072,9 @@ mod layout_tests {
         .unwrap();
     }
 
-    /// Three slim buttons in a row stack into a column of two, then a column
-    /// of one; a full button between slim ones stands alone.
+    /// Three slim buttons in a row stack into a column of two, 27px tall and
+    /// 4px apart, then a column of one, 4px along; a full button between slim
+    /// ones stands alone, 58px tall.
     #[gpui_kit::test]
     fn slim_buttons_stack_two_to_a_column(cx: &mut TestAppContext) {
         use gpui_kit::component::Root;
@@ -1129,9 +1111,6 @@ mod layout_tests {
                 div().flex().child(group(
                     "Group",
                     vec![slim("a"), slim("b"), slim("d"), full("e"), slim("f")],
-                    gpui_kit::black(),
-                    gpui_kit::black(),
-                    "sans-serif",
                 ))
             }
         }
@@ -1144,17 +1123,20 @@ mod layout_tests {
             window.render_frame(cx);
             let at = |id: &'static str| window.find(id).bounds();
             let (a, b, d, e, f) = (at("a"), at("b"), at("d"), at("e"), at("f"));
-            let gap = super::BODY_PADDING;
+            let gap = super::GAP;
+            assert_eq!(gap, px(4.));
+            assert_eq!(a.size.height, px(27.), "a slim button isn't 27px tall");
             assert_eq!(b.left(), a.left(), "a, b aren't one column");
             assert_eq!(b.top() - a.bottom(), gap);
             assert_eq!(d.top(), a.top(), "the third doesn't start a new column");
             assert_eq!(d.left() - a.right(), gap);
             assert_eq!(e.left() - d.right(), gap);
-            // A full button is two slim buttons and the gap between them.
+            // A full button is two slim buttons and the gap between them:
+            // 58px.
             assert_eq!(
-                e.size.height,
-                super::stacked(2),
-                "the full button isn't two slim buttons tall"
+                (e.size.height, e.top()),
+                (px(58.), a.top()),
+                "the full button isn't two slim buttons tall, from the top"
             );
             assert_eq!((f.top(), f.left() - e.right()), (a.top(), gap));
         })

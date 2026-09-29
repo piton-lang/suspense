@@ -98,6 +98,18 @@ shape HarnessIntegrationShape:
         Questions, the palette's file search, the one-off runs, and the notes
         and commit messages each take a single prompt, as ever.
 
+    images:
+        Images attached to a prompt, as the @{ChatInputScope} says, are given
+        to the harness as it takes them: to Claude Code as image content blocks,
+        base64-encoded with their media type, in the same stream-json user
+        message as the prompt's text, after it; to Codex with an `--image`
+        argument per image; and to OpenCode with a `--file` argument per image.
+        A message fed to a running Claude Code task carries its images the same
+        way, and a Claude Code run that isn't fed more but has images is given
+        its prompt as a stream-json message too, so the images can go with it.
+        Codex's options end with `--` before the prompt when it is given
+        images. Questions take images as tasks do.
+
     context:
         The harness keeps its context between requests instead of starting fresh
         each time. Tasks share one ongoing conversation, and each task sent

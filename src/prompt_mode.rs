@@ -43,6 +43,7 @@ use gpui_kit::base::TextSelection;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::label::Label;
+use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::resizable::{ResizableState, h_resizable, resizable_panel};
 use gpui_kit::component::spinner::Spinner;
@@ -55,6 +56,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::activity::{Job, JobKind};
+use crate::attached_image::{self, AttachedImage};
 use crate::chat_input::{
     self, ChatInput, NewConversation, PreviewPrompt, QueuedEdit, SendMode, Submit, TabChanged,
 };
@@ -63,7 +65,7 @@ use crate::conversations;
 use crate::file_link::OpenFile;
 use crate::file_view::{CloseFile, FileView, OpenDefinition, SendToPrompt};
 use crate::harness::{self, HarnessEvent};
-use crate::hidden_anchor::{self, CodeTask, HiddenAnchor};
+use crate::hidden_anchor::{self, Attached, CodeTask, HiddenAnchor};
 use crate::markdown;
 use crate::markdown::{MarkdownKey, MarkdownKind, MarkdownStates};
 use crate::measured_list::{MeasuredList, RenderRow};
@@ -72,6 +74,7 @@ use crate::piton_lsp::PitonSession;
 use crate::project_directory::ProjectDirectory;
 use crate::prompt_history::{self, RunRecord, SavedPrompt};
 use crate::prompt_queue::{self, QueuedPrompt};
+use crate::raw_prompt::{Given, RawPrompt, RawPromptView};
 use crate::referenced_spec;
 use crate::scrollbar::{self, SetLock};
 use crate::selection_popover::{SelectionAction, selection_popover};
@@ -156,20 +159,85 @@ struct QueueItem {
     /// Queued on purpose: once saved, it waits rather than being sent at
     /// once.
     wait: bool,
+    /// Sent to the other mode, the name of the task it was sent from, known
+    /// from the moment it is queued, before it is saved.
+    sent_from: Option<String>,
+    /// The images attached to it, by their paths from the project directory,
+    /// known from the moment it is queued.
+    images: Vec<String>,
+}
+
+/// How a task's Send to Spec or Send to Code button stands. Only
+/// [`Self::Offered`] is enabled; the others are greyed out and disabled.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OtherModeState {
+    /// It can be sent there.
+    Offered,
+    /// A prompt sent there from it waits in the queue, or a task sent from
+    /// it is building, compiling, or running.
+    Sending,
+    /// A task sent there from it finished as Done.
+    Sent,
+    /// It was marked done by hand, from the button's menu.
+    MarkedDone,
+    /// It was itself sent from the other mode (its [`SentAs::sent_from`] is
+    /// set), so it has been through both the code and the spec and never
+    /// offers to be sent back, for good. Its button opens no menu.
+    Complete,
+}
+
+impl OtherModeState {
+    /// The button's tooltip, sending to `to`.
+    fn tooltip(self, to: SendMode) -> String {
+        let to = to.label();
+        match self {
+            Self::Offered => format!("Send to {to}"),
+            Self::Sending => format!("Being sent to {to}"),
+            Self::Sent => format!("Sent to {to}"),
+            Self::MarkedDone => "Marked as done".to_string(),
+            // Sent here from the mode it would be sent back to.
+            Self::Complete => format!("Complete, sent here from {to}"),
+        }
+    }
+}
+
+/// The menu right-clicking a Send to Spec or Send to Code button opens,
+/// where it was right-clicked.
+struct MarkMenu {
+    view: Entity<PopupMenu>,
+    position: Point<Pixels>,
+    /// What had focus before, given back if the menu closes without anything
+    /// else taking it.
+    previous_focus: Option<FocusHandle>,
+    _dismissed: Subscription,
+}
+
+/// The one item of a Send to Spec or Send to Code button's menu, for a task
+/// `marked_done` or not.
+fn mark_label(marked_done: bool) -> &'static str {
+    if marked_done {
+        "Mark as not done"
+    } else {
+        "Mark as done"
+    }
 }
 
 /// A prompt on its way to the harness.
 enum Sending {
-    /// Typed and sent straight away, in a mode, with any text attached,
-    /// whether it is sent sliced, and, for a Code task sent to Spec, the code
-    /// task it was sent from.
-    Now(SendMode, Vec<String>, bool, Option<CodeTask>),
+    /// Typed and sent straight away, in a mode, with anything attached,
+    /// whether it is sent sliced, for a Code task sent to Spec, the code
+    /// task it was sent from, and, for a task sent to the other mode, the
+    /// name of the task it was sent from.
+    Now(SendMode, Attached, bool, Option<CodeTask>, Option<String>),
     /// Out of the queue, saved with its anchor.
     Queued(QueuedPrompt),
 }
 
 /// A prompt sent to the harness, and what the harness did with it.
 struct PromptTask {
+    /// The name of its hidden anchor, known from the moment it is sent, and
+    /// what a task sent to the other mode from it knows it by.
+    name: SharedString,
     /// The prompt as typed, shown until it compiles.
     text: SharedString,
     compiled: Option<Compiled>,
@@ -194,6 +262,15 @@ struct PromptTask {
     slices_open: bool,
     /// Cancels it while it is under way; none for a task not sent from here.
     cancel: Option<Cancel>,
+    /// The harness it was sent to and the system prompt that harness
+    /// received, once sent; none for one from the history saved before these
+    /// were kept.
+    given: Option<Given>,
+    /// Marked done by hand for sending to the other mode, from its Send to
+    /// Spec or Send to Code button's menu: its button is disabled as though
+    /// it had been sent there, and the batch actions leave it out. Kept in
+    /// its history record.
+    marked_done: bool,
 }
 
 /// Cancels a task under way, from its Cancel button: see
@@ -225,10 +302,17 @@ struct SentAs {
     /// Its mode, unknown for a prompt saved before modes were.
     mode: Option<SendMode>,
     attached_text: Vec<String>,
+    /// Its attached images, by their paths from the project directory.
+    attached_images: Vec<String>,
     sliced: bool,
     /// Sent to Spec from a Code task, that code task, told to it again
     /// whenever it is resent.
     code_task: Option<CodeTask>,
+    /// Sent to the other mode, from Code or from Spec, the name of the task
+    /// it was sent from (see [`PromptTask::name`]), kept whenever it is
+    /// resent. That task no longer offers to be sent there while this one is
+    /// under way or once it is done.
+    sent_from: Option<String>,
 }
 
 impl SentAs {
@@ -236,8 +320,18 @@ impl SentAs {
         Self {
             mode: anchor_mode(anchor),
             attached_text: anchor.attached_text.clone(),
+            attached_images: anchor.attached_images.clone(),
             sliced: anchor.sliced,
             code_task: anchor.code_task.clone(),
+            sent_from: anchor.sent_from.clone(),
+        }
+    }
+
+    /// What was attached to it.
+    fn attached(&self) -> Attached {
+        Attached {
+            text: self.attached_text.clone(),
+            images: self.attached_images.clone(),
         }
     }
 }
@@ -372,6 +466,7 @@ impl TaskStatus {
 impl PromptTask {
     fn new(text: SharedString) -> Self {
         Self {
+            name: HiddenAnchor::random_name().into(),
             text,
             compiled: None,
             reply: Reply::default(),
@@ -385,20 +480,32 @@ impl PromptTask {
             sent: SentAs::default(),
             slices_open: false,
             cancel: None,
+            given: None,
+            marked_done: false,
         }
     }
 
     /// A task from the history, as it ended: its run's output is replayed
-    /// through the harness's parser.
+    /// through the harness's parser. A record holding only the task's mark
+    /// leaves it a task without a record, marked.
     fn restore(saved: SavedPrompt) -> Self {
         let mut task = Self::new(saved.text.into());
+        task.name = saved.anchor.name().to_string().into();
         task.mode = anchor_mode(&saved.anchor);
         task.sent = SentAs::of(&saved.anchor);
-        let Some(record) = saved.record else {
+        task.marked_done = saved
+            .record
+            .as_ref()
+            .is_some_and(|record| record.marked_done);
+        let Some(record) = saved.record.filter(|record| !record.holds_only_the_mark()) else {
             task.reply.stop();
             task.status = TaskStatus::Unrecorded;
             return task;
         };
+        task.given = record.harness().map(|harness| Given {
+            harness,
+            system_prompt: record.system_prompt.clone(),
+        });
         if let Some(markdown) = record.user_prompt.clone() {
             task.set_compiled(Compiled::new(
                 saved.anchor.name().to_string().into(),
@@ -916,16 +1023,30 @@ impl HistoryList {
                         })
                         .children(checkbox)
                         .child(task_summary((item_id, item), task_ix, task, cx))
-                        .children(other_mode(task).map(|to| {
+                        .children(entity.read(cx).other_mode_state(task).map(|(to, state)| {
                             let this = this_for_resend.clone();
+                            let menu = this_for_resend.clone();
+                            let name = task.name.clone();
                             other_mode_button(
                                 ("send-to-other-previous", task_ix),
                                 to,
+                                state,
                                 move |_, window, cx| {
                                     // The button's click isn't the heading's.
                                     cx.stop_propagation();
                                     this.update(cx, |this, cx| {
                                         this.send_to_other_mode(tasks_of, item, window, cx)
+                                    })
+                                    .ok();
+                                },
+                                move |event, window, cx| {
+                                    menu.update(cx, |this, cx| {
+                                        this.open_mark_menu(
+                                            name.clone(),
+                                            event.position,
+                                            window,
+                                            cx,
+                                        )
                                     })
                                     .ok();
                                 },
@@ -1699,9 +1820,6 @@ pub struct PromptMode {
     refs_width: Rc<Cell<Pixels>>,
     refs_split: Entity<ResizableState>,
     refs_scroll: ScrollHandle,
-    /// How the sidebar's height is shared between its referenced files and
-    /// its understanding, kept for as long as the application runs.
-    refs_halves: Entity<ResizableState>,
     understanding_scroll: ScrollHandle,
     /// The task view's width beside the referenced spec sidebar, as last laid
     /// out.
@@ -1727,6 +1845,9 @@ pub struct PromptMode {
     /// The popover offering to copy text selected in an answer, or attach it
     /// to the prompt: where the selecting drag ended, and what it selected.
     selection_popover: Option<(Point<Pixels>, String)>,
+    /// The menu a task's Send to Spec or Send to Code button opens when
+    /// right-clicked, while it is open.
+    mark_menu: Option<MarkMenu>,
     /// The answers' tables whose steps were expanded, by task index.
     steps_shown: HashSet<usize>,
     /// The share of the space above the chat input the answer drawer takes
@@ -1795,11 +1916,22 @@ impl PromptMode {
                 &chat_input,
                 window,
                 |this, _, submit: &Submit, window, cx| {
-                    let (text, attached_text) = (submit.text.clone(), submit.attached_text.clone());
+                    let text = submit.text.clone();
+                    // Its images are saved in the project's data as it is
+                    // sent or queued.
+                    let Some(attached) = this.save_attached(
+                        &text,
+                        submit.attached_text.clone(),
+                        &submit.attached_images,
+                        window,
+                        cx,
+                    ) else {
+                        return;
+                    };
                     // Queued on purpose, it waits in the queue even while the
                     // harness is free; a question never queues.
                     if submit.to_task && submit.mode != SendMode::Ask {
-                        this.send_to_task(text, submit.mode, attached_text, window, cx);
+                        this.send_to_task(text, submit.mode, attached, window, cx);
                     } else if submit.queue
                         && submit.mode != SendMode::Ask
                         && this.project_dir.is_some()
@@ -1809,14 +1941,15 @@ impl PromptMode {
                             text,
                             true,
                             submit.mode,
-                            attached_text,
+                            attached,
                             sliced,
+                            None,
                             None,
                             window,
                             cx,
                         );
                     } else {
-                        this.send(text, submit.mode, attached_text, window, cx)
+                        this.send_attached(text, submit.mode, attached, window, cx)
                     }
                 },
             ),
@@ -1871,7 +2004,6 @@ impl PromptMode {
             refs_width: Rc::new(Cell::new(referenced_spec::WIDTH)),
             refs_split: cx.new(|_| ResizableState::default()),
             refs_scroll: ScrollHandle::new(),
-            refs_halves: cx.new(|_| ResizableState::default()),
             understanding_scroll: ScrollHandle::new(),
             history_width: Rc::default(),
             _pending: Task::ready(()),
@@ -1883,6 +2015,7 @@ impl PromptMode {
             next_ask_id: 0,
             expanded_ask: None,
             selection_popover: None,
+            mark_menu: None,
             steps_shown: HashSet::new(),
             drawer_share: DRAWER_SHARE,
             drawer_dragged: None,
@@ -2372,6 +2505,25 @@ impl PromptMode {
         self.output_table.scroll_to_top();
     }
 
+    /// Opens the raw prompt modal on task `ix`: what the harness was given
+    /// for it, once it has compiled.
+    fn open_raw_prompt(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(task) = self.tasks.get(ix) else {
+            return;
+        };
+        let Some(compiled) = &task.compiled else {
+            return;
+        };
+        let prompt = RawPrompt::new(
+            task.mode,
+            compiled.anchor.clone(),
+            &compiled.markdown,
+            task.given.as_ref(),
+        )
+        .with_images(&task.sent.attached_images);
+        RawPromptView::open(prompt, window, cx);
+    }
+
     /// Heads the task at `ix` with the compiled markdown it was sent as, and
     /// the name of the anchor it was compiled from.
     fn show_compiled(
@@ -2414,8 +2566,15 @@ impl PromptMode {
             if mode == SendMode::Freeform {
                 return Ok(hidden_anchor::freeform(&text, &attached_text));
             }
-            let anchor =
-                resolve_anchor(&text, mode, attached_text, sliced, None, lsp, &project_dir)?;
+            let anchor = resolve_anchor(
+                &text,
+                mode,
+                attached_text.into(),
+                sliced,
+                None,
+                lsp,
+                &project_dir,
+            )?;
             hidden_anchor::preview(&anchor, &text, &project_dir)
         });
         self._preview = cx.spawn(async move |_, cx| {
@@ -2437,6 +2596,20 @@ impl PromptMode {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.send_attached(text, mode, attached_text.into(), window, cx)
+    }
+
+    /// Sends `text` in `mode`, with what is `attached` to it, as
+    /// [`Self::send`] does; its images are already saved in the project's
+    /// data.
+    pub fn send_attached(
+        &mut self,
+        text: String,
+        mode: SendMode,
+        attached: Attached,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.project_dir.is_none() {
             window.push_notification(
                 Notification::error("Open a project before sending a prompt.")
@@ -2446,19 +2619,57 @@ impl PromptMode {
             return;
         }
         let sliced = self.chat_input.read(cx).slices();
-        self.send_as(text, mode, attached_text, sliced, None, window, cx);
+        self.send_as(text, mode, attached, sliced, None, None, window, cx);
+    }
+
+    /// What is attached to a prompt as it is sent or queued: `attached_text`,
+    /// and `images`, each saved in the project's data unless it already is.
+    /// None, the prompt put back in the chat input as it was, when an image
+    /// couldn't be saved.
+    fn save_attached(
+        &mut self,
+        text: &str,
+        attached_text: Vec<String>,
+        images: &[AttachedImage],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<Attached> {
+        let Some(project_dir) = self.project_dir.clone().filter(|_| !images.is_empty()) else {
+            // With no project open, sending says so.
+            return Some(attached_text.into());
+        };
+        match attached_image::save_all(images, &project_dir) {
+            Ok(images) => Some(Attached {
+                text: attached_text,
+                images,
+            }),
+            Err(err) => {
+                window.push_notification(
+                    Notification::error(format!("{err:#}")).title("Could not attach the images"),
+                    cx,
+                );
+                let (text, images) = (text.to_string(), images.to_vec());
+                self.chat_input.update(cx, |input, cx| {
+                    input.take_back(text, attached_text, images, window, cx)
+                });
+                None
+            }
+        }
     }
 
     /// Sends `text` in `mode`, sliced or not, as [`Self::send`] does; in Spec,
-    /// told what `code_task`, the Code task it was sent from, if any, did.
+    /// told what `code_task`, the Code task it was sent from, if any, did;
+    /// sent to the other mode, knowing `sent_from`, the name of the task it
+    /// was sent from.
     #[allow(clippy::too_many_arguments)]
     fn send_as(
         &mut self,
         text: String,
         mode: SendMode,
-        attached_text: Vec<String>,
+        attached: Attached,
         sliced: bool,
         code_task: Option<CodeTask>,
+        sent_from: Option<String>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -2466,22 +2677,15 @@ impl PromptMode {
             return;
         }
         if mode == SendMode::Ask {
-            self.ask(text, attached_text, sliced, cx);
+            self.ask(text, attached, sliced, cx);
         } else if self.working {
             self.enqueue(
-                text,
-                false,
-                mode,
-                attached_text,
-                sliced,
-                code_task,
-                window,
-                cx,
+                text, false, mode, attached, sliced, code_task, sent_from, window, cx,
             );
         } else {
             self.start(
                 text,
-                Sending::Now(mode, attached_text, sliced, code_task),
+                Sending::Now(mode, attached, sliced, code_task, sent_from),
                 cx,
             );
         }
@@ -2524,21 +2728,201 @@ impl PromptMode {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(to) = tasks_of(self).get(ix).and_then(other_mode) else {
+        let Some(to) = tasks_of(self)
+            .get(ix)
+            .and_then(|task| self.offers_other_mode(task))
+        else {
             return;
         };
         self.resend_in(tasks_of, ix, Some(to), window, cx);
     }
 
+    /// The mode `task` offers to be sent to, from its Send to Spec or Send to
+    /// Code button, as [`other_mode`] says, unless it has already been sent
+    /// there, is being sent, or was marked done (see
+    /// [`Self::other_mode_state`]).
+    fn offers_other_mode(&self, task: &PromptTask) -> Option<SendMode> {
+        self.other_mode_state(task)
+            .filter(|&(_, state)| state == OtherModeState::Offered)
+            .map(|(to, _)| to)
+    }
+
+    /// The mode `task`'s Send to Spec or Send to Code button sends it to, and
+    /// how the button stands; none for a task that has no such button, as
+    /// [`other_mode`] says. A task itself sent from the other mode is
+    /// complete, before anything else; then a task sent there that finished
+    /// as Done, then one on its way, then the task's own mark.
+    fn other_mode_state(&self, task: &PromptTask) -> Option<(SendMode, OtherModeState)> {
+        let to = other_mode(task)?;
+        let state = match self.sent_to_other_mode(task) {
+            _ if task.sent.sent_from.is_some() => OtherModeState::Complete,
+            Some(sent) => sent,
+            None if task.marked_done => OtherModeState::MarkedDone,
+            None => OtherModeState::Offered,
+        };
+        Some((to, state))
+    }
+
+    /// Whether `task` has been sent to the other mode, and that hasn't come
+    /// to nothing: [`OtherModeState::Sent`] once a task sent from it is done,
+    /// else [`OtherModeState::Sending`] while a prompt sent from it waits in
+    /// the queue, or a task sent from it is building, compiling, or running.
+    /// One that failed, was cancelled, or wasn't recorded doesn't count, and
+    /// nor does one no longer in the history.
+    fn sent_to_other_mode(&self, task: &PromptTask) -> Option<OtherModeState> {
+        let from = |sent_from: &Option<String>| sent_from.as_deref() == Some(task.name.as_ref());
+        let sent_from_it = || self.tasks.iter().filter(|sent| from(&sent.sent.sent_from));
+        if sent_from_it().any(|sent| sent.status == TaskStatus::Done) {
+            Some(OtherModeState::Sent)
+        } else if self.queue.iter().any(|item| from(&item.sent_from))
+            || sent_from_it().any(|sent| sent.status.is_active())
+        {
+            Some(OtherModeState::Sending)
+        } else {
+            None
+        }
+    }
+
+    /// Marks the task named `name` done by hand for sending to the other
+    /// mode, or not, from its Send to Spec or Send to Code button's menu,
+    /// sending nothing. The mark is saved in its history record, straight
+    /// away unless its run is still to save the record, which then saves it
+    /// (see [`Self::send_as`]).
+    fn set_marked_done(&mut self, name: &str, marked_done: bool, cx: &mut Context<Self>) {
+        let Some(task) = self
+            .tasks
+            .iter_mut()
+            .find(|task| task.name.as_ref() == name)
+        else {
+            return;
+        };
+        if task.marked_done == marked_done {
+            return;
+        }
+        task.marked_done = marked_done;
+        // Its run, while it has one, saves the mark with its record.
+        let saved_by_its_run = task.cancel.is_some();
+        if !saved_by_its_run && let Some(project_dir) = self.project_dir.clone() {
+            let name = name.to_string();
+            cx.background_spawn(async move {
+                if let Some(file) = prompt_history::history_file(&project_dir, &name) {
+                    prompt_history::save_marked_done(&file, marked_done).ok();
+                }
+            })
+            .detach();
+        }
+        cx.notify();
+    }
+
+    /// Opens the menu right-clicking the Send to Spec or Send to Code button
+    /// of the task named `name` opens, at `position`, in place of any open:
+    /// "Mark as done", or "Mark as not done" on a task marked so. A task
+    /// that is [`OtherModeState::Complete`] opens none, since it can't be
+    /// marked not done.
+    fn open_mark_menu(
+        &mut self,
+        name: SharedString,
+        position: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(marked_done) = self
+            .tasks
+            .iter()
+            .find(|task| task.name == name)
+            .filter(|task| {
+                !matches!(
+                    self.other_mode_state(task),
+                    Some((_, OtherModeState::Complete))
+                )
+            })
+            .map(|task| task.marked_done)
+        else {
+            return;
+        };
+        let this = cx.entity().downgrade();
+        let view = PopupMenu::build(window, cx, move |menu, _, _| {
+            let this = this.clone();
+            let name = name.clone();
+            menu.item(
+                PopupMenuItem::new(mark_label(marked_done))
+                    .icon(if marked_done {
+                        IconName::RotateCcw
+                    } else {
+                        IconName::Check
+                    })
+                    .on_click(move |_, _, cx| {
+                        this.update(cx, |this, cx| this.set_marked_done(&name, !marked_done, cx))
+                            .ok();
+                    }),
+            )
+        });
+        let previous_focus = window.focused(cx).filter(|focused| {
+            self.mark_menu
+                .as_ref()
+                .is_none_or(|open| *focused != open.view.focus_handle(cx))
+        });
+        let previous_focus = previous_focus.or_else(|| {
+            self.mark_menu
+                .as_ref()
+                .and_then(|open| open.previous_focus.clone())
+        });
+        let dismissed =
+            cx.subscribe_in(&view, window, |this, view, _: &DismissEvent, window, cx| {
+                let Some(open) = this.mark_menu.take_if(|open| open.view == *view) else {
+                    return;
+                };
+                // Given back only if nothing else took the focus.
+                let menu_focused = view.focus_handle(cx).contains_focused(window, cx);
+                if (window.focused(cx).is_none() || menu_focused)
+                    && let Some(previous) = &open.previous_focus
+                {
+                    window.focus(previous, cx);
+                }
+                cx.notify();
+            });
+        view.focus_handle(cx).focus(window, cx);
+        self.mark_menu = Some(MarkMenu {
+            view,
+            position,
+            previous_focus,
+            _dismissed: dismissed,
+        });
+        cx.notify();
+    }
+
+    /// The menu a Send to Spec or Send to Code button's right-click opened,
+    /// where it was right-clicked, while it is open.
+    fn render_mark_menu(&self) -> Option<AnyElement> {
+        let open = self.mark_menu.as_ref()?;
+        Some(
+            deferred(
+                anchored()
+                    .position(open.position)
+                    .snap_to_window_with_margin(px(8.))
+                    .child(open.view.clone()),
+            )
+            .with_priority(gpui_kit::base::POPUP_PRIORITY)
+            .into_any_element(),
+        )
+    }
+
     /// The selected previous tasks a batch action sends to `to`, oldest
-    /// first: those sent in the mode it is the other of. Chain tasks, and those
-    /// whose mode isn't known, are never among them.
+    /// first: those sent in the mode it is the other of, and not already sent
+    /// there. Chain tasks, those whose mode isn't known, and those complete,
+    /// having been sent from the other mode themselves, are never among
+    /// them.
     fn selected_for(&self, to: SendMode) -> Vec<usize> {
         self.task_history
             .selected
             .iter()
             .copied()
-            .filter(|&ix| self.tasks.get(ix).and_then(other_mode) == Some(to))
+            .filter(|&ix| {
+                self.tasks
+                    .get(ix)
+                    .and_then(|task| self.offers_other_mode(task))
+                    == Some(to)
+            })
             .collect()
     }
 
@@ -2638,7 +3022,9 @@ impl PromptMode {
     /// when given, rather than the mode it was sent in. A Code task sent to
     /// Spec is sent with what it did (see [`code_task_of`]); a task sent from
     /// Code, resent to Spec, is told the same code task again; a Spec task
-    /// sent to Code is told nothing of one.
+    /// sent to Code is told nothing of one. Sent in another mode, it knows the
+    /// task it was sent from; resent, it keeps the one it was sent from, if
+    /// any.
     fn resend_in(
         &mut self,
         tasks_of: fn(&PromptMode) -> &Vec<PromptTask>,
@@ -2656,6 +3042,10 @@ impl PromptMode {
             Some(_) => None,
             None => sent.code_task.clone(),
         };
+        let sent_from = match mode {
+            Some(_) => Some(task.name.to_string()),
+            None => sent.sent_from.clone(),
+        };
         let mode = mode
             .or(sent.mode)
             .unwrap_or_else(|| self.chat_input.read(cx).mode());
@@ -2671,9 +3061,10 @@ impl PromptMode {
         self.send_as(
             text,
             mode,
-            sent.attached_text,
+            sent.attached(),
             sent.sliced,
             code_task,
+            sent_from,
             window,
             cx,
         );
@@ -2697,7 +3088,7 @@ impl PromptMode {
         &mut self,
         text: String,
         mode: SendMode,
-        attached_text: Vec<String>,
+        attached: Attached,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -2711,25 +3102,27 @@ impl PromptMode {
         };
         let sliced = self.chat_input.read(cx).slices();
         let Some(feed) = self.feed.clone().filter(harness::Feed::is_open) else {
-            self.enqueue(text, false, mode, attached_text, sliced, None, window, cx);
+            self.enqueue(text, false, mode, attached, sliced, None, None, window, cx);
             return;
         };
         let lsp = self.chat_input.read(cx).lsp();
         let feeding = self.feeding.clone();
         let sent = cx.background_spawn({
-            let (text, attached_text) = (text.clone(), attached_text.clone());
+            let (text, attached) = (text.clone(), attached.clone());
             let project_dir = project_dir.clone();
             async move {
                 let _turn = feeding.lock().await;
                 // From the Freeform tab it goes just as it was typed.
                 let compiled = if mode == SendMode::Freeform {
-                    Ok(hidden_anchor::freeform(&text, &attached_text))
+                    let mut compiled = hidden_anchor::freeform(&text, &attached.text);
+                    compiled.images = hidden_anchor::image_files(&attached.images, &project_dir);
+                    Ok(compiled)
                 } else {
-                    message_anchor(&text, attached_text, sliced, lsp)
+                    message_anchor(&text, attached, sliced, lsp)
                         .and_then(|anchor| hidden_anchor::preview(&anchor, &text, &project_dir))
                 };
                 match compiled {
-                    Ok(compiled) => match feed.send(text, compiled.user_prompt) {
+                    Ok(compiled) => match feed.send(text, compiled.user_prompt, &compiled.images) {
                         Ok(()) => ToTask::Sent,
                         Err(_) => ToTask::Over,
                     },
@@ -2743,7 +3136,7 @@ impl PromptMode {
                 ToTask::Sent => {}
                 ToTask::Over => {
                     this.in_project(&project_dir, cx, |this, cx| {
-                        this.enqueue(text, false, mode, attached_text, sliced, None, window, cx)
+                        this.enqueue(text, false, mode, attached, sliced, None, None, window, cx)
                     });
                 }
                 ToTask::Failed(error) => {
@@ -2751,8 +3144,9 @@ impl PromptMode {
                         Notification::error(error).title("Could not send to the task"),
                         cx,
                     );
+                    let images = attached_image::load_saved(&attached.images, Some(&project_dir));
                     this.chat_input.update(cx, |input, cx| {
-                        input.take_back(text, attached_text, window, cx)
+                        input.take_back(text, attached.text, images, window, cx)
                     });
                 }
             })
@@ -2777,6 +3171,8 @@ impl PromptMode {
                     id: self.next_queue_id,
                     text: saved.text.clone().into(),
                     wait: false,
+                    sent_from: saved.anchor.sent_from.clone(),
+                    images: saved.anchor.attached_images.clone(),
                     saved: Some(saved),
                 }
             })
@@ -2848,16 +3244,18 @@ impl PromptMode {
 
     /// Adds `text` to the end of the queue, then resolves its hidden anchor,
     /// with the system prompt of `mode`, told what `code_task` did if it was
-    /// sent from one, and saves it with the project in the background.
+    /// sent from one, knowing `sent_from`, the task it was sent from if sent
+    /// to the other mode, and saves it with the project in the background.
     #[allow(clippy::too_many_arguments)]
     fn enqueue(
         &mut self,
         text: String,
         wait: bool,
         mode: SendMode,
-        attached_text: Vec<String>,
+        attached: Attached,
         sliced: bool,
         code_task: Option<CodeTask>,
+        sent_from: Option<String>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -2871,6 +3269,8 @@ impl PromptMode {
             text: text.clone().into(),
             wait,
             saved: None,
+            sent_from: sent_from.clone(),
+            images: attached.images.clone(),
         });
         cx.notify();
 
@@ -2882,15 +3282,9 @@ impl PromptMode {
         let save = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
-                let anchor = resolve_anchor(
-                    &text,
-                    mode,
-                    attached_text,
-                    sliced,
-                    code_task,
-                    lsp,
-                    &project_dir,
-                )?;
+                let mut anchor =
+                    resolve_anchor(&text, mode, attached, sliced, code_task, lsp, &project_dir)?;
+                anchor.sent_from = sent_from;
                 prompt_queue::add_at(queued_at, anchor, text, &project_dir)
             }
         });
@@ -2953,12 +3347,16 @@ impl PromptMode {
             return;
         };
         let (text, attached_text) = (saved.text.clone(), saved.anchor.attached_text.clone());
+        // Its images are read back from the project's data, to be shown and
+        // sent again.
+        let images =
+            attached_image::load_saved(&saved.anchor.attached_images, self.project_dir.as_deref());
         let mode = anchor_mode(&saved.anchor).unwrap_or(SendMode::Both);
         // Another edit in progress simply gives way: the chat input puts back
         // what it set aside before setting it aside again.
         self.editing_queued = Some(id);
         self.chat_input.update(cx, |input, cx| {
-            input.begin_editing(ix + 1, text, mode, attached_text, window, cx)
+            input.begin_editing(ix + 1, text, mode, attached_text, images, window, cx)
         });
         cx.notify();
     }
@@ -2983,43 +3381,70 @@ impl PromptMode {
             text,
             mode,
             attached_text,
+            attached_images,
         } = edit
         else {
             self.auto_send_next(cx);
             cx.notify();
             return;
         };
-        let (Some(project_dir), Some(item)) = (
-            self.project_dir.clone(),
-            self.queue.iter_mut().find(|item| item.id == id),
-        ) else {
+        let Some(project_dir) = self
+            .project_dir
+            .clone()
+            .filter(|_| self.queue.iter().any(|item| item.id == id))
+        else {
+            return;
+        };
+        // Its images are saved as it is, the same image once.
+        let images = match attached_image::save_all(attached_images, &project_dir) {
+            Ok(images) => images,
+            Err(err) => {
+                window.push_notification(
+                    Notification::error(format!("{err:#}"))
+                        .title("Could not save the queued prompt"),
+                    cx,
+                );
+                self.auto_send_next(cx);
+                cx.notify();
+                return;
+            }
+        };
+        let Some(item) = self.queue.iter_mut().find(|item| item.id == id) else {
             return;
         };
         let Some(old) = item.saved.take() else {
             return;
         };
         let old_text = std::mem::replace(&mut item.text, text.clone().into());
+        let old_images = std::mem::replace(&mut item.images, images.clone());
         cx.notify();
         let lsp = self.chat_input.read(cx).lsp();
         let sliced = self.chat_input.read(cx).slices();
-        let (text, mode, attached_text) = (text.clone(), *mode, attached_text.clone());
+        let (text, mode) = (text.clone(), *mode);
+        let attached = Attached {
+            text: attached_text.clone(),
+            images,
+        };
+        // Sent to the other mode, it is still sent from its task while it
+        // stays in the mode it was sent to.
+        let sent_from = old
+            .anchor
+            .sent_from
+            .clone()
+            .filter(|_| anchor_mode(&old.anchor) == Some(mode));
+        item.sent_from = sent_from.clone();
         let save = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
                 // Sent to Spec from a Code task, it is still told what that
                 // did while it stays in Spec.
                 let code_task = old.anchor.code_task.clone();
-                match resolve_anchor(
-                    &text,
-                    mode,
-                    attached_text,
-                    sliced,
-                    code_task,
-                    lsp,
-                    &project_dir,
-                ) {
-                    Ok(anchor) => prompt_queue::replace(old.file.clone(), anchor, text)
-                        .map_err(|err| (old, err)),
+                match resolve_anchor(&text, mode, attached, sliced, code_task, lsp, &project_dir) {
+                    Ok(mut anchor) => {
+                        anchor.sent_from = sent_from;
+                        prompt_queue::replace(old.file.clone(), anchor, text)
+                            .map_err(|err| (old, err))
+                    }
                     Err(err) => Err((old, err)),
                 }
             }
@@ -3040,6 +3465,8 @@ impl PromptMode {
                         Err((old, err)) => {
                             // It stays as it was.
                             item.text = old_text;
+                            item.images = old_images;
+                            item.sent_from = old.anchor.sent_from.clone();
                             item.saved = Some(old);
                             window.push_notification(
                                 Notification::error(format!("{err:#}"))
@@ -3304,7 +3731,6 @@ impl PromptMode {
                 referenced_spec::Layout {
                     files_scroll: &this.refs_scroll,
                     understanding_scroll: &this.understanding_scroll,
-                    split: &this.refs_halves,
                 },
                 this.file_opener(cx),
                 cx,
@@ -3533,15 +3959,23 @@ impl PromptMode {
         };
         let task_ix = self.push_task(text.clone().into(), cx);
         self.tasks[task_ix].sent = match &sending {
-            Sending::Now(mode, attached_text, sliced, code_task) => SentAs {
+            Sending::Now(mode, attached, sliced, code_task, sent_from) => SentAs {
                 mode: Some(*mode),
-                attached_text: attached_text.clone(),
+                attached_text: attached.text.clone(),
+                attached_images: attached.images.clone(),
                 // A Freeform prompt is never sliced, whatever the toggle says.
                 sliced: *sliced && *mode != SendMode::Freeform,
                 code_task: code_task.clone().filter(|_| *mode == SendMode::Spec),
+                sent_from: sent_from.clone(),
             },
             Sending::Queued(queued) => SentAs::of(&queued.anchor),
         };
+        // Known by its anchor's name from now on, before the anchor is
+        // resolved, so a task sent to the other mode from it knows it by that.
+        if let Sending::Queued(queued) = &sending {
+            self.tasks[task_ix].name = queued.anchor.name().to_string().into();
+        }
+        let name = self.tasks[task_ix].name.to_string();
         self.tasks[task_ix].mode = self.tasks[task_ix].sent.mode;
         self.working = true;
         if !self.in_background {
@@ -3602,15 +4036,20 @@ impl PromptMode {
                         prompt_queue::remove(&queued.file)?;
                         queued.anchor
                     }
-                    Sending::Now(mode, attached_text, sliced, code_task) => resolve_anchor(
-                        &text,
-                        mode,
-                        attached_text,
-                        sliced,
-                        code_task,
-                        lsp,
-                        &project_dir,
-                    )?,
+                    Sending::Now(mode, attached, sliced, code_task, sent_from) => {
+                        let mut anchor = resolve_anchor(
+                            &text,
+                            mode,
+                            attached,
+                            sliced,
+                            code_task,
+                            lsp,
+                            &project_dir,
+                        )?;
+                        anchor.rename(name);
+                        anchor.sent_from = sent_from;
+                        anchor
+                    }
                 };
                 let file = hidden_anchor::save(&anchor, &text, &project_dir)?;
                 // Cancelled by now, it is saved to the history as cancelled,
@@ -3619,7 +4058,9 @@ impl PromptMode {
                     return Ok((anchor.name().to_string(), file, None));
                 }
                 if freeform {
-                    let compiled = hidden_anchor::freeform(&text, &anchor.attached_text);
+                    let mut compiled = hidden_anchor::freeform(&text, &anchor.attached_text);
+                    compiled.images =
+                        hidden_anchor::image_files(&anchor.attached_images, &project_dir);
                     return anyhow::Ok((
                         anchor.name().to_string(),
                         file,
@@ -3717,6 +4158,13 @@ impl PromptMode {
                     let system_prompt = compiled.system_prompt_as_sent(shown_path.as_deref());
                     // The harness the run goes to, which its usage came from.
                     let agent = crate::agent::current();
+                    // What else the harness is given, kept for the raw
+                    // prompt, with the task and in its record.
+                    record.sent_to(agent, system_prompt.as_deref());
+                    let given = Given {
+                        harness: agent,
+                        system_prompt: system_prompt.clone(),
+                    };
                     let mut usage_run = None;
                     let harness::Run {
                         mut events,
@@ -3725,6 +4173,7 @@ impl PromptMode {
                     } = harness::send_task(
                         prompt.clone(),
                         system_prompt,
+                        compiled.images.clone(),
                         resume.clone().map(|session| harness::Resume {
                             session,
                             fork: false,
@@ -3763,6 +4212,7 @@ impl PromptMode {
                                 }
                                 if let Some(task) = this.tasks.get_mut(task_ix) {
                                     (task.imported, task.spec_dir) = imported;
+                                    task.given = Some(given);
                                 }
                                 this.show_compiled(task_ix, anchor, prompt, cx)
                             });
@@ -3864,6 +4314,21 @@ impl PromptMode {
             }
 
             record.cancelled = is_cancelled();
+            // Marked done by hand while it ran, it is saved so; marked or
+            // unmarked while this saves, it is saved again below.
+            record.marked_done = this
+                .update(cx, |this, cx| {
+                    this.in_project(&project_dir, cx, |this, _| {
+                        this.tasks
+                            .get(task_ix)
+                            .is_some_and(|task| task.marked_done)
+                    })
+                })
+                .ok()
+                .flatten()
+                .unwrap_or(false);
+            let marked_done = record.marked_done;
+            let record_file = prompt_file.clone();
             // Unsaved (the prompt itself could not be saved) there is nothing
             // to save it beside.
             let saved = match prompt_file {
@@ -3883,6 +4348,16 @@ impl PromptMode {
                 if let Some(task) = this.tasks.get_mut(task_ix) {
                     task.cancel = None;
                     task.end();
+                    if task.marked_done != marked_done
+                        && saved.is_ok()
+                        && let Some(file) = record_file
+                    {
+                        let marked_done = task.marked_done;
+                        cx.background_spawn(async move {
+                            prompt_history::save_marked_done(&file, marked_done).ok();
+                        })
+                        .detach();
+                    }
                     if let Err(err) = saved {
                         // Shown without failing the task: the run itself is
                         // unaffected.
@@ -3931,13 +4406,7 @@ impl PromptMode {
     /// Asks `text` straight away, beside any task the harness is working on,
     /// in place of any question still open. It is saved apart from the
     /// history, so it never becomes one of the tasks.
-    fn ask(
-        &mut self,
-        text: String,
-        attached_text: Vec<String>,
-        sliced: bool,
-        cx: &mut Context<Self>,
-    ) {
+    fn ask(&mut self, text: String, attached: Attached, sliced: bool, cx: &mut Context<Self>) {
         let Some(project_dir) = self.project_dir.clone() else {
             return;
         };
@@ -3945,9 +4414,11 @@ impl PromptMode {
         if let Some(ask) = self.asks.iter_mut().find(|ask| ask.id == run) {
             ask.task.sent = SentAs {
                 mode: Some(SendMode::Ask),
-                attached_text: attached_text.clone(),
+                attached_text: attached.text.clone(),
+                attached_images: attached.images.clone(),
                 sliced,
                 code_task: None,
+                sent_from: None,
             };
         }
         // Questions run at once. One that starts while another carries on the
@@ -3969,7 +4440,7 @@ impl PromptMode {
                 let (anchor, resolve_error) = match resolve_anchor(
                     &text,
                     SendMode::Ask,
-                    attached_text.clone(),
+                    attached.clone(),
                     sliced,
                     None,
                     lsp,
@@ -3979,7 +4450,7 @@ impl PromptMode {
                     Err(err) => {
                         let mut anchor = HiddenAnchor::random();
                         anchor.mode = Some(SendMode::Ask);
-                        anchor.attached_text = attached_text;
+                        anchor.attach(attached);
                         (anchor, Some(err))
                     }
                 };
@@ -4020,10 +4491,12 @@ impl PromptMode {
                     // The harness the question goes to, which its usage came
                     // from.
                     let agent = crate::agent::current();
+                    log.record.sent_to(agent, system_prompt.as_deref());
                     let mut usage_run = None;
-                    let mut events = harness::send(
+                    let mut events = harness::send_with_images(
                         prompt.clone(),
                         system_prompt,
+                        compiled.images,
                         resume
                             .clone()
                             .map(|session| harness::Resume { session, fork }),
@@ -4972,12 +5445,22 @@ impl PromptMode {
                                     cx.listener(move |this, _, _, cx| this.cancel_task(ix, cx)),
                                 ))
                             })
-                            .children(other_mode(task).map(|to| {
+                            .children(self.other_mode_state(task).map(|(to, state)| {
+                                let name = task.name.clone();
                                 other_mode_button(
                                     ("send-to-other-latest", ix),
                                     to,
+                                    state,
                                     cx.listener(move |this, _, window, cx| {
                                         this.send_to_other_mode(|this| &this.tasks, ix, window, cx)
+                                    }),
+                                    cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                                        this.open_mark_menu(
+                                            name.clone(),
+                                            event.position,
+                                            window,
+                                            cx,
+                                        )
                                     }),
                                     cx,
                                 )
@@ -4986,7 +5469,17 @@ impl PromptMode {
                                 move |this, _, window, cx| {
                                     this.resend(|this| &this.tasks, ix, window, cx)
                                 },
-                            ))),
+                            )))
+                            .child(raw_prompt_button(
+                                ("raw-prompt-latest", ix),
+                                task.compiled.is_some(),
+                                cx.listener(move |this, _, window, cx| {
+                                    // Nothing else in the header opens or
+                                    // closes with it.
+                                    cx.stop_propagation();
+                                    this.open_raw_prompt(ix, window, cx)
+                                }),
+                            )),
                     ),
             )
             .child(match &task.compiled {
@@ -5001,8 +5494,26 @@ impl PromptMode {
                         })
                         .ok();
                     });
-                    self.header_prompt
-                        .element(ix, compiled, task.slices_open, toggle, open, cx)
+                    let prompt = self.header_prompt.element(
+                        ix,
+                        compiled,
+                        task.slices_open,
+                        toggle,
+                        open,
+                        cx,
+                    );
+                    // Its images beneath it.
+                    v_flex()
+                        .gap_2()
+                        .child(prompt)
+                        .children(attached_image::prompt_thumbnails(
+                            ("header-images", ix),
+                            &task.sent.attached_images,
+                            self.project_dir.as_deref(),
+                            attached_image::PROMPT_THUMBNAIL,
+                            cx,
+                        ))
+                        .into_any_element()
                 }
                 None => div()
                     .id(("task-prompt", ix))
@@ -5095,11 +5606,18 @@ impl PromptMode {
                                 .child(format!("{}.", ix + 1)),
                         )
                         .child(
-                            div()
+                            v_flex()
                                 .flex_1()
                                 .min_w_0()
-                                .line_clamp(2)
-                                .child(item.text.clone()),
+                                .gap_1()
+                                .child(div().min_w_0().line_clamp(2).child(item.text.clone()))
+                                .children(attached_image::prompt_thumbnails(
+                                    ("queued-images", ix),
+                                    &item.images,
+                                    self.project_dir.as_deref(),
+                                    attached_image::QUEUED_THUMBNAIL,
+                                    cx,
+                                )),
                         )
                         .when(item.saved.is_none(), |row| {
                             row.child(div().flex_none().child(Spinner::new().small()))
@@ -5433,7 +5951,8 @@ impl Render for PromptMode {
             )
             .child(self.render_ask_dim(cx))
             .children(self.render_ask_drawer(cx))
-            .children(self.render_selection_popover(cx));
+            .children(self.render_selection_popover(cx))
+            .children(self.render_mark_menu());
         // Lets UI tests find the space above the chat input; inert in normal
         // builds.
         let body = gpui_kit::TestSupportExt::test_support(body);
@@ -5457,7 +5976,7 @@ impl Render for PromptMode {
 fn resolve_anchor(
     text: &str,
     mode: SendMode,
-    attached_text: Vec<String>,
+    attached: Attached,
     sliced: bool,
     code_task: Option<CodeTask>,
     lsp: Option<Arc<PitonSession>>,
@@ -5466,7 +5985,7 @@ fn resolve_anchor(
     if mode == SendMode::Freeform {
         let mut anchor = HiddenAnchor::random();
         anchor.mode = Some(mode);
-        anchor.attached_text = attached_text;
+        anchor.attach(attached);
         return Ok(anchor);
     }
     let mut anchor = match lsp {
@@ -5479,7 +5998,7 @@ fn resolve_anchor(
     system_prompts::save_missing(project_dir).ok();
     anchor.mode = Some(mode);
     anchor.sliced = sliced;
-    anchor.attached_text = attached_text;
+    anchor.attach(attached);
     // Waits for the project's fluency if it is still being printed; every
     // caller is already off the UI thread.
     let fluency = crate::piton_fluency::get(project_dir);
@@ -5498,7 +6017,7 @@ fn resolve_anchor(
 /// since the run already has the one it began with.
 fn message_anchor(
     text: &str,
-    attached_text: Vec<String>,
+    attached: Attached,
     sliced: bool,
     lsp: Option<Arc<PitonSession>>,
 ) -> Result<HiddenAnchor> {
@@ -5507,7 +6026,7 @@ fn message_anchor(
         None => HiddenAnchor::random(),
     };
     anchor.sliced = sliced;
-    anchor.attached_text = attached_text;
+    anchor.attach(attached);
     Ok(anchor)
 }
 
@@ -5602,6 +6121,30 @@ fn resend_button(id: impl Into<ElementId>) -> Button {
         .tooltip("Send this prompt again, as it was sent")
 }
 
+/// The button, `id`, beside the latest task's Resend button that opens the
+/// raw prompt modal with `on_click`; disabled until the task has compiled, as
+/// until then nothing has been sent.
+fn raw_prompt_button(
+    id: impl Into<ElementId>,
+    compiled: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> AnyElement {
+    let button = Button::new("raw-prompt-button")
+        .ghost()
+        .xsmall()
+        .icon(IconName::Code)
+        .tooltip(if compiled {
+            "View the raw prompt"
+        } else {
+            "No prompt sent yet"
+        })
+        .disabled(!compiled)
+        .on_click(on_click);
+    // Lets UI tests find and click the button; inert in normal builds.
+    gpui_kit::TestSupportExt::test_support(div().id(id).flex_none().child(button))
+        .into_any_element()
+}
+
 /// The button that cancels the task under way.
 fn cancel_button(id: impl Into<ElementId>) -> Button {
     Button::new(id)
@@ -5633,22 +6176,47 @@ fn other_mode(task: &PromptTask) -> Option<SendMode> {
 }
 
 /// The button, `id`, that sends a task again in the other mode, `to`,
-/// tinted that mode's colour, beside its Resend button.
+/// tinted that mode's colour, beside its Resend button: enabled while it is
+/// [`OtherModeState::Offered`], else greyed out and disabled, its tooltip
+/// saying why. Right-clicked, enabled or not, it calls `on_right_click`,
+/// which opens its menu; the right-click goes no further.
 fn other_mode_button(
     id: impl Into<ElementId>,
     to: SendMode,
+    state: OtherModeState,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_right_click: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
     cx: &App,
 ) -> AnyElement {
+    let enabled = state == OtherModeState::Offered;
+    let tooltip: SharedString = state.tooltip(to).into();
+    let color = if enabled {
+        chat_input::mode_color(to, cx)
+    } else {
+        cx.theme().muted_foreground
+    };
     let button = Button::new("send-to-other-mode")
         .ghost()
         .xsmall()
-        .icon(Icon::new(IconName::ArrowRightLeft).text_color(chat_input::mode_color(to, cx)))
-        .tooltip(format!("Send to {}", to.label()))
+        .icon(Icon::new(IconName::ArrowRightLeft).text_color(color))
+        .tooltip(tooltip.clone())
+        .disabled(!enabled)
         .on_click(on_click);
     // Lets UI tests find and click the button; inert in normal builds.
-    gpui_kit::TestSupportExt::test_support(div().id(id).flex_none().child(button))
-        .into_any_element()
+    gpui_kit::TestSupportExt::test_support(
+        div()
+            .id(id)
+            .flex_none()
+            // Says what its tooltip does, whether it is enabled or not.
+            .aria_label(tooltip)
+            .on_mouse_down(MouseButton::Right, move |event, window, cx| {
+                // Not the heading's, nor anything else's beneath it.
+                cx.stop_propagation();
+                on_right_click(event, window, cx);
+            })
+            .child(button),
+    )
+    .into_any_element()
 }
 
 /// The checkbox, `checked` or not, at the left of the heading of the history
@@ -5721,6 +6289,8 @@ fn task_prompt(
                     Some(open),
                     cx,
                 ))
+                // Its images beneath the prompt as typed, then its slices.
+                .children(task_images(ix, task, cx))
                 .children(slices);
             // Lets UI tests find the compiled prompt; inert in normal builds.
             gpui_kit::TestSupportExt::test_support(prompt).into_any_element()
@@ -5729,8 +6299,22 @@ fn task_prompt(
             .min_w_0()
             .text_color(cx.theme().muted_foreground)
             .child(task.text.clone())
+            .children(task_images(ix, task, cx))
             .into_any_element(),
     }
+}
+
+/// The images attached to task `ix`, as thumbnails beneath its prompt.
+fn task_images(ix: usize, task: &PromptTask, cx: &App) -> Option<AnyElement> {
+    let project_dir = ProjectDirectory::get(cx);
+    attached_image::prompt_thumbnails(
+        ("prompt-images", ix),
+        &task.sent.attached_images,
+        project_dir.as_deref(),
+        attached_image::PROMPT_THUMBNAIL,
+        cx,
+    )
+    .map(|row| div().pt_2().child(row).into_any_element())
 }
 
 /// A task in the expanded list, on one line: its title, then the start of its
@@ -5897,6 +6481,7 @@ mod tests {
     use std::time::Duration;
 
     use gpui_kit::component::Root;
+    use gpui_kit::component::WindowExt as _;
     use gpui_kit::test::{TestAppContextExt as _, TestWindowExt as _};
     use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 
@@ -5914,6 +6499,22 @@ mod tests {
             id: id.into(),
             name: name.into(),
         }
+    }
+
+    /// The Send to Spec or Send to Code button `id` in a frame drawn now:
+    /// none when there is none, else what its tooltip says, which is "Send
+    /// to Spec" or "Send to Code" only while it is enabled.
+    fn other_mode_button_at(
+        handle: AnyWindowHandle,
+        id: (&'static str, usize),
+        cx: &mut TestAppContext,
+    ) -> Option<String> {
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let button = window.try_find(id)?;
+            Some(button.label().expect("the button has a label").to_string())
+        })
+        .unwrap()
     }
 
     /// Opens prompt mode in a window.
@@ -5937,10 +6538,11 @@ mod tests {
     /// view, which keeps its width meanwhile, lists the spec files the task
     /// references, opens one clicked, and slides back once the run is over.
     /// A question never shows it.
-    /// The sidebar's bottom half shows the running task's understanding
-    /// file as the harness writes it, a row per list item, sharing the height
-    /// evenly with the referenced files; a row whose link points to a missing
-    /// file does nothing, and one whose file exists opens it.
+    /// The sidebar's understanding shows the running task's understanding
+    /// file as the harness writes it, a row per list item, beneath the
+    /// referenced files, which take only the height their placeholder needs,
+    /// and filling the rest; a row whose link points to a missing file does
+    /// nothing, and one whose file exists opens it.
     #[gpui_kit::test]
     async fn referenced_spec_shows_the_understanding(cx: &mut TestAppContext) {
         let dir =
@@ -5993,16 +6595,23 @@ mod tests {
         cx.update_window(handle, |_, window, _| {
             assert!(window.try_find(("understanding-row", 1usize)).is_some());
             assert!(window.try_find(("understanding-row", 2usize)).is_none());
-            let files = window.find("referenced-files-list").bounds();
-            let understanding = window.find("understanding-list").bounds();
-            assert!(
-                understanding.top() >= files.bottom() - gpui_kit::px(1.),
-                "{understanding:?} isn't beneath {files:?}"
+            let sidebar = window.find("referenced-files").bounds();
+            let files = window.find("referenced-files-panel").bounds();
+            let understanding = window.find("understanding-panel").bounds();
+            assert_eq!(
+                files.size.height,
+                crate::referenced_spec::files_height(0),
+                "the referenced files, with none yet, don't fit their placeholder"
+            );
+            assert_eq!(
+                (understanding.top(), understanding.bottom()),
+                (files.bottom(), sidebar.bottom()),
+                "the understanding {understanding:?} doesn't fill the sidebar {sidebar:?} \
+                 beneath the referenced files {files:?}"
             );
             assert!(
-                (understanding.size.height - files.size.height).abs() <= gpui_kit::px(4.)
-                    && understanding.size.height >= gpui_kit::px(40.),
-                "the halves {files:?} and {understanding:?} don't share the height"
+                window.try_find("referenced-spec-split").is_none(),
+                "the panels can still be dragged apart"
             );
         })
         .unwrap();
@@ -6028,6 +6637,319 @@ mod tests {
         prompt_mode.read_with(cx, |this, _| {
             assert!(this.file.is_some(), "the linked file didn't open")
         });
+    }
+
+    /// As the mockup has it, in dark and light mode alike: each panel's
+    /// header 32 pixels tall on the darkest surface, the body on the ribbon's
+    /// command area colour, no line anywhere, not even along the sidebar's
+    /// left edge; the referenced files 24 pixels tall inside 8 pixels of
+    /// padding, with no icon but the pencil of an edited file; each
+    /// understanding row a softly rounded box on the ribbon's tab row colour,
+    /// 32 pixels tall, 8 pixels in and 4 apart. The referenced files take only
+    /// the height their rows need, up to half the sidebar's, then scroll.
+    #[gpui_kit::test]
+    async fn referenced_spec_takes_the_mockups_look(cx: &mut TestAppContext) {
+        use gpui_kit::component::{Theme, ThemeMode};
+        use gpui_kit::{point, px};
+        let dir = std::env::temp_dir().join(format!("suspense-refs-look-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("spec")).unwrap();
+        std::fs::write(
+            dir.join("piton.config.pi"),
+            "export piton-config Project:\n    root: ./spec\n",
+        )
+        .unwrap();
+        for ix in 0..40 {
+            std::fs::write(dir.join(format!("spec/f{ix}.pi")), "a: 1\n").unwrap();
+        }
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        let dir = prompt_mode.read_with(cx, |this, _| this.project_dir.clone().unwrap());
+        let file = crate::understanding::path(&dir.join(".suspense/history/1-Prompt_a.pi"));
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, "- The button should be blue\n- Other things\n").unwrap();
+        let read = |this: &mut PromptMode,
+                    ix: usize,
+                    file: usize,
+                    tool: &str,
+                    cx: &mut gpui_kit::Context<PromptMode>| {
+            let path = dir.join(format!("spec/f{file}.pi"));
+            this.apply_event(
+                ix,
+                HarnessEvent::ToolCalled {
+                    id: format!("t{file}"),
+                    name: tool.into(),
+                    input: serde_json::json!({ "file_path": path }),
+                    subagent: false,
+                },
+                cx,
+            );
+        };
+        let ix = prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("Change a".into(), cx);
+            this.tasks[ix].mode = Some(crate::chat_input::SendMode::Code);
+            this.tasks[ix].status = TaskStatus::Running;
+            this.tasks[ix].spec_dir = Some(dir.join("spec"));
+            this.tasks[ix]._understanding_watch =
+                PromptMode::watch_understanding(ix, file.clone(), dir.clone(), cx);
+            read(this, ix, 0, "Read", cx);
+            read(this, ix, 1, "Edit", cx);
+            this.set_working(true);
+            cx.notify();
+            ix
+        });
+        let settle = |cx: &mut TestAppContext| {
+            cx.executor().advance_clock(Duration::from_millis(300));
+            cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(400));
+            // The rows' highlight, just added, is over.
+            prompt_mode.update(cx, |this, _| {
+                for row in &mut this.tasks[ix].understanding.rows {
+                    row.changed = None;
+                }
+            });
+            for _ in 0..3 {
+                cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                    .unwrap();
+            }
+        };
+        settle(cx);
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.tasks[ix].understanding.rows.len(), 2)
+        });
+
+        for mode in [ThemeMode::Dark, ThemeMode::Light] {
+            cx.update(|cx| Theme::change(mode, None, cx));
+            settle(cx);
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let palette = crate::theme::palette(cx);
+                let frame = crate::frame_image::Frame::of(window);
+                let bounds = |id: &'static str| window.find(id).bounds();
+                let sidebar = bounds("referenced-files");
+                let (files, understanding) = (
+                    bounds("referenced-files-panel"),
+                    bounds("understanding-panel"),
+                );
+                let headers = [
+                    bounds("referenced-files-header"),
+                    bounds("understanding-header"),
+                ];
+                let rows = [0usize, 1].map(|ix| window.find(("referenced-file", ix)).bounds());
+                let boxes = [0usize, 1].map(|ix| window.find(("understanding-row", ix)).bounds());
+                assert!(
+                    window.try_find(("referenced-file", 2usize)).is_none(),
+                    "{mode:?}"
+                );
+
+                // The headers, 32 tall on the darkest surface, above the
+                // bodies on the command area colour.
+                assert_eq!(headers[0].top(), sidebar.top(), "{mode:?}");
+                assert_eq!(headers[1].top(), files.bottom(), "{mode:?}");
+                for header in headers {
+                    assert_eq!(header.size.height, px(32.), "{mode:?}: header");
+                    assert_eq!(header.size.width, sidebar.size.width, "{mode:?}");
+                    assert_eq!(
+                        frame.at(point(header.left() + px(2.), header.top() + px(2.))),
+                        palette.darkest,
+                        "{mode:?}: header"
+                    );
+                }
+                assert_eq!(
+                    frame.at(point(
+                        sidebar.right() - px(3.),
+                        headers[0].bottom() + px(3.)
+                    )),
+                    palette.ribbon,
+                    "{mode:?}: the referenced files' body"
+                );
+                assert_eq!(
+                    frame.at(point(sidebar.left() + px(40.), sidebar.bottom() - px(20.))),
+                    palette.ribbon,
+                    "{mode:?}: the understanding's body"
+                );
+
+                // Two rows of 24, 8 in, fitting the panel.
+                assert_eq!(rows[0].top(), headers[0].bottom() + px(8.), "{mode:?}");
+                assert_eq!(rows[1].top(), rows[0].bottom(), "{mode:?}");
+                for row in rows {
+                    assert_eq!(row.size.height, px(24.), "{mode:?}: row");
+                    assert_eq!(
+                        (row.left() - sidebar.left(), sidebar.right() - row.right()),
+                        (px(8.), px(8.)),
+                        "{mode:?}: row"
+                    );
+                }
+                assert_eq!(files.bottom(), rows[1].bottom() + px(8.), "{mode:?}");
+                assert_eq!(
+                    files.size.height,
+                    crate::referenced_spec::files_height(2),
+                    "{mode:?}"
+                );
+                assert_eq!(understanding.bottom(), sidebar.bottom(), "{mode:?}");
+
+                // The boxes, 32 tall, 8 in and 4 apart, on the tab row
+                // colour, rounded.
+                assert_eq!(boxes[0].top(), headers[1].bottom() + px(8.), "{mode:?}");
+                assert_eq!(boxes[1].top(), boxes[0].bottom() + px(4.), "{mode:?}");
+                for bx in boxes {
+                    assert_eq!(bx.size.height, px(32.), "{mode:?}: box");
+                    assert_eq!(
+                        (bx.left() - sidebar.left(), sidebar.right() - bx.right()),
+                        (px(8.), px(8.)),
+                        "{mode:?}: box"
+                    );
+                    assert_eq!(
+                        frame.at(point(bx.left() + px(4.), bx.top() + px(16.))),
+                        palette.ribbon_tabs,
+                        "{mode:?}: box"
+                    );
+                }
+                let scale = window.scale_factor();
+                assert!(
+                    window.painted_quads().iter().any(|quad| {
+                        let (x, y) = (
+                            quad.bounds.origin.x.0 / scale,
+                            quad.bounds.origin.y.0 / scale,
+                        );
+                        (x - boxes[0].left().as_f32()).abs() < 0.5
+                            && (y - boxes[0].top().as_f32()).abs() < 0.5
+                            && (quad.corner_radii.top_left.0 / scale - 4.).abs() < 0.5
+                    }),
+                    "{mode:?}: the box isn't rounded"
+                );
+
+                // No line anywhere: down it just inside the edge it is
+                // dragged by (the one line, where it meets the task view,
+                // which the split draws), down it clear of the text, and
+                // across its headers, rows and boxes, only the surfaces it is
+                // drawn on; and nothing in it has a border.
+                let surfaces = [palette.darkest, palette.ribbon, palette.ribbon_tabs];
+                let surface = |x: gpui_kit::Pixels, y: gpui_kit::Pixels| {
+                    let at = frame.at(point(x, y));
+                    assert!(
+                        surfaces.contains(&at),
+                        "{mode:?}: {at:06x} at {x:?}, {y:?} isn't a surface of the sidebar"
+                    );
+                };
+                for x in [
+                    sidebar.left() + px(1.5),
+                    sidebar.left() + px(4.5),
+                    sidebar.right() - px(1.5),
+                ] {
+                    let mut y = sidebar.top() + px(0.5);
+                    while y < sidebar.bottom() {
+                        surface(x, y);
+                        y += px(1.);
+                    }
+                }
+                for y in [
+                    headers[0].top() + px(2.5),
+                    rows[0].top() + px(2.5),
+                    headers[1].bottom() - px(0.5),
+                    boxes[0].top() + px(2.5),
+                    boxes[0].bottom() + px(2.5),
+                ] {
+                    let mut x = sidebar.left() + px(1.5);
+                    while x < sidebar.right() {
+                        surface(x, y);
+                        x += px(1.);
+                    }
+                }
+                for quad in window.painted_quads() {
+                    let (x, y) = (
+                        quad.bounds.origin.x.0 / scale,
+                        quad.bounds.origin.y.0 / scale,
+                    );
+                    let inside = x >= sidebar.left().as_f32() - 0.5
+                        && x < sidebar.right().as_f32()
+                        && y >= sidebar.top().as_f32()
+                        && y < sidebar.bottom().as_f32();
+                    let widths = &quad.border_widths;
+                    assert!(
+                        !inside
+                            || [widths.top, widths.right, widths.bottom, widths.left]
+                                .iter()
+                                .all(|width| width.0 == 0.)
+                            || quad.border_color.a == 0.,
+                        "{mode:?}: a quad at {x}, {y} has a border"
+                    );
+                }
+            })
+            .unwrap();
+        }
+
+        // Many more files than half the sidebar holds: the referenced files
+        // take half its height and scroll, the understanding the rest. In
+        // dark mode, on the body's #222222.
+        cx.update(|cx| Theme::change(ThemeMode::Dark, None, cx));
+        prompt_mode.update(cx, |this, cx| {
+            for file in 2..40 {
+                read(this, ix, file, "Read", cx);
+            }
+            cx.notify();
+        });
+        settle(cx);
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let bounds = |id: &'static str| window.find(id).bounds();
+            let sidebar = bounds("referenced-files");
+            let (files, understanding) = (
+                bounds("referenced-files-panel"),
+                bounds("understanding-panel"),
+            );
+            assert!(
+                crate::referenced_spec::files_height(40) > sidebar.size.height / 2.,
+                "the window is too tall for the test: {sidebar:?}"
+            );
+            assert!(
+                (files.size.height - sidebar.size.height / 2.).abs() <= px(0.5),
+                "the referenced files {files:?} aren't half the sidebar {sidebar:?}"
+            );
+            assert_eq!(
+                (understanding.top(), understanding.bottom()),
+                (files.bottom(), sidebar.bottom())
+            );
+            let list = bounds("referenced-files-list");
+            assert!(
+                list.bottom() <= files.bottom() + px(0.5),
+                "the list {list:?} runs out of its panel {files:?}"
+            );
+            prompt_mode.read_with(cx, |this, _| {
+                assert!(
+                    this.refs_scroll.max_offset().y > px(0.),
+                    "the referenced files don't scroll"
+                )
+            });
+            // Now that they overflow, the same scrollbar as every other runs
+            // down their right, laid over their body's surface: the body's
+            // colour down both its sides and beside its buttons' arrows, and
+            // the track, black laid half way over it, inset between. Scrolled
+            // to the top, the thumb is at the track's top.
+            let frame = crate::frame_image::Frame::of(window);
+            let body = crate::theme::palette(cx).ribbon;
+            let colors = crate::scrollbar::scroll_colors(true);
+            let column = bounds("referenced-files-scroll-column");
+            let track = bounds("referenced-files-scroll-track");
+            assert_eq!(column.right(), sidebar.right());
+            let at = |x: f32, y: gpui_kit::Pixels| frame.at(point(column.left() + px(x + 0.5), y));
+            let low = track.bottom() - px(2.5);
+            for y in [column.top() + px(2.5), track.top() + track.size.height / 2., low] {
+                assert_eq!(at(0., y), body, "the column's left side at {y:?}");
+                assert_eq!(at(17., y), body, "the column's right side at {y:?}");
+            }
+            let dark = at(8., low);
+            let c: gpui_kit::Rgba = colors.track.into();
+            let expected = ((((body >> 16) & 0xff) as f32 * (1. - c.a)).round() as u32) * 0x010101;
+            assert!(
+                (dark as i32 - expected as i32).abs() <= 0x010101,
+                "the track is {dark:06x} on {body:06x}, not {expected:06x}"
+            );
+            assert_eq!(at(0., low), body, "the track isn't inset");
+        })
+        .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[gpui_kit::test]
@@ -6867,7 +7789,7 @@ mod tests {
         prompt_mode.update(cx, |this, _| this.task_history.expanded = false);
         assert!(offered(cx));
 
-        feed.send("Also b.".into(), "Also b, compiled.".into())
+        feed.send("Also b.".into(), "Also b, compiled.".into(), &[])
             .unwrap();
         assert_eq!(
             events.next().await,
@@ -6879,14 +7801,14 @@ mod tests {
 
         // The run takes no more: a message on its way is queued as a task.
         feed.close();
-        assert!(feed.send("Late.".into(), "Late.".into()).is_err());
+        assert!(feed.send("Late.".into(), "Late.".into(), &[]).is_err());
         assert!(!offered(cx));
         cx.update_window(handle, |_, window, cx| {
             prompt_mode.update(cx, |this, cx| {
                 this.send_to_task(
                     "Also c.".into(),
                     crate::chat_input::SendMode::Code,
-                    Vec::new(),
+                    Default::default(),
                     window,
                     cx,
                 )
@@ -7448,7 +8370,7 @@ mod tests {
                 .read(cx)
                 .attachments()
                 .iter()
-                .map(|attachment| attachment.text.clone())
+                .map(|attachment| attachment.text().unwrap_or_default().to_string())
                 .collect::<Vec<_>>()
         });
         assert_eq!(attached, ["selected text"]);
@@ -8397,7 +9319,7 @@ mod tests {
                 .read(cx)
                 .attachments()
                 .iter()
-                .map(|attachment| attachment.text.clone())
+                .map(|attachment| attachment.text().unwrap_or_default().to_string())
                 .collect::<Vec<_>>()
         });
         assert_eq!(attached.len(), 1, "{attached:?}");
@@ -9210,7 +10132,7 @@ mod tests {
                     .filter(|quad| quad.background.as_solid() == Some(color))
                     .filter(|quad| {
                         let b = &quad.bounds;
-                        // Not the scroll column's thumb, which has one too.
+                        // Not the scroll column's buttons, hovered.
                         b.origin.x.0 >= output.left().as_f32() * scale
                             && b.origin.x.0 < column.left().as_f32() * scale
                             && b.origin.y.0 >= output.top().as_f32() * scale
@@ -9220,8 +10142,7 @@ mod tests {
             };
             assert_eq!(edges(light), 2, "the header's lit edges");
             assert_eq!(edges(shade), 2, "the header's shaded edges");
-            // The track spans the column's full width, and every button sits
-            // just inside the track's line.
+            // The track, and every button, spans the column's full width.
             let track = window.find("task-output-scroll-track").bounds();
             assert!(track.left() == column.left() && track.right() == column.right());
             for id in [
@@ -9231,9 +10152,8 @@ mod tests {
             ] {
                 let part = window.find(id).bounds();
                 assert!(
-                    part.left() == column.left() + gpui_kit::px(1.)
-                        && part.right() == column.right(),
-                    "{id} {part:?} doesn't sit inside the track's line in {column:?}"
+                    part.left() == column.left() && part.right() == column.right(),
+                    "{id} {part:?} isn't the width of {column:?}"
                 );
             }
             assert!(
@@ -9398,15 +10318,19 @@ mod tests {
                 this.tasks[ix].sent = super::SentAs {
                     mode: Some(SendMode::Spec),
                     attached_text: vec!["note".into()],
+                    attached_images: Vec::new(),
                     sliced: false,
                     code_task: None,
+                    sent_from: None,
                 };
                 let mut answer = PromptTask::new("Why?".into());
                 answer.sent = super::SentAs {
                     mode: Some(SendMode::Ask),
                     attached_text: vec!["context".into()],
+                    attached_images: Vec::new(),
                     sliced: true,
                     code_task: None,
+                    sent_from: None,
                 };
                 this.answers.push(answer);
                 this.working = true;
@@ -9432,7 +10356,8 @@ mod tests {
     /// at the right of the latest task's header and of each previous task's
     /// heading; not one sent in Chain, a question, or one of unknown mode.
     /// Clicking it sends the task again as resending does, but in the other
-    /// mode, leaving the heading closed and the task where it was.
+    /// mode, leaving the heading closed and the task where it was. The task
+    /// sent is complete, and its button, clicked, sends nothing back.
     #[gpui_kit::test]
     async fn code_and_spec_tasks_can_be_sent_to_the_other_mode(cx: &mut TestAppContext) {
         use crate::chat_input::SendMode;
@@ -9448,8 +10373,10 @@ mod tests {
                 this.tasks[ix].sent = super::SentAs {
                     mode,
                     attached_text: vec!["note".into()],
+                    attached_images: Vec::new(),
                     sliced: true,
                     code_task: None,
+                    sent_from: None,
                 };
                 this.tasks[ix].mode = mode;
             })
@@ -9530,18 +10457,22 @@ mod tests {
                 super::SentAs {
                     mode: Some(SendMode::Spec),
                     attached_text: vec!["note".into()],
+                    attached_images: Vec::new(),
                     sliced: true,
                     // Told of the code task, which never finished.
                     code_task: Some(crate::hidden_anchor::CodeTask {
                         prompt: "Task 0".into(),
                         result: None,
                     }),
+                    // Knowing the task it was sent from.
+                    sent_from: Some(this.tasks[0].name.to_string()),
                 }
             );
         });
         settle(cx);
 
-        // And the latest, now that Spec task, goes to Code.
+        // The latest, now that Spec task, sent from Code, is complete: it
+        // isn't offered, and clicked, it sends nothing back.
         prompt_mode.update(cx, |this, cx| {
             this.task_history.expanded = false;
             cx.notify();
@@ -9552,14 +10483,30 @@ mod tests {
             window.try_find("referenced-files").is_none()
         })
         .await;
+        assert_eq!(
+            other_mode_button_at(handle, ("send-to-other-latest", 5), cx).as_deref(),
+            Some("Complete, sent here from Code")
+        );
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             window.click(("send-to-other-latest", 5usize), cx)
         })
         .unwrap();
+        prompt_mode.read_with(cx, |this, _| assert_eq!(this.tasks.len(), 6));
+
+        // A Spec task goes to Code.
+        prompt_mode.update(cx, |this, cx| {
+            this.task_history.expanded = true;
+            cx.notify();
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click(("send-to-other-previous", 4usize), cx)
+        })
+        .unwrap();
         prompt_mode.read_with(cx, |this, _| {
             assert_eq!(this.tasks.len(), 7);
-            assert_eq!(this.tasks[6].text.as_ref(), "Task 0");
+            assert_eq!(this.tasks[6].text.as_ref(), "Task 4");
             assert_eq!(this.tasks[6].sent.mode, Some(SendMode::Code));
         });
 
@@ -9575,6 +10522,1105 @@ mod tests {
         })
         .unwrap();
         settle(cx);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A task sent to the other mode, from Code or from Spec, keeps its Send
+    /// to Spec or Send to Code button, but greyed out and disabled while the
+    /// task sent from it waits in the queue, builds, compiles, or runs, and
+    /// once it is done, in the latest task's header or among the previous
+    /// tasks, its tooltip saying it is being sent or was sent; if that task
+    /// fails, is cancelled, or wasn't recorded, it is enabled again. Clicked
+    /// meanwhile, it sends nothing. Batch actions neither count nor send it, though it
+    /// stays selected. Resend is offered throughout, and a task sent to the
+    /// other mode, resent, is still sent from the task it was.
+    #[gpui_kit::test]
+    async fn tasks_sent_to_the_other_mode_no_longer_offer_it(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        let dir = std::env::temp_dir().join(format!("suspense-sent-once-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        let push =
+            |mode: SendMode, status: TaskStatus, from: Option<usize>, cx: &mut TestAppContext| {
+                prompt_mode.update(cx, |this, cx| {
+                    let sent_from = from.map(|from| this.tasks[from].name.to_string());
+                    let ix = this.push_task(format!("Task {}", this.tasks.len()).into(), cx);
+                    this.tasks[ix].sent = super::SentAs {
+                        mode: Some(mode),
+                        attached_text: Vec::new(),
+                        attached_images: Vec::new(),
+                        sliced: false,
+                        code_task: None,
+                        sent_from,
+                    };
+                    this.tasks[ix].mode = Some(mode);
+                    this.tasks[ix].status = status;
+                    ix
+                })
+            };
+        let shown = |id: (&'static str, usize), cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.try_find(id).is_some()
+            })
+            .unwrap()
+        };
+        // The Send to Spec or Send to Code button `id` as drawn, by its
+        // tooltip, and whether it is enabled, as its task stands.
+        let button = |id: (&'static str, usize), cx: &mut TestAppContext| {
+            let tooltip = other_mode_button_at(handle, id, cx).expect("no button drawn");
+            let enabled = prompt_mode.read_with(cx, |this, _| {
+                let (_, state) = this.other_mode_state(&this.tasks[id.1]).unwrap();
+                state == super::OtherModeState::Offered
+            });
+            (enabled, tooltip)
+        };
+        let expand = |expanded: bool, cx: &mut TestAppContext| {
+            prompt_mode.update(cx, |this, cx| {
+                this.task_history.expanded = expanded;
+                cx.notify();
+            })
+        };
+        let set_status = |ix: usize, status: TaskStatus, cx: &mut TestAppContext| {
+            prompt_mode.update(cx, |this, cx| {
+                this.tasks[ix].status = status;
+                cx.notify();
+            })
+        };
+        let queue_from = |from: usize, cx: &mut TestAppContext| {
+            prompt_mode.update(cx, |this, cx| {
+                let sent_from = Some(this.tasks[from].name.to_string());
+                this.queue.push(super::QueueItem {
+                    id: usize::MAX - from,
+                    text: "queued".into(),
+                    saved: None,
+                    wait: true,
+                    sent_from,
+                    images: Vec::new(),
+                });
+                cx.notify();
+            })
+        };
+        let clear_queue = |cx: &mut TestAppContext| {
+            prompt_mode.update(cx, |this, cx| {
+                this.queue.clear();
+                cx.notify();
+            })
+        };
+
+        let code = push(SendMode::Code, TaskStatus::Done, None, cx);
+        let spec = push(SendMode::Spec, TaskStatus::Done, None, cx);
+
+        // The latest, a Spec task, offers Send to Code until a prompt sent
+        // from it waits in the queue, when it is disabled; Resend stays.
+        assert_eq!(
+            button(("send-to-other-latest", spec), cx),
+            (true, "Send to Code".into())
+        );
+        queue_from(spec, cx);
+        assert_eq!(
+            button(("send-to-other-latest", spec), cx),
+            (false, "Being sent to Code".into())
+        );
+        assert!(shown(("resend-latest", spec), cx));
+        clear_queue(cx);
+        assert_eq!(
+            button(("send-to-other-latest", spec), cx),
+            (true, "Send to Code".into())
+        );
+
+        // The Code task sent to Spec: disabled while that task is under way
+        // or done, enabled again once it failed, was cancelled, or wasn't
+        // recorded.
+        let to_spec = push(SendMode::Spec, TaskStatus::Building, Some(code), cx);
+        expand(true, cx);
+        for status in [
+            TaskStatus::Building,
+            TaskStatus::Compiling,
+            TaskStatus::Running,
+            TaskStatus::Done,
+            TaskStatus::Failed,
+            TaskStatus::Cancelled,
+            TaskStatus::Unrecorded,
+        ] {
+            set_status(to_spec, status, cx);
+            let sent = status.is_active() || status == TaskStatus::Done;
+            let tooltip = if status == TaskStatus::Done {
+                "Sent to Spec"
+            } else if sent {
+                "Being sent to Spec"
+            } else {
+                "Send to Spec"
+            };
+            assert_eq!(
+                button(("send-to-other-previous", code), cx),
+                (!sent, tooltip.into()),
+                "Send to Spec, with the task sent from it {}",
+                status.label()
+            );
+            assert!(shown(("resend-previous", code), cx));
+            // The task sent, itself sent from Code, is complete, however it
+            // stands.
+            assert_eq!(
+                button(("send-to-other-previous", to_spec), cx),
+                (false, "Complete, sent here from Code".into())
+            );
+        }
+
+        // The other way, the Spec task sent to Code.
+        let to_code = push(SendMode::Code, TaskStatus::Running, Some(spec), cx);
+        assert_eq!(
+            button(("send-to-other-previous", spec), cx),
+            (false, "Being sent to Code".into())
+        );
+        set_status(to_code, TaskStatus::Done, cx);
+        assert_eq!(
+            button(("send-to-other-previous", spec), cx),
+            (false, "Sent to Code".into())
+        );
+        assert!(shown(("resend-previous", spec), cx));
+        set_status(to_code, TaskStatus::Failed, cx);
+        assert_eq!(
+            button(("send-to-other-previous", spec), cx),
+            (true, "Send to Code".into())
+        );
+        // Waiting in the queue, it is disabled too.
+        queue_from(spec, cx);
+        assert_eq!(
+            button(("send-to-other-previous", spec), cx),
+            (false, "Being sent to Code".into())
+        );
+
+        // Batch actions neither count nor send them, but they stay selected.
+        set_status(to_spec, TaskStatus::Done, cx);
+        prompt_mode.update(cx, |this, cx| {
+            this.task_history.click_checkbox(code, false);
+            this.task_history.click_checkbox(spec, false);
+            cx.notify();
+        });
+        // The actions shown: the count, to Spec, and to Code.
+        let actions = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                (
+                    window.try_find("history-selected-count").is_some(),
+                    window.try_find("history-send-selected-to-spec").is_some(),
+                    window.try_find("history-send-selected-to-code").is_some(),
+                )
+            })
+            .unwrap()
+        };
+        assert_eq!(actions(cx), (true, false, false));
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                assert!(this.selected_for(SendMode::Spec).is_empty());
+                assert!(this.selected_for(SendMode::Code).is_empty());
+                this.send_selected_to(SendMode::Spec, window, cx);
+                this.send_selected_to(SendMode::Code, window, cx);
+                // Nor are they sent from their buttons, clicked meanwhile.
+                this.send_to_other_mode(|this| &this.tasks, code, window, cx);
+                this.send_to_other_mode(|this| &this.tasks, spec, window, cx);
+                assert_eq!(this.tasks.len(), 4, "a task sent was sent again");
+                assert_eq!(this.queue.len(), 1, "a task sent was queued again");
+                assert_eq!(
+                    this.task_history
+                        .selected
+                        .iter()
+                        .copied()
+                        .collect::<Vec<_>>(),
+                    [code, spec],
+                    "deselected though not sent"
+                );
+            })
+        })
+        .unwrap();
+        // Once what was sent from them came to nothing, they count again.
+        set_status(to_spec, TaskStatus::Cancelled, cx);
+        clear_queue(cx);
+        assert_eq!(actions(cx), (true, true, true));
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.selected_for(SendMode::Spec), [code]);
+            assert_eq!(this.selected_for(SendMode::Code), [spec]);
+        });
+
+        // Resent, a task sent to the other mode is still sent from the task
+        // it was; being complete, it isn't sent back.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.working = true;
+                this.resend(|this| &this.tasks, to_spec, window, cx);
+                this.send_to_other_mode(|this| &this.tasks, to_spec, window, cx);
+                let from: Vec<Option<String>> = this
+                    .queue
+                    .iter()
+                    .map(|item| item.sent_from.clone())
+                    .collect();
+                assert_eq!(from, [Some(this.tasks[code].name.to_string())]);
+                // Queued again, the Code task isn't offered Send to Spec.
+                assert_eq!(this.offers_other_mode(&this.tasks[code]), None);
+                this.queue.clear();
+                this.working = false;
+            })
+        })
+        .unwrap();
+        cx.run_until_parked();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A task sent to the other mode is saved in the history with the task
+    /// it was sent from, from Code and from Spec, so once what was sent from
+    /// it is done, its button is disabled, saying it was sent there, and the
+    /// task sent is complete, saying it was sent here, as it runs and once
+    /// the history is loaded again. A prompt queued from it is
+    /// saved with it, and disables it again once the queue is loaded back.
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn tasks_sent_to_the_other_mode_are_remembered_in_the_history(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        use std::os::unix::fs::PermissionsExt as _;
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        // The stand-in harness is a real process, whose events arrive from
+        // its own thread.
+        cx.executor().allow_parking();
+        let (prompt_mode, handle) = open(cx);
+        let dir = cancel_project("sent-once-history", &prompt_mode, cx);
+        // A harness that is done at once.
+        let script = dir.join("done-harness.sh");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\n\
+             IFS= read -r line\n\
+             echo '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"s1\"}'\n\
+             echo '{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Done.\"}'\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::harness::use_program_for_test(Some(script));
+        let offered = |ix: usize, cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| {
+                this.offers_other_mode(&this.tasks[ix]).is_some()
+            })
+        };
+        let shown = |id: (&'static str, usize), cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.try_find(id).is_some()
+            })
+            .unwrap()
+        };
+
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send("Change it".into(), SendMode::Code, Vec::new(), window, cx)
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the Code task", |this| {
+            !this.working && this.tasks.len() == 1
+        });
+        assert_eq!(
+            prompt_mode.read_with(cx, |this, _| this.tasks[0].status),
+            TaskStatus::Done
+        );
+        assert!(offered(0, cx));
+
+        // Sent to Spec, it no longer offers it, while that runs and once it
+        // is done.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send_to_other_mode(|this| &this.tasks, 0, window, cx);
+                assert!(this.tasks[1].status.is_active());
+                assert_eq!(
+                    this.tasks[1].sent.sent_from.as_deref(),
+                    Some(this.tasks[0].name.as_ref())
+                );
+            })
+        })
+        .unwrap();
+        assert!(!offered(0, cx));
+        run_until(cx, &prompt_mode, "the task sent to Spec", |this| {
+            !this.working && this.tasks.len() == 2
+        });
+        assert_eq!(
+            prompt_mode.read_with(cx, |this, _| this.tasks[1].status),
+            TaskStatus::Done
+        );
+        assert!(!offered(0, cx));
+        // That Spec task, sent from Code, is complete.
+        assert!(!offered(1, cx));
+
+        // A Spec task, sent to Code.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send("Describe it".into(), SendMode::Spec, Vec::new(), window, cx)
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the Spec task", |this| {
+            !this.working && this.tasks.len() == 3
+        });
+        assert!(offered(2, cx));
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send_to_other_mode(|this| &this.tasks, 2, window, cx)
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the task sent to Code", |this| {
+            !this.working && this.tasks.len() == 4
+        });
+        let names: Vec<String> = prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.tasks[3].status, TaskStatus::Done);
+            assert_eq!(this.tasks[3].sent.mode, Some(SendMode::Code));
+            this.tasks
+                .iter()
+                .map(|task| task.name.to_string())
+                .collect()
+        });
+        assert!(!offered(2, cx));
+        // The Code task sent from it is complete too.
+        assert!(!offered(3, cx));
+
+        // Loaded again from the history, each still knows where it was sent
+        // from, and so still doesn't offer it: those sent from are sent, and
+        // those sent are complete.
+        prompt_mode.update(cx, |this, cx| {
+            this.tasks.clear();
+            this.load_history(cx);
+        });
+        run_until(cx, &prompt_mode, "the history loading", |this| {
+            this.tasks.len() == 4
+        });
+        // Tasks saved in the same second load back in no set order, so each
+        // is found by its name.
+        let at = |name: &String, cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| {
+                this.tasks
+                    .iter()
+                    .position(|task| task.name.as_ref() == name)
+                    .unwrap()
+            })
+        };
+        let from: Vec<(Option<String>, TaskStatus)> = names
+            .iter()
+            .map(|name| {
+                let ix = at(name, cx);
+                prompt_mode.read_with(cx, |this, _| {
+                    (this.tasks[ix].sent.sent_from.clone(), this.tasks[ix].status)
+                })
+            })
+            .collect();
+        assert_eq!(
+            from,
+            [
+                (None, TaskStatus::Done),
+                (Some(names[0].clone()), TaskStatus::Done),
+                (None, TaskStatus::Done),
+                (Some(names[2].clone()), TaskStatus::Done),
+            ]
+        );
+        // Its button, in the latest task's header or its previous task's
+        // heading, whichever it is in.
+        let button = |ix: usize, cx: &mut TestAppContext| {
+            let latest = prompt_mode.update(cx, |this, cx| {
+                let latest = ix + 1 == this.tasks.len();
+                this.task_history.expanded = !latest;
+                cx.notify();
+                latest
+            });
+            let (send, resend) = if latest {
+                ("send-to-other-latest", "resend-latest")
+            } else {
+                ("send-to-other-previous", "resend-previous")
+            };
+            assert!(shown((resend, ix), cx), "no Resend for task {ix}");
+            other_mode_button_at(handle, (send, ix), cx)
+        };
+        for (n, (name, tooltip)) in names
+            .iter()
+            .zip([
+                "Sent to Spec",
+                "Complete, sent here from Code",
+                "Sent to Code",
+                "Complete, sent here from Spec",
+            ])
+            .enumerate()
+        {
+            let ix = at(name, cx);
+            assert_eq!(
+                button(ix, cx).as_deref(),
+                Some(tooltip),
+                "task {n}, at {ix}"
+            );
+            assert_eq!(
+                prompt_mode.read_with(cx, |this, _| this.offers_other_mode(&this.tasks[ix])),
+                None,
+                "task {n} sent, at {ix}"
+            );
+        }
+
+        // A new Code task, queued from, is saved with where it was sent
+        // from, and loaded back so.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send("Change more".into(), SendMode::Code, Vec::new(), window, cx)
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the new Code task", |this| {
+            !this.working && this.tasks.len() == 5
+        });
+        let last = 4;
+        let last_name = prompt_mode.read_with(cx, |this, _| this.tasks[last].name.to_string());
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.working = true;
+                this.send_to_other_mode(|this| &this.tasks, last, window, cx);
+            })
+        })
+        .unwrap();
+        assert_eq!(button(last, cx).as_deref(), Some("Being sent to Spec"));
+        run_until(cx, &prompt_mode, "the prompt queued saving", |this| {
+            this.queue.first().is_some_and(|item| item.saved.is_some())
+        });
+        prompt_mode.update(cx, |this, cx| {
+            this.queue.clear();
+            assert!(this.offers_other_mode(&this.tasks[last]).is_some());
+            this.load_queue(cx);
+            assert_eq!(this.queue.len(), 1);
+            assert_eq!(this.queue[0].sent_from.as_deref(), Some(last_name.as_str()));
+            assert_eq!(this.offers_other_mode(&this.tasks[last]), None);
+            for item in this.queue.drain(..) {
+                prompt_queue::remove(&item.saved.unwrap().file).unwrap();
+            }
+            this.queue_held = false;
+            this.working = false;
+        });
+        crate::harness::use_program_for_test(None);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A task itself sent from the other mode, from Code to Spec or from
+    /// Spec to Code, is complete: its Send to Code or Send to Spec button is
+    /// greyed out and disabled for good, in the latest task's header and in
+    /// its previous task's heading, its tooltip saying it was sent here from
+    /// Code, or from Spec, whatever becomes of a task sent from it and though
+    /// it is marked done. Clicked, it sends nothing; right-clicked, it opens
+    /// no menu, and neither opens nor closes the item. Batch actions neither
+    /// count nor send it, though it stays selected. Resent, it is sent from
+    /// the task it first was, and so is complete in the same way.
+    #[gpui_kit::test]
+    async fn tasks_sent_from_the_other_mode_are_complete(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        let dir = std::env::temp_dir().join(format!("suspense-complete-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        let push =
+            |mode: SendMode, status: TaskStatus, from: Option<usize>, cx: &mut TestAppContext| {
+                prompt_mode.update(cx, |this, cx| {
+                    let sent_from = from.map(|from| this.tasks[from].name.to_string());
+                    let ix = this.push_task(format!("Task {}", this.tasks.len()).into(), cx);
+                    this.tasks[ix].sent = super::SentAs {
+                        mode: Some(mode),
+                        attached_text: Vec::new(),
+                        attached_images: Vec::new(),
+                        sliced: false,
+                        code_task: None,
+                        sent_from,
+                    };
+                    this.tasks[ix].mode = Some(mode);
+                    this.tasks[ix].status = status;
+                    ix
+                })
+            };
+        let tooltip = |id: (&'static str, usize), cx: &mut TestAppContext| {
+            other_mode_button_at(handle, id, cx).expect("no button drawn")
+        };
+        let offered = |ix: usize, cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| this.offers_other_mode(&this.tasks[ix]))
+        };
+        // How many tasks there are, and prompts queued.
+        let sent = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| (this.tasks.len(), this.queue.len()))
+        };
+        let click = |id: (&'static str, usize), cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.click(id, cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        };
+        // Right-clicks `id`, and says whether a menu opened.
+        let menu_opens = |id: (&'static str, usize), cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.right_click(id, cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+            let opened = cx
+                .update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    window.try_find("popup-menu").is_some()
+                })
+                .unwrap();
+            assert_eq!(
+                opened,
+                prompt_mode.read_with(cx, |this, _| this.mark_menu.is_some())
+            );
+            opened
+        };
+        let open_item =
+            |cx: &mut TestAppContext| prompt_mode.read_with(cx, |this, _| this.task_history.open);
+
+        let code = push(SendMode::Code, TaskStatus::Done, None, cx);
+        let spec = push(SendMode::Spec, TaskStatus::Done, None, cx);
+        let to_spec = push(SendMode::Spec, TaskStatus::Done, Some(code), cx);
+        let to_code = push(SendMode::Code, TaskStatus::Done, Some(spec), cx);
+
+        // The latest, a Code task sent from Spec: disabled, saying so, and
+        // sending nothing, however it is asked to.
+        let latest = ("send-to-other-latest", to_code);
+        assert_eq!(tooltip(latest, cx), "Complete, sent here from Spec");
+        assert_eq!(offered(to_code, cx), None);
+        click(latest, cx);
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send_to_other_mode(|this| &this.tasks, to_code, window, cx)
+            })
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(sent(cx), (4, 0), "a complete task was sent back to Spec");
+        assert!(!menu_opens(latest, cx), "a complete task opened its menu");
+
+        // A previous task, a Spec task sent from Code, the same; and
+        // right-clicked, it neither opens nor closes the item.
+        prompt_mode.update(cx, |this, cx| {
+            this.task_history.expanded = true;
+            cx.notify();
+        });
+        let previous = ("send-to-other-previous", to_spec);
+        assert_eq!(tooltip(previous, cx), "Complete, sent here from Code");
+        assert_eq!(offered(to_spec, cx), None);
+        click(previous, cx);
+        assert_eq!(sent(cx), (4, 0), "a complete task was sent back to Code");
+        assert_eq!(open_item(cx), None, "clicking opened the item");
+        assert!(!menu_opens(previous, cx), "a complete task opened its menu");
+        assert_eq!(open_item(cx), None, "right-clicking opened the item");
+        prompt_mode.update(cx, |this, cx| {
+            this.task_history.open = Some(to_spec);
+            cx.notify();
+        });
+        assert!(!menu_opens(previous, cx));
+        assert_eq!(
+            open_item(cx),
+            Some(to_spec),
+            "right-clicking closed the item"
+        );
+        prompt_mode.update(cx, |this, cx| {
+            this.task_history.open = None;
+            cx.notify();
+        });
+        // The tasks they were sent from, not complete, still open theirs.
+        assert!(menu_opens(("send-to-other-previous", code), cx));
+        prompt_mode.update(cx, |this, cx| {
+            this.mark_menu = None;
+            cx.notify();
+        });
+        // Nor can one be marked from its menu, even asked to directly.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let name = this.tasks[to_spec].name.clone();
+                this.open_mark_menu(name, Default::default(), window, cx);
+                assert!(this.mark_menu.is_none());
+            })
+        })
+        .unwrap();
+
+        // Batch actions neither count nor send them, though they stay
+        // selected.
+        prompt_mode.update(cx, |this, cx| {
+            this.task_history.click_checkbox(to_spec, false);
+            this.task_history.click_checkbox(to_code, false);
+            cx.notify();
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("history-selected-count").is_some());
+            assert!(window.try_find("history-send-selected-to-spec").is_none());
+            assert!(window.try_find("history-send-selected-to-code").is_none());
+            prompt_mode.update(cx, |this, cx| {
+                assert!(this.selected_for(SendMode::Spec).is_empty());
+                assert!(this.selected_for(SendMode::Code).is_empty());
+                this.send_selected_to(SendMode::Spec, window, cx);
+                this.send_selected_to(SendMode::Code, window, cx);
+                assert_eq!(
+                    this.task_history
+                        .selected
+                        .iter()
+                        .copied()
+                        .collect::<Vec<_>>(),
+                    [to_spec, to_code],
+                    "deselected though not sent"
+                );
+            })
+        })
+        .unwrap();
+        assert_eq!(sent(cx), (4, 0), "a batch sent a complete task");
+        prompt_mode.update(cx, |this, cx| {
+            this.task_history.clear_selection();
+            cx.notify();
+        });
+
+        // Resent, each is sent from the task it first was, from the queue as
+        // when sent at once, so it is complete once it is a task.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.working = true;
+                this.resend(|this| &this.tasks, to_spec, window, cx);
+                this.resend(|this| &this.tasks, to_code, window, cx);
+                let from: Vec<Option<String>> = this
+                    .queue
+                    .iter()
+                    .map(|item| item.sent_from.clone())
+                    .collect();
+                assert_eq!(
+                    from,
+                    [
+                        Some(this.tasks[code].name.to_string()),
+                        Some(this.tasks[spec].name.to_string()),
+                    ]
+                );
+                this.queue.clear();
+                this.working = false;
+            })
+        })
+        .unwrap();
+        let resent = push(SendMode::Spec, TaskStatus::Done, Some(code), cx);
+        prompt_mode.update(cx, |this, cx| {
+            this.task_history.expanded = false;
+            cx.notify();
+        });
+        assert_eq!(
+            tooltip(("send-to-other-latest", resent), cx),
+            "Complete, sent here from Code"
+        );
+        assert_eq!(offered(resent, cx), None);
+
+        // Complete comes before anything else: its mark, and a task sent
+        // from it (as one could be before tasks sent over were complete).
+        prompt_mode.update(cx, |this, cx| {
+            this.tasks[to_spec].marked_done = true;
+            this.task_history.expanded = true;
+            cx.notify();
+        });
+        assert_eq!(tooltip(previous, cx), "Complete, sent here from Code");
+        let onward = push(SendMode::Code, TaskStatus::Running, Some(to_spec), cx);
+        assert_eq!(tooltip(previous, cx), "Complete, sent here from Code");
+        prompt_mode.update(cx, |this, cx| {
+            this.tasks[onward].status = TaskStatus::Done;
+            cx.notify();
+        });
+        assert_eq!(tooltip(previous, cx), "Complete, sent here from Code");
+        assert_eq!(sent(cx), (6, 0));
+        cx.run_until_parked();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Right-clicking a task's Send to Spec or Send to Code button, enabled
+    /// or not, in the latest task's header or a previous task's heading,
+    /// opens a menu offering "Mark as done", or "Mark as not done" on a task
+    /// marked so, and never opens or closes the item. Marked done, the
+    /// button is disabled, its tooltip saying so, and nothing is sent,
+    /// whether it is clicked or a batch action is used, which leaves it
+    /// selected; marked not done, it is enabled again, unless a task sent
+    /// from it is under way or finished as Done.
+    #[gpui_kit::test]
+    async fn tasks_can_be_marked_done_by_hand(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        let dir = std::env::temp_dir().join(format!("suspense-mark-done-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        let push =
+            |mode: SendMode, status: TaskStatus, from: Option<usize>, cx: &mut TestAppContext| {
+                prompt_mode.update(cx, |this, cx| {
+                    let sent_from = from.map(|from| this.tasks[from].name.to_string());
+                    let ix = this.push_task(format!("Task {}", this.tasks.len()).into(), cx);
+                    this.tasks[ix].sent = super::SentAs {
+                        mode: Some(mode),
+                        attached_text: Vec::new(),
+                        attached_images: Vec::new(),
+                        sliced: false,
+                        code_task: None,
+                        sent_from,
+                    };
+                    this.tasks[ix].mode = Some(mode);
+                    this.tasks[ix].status = status;
+                    ix
+                })
+            };
+        let tooltip = |id: (&'static str, usize), cx: &mut TestAppContext| {
+            other_mode_button_at(handle, id, cx).expect("no button drawn")
+        };
+        // Right-clicks `id`, and says what the menu that opened offers.
+        let right_click = |id: (&'static str, usize), cx: &mut TestAppContext| -> String {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.right_click(id, cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let mut menu = window.within("popup-menu");
+                assert!(menu.try_find(1usize).is_none(), "more than one item");
+                menu.find(0usize)
+                    .label()
+                    .expect("the item has a label")
+                    .to_string()
+            })
+            .unwrap()
+        };
+        // Chooses the open menu's item, which closes it.
+        let choose = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.within("popup-menu").click(0usize, cx)
+            })
+            .unwrap();
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                assert!(
+                    window.try_find("popup-menu").is_none(),
+                    "the menu stayed open"
+                );
+            })
+            .unwrap();
+        };
+        let marked = |ix: usize, cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| this.tasks[ix].marked_done)
+        };
+        let set_marked = |ix: usize, marked_done: bool, cx: &mut TestAppContext| {
+            prompt_mode.update(cx, |this, cx| {
+                let name = this.tasks[ix].name.to_string();
+                this.set_marked_done(&name, marked_done, cx)
+            })
+        };
+        let set_status = |ix: usize, status: TaskStatus, cx: &mut TestAppContext| {
+            prompt_mode.update(cx, |this, cx| {
+                this.tasks[ix].status = status;
+                cx.notify();
+            })
+        };
+        // How many tasks there are, and prompts queued.
+        let sent = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| (this.tasks.len(), this.queue.len()))
+        };
+
+        let code = push(SendMode::Code, TaskStatus::Done, None, cx);
+        let spec = push(SendMode::Spec, TaskStatus::Done, None, cx);
+        let latest = ("send-to-other-latest", spec);
+
+        // The latest, marked done from its menu: disabled, sending nothing.
+        assert_eq!(tooltip(latest, cx), "Send to Code");
+        assert_eq!(right_click(latest, cx), "Mark as done");
+        choose(cx);
+        assert!(marked(spec, cx));
+        assert_eq!(tooltip(latest, cx), "Marked as done");
+        assert_eq!(sent(cx), (2, 0), "marking it done sent it");
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click(latest, cx);
+        })
+        .unwrap();
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send_to_other_mode(|this| &this.tasks, spec, window, cx)
+            })
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(sent(cx), (2, 0), "a task marked done was sent");
+        // Disabled, it still opens its menu, which marks it not done.
+        assert_eq!(right_click(latest, cx), "Mark as not done");
+        choose(cx);
+        assert!(!marked(spec, cx));
+        assert_eq!(tooltip(latest, cx), "Send to Code");
+        assert_eq!(sent(cx), (2, 0));
+
+        // Among the previous tasks, right-clicking neither opens nor closes
+        // the item, enabled or not.
+        prompt_mode.update(cx, |this, cx| {
+            this.task_history.expanded = true;
+            cx.notify();
+        });
+        let previous = ("send-to-other-previous", code);
+        let open_item =
+            |cx: &mut TestAppContext| prompt_mode.read_with(cx, |this, _| this.task_history.open);
+        assert_eq!(right_click(previous, cx), "Mark as done");
+        assert_eq!(open_item(cx), None, "right-clicking opened the item");
+        choose(cx);
+        assert_eq!(tooltip(previous, cx), "Marked as done");
+        assert_eq!(open_item(cx), None);
+        prompt_mode.update(cx, |this, cx| {
+            this.task_history.open = Some(code);
+            cx.notify();
+        });
+        assert_eq!(right_click(previous, cx), "Mark as not done");
+        assert_eq!(open_item(cx), Some(code), "right-clicking closed the item");
+        choose(cx);
+        assert_eq!(tooltip(previous, cx), "Send to Spec");
+        assert_eq!(open_item(cx), Some(code));
+        prompt_mode.update(cx, |this, cx| {
+            this.task_history.open = None;
+            cx.notify();
+        });
+
+        // Batch actions treat tasks marked done as sent: neither counted nor
+        // sent, though still selected.
+        set_marked(code, true, cx);
+        set_marked(spec, true, cx);
+        prompt_mode.update(cx, |this, cx| {
+            this.task_history.click_checkbox(code, false);
+            this.task_history.click_checkbox(spec, false);
+            cx.notify();
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("history-selected-count").is_some());
+            assert!(window.try_find("history-send-selected-to-spec").is_none());
+            assert!(window.try_find("history-send-selected-to-code").is_none());
+            prompt_mode.update(cx, |this, cx| {
+                assert!(this.selected_for(SendMode::Spec).is_empty());
+                assert!(this.selected_for(SendMode::Code).is_empty());
+                this.send_selected_to(SendMode::Spec, window, cx);
+                this.send_selected_to(SendMode::Code, window, cx);
+                assert_eq!(
+                    this.task_history
+                        .selected
+                        .iter()
+                        .copied()
+                        .collect::<Vec<_>>(),
+                    [code, spec],
+                    "deselected though not sent"
+                );
+            })
+        })
+        .unwrap();
+        assert_eq!(sent(cx), (2, 0), "a batch sent a task marked done");
+        // Unmarked, they count again.
+        set_marked(code, false, cx);
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.selected_for(SendMode::Spec), [code]);
+            assert!(this.selected_for(SendMode::Code).is_empty());
+        });
+        prompt_mode.update(cx, |this, cx| {
+            this.task_history.clear_selection();
+            cx.notify();
+        });
+
+        // Marked not done, it stays disabled while a task sent from it is
+        // under way or finished as Done, and is enabled once that failed.
+        let to_code = push(SendMode::Code, TaskStatus::Running, Some(spec), cx);
+        let previous = ("send-to-other-previous", spec);
+        assert_eq!(tooltip(previous, cx), "Being sent to Code");
+        set_marked(spec, false, cx);
+        assert_eq!(tooltip(previous, cx), "Being sent to Code");
+        set_status(to_code, TaskStatus::Done, cx);
+        assert_eq!(tooltip(previous, cx), "Sent to Code");
+        assert_eq!(right_click(previous, cx), "Mark as done");
+        choose(cx);
+        assert_eq!(tooltip(previous, cx), "Sent to Code");
+        set_status(to_code, TaskStatus::Failed, cx);
+        assert_eq!(tooltip(previous, cx), "Marked as done");
+        set_marked(spec, false, cx);
+        assert_eq!(tooltip(previous, cx), "Send to Code");
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(
+                this.offers_other_mode(&this.tasks[spec]),
+                Some(SendMode::Code)
+            );
+        });
+        cx.run_until_parked();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A task marked done is saved so in its history record, with the rest
+    /// of the record kept as it was, and loads back marked; one whose run
+    /// left no record is given a record of its mark alone, and loads back
+    /// marked and still without a record. Marked not done, it loads back so.
+    #[gpui_kit::test]
+    async fn marks_are_kept_in_the_history(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        let dir =
+            std::env::temp_dir().join(format!("suspense-mark-history-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut recorded = HiddenAnchor::random();
+        recorded.mode = Some(SendMode::Code);
+        let recorded_file = hidden_anchor::save(&recorded, "Recorded", &dir).unwrap();
+        let mut record = RunRecord {
+            user_prompt: Some("Recorded, compiled".into()),
+            ..RunRecord::default()
+        };
+        record.note(&HarnessEvent::Output(
+            r#"{"type":"result","is_error":false,"result":"Done."}"#.into(),
+        ));
+        prompt_history::save_record(&recorded_file, &record).unwrap();
+        let mut unrecorded = HiddenAnchor::random();
+        unrecorded.mode = Some(SendMode::Spec);
+        let unrecorded_file = hidden_anchor::save(&unrecorded, "Unrecorded", &dir).unwrap();
+        let names = [recorded.name().to_string(), unrecorded.name().to_string()];
+
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        let reload = |cx: &mut TestAppContext| {
+            prompt_mode.update(cx, |this, cx| {
+                this.tasks.clear();
+                this.load_history(cx);
+            });
+            run_until(cx, &prompt_mode, "the history loading", |this| {
+                this.tasks.len() == 2
+            });
+        };
+        run_until(cx, &prompt_mode, "the history loading", |this| {
+            this.tasks.len() == 2
+        });
+        // Each task, by its name: whether it is marked, and its status.
+        let task = |name: &String, cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| {
+                let task = this
+                    .tasks
+                    .iter()
+                    .find(|task| task.name.as_ref() == name)
+                    .unwrap();
+                (task.marked_done, task.status)
+            })
+        };
+        let set_marked = |name: &String, marked_done: bool, cx: &mut TestAppContext| {
+            prompt_mode.update(cx, |this, cx| this.set_marked_done(name, marked_done, cx));
+            cx.run_until_parked();
+        };
+        let saved = |file: &std::path::Path| -> RunRecord {
+            serde_json::from_str(&std::fs::read_to_string(file.with_extension("json")).unwrap())
+                .unwrap()
+        };
+        assert_eq!(task(&names[0], cx), (false, TaskStatus::Done));
+        assert_eq!(task(&names[1], cx), (false, TaskStatus::Unrecorded));
+
+        set_marked(&names[0], true, cx);
+        set_marked(&names[1], true, cx);
+        let marked = saved(&recorded_file);
+        assert!(marked.marked_done);
+        assert_eq!(
+            RunRecord {
+                marked_done: false,
+                ..marked
+            },
+            record,
+            "the rest of the record changed"
+        );
+        let mark_alone = saved(&unrecorded_file);
+        assert!(mark_alone.marked_done && mark_alone.holds_only_the_mark());
+
+        reload(cx);
+        assert_eq!(task(&names[0], cx), (true, TaskStatus::Done));
+        assert_eq!(task(&names[1], cx), (true, TaskStatus::Unrecorded));
+        prompt_mode.update(cx, |this, cx| {
+            this.task_history.expanded = true;
+            cx.notify();
+        });
+        for name in &names {
+            let ix = prompt_mode.read_with(cx, |this, _| {
+                this.tasks
+                    .iter()
+                    .position(|task| task.name.as_ref() == name)
+                    .unwrap()
+            });
+            assert_eq!(
+                other_mode_button_at(handle, ("send-to-other-previous", ix), cx).as_deref(),
+                Some("Marked as done")
+            );
+        }
+
+        set_marked(&names[0], false, cx);
+        set_marked(&names[1], false, cx);
+        assert!(!saved(&recorded_file).marked_done);
+        reload(cx);
+        assert_eq!(task(&names[0], cx), (false, TaskStatus::Done));
+        assert_eq!(task(&names[1], cx), (false, TaskStatus::Unrecorded));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A task marked done while it runs has no record to save the mark in
+    /// yet; its run saves it with the record once it is over.
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn a_task_marked_done_while_it_runs_is_saved_so(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        // The stand-in harness is a real process, whose events arrive from
+        // its own thread.
+        cx.executor().allow_parking();
+        let (prompt_mode, handle) = open(cx);
+        let dir = cancel_project("mark-while-running", &prompt_mode, cx);
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send("Change it".into(), SendMode::Code, Vec::new(), window, cx)
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the task running", |this| {
+            this.tasks
+                .first()
+                .is_some_and(|task| task.status == TaskStatus::Running)
+        });
+        let name = prompt_mode.update(cx, |this, cx| {
+            let name = this.tasks[0].name.to_string();
+            this.set_marked_done(&name, true, cx);
+            name
+        });
+        cx.run_until_parked();
+        let file = prompt_history::history_file(&dir, &name).expect("the task wasn't saved");
+        assert!(
+            !file.with_extension("json").exists(),
+            "a record was saved while the task ran"
+        );
+        prompt_mode.update(cx, |this, cx| this.cancel_task(0, cx));
+        run_until(cx, &prompt_mode, "the task ending", |this| !this.working);
+        cx.run_until_parked();
+        let record: RunRecord =
+            serde_json::from_str(&std::fs::read_to_string(file.with_extension("json")).unwrap())
+                .unwrap();
+        assert!(record.marked_done && record.cancelled);
+
+        prompt_mode.update(cx, |this, cx| {
+            this.tasks.clear();
+            this.load_history(cx);
+        });
+        run_until(cx, &prompt_mode, "the history loading", |this| {
+            this.tasks.len() == 1
+        });
+        prompt_mode.read_with(cx, |this, _| {
+            assert!(this.tasks[0].marked_done);
+            assert_eq!(this.tasks[0].status, TaskStatus::Cancelled);
+        });
+        crate::harness::use_program_for_test(None);
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -9611,8 +11657,10 @@ mod tests {
                 this.tasks[ix].sent = super::SentAs {
                     mode,
                     attached_text: vec!["note".into()],
+                    attached_images: Vec::new(),
                     sliced: true,
                     code_task: None,
+                    sent_from: None,
                 };
                 this.tasks[ix].mode = mode;
             }
@@ -9829,8 +11877,10 @@ mod tests {
                     this.tasks[ix].sent = super::SentAs {
                         mode,
                         attached_text: Vec::new(),
+                        attached_images: Vec::new(),
                         sliced: false,
                         code_task: None,
+                        sent_from: None,
                     };
                     this.tasks[ix].mode = mode;
                     this.tasks[ix].status = TaskStatus::Done;
@@ -9891,7 +11941,8 @@ mod tests {
     /// exactly as they were, or a line saying it left none when it didn't
     /// finish. It remembers the code task in its history record, is told it
     /// again when resent, and says beneath its anchor's name that it was sent
-    /// from Code. Sent on to Code, it is given Code's system prompt alone.
+    /// from Code. It and its resend are complete, never sent back to Code; a
+    /// Spec task sent to Code is given Code's system prompt alone.
     #[cfg(unix)]
     #[gpui_kit::test]
     async fn code_tasks_sent_to_spec_are_told_what_the_code_task_did(cx: &mut TestAppContext) {
@@ -9946,8 +11997,10 @@ mod tests {
                     this.tasks[ix].sent = super::SentAs {
                         mode: Some(mode),
                         attached_text: vec!["note".into()],
+                        attached_images: Vec::new(),
                         sliced: false,
                         code_task: None,
+                        sent_from: None,
                     };
                     this.tasks[ix].mode = Some(mode);
                     for event in events {
@@ -10059,8 +12112,10 @@ mod tests {
                 super::SentAs {
                     mode: Some(SendMode::Spec),
                     attached_text: vec!["note".into()],
+                    attached_images: Vec::new(),
                     sliced: false,
                     code_task: Some(told.clone()),
+                    sent_from: Some(this.tasks[0].name.to_string()),
                 }
             );
             assert!(
@@ -10099,10 +12154,16 @@ mod tests {
         });
         told_spec(&run(1), answer.trim_end());
 
-        // Sent on to Code, it is given Code's system prompt alone.
+        // Sent from Code, it is complete, as is its resend, and neither is
+        // sent on to Code; a Spec task sent to Code is given Code's system
+        // prompt alone.
         cx.update_window(handle, |_, window, cx| {
             prompt_mode.update(cx, |this, cx| {
-                this.send_to_other_mode(|this| &this.tasks, 4, window, cx)
+                this.send_to_other_mode(|this| &this.tasks, 3, window, cx);
+                this.send_to_other_mode(|this| &this.tasks, 4, window, cx);
+                assert_eq!(this.tasks.len(), 5, "a complete task was sent back");
+                assert!(!this.working);
+                this.send_to_other_mode(|this| &this.tasks, 2, window, cx)
             })
         })
         .unwrap();
@@ -10651,6 +12712,318 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
             .collect()
     }
 
+    /// Images attached in the chat input are saved in the project's data as
+    /// the prompt is sent, the hidden anchor keeping their paths, and given
+    /// to the harness after the prompt's text; they are shown beneath the
+    /// prompt in the latest task's header, listed in the raw prompt, and
+    /// kept with the task in the history. Resending it, queueing it,
+    /// editing it while queued, and sending a task to the other mode keep
+    /// its images, and so does a message sent to the running task.
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn attached_images_stay_with_the_prompt(cx: &mut TestAppContext) {
+        use crate::attached_image::AttachedImage;
+        use crate::chat_input::SendMode;
+        use crate::harness::tests::image_blocks_of;
+        // The stand-in harness is a real process, whose events arrive from
+        // its own thread.
+        cx.executor().allow_parking();
+        let (prompt_mode, handle) = open(cx);
+        let dir = freeform_project("images", &prompt_mode, cx);
+        let png = crate::attached_image::tests::png;
+        let (a, b) = (png(3, 2, "a"), png(5, 4, "b"));
+        let image_a = AttachedImage::from_bytes(a.clone(), Some("a.png".into())).unwrap();
+        let image_b = AttachedImage::from_bytes(b.clone(), None).unwrap();
+        let chat_input = prompt_mode.read_with(cx, |this, _| this.chat_input.clone());
+        let given = |line: usize| {
+            let stdin = std::fs::read_to_string(dir.join("stdin")).unwrap_or_default();
+            let message: serde_json::Value =
+                serde_json::from_str(stdin.lines().nth(line).expect("no such run")).unwrap();
+            image_blocks_of(&message)
+                .into_iter()
+                .map(|(_, bytes)| bytes)
+                .collect::<Vec<_>>()
+        };
+        let press_send = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                #[cfg(target_os = "macos")]
+                window.press("cmd-enter", cx);
+                #[cfg(not(target_os = "macos"))]
+                window.press("ctrl-enter", cx);
+            })
+            .unwrap();
+        };
+
+        // Sent from the Freeform tab, with an image, text, and an image.
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| {
+                input.select_tab(4, window, cx);
+                assert_eq!(input.mode(), SendMode::Freeform);
+                input.attach_image(image_a.clone(), cx);
+                input.attach_text("note".into(), cx);
+                input.attach_image(image_b.clone(), cx);
+                input.set_text_for_test("Look", window, cx);
+            });
+            chat_input.update(cx, |input, cx| input.focus_editor_for_test(window, cx));
+        })
+        .unwrap();
+        press_send(cx);
+        run_until(cx, &prompt_mode, "the task done", |this| {
+            !this.working && this.tasks.len() == 1
+        });
+        let paths = prompt_mode.read_with(cx, |this, _| this.tasks[0].sent.attached_images.clone());
+        assert_eq!(paths.len(), 2);
+        assert!(
+            paths
+                .iter()
+                .all(|path| path.starts_with(".suspense/images/") && dir.join(path).is_file()),
+            "{paths:?}"
+        );
+        assert_eq!(std::fs::read(dir.join(&paths[1])).unwrap(), b);
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.tasks[0].sent.attached_text, ["note"]);
+            assert_eq!(this.tasks[0].status, TaskStatus::Done);
+        });
+        assert_eq!(given(0), [a.clone(), b.clone()]);
+        // Never as text in the prompt.
+        let stdin = std::fs::read_to_string(dir.join("stdin")).unwrap();
+        let first: serde_json::Value = serde_json::from_str(stdin.lines().next().unwrap()).unwrap();
+        let text = first["message"]["content"][0]["text"].as_str().unwrap();
+        assert!(!text.contains(".suspense/images"), "{text}");
+        // Kept in the history, and restored with the task.
+        let saved = prompt_history::load(&dir)
+            .into_iter()
+            .find(|saved| saved.text == "Look")
+            .unwrap();
+        assert_eq!(saved.anchor.attached_images, paths);
+        assert_eq!(PromptTask::restore(saved).sent.attached_images, paths);
+        // Beneath the prompt in the header, and in the raw prompt.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let row = window.find(("header-images", 0usize)).bounds();
+            let prompt = window.find(("compiled-prompt", 0usize)).bounds();
+            assert!(
+                row.top() >= prompt.bottom() - gpui_kit::px(0.5),
+                "{row:?} {prompt:?}"
+            );
+            assert!(
+                window
+                    .within(("header-images", 0usize))
+                    .try_find(("prompt-image", 1usize))
+                    .is_some()
+            );
+            prompt_mode.update(cx, |this, cx| this.open_raw_prompt(0, window, cx));
+        })
+        .unwrap();
+        let sections = crate::raw_prompt::last_opened()
+            .unwrap()
+            .read_with(cx, |view, _| view.prompt().sections.clone());
+        assert_eq!(sections.last().unwrap().title, "Attached images");
+        assert_eq!(
+            sections
+                .last()
+                .unwrap()
+                .copied()
+                .map(|text| text.to_string()),
+            Some(paths.join("\n"))
+        );
+        cx.update_window(handle, |_, window, cx| window.press("escape", cx))
+            .unwrap();
+
+        // Resent, it goes with its images again.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.resend(|this| &this.tasks, 0, window, cx)
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the resend done", |this| {
+            !this.working && this.tasks.len() == 2
+        });
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.tasks[1].sent.attached_images, paths)
+        });
+        assert_eq!(given(1), [a.clone(), b.clone()]);
+
+        // Queued while the harness works, it keeps them, shown beneath it in
+        // the queue, and editing it brings them back into the chat input.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.working = true;
+                this.queue_expanded = true;
+                this.resend(|this| &this.tasks, 0, window, cx);
+                assert_eq!(this.queue[0].images, paths);
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the queued prompt saved", |this| {
+            this.queue[0].saved.is_some()
+        });
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(
+                this.queue[0].saved.as_ref().unwrap().anchor.attached_images,
+                paths
+            )
+        });
+        let id = prompt_mode.read_with(cx, |this, _| this.queue[0].id);
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find(("queued-images", 0usize)).is_some());
+            prompt_mode.update(cx, |this, cx| this.edit_queued(id, window, cx));
+        })
+        .unwrap();
+        let attached = chat_input.read_with(cx, |input, _| {
+            input
+                .attachments()
+                .iter()
+                .map(|attachment| match &attachment.attached {
+                    crate::chat_input::Attaching::Text(text) => text.clone(),
+                    crate::chat_input::Attaching::Image(image) => {
+                        format!("{:?}", image.image.bytes.len())
+                    }
+                })
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(
+            attached,
+            ["note".to_string(), a.len().to_string(), b.len().to_string()]
+        );
+        press_send(cx);
+        run_until(cx, &prompt_mode, "the edit saved", |this| {
+            this.editing_queued.is_none() && this.queue[0].saved.is_some()
+        });
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.queue[0].images, paths);
+            assert_eq!(
+                this.queue[0].saved.as_ref().unwrap().anchor.attached_images,
+                paths
+            );
+        });
+        // Saved once each, however often they were sent.
+        assert_eq!(
+            std::fs::read_dir(crate::attached_image::images_dir(&dir))
+                .unwrap()
+                .count(),
+            2
+        );
+        prompt_mode.update(cx, |this, cx| {
+            this.working = false;
+            this.send_next(cx);
+        });
+        run_until(cx, &prompt_mode, "the queued prompt done", |this| {
+            !this.working && this.queue.is_empty() && this.tasks.len() == 3
+        });
+        assert_eq!(given(2), [a.clone(), b.clone()]);
+
+        // A Code task sent to Spec keeps its images.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let ix = this.push_task("Code it".into(), cx);
+                this.tasks[ix].sent = super::SentAs {
+                    mode: Some(SendMode::Code),
+                    attached_images: paths.clone(),
+                    ..Default::default()
+                };
+                this.tasks[ix].mode = Some(SendMode::Code);
+                this.working = true;
+                this.send_to_other_mode(|this| &this.tasks, ix, window, cx);
+                let queued = this.queue.last().unwrap();
+                assert_eq!(queued.text.as_ref(), "Code it");
+                assert_eq!(queued.images, paths);
+                this.queue.clear();
+                this.working = false;
+            })
+        })
+        .unwrap();
+        cx.run_until_parked();
+
+        // A message sent to the running task carries its images.
+        std::fs::remove_file(dir.join("stdin")).ok();
+        crate::harness::use_program_for_test(Some(crate::harness::tests::recording_harness(
+            &dir, 2,
+        )));
+        let crate::harness::Run { events, feed, .. } =
+            crate::harness::send_task("First".into(), None, Vec::new(), None, dir.clone());
+        crate::harness::use_program_for_test(None);
+        let feed = feed.unwrap();
+        let start = std::time::Instant::now();
+        while !feed.is_open() {
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "the run never started"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.feed = Some(feed.clone());
+                this.working = true;
+                this.send_to_task(
+                    "And this".into(),
+                    SendMode::Freeform,
+                    crate::hidden_anchor::Attached {
+                        text: Vec::new(),
+                        images: vec![paths[1].clone()],
+                    },
+                    window,
+                    cx,
+                );
+            })
+        })
+        .unwrap();
+        // Sent off the main thread, once the executor runs.
+        let start = std::time::Instant::now();
+        while std::fs::read_to_string(dir.join("stdin"))
+            .unwrap_or_default()
+            .lines()
+            .count()
+            < 2
+        {
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "the message was never sent"
+            );
+            cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let events = futures::executor::block_on(futures::StreamExt::collect::<Vec<_>>(events));
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                HarnessEvent::Sent { text, .. } if text == "And this"
+            )),
+            "{events:?}"
+        );
+        assert_eq!(given(1), [b.clone()]);
+        prompt_mode.update(cx, |this, _| {
+            this.working = false;
+            this.feed = None;
+        });
+
+        // A question takes images as a task does.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send_attached(
+                    "Why?".into(),
+                    SendMode::Ask,
+                    crate::hidden_anchor::Attached {
+                        text: Vec::new(),
+                        images: paths.clone(),
+                    },
+                    window,
+                    cx,
+                );
+                assert_eq!(this.asks.last().unwrap().task.sent.attached_images, paths);
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the question over", |this| {
+            this.asks.iter().all(|ask| !ask.task.status.is_active())
+        });
+        crate::harness::use_program_for_test(None);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// A Freeform prompt goes to the harness exactly as it was typed, with
     /// the text attached to it, and nothing else: no system prompt, no spec
     /// built or prompt compiled (the project has no config, so either would
@@ -10828,6 +13201,451 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
             });
         })
         .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Prompt mode in a window that shows dialogs over it, as the main
+    /// window does.
+    fn open_with_dialogs(cx: &mut TestAppContext) -> (Entity<PromptMode>, AnyWindowHandle) {
+        struct WithDialogs(Entity<PromptMode>);
+        impl gpui_kit::Render for WithDialogs {
+            fn render(
+                &mut self,
+                window: &mut gpui_kit::Window,
+                cx: &mut gpui_kit::Context<Self>,
+            ) -> impl gpui_kit::IntoElement {
+                use gpui_kit::{ParentElement as _, Styled as _};
+                gpui_kit::div()
+                    .size_full()
+                    .child(self.0.clone())
+                    .children(Root::render_dialog_layer(window, cx))
+            }
+        }
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut prompt_mode = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| PromptMode::new(window, cx));
+            prompt_mode = Some(view.clone());
+            let shown = cx.new(|_| WithDialogs(view));
+            Root::new(shown, window, cx)
+        });
+        (prompt_mode.unwrap(), window.into())
+    }
+
+    /// The raw prompt modal on the latest task, opened from its header, as a
+    /// test reads it.
+    fn raw_prompt_of_latest(
+        cx: &mut TestAppContext,
+        handle: AnyWindowHandle,
+        prompt_mode: &Entity<PromptMode>,
+    ) -> crate::raw_prompt::RawPrompt {
+        let ix = prompt_mode.read_with(cx, |this, _| this.tasks.len() - 1);
+        prompt_mode.read_with(cx, |this, _| {
+            let task = &this.tasks[ix];
+            assert!(
+                task.compiled.is_some(),
+                "it didn't compile: {} {:?}",
+                task.status.label(),
+                task.reply
+                    .parts
+                    .iter()
+                    .filter_map(|part| match part {
+                        ReplyPart::Error(error) => Some(error),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+            );
+        });
+        // Once the referenced spec sidebar is out of the way.
+        settle_sidebar(cx, handle);
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click(("raw-prompt-latest", ix), cx);
+            window.render_frame(cx);
+            assert!(window.has_active_dialog(cx), "the raw prompt didn't open");
+        })
+        .unwrap();
+        let view = crate::raw_prompt::last_opened().expect("no raw prompt was opened");
+        view.read_with(cx, |view, _| view.prompt().clone())
+    }
+
+    /// The raw prompt `task` restored from the history shows.
+    fn raw_prompt_of(task: &PromptTask) -> crate::raw_prompt::RawPrompt {
+        let compiled = task.compiled.as_ref().expect("it didn't compile");
+        crate::raw_prompt::RawPrompt::new(
+            task.mode,
+            compiled.anchor.clone(),
+            &compiled.markdown,
+            task.given.as_ref(),
+        )
+    }
+
+    /// The latest task's header has a button beside Resend that opens the
+    /// raw prompt modal, disabled until the task has compiled. Opening it
+    /// opens or closes nothing else in the header; it shows the task's mode,
+    /// hidden anchor, and harness beneath its title, and each section's Copy
+    /// button copies its text; Escape closes it.
+    #[gpui_kit::test]
+    async fn raw_prompt_opens_once_the_task_has_compiled(cx: &mut TestAppContext) {
+        use crate::agent::Agent;
+        use crate::chat_input::SendMode;
+        use crate::raw_prompt::Given;
+        let (prompt_mode, handle) = open_with_dialogs(cx);
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("Fix it".into(), cx);
+            this.tasks[ix].mode = Some(SendMode::Code);
+            cx.notify();
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let button = window.find(("raw-prompt-latest", 0usize)).bounds();
+            let resend = window.find(("resend-latest", 0usize)).bounds();
+            assert!(
+                (button.center().y - resend.center().y).abs() < gpui_kit::px(2.),
+                "{button:?} isn't beside Resend at {resend:?}"
+            );
+            window.click(("raw-prompt-latest", 0usize), cx);
+            window.render_frame(cx);
+            assert!(!window.has_active_dialog(cx), "it opened before compiling");
+        })
+        .unwrap();
+
+        let sliced = "Fix it, compiled.\n\n<!-- slices -->";
+        prompt_mode.update(cx, |this, cx| {
+            this.tasks[0].given = Some(Given {
+                harness: Agent::Claude,
+                system_prompt: Some("Be brief.\n\nVery.".into()),
+            });
+            this.show_compiled(0, "Prompt_a".into(), sliced.into(), cx);
+        });
+        let before = prompt_mode.read_with(cx, |this, _| {
+            (this.tasks[0].slices_open, this.task_history.expanded)
+        });
+        let prompt = raw_prompt_of_latest(cx, handle, &prompt_mode);
+        let sections: Vec<_> = prompt
+            .sections
+            .iter()
+            .map(|section| (section.title, section.copied().map(|text| text.to_string())))
+            .collect();
+        assert_eq!(
+            sections,
+            [
+                ("System prompt", Some("Be brief.\n\nVery.".to_string())),
+                ("User prompt", Some(sliced.to_string())),
+            ]
+        );
+        assert_eq!(prompt.subtitle(), "Code · Prompt_a · Claude Code");
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(
+                (this.tasks[0].slices_open, this.task_history.expanded),
+                before,
+                "opening it changed the header"
+            );
+        });
+        cx.update_window(handle, |_, window, cx| {
+            for id in ["raw-prompt", "raw-prompt-title", "raw-prompt-list"] {
+                assert!(window.try_find(id).is_some(), "no {id}");
+            }
+            // Most of the window's height.
+            let modal = window.find("raw-prompt").bounds();
+            assert!(
+                modal.size.height > window.viewport_size().height * 0.7,
+                "{modal:?} is short"
+            );
+            window.click(("raw-prompt-copy-button", 1usize), cx);
+        })
+        .unwrap();
+        assert_eq!(
+            cx.read_from_clipboard().and_then(|item| item.text()),
+            Some(sliced.to_string())
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.press("escape", cx);
+            window.render_frame(cx);
+            assert!(!window.has_active_dialog(cx), "Escape didn't close it");
+        })
+        .unwrap();
+    }
+
+    /// Whatever it holds, the modal lays out only the text in view.
+    #[gpui_kit::test]
+    async fn raw_prompt_lays_out_only_what_is_in_view(cx: &mut TestAppContext) {
+        use crate::agent::Agent;
+        use crate::raw_prompt::Given;
+        let (prompt_mode, handle) = open_with_dialogs(cx);
+        let long: String = (0..20_000).map(|n| format!("line {n}\n")).collect();
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("Long".into(), cx);
+            this.tasks[ix].given = Some(Given {
+                harness: Agent::Claude,
+                system_prompt: Some(long.clone()),
+            });
+            this.show_compiled(ix, "Prompt_a".into(), "Short.".into(), cx);
+        });
+        let prompt = raw_prompt_of_latest(cx, handle, &prompt_mode);
+        assert_eq!(
+            prompt.sections[0].copied().map(|text| text.to_string()),
+            Some(long)
+        );
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find(("raw-prompt-text", 1usize)).is_some());
+            assert!(
+                window.try_find(("raw-prompt-text", 1000usize)).is_none(),
+                "every row was laid out"
+            );
+        })
+        .unwrap();
+    }
+
+    /// A Code task sent to Spec shows, in its raw prompt, the system prompt
+    /// exactly as the harness received it, every placeholder filled in, the
+    /// spec-reading prompt, the Piton fluency, and the code-to-spec prompt with
+    /// the code task's prompt and output in place, and the compiled prompt
+    /// the harness received. Restored from the history, it shows the same;
+    /// from a record saved before the system prompt was kept, "Not recorded".
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn raw_prompt_shows_the_system_prompt_as_sent(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        use crate::raw_prompt::NOT_RECORDED;
+        use std::os::unix::fs::PermissionsExt as _;
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        cx.executor().allow_parking();
+        let (prompt_mode, handle) = open_with_dialogs(cx);
+        let dir = cancel_project("raw-prompt", &prompt_mode, cx);
+        // A harness that is done at once, keeping the system prompt it was
+        // given.
+        let given = dir.join("given");
+        let script = dir.join("recording-harness.sh");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\n\
+                 : > {given}\n\
+                 while [ $# -gt 0 ]; do\n\
+                 \x20 if [ \"$1\" = --append-system-prompt ]; then printf '%s' \"$2\" > {given}; fi\n\
+                 \x20 shift\n\
+                 done\n\
+                 exit 0\n",
+                given = given.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::harness::use_program_for_test(Some(script));
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let ix = this.push_task("Make it blue.".into(), cx);
+                this.tasks[ix].sent = super::SentAs {
+                    mode: Some(SendMode::Code),
+                    attached_text: Vec::new(),
+                    attached_images: Vec::new(),
+                    sliced: false,
+                    code_task: None,
+                    sent_from: None,
+                };
+                this.tasks[ix].mode = Some(SendMode::Code);
+                for event in [
+                    HarnessEvent::TextStarted,
+                    HarnessEvent::TextDelta("Made it blue.".into()),
+                    HarnessEvent::Finished {
+                        is_error: false,
+                        result: String::new(),
+                    },
+                ] {
+                    this.tasks[ix].reply.apply(event);
+                }
+                this.tasks[ix].status = TaskStatus::Done;
+                this.send_to_other_mode(|this| &this.tasks, ix, window, cx);
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the code task sent to Spec", |this| {
+            !this.working && this.tasks.len() == 2
+        });
+        crate::harness::use_program_for_test(None);
+
+        let sent = std::fs::read_to_string(&given).unwrap();
+        let prompt = raw_prompt_of_latest(cx, handle, &prompt_mode);
+        assert_eq!(prompt.sections.len(), 2);
+        assert_eq!(prompt.sections[0].title, "System prompt");
+        let system_prompt = prompt.sections[0].copied().unwrap().to_string();
+        assert_eq!(system_prompt, sent, "not the system prompt sent");
+        for injected in [
+            "We're working on the spec ",
+            "Before executing anything, read the spec it touches",
+            "Piton Fluency",
+            "This prompt was first sent to change the code",
+            "Make it blue.",
+            "Made it blue.",
+            ".understanding.md",
+        ] {
+            assert!(
+                system_prompt.contains(injected),
+                "no {injected:?}: {system_prompt}"
+            );
+        }
+        for placeholder in [
+            "CODE_LOCATION",
+            "SPEC_LOCATION",
+            "HARNESS_DIRECTORY",
+            "SPEC_READING",
+            "PITON_FLUENCY",
+            "UNDERSTANDING_FILE",
+            "CODE_PROMPT",
+            "CODE_RESULT",
+        ] {
+            assert!(
+                !system_prompt.contains(&format!("${{{placeholder}}}")),
+                "{placeholder} was left: {system_prompt}"
+            );
+        }
+        let compiled = prompt_mode.read_with(cx, |this, _| {
+            this.tasks[1].compiled.as_ref().unwrap().markdown.clone()
+        });
+        assert_eq!(prompt.sections[1].title, "User prompt");
+        assert_eq!(
+            prompt.sections[1].copied().map(|text| text.to_string()),
+            Some(compiled)
+        );
+        assert!(
+            prompt.subtitle().starts_with("Spec · Prompt_"),
+            "{}",
+            prompt.subtitle()
+        );
+        assert!(prompt.subtitle().ends_with(" · Claude Code"));
+
+        // Restored from the history, the same.
+        let saved = || {
+            prompt_history::load(&dir)
+                .into_iter()
+                .find(|saved| saved.anchor.mode == Some(SendMode::Spec))
+                .unwrap()
+        };
+        assert_eq!(raw_prompt_of(&PromptTask::restore(saved())), prompt);
+        // Saved before the system prompt was kept, it says so.
+        let record_file = std::fs::read_dir(hidden_anchor::history_dir(&dir))
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.path())
+            .find(|path| path.extension().is_some_and(|ext| ext == "json"))
+            .unwrap();
+        let mut record: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&record_file).unwrap()).unwrap();
+        assert_eq!(record["systemPrompt"].as_str(), Some(sent.as_str()));
+        assert_eq!(record["harness"].as_str(), Some("claude"));
+        let record_map = record.as_object_mut().unwrap();
+        record_map.remove("systemPrompt");
+        record_map.remove("harness");
+        std::fs::write(&record_file, serde_json::to_string(&record).unwrap()).unwrap();
+        let old = raw_prompt_of(&PromptTask::restore(saved()));
+        assert_eq!(old.sections[0].text, Err(NOT_RECORDED));
+        assert_eq!(old.sections[1], prompt.sections[1]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A Freeform task's raw prompt says there was no system prompt, and
+    /// shows the prompt as typed.
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn raw_prompt_of_a_freeform_task_has_no_system_prompt(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        use crate::raw_prompt::NO_SYSTEM_PROMPT;
+        cx.executor().allow_parking();
+        let (prompt_mode, handle) = open_with_dialogs(cx);
+        let dir = freeform_project("raw-prompt-freeform", &prompt_mode, cx);
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send(
+                    "Just this.".into(),
+                    SendMode::Freeform,
+                    Vec::new(),
+                    window,
+                    cx,
+                )
+            });
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the prompt running", |this| {
+            !this.working && this.tasks.len() == 1
+        });
+        crate::harness::use_program_for_test(None);
+        let prompt = raw_prompt_of_latest(cx, handle, &prompt_mode);
+        assert_eq!(prompt.sections[0].text, Err(NO_SYSTEM_PROMPT));
+        assert_eq!(
+            prompt.sections[1].copied().map(|text| text.to_string()),
+            Some(prompts_given(&dir)[0].clone())
+        );
+        let saved = prompt_history::load(&dir).pop().unwrap();
+        assert_eq!(raw_prompt_of(&PromptTask::restore(saved)), prompt);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// For Codex, which takes no system prompt of its own, the raw prompt is
+    /// the one text it was given, the system prompt ahead of the prompt, just
+    /// as it read it.
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn raw_prompt_for_codex_is_the_one_prompt_it_was_given(cx: &mut TestAppContext) {
+        use crate::agent::{self, Agent};
+        use crate::chat_input::SendMode;
+        use std::os::unix::fs::PermissionsExt as _;
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        cx.executor().allow_parking();
+        let (prompt_mode, handle) = open_with_dialogs(cx);
+        let dir = cancel_project("raw-prompt-codex", &prompt_mode, cx);
+        // A harness that keeps what it read, and is done once it exits.
+        let given = dir.join("given");
+        let script = dir.join("codex.sh");
+        std::fs::write(
+            &script,
+            format!("#!/bin/sh\ncat > {}\nexit 0\n", given.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::harness::use_program_for_test(Some(script));
+        agent::set(Agent::Codex).unwrap();
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send(
+                    "Make it blue.".into(),
+                    SendMode::Code,
+                    Vec::new(),
+                    window,
+                    cx,
+                )
+            });
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the task running", |this| {
+            !this.working && this.tasks.len() == 1
+        });
+        crate::harness::use_program_for_test(None);
+        let prompt = raw_prompt_of_latest(cx, handle, &prompt_mode);
+        agent::set(Agent::Claude).unwrap();
+        let sent = std::fs::read_to_string(&given).unwrap();
+        assert!(sent.starts_with("<system-prompt>\n"), "{sent}");
+        assert_eq!(prompt.sections.len(), 1);
+        assert_eq!(prompt.sections[0].title, "Prompt");
+        assert_eq!(
+            prompt.sections[0].copied().map(|text| text.to_string()),
+            Some(sent)
+        );
+        assert!(
+            prompt.subtitle().ends_with(" · Codex"),
+            "{}",
+            prompt.subtitle()
+        );
+        let saved = prompt_history::load(&dir).pop().unwrap();
+        assert_eq!(raw_prompt_of(&PromptTask::restore(saved)), prompt);
         std::fs::remove_dir_all(&dir).ok();
     }
 }

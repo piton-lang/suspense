@@ -5,6 +5,7 @@ from /scope/harness-integration import HarnessIntegrationScope
 from /scope/harness-integration/catalog import HarnessCatalogScope
 from /scope/lsp import LSP
 from /scope/open-projects import OpenProjectsScope
+from /scope/project-data import ProjectDataScope
 from /scope/prompt-mode import PromptEditor
 from /scope/prompt-mode/answer-drawer import AnswerDrawerScope
 from /scope/prompt-mode/message-list import MessageList
@@ -37,7 +38,7 @@ shape ChatInputShape:
 
         Sending sends the prompt in the selected tab's mode, as the
         @{PromptSendingScope} says. While the harness is working, the send
-        button on the Code, Chain, and Spec tabs reads "Queue", since the prompt
+        button on the Code, Chain, Spec, and Freeform tabs reads "Queue", since the prompt
         will queue. On the Ask tab it always reads "Send", because a question is
         never queued. The button is only disabled while the input is empty.
 
@@ -195,7 +196,7 @@ shape ChatInputShape:
 
             New conversation is a small ghost button with a sparkles icon,
             reading "New conversation". Pressing it starts a new conversation
-            for the selected tab: the tasks' on Code, Chain, and Spec, the
+            for the selected tab: the tasks' on Code, Chain, Spec, and Freeform, the
             questions' on Ask. The next run in that tab, or in any tab sharing
             its conversation, starts a new one with no context instead of
             carrying on, and the figure reads "Context 0". A run of the
@@ -205,7 +206,7 @@ shape ChatInputShape:
             @{HarnessIntegrationScope} says.
 
             It can be pressed while a run in that conversation is under way, a
-            task on Code, Chain, or Spec, or any question on Ask, without
+            task on Code, Chain, Spec, or Freeform, or any question on Ask, without
             waiting for it to finish. Pressed while a task runs, the prompts
             sent meanwhile queue as ever, and the next task to run from the
             queue, the first in it, starts a new conversation with no context,
@@ -283,9 +284,11 @@ shape ChatInputShape:
             Code, Spec, and the body are all purple. The colour transitions
             smoothly whenever the selected tab changes, straight from the old
             tab's colour to the new one's. The tabs wrap around, so pressing
-            <Ctrl+Tab> on Ask fades green straight to Code's red, and
-            <Ctrl+Shift+Tab> on Code fades red straight to Ask's green; neither
-            lights up Chain or Spec on the way.
+            <Ctrl+Tab> on Freeform fades grey straight to Code's red, and
+            <Ctrl+Shift+Tab> on Code fades red straight to Freeform's grey;
+            neither lights up Chain, Spec, or Ask on the way. A fade to or from
+            Freeform's grey keeps the other tab's hue, only draining or filling
+            its colour, so it never passes through another hue.
 
             The send button, both its halves, takes the same colour as the
             selected tab, purple with Chain selected, but at full strength
@@ -375,6 +378,42 @@ shape ChatInputShape:
         ellipsis, and, when it runs to more than one line, how many lines it
         has, muted, and at the right end a small button with a cross, whose
         tooltip says it removes the attachment, which removes just that one.
+
+        Images can be attached too: pasted from the clipboard while the chat
+        input has focus, dropped onto the chat input from the file manager, or
+        chosen with a small ghost button with an image icon, whose tooltip says
+        "Attach images", on the tab row between the last tab and the help
+        text, which opens the platform's file picker for any files, several at
+        once, since the picker can't be limited to images. Pasting an image
+        attaches it rather than putting anything in the text, even when the
+        clipboard holds text as well; every image on the clipboard is
+        attached, and a clipboard with no image pastes its text as usual.
+        Several files dropped or chosen at once are attached in their order,
+        each on its own merits. An image is known by its content, not
+        its name, and only PNG, JPEG, GIF, and WebP are taken: anything else
+        pasted, dropped, or chosen, BMP, TIFF, and SVG included, is not
+        attached, and a warning notification titled "Not attached" says it
+        isn't an image. An image larger than 5 MB is not attached either, and
+        the same notification says it is too large. A folder dropped or chosen
+        isn't an image either, and a file that can't be read is not attached,
+        the same notification saying it couldn't be read, and why. Each file
+        left out has its own notification, and the others are still attached.
+
+        Files can be dropped only on the chat input itself, its tabs, the
+        attachments, and the text input; dropping them on the message list
+        above it does nothing. While files are dragged over the chat input,
+        its background is highlighted with the accent's fill, laid about a
+        quarter of the way over it.
+
+        An attached
+        image's row shows a small thumbnail, its file name, or "Pasted image"
+        for one pasted, and its size in pixels, muted, with the same remove
+        button; hovering the thumbnail shows the image larger, at most 320
+        pixels. Images and text are listed together in the order they were
+        attached while the prompt is written. A prompt taken back into the
+        input, as when a queued prompt is edited, lists its text first, then
+        its images, each image named by its saved file, a pasted one
+        included.
 
         Attachments belong to the prompt being written, not to a tab: switching
         tabs keeps them all, and they go with the prompt whichever tab it is
@@ -488,6 +527,36 @@ shape ChatInputShape:
             multi-line escape block, as the userPrompt is, so nothing in it is
             interpolated or evaluated. A prompt with nothing attached has no
             attachedText property.
+
+        attachedImages:
+            Each attached image is saved in the project's data, as the
+            @{ProjectDataScope} says, once the prompt is sent or queued, and a
+            prompt with images gives the hidden anchor an attachedImages
+            property: a list of the saved images' paths, from the project
+            directory, in the order they were attached, keyed image1, image2,
+            and so on, each written as an escape block as attached text is. The
+            same image attached twice is saved once but listed, and given to
+            the harness, twice. The images themselves are never put into the
+            compiled prompt as text. The preview draws its thumbnails from the
+            images in memory, saving nothing.
+
+            The harness is given the images alongside the compiled prompt, in
+            the way it takes images, as the @{HarnessIntegrationScope} says,
+            in the order they were attached. A message sent to a running task
+            can carry images the same way, and so can a question. A saved image
+            that can't be found when the run starts fails it saying so, before
+            anything is run.
+
+            Wherever an attached prompt is shown, in the latest task's header,
+            among the previous tasks and answers, in the queue, and in the
+            preview, its images are shown as thumbnails beneath the prompt as
+            typed, between it and any slices, except in the latest task's
+            header, where they come beneath the whole prompt, slices included.
+            A message sent to a running task shows none in the task's output.
+            The raw prompt lists their paths, as the @{PromptEditor} says. Clicking a
+            thumbnail opens the image full size, in the platform's image viewer. Resending, sending to the other mode, and
+            editing a queued prompt keep its images, and a Freeform prompt
+            sends them as any other does.
 
             What the harness receives is the compiled userPrompt followed by the
             attached text: a line reading "Attached text:", then each piece as a

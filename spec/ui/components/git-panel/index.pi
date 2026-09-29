@@ -29,24 +29,39 @@ shape GitPanelShape:
         A compact panel. It is shown only while the project is inside a git
         repository.
 
+    look:
+        The panel's top row, the branch, is its header: 32 pixels tall, on the
+        ribbon's tab row colour, #333333 in dark mode. Beneath it, the panel's
+        body is on the ribbon's command area colour, #222222 in dark mode,
+        with 8 pixels of padding at either side and at the bottom, and 4
+        pixels between one thing and the next. There is no line between the
+        header and the body, nor between the file tree and the header: the
+        change of colour is the edge. Every box and button in it is square,
+        with no rounded corners and no border, and the Pull and Push buttons
+        are square too.
+
     branch:
-        The top row shows the branch from the @{GitScope}, or "Detached HEAD",
-        beside how many commits it is ahead of its upstream (↑) and behind it
-        (↓), each only when not zero. At the right end are a Pull button and a
-        Push button, icons with tooltips.
+        The top row shows a branch icon, then the branch from the
+        @{GitScope}, or "Detached HEAD", in regular text, beside how many
+        commits it is ahead of its upstream (↑) and behind it (↓), muted, each
+        only when not zero. At the right end are a Pull button, a
+        cloud-download icon, and a Push button, a cloud-upload icon, ghost
+        icon buttons with tooltips.
 
     summary:
         Below the branch, a line counts the @{GitScope}'s changes, leaving out
         any kind with none, as "2 modified · 1 untracked", or "No changes".
-        Beside it, how many lines were added (+, in green) and removed (−, in
-        red). The files themselves are not listed, since the @{FileTreeScope}
+        At the right end of that line, how many lines were added (+, in
+        green) and removed (−, in red). The count is in small, muted text. The files themselves are not listed, since the @{FileTreeScope}
         shows them. The summary refreshes as the @{GitScope} does, and
         straight after anything the panel does.
 
     commitNotes:
-        Above the message box, a row for each commit note, in the order they
-        were added: a one-line box holding the note, which can be edited, and a
-        small button to remove it. Each task that adds a note, as the
+        Above the message box, a box for each commit note, in the order they
+        were added, on the ribbon's tab row colour, holding the note in small
+        text that wraps onto as many lines as it needs, growing to fit it, and
+        can be edited; <Enter> in a note starts a new line within it. A
+        small button to remove it shows at its top right while it is hovered. Each task that adds a note, as the
         @{PromptModesScope} says, adds a one-line summary of what it changed,
         once the harness has written it, quickly, in the same way as a written
         message: from what the task asked and the harness's own summary of what
@@ -58,11 +73,13 @@ shape GitPanelShape:
 
     message:
         A commit message box, a @{GrowingTextInputScope} growing to 10 rows at
-        most, so it starts at a single row. It reads "Commit message" while
+        most, so it starts at a single row. On the tree's darkest surface, #111111 in dark mode,
+        in the editor's monospace font, it reads "Commit Message…" while
         empty.
 
     writingAMessage:
-        A "Write message" button, with a sparkles icon, has the harness write
+        A "Generate" button, with a sparkles icon, on the ribbon's tab row
+        colour, at the left of the row beneath the message box, has the harness write
         the commit message from what has changed, and puts it in the message
         box, replacing what was there. It is quick: a small, fast model, at
         low effort, with no tools, handed only the list of changed files and
@@ -73,7 +90,8 @@ shape GitPanelShape:
         is disabled while there are no changes.
 
     committing:
-        A primary "Commit" button commits every change, new files included.
+        A primary "Commit" button, at the right end of that row, on the
+        ribbon's button colour, #444444 in dark mode, with no icon, commits every change, new files included.
         The commit message is what was typed, then a blank line, then each
         note that isn't blank as a line of its own starting "- "; with nothing
         typed, it is the notes alone. Once committed, the message box and the

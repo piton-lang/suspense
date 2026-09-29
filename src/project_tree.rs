@@ -14,24 +14,50 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::dialog::DialogButtonProps;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
-use gpui_kit::component::list::ListItem;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::tree::{TreeEntry, TreeEvent, TreeItem, TreeState};
-use gpui_kit::component::{ActiveTheme, Icon, Sizable, WindowExt as _, h_flex, v_flex};
+use gpui_kit::component::{
+    ActiveTheme, Icon, Sizable, StyledExt as _, WindowExt as _, h_flex, v_flex,
+};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use notify::event::ModifyKind;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as _};
 
+use crate::chat_input::SendMode;
 use crate::git_status::{GitStatus, Status};
 use crate::project_directory::ProjectDirectory;
+use crate::theme::Hue;
 
 /// Names never listed.
 const HIDDEN_NAMES: &[&str] = &[".git"];
 
-/// Indent added per level of depth.
-const INDENT: Pixels = px(12.);
+/// Indent added per level of depth: an icon and the gap after it, so a
+/// folder's contents' icons sit beneath its name.
+pub const INDENT: Pixels = px(24.);
+
+/// How tall each row is.
+pub const ROW_HEIGHT: Pixels = px(24.);
+
+/// How far a row's background, when selected or hovered, is inset from either
+/// side of the tree.
+pub const ROW_INSET: Pixels = px(8.);
+
+/// Where a top-level row's icon starts, from the tree's left edge.
+pub const ICON_LEFT: Pixels = px(16.);
+
+/// Between an icon and its name.
+const NAME_GAP: Pixels = px(8.);
+
+/// The softly rounded corners of a row's background.
+const ROW_RADIUS: Pixels = px(4.);
+
+/// How much of the selected row's background a hovered row has.
+const HOVER_OPACITY: f32 = 0.5;
+
+/// The project's configuration file, shown with a settings icon.
+const CONFIG_NAME: &str = "piton.config.pi";
 
 /// How often the git status is read again, which catches what the watcher
 /// doesn't see: edits in folders never expanded, staging, commits, and
@@ -127,6 +153,101 @@ pub fn name_problem(name: &str, dir: &Path, renaming: Option<&Path>) -> Option<&
     None
 }
 
+/// Where the project's spec and code are, as the ProjectLocationsScope says:
+/// each missing from the config is left out.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Locations {
+    /// The spec location, `root` of its piton-config.
+    pub spec: Option<PathBuf>,
+    /// The code location, `codeRoot` of its belay-config.
+    pub code: Option<PathBuf>,
+}
+
+impl Locations {
+    pub fn read(project_dir: &Path) -> Self {
+        let location = |key: &str| {
+            let value = crate::hidden_anchor::config_value(project_dir, key).ok()?;
+            let value = value.trim().trim_start_matches("./").trim_end_matches('/');
+            (!value.is_empty() && value != ".").then(|| project_dir.join(value))
+        };
+        Self {
+            spec: location("root"),
+            code: location("codeRoot"),
+        }
+    }
+}
+
+/// Which colour a row's icon takes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IconTint {
+    /// Muted text, as most are.
+    Muted,
+    /// Spec's colour: the spec location's folder and its .pi files.
+    Spec,
+    /// Code's colour: the code location's folder.
+    Code,
+    /// The theme's orange: the project's piton.config.pi.
+    Config,
+}
+
+/// How a file or folder's row looks, apart from its git status.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Look {
+    pub icon: IconName,
+    pub tint: IconTint,
+    /// Dimmed, name and icon both, as tertiary text is.
+    pub dimmed: bool,
+}
+
+/// A dot file that is part of how the project is kept, such as .gitignore,
+/// shown like any other file rather than dimmed.
+fn kept_dot_file(name: &str) -> bool {
+    name.starts_with(".git") || name.ends_with("ignore")
+}
+
+/// How the row for `path`, named `name`, looks in a project at `root` with
+/// `locations`, given whether git ignores it.
+pub fn look(
+    path: &Path,
+    name: &str,
+    is_dir: bool,
+    ignored: bool,
+    root: &Path,
+    locations: &Locations,
+) -> Look {
+    let is_pi = !is_dir && name.ends_with(".pi");
+    let config = !is_dir && path.parent() == Some(root) && name == CONFIG_NAME;
+    let icon = if is_dir {
+        IconName::Folder
+    } else if config {
+        IconName::FileCog
+    } else if is_pi {
+        IconName::FileCode
+    } else {
+        IconName::FileText
+    };
+    let at = |location: &Option<PathBuf>| location.as_deref() == Some(path);
+    let in_spec = locations
+        .spec
+        .as_deref()
+        .is_some_and(|spec| path.starts_with(spec));
+    let tint = if config {
+        IconTint::Config
+    } else if is_dir && at(&locations.spec) || is_pi && in_spec {
+        IconTint::Spec
+    } else if is_dir && at(&locations.code) {
+        IconTint::Code
+    } else {
+        IconTint::Muted
+    };
+    let dotted = name.starts_with('.') && (is_dir || !kept_dot_file(name));
+    Look {
+        icon,
+        tint,
+        dimmed: ignored || dotted,
+    }
+}
+
 pub struct ProjectTree {
     root: Option<PathBuf>,
     /// Every folder read so far, keyed by path.
@@ -141,6 +262,8 @@ pub struct ProjectTree {
     _refresh: Option<Task<()>>,
     /// The project's git status; `None` outside a repository.
     git: Option<GitStatus>,
+    /// Where the project's spec and code are, as its piton.config.pi says.
+    locations: Locations,
     /// A name being given in the tree, while one is.
     editing: Option<Editing>,
     /// Selected once the tree lists it, as a folder just made is.
@@ -180,6 +303,7 @@ impl ProjectTree {
             watched: HashSet::new(),
             _refresh: None,
             git: None,
+            locations: Locations::default(),
             editing: None,
             select_when_listed: None,
             menu: None,
@@ -210,6 +334,7 @@ impl ProjectTree {
             .and_then(|root| self.left.remove(root))
             .unwrap_or_default();
         self.root = root.clone();
+        self.locations = root.as_deref().map(Locations::read).unwrap_or_default();
         self.editing = None;
         self.listings.clear();
         self.expanded = expanded;
@@ -351,6 +476,9 @@ impl ProjectTree {
                 }
                 if this.listings.get(&dir) == Some(&listing) {
                     return;
+                }
+                if this.root.as_ref() == Some(&dir) {
+                    this.locations = Locations::read(&dir);
                 }
                 this.forget_vanished_folders(&dir, &listing);
                 // A folder left expanded that has come back is read again.
@@ -766,14 +894,18 @@ fn read_dir(dir: &Path) -> Listing {
     Ok(entries)
 }
 
+/// A row of the tree: 24 pixels tall, its background, when selected or
+/// hovered, inset from either side, with the icon and name inside it.
 fn render_entry(
     tree: &WeakEntity<ProjectTree>,
     ix: usize,
     entry: &TreeEntry,
+    selected: bool,
     cx: &mut App,
-) -> ListItem {
+) -> Div {
+    let palette = *crate::theme::palette(cx);
     let muted = cx.theme().muted_foreground;
-    let icon = |name: IconName| Icon::new(name).small().text_color(muted);
+    let dim = crate::theme::color(palette.text_tertiary);
     // The name being given here, in place of the label, while it is.
     let editing = tree.upgrade().and_then(|tree| {
         let tree = tree.read(cx);
@@ -794,26 +926,50 @@ fn render_entry(
             tree.read(cx).git.as_ref()?.of(path, entry.is_folder())
         })
         .flatten();
-    let (chevron, kind) = if let Some((_, _, new_folder)) = &editing
+    // Its icon, the icon's colour, and whether it is dimmed; a folder's icon
+    // is the same whether it is expanded or not, and there are no chevrons.
+    let look = if let Some((_, _, new_folder)) = &editing
         && entry.item().id.ends_with("\0new")
     {
-        (
-            None,
-            Some(if *new_folder {
-                IconName::FolderClosed
+        Some(Look {
+            icon: if *new_folder {
+                IconName::Folder
             } else {
-                IconName::File
-            }),
-        )
+                IconName::FileText
+            },
+            tint: IconTint::Muted,
+            dimmed: false,
+        })
     } else if entry.is_disabled() {
-        (None, None)
-    } else if entry.is_folder() && entry.is_expanded() {
-        (Some(IconName::ChevronDown), Some(IconName::FolderOpen))
-    } else if entry.is_folder() {
-        (Some(IconName::ChevronRight), Some(IconName::FolderClosed))
+        None
     } else {
-        (None, Some(IconName::File))
+        tree.upgrade().and_then(|tree| {
+            let tree = tree.read(cx);
+            let root = tree.root.as_deref()?;
+            Some(look(
+                Path::new(entry.item().id.as_ref()),
+                &entry.item().label,
+                entry.is_folder(),
+                status == Some(Status::Ignored),
+                root,
+                &tree.locations,
+            ))
+        })
     };
+    let dimmed = look.is_some_and(|look| look.dimmed);
+    let icon = look.map(|look| {
+        let color = if look.dimmed {
+            dim
+        } else {
+            match look.tint {
+                IconTint::Muted => muted,
+                IconTint::Spec => crate::chat_input::mode_color(SendMode::Spec, cx),
+                IconTint::Code => crate::chat_input::mode_color(SendMode::Code, cx),
+                IconTint::Config => Hue::Orange.of(&palette),
+            }
+        };
+        Icon::new(look.icon).small().text_color(color)
+    });
 
     // A placeholder ("Loading…", "Empty", or an error) is not an entry.
     let id = if entry.is_disabled() {
@@ -824,11 +980,33 @@ fn render_entry(
     let row =
         h_flex()
             .id((id, ix))
-            .w_full()
-            .gap_1()
+            .size_full()
             .min_w_0()
-            .child(div().flex_none().size_4().children(chevron.map(icon)))
-            .child(div().flex_none().size_4().children(kind.map(icon)))
+            .gap(NAME_GAP)
+            .pl(ICON_LEFT - ROW_INSET + INDENT * entry.depth() as f32)
+            .pr_1()
+            .rounded(ROW_RADIUS)
+            .map(|row| {
+                let background = crate::theme::color(palette.ribbon);
+                if selected && !entry.is_disabled() {
+                    row.bg(background)
+                } else if entry.is_disabled() {
+                    row
+                } else {
+                    row.hover(|row| row.bg(background.opacity(HOVER_OPACITY)))
+                }
+            })
+            // Lets UI tests find the icon; inert in normal builds.
+            .child(gpui_kit::TestSupportExt::test_support(
+                div()
+                    .id(("project-icon", ix))
+                    .flex_none()
+                    .size_4()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .children(icon),
+            ))
             .map(|row| match editing.clone() {
                 // The name is typed where the label is, over it: the label stays
                 // laid out, unseen, so the row is exactly as it was, and why a name
@@ -914,17 +1092,24 @@ fn render_entry(
                             )
                         })),
                 ),
-                None => row.child(
+                // The name, in its git status's colour, unless it is dimmed;
+                // the selected row's in semibold.
+                None => row.child(gpui_kit::TestSupportExt::test_support(
                     div()
+                        .id(("project-name", ix))
                         .truncate()
+                        .when(selected && !entry.is_disabled(), |label| {
+                            label.font_semibold()
+                        })
                         .when(entry.is_disabled(), |label| {
                             label.italic().text_color(muted)
                         })
                         .when_some(status.map(|status| status.color(cx)), |label, color| {
                             label.text_color(color)
                         })
+                        .when(dimmed, |label| label.text_color(dim))
                         .child(entry.item().label.clone()),
-                ),
+                )),
             })
             // A new or changed file has a button beside it that opens its diff.
             .when(
@@ -1005,8 +1190,11 @@ fn render_entry(
     // Lets UI tests find the row; inert in normal builds.
     let row = gpui_kit::TestSupportExt::test_support(row);
 
-    ListItem::new(ix)
-        .pl(INDENT * entry.depth() as f32 + px(8.))
+    div()
+        .h(ROW_HEIGHT)
+        .w_full()
+        .px(ROW_INSET)
+        .when(entry.is_disabled(), |row| row.text_color(muted))
         .child(row)
 }
 
@@ -1059,7 +1247,12 @@ fn entry_menu(
 
 impl Render for ProjectTree {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let sidebar = v_flex().id("project-tree").size_full().text_sm();
+        // On the darkest surface, a step past the ribbon's command area.
+        let sidebar = v_flex()
+            .id("project-tree")
+            .size_full()
+            .bg(crate::theme::color(crate::theme::palette(cx).darkest))
+            .text_sm();
         let sidebar = match self.root {
             Some(_) => {
                 let this = cx.entity().downgrade();
@@ -1101,15 +1294,16 @@ impl Render for ProjectTree {
                     .child(
                         gpui_kit::base::Tree::new(&self.tree)
                             .item(move |ix, entry, entry_state, _, cx| {
-                                render_entry(&this, ix, entry, cx)
-                                    .disabled(entry.is_disabled())
-                                    .selected(entry_state.is_selected())
+                                render_entry(&this, ix, entry, entry_state.is_selected(), cx)
                                     .into_any_element()
                             })
                             .list_style(StyleRefinement::default().flex_grow_1().size_full())
                             .relative()
                             .size_full(),
                     );
+                // Lets UI tests find the space the rows are in; inert in
+                // normal builds.
+                let tree = gpui_kit::TestSupportExt::test_support(tree);
                 sidebar.child(crate::scrollbar::with_scrollbar(
                     "project-tree",
                     &scroll,
@@ -1152,6 +1346,351 @@ mod tests {
             .map_while(|ix| state.entry(ix))
             .map(|entry| entry.item().label.to_string())
             .collect()
+    }
+
+    /// A project with a spec and a code location, for the tree's look: once
+    /// open, with the spec folder expanded and selected, the tree lists
+    /// spec, lib, index.pi, src, piton.config.pi.
+    async fn open_located_project(
+        name: &str,
+        cx: &mut TestAppContext,
+    ) -> (
+        std::path::PathBuf,
+        Entity<ProjectTree>,
+        gpui_kit::AnyWindowHandle,
+    ) {
+        let dir = std::env::temp_dir().join(format!("suspense-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("spec/lib")).unwrap();
+        fs::create_dir_all(dir.join("src")).unwrap();
+        fs::write(dir.join("spec/index.pi"), "").unwrap();
+        fs::write(
+            dir.join("piton.config.pi"),
+            "export piton-config Config:\n    root: ./spec\n\nbelay-config Belay:\n    codeRoot: ./src\n",
+        )
+        .unwrap();
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            ProjectDirectory::init(cx);
+        });
+        let tree = cx.update(|cx| cx.new(ProjectTree::new));
+        let window = cx.add_window(|window, cx| Root::new(tree.clone(), window, cx));
+        let handle: gpui_kit::AnyWindowHandle = window.into();
+        gpui_kit::VisualTestContext::from_window(handle, cx)
+            .simulate_resize(gpui_kit::size(gpui_kit::px(260.), gpui_kit::px(400.)));
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.wait_for(handle, TIMEOUT, |window, cx| {
+            labels(&tree, cx) == ["spec", "src", "piton.config.pi"]
+                && window.try_find(("project-entry", 0usize)).is_some()
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("project-entry", 0usize), cx)
+        })
+        .unwrap();
+        cx.wait_for(handle, TIMEOUT, |window, cx| {
+            labels(&tree, cx) == ["spec", "lib", "index.pi", "src", "piton.config.pi"]
+                && window.try_find(("project-entry", 4usize)).is_some()
+        })
+        .await;
+        (dir, tree, handle)
+    }
+
+    /// Each row is 24 pixels tall, one straight after another; a top-level
+    /// row's icon starts 16 pixels from the tree's left edge, its name 8
+    /// pixels after the icon, and each level is indented 24 pixels further,
+    /// so a folder's contents' icons sit beneath its name.
+    #[gpui_kit::test]
+    async fn rows_are_24px_tall_and_indented_24px_a_level(cx: &mut TestAppContext) {
+        use gpui_kit::px;
+        let (dir, _, handle) = open_located_project("tree-rows", cx).await;
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let space = window.find("project-tree-space").bounds();
+            let row = |ix: usize| window.find(("project-entry", ix)).bounds();
+            let icon = |ix: usize| window.find(("project-icon", ix)).bounds();
+            let name = |ix: usize| window.find(("project-name", ix)).bounds();
+            for ix in 0..5 {
+                assert_eq!(row(ix).size.height, super::ROW_HEIGHT, "row {ix}'s height");
+                assert_eq!(
+                    (
+                        row(ix).left() - space.left(),
+                        space.right() - row(ix).right()
+                    ),
+                    (super::ROW_INSET, super::ROW_INSET),
+                    "row {ix} isn't inset 8px from either side"
+                );
+                if ix > 0 {
+                    assert_eq!(row(ix).top() - row(ix - 1).top(), px(24.), "row {ix}");
+                }
+                assert_eq!(
+                    name(ix).left() - icon(ix).right(),
+                    px(8.),
+                    "row {ix}'s name isn't 8px after its icon"
+                );
+            }
+            // spec, lib, index.pi, src, piton.config.pi
+            for (ix, depth) in [(0, 0.), (1, 1.), (2, 1.), (3, 0.), (4, 0.)] {
+                assert_eq!(
+                    icon(ix).left() - space.left(),
+                    super::ICON_LEFT + super::INDENT * depth,
+                    "row {ix}'s icon at depth {depth}"
+                );
+            }
+            assert_eq!(
+                icon(1).left(),
+                name(0).left(),
+                "lib's icon isn't beneath spec's name"
+            );
+        })
+        .unwrap();
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The tree is on the darkest surface; the selected row's background is
+    /// the ribbon's command area colour, inset 8 pixels from either side with
+    /// rounded corners, and no other row has one, in dark and light mode.
+    #[gpui_kit::test]
+    async fn the_selected_row_is_on_the_ribbons_colour(cx: &mut TestAppContext) {
+        use gpui_kit::component::{Theme, ThemeMode};
+        use gpui_kit::{point, px};
+        let (dir, tree, handle) = open_located_project("tree-selected", cx).await;
+        assert_eq!(
+            cx.update(|cx| tree.read(cx).tree.read(cx).selected_index()),
+            Some(0),
+            "the spec folder clicked isn't selected"
+        );
+        for mode in [ThemeMode::Dark, ThemeMode::Light] {
+            cx.update(|cx| Theme::change(mode, None, cx));
+            for _ in 0..2 {
+                cx.run_until_parked();
+                cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                    .unwrap();
+            }
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let palette = crate::theme::palette(cx);
+                let frame = crate::frame_image::Frame::of(window);
+                let space = window.find("project-tree-space").bounds();
+                let selected = window.find(("project-entry", 0usize)).bounds();
+                let other = window.find(("project-entry", 3usize)).bounds();
+                let middle = |b: gpui_kit::Bounds<gpui_kit::Pixels>| b.top() + b.size.height / 2.;
+                let y = middle(selected);
+                assert_eq!(
+                    frame.at(point(selected.left() + px(40.), y)),
+                    palette.ribbon,
+                    "{mode:?}: the selected row"
+                );
+                assert_eq!(
+                    frame.at(point(space.left() + px(4.), y)),
+                    palette.darkest,
+                    "{mode:?}: the selected row isn't inset at its left"
+                );
+                assert_eq!(
+                    frame.at(point(space.right() - px(4.), y)),
+                    palette.darkest,
+                    "{mode:?}: the selected row isn't inset at its right"
+                );
+                assert_eq!(
+                    frame.at(point(other.left() + px(40.), middle(other))),
+                    palette.darkest,
+                    "{mode:?}: a row not selected has a background"
+                );
+                // Its background drawn with rounded corners.
+                let scale = window.scale_factor();
+                assert!(
+                    window.painted_quads().iter().any(|quad| {
+                        (quad.bounds.origin.x.0 / scale - selected.left().as_f32()).abs() < 0.5
+                            && (quad.bounds.size.height.0 / scale - 24.).abs() < 0.5
+                            && quad.corner_radii.top_left.0 > 0.
+                    }),
+                    "{mode:?}: no rounded background drawn for the selected row"
+                );
+            })
+            .unwrap();
+        }
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The tree's scrollbar is laid over the tree's darkest surface, with no
+    /// line or background of its own: the surface down both of the column's
+    /// sides and around its buttons' arrows, and, with nothing to scroll, the
+    /// thumb filling the track as the surface, a row of black laid a quarter
+    /// over it at either end.
+    #[gpui_kit::test]
+    async fn the_scrollbar_is_laid_over_the_trees_surface(cx: &mut TestAppContext) {
+        use gpui_kit::component::{Theme, ThemeMode};
+        use gpui_kit::{point, px};
+        let (dir, _, handle) = open_located_project("tree-scrollbar", cx).await;
+        cx.update(|cx| Theme::change(ThemeMode::Dark, None, cx));
+        for _ in 0..2 {
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                .unwrap();
+        }
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let darkest = crate::theme::palette(cx).darkest;
+            assert_eq!(darkest, 0x111111);
+            let frame = crate::frame_image::Frame::of(window);
+            let column = window.find("project-tree-scroll-column").bounds();
+            let track = window.find("project-tree-scroll-track").bounds();
+            let up = window.find("project-tree-scroll-up").bounds();
+            let at = |x: f32, y: f32, from: gpui_kit::Bounds<gpui_kit::Pixels>| {
+                frame.at(point(from.left() + px(x + 0.5), from.top() + px(y + 0.5)))
+            };
+            for y in [0., 8., 20., column.size.height.as_f32() / 2., column.size.height.as_f32() - 1.] {
+                for x in [-1., 0., 17.] {
+                    assert_eq!(at(x, y, column), darkest, "beside the track at ({x}, {y})");
+                }
+            }
+            // The up button: its arrow, and the surface around it.
+            assert_eq!(at(2., 8., up), darkest, "the up button has a background");
+            assert_ne!(at(8., 10., up), darkest, "the up button has no arrow");
+            // The thumb fills the track: its ends, black laid a quarter over
+            // the surface, and the surface between.
+            let end = 0x0d0d0d;
+            let last = track.size.height.as_f32() - 1.;
+            for x in [1., 8., 16.] {
+                for y in [0., last] {
+                    let c = at(x, y, track);
+                    assert!(
+                        (c as i32 - end as i32).abs() <= 0x010101,
+                        "the thumb's end is {c:06x} at ({x}, {y})"
+                    );
+                }
+                assert_eq!(at(x, last / 2., track), darkest, "the thumb at {x}");
+            }
+        })
+        .unwrap();
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The spec location's folder and its .pi files take Spec's colour, the
+    /// code location's folder Code's, and the project's piton.config.pi the
+    /// theme's orange with a settings icon; everything else is muted. Dot
+    /// files and folders, but not .gitignore and the like, and whatever git
+    /// ignores, are dimmed. A folder's icon is the same expanded or not.
+    #[test]
+    fn locations_colour_their_icons_and_dot_files_are_dimmed() {
+        use gpui_kit::assets::IconName;
+
+        use super::{IconTint, Locations, look};
+
+        let root = std::env::temp_dir().join(format!("suspense-tree-look-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        fs::write(
+            root.join("piton.config.pi"),
+            "export piton-config Config:\n    root: ./spec/\n\nbelay-config Belay:\n    codeRoot: ./src\n",
+        )
+        .unwrap();
+        let locations = Locations::read(&root);
+        assert_eq!(
+            locations,
+            Locations {
+                spec: Some(root.join("spec")),
+                code: Some(root.join("src")),
+            }
+        );
+        assert_eq!(
+            Locations::read(&root.join("nowhere")),
+            Locations::default(),
+            "a project without a config has no locations"
+        );
+
+        let of = |path: &str, is_dir: bool| {
+            let path = root.join(path);
+            let name = path.file_name().unwrap().to_string_lossy().into_owned();
+            look(&path, &name, is_dir, false, &root, &locations)
+        };
+        let tint = |path: &str, is_dir: bool| of(path, is_dir).tint;
+        assert_eq!(tint("spec", true), IconTint::Spec);
+        assert_eq!(tint("spec/index.pi", false), IconTint::Spec);
+        assert_eq!(tint("spec/lib/index.pi", false), IconTint::Spec);
+        assert_eq!(
+            tint("spec/lib", true),
+            IconTint::Muted,
+            "only the location's own folder"
+        );
+        assert_eq!(tint("spec/notes.md", false), IconTint::Muted);
+        assert_eq!(tint("src", true), IconTint::Code);
+        assert_eq!(tint("src/main.rs", false), IconTint::Muted);
+        assert_eq!(
+            tint("examples/a.pi", false),
+            IconTint::Muted,
+            "a .pi file outside the spec"
+        );
+        assert_eq!(tint("assets", true), IconTint::Muted);
+        assert_eq!(tint("piton.config.pi", false), IconTint::Config);
+        assert_eq!(
+            tint("spec/piton.config.pi", false),
+            IconTint::Spec,
+            "not the project's config"
+        );
+
+        assert_eq!(of("spec", true).icon, IconName::Folder);
+        assert_eq!(of("spec/index.pi", false).icon, IconName::FileCode);
+        assert_eq!(of("piton.config.pi", false).icon, IconName::FileCog);
+        assert_eq!(of("Cargo.toml", false).icon, IconName::FileText);
+
+        let dimmed = |path: &str, is_dir: bool| of(path, is_dir).dimmed;
+        for (path, is_dir) in [
+            (".claude", true),
+            (".piton", true),
+            (".suspense", true),
+            (".github", true),
+            (".env", false),
+        ] {
+            assert!(dimmed(path, is_dir), "{path} isn't dimmed");
+        }
+        for (path, is_dir) in [
+            (".gitignore", false),
+            (".gitattributes", false),
+            (".dockerignore", false),
+            ("assets", true),
+            ("Cargo.lock", false),
+            ("spec", true),
+        ] {
+            assert!(!dimmed(path, is_dir), "{path} is dimmed");
+        }
+        let target = root.join("targets");
+        assert!(
+            look(&target, "targets", true, true, &root, &locations).dimmed,
+            "a folder git ignores isn't dimmed"
+        );
+        fs::remove_dir_all(&root).ok();
+    }
+
+    /// Spec's and Code's colours, as the tree draws their locations' icons,
+    /// are the modes' own: blue and red.
+    #[gpui_kit::test]
+    fn location_colours_are_the_modes(cx: &mut TestAppContext) {
+        use gpui_kit::component::{ActiveTheme as _, Theme, ThemeMode};
+
+        use crate::chat_input::{SendMode, mode_color};
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            for mode in [ThemeMode::Dark, ThemeMode::Light] {
+                Theme::change(mode, None, cx);
+                let same = |a: gpui_kit::Hsla, b: gpui_kit::Hsla| {
+                    (a.h - b.h).abs() < 1e-4
+                        && (a.s - b.s).abs() < 1e-4
+                        && (a.l - b.l).abs() < 1e-4
+                        && a.a == 1.
+                };
+                assert!(
+                    same(mode_color(SendMode::Spec, cx), cx.theme().blue),
+                    "{mode:?}: Spec"
+                );
+                assert!(
+                    same(mode_color(SendMode::Code, cx), cx.theme().red),
+                    "{mode:?}: Code"
+                );
+            }
+        });
     }
 
     /// A project switched away from comes back with its folders expanded as

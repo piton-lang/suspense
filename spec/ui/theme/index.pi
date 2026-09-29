@@ -38,8 +38,8 @@ shape ThemeShape:
         Each surface in dark mode, then light mode:
         - well, #2e2e2e, then #f5f5f5: where content is read or written, such as the editor, code blocks, answers, and task tables' bodies; the most contrast with the text it holds
         - recessed, #383838, then #e8e8e8: text inputs, lists, and trees, a step toward the well
-        - base, #444444, then #d0d0d0: the window, its panels, the sidebar, and the ribbon's command area
-        - raised, #4e4e4e, then #dadada: buttons, tab bars, headers, a group's title strip, and cards, a small step toward the viewer
+        - base, #444444, then #d0d0d0: the window, its panels, and the sidebar; the ribbon has its own, as its scope says
+        - raised, #4e4e4e, then #dadada: buttons, tab bars, headers, and cards, a small step toward the viewer
         - hover, #585858, then #e2e2e2: a raised or listed thing under the pointer, one step further along the way it is already raised
         - pressed, #3c3c3c, then #c6c6c6: a control held down, a step back past the base
         - selected, #5e5e5e, then #bcbcbc: a selected row or tab without focus, the neutral state furthest from its surface short of the accent
@@ -110,7 +110,7 @@ shape ThemeShape:
 
     bevel:
         A surface that should lift slightly off what it sits on, such as a
-        scrollbar's thumb or a table's header, can have the theme's bevel: a
+        table's header or a hovered scrollbar button, can have the theme's bevel: a
         very slight 1 pixel edge around it, just enough to lift it. Its top and
         left edges are a touch lighter, as white laid faintly over the surface,
         8% in dark mode and 55% in light mode; its bottom and right edges only
@@ -139,6 +139,45 @@ shape ThemeShape:
         primary text at least 4 to 1 on controls in any state. Tertiary text,
         status colours, and the accent keep at least 3 to 1 on the base. Edges
         keep about 1.5 to 1 against the base, and lines less.
+
+    brightness:
+        The whole interface can be made lighter or darker, from the Brightness
+        slider of the ribbon's Application tab, without changing how it reads.
+        Brightness moves the mode's whole ladder of neutral greys together, by
+        the same amount in lightness, every surface, line, bevel, and overlay
+        with it: the ribbon's greys, the file tree's darkest surface, the
+        wells, the base, raised, hover, pressed, and selected surfaces, and
+        the scrollbar's track, since it is laid over them. The steps between
+        them stay the size they are at 0, and their order never changes: in
+        dark mode what is lighter than what it sits on stays lighter, however
+        bright it is made, and in light mode what is darker stays darker. A
+        raised box never becomes darker than its ground, nor a well lighter
+        than the base.
+
+        Each mode has its own brightness, running from -10 to +10, each step
+        moving every channel of every grey by 2% of the way from black to
+        white, rounded to a whole value, but only as far as the mode allows:
+        a mode's brightness stops at whichever step would first push a grey
+        below black or above white, since clipping would close the steps up,
+        or bring text or a hue below the contrast asked of it above. At 0 the
+        greys are exactly those given above. With these greys, dark mode runs
+        from -3 to +1 and light mode from -4 to +2.
+
+        The Brightness slider runs through both modes as one scale, dark
+        mode's steps from its darkest to its lightest, then light mode's, so
+        the interface goes from its darkest to its lightest with no switch
+        between modes. Where it crosses from dark mode's lightest step to
+        light mode's darkest, the greys jump, the base from about #494949 to
+        #bcbcbc, rather than blending through the mid greys between, on which
+        neither mode's text would keep its contrast.
+
+        Text keeps its colours as the greys move, unless moving them would
+        bring it below that contrast, in which case the brightness stops there
+        rather than recolouring it. The accent, the mode colours, and the
+        status colours keep their hues; tints laid over a surface, such as a
+        mode's, are laid over the moved surface and so move with it.
+        Everything takes the new brightness at once, while the slider is
+        dragged, with no flicker and nothing laid out anew.
 
     gpuiKit:
         The application's gpui-kit theme is set from these roles in both

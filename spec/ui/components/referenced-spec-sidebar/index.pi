@@ -5,6 +5,7 @@ use /ui/components/sidebar/Sidebar
 from /scope/open-file import OpenFileScope
 from /scope/project-locations import ProjectLocationsScope
 from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
+from /ui/components/scrollbar import ScrollbarScope
 from /ui/components/sidebar import SidebarScope
 
 export sidebar ReferencedSpecSidebarScope:
@@ -31,10 +32,26 @@ shape ReferencedSpecSidebarShape:
         which stays across the full width of prompt mode. It keeps the width
         it was dragged to while the application runs.
 
-        Its two panels, the referenced files above the understanding, share
-        its height, starting halfway. The line between them keeps where it
-        was dragged for as long as the application runs, whichever task the
-        sidebar shows.
+        Its two panels, the referenced files above the understanding, sit one
+        above the other: the referenced files only as tall as their rows need,
+        up to half the sidebar's height, scrolling beyond that, and the
+        understanding filling the rest.
+
+    look:
+        The sidebar's body is on the ribbon's command area colour, #222222 in
+        dark mode. Each panel's header is 32 pixels tall, on the darkest
+        surface, #111111 in dark mode, as the file tree is, its title in
+        small semibold text, 8 pixels from the left, with no count beside it.
+        There is no line anywhere in it, not between a header and its body,
+        nor between one panel and the next: the change of colour is the edge.
+        The only line is the one down its left edge, where it meets the
+        message list, which is the handle it is resized by. In light mode the
+        same steps are taken, as the ribbon's are.
+
+        Neither panel has a permanent scrollbar, since its column would break
+        the 8 pixel inset: a panel shows its scrollbar only while its contents
+        are taller than it, and none otherwise. When it shows, it is the
+        same scrollbar as every other, as the @{ScrollbarScope} says.
 
     showing:
         It is only there while a task is running: from the moment a task is
@@ -49,9 +66,9 @@ shape ReferencedSpecSidebarShape:
         settles, as when a file's split opens.
 
 export panel ReferencedFilesPanel:
-    title: Referenced spec
-    counted: true
-    height: share
+    title: Referenced Spec
+    counted: false
+    height: fit
     scrolls: true
 
     concept: {ReferencedFilesConcept}
@@ -66,8 +83,10 @@ concept ReferencedFilesConcept:
 shape ReferencedFilesShape:
     description:
         One row per spec file the running task references, each listed once: first those its prompt imports from, then
-        the rest in the order they are first referenced. Each row shows its
-        file icon, then its file name alone, without its folders, cut off with
+        the rest in the order they are first referenced. The rows sit 8
+        pixels in from the panel's edges, above and below as well as at the
+        sides, each 24 pixels tall, with no icon: each shows its file name
+        alone, in small text, without its folders, cut off with
         an ellipsis when the sidebar is too narrow, its full path in its
         tooltip. A file named index, whatever its extension, such as
         `index.pi`, shows the folder it is in before its name, as
@@ -110,8 +129,8 @@ shape ReferencedFilesShape:
 
 export panel UnderstandingPanel:
     title: Understanding
-    counted: true
-    height: share
+    counted: false
+    height: fill
     scrolls: true
 
     concept: {UnderstandingConcept}
@@ -128,7 +147,11 @@ shape UnderstandingShape:
         It shows the running task's understanding file, as the
         @{ModeSystemPromptsScope} says, as it is written: one row per item of
         its Markdown list, in the file's order, its text wrapping rather than
-        cut off. Anything in the file that isn't a list item is left out.
+        cut off. Each row is a box on the ribbon's tab row colour, #333333 in
+        dark mode, with corners rounded 4 pixels, its text in small text with
+        a 20 pixel line height, 8 pixels of padding either side and 6 above
+        and below, so it is 32 pixels tall for a single line;
+        the boxes sit 8 pixels in from the panel's edges and 4 pixels apart. Anything in the file that isn't a list item is left out.
 
         A row's text is its item's, with any link shown as its text alone.
         Clicking a row opens the file its link points to, read from the
@@ -138,5 +161,5 @@ shape UnderstandingShape:
 
         It follows the file as it changes on disk while the task runs. A row
         that is added, or whose text changes, is briefly highlighted, fading
-        back to the panel's body. Until the file exists, it reads
+        back to its box's colour. Until the file exists, it reads
         "Nothing understood yet", muted.

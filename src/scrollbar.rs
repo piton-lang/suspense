@@ -8,15 +8,13 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::{ActiveTheme as _, Selectable as _, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::measured_list::MeasuredList;
 
-/// How wide the column is, which is also each button's width and height.
+/// How wide the column is, which is also each button's width.
 pub const COLUMN_WIDTH: Pixels = px(18.);
 
 /// How far a button scrolls the list.
@@ -81,14 +79,17 @@ impl Scroll {
     }
 }
 
-/// The track's fill, and the thumb's under the pointer and while dragged. The
-/// track is black laid over whatever the column sits on, so it is darker than
-/// what is beneath it on any surface. The thumb at rest has no fill at all, so
-/// it is the colour of that surface, as the buttons are, and white is laid over
-/// it as it is hovered and grabbed.
+/// The colours the column draws, each laid over whatever surface it sits on
+/// rather than a colour of its own, so the scrollbar looks the same on any
+/// surface: the track, black laid half way over it; the single row at each end
+/// of the thumb, black laid a quarter of the way; the buttons' arrows, white
+/// laid about a fifth of the way; and the thumb's lightening while hovered and
+/// dragged. The thumb at rest, like the buttons, has no fill at all.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScrollColors {
     pub track: Hsla,
+    pub thumb_end: Hsla,
+    pub arrow: Hsla,
     pub hover: Hsla,
     pub pressed: Hsla,
 }
@@ -97,13 +98,24 @@ pub fn scroll_colors(dark: bool) -> ScrollColors {
     let (black, white) = (hsla(0., 0., 0., 1.), hsla(0., 0., 1., 1.));
     if dark {
         ScrollColors {
-            track: black.opacity(0.4),
+            // #111111 on #222222.
+            track: black.opacity(0.5),
+            // #191919 on #222222: a quarter, a touch over, so it rounds to
+            // the mockup's rather than to #1a1a1a.
+            thumb_end: black.opacity(0.26),
+            // #4d4d4d on #222222.
+            arrow: white.opacity(0.195),
             hover: white.opacity(0.035),
             pressed: white.opacity(0.07),
         }
     } else {
+        // The spec gives dark mode's; light mode takes the same steps, gentler,
+        // with the arrow darker rather than lighter, as white would all but
+        // vanish on a light surface.
         ScrollColors {
-            track: black.opacity(0.16),
+            track: black.opacity(0.2),
+            thumb_end: black.opacity(0.1),
+            arrow: black.opacity(0.35),
             hover: white.opacity(0.18),
             pressed: white.opacity(0.35),
         }
@@ -172,46 +184,21 @@ fn at_bottom(handle: &Scroll) -> bool {
     handle.offset().y <= -handle.max_offset().y + px(1.)
 }
 
-/// The column itself.
+/// How tall each button is.
+pub const BUTTON_HEIGHT: Pixels = px(17.);
+
+/// How far the track is inset from either side of the column.
+const TRACK_INSET: Pixels = px(1.);
+
+/// The column itself: no background of its own, so the colour of whatever it
+/// sits on, and no line anywhere.
 fn scrollbar(
     id: SharedString,
     handle: &Scroll,
     lock: Option<(bool, SetLock)>,
     cx: &App,
 ) -> AnyElement {
-    let theme = cx.theme();
-    let border = theme.border;
-    let colors = scroll_colors(theme.is_dark());
-    let palette = *crate::theme::palette(cx);
-    // A square button filling the track inside its line, with no lines of its
-    // own; see [`in_track`].
-    let square = |name: &str, icon: IconName| {
-        Button::new(SharedString::from(format!("{id}-{name}")))
-            .ghost()
-            .xsmall()
-            .icon(icon)
-            .w(COLUMN_WIDTH - TRACK_LINE)
-            .h(COLUMN_WIDTH - TRACK_LINE)
-            .rounded_none()
-    };
-    // `button` sitting just inside the track, as the thumb does: the track's
-    // line runs down beside it, and a pixel of the dark track lies between it
-    // and the part of the track toward `gap_above` or below it.
-    let in_track = |button: AnyElement, gap_above: bool| {
-        let gap = || div().flex_none().h(TRACK_LINE).w_full().bg(colors.track);
-        h_flex()
-            .w(COLUMN_WIDTH)
-            .h(COLUMN_WIDTH)
-            .child(div().w(TRACK_LINE).h_full().flex_none().bg(border))
-            .child(
-                v_flex()
-                    .flex_1()
-                    .h_full()
-                    .when(gap_above, |slot| slot.child(gap()))
-                    .child(button)
-                    .when(!gap_above, |slot| slot.child(gap())),
-            )
-    };
+    let colors = scroll_colors(cx.theme().is_dark());
     let follow = follower(handle, &lock);
     let scroll_by = |delta: Pixels| {
         let handle = handle.clone();
@@ -252,30 +239,24 @@ fn scrollbar(
                 let hovered = hovered.read(cx).clone();
                 let geometry = Geometry::of(&handle, bounds);
                 let thumb = thumb_bounds(&geometry, bounds);
-                // The track is dark above and below the thumb, inside its line,
-                // while the thumb is left the colour of what the column sits on.
-                let inside = bounds.origin.x + TRACK_LINE;
+                // The track is dark above and below the thumb, inset a pixel
+                // from either side of the column, while the thumb is left the
+                // colour of what the column sits on.
+                let (inside, inner_width) = inset(bounds);
                 for (top, bottom) in [
                     (bounds.top(), thumb.top()),
                     (thumb.bottom(), bounds.bottom()),
                 ] {
                     if bottom > top {
                         window.paint_quad(fill(
-                            Bounds::new(point(inside, top), size(thumb.size.width, bottom - top)),
+                            Bounds::new(point(inside, top), size(inner_width, bottom - top)),
                             colors.track,
                         ));
                     }
                 }
-                // The line beside the list runs the track's full height, the
-                // thumb never covering it.
-                window.paint_quad(fill(
-                    Bounds::new(bounds.origin, size(TRACK_LINE, bounds.size.height)),
-                    border,
-                ));
-                // The thumb fills the track inside its line, square, with no
-                // lines of its own, lightening while hovered or dragged.
-                // Nothing is hovered while something else, like a sidebar's
-                // edge, is being dragged across it.
+                // The thumb, the column's full width, lightening while hovered
+                // or dragged. Nothing is hovered while something else, like a
+                // sidebar's edge, is being dragged across it.
                 let is_hovered = !cx.has_active_drag() && thumb.contains(&window.mouse_position());
                 hovered.set(is_hovered);
                 if grab.get().is_some() {
@@ -285,10 +266,9 @@ fn scrollbar(
                 } else if is_hovered {
                     window.paint_quad(fill(thumb, colors.hover));
                 }
-                // The theme's faint bevel.
-                for (edge, color) in
-                    crate::theme::bevel_edges(thumb, crate::theme::Bevel::Raised, &palette)
-                {
+                // A pixel at each end, between the track's colour and the
+                // surface's, across the track.
+                for (edge, color) in thumb_ends(thumb, bounds, &colors) {
                     window.paint_quad(fill(edge, color));
                 }
                 // Moving on or off the thumb redraws it.
@@ -338,9 +318,7 @@ fn scrollbar(
                         }
                         // Grabbed where it was pressed; pressed off the thumb, the
                         // thumb first jumps to centre on the press.
-                        let at = if y >= geometry.thumb_top
-                            && y <= geometry.thumb_top + geometry.thumb_height
-                        {
+                        let at = if on_thumb {
                             y - geometry.thumb_top
                         } else {
                             geometry.thumb_height / 2.
@@ -383,19 +361,14 @@ fn scrollbar(
         .id(SharedString::from(format!("{id}-scroll-column")))
         .flex_none()
         .w(COLUMN_WIDTH)
-        .child(in_track(
-            bevelled(
-                format!("{id}-scroll-up"),
-                square("scroll-up", IconName::ChevronUp)
-                    .tooltip("Scroll up")
-                    .on_click({
-                        let press = scroll_by(STEP);
-                        move |_, window, cx| press(window, cx)
-                    }),
-                scroll_by(STEP),
-            )
-            .into_any_element(),
+        .child(square(
+            format!("{id}-scroll-up"),
+            Glyph::Up,
+            "Scroll up".into(),
             false,
+            scroll_by(STEP),
+            None,
+            colors,
         ))
         .child(gpui_kit::TestSupportExt::test_support(
             div()
@@ -404,55 +377,165 @@ fn scrollbar(
                 .min_h(px(8.))
                 .child(track),
         ))
-        .child(in_track(
-            bevelled(
-                format!("{id}-scroll-down"),
-                square("scroll-down", IconName::ChevronDown)
-                    .tooltip("Scroll down")
-                    .on_click({
-                        let press = scroll_by(-STEP);
-                        move |_, window, cx| press(window, cx)
-                    }),
-                scroll_by(-STEP),
-            )
-            .into_any_element(),
-            true,
+        .child(square(
+            format!("{id}-scroll-down"),
+            Glyph::Down,
+            "Scroll down".into(),
+            false,
+            scroll_by(-STEP),
+            None,
+            colors,
         ))
         .when_some(lock, |column, (locked, set_lock)| {
-            let press: Press = {
-                let set_lock = set_lock.clone();
-                Rc::new(move |window, cx| set_lock(!locked, window, cx))
+            let press: Press = Rc::new(move |window, cx| set_lock(!locked, window, cx));
+            let tooltip = if locked {
+                "Unlock the scroll from the bottom"
+            } else {
+                "Lock the scroll to the bottom"
             };
-            let button = square("scroll-lock", IconName::ArrowDownToLine)
-                .selected(locked)
-                .tooltip(if locked {
-                    "Unlock the scroll from the bottom"
-                } else {
-                    "Lock the scroll to the bottom"
-                })
-                .on_click(move |_, window, cx| set_lock(!locked, window, cx));
-            column.child(in_track(
-                div()
-                    .id(SharedString::from(format!("{id}-scroll-lock-pulse")))
-                    .relative()
-                    .child(pulse(locked, cx))
-                    .child(button)
-                    .child(over_edges(format!("{id}-scroll-lock-claim").into(), press))
-                    .into_any_element(),
-                true,
-            ))
+            column
+                // A pixel of the surface between it and the down button.
+                .child(div().flex_none().h(LOCK_GAP))
+                .child(square(
+                    format!("{id}-scroll-lock"),
+                    Glyph::ToBottom,
+                    tooltip.into(),
+                    locked,
+                    press,
+                    Some(pulse(locked, cx).into_any_element()),
+                    colors,
+                ))
         });
     // Lets UI tests find the column; inert in normal builds.
     gpui_kit::TestSupportExt::test_support(column).into_any_element()
 }
 
-/// `button`, with the theme's bevel while hovered, and its pressed bevel while
-/// pressed with the pointer still over it. The bevel takes no mouse: it
-/// watches the mouse before the button does.
-fn bevelled(id: String, button: impl IntoElement, press: Press) -> impl IntoElement {
+/// The space between the down button and the lock button.
+const LOCK_GAP: Pixels = px(1.);
+
+/// Where the track lies across a column at `bounds`: its left and its width,
+/// a pixel in from either side.
+fn inset(bounds: Bounds<Pixels>) -> (Pixels, Pixels) {
+    (
+        bounds.origin.x + TRACK_INSET,
+        (bounds.size.width - TRACK_INSET * 2.).max(px(0.)),
+    )
+}
+
+/// The single row at each end of a thumb at `thumb`, in a track at `track`,
+/// with its colour: across the track's width, inside the thumb. None where the
+/// thumb is too short to have two.
+fn thumb_ends(
+    thumb: Bounds<Pixels>,
+    track: Bounds<Pixels>,
+    colors: &ScrollColors,
+) -> Vec<(Bounds<Pixels>, Hsla)> {
+    let row = px(1.);
+    if thumb.size.height < row * 2. {
+        return Vec::new();
+    }
+    let (left, width) = inset(track);
+    vec![
+        (
+            Bounds::new(point(left, thumb.top()), size(width, row)),
+            colors.thumb_end,
+        ),
+        (
+            Bounds::new(point(left, thumb.bottom() - row), size(width, row)),
+            colors.thumb_end,
+        ),
+    ]
+}
+
+/// What a button in the column shows: a small solid arrow, pointing up or
+/// down, or down to a line for the lock.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Glyph {
+    Up,
+    Down,
+    ToBottom,
+}
+
+impl Glyph {
+    /// The glyph's rows in a button at `bounds`, each as its top and width
+    /// from the button's top, centred across it: a triangle 6 pixels wide
+    /// and 4 tall, 7 pixels from the button's top pointing up or from its
+    /// bottom pointing down, and for the lock the down arrow with a bar
+    /// beneath it.
+    fn rows(self) -> &'static [(f32, f32)] {
+        match self {
+            Glyph::Up => &[(7., 2.), (8., 4.), (9., 6.), (10., 6.)],
+            Glyph::Down => &[(6., 6.), (7., 6.), (8., 4.), (9., 2.)],
+            Glyph::ToBottom => &[(5., 6.), (6., 6.), (7., 4.), (8., 2.), (10., 6.)],
+        }
+    }
+
+    pub(crate) fn quads(self, bounds: Bounds<Pixels>) -> Vec<Bounds<Pixels>> {
+        // Rounded to a whole pixel, so it stays crisp.
+        let center = (bounds.origin.x + bounds.size.width / 2.).round();
+        self.rows()
+            .iter()
+            .map(|&(top, width)| {
+                Bounds::new(
+                    point(center - px(width / 2.), bounds.origin.y + px(top)),
+                    size(px(width), px(1.)),
+                )
+            })
+            .collect()
+    }
+}
+
+/// A button in the column, `id`, as wide as the column and a button tall,
+/// showing only `glyph`, with no background, border, or line of its own. It
+/// has the theme's bevel while hovered, and its pressed bevel while pressed
+/// with the pointer still over it, or while `selected`. Pressing it does
+/// `press`. `behind` is drawn beneath everything else in it.
+fn square(
+    id: String,
+    glyph: Glyph,
+    tooltip: SharedString,
+    selected: bool,
+    press: Press,
+    behind: Option<AnyElement>,
+    colors: ScrollColors,
+) -> impl IntoElement {
+    let arrow = canvas(
+        |_, _, _| {},
+        move |bounds, _, window, _| {
+            for row in glyph.quads(bounds) {
+                window.paint_quad(fill(row, colors.arrow));
+            }
+        },
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full();
+    let button = div()
+        .id(SharedString::from(id.clone()))
+        .relative()
+        .flex_none()
+        .w(COLUMN_WIDTH)
+        .h(BUTTON_HEIGHT)
+        .children(behind)
+        .child(arrow)
+        .child(bevel(format!("{id}-bevel"), selected))
+        .child(over_edges(format!("{id}-claim").into(), press.clone()))
+        .tooltip(move |window, cx| {
+            gpui_kit::component::tooltip::Tooltip::new(tooltip.clone()).build(window, cx)
+        })
+        .on_click(move |_, window, cx| press(window, cx));
+    // Lets UI tests find the button; inert in normal builds.
+    gpui_kit::TestSupportExt::test_support(button)
+}
+
+/// The bevel over a button: the theme's bevel while hovered, and its pressed
+/// bevel while pressed with the pointer still over it, or while `selected`.
+/// It takes no mouse: it watches the mouse before the button does.
+fn bevel(key: String, selected: bool) -> impl IntoElement {
     use crate::theme::{Bevel, bevel_edges, palette};
-    let key = SharedString::from(format!("{id}-bevel"));
-    let overlay = canvas(
+    let key = SharedString::from(key);
+    canvas(
         move |_, window, cx| {
             // Whether the button was pressed, and not yet let go.
             window.use_keyed_state(key, cx, |_, _| Rc::new(Cell::new(false)))
@@ -461,10 +544,10 @@ fn bevelled(id: String, button: impl IntoElement, press: Press) -> impl IntoElem
             let pressed = pressed.read(cx).clone();
             // Not while something else, like a sidebar's edge, is dragged.
             let hovered = !cx.has_active_drag() && bounds.contains(&window.mouse_position());
-            let bevel = match (hovered, pressed.get()) {
-                (true, true) => Some(Bevel::Pressed),
-                (true, false) => Some(Bevel::Raised),
-                (false, _) => None,
+            let bevel = match (hovered, pressed.get(), selected) {
+                (true, true, _) | (_, _, true) => Some(Bevel::Pressed),
+                (true, false, false) => Some(Bevel::Raised),
+                (false, _, false) => None,
             };
             if let Some(bevel) = bevel {
                 for (edge, color) in bevel_edges(bounds, bevel, palette(cx)) {
@@ -502,12 +585,7 @@ fn bevelled(id: String, button: impl IntoElement, press: Press) -> impl IntoElem
     .absolute()
     .top_0()
     .left_0()
-    .size_full();
-    div()
-        .relative()
-        .child(button)
-        .child(overlay)
-        .child(over_edges(format!("{id}-claim").into(), press))
+    .size_full()
 }
 
 /// What pressing a button in the column does.
@@ -718,17 +796,12 @@ fn ease_out_cubic(t: f32) -> f32 {
     1. - (1. - t.clamp(0., 1.)).powi(3)
 }
 
-/// The width of the line down the track's side against the list.
-const TRACK_LINE: Pixels = px(1.);
-
-/// The thumb in a track at `track`: inside the track's line, never over it.
+/// The thumb in a track at `track`: the column's full width, covering the
+/// track's inset.
 fn thumb_bounds(geometry: &Geometry, track: Bounds<Pixels>) -> Bounds<Pixels> {
     Bounds::new(
-        point(track.origin.x + TRACK_LINE, geometry.thumb_top),
-        size(
-            (track.size.width - TRACK_LINE).max(px(0.)),
-            geometry.thumb_height,
-        ),
+        point(track.origin.x, geometry.thumb_top),
+        size(track.size.width, geometry.thumb_height),
     )
 }
 
@@ -792,34 +865,47 @@ mod thumb_tests {
     use gpui_kit::{Hsla, hsla};
 
     /// Laid over dark and light surfaces alike, the track is clearly darker
-    /// than what is beneath it without losing the surface's character, and
-    /// the thumb, the surface itself at rest, lightens hovered, and lightens
-    /// again while dragged.
+    /// than what is beneath it without losing the surface's character, the
+    /// thumb's ends lie between the track and the surface, and the thumb, the
+    /// surface itself at rest, lightens hovered, and lightens again while
+    /// dragged. Nothing is opaque: all of it is laid over the surface.
     #[test]
     fn track_is_dark_and_thumb_lightens_as_it_is_used() {
         let over = |surface: Hsla, color: Hsla| surface.blend(color);
         for (dark, surfaces) in [
-            (true, [0.18, 0.22, 0.27, 0.31]),
+            (true, [0.067, 0.133, 0.18, 0.27]),
             (false, [0.74, 0.82, 0.91, 0.96]),
         ] {
             let colors = super::scroll_colors(dark);
-            for color in [colors.track, colors.hover, colors.pressed] {
+            for color in [
+                colors.track,
+                colors.thumb_end,
+                colors.arrow,
+                colors.hover,
+                colors.pressed,
+            ] {
                 assert!(color.a < 1., "laid over, not opaque");
             }
             for l in surfaces {
                 let surface = hsla(0., 0., l, 1.);
                 let track = over(surface, colors.track);
+                let end = over(surface, colors.thumb_end);
+                let arrow = over(surface, colors.arrow);
                 let hover = over(surface, colors.hover);
                 let pressed = over(surface, colors.pressed);
                 assert!(
-                    (0.05..0.25).contains(&(surface.l - track.l)),
-                    "{track:?} isn't clearly but modestly darker than {surface:?}"
+                    track.l < surface.l && surface.l - track.l < 0.25,
+                    "{track:?} isn't darker than {surface:?}, without losing it"
                 );
+                assert!(
+                    track.l < end.l && end.l < surface.l,
+                    "{end:?} isn't between {track:?} and {surface:?}"
+                );
+                assert!((arrow.l - surface.l).abs() > 0.05, "{arrow:?} on {surface:?}");
                 assert!(
                     hover.l > surface.l && pressed.l > hover.l,
                     "{surface:?} {hover:?} {pressed:?}"
                 );
-                assert!(pressed.l - surface.l < surface.l - track.l);
             }
         }
     }
@@ -917,12 +1003,11 @@ mod tests {
         }
     }
 
-    /// The buttons sit just inside the track, as the thumb does: the track's
-    /// line runs down beside them, unbroken the column's full height, and a
-    /// pixel of the dark track lies between each and the track, drawn by
-    /// nothing over the line.
+    /// Each button is the column's full width and 17 pixels tall, the track
+    /// running straight between them, and nothing in the column is drawn in
+    /// the theme's border colour: it has no line anywhere.
     #[gpui_kit::test]
-    async fn buttons_sit_just_inside_the_track(cx: &mut TestAppContext) {
+    async fn buttons_fill_the_column_with_no_line(cx: &mut TestAppContext) {
         cx.update(gpui_kit::init);
         let window = cx.add_window(|window, cx| {
             let view = cx.new(|_| TallList {
@@ -938,79 +1023,34 @@ mod tests {
             let track = window.find("tall-scroll-track").bounds();
             let up = window.find("tall-scroll-up").bounds();
             let down = window.find("tall-scroll-down").bounds();
+            assert_eq!(column.size.width, px(18.));
             for button in [up, down] {
                 assert_eq!(
-                    button.left(),
-                    column.left() + px(1.),
-                    "{button:?} covers the line"
+                    (button.left(), button.right()),
+                    (column.left(), column.right()),
+                    "{button:?} isn't the column's width"
                 );
-                assert_eq!(button.right(), column.right());
+                assert_eq!(button.size.height, px(17.));
             }
-            assert_eq!(
-                track.top() - up.bottom(),
-                px(1.),
-                "no gap under the up button"
-            );
-            assert_eq!(
-                down.top() - track.bottom(),
-                px(1.),
-                "no gap over the down button"
-            );
-            // The line beside the list, from the top of the column to its
-            // bottom, in pieces that meet.
+            assert_eq!((up.top(), down.bottom()), (column.top(), column.bottom()));
+            assert_eq!((track.top(), track.bottom()), (up.bottom(), down.top()));
+            assert_eq!((track.left(), track.right()), (column.left(), column.right()));
             let scale = window.scale_factor();
             let border = gpui_kit::component::ActiveTheme::theme(cx).border;
-            let mut pieces: Vec<(f32, f32)> = window
-                .painted_quads()
-                .into_iter()
-                .filter(|q| {
-                    q.background.as_solid() == Some(border)
-                        && (q.bounds.origin.x.0 - column.left().as_f32() * scale).abs() < 0.01
-                        && (q.bounds.size.width.0 - scale).abs() < 0.01
-                })
-                .map(|q| {
-                    (
-                        q.bounds.origin.y.0,
-                        q.bounds.origin.y.0 + q.bounds.size.height.0,
-                    )
-                })
-                .collect();
-            pieces.sort_by(|a, b| a.0.total_cmp(&b.0));
-            let mut reach = column.top().as_f32() * scale;
-            for (top, bottom) in pieces {
-                assert!(top <= reach + 0.01, "the line breaks at {reach}");
-                reach = reach.max(bottom);
-            }
-            assert!(
-                reach >= column.bottom().as_f32() * scale - 0.01,
-                "the line stops at {reach}"
-            );
-            // Nothing drawn after it, in the column, covers the line.
-            let line_drawn = window
-                .painted_quads()
-                .into_iter()
-                .filter(|q| {
-                    q.background.as_solid() == Some(border)
-                        && (q.bounds.origin.x.0 - column.left().as_f32() * scale).abs() < 0.01
-                })
-                .map(|q| q.order)
-                .min()
-                .unwrap();
             for q in window.painted_quads() {
                 let b = &q.bounds;
-                if q.order <= line_drawn
-                    || b.size.width.0 > column.size.width.as_f32() * scale + 0.01
-                {
-                    continue;
-                }
-                let over_line = b.origin.x.0 < column.left().as_f32() * scale + scale - 0.01
-                    && b.origin.x.0 + b.size.width.0 > column.left().as_f32() * scale + 0.01
-                    && b.origin.y.0 >= column.top().as_f32() * scale
+                let in_column = b.origin.x.0 + b.size.width.0 > column.left().as_f32() * scale
+                    && b.origin.x.0 < column.right().as_f32() * scale
+                    && b.origin.y.0 + b.size.height.0 > column.top().as_f32() * scale
                     && b.origin.y.0 < column.bottom().as_f32() * scale;
-                if over_line && q.background.as_solid() != Some(border) {
+                if in_column && b.size.width.0 <= column.size.width.as_f32() * scale + 0.01 {
+                    assert_ne!(q.background.as_solid(), Some(border), "a line at {b:?}");
                     assert!(
-                        q.background.as_solid().is_none_or(|c| c.a == 0.),
-                        "{b:?} is drawn over the line"
+                        q.border_widths.left.0 == 0.
+                            && q.border_widths.right.0 == 0.
+                            && q.border_widths.top.0 == 0.
+                            && q.border_widths.bottom.0 == 0.,
+                        "a border at {b:?}"
                     );
                 }
             }
@@ -1220,7 +1260,7 @@ mod tests {
                 )
             })
             .unwrap();
-        // Anything lit in the window: the thumb's own bevel, and a hover.
+        // Anything lit in the window: a button's bevel, and a hover.
         let lit = |cx: &mut gpui_kit::VisualTestContext| {
             cx.update(|window, cx| {
                 window.render_frame(cx);
@@ -1242,7 +1282,7 @@ mod tests {
         let edge = point(up.right() + px(3.), up.bottom() + px(200.));
         cx.simulate_mouse_move(edge, None, gpui_kit::Modifiers::default());
         cx.run_until_parked();
-        // The thumb's own bevel, lit at rest.
+        // Whatever is lit at rest.
         let rest = lit(cx);
         cx.simulate_mouse_down(
             edge,
@@ -1318,62 +1358,299 @@ mod tests {
         );
     }
 
-    /// The thumb sits inside the track's line: the line beside the list runs
-    /// unbroken down the track's full height, and nothing is drawn over it.
-    #[gpui_kit::test]
-    async fn thumb_keeps_inside_the_track_line(cx: &mut TestAppContext) {
-        cx.update(gpui_kit::init);
-        let window = cx.add_window(|window, cx| {
-            let view = cx.new(|_| TallList {
-                scroll: ScrollHandle::new(),
+    /// A tall list on a surface of `surface`, in dark mode, scrolled with
+    /// `scroll`, with the lock button when `lock` is given.
+    struct OnSurface {
+        scroll: ScrollHandle,
+        surface: u32,
+        lock: Option<bool>,
+    }
+
+    impl Render for OnSurface {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let list = div()
+                .id("tall")
+                .size_full()
+                .overflow_y_scroll()
+                .track_scroll(&self.scroll)
+                .child(
+                    v_flex()
+                        .children((0..200).map(|ix| div().h(px(20.)).child(format!("row {ix}")))),
+                );
+            let lock = self.lock.map(|locked| {
+                let set: super::SetLock = std::rc::Rc::new(|_, _, _| {});
+                (locked, set)
             });
-            Root::new(view, window, cx)
+            div()
+                .size_full()
+                .bg(crate::theme::color(self.surface))
+                .child(with_scrollbar("tall", &self.scroll, list, true, lock, cx))
+        }
+    }
+
+    /// A window in dark mode holding the list on `surface`, scrolled to the
+    /// middle, so the track shows above and below the thumb.
+    fn on_surface(
+        surface: u32,
+        lock: Option<bool>,
+        cx: &mut TestAppContext,
+    ) -> (gpui_kit::AnyWindowHandle, ScrollHandle) {
+        use gpui_kit::component::{Theme, ThemeMode};
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            Theme::change(ThemeMode::Dark, None, cx);
         });
-        let handle = window.into();
+        let scroll = ScrollHandle::new();
+        let window = cx.add_window({
+            let scroll = scroll.clone();
+            move |window, cx| {
+                let view = cx.new(|_| OnSurface {
+                    scroll,
+                    surface,
+                    lock,
+                });
+                Root::new(view, window, cx)
+            }
+        });
+        let handle: gpui_kit::AnyWindowHandle = window.into();
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             window.render_frame(cx);
-            let scale = window.scale_factor();
-            let track = window.find("tall-scroll-track").bounds();
-            let (left, top, bottom, right) = (
-                track.left().as_f32() * scale,
-                track.top().as_f32() * scale,
-                track.bottom().as_f32() * scale,
-                track.right().as_f32() * scale,
-            );
-            let within = |q: &gpui_kit::Quad| {
-                let b = &q.bounds;
-                b.origin.x.0 >= left - 0.01
-                    && b.origin.x.0 + b.size.width.0 <= right + 0.01
-                    && b.origin.y.0 >= top - 0.01
-                    && b.origin.y.0 + b.size.height.0 <= bottom + 0.01
-            };
-            let quads: Vec<_> = window.painted_quads().into_iter().filter(within).collect();
-            let line = quads
-                .iter()
-                .position(|q| {
-                    (q.bounds.origin.x.0 - left).abs() < 0.01
-                        && (q.bounds.size.width.0 - scale).abs() < 0.01
-                        && (q.bounds.origin.y.0 - top).abs() < 0.01
-                        && (q.bounds.size.height.0 - (bottom - top)).abs() < 0.01
+        })
+        .unwrap();
+        let max = scroll.max_offset().y;
+        assert!(max > px(0.), "nothing to scroll");
+        scroll.set_offset(point(px(0.), -(max / 2.).round()));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.render_frame(cx);
+        })
+        .unwrap();
+        (handle, scroll)
+    }
+
+    /// `color` laid over `surface`, as 0xRRGGBB.
+    fn over(surface: u32, color: gpui_kit::Hsla) -> u32 {
+        let c: gpui_kit::Rgba = color.into();
+        [(16, c.r), (8, c.g), (0, c.b)]
+            .into_iter()
+            .fold(0, |rgb, (shift, channel)| {
+                let s = ((surface >> shift) & 0xff) as f32 / 255.;
+                let v = s * (1. - c.a) + channel * c.a;
+                rgb | ((v * 255.).round() as u32) << shift
+            })
+    }
+
+    /// Whether two colours are the same, to a step in each channel.
+    fn same(a: u32, b: u32) -> bool {
+        (0..3).all(|ix| {
+            let channel = |c: u32| ((c >> (ix * 8)) & 0xff) as i32;
+            (channel(a) - channel(b)).abs() <= 1
+        })
+    }
+
+    /// Where the thumb is, from the frame: the first and last rows, from the
+    /// track's top, whose middle isn't the track's colour.
+    fn thumb_rows(
+        frame: &crate::frame_image::Frame,
+        track: Bounds<gpui_kit::Pixels>,
+        dark_track: u32,
+    ) -> (i32, i32) {
+        let x = track.left() + px(8.5);
+        let rows: Vec<i32> = (0..track.size.height.as_f32() as i32)
+            .filter(|y| !same(frame.at(point(x, track.top() + px(*y as f32 + 0.5))), dark_track))
+            .collect();
+        (*rows.first().unwrap(), *rows.last().unwrap())
+    }
+
+    /// On the file tree's darkest surface and on a panel body's, the column
+    /// is drawn as the mockup is: no background and no line of its own, down
+    /// its sides or against the list; the track, black laid half way over the
+    /// surface, inset a pixel from either side; the thumb the surface's own
+    /// colour, the column's full width, with a row of black laid a quarter
+    /// over the surface at either end across the track; and each button only
+    /// a small solid arrow in white laid about a fifth over the surface.
+    #[gpui_kit::test]
+    async fn the_column_is_laid_over_its_surface(cx: &mut TestAppContext) {
+        for (surface, dark_track, end, arrow) in [
+            (0x111111, 0x090909, 0x0d0d0d, 0x3e3e3e),
+            (0x222222, 0x111111, 0x191919, 0x4d4d4d),
+        ] {
+            let (handle, _) = on_surface(surface, None, cx);
+            cx.update_window(handle, |_, window, _| {
+                let colors = super::scroll_colors(true);
+                assert!(same(over(surface, colors.track), dark_track));
+                assert!(same(over(surface, colors.thumb_end), end));
+                assert!(same(over(surface, colors.arrow), arrow));
+                let frame = crate::frame_image::Frame::of(window);
+                let at = |x: f32, y: f32, from: Bounds<gpui_kit::Pixels>| {
+                    frame.at(point(from.left() + px(x + 0.5), from.top() + px(y + 0.5)))
+                };
+                let column = window.find("tall-scroll-column").bounds();
+                let track = window.find("tall-scroll-track").bounds();
+                let up = window.find("tall-scroll-up").bounds();
+                let down = window.find("tall-scroll-down").bounds();
+                let (first, last) = thumb_rows(&frame, track, dark_track);
+                assert!(first > 10 && last < track.size.height.as_f32() as i32 - 10);
+                // Down both sides of the column, and just left of it against
+                // the list, only the surface, from its top to its bottom.
+                for y in 0..column.size.height.as_f32() as i32 {
+                    for x in [-1., 0., 17.] {
+                        let c = at(x, y as f32, column);
+                        assert!(
+                            same(c, surface),
+                            "{surface:06x}: {c:06x} at ({x}, {y}) beside the track"
+                        );
+                    }
+                }
+                // The track, inset, above and below the thumb.
+                for y in [0, first - 1, last + 1, track.size.height.as_f32() as i32 - 1] {
+                    for x in 1..17 {
+                        let c = at(x as f32, y as f32, track);
+                        assert!(
+                            same(c, dark_track),
+                            "{surface:06x}: the track is {c:06x} at ({x}, {y})"
+                        );
+                    }
+                }
+                // The thumb's ends, and the surface between them.
+                for x in 1..17 {
+                    for y in [first, last] {
+                        let c = at(x as f32, y as f32, track);
+                        assert!(same(c, end), "{surface:06x}: thumb end {c:06x} at ({x}, {y})");
+                    }
+                    for y in [first + 1, (first + last) / 2, last - 1] {
+                        let c = at(x as f32, y as f32, track);
+                        assert!(same(c, surface), "{surface:06x}: the thumb is {c:06x} at {y}");
+                    }
+                }
+                // The buttons: the arrow's rows, as the mockup's, and the
+                // surface everywhere else.
+                let up_rows = [(7, 8, 2), (8, 7, 4), (9, 6, 6), (10, 6, 6)];
+                let down_rows = [(6, 6, 6), (7, 6, 6), (8, 7, 4), (9, 8, 2)];
+                for (button, rows) in [(up, up_rows), (down, down_rows)] {
+                    for y in 0..17 {
+                        for x in 0..18 {
+                            let lit = rows
+                                .iter()
+                                .any(|&(row, left, width)| y == row && (left..left + width).contains(&x));
+                            let c = at(x as f32, y as f32, button);
+                            let expected = if lit { arrow } else { surface };
+                            assert!(
+                                same(c, expected),
+                                "{surface:06x}: {c:06x} at ({x}, {y}) in {button:?}, not {expected:06x}"
+                            );
+                        }
+                    }
+                }
+            })
+            .unwrap();
+        }
+    }
+
+    /// Under the pointer the thumb lightens across the column's full width,
+    /// as white laid over the surface, ends and all, on either surface; the
+    /// track and the buttons don't change.
+    #[gpui_kit::test]
+    async fn the_thumb_lightens_on_either_surface(cx: &mut TestAppContext) {
+        for (surface, dark_track) in [(0x111111, 0x090909), (0x222222, 0x111111)] {
+            let (handle, _) = on_surface(surface, None, cx);
+            let (track, rows) = cx
+                .update_window(handle, |_, window, _| {
+                    let frame = crate::frame_image::Frame::of(window);
+                    let track = window.find("tall-scroll-track").bounds();
+                    (track, thumb_rows(&frame, track, dark_track))
                 })
-                .expect("no line down the track's full height");
-            for (ix, q) in quads.iter().enumerate() {
-                if ix != line && q.order >= quads[line].order {
-                    assert!(
-                        q.bounds.origin.x.0 >= left + scale - 0.01,
-                        "{:?} covers the track's line",
-                        q.bounds
-                    );
+                .unwrap();
+            let middle = point(
+                track.left() + px(9.),
+                track.top() + px(((rows.0 + rows.1) / 2) as f32),
+            );
+            let cx = &mut gpui_kit::VisualTestContext::from_window(handle, cx);
+            cx.simulate_mouse_move(middle, None, gpui_kit::Modifiers::default());
+            cx.run_until_parked();
+            cx.update(|window, cx| {
+                window.render_frame(cx);
+                let colors = super::scroll_colors(true);
+                let frame = crate::frame_image::Frame::of(window);
+                let hover = over(surface, colors.hover);
+                assert_ne!(hover, surface, "hovering doesn't lighten {surface:06x}");
+                for x in [0., 1., 9., 16., 17.] {
+                    let c = frame.at(point(track.left() + px(x + 0.5), middle.y + px(0.5)));
+                    assert!(same(c, hover), "{surface:06x}: hovered, the thumb is {c:06x} at {x}");
+                }
+                // The ends, laid over the lightened thumb.
+                let end = frame.at(point(track.left() + px(8.5), track.top() + px(rows.0 as f32 + 0.5)));
+                let expected = over(hover, colors.thumb_end);
+                assert!(same(end, expected), "{surface:06x}: hovered end {end:06x}");
+                // Just outside the thumb, the track is as it was.
+                let above = frame.at(point(track.left() + px(8.5), track.top() + px(rows.0 as f32 - 0.5)));
+                assert!(same(above, dark_track));
+            });
+        }
+    }
+
+    /// The lock button is drawn as the others are, a button tall, with a
+    /// pixel of the surface between it and the down button: no background,
+    /// only its arrow.
+    #[gpui_kit::test]
+    async fn the_lock_button_is_drawn_as_the_others(cx: &mut TestAppContext) {
+        let surface = 0x222222;
+        let (handle, _) = on_surface(surface, Some(false), cx);
+        cx.update_window(handle, |_, window, _| {
+            let frame = crate::frame_image::Frame::of(window);
+            let down = window.find("tall-scroll-down").bounds();
+            let lock = window.find("tall-scroll-lock").bounds();
+            let column = window.find("tall-scroll-column").bounds();
+            assert_eq!(lock.top() - down.bottom(), px(1.));
+            assert_eq!(lock.size.height, px(17.));
+            assert_eq!((lock.left(), lock.right()), (column.left(), column.right()));
+            assert_eq!(lock.bottom(), column.bottom());
+            let arrow = over(surface, super::scroll_colors(true).arrow);
+            let mut lit = 0;
+            for y in -1..17 {
+                for x in 0..18 {
+                    let c = frame.at(point(
+                        lock.left() + px(x as f32 + 0.5),
+                        lock.top() + px(y as f32 + 0.5),
+                    ));
+                    if same(c, arrow) {
+                        lit += 1;
+                    } else {
+                        assert!(same(c, surface), "{c:06x} at ({x}, {y}) in the lock button");
+                    }
                 }
             }
-            // Whatever the thumb, and the dark track around it, stays right of
-            // the line.
-            for q in &quads {
-                if q.background.as_solid().is_some_and(|c| c.l < 0.05) {
-                    assert!(q.bounds.origin.x.0 >= left + scale - 0.01, "{:?}", q.bounds);
+            assert!(lit > 0, "the lock button shows nothing");
+        })
+        .unwrap();
+    }
+
+    /// Writes the column on #222222 to the path in `SCROLLBAR_FRAME`, as a
+    /// PPM, to compare with a mockup by eye or by script. Does nothing
+    /// without it.
+    #[gpui_kit::test]
+    async fn capture_the_column(cx: &mut TestAppContext) {
+        let Ok(path) = std::env::var("SCROLLBAR_FRAME") else {
+            return;
+        };
+        let (handle, _) = on_surface(0x222222, None, cx);
+        cx.update_window(handle, |_, window, _| {
+            let frame = crate::frame_image::Frame::of(window);
+            let column = window.find("tall-scroll-column").bounds();
+            let (w, h) = (18, column.size.height.as_f32() as usize);
+            let mut out = format!("P6\n{w} {h}\n255\n").into_bytes();
+            for y in 0..h {
+                for x in 0..w {
+                    let c = frame.at(point(
+                        column.left() + px(x as f32 + 0.5),
+                        column.top() + px(y as f32 + 0.5),
+                    ));
+                    out.extend([(c >> 16) as u8, (c >> 8) as u8, c as u8]);
                 }
             }
+            std::fs::write(path, out).unwrap();
         })
         .unwrap();
     }

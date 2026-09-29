@@ -28,6 +28,16 @@ pub struct Palette {
     pub selected: u32,
     /// Menus, popovers, tooltips, inset panels.
     pub overlay: u32,
+    /// The ribbon's command area, and its open tabs, which read as one piece
+    /// with it.
+    pub ribbon: u32,
+    /// The ribbon's row of tabs, a step from its command area: lighter in dark
+    /// mode, darker in light mode. Also the dividers between its groups.
+    pub ribbon_tabs: u32,
+    /// The darkest surface in dark mode, a step past the ribbon's command area
+    /// away from its tab row: the project tree, and the commit message on the
+    /// git panel. In light mode, a step lighter than the command area instead.
+    pub darkest: u32,
     pub text: u32,
     /// What the spec calls muted.
     pub text_secondary: u32,
@@ -64,6 +74,11 @@ pub const DARK: Palette = Palette {
     pressed: 0x3c3c3c,
     selected: 0x5e5e5e,
     overlay: 0x4a4a4a,
+    // Two and one steps of 0x11 below the base, so the ribbon's buttons, at
+    // the base, stand as far from its command area as its tab row, twice over.
+    ribbon: 0x222222,
+    ribbon_tabs: 0x333333,
+    darkest: 0x111111,
     text: 0xebebeb,
     text_secondary: 0xc4c4c4,
     text_tertiary: 0x9c9c9c,
@@ -92,6 +107,11 @@ pub const LIGHT: Palette = Palette {
     pressed: 0xc6c6c6,
     selected: 0xbcbcbc,
     overlay: 0xdcdcdc,
+    // The same step the other way: the command area on the base, where white
+    // laid over it lightens its buttons, and the tab row a step darker.
+    ribbon: 0xd0d0d0,
+    ribbon_tabs: 0xbfbfbf,
+    darkest: 0xe1e1e1,
     text: 0x1e1e1e,
     text_secondary: 0x454545,
     text_tertiary: 0x636363,
@@ -117,9 +137,292 @@ const SELECTION_ALPHA: u8 = 0x59;
 pub const DARK_NAME: &str = "Suspense Dark";
 pub const LIGHT_NAME: &str = "Suspense Light";
 
-/// The palette of the mode showing.
+/// The palette of the mode showing, at that mode's brightness.
 pub fn palette(cx: &App) -> &'static Palette {
-    if cx.theme().is_dark() { &DARK } else { &LIGHT }
+    let dark = cx.theme().is_dark();
+    shifted(dark, brightness_of(dark, cx))
+}
+
+/// How far the brightness setting runs either way from 0, before what a mode
+/// allows narrows it.
+pub const BRIGHTNESS_LIMIT: i32 = 10;
+
+/// How far, in each channel, `step` moves every grey: 2% of their lightness a
+/// step, rounded half away from 0 to a whole channel value, so every grey
+/// moves by exactly the same amount and the steps between them keep their
+/// size.
+pub fn brightness_shift(step: i32) -> i32 {
+    // 2% of 255 is 5.1: in tenths, 51 a step, kept in integers so the
+    // rounding is exact and the same either way.
+    let tenths = step * 51;
+    (tenths + 5 * tenths.signum()) / 10
+}
+
+/// The palette's neutral greys, which brightness moves: every surface, the
+/// ribbon's, the darkest, and the lines. Text, the accent, the status hues,
+/// and the overlays' strengths aren't among them.
+fn greys_mut(p: &mut Palette) -> [&mut u32; 13] {
+    [
+        &mut p.well,
+        &mut p.recessed,
+        &mut p.base,
+        &mut p.raised,
+        &mut p.hover,
+        &mut p.pressed,
+        &mut p.selected,
+        &mut p.overlay,
+        &mut p.ribbon,
+        &mut p.ribbon_tabs,
+        &mut p.darkest,
+        &mut p.line,
+        &mut p.edge,
+    ]
+}
+
+/// The palette's neutral greys, named, as brightness moves them.
+pub fn greys(palette: &Palette) -> [(&'static str, u32); 13] {
+    let p = palette;
+    [
+        ("well", p.well),
+        ("recessed", p.recessed),
+        ("base", p.base),
+        ("raised", p.raised),
+        ("hover", p.hover),
+        ("pressed", p.pressed),
+        ("selected", p.selected),
+        ("overlay", p.overlay),
+        ("ribbon", p.ribbon),
+        ("ribbon_tabs", p.ribbon_tabs),
+        ("darkest", p.darkest),
+        ("line", p.line),
+        ("edge", p.edge),
+    ]
+}
+
+/// `color`'s red, green, and blue, each moved by `shift`, clipped to black
+/// and white.
+fn shift_channels(color: u32, shift: i32) -> u32 {
+    [16, 8, 0].into_iter().fold(0, |out, at| {
+        let channel = ((color >> at) & 0xff) as i32;
+        out | (((channel + shift).clamp(0, 255) as u32) << at)
+    })
+}
+
+/// `palette` at brightness `step`: every neutral grey moved by the same
+/// amount of lightness, everything else as it is. Within the mode's range no
+/// grey clips, so the steps between them and their order stay as at 0.
+pub fn brightened(palette: &Palette, step: i32) -> Palette {
+    let shift = brightness_shift(step);
+    let mut p = *palette;
+    for grey in greys_mut(&mut p) {
+        *grey = shift_channels(*grey, shift);
+    }
+    p
+}
+
+/// WCAG's contrast ratio between two opaque colours.
+pub fn contrast(a: u32, b: u32) -> f32 {
+    let luminance = |c: u32| {
+        let channel = |shift: u32| {
+            let v = ((c >> shift) & 0xff) as f32 / 255.;
+            if v <= 0.04045 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
+    };
+    let (a, b) = (luminance(a), luminance(b));
+    (a.max(b) + 0.05) / (a.min(b) + 0.05)
+}
+
+/// Whether the text and hues of `p` keep the contrast the theme asks of them
+/// on its surfaces: primary and secondary text 4.5 to 1 on the base,
+/// recessed, well, and overlay surfaces; primary text 4 to 1 on controls in
+/// any state; tertiary text, the status colours, and the accent 3 to 1 on the
+/// base.
+pub fn keeps_contrast(p: &Palette) -> bool {
+    let read = [p.base, p.recessed, p.well, p.overlay];
+    let controls = [p.raised, p.hover, p.pressed, p.selected];
+    let hues = [
+        p.text_tertiary,
+        p.success,
+        p.warning,
+        p.error,
+        p.accent,
+        p.orange,
+    ];
+    [p.text, p.text_secondary].into_iter().all(|text| {
+        read.into_iter()
+            .all(|surface| contrast(text, surface) >= 4.5)
+    }) && controls
+        .into_iter()
+        .all(|control| contrast(p.text, control) >= 4.)
+        && hues.into_iter().all(|hue| contrast(hue, p.base) >= 3.)
+}
+
+/// Whether `palette` can be moved to brightness `step`: within the setting's
+/// ends, no grey pushed below black or above white, and every text keeping
+/// its contrast.
+pub fn brightness_allowed(palette: &Palette, step: i32) -> bool {
+    let shift = brightness_shift(step);
+    let clips = greys(palette).into_iter().any(|(_, grey)| {
+        [16, 8, 0].into_iter().any(|at| {
+            let channel = ((grey >> at) & 0xff) as i32 + shift;
+            !(0..=255).contains(&channel)
+        })
+    });
+    step.abs() <= BRIGHTNESS_LIMIT && !clips && keeps_contrast(&brightened(palette, step))
+}
+
+/// How far `palette`'s brightness can go either way: from 0 out to the last
+/// step allowed before one isn't.
+pub fn brightness_range(palette: &Palette) -> std::ops::RangeInclusive<i32> {
+    let reach = |direction: i32| {
+        let mut step = 0;
+        while brightness_allowed(palette, step + direction) {
+            step += direction;
+        }
+        step
+    };
+    reach(-1)..=reach(1)
+}
+
+/// The brightness range of dark or light mode, worked out once.
+pub fn mode_brightness_range(dark: bool) -> std::ops::RangeInclusive<i32> {
+    static RANGES: std::sync::LazyLock<[std::ops::RangeInclusive<i32>; 2]> =
+        std::sync::LazyLock::new(|| [brightness_range(&LIGHT), brightness_range(&DARK)]);
+    RANGES[dark as usize].clone()
+}
+
+/// Every appearance the Brightness slider runs through, darkest first: dark
+/// mode from its darkest step to its lightest, then light mode from its
+/// darkest to its lightest, each as whether it is dark mode and its step.
+pub fn appearances() -> &'static [(bool, i32)] {
+    static ALL: std::sync::LazyLock<Vec<(bool, i32)>> = std::sync::LazyLock::new(|| {
+        let dark = mode_brightness_range(true).map(|step| (true, step));
+        let light = mode_brightness_range(false).map(|step| (false, step));
+        dark.chain(light).collect()
+    });
+    &ALL
+}
+
+/// Where dark or light mode at brightness `step` falls among the
+/// appearances, the step kept within what the mode allows.
+pub fn appearance_index(dark: bool, step: i32) -> usize {
+    let range = mode_brightness_range(dark);
+    let step = step.clamp(*range.start(), *range.end());
+    appearances()
+        .iter()
+        .position(|&appearance| appearance == (dark, step))
+        .expect("every step a mode allows is an appearance")
+}
+
+/// Dark or light mode's palette at brightness `step`, from every step worked
+/// out once, so the palette showing can still be borrowed for the life of
+/// the application.
+fn shifted(dark: bool, step: i32) -> &'static Palette {
+    static PALETTES: std::sync::LazyLock<[Vec<Palette>; 2]> = std::sync::LazyLock::new(|| {
+        let every = |palette: &Palette| {
+            (-BRIGHTNESS_LIMIT..=BRIGHTNESS_LIMIT)
+                .map(|step| brightened(palette, step))
+                .collect()
+        };
+        [every(&LIGHT), every(&DARK)]
+    });
+    let step = step.clamp(-BRIGHTNESS_LIMIT, BRIGHTNESS_LIMIT);
+    &PALETTES[dark as usize][(step + BRIGHTNESS_LIMIT) as usize]
+}
+
+/// Each mode's brightness, and the gpui-kit themes built for the steps taken
+/// so far, so dragging back and forth doesn't build them again.
+#[derive(Default)]
+struct Brightness {
+    dark: i32,
+    light: i32,
+    configs: std::collections::HashMap<(bool, i32), Rc<ThemeConfig>>,
+}
+
+impl Global for Brightness {}
+
+/// The brightness of the mode showing.
+pub fn brightness(cx: &App) -> i32 {
+    brightness_of(cx.theme().is_dark(), cx)
+}
+
+/// The brightness of dark or light mode: 0 until set.
+pub fn brightness_of(dark: bool, cx: &App) -> i32 {
+    cx.try_global::<Brightness>()
+        .map_or(0, |b| if dark { b.dark } else { b.light })
+}
+
+/// Sets dark or light mode's brightness to `step`, kept within what the mode
+/// allows, and, if that mode is showing, has every window take it at once:
+/// only colours change, so nothing is laid out anew. Returns the step taken.
+pub fn set_brightness(dark: bool, step: i32, cx: &mut App) -> i32 {
+    let range = mode_brightness_range(dark);
+    let step = step.clamp(*range.start(), *range.end());
+    if cx.has_global::<Brightness>() && brightness_of(dark, cx) == step {
+        return step;
+    }
+    let brightness = cx.default_global::<Brightness>();
+    if dark {
+        brightness.dark = step;
+    } else {
+        brightness.light = step;
+    }
+    install_brightness(dark, cx);
+    if cx.has_global::<Theme>() && cx.theme().is_dark() == dark {
+        let mode = cx.theme().mode;
+        Theme::change(mode, None, cx);
+        cx.refresh_windows();
+    }
+    step
+}
+
+/// Makes gpui-kit's theme for dark or light mode the one for its brightness.
+fn install_brightness(dark: bool, cx: &mut App) {
+    if !cx.has_global::<Theme>() || !cx.has_global::<ThemeRegistry>() {
+        return;
+    }
+    let step = brightness_of(dark, cx);
+    let cached = cx
+        .try_global::<Brightness>()
+        .and_then(|b| b.configs.get(&(dark, step)).cloned());
+    let config = match cached {
+        Some(config) => config,
+        None => {
+            let (mode, registry) = (
+                if dark {
+                    ThemeMode::Dark
+                } else {
+                    ThemeMode::Light
+                },
+                ThemeRegistry::global(cx),
+            );
+            let default = if dark {
+                registry.default_dark_theme()
+            } else {
+                registry.default_light_theme()
+            };
+            let value = self::config(shifted(dark, step), mode, default);
+            let config = Rc::new(
+                serde_json::from_value::<ThemeConfig>(value)
+                    .expect("the theme's own configuration is valid"),
+            );
+            cx.default_global::<Brightness>()
+                .configs
+                .insert((dark, step), config.clone());
+            config
+        }
+    };
+    let theme = Theme::global_mut(cx);
+    if dark {
+        theme.dark_theme = config;
+    } else {
+        theme.light_theme = config;
+    }
 }
 
 /// `color` as an opaque colour.
@@ -271,6 +574,11 @@ pub fn init(cx: &mut App) {
     let theme = Theme::global_mut(cx);
     theme.dark_theme = dark;
     theme.light_theme = light;
+    // Each mode at the brightness already set, if any has been.
+    if cx.has_global::<Brightness>() {
+        install_brightness(true, cx);
+        install_brightness(false, cx);
+    }
 }
 
 fn hex(color: u32) -> String {
@@ -452,7 +760,7 @@ mod tests {
     use gpui_kit::component::{Theme, ThemeMode};
     use gpui_kit::{Hsla, TestAppContext};
 
-    use super::{Bevel, DARK, LIGHT, Palette, bevel_colors, bevel_edges, color};
+    use super::{Bevel, DARK, LIGHT, Palette, bevel_colors, bevel_edges, color, contrast};
 
     /// The bevel is a pixel wide, lit along the top and left, shaded along
     /// the bottom and right, within the surface, with no edge over another;
@@ -507,23 +815,6 @@ mod tests {
         }
         let tiny = Bounds::new(point(px(0.), px(0.)), size(px(1.), px(1.)));
         assert!(bevel_edges(tiny, Bevel::Raised, &DARK).is_empty());
-    }
-
-    /// WCAG's contrast ratio between two opaque colours.
-    fn contrast(a: u32, b: u32) -> f32 {
-        let luminance = |c: u32| {
-            let channel = |shift: u32| {
-                let v = ((c >> shift) & 0xff) as f32 / 255.;
-                if v <= 0.04045 {
-                    v / 12.92
-                } else {
-                    ((v + 0.055) / 1.055).powf(2.4)
-                }
-            };
-            0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
-        };
-        let (a, b) = (luminance(a), luminance(b));
-        (a.max(b) + 0.05) / (a.min(b) + 0.05)
     }
 
     /// The contrast the theme promises, in both modes.
@@ -591,6 +882,228 @@ mod tests {
         assert!(lightness(l.recessed) > lightness(l.base));
         assert!(lightness(l.selected) < lightness(l.pressed));
         assert!(lightness(l.pressed) < lightness(l.base));
+    }
+
+    /// The darkest surface is a step past the ribbon's command area, away
+    /// from its tab row, as far as the tab row is from it: #111111 in dark
+    /// mode, a step lighter than the command area in light mode.
+    #[test]
+    fn the_darkest_surface_steps_past_the_ribbon() {
+        assert_eq!(DARK.darkest, 0x111111);
+        for (name, p) in [("dark", DARK), ("light", LIGHT)] {
+            let channel = |c: u32| (c & 0xff) as i32;
+            assert_eq!(
+                channel(p.ribbon) - channel(p.darkest),
+                channel(p.ribbon_tabs) - channel(p.ribbon),
+                "{name}: the darkest surface isn't a step from the command area"
+            );
+            assert!(
+                contrast(p.text, p.darkest) >= 4.5,
+                "{name}: text on the darkest surface"
+            );
+        }
+    }
+
+    /// Every step of brightness a mode allows moves every grey by the same
+    /// amount: the difference between any two greys, in every channel, is
+    /// what it is at 0, so their order and the steps between them never
+    /// change, and a lighter box on a darker one stays lighter.
+    #[test]
+    fn brightening_keeps_every_step_and_order() {
+        use super::{brightened, brightness_range, brightness_shift, greys};
+        for (name, p) in [("dark", DARK), ("light", LIGHT)] {
+            let range = brightness_range(&p);
+            assert!(range.contains(&0), "{name}: 0 is out of range");
+            let at_zero = greys(&p);
+            for step in range {
+                let moved = greys(&brightened(&p, step));
+                for ((grey, before), (_, after)) in at_zero.iter().zip(&moved) {
+                    for at in [16, 8, 0] {
+                        let channel = |c: u32| ((c >> at) & 0xff) as i32;
+                        assert_eq!(
+                            channel(*after) - channel(*before),
+                            brightness_shift(step),
+                            "{name} at {step}: {grey} didn't move with the rest"
+                        );
+                    }
+                }
+                for (a, before_a) in &at_zero {
+                    for (b, before_b) in &at_zero {
+                        let after = |grey: &str| moved.iter().find(|(n, _)| *n == grey).unwrap().1;
+                        let lightness = |c: u32| Hsla::from(color(c)).l;
+                        assert_eq!(
+                            (after(a) & 0xff) as i32 - (after(b) & 0xff) as i32,
+                            (*before_a & 0xff) as i32 - (*before_b & 0xff) as i32,
+                            "{name} at {step}: the step from {b} to {a} changed"
+                        );
+                        assert_eq!(
+                            lightness(*before_a).total_cmp(&lightness(*before_b)),
+                            lightness(after(a)).total_cmp(&lightness(after(b))),
+                            "{name} at {step}: {a} and {b} changed order"
+                        );
+                    }
+                }
+            }
+            // A raised box stays lighter than the base, and a well on the
+            // side of it it is at 0; the ribbon's base-coloured buttons stay
+            // on their side of its command area.
+            for step in brightness_range(&p) {
+                let q = brightened(&p, step);
+                assert!(q.raised > q.base, "{name} at {step}: raised isn't lighter");
+                assert_eq!(
+                    q.well < q.base,
+                    p.well < p.base,
+                    "{name} at {step}: the well"
+                );
+                assert_eq!(
+                    q.base > q.ribbon,
+                    p.base > p.ribbon,
+                    "{name} at {step}: the ribbon's buttons turned"
+                );
+            }
+        }
+        // A step is 2% of the lightness, 5.1 of 255, rounded half away from 0.
+        assert_eq!(
+            (-10..=10).map(brightness_shift).collect::<Vec<_>>(),
+            [
+                -51, -46, -41, -36, -31, -26, -20, -15, -10, -5, 0, 5, 10, 15, 20, 26, 31, 36, 41,
+                46, 51
+            ]
+        );
+    }
+
+    /// The range each mode allows is worked out, not written down: it runs
+    /// from 0 out to the last step at which no grey clips below black or
+    /// above white and every text keeps the contrast the theme asks of it on
+    /// every surface; the next step either way, within -10 to +10, breaks
+    /// one of them.
+    #[test]
+    fn brightness_stops_before_clipping_or_losing_contrast() {
+        use super::{
+            BRIGHTNESS_LIMIT, brightened, brightness_allowed, brightness_range, brightness_shift,
+            greys, keeps_contrast, mode_brightness_range,
+        };
+        let clips = |p: &Palette, step: i32| {
+            greys(p).into_iter().any(|(_, grey)| {
+                let v = (grey & 0xff) as i32 + brightness_shift(step);
+                !(0..=255).contains(&v)
+            })
+        };
+        let contrast_holds = |p: &Palette| {
+            [p.text, p.text_secondary].into_iter().all(|text| {
+                [p.base, p.recessed, p.well, p.overlay]
+                    .into_iter()
+                    .all(|surface| contrast(text, surface) >= 4.5)
+            }) && [p.raised, p.hover, p.pressed, p.selected]
+                .into_iter()
+                .all(|control| contrast(p.text, control) >= 4.)
+                && [
+                    p.text_tertiary,
+                    p.success,
+                    p.warning,
+                    p.error,
+                    p.accent,
+                    p.orange,
+                ]
+                .into_iter()
+                .all(|hue| contrast(hue, p.base) >= 3.)
+        };
+        for (name, dark, p, expected) in [
+            ("dark", true, DARK, -3..=1),
+            ("light", false, LIGHT, -4..=2),
+        ] {
+            let range = brightness_range(&p);
+            assert_eq!(range, expected, "{name}'s range");
+            assert_eq!(mode_brightness_range(dark), range);
+            for step in range.clone() {
+                let q = brightened(&p, step);
+                assert!(!clips(&p, step), "{name} at {step} clips");
+                assert!(
+                    contrast_holds(&q) && keeps_contrast(&q),
+                    "{name} at {step} loses contrast"
+                );
+            }
+            for beyond in [*range.start() - 1, *range.end() + 1] {
+                assert!(!brightness_allowed(&p, beyond), "{name} allows {beyond}");
+                if beyond.abs() <= BRIGHTNESS_LIMIT {
+                    assert!(
+                        clips(&p, beyond) || !contrast_holds(&brightened(&p, beyond)),
+                        "{name} stops at {beyond} for no reason"
+                    );
+                }
+            }
+        }
+        // Dark mode's darkest grey would go below black first; its secondary
+        // text would lose its contrast first the other way. Light mode's well
+        // would go past white first; its tertiary text the other way.
+        assert!(clips(&DARK, -4) && !contrast_holds(&brightened(&DARK, 2)));
+        assert!(clips(&LIGHT, 3) && !contrast_holds(&brightened(&LIGHT, -5)));
+    }
+
+    /// Brightness moves only the greys: text, the accent, the status and
+    /// other hues, and the strengths of what is laid over the surfaces are
+    /// the same at every step.
+    #[test]
+    fn brightness_leaves_text_and_hues_alone() {
+        use super::{BRIGHTNESS_LIMIT, brightened};
+        for p in [DARK, LIGHT] {
+            for step in -BRIGHTNESS_LIMIT..=BRIGHTNESS_LIMIT {
+                let q = brightened(&p, step);
+                let kept = |p: &Palette| {
+                    (
+                        [
+                            p.text,
+                            p.text_secondary,
+                            p.text_tertiary,
+                            p.text_disabled,
+                            p.accent,
+                            p.accent_fill,
+                            p.success,
+                            p.warning,
+                            p.error,
+                            p.purple,
+                            p.cyan,
+                            p.orange,
+                        ],
+                        [p.dim, p.bevel_light, p.bevel_shade],
+                    )
+                };
+                assert_eq!(kept(&q), kept(&p), "at {step}");
+            }
+            assert_eq!(brightened(&p, 0), p, "0 isn't the palette as given");
+        }
+    }
+
+    /// Setting a mode's brightness moves the palette and gpui-kit's theme at
+    /// once, its text as it was; each mode keeps its own, starting at 0; and
+    /// a setting past what the mode allows stops at its end.
+    #[gpui_kit::test]
+    fn each_mode_keeps_its_own_brightness(cx: &mut TestAppContext) {
+        use super::{brightened, brightness, palette, set_brightness};
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            super::init(cx);
+            Theme::change(ThemeMode::Dark, None, cx);
+            assert_eq!(brightness(cx), 0);
+            assert_eq!(set_brightness(true, 1, cx), 1);
+            assert_eq!(*palette(cx), brightened(&DARK, 1));
+            let theme = Theme::global(cx);
+            assert_eq!(theme.background, color(0x494949), "the base didn't move");
+            assert_eq!(theme.foreground, color(DARK.text), "the text moved");
+
+            Theme::change(ThemeMode::Light, None, cx);
+            assert_eq!(brightness(cx), 0, "light mode took dark mode's");
+            assert_eq!(*palette(cx), LIGHT);
+            assert_eq!(set_brightness(false, -10, cx), -4, "past the end");
+            assert_eq!(Theme::global(cx).background, color(LIGHT.base - 0x141414));
+
+            Theme::change(ThemeMode::Dark, None, cx);
+            assert_eq!(brightness(cx), 1, "dark mode lost its own");
+            assert_eq!(Theme::global(cx).background, color(0x494949));
+            assert_eq!(set_brightness(true, 5, cx), 1, "past the end");
+            assert_eq!(set_brightness(true, 0, cx), 0);
+            assert_eq!(Theme::global(cx).background, color(DARK.base));
+        });
     }
 
     /// gpui-kit's theme takes its colours from the palette in each mode.

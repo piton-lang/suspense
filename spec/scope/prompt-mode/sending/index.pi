@@ -24,7 +24,7 @@ shape PromptSendingShape:
         attached to it. Sending is never blocked by the harness working.
 
     tasks:
-        A task, a prompt in Code, Chain, or Spec, is sent straight away while
+        A task, a prompt in Code, Chain, Spec, or Freeform, is sent straight away while
         the harness is free. While the harness is working, it waits in the
         @{PromptEditor}'s queue instead, in the order it was sent, keeping its
         mode and attachments, until its turn comes.
@@ -45,7 +45,9 @@ shape PromptSendingShape:
     sendingToATask:
         While a task is running, more can be sent to it, as to a terminal
         session, from the @{ChatInputScope}'s "Send to task", as it says. What
-        is sent is written as a hidden anchor and compiled like any prompt, its
+        is sent is written as a hidden anchor and compiled like any prompt,
+        unless the task was sent from Freeform, when it goes just as it was
+        typed, with its attachments, its
         references, attachments, and Slice toggle included, so it can reference
         the spec, but the spec isn't built first, and its systemPrompt isn't
         sent, since the run already has the one it began with. It goes to the
@@ -133,3 +135,63 @@ shape PromptSendingShape:
         prompt and final output, and its header shows, beneath the hidden
         anchor's name, that it was sent from Code. A Spec task sent to Code is
         sent with Code's system prompt alone.
+
+        A task that has been sent to the other mode no longer offers to be
+        sent there once that has succeeded, and every task sent in Code or
+        Spec alone keeps its button in the same place either way: once the
+        task sent from it has finished as Done, its Send to Spec or Send to
+        Code button is greyed out and disabled, in the latest task's header
+        and in its heading among the previous tasks, its tooltip reading
+        "Sent to Spec" or "Sent to Code". The batch actions neither count nor send
+        it, though it can still be selected. While the task sent from it is
+        waiting in the queue, building, compiling, or running, the button is
+        disabled too, its tooltip reading "Being sent to Spec" or "Being sent
+        to Code", so it isn't sent twice. If that task fails, is cancelled, or
+        is left "Not recorded", as when the application closed while it ran,
+        or a queued prompt sent from it is cancelled, the button is enabled
+        again. A resend of the task sent from it counts the same: once any
+        task sent from it finishes as Done, the button is disabled. Every task
+        sent to the other mode, from Code or from Spec, says in its hidden
+        anchor, saved before it runs and in the queue as much as in the
+        history, which task it was sent from, by that task's hidden anchor's
+        name, so this holds for queued prompts and for tasks restored from the
+        history, and for as long as the task it was sent as is there. Tasks
+        sent before this was recorded say nothing of it, and the tasks they
+        were sent from offer to be sent again. That name is never sent to the
+        harness. Resend is still offered either way.
+
+        A task that was itself sent from the other mode is complete: its
+        prompt has been through both the code and the spec, so it never offers
+        to be sent back. Its Send to Spec or Send to Code button is greyed out
+        and disabled for good, in the latest task's header and in its heading
+        among the previous tasks, its tooltip reading "Complete, sent here
+        from Code" or "Complete, sent here from Spec". Being complete wins
+        over every other state, sent, being sent, or marked done. Right-clicking it opens no
+        menu, since it can't be marked not done, and the batch actions neither
+        count nor send it, though it can still be selected. A resend of such a
+        task is complete in the same way, since it remembers the task it was
+        first sent from.
+
+        A task can also be marked as sent by hand, for a prompt whose other
+        half was written some other way. Right-clicking its Send to Spec or
+        Send to Code button, enabled or not, in the latest task's header or in
+        its heading among the previous tasks, opens a small context menu there
+        with "Mark as done", with a check icon, or, on a task marked so, "Mark
+        as not done", with a rotating-arrow icon; one menu is open at a time,
+        and closing it gives the focus back. Only these buttons have it, so
+        questions, and Chain and Freeform tasks, which have none, never do. Marking
+        it done greys out and disables its button as though it had been sent
+        and finished, its tooltip reading "Marked as done" unless it has also
+        been sent, and sends
+        nothing; marking it not done enables it again, unless a task sent
+        from it is still under way or finished as Done. Right-clicking never
+        opens or closes the item. The mark is saved with the task in the
+        project's data, as the @{ProjectDataScope} says, in its history
+        record, changing nothing else in it, so it is kept across restarts. A
+        task with no record yet, left "Not recorded", is given a record
+        holding only the mark, and still reloads as "Not recorded", marked. A
+        task marked while it runs keeps the mark in memory until its run
+        saves its record, which saves the mark with it, and a mark changed
+        while that record is being saved is saved again after it. The batch
+        actions treat a task marked done as one already sent: they neither
+        count nor send it, though it can still be selected.

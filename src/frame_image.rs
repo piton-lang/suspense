@@ -81,3 +81,39 @@ pub fn pixels(window: &Window) -> (usize, usize, Vec<[f32; 3]>) {
     }
     (w, h, px)
 }
+
+/// The window's last frame, drawn once, for reading the colour at points in
+/// it as a test would see them: every quad laid over those beneath it.
+pub struct Frame {
+    width: usize,
+    height: usize,
+    pixels: Vec<[f32; 3]>,
+    scale: f32,
+}
+
+impl Frame {
+    pub fn of(window: &Window) -> Self {
+        let (width, height, pixels) = self::pixels(window);
+        Self {
+            width,
+            height,
+            pixels,
+            scale: window.scale_factor(),
+        }
+    }
+
+    /// The colour at `point`, in logical pixels, as 0xRRGGBB; black outside
+    /// what was drawn.
+    pub fn at(&self, point: gpui_kit::Point<gpui_kit::Pixels>) -> u32 {
+        let (x, y) = (
+            (point.x.as_f32() * self.scale) as usize,
+            (point.y.as_f32() * self.scale) as usize,
+        );
+        if x >= self.width || y >= self.height {
+            return 0;
+        }
+        self.pixels[y * self.width + x].iter().fold(0, |rgb, c| {
+            rgb << 8 | (c.clamp(0., 1.) * 255.).round() as u32
+        })
+    }
+}

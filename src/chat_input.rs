@@ -14,18 +14,20 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonVariants};
 use gpui_kit::component::input::{
     CompletionProvider, Editor, EditorState, Enter, Escape, IndentInline, InputEvent, MoveDown,
-    MoveUp, OutdentInline, Rope,
+    MoveUp, OutdentInline, Paste, Rope,
 };
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{
-    ActiveTheme, Disableable, Icon, Selectable as _, Sizable as _, h_flex, v_flex,
+    ActiveTheme, Disableable, Icon, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use lsp_types::{CompletionContext, CompletionResponse};
 
+use crate::attached_image::{self, AttachedImage};
 use crate::completion_menu::CompletionMenu;
 use crate::growing_input::GrowToFit;
 use crate::harness_mentions;
@@ -144,6 +146,8 @@ pub enum QueuedEdit {
         text: String,
         mode: SendMode,
         attached_text: Vec<String>,
+        /// The images attached to it, not yet saved.
+        attached_images: Vec<AttachedImage>,
     },
     Cancelled,
 }
@@ -453,6 +457,9 @@ pub struct Submit {
     pub mode: SendMode,
     /// The text attached to the prompt, in the order it was attached.
     pub attached_text: Vec<String>,
+    /// The images attached to the prompt, in the order they were attached,
+    /// saved in the project's data as the prompt is sent or queued.
+    pub attached_images: Vec<AttachedImage>,
     /// Queued on purpose, rather than sent if the harness is free.
     pub queue: bool,
     /// Sent to the task running, as more for it to do, rather than as a task
@@ -464,8 +471,49 @@ pub struct Submit {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Attachment {
     pub id: usize,
-    pub text: String,
+    pub attached: Attaching,
 }
+
+/// What an attachment is: a piece of text, or an image.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Attaching {
+    Text(String),
+    Image(AttachedImage),
+}
+
+impl Attachment {
+    /// Its text, for attached text.
+    pub fn text(&self) -> Option<&str> {
+        match &self.attached {
+            Attaching::Text(text) => Some(text),
+            Attaching::Image(_) => None,
+        }
+    }
+
+    /// Its image, for an attached image.
+    pub fn image(&self) -> Option<&AttachedImage> {
+        match &self.attached {
+            Attaching::Image(image) => Some(image),
+            Attaching::Text(_) => None,
+        }
+    }
+}
+
+/// The text and the images of `attachments`, each in the order attached.
+fn split_attachments(attachments: Vec<Attachment>) -> (Vec<String>, Vec<AttachedImage>) {
+    let mut text = Vec::new();
+    let mut images = Vec::new();
+    for attachment in attachments {
+        match attachment.attached {
+            Attaching::Text(piece) => text.push(piece),
+            Attaching::Image(image) => images.push(image),
+        }
+    }
+    (text, images)
+}
+
+/// The side of an attached image's thumbnail in its row.
+const ROW_THUMBNAIL: Pixels = px(20.);
 
 pub struct ChatInput {
     editor: Entity<EditorState>,
@@ -631,12 +679,88 @@ impl ChatInput {
 
     /// Attaches `text` to the prompt, after anything already attached.
     pub fn attach_text(&mut self, text: String, cx: &mut Context<Self>) {
+        self.attach(Attaching::Text(text), cx);
+    }
+
+    /// Attaches `image` to the prompt, after anything already attached.
+    pub fn attach_image(&mut self, image: AttachedImage, cx: &mut Context<Self>) {
+        self.attach(Attaching::Image(image), cx);
+    }
+
+    fn attach(&mut self, attached: Attaching, cx: &mut Context<Self>) {
         self.next_attachment_id += 1;
         self.attachments.push(Attachment {
             id: self.next_attachment_id,
-            text,
+            attached,
         });
         cx.notify();
+    }
+
+    /// Attaches the image files at `paths`, dropped onto the chat input or
+    /// chosen with its Attach images button, in order. Each that isn't an
+    /// image, or is too large, is left out, a notification saying why.
+    pub fn attach_paths(
+        &mut self,
+        paths: &[std::path::PathBuf],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        for path in paths {
+            match AttachedImage::load(path) {
+                Ok(image) => self.attach_image(image, cx),
+                Err(rejected) => Self::not_attached(&rejected, window, cx),
+            }
+        }
+    }
+
+    /// Attaches the images on the clipboard, pasted into the text input;
+    /// whether there were any, in which case nothing is put in the text.
+    fn paste_images(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let Some(item) = cx.read_from_clipboard() else {
+            return false;
+        };
+        let images: Vec<Image> = item
+            .entries()
+            .iter()
+            .filter_map(|entry| match entry {
+                ClipboardEntry::Image(image) => Some(image.clone()),
+                _ => None,
+            })
+            .collect();
+        for image in &images {
+            match AttachedImage::pasted(image) {
+                Ok(image) => self.attach_image(image, cx),
+                Err(rejected) => Self::not_attached(&rejected, window, cx),
+            }
+        }
+        !images.is_empty()
+    }
+
+    /// Says why an image wasn't attached.
+    fn not_attached(rejected: &attached_image::Rejected, window: &mut Window, cx: &mut App) {
+        window.push_notification(
+            Notification::warning(rejected.message()).title("Not attached"),
+            cx,
+        );
+    }
+
+    /// Opens the platform's file picker for images to attach, several at
+    /// once, and attaches those chosen.
+    fn pick_images(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let picked = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: true,
+            prompt: Some("Attach".into()),
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(paths))) = picked.await else {
+                return;
+            };
+            this.update_in(cx, |this, window, cx| this.attach_paths(&paths, window, cx))
+                .ok();
+        })
+        .detach();
     }
 
     /// Removes the attachment `id`.
@@ -650,17 +774,64 @@ impl ChatInput {
         &self.attachments
     }
 
+    /// The images attached, as thumbnails in a row, for the preview to show
+    /// beneath the prompt as typed; none without any.
+    fn attached_thumbnails(&self, cx: &App) -> Option<AnyElement> {
+        let images: Vec<&AttachedImage> = self
+            .attachments
+            .iter()
+            .filter_map(Attachment::image)
+            .collect();
+        if images.is_empty() {
+            return None;
+        }
+        let theme = cx.theme();
+        let (border, radius) = (theme.border, theme.radius);
+        let row = h_flex()
+            .id("preview-images")
+            .flex_wrap()
+            .pt_2()
+            .gap_2()
+            .children(images.into_iter().enumerate().map(|(ix, image)| {
+                let source = ImageSource::Image(image.image.clone());
+                let (hover, name) = (source.clone(), image.label().to_string());
+                div()
+                    .id(("preview-image", ix))
+                    .flex_none()
+                    .size(px(56.))
+                    .overflow_hidden()
+                    .rounded(radius)
+                    .border_1()
+                    .border_color(border)
+                    .child(img(source).size_full().object_fit(ObjectFit::Cover))
+                    .tooltip(move |window, cx| {
+                        attached_image::larger(hover.clone(), Some(name.clone()), window, cx)
+                    })
+            }));
+        // Lets UI tests find the row; inert in normal builds.
+        Some(gpui_kit::TestSupportExt::test_support(row).into_any_element())
+    }
+
     /// The attachments listed above the input, one row each.
     fn render_attachments(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         if self.attachments.is_empty() {
             return None;
         }
         let theme = cx.theme();
+        let (radius, border, background, muted) = (
+            theme.radius,
+            theme.border,
+            theme.background,
+            theme.muted_foreground,
+        );
         let rows = self.attachments.iter().map(|attachment| {
             let id = attachment.id;
-            let lines = attachment.text.lines().count().max(1);
-            let first_line = attachment
-                .text
+            if let Some(image) = attachment.image() {
+                return self.render_image_row(id, image, cx);
+            }
+            let text = attachment.text().unwrap_or_default();
+            let lines = text.lines().count().max(1);
+            let first_line = text
                 .lines()
                 .find(|line| !line.trim().is_empty())
                 .unwrap_or_default()
@@ -671,23 +842,19 @@ impl ChatInput {
                 .gap_2()
                 .px_2()
                 .py_1()
-                .rounded(theme.radius)
+                .rounded(radius)
                 .border_1()
-                .border_color(theme.border)
-                .bg(theme.background)
+                .border_color(border)
+                .bg(background)
                 .text_sm()
-                .child(
-                    Icon::new(IconName::TextQuote)
-                        .small()
-                        .text_color(theme.muted_foreground),
-                )
+                .child(Icon::new(IconName::TextQuote).small().text_color(muted))
                 .child(div().flex_1().min_w_0().truncate().child(first_line))
                 .when(lines > 1, |row| {
                     row.child(
                         div()
                             .flex_none()
                             .text_xs()
-                            .text_color(theme.muted_foreground)
+                            .text_color(muted)
                             .child(format!("{lines} lines")),
                     )
                 })
@@ -702,11 +869,71 @@ impl ChatInput {
                         ),
                 );
             // Lets UI tests find the row; inert in normal builds.
-            gpui_kit::TestSupportExt::test_support(row)
+            gpui_kit::TestSupportExt::test_support(row).into_any_element()
         });
         let list = v_flex().id("attachments").gap_1().children(rows);
         // Lets UI tests find the list; inert in normal builds.
         Some(gpui_kit::TestSupportExt::test_support(list).into_any_element())
+    }
+
+    /// An attached image's row: a small thumbnail, which shows the image
+    /// larger while hovered, its file's name, or "Pasted image", its size in
+    /// pixels, muted, and the button removing it.
+    fn render_image_row(
+        &self,
+        id: usize,
+        image: &AttachedImage,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = cx.theme();
+        let source = ImageSource::Image(image.image.clone());
+        let (hover, name) = (source.clone(), image.label().to_string());
+        let row = h_flex()
+            .id(("attachment", id))
+            .gap_2()
+            .px_2()
+            .py_1()
+            .rounded(theme.radius)
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.background)
+            .text_sm()
+            .child(gpui_kit::TestSupportExt::test_support(
+                div()
+                    .id(("attachment-thumbnail", id))
+                    .flex_none()
+                    .size(ROW_THUMBNAIL)
+                    .overflow_hidden()
+                    .rounded(theme.radius)
+                    .child(img(source).size_full().object_fit(ObjectFit::Cover))
+                    .tooltip(move |window, cx| {
+                        attached_image::larger(hover.clone(), Some(name.clone()), window, cx)
+                    }),
+            ))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .child(image.label().to_string()),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(image.size_label()),
+            )
+            .child(
+                Button::new(("remove-attachment", id))
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::X)
+                    .tooltip("Remove this attachment")
+                    .on_click(cx.listener(move |this, _, _, cx| this.remove_attachment(id, cx))),
+            );
+        // Lets UI tests find the row; inert in normal builds.
+        gpui_kit::TestSupportExt::test_support(row).into_any_element()
     }
 
     /// The project's `piton lsp` session, once it is running.
@@ -827,7 +1054,7 @@ impl ChatInput {
             attached_text: self
                 .attachments
                 .iter()
-                .map(|attachment| attachment.text.clone())
+                .filter_map(|attachment| attachment.text().map(str::to_string))
                 .collect(),
         });
         cx.notify();
@@ -849,6 +1076,11 @@ impl ChatInput {
             Err(error) => Preview::Failed(error),
         });
         cx.notify();
+    }
+
+    #[cfg(test)]
+    pub fn focus_editor_for_test(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor.read(cx).focus_handle(cx).focus(window, cx);
     }
 
     #[cfg(test)]
@@ -1016,6 +1248,7 @@ impl ChatInput {
                             None,
                             cx,
                         ))
+                        .children(self.attached_thumbnails(cx))
                         .children(slices)
                         .into_any_element(),
                 )
@@ -1247,11 +1480,15 @@ impl ChatInput {
         &mut self,
         text: String,
         attached_text: Vec<String>,
+        attached_images: Vec<AttachedImage>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         for text in attached_text {
             self.attach_text(text, cx);
+        }
+        for image in attached_images {
+            self.attach_image(image, cx);
         }
         let written = self.editor.read(cx).value().to_string();
         let text = if written.trim().is_empty() {
@@ -1299,6 +1536,7 @@ impl ChatInput {
         text: String,
         mode: SendMode,
         attached_text: Vec<String>,
+        attached_images: Vec<AttachedImage>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1312,6 +1550,9 @@ impl ChatInput {
         };
         for text in attached_text {
             self.attach_text(text, cx);
+        }
+        for image in attached_images {
+            self.attach_image(image, cx);
         }
         let tab = TABS
             .iter()
@@ -1390,16 +1631,15 @@ impl ChatInput {
             return;
         }
         if self.editing.is_some() {
-            let attached_text = std::mem::take(&mut self.attachments)
-                .into_iter()
-                .map(|attachment| attachment.text)
-                .collect();
+            let (attached_text, attached_images) =
+                split_attachments(std::mem::take(&mut self.attachments));
             let mode = TABS[self.selected_tab];
             self.end_editing(window, cx);
             cx.emit(QueuedEdit::Saved {
                 text,
                 mode,
                 attached_text,
+                attached_images,
             });
             return;
         }
@@ -1411,14 +1651,13 @@ impl ChatInput {
         self.editor
             .update(cx, |editor, cx| editor.set_value("", window, cx));
         // The attachments go with the prompt.
-        let attached_text = std::mem::take(&mut self.attachments)
-            .into_iter()
-            .map(|attachment| attachment.text)
-            .collect();
+        let (attached_text, attached_images) =
+            split_attachments(std::mem::take(&mut self.attachments));
         cx.emit(Submit {
             text,
             mode: TABS[self.selected_tab],
             attached_text,
+            attached_images,
             queue: how == Sent::Queued,
             to_task: how == Sent::ToTask,
         });
@@ -1810,6 +2049,23 @@ impl Render for ChatInput {
                     .tooltip(new_conversation_tooltip)
                     .on_click(cx.listener(|_, _, _, cx| cx.emit(NewConversation))),
             );
+        // At the left of the bar's bottom line, a button choosing images to
+        // attach.
+        let attach_images = h_flex()
+            .flex_none()
+            .self_stretch()
+            .items_center()
+            .pl_2()
+            .border_b_1()
+            .border_color(cx.theme().border)
+            .child(
+                Button::new("attach-images")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::Image)
+                    .tooltip("Attach images")
+                    .on_click(cx.listener(|this, _, window, cx| this.pick_images(window, cx))),
+            );
         let tabs = gpui_kit::TestSupportExt::test_support(
             div()
                 .id("chat-tabs")
@@ -1821,6 +2077,7 @@ impl Render for ChatInput {
                 .child(spec)
                 .child(ask)
                 .child(freeform)
+                .child(attach_images)
                 .child(help)
                 .child(session),
         );
@@ -1958,6 +2215,18 @@ impl Render for ChatInput {
                 if this.preview.is_some() {
                     this.submit(window, cx);
                 }
+            }))
+            // Pasting an image attaches it rather than putting anything in
+            // the text.
+            .capture_action(cx.listener(|this, _: &Paste, window, cx| {
+                if this.paste_images(window, cx) {
+                    cx.stop_propagation();
+                }
+            }))
+            // Image files dropped from the file manager are attached.
+            .drag_over::<ExternalPaths>(|style, _, _, cx| style.bg(cx.theme().drop_target))
+            .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
+                this.attach_paths(paths.paths(), window, cx)
             }))
             // Tab and Shift+Tab move focus on, rather than indenting.
             .capture_action(
@@ -2973,6 +3242,7 @@ mod tests {
                             text,
                             mode,
                             attached_text,
+                            ..
                         } => Some((text.clone(), *mode, attached_text.clone())),
                         QueuedEdit::Cancelled => None,
                     })
@@ -3029,6 +3299,7 @@ mod tests {
                     "Queued".into(),
                     SendMode::Code,
                     vec!["theirs".into()],
+                    Vec::new(),
                     window,
                     cx,
                 )
@@ -3037,7 +3308,10 @@ mod tests {
             window.find("editing-queued");
             assert_eq!(text(cx), "Queued");
             assert_eq!(chat_input.read(cx).mode(), SendMode::Code);
-            assert_eq!(chat_input.read(cx).attachments()[0].text, "theirs");
+            assert_eq!(
+                chat_input.read(cx).attachments()[0].text().unwrap(),
+                "theirs"
+            );
             window.press("ctrl-shift-enter", cx);
             assert!(
                 !chat_input.read(cx).send_menu_open(),
@@ -3049,7 +3323,7 @@ mod tests {
             assert!(window.try_find("editing-queued").is_none());
             assert_eq!(text(cx), "Why?");
             assert_eq!(chat_input.read(cx).mode(), SendMode::Ask);
-            assert_eq!(chat_input.read(cx).attachments()[0].text, "mine");
+            assert_eq!(chat_input.read(cx).attachments()[0].text().unwrap(), "mine");
         })
         .unwrap();
         cx.run_until_parked();
@@ -3057,7 +3331,15 @@ mod tests {
 
         cx.update_window(handle, |_, window, cx| {
             chat_input.update(cx, |input, cx| {
-                input.begin_editing(1, "Queued".into(), SendMode::Spec, Vec::new(), window, cx);
+                input.begin_editing(
+                    1,
+                    "Queued".into(),
+                    SendMode::Spec,
+                    Vec::new(),
+                    Vec::new(),
+                    window,
+                    cx,
+                );
                 input.set_text_for_test("Queued, edited", window, cx);
             });
             window.press("ctrl-enter", cx);
@@ -3199,13 +3481,22 @@ mod tests {
         // written since, with what was attached.
         cx.update_window(handle, |_, window, cx| {
             chat_input.update(cx, |input, cx| {
-                input.take_back("Also this".into(), vec!["the log".into()], window, cx)
+                input.take_back(
+                    "Also this".into(),
+                    vec!["the log".into()],
+                    Vec::new(),
+                    window,
+                    cx,
+                )
             });
             assert_eq!(
                 chat_input.read(cx).editor.read(cx).value().as_ref(),
                 "Also this\n\nLate"
             );
-            assert_eq!(chat_input.read(cx).attachments()[0].text, "the log");
+            assert_eq!(
+                chat_input.read(cx).attachments()[0].text().unwrap(),
+                "the log"
+            );
         })
         .unwrap();
     }
@@ -3279,7 +3570,7 @@ mod tests {
                 input
                     .attachments()
                     .iter()
-                    .map(|attachment| attachment.text.clone())
+                    .map(|attachment| attachment.text().unwrap_or_default().to_string())
                     .collect::<Vec<_>>()
             })
         };
@@ -3303,6 +3594,196 @@ mod tests {
             )]
         );
         assert!(texts(cx).is_empty(), "sending left the attachments behind");
+    }
+
+    /// Images are attached by pasting one into the text input, which puts
+    /// nothing in the text, by dropping image files onto the chat input, and
+    /// by choosing them, several at once, with the Attach images button at
+    /// the left of the bar's bottom line. A file that isn't an image, or is
+    /// over 5 MB, isn't attached, a notification saying why. Each image's
+    /// row shows its thumbnail, its name, or "Pasted image", and its size in
+    /// pixels, and is removed as text is; images and text are listed, and
+    /// sent, in the order they were attached, and pasted text still goes in
+    /// the text.
+    #[gpui_kit::test]
+    async fn images_are_pasted_dropped_or_chosen(cx: &mut TestAppContext) {
+        use gpui_kit::component::WindowExt as _;
+        use gpui_kit::{ClipboardItem, Image, ImageFormat};
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            super::bind_keys(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut chat_input = None;
+        let window = cx.add_window(|window, cx| {
+            let input = cx.new(|cx| ChatInput::new(window, cx));
+            chat_input = Some(input.clone());
+            Root::new(cx.new(|_| AtBottom(input)), window, cx)
+        });
+        let chat_input = chat_input.unwrap();
+        let handle = window.into();
+        let submitted = Rc::new(std::cell::RefCell::new(Vec::new()));
+        let _subscription = cx.update(|cx| {
+            let submitted = submitted.clone();
+            cx.subscribe(&chat_input, move |_, submit: &super::Submit, _| {
+                submitted.borrow_mut().push((
+                    submit.attached_text.clone(),
+                    submit
+                        .attached_images
+                        .iter()
+                        .map(|image| image.label().to_string())
+                        .collect::<Vec<_>>(),
+                ))
+            })
+        });
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("prompt-editor").is_some()
+        })
+        .await;
+        let dir = crate::attached_image::tests::scratch("chat-input");
+        let png = crate::attached_image::tests::png;
+        let (shot, notes, large, other) = (
+            dir.join("shot.png"),
+            dir.join("notes.txt"),
+            dir.join("large.png"),
+            dir.join("other.png"),
+        );
+        std::fs::write(&shot, png(800, 600, "shot")).unwrap();
+        std::fs::write(&notes, "not an image").unwrap();
+        let mut bytes = png(10, 10, "large");
+        bytes.resize(crate::attached_image::MAX_BYTES as usize + 1, 0);
+        std::fs::write(&large, bytes).unwrap();
+        std::fs::write(&other, png(1, 2, "other")).unwrap();
+        let labels = |cx: &mut TestAppContext| {
+            chat_input.read_with(cx, |input, _| {
+                input
+                    .attachments()
+                    .iter()
+                    .map(|attachment| match &attachment.attached {
+                        super::Attaching::Text(text) => format!("text {text}"),
+                        super::Attaching::Image(image) => {
+                            format!("image {} {}", image.label(), image.size_label())
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+        };
+        let notifications = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| window.notifications(cx).len())
+                .unwrap()
+        };
+
+        // Pasted, an image is attached, and nothing goes in the text.
+        chat_input.update(cx, |input, cx| input.attach_text("before".into(), cx));
+        cx.write_to_clipboard(ClipboardItem::new_image(&Image::from_bytes(
+            ImageFormat::Png,
+            png(4, 3, "pasted"),
+        )));
+        cx.update_window(handle, |_, window, cx| {
+            let editor = chat_input.read(cx).editor.clone();
+            editor.read(cx).focus_handle(cx).focus(window, cx);
+            window.dispatch_action(Box::new(super::Paste), cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(labels(cx), ["text before", "image Pasted image 4 × 3"]);
+        assert_eq!(
+            chat_input.read_with(cx, |input, cx| input.editor_text_for_test(cx)),
+            ""
+        );
+        // Text still pastes as text.
+        cx.write_to_clipboard(ClipboardItem::new_string("typed".into()));
+        cx.update_window(handle, |_, window, cx| {
+            window.dispatch_action(Box::new(super::Paste), cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(
+            chat_input.read_with(cx, |input, cx| input.editor_text_for_test(cx)),
+            "typed"
+        );
+        assert_eq!(labels(cx).len(), 2);
+
+        // Dropped: only the image up to 5 MB is attached, a notification
+        // saying why each other wasn't.
+        assert_eq!(notifications(cx), 0);
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| {
+                input.attach_paths(&[notes.clone(), shot.clone(), large.clone()], window, cx)
+            })
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(
+            labels(cx),
+            [
+                "text before",
+                "image Pasted image 4 × 3",
+                "image shot.png 800 × 600"
+            ]
+        );
+        assert_eq!(notifications(cx), 2);
+
+        // Chosen with the button, at the left of the bar's bottom line, from
+        // a picker for several files at once.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let (button, help, freeform) = (
+                window.find("attach-images").bounds(),
+                window.find("tab-help").bounds(),
+                window.within("freeform-tab").find(0usize).bounds(),
+            );
+            assert!(
+                button.left() >= freeform.right() - gpui_kit::px(0.5)
+                    && button.right() <= help.left() + gpui_kit::px(0.5),
+                "{button:?} isn't between the tabs {freeform:?} and the help {help:?}"
+            );
+            window.click("attach-images", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(cx.did_prompt_for_paths());
+        cx.simulate_path_prompt_response(|options| {
+            assert!(options.files && options.multiple && !options.directories);
+            Some(vec![other.clone(), notes.clone()])
+        });
+        cx.run_until_parked();
+        assert_eq!(labels(cx).last().unwrap(), "image other.png 1 × 2");
+        assert_eq!(notifications(cx), 3);
+        chat_input.update(cx, |input, cx| input.attach_text("after".into(), cx));
+
+        // Each image's row: its thumbnail, name, and size; removable.
+        let ids: Vec<usize> = chat_input.read_with(cx, |input, _| {
+            input.attachments().iter().map(|a| a.id).collect()
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find(("attachment-thumbnail", ids[1])).is_some());
+            assert!(window.try_find(("attachment-thumbnail", ids[0])).is_none());
+            window.click(("remove-attachment", ids[3]), cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+
+        // Sent in the order attached, text and images apart.
+        cx.update_window(handle, |_, window, cx| {
+            #[cfg(target_os = "macos")]
+            window.press("cmd-enter", cx);
+            #[cfg(not(target_os = "macos"))]
+            window.press("ctrl-enter", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(
+            *submitted.borrow(),
+            [(
+                vec!["before".to_string(), "after".to_string()],
+                vec!["Pasted image".to_string(), "shot.png".to_string()]
+            )]
+        );
+        assert!(labels(cx).is_empty(), "sending left the attachments behind");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     type Bounds = gpui_kit::Bounds<gpui_kit::Pixels>;

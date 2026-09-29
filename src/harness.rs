@@ -15,6 +15,7 @@ use futures::channel::mpsc;
 use serde_json::{Value, json};
 
 use crate::agent::{self, Agent};
+use crate::attached_image;
 use crate::harness_mentions;
 use crate::usage::{PlanLimit, Spend, Tally};
 
@@ -116,7 +117,19 @@ pub fn send(
     resume: Option<Resume>,
     project_dir: PathBuf,
 ) -> mpsc::UnboundedReceiver<HarnessEvent> {
-    start(prompt, system_prompt, resume, project_dir, false).events
+    send_with_images(prompt, system_prompt, Vec::new(), resume, project_dir)
+}
+
+/// Runs the harness once as [`send`] does, giving it `images` alongside the
+/// prompt, in order, as it takes images (see [`run`]).
+pub fn send_with_images(
+    prompt: String,
+    system_prompt: Option<String>,
+    images: Vec<PathBuf>,
+    resume: Option<Resume>,
+    project_dir: PathBuf,
+) -> mpsc::UnboundedReceiver<HarnessEvent> {
+    start(prompt, system_prompt, images, resume, project_dir, false).events
 }
 
 /// A task's run of the harness: its events, where the harness can be fed
@@ -131,19 +144,22 @@ pub struct Run {
 /// be fed more while it works, as Claude Code can, its prompt is the first of
 /// a stream of messages and the run's feed sends it more. Such a run is over
 /// once the harness has answered every message sent to it; `codex exec` and
-/// `opencode run` read a single prompt, and have no feed.
+/// `opencode run` read a single prompt, and have no feed. The harness is
+/// given `images` alongside the prompt, in order.
 pub fn send_task(
     prompt: String,
     system_prompt: Option<String>,
+    images: Vec<PathBuf>,
     resume: Option<Resume>,
     project_dir: PathBuf,
 ) -> Run {
-    start(prompt, system_prompt, resume, project_dir, true)
+    start(prompt, system_prompt, images, resume, project_dir, true)
 }
 
 fn start(
     prompt: String,
     system_prompt: Option<String>,
+    images: Vec<PathBuf>,
     resume: Option<Resume>,
     project_dir: PathBuf,
     fed: bool,
@@ -162,6 +178,7 @@ fn start(
                 &program,
                 &prompt,
                 system_prompt.as_deref(),
+                &images,
                 resume.as_ref(),
                 &project_dir,
                 &tx,
@@ -345,17 +362,20 @@ impl Feed {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    /// Sends the run `compiled`, the message typed as `text`, which the
-    /// harness takes once it finishes what it is doing. Fails, sending
-    /// nothing, once the run is over or about to be: once its input is
-    /// closed. Blocks while the message is written.
-    pub fn send(&self, text: String, compiled: String) -> Result<()> {
+    /// Sends the run `compiled`, the message typed as `text`, with `images`
+    /// after it, which the harness takes once it finishes what it is doing.
+    /// Fails, sending nothing, once the run is over or about to be: once its
+    /// input is closed, or when an image can't be read. Blocks while the
+    /// message is written.
+    pub fn send(&self, text: String, compiled: String, images: &[PathBuf]) -> Result<()> {
+        // Read before the run's input is taken, which only writes.
+        let images = image_blocks(images)?;
         let mut feeding = self.lock();
         let Some(stdin) = feeding.stdin.as_mut() else {
             bail!("the task is over");
         };
         let written = stdin
-            .write_all(user_message(&compiled).as_bytes())
+            .write_all(user_message(&compiled, &images).as_bytes())
             .and_then(|()| stdin.flush());
         if let Err(err) = written {
             feeding.stdin = None;
@@ -421,18 +441,65 @@ impl Feed {
 }
 
 /// A message for a harness reading `--input-format stream-json`: a user
-/// message holding `text`, as a line of JSON.
-fn user_message(text: &str) -> String {
+/// message holding `text`, then `images`, image content blocks from
+/// [`image_blocks`], as a line of JSON.
+fn user_message(text: &str, images: &[Value]) -> String {
+    let content: Vec<Value> = std::iter::once(json!({ "type": "text", "text": text }))
+        .chain(images.iter().cloned())
+        .collect();
     let mut line = json!({
         "type": "user",
         "message": {
             "role": "user",
-            "content": [{ "type": "text", "text": text }],
+            "content": content,
         },
     })
     .to_string();
     line.push('\n');
     line
+}
+
+/// The images at `paths` as Claude Code's image content blocks, each
+/// base64-encoded with its media type, in order. Fails, naming it, on one
+/// that can't be read or isn't an image that can be attached.
+fn image_blocks(paths: &[PathBuf]) -> Result<Vec<Value>> {
+    use base64::Engine as _;
+    paths
+        .iter()
+        .map(|path| {
+            let bytes = std::fs::read(path)
+                .with_context(|| format!("could not read the attached image {}", path.display()))?;
+            let media_type = attached_image::media_type(&bytes).with_context(|| {
+                format!(
+                    "the attached image {} is not a PNG, JPEG, GIF, or WebP image",
+                    path.display()
+                )
+            })?;
+            Ok(json!({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": media_type,
+                    "data": base64::engine::general_purpose::STANDARD.encode(&bytes),
+                },
+            }))
+        })
+        .collect()
+}
+
+/// The arguments giving `agent` the images at `paths`, attached to the
+/// prompt: Codex takes an `--image` per image, and OpenCode a `--file` per
+/// image. Claude Code takes them in its input instead (see [`image_blocks`]).
+fn image_args(agent: Agent, paths: &[PathBuf]) -> Vec<std::ffi::OsString> {
+    let flag = match agent {
+        Agent::Claude => return Vec::new(),
+        Agent::Codex => "--image",
+        Agent::OpenCode => "--file",
+    };
+    paths
+        .iter()
+        .flat_map(|path| [flag.into(), path.clone().into_os_string()])
+        .collect()
 }
 
 /// How many messages a fed run was sent, its prompt the first, how many the
@@ -514,6 +581,7 @@ fn run(
     program: &Path,
     prompt: &str,
     system_prompt: Option<&str>,
+    images: &[PathBuf],
     resume: Option<&Resume>,
     project_dir: &Path,
     tx: &mpsc::UnboundedSender<HarnessEvent>,
@@ -527,8 +595,15 @@ fn run(
         (began == agent && (!resume.fork || agent == Agent::Claude))
             .then(|| (id.to_string(), resume.fork))
     });
+    // Every image is there to be given before anything is run; one that
+    // isn't fails the run, saying so.
+    for image in images {
+        if !image.is_file() {
+            bail!("the attached image {} is missing", image.display());
+        }
+    }
     let mut command = Command::new(program);
-    let mut input = prompt.to_string();
+    let mut input = prompt_as_given(agent, prompt, system_prompt);
     match agent {
         Agent::Claude => {
             command.args([
@@ -556,16 +631,30 @@ fn run(
                 command.args(["--append-system-prompt", system_prompt]);
             }
             // Fed, the prompt is the first of a stream of messages, each of
-            // which the harness replays as it takes it in.
+            // which the harness replays as it takes it in. Images go in the
+            // same message as the prompt, after it, so a run given any takes
+            // its prompt as a message even when it isn't fed.
             if feed.is_some() {
                 command.args(["--input-format", "stream-json", "--replay-user-messages"]);
-                input = user_message(prompt);
+                input = user_message(prompt, &image_blocks(images)?);
+            } else if !images.is_empty() {
+                command.args(["--input-format", "stream-json"]);
+                input = user_message(prompt, &image_blocks(images)?);
             }
         }
         Agent::Codex => {
             command.args(["exec", "--json", "--full-auto", "--skip-git-repo-check"]);
+            if resume.is_some() {
+                command.arg("resume");
+            }
+            if !images.is_empty() {
+                command.args(image_args(agent, images));
+                // `--image` takes any number of files, so the options end
+                // before the session and the prompt.
+                command.arg("--");
+            }
             if let Some((session, _)) = &resume {
-                command.args(["resume", session]);
+                command.arg(session);
             }
             // Read from standard input.
             command.arg("-");
@@ -575,12 +664,8 @@ fn run(
             if let Some((session, _)) = &resume {
                 command.args(["--session", session]);
             }
+            command.args(image_args(agent, images));
         }
-    }
-    if agent != Agent::Claude
-        && let Some(system_prompt) = system_prompt
-    {
-        input = with_system_prompt(prompt, system_prompt);
     }
     let name = invocation(agent);
     if stop.is_stopped() {
@@ -703,6 +788,20 @@ fn invocation(agent: Agent) -> &'static str {
         Agent::Claude => "claude -p",
         Agent::Codex => "codex exec",
         Agent::OpenCode => "opencode run",
+    }
+}
+
+/// The prompt `agent` is given, as text, for `prompt` sent with
+/// `system_prompt`: the prompt alone for a harness that takes a system prompt
+/// of its own, where it goes apart (see [`Agent::takes_system_prompt`]), and
+/// otherwise the system prompt ahead of it, marked off from it. What the
+/// harness is sent is this, and so is what the raw prompt modal shows.
+pub fn prompt_as_given(agent: Agent, prompt: &str, system_prompt: Option<&str>) -> String {
+    match system_prompt {
+        Some(system_prompt) if !agent.takes_system_prompt() => {
+            with_system_prompt(prompt, system_prompt)
+        }
+        _ => prompt.to_string(),
     }
 }
 
@@ -1506,7 +1605,7 @@ wait
                 mut events,
                 feed,
                 stop,
-            } = super::send_task("Do it".into(), None, None, dir.clone());
+            } = super::send_task("Do it".into(), None, Vec::new(), None, dir.clone());
             super::use_program_for_test(None);
             assert_eq!(feed.is_some(), agent == Agent::Claude);
 
@@ -1934,7 +2033,7 @@ wait
     /// `--input-format stream-json` reads them.
     #[test]
     fn messages_are_stream_json_user_messages() {
-        let line = super::user_message("Fix \"it\".\nThen test.");
+        let line = super::user_message("Fix \"it\".\nThen test.", &[]);
         assert!(
             line.ends_with('\n') && line.matches('\n').count() == 1,
             "{line}"
@@ -2013,6 +2112,292 @@ wait
         messages.read(&json!({ "type": "user", "isReplay": true, "parent_tool_use_id": "t9" }));
         messages.read(&taken);
         assert_eq!(messages.read(&result), Some(false));
+    }
+
+    /// A stand-in harness, written to `dir`, that adds its arguments to
+    /// `dir/args` and each line of its input to `dir/stdin`, the first line
+    /// before it starts; after `messages` lines it answers with a result for
+    /// each, and ends.
+    #[cfg(unix)]
+    pub(crate) fn recording_harness(dir: &std::path::Path, messages: usize) -> std::path::PathBuf {
+        use std::os::unix::fs::PermissionsExt as _;
+        let script = dir.join("recording.sh");
+        std::fs::write(
+            &script,
+            format!(
+                r#"#!/bin/sh
+echo "$@" >> {args}
+n=0
+while [ $n -lt {messages} ] && {{ IFS= read -r line || [ -n "$line" ]; }}; do
+  printf '%s\n' "$line" >> {stdin}
+  n=$((n + 1))
+  if [ $n -eq 1 ]; then
+    echo '{{"type":"system","subtype":"init","session_id":"s1"}}'
+  fi
+done
+i=0
+while [ $i -lt {messages} ]; do
+  echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
+  i=$((i + 1))
+done
+"#,
+                args = dir.join("args").display(),
+                stdin = dir.join("stdin").display(),
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        script
+    }
+
+    /// A fresh directory for test `name`, with a PNG and a JPEG in it.
+    #[cfg(unix)]
+    fn images_dir(name: &str) -> (std::path::PathBuf, Vec<std::path::PathBuf>) {
+        let dir =
+            std::env::temp_dir().join(format!("suspense-harness-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let png = dir.join("a.png");
+        std::fs::write(&png, crate::attached_image::tests::png(3, 2, "a")).unwrap();
+        let jpeg = dir.join("b.jpg");
+        std::fs::write(
+            &jpeg,
+            b"\xff\xd8\xff\xc0\x00\x11\x08\x00\x04\x00\x05\x03\x01\x22\x00\x02\x11\x01\x03\x11\x01\xff\xd9",
+        )
+        .unwrap();
+        (dir, vec![png, jpeg])
+    }
+
+    /// Every event of a run, until it ends.
+    fn all_events(
+        events: futures::channel::mpsc::UnboundedReceiver<HarnessEvent>,
+    ) -> Vec<HarnessEvent> {
+        use futures::StreamExt as _;
+        futures::executor::block_on(events.collect::<Vec<_>>())
+    }
+
+    /// The image content blocks of a stream-json user message: each image's
+    /// media type and its bytes, decoded.
+    pub(crate) fn image_blocks_of(message: &serde_json::Value) -> Vec<(String, Vec<u8>)> {
+        use base64::Engine as _;
+        message["message"]["content"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .skip(1)
+            .map(|block| {
+                assert_eq!(block["type"], "image");
+                assert_eq!(block["source"]["type"], "base64");
+                (
+                    block["source"]["media_type"].as_str().unwrap().to_string(),
+                    base64::engine::general_purpose::STANDARD
+                        .decode(block["source"]["data"].as_str().unwrap())
+                        .unwrap(),
+                )
+            })
+            .collect()
+    }
+
+    /// A message with images holds them after its text, as image content
+    /// blocks, base64-encoded with their media type, in order.
+    #[cfg(unix)]
+    #[test]
+    fn messages_carry_images_after_their_text() {
+        let (dir, images) = images_dir("blocks");
+        let blocks = super::image_blocks(&images).unwrap();
+        let line = super::user_message("Look.", &blocks);
+        let message: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(
+            message["message"]["content"][0],
+            json!({ "type": "text", "text": "Look." })
+        );
+        assert_eq!(
+            image_blocks_of(&message),
+            [
+                ("image/png".to_string(), std::fs::read(&images[0]).unwrap()),
+                ("image/jpeg".to_string(), std::fs::read(&images[1]).unwrap()),
+            ]
+        );
+        // A file that isn't an image that can be attached is named.
+        let text = dir.join("notes.txt");
+        std::fs::write(&text, "hi").unwrap();
+        let error = format!("{:#}", super::image_blocks(&[text]).unwrap_err());
+        assert!(error.contains("notes.txt"), "{error}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Claude Code is given a prompt's images in the same stream-json user
+    /// message as its text, after it: a question's run, which isn't fed,
+    /// takes its input as stream-json for them, and a task's run, which is,
+    /// takes them in its first message and in each message fed to it.
+    #[cfg(unix)]
+    #[test]
+    fn claude_is_given_images_in_its_messages() {
+        use crate::agent::{self, Agent};
+        let (dir, images) = images_dir("claude");
+        agent::set(Agent::Claude).unwrap();
+
+        super::use_program_for_test(Some(recording_harness(&dir, 1)));
+        let events = super::send_with_images(
+            "What is this?".into(),
+            None,
+            images.clone(),
+            None,
+            dir.clone(),
+        );
+        let events = all_events(events);
+        super::use_program_for_test(None);
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, HarnessEvent::Finished { .. })),
+            "{events:?}"
+        );
+        let args = std::fs::read_to_string(dir.join("args")).unwrap();
+        assert!(args.contains("--input-format stream-json"), "{args}");
+        assert!(!args.contains("--replay-user-messages"), "{args}");
+        let stdin = std::fs::read_to_string(dir.join("stdin")).unwrap();
+        let message: serde_json::Value =
+            serde_json::from_str(stdin.lines().next().unwrap()).unwrap();
+        assert_eq!(message["message"]["content"][0]["text"], "What is this?");
+        let given = image_blocks_of(&message);
+        assert_eq!(given.len(), 2);
+        assert_eq!(given[0].1, std::fs::read(&images[0]).unwrap());
+
+        // Without images, nothing changes: the prompt is given as text.
+        std::fs::remove_file(dir.join("args")).unwrap();
+        super::use_program_for_test(Some(recording_harness(&dir, 1)));
+        all_events(super::send("Plain.".into(), None, None, dir.clone()));
+        super::use_program_for_test(None);
+        let args = std::fs::read_to_string(dir.join("args")).unwrap();
+        assert!(!args.contains("--input-format"), "{args}");
+
+        // A task's run, fed a message with an image of its own.
+        std::fs::remove_file(dir.join("stdin")).unwrap();
+        super::use_program_for_test(Some(recording_harness(&dir, 2)));
+        let super::Run { events, feed, .. } = super::send_task(
+            "Fix this.".into(),
+            None,
+            vec![images[0].clone()],
+            None,
+            dir.clone(),
+        );
+        super::use_program_for_test(None);
+        let feed = feed.expect("Claude Code is fed");
+        let start = std::time::Instant::now();
+        while !feed.is_open() {
+            assert!(start.elapsed() < std::time::Duration::from_secs(10));
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        feed.send("And this.".into(), "And this.".into(), &images[1..])
+            .unwrap();
+        let events = all_events(events);
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, HarnessEvent::Finished { .. })),
+            "{events:?}"
+        );
+        let stdin = std::fs::read_to_string(dir.join("stdin")).unwrap();
+        let messages: Vec<serde_json::Value> = stdin
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert_eq!(messages.len(), 2, "{stdin}");
+        assert_eq!(messages[0]["message"]["content"][0]["text"], "Fix this.");
+        assert_eq!(
+            image_blocks_of(&messages[0]),
+            [("image/png".to_string(), std::fs::read(&images[0]).unwrap())]
+        );
+        assert_eq!(messages[1]["message"]["content"][0]["text"], "And this.");
+        assert_eq!(
+            image_blocks_of(&messages[1]),
+            [("image/jpeg".to_string(), std::fs::read(&images[1]).unwrap())]
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Codex is given an `--image` per image, and OpenCode a `--file` per
+    /// image, in order, the prompt still over standard input; Codex's
+    /// options end before the session and the prompt, since `--image` takes
+    /// any number of files. An image that is missing fails the run before
+    /// anything is run.
+    #[cfg(unix)]
+    #[test]
+    fn codex_and_opencode_are_given_images_as_arguments() {
+        use crate::agent::{self, Agent};
+        let (dir, images) = images_dir("args");
+        let (a, b) = (images[0].display(), images[1].display());
+        let cases = [
+            (
+                Agent::Codex,
+                None,
+                format!(
+                    "exec --json --full-auto --skip-git-repo-check --image {a} --image {b} -- -"
+                ),
+            ),
+            (
+                Agent::Codex,
+                Some("codex:t1"),
+                format!(
+                    "exec --json --full-auto --skip-git-repo-check resume --image {a} --image {b} -- t1 -"
+                ),
+            ),
+            (
+                Agent::OpenCode,
+                None,
+                format!("run --format json --file {a} --file {b}"),
+            ),
+            (
+                Agent::OpenCode,
+                Some("opencode:ses_1"),
+                format!("run --format json --session ses_1 --file {a} --file {b}"),
+            ),
+        ];
+        for (agent, session, expected) in cases {
+            agent::set(agent).unwrap();
+            std::fs::remove_file(dir.join("args")).ok();
+            std::fs::remove_file(dir.join("stdin")).ok();
+            super::use_program_for_test(Some(recording_harness(&dir, 1)));
+            let resume = session.map(|session| super::Resume {
+                session: session.into(),
+                fork: false,
+            });
+            all_events(super::send_with_images(
+                "Look.".into(),
+                None,
+                images.clone(),
+                resume,
+                dir.clone(),
+            ));
+            super::use_program_for_test(None);
+            let args = std::fs::read_to_string(dir.join("args")).unwrap();
+            assert_eq!(args.trim_end(), expected, "{agent:?} {session:?}");
+            let stdin = std::fs::read_to_string(dir.join("stdin")).unwrap();
+            assert_eq!(stdin.trim_end(), "Look.", "{agent:?}");
+        }
+
+        // Missing, nothing runs.
+        for agent in Agent::ALL {
+            agent::set(agent).unwrap();
+            std::fs::remove_file(dir.join("args")).ok();
+            super::use_program_for_test(Some(recording_harness(&dir, 1)));
+            let events = all_events(super::send_with_images(
+                "Look.".into(),
+                None,
+                vec![dir.join("gone.png")],
+                None,
+                dir.clone(),
+            ));
+            super::use_program_for_test(None);
+            assert!(
+                matches!(events.as_slice(), [HarnessEvent::Failed(error)] if error.contains("gone.png")),
+                "{agent:?}: {events:?}"
+            );
+            assert!(!dir.join("args").exists(), "{agent:?} ran");
+        }
+        agent::set(Agent::Claude).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// Codex and OpenCode get the system prompt ahead of the prompt, marked

@@ -2,6 +2,7 @@ use /lib
 use /ui
 from /scope/settings-window import SettingsWindowScope
 from /scope/user-preferences import UserPreferencesScope
+from /ui/theme import ThemeScope
 
 export ui-component RibbonApplicationTabScope:
     concept: {RibbonApplicationTabConcept}
@@ -19,21 +20,48 @@ shape RibbonApplicationTabShape:
 
     groups:
         appearance:
-            An "Appearance" group holds the Dark mode command.
+            An "Appearance" group holds the Brightness command, its one
+            control; there is no Dark mode switch, since the slider reaches
+            both modes.
 
         preferences:
             A "Preferences" group holds the Settings command.
 
     commands:
-        darkMode:
-            A "Dark mode" switch, on while the window is in dark mode. Switching
-            it changes the window between light and dark mode straight away, and
-            saves the choice among the @{UserPreferencesScope}. A choice that
-            can't be saved shows a notification titled
-            "Could not save dark mode", with why.
+        brightness:
+            A "Brightness" slider, which runs the whole interface from its
+            darkest to its lightest: a moon icon, then a horizontal slider
+            120 pixels wide, then a sun icon, with nothing showing the setting
+            as a number. As a ribbon setting, it has no background of its
+            own, and sits straight on the commands' area, as tall as a slim
+            button. Its tooltip says it makes the whole interface darker or
+            lighter, from its darkest to its lightest, keeping its contrast,
+            and that double-clicking it resets it.
 
-            It is primary, and slim: the switch takes the room of a slim
-            button, with no background of its own.
+            Its one track runs through every appearance the @{ThemeScope}
+            allows, darkest first: dark mode from its darkest brightness to
+            its lightest, then light mode from its darkest to its lightest,
+            one position for each step, with no switch between them. So all
+            the way left is dark mode at its darkest, and all the way right
+            light mode at its lightest; dragging past dark mode's lightest
+            step changes the window to light mode, and back.
+
+            Dragging it changes the mode and the brightness straight away as
+            it moves, and once it is let go saves the mode showing and each
+            mode's brightness among the @{UserPreferencesScope}. A mode that
+            can't be saved shows a notification titled
+            "Could not save brightness", with why; a brightness that can't be
+            saved fails quietly. Its thumb follows the appearance showing,
+            however that was changed, such as from the palette, but not while
+            it is being dragged.
+
+            Double-clicking anywhere on it, its icons or its track, puts the
+            mode showing back to its brightness at 0, keeping the mode, and
+            saves it; the second click doesn't also move the thumb.
+
+            It is primary, so the collapsed ribbon keeps it: its icons and
+            track as they are, only as wide as they are, as tall as a small
+            button.
 
         settings:
             A "Settings" button with a gear icon. Clicking it opens the

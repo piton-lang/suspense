@@ -18,6 +18,7 @@ shape UserPreferencesShape:
 
     preferences:
         - light or dark mode, which, until chosen, follows the operating system's appearance
+        - the interface's brightness, one for dark mode and one for light, each starting at 0
         - whether the ribbon is collapsed, which starts expanded
         - the layout of a file's diff, which starts side by side
         - the recent projects
@@ -29,5 +30,6 @@ shape UserPreferencesShape:
 
     failing:
         A preference that can't be saved still holds for the rest of the
-        session. Only dark mode says so, as its command does; the others fail
-        quietly, being only a convenience.
+        session. Only light or dark mode says so, as the commands that change
+        it do; the others, brightness among them, fail quietly, being only a
+        convenience.

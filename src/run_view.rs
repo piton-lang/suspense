@@ -675,7 +675,6 @@ impl RunView {
             .id("run-output")
             .size_full()
             .py(BODY_INSET)
-            .bg(gpui_kit::rgb(well))
             .child(rows.element(render));
         let log = gpui_kit::TestSupportExt::test_support(log);
         v_flex()
@@ -692,7 +691,9 @@ impl RunView {
                     .text_color(theme.muted_foreground)
                     .child(target.command.clone()),
             )
-            .child(div().flex_1().min_h_0().child(scrollbar::with_scrollbar(
+            // The well is the log's surface, beneath its scroll column too,
+            // which has no colour of its own.
+            .child(div().flex_1().min_h_0().bg(gpui_kit::rgb(well)).child(scrollbar::with_scrollbar(
                 "run-output",
                 rows,
                 log,
@@ -846,6 +847,73 @@ pub mod tests {
             view.read_with(cx, |view, _| view.status()),
             Some(RunStatus::Stopped)
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The log's scroll column has no colour of its own: it sits on the log's
+    /// own surface, the well, as the log does, down both of its sides.
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn the_logs_scroll_column_is_on_the_logs_surface(cx: &mut TestAppContext) {
+        use gpui_kit::component::{Theme, ThemeMode};
+        use gpui_kit::test::TestWindowExt as _;
+        use gpui_kit::{point, px};
+        let dir = dir("run-column");
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+        });
+        let mut view = None;
+        let window = cx.add_window(|window, cx| {
+            let run = cx.new(|cx| {
+                RunView::running(
+                    dir.clone(),
+                    0,
+                    Target {
+                        name: "Run".into(),
+                        command: "seq 1 5".into(),
+                        kind: Kind::Run,
+                        release: false,
+                    },
+                    cx,
+                )
+            });
+            view = Some(run.clone());
+            Root::new(run, window, cx)
+        });
+        let (view, handle): (_, gpui_kit::AnyWindowHandle) = (view.unwrap(), window.into());
+        for _ in 0..200 {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            cx.executor().advance_clock(super::POLL);
+            cx.run_until_parked();
+            if !view.read_with(cx, |view, _| view.is_running()) {
+                break;
+            }
+        }
+        for mode in [ThemeMode::Dark, ThemeMode::Light] {
+            cx.update(|cx| Theme::change(mode, None, cx));
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.render_frame(cx);
+                let well = crate::theme::palette(cx).well;
+                let frame = crate::frame_image::Frame::of(window);
+                let log = window.find("run-output").bounds();
+                let column = window.find("run-output-scroll-column").bounds();
+                // Down to the down button: the lock button beneath it is
+                // pressed while the log follows its output.
+                let bottom = window.find("run-output-scroll-down").bounds().bottom();
+                let mut y = column.top() + px(0.5);
+                while y < bottom {
+                    for x in [log.right() - px(4.), column.left() + px(0.5), column.right() - px(0.5)] {
+                        let c = frame.at(point(x, y));
+                        assert_eq!(c, well, "{mode:?}: {c:06x} at ({x:?}, {y:?}), not the well");
+                    }
+                    y += px(7.);
+                }
+            })
+            .unwrap();
+        }
         std::fs::remove_dir_all(&dir).ok();
     }
 }

@@ -9,7 +9,6 @@ use gpui_kit::component::button::ButtonVariant;
 use gpui_kit::component::dialog::DialogButtonProps;
 use gpui_kit::component::resizable::{ResizableState, h_resizable, resizable_panel};
 use gpui_kit::component::{ActiveTheme, Root, WindowExt as _};
-use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::activity::{Job, JobKind, RevealJob};
@@ -165,7 +164,8 @@ impl MainWindow {
 
         cx.open_window(options, |window, cx| {
             // Start in the saved light or dark mode, else the system's; the
-            // ribbon can switch.
+            // ribbon can switch; each mode at its saved brightness.
+            theme_preference::restore_brightness(cx);
             theme_preference::apply(window, cx);
             let view = cx.new(|cx| MainWindow::new(window, cx));
             cx.new(|cx| Root::new(view, window, cx))
@@ -1655,13 +1655,16 @@ impl Render for MainWindow {
                                 .size_range(MIN_SIDEBAR_WIDTH..Pixels::MAX)
                                 .child(
                                     // The file tree, with the git panel beneath it
-                                    // while it shows, a single line between them.
+                                    // while it shows: its header's change of
+                                    // colour is the edge between them.
                                     gpui_kit::component::v_flex()
                                         .size_full()
                                         .child(div().flex_1().min_h_0().child(self.sidebar.clone()))
-                                        .when(self.git_panel.read(cx).is_shown(), |panels: Div| {
-                                            panels.child(crate::sidebar::divider(cx))
-                                        })
+                                        .children(crate::sidebar::between(
+                                            self.git_panel.read(cx).is_shown(),
+                                            crate::git_panel::COLOUR_IS_EDGE,
+                                            cx,
+                                        ))
                                         .child(self.git_panel.clone()),
                                 ),
                             resizable_panel()
@@ -1697,8 +1700,9 @@ mod tests {
     /// The ribbon's body is only as tall as its commands need, and each
     /// command only as tall as it needs: the body is the tallest column on the
     /// open tab, padded 8 pixels above and below, and never taller than two
-    /// stacked slim buttons, padded; a tab with no commands is shorter than
-    /// any with them. A full button is always two slim buttons tall.
+    /// stacked 27px slim buttons 4px apart, padded, 74px; a tab with no
+    /// commands is shorter than any with them. A full button is always two
+    /// slim buttons tall, 58px.
     #[gpui_kit::test]
     async fn the_ribbon_body_fits_its_commands(cx: &mut TestAppContext) {
         use crate::ribbon::RibbonTab;
@@ -1761,13 +1765,17 @@ mod tests {
             ],
             cx,
         );
+        // Brightness, beside a full button.
+        let application = body_of(RibbonTab::Application, &["brightness", "settings"], cx);
         let empty = body_of(RibbonTab::Research, &[], cx);
         // Two slim buttons stacked, padded, is as tall as the body gets.
-        let most = gpui_kit::px(22.) * 2. + padding * 3.;
+        let most = gpui_kit::px(27.) * 2. + gpui_kit::px(4.) + padding * 2.;
+        assert_eq!(most, gpui_kit::px(74.));
         assert!(
-            empty < project && project == most && spec == most,
+            empty < project && project == most && spec == most && application == most,
             "the tabs' bodies don't fit their commands: \
-             empty {empty:?}, two stacked {project:?}, many {spec:?}"
+             empty {empty:?}, two stacked {project:?}, many {spec:?}, \
+             Application {application:?}"
         );
 
         // On Spec and on Application alike, a full button is two slim buttons
@@ -1782,7 +1790,8 @@ mod tests {
                 window.render_frame(cx);
                 let body = window.find("ribbon-controls").bounds();
                 let button = window.find(full).bounds();
-                let slims = gpui_kit::px(22.) * stacked + padding * (stacked - 1.);
+                let slims = gpui_kit::px(27.) * stacked + gpui_kit::px(4.) * (stacked - 1.);
+                assert_eq!(slims, gpui_kit::px(58.));
                 assert_eq!(
                     button.size.height, slims,
                     "{tab:?}: the full button isn't {stacked} slim buttons tall"
@@ -1800,6 +1809,247 @@ mod tests {
             })
             .unwrap();
         }
+    }
+
+    /// The Brightness slider is the Appearance group's one control, with no
+    /// Dark mode switch: as tall as a slim button, its track 120px wide, with
+    /// no background of its own. Its one track runs from the darkest
+    /// appearance to the lightest, dark mode's steps then light mode's, so
+    /// dragging it all the way right brings light mode at its lightest, and
+    /// all the way left dark mode at its darkest. The thumb follows the
+    /// appearance showing, however it was set, and double-clicking it puts
+    /// the mode showing back to 0. At the brightest dark mode allows, the
+    /// ribbon's buttons still show lighter than its command area. Being
+    /// primary, the collapsed ribbon keeps it.
+    #[gpui_kit::test]
+    async fn the_brightness_slider_brightens_the_interface(cx: &mut TestAppContext) {
+        use gpui_kit::component::{ActiveTheme as _, Theme, ThemeMode};
+        use gpui_kit::{Bounds, Hsla, Pixels, point, px};
+
+        use crate::ribbon::RibbonTab;
+        use crate::theme;
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+            Theme::change(ThemeMode::Dark, None, cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let handle: gpui_kit::AnyWindowHandle = window.into();
+        let ribbon = main.unwrap().read_with(cx, |main, _| main.ribbon.clone());
+        ribbon.update(cx, |r, cx| r.select_tab(RibbonTab::Application, cx));
+        cx.run_until_parked();
+
+        // A solid, visible quad painted exactly at `bounds`, if any is.
+        fn painted_at(window: &gpui_kit::Window, bounds: Bounds<Pixels>) -> Option<Hsla> {
+            let scale = window.scale_factor();
+            window
+                .painted_quads()
+                .into_iter()
+                .find(|q| {
+                    (q.bounds.origin.x.0 - bounds.left().as_f32() * scale).abs() < 1.
+                        && (q.bounds.origin.y.0 - bounds.top().as_f32() * scale).abs() < 1.
+                        && (q.bounds.size.width.0 - bounds.size.width.as_f32() * scale).abs() < 1.
+                        && (q.bounds.size.height.0 - bounds.size.height.as_f32() * scale).abs() < 1.
+                        && q.background.as_solid().is_some_and(|c| c.a > 0.)
+                })
+                .and_then(|q| q.background.as_solid())
+        }
+
+        // The group's one control, with nothing behind it.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("dark-mode").is_none(), "Dark mode is still there");
+            let group = window.find("Appearance").bounds();
+            let brightness = window.find("brightness").bounds();
+            let slider = window.find("brightness-slider").bounds();
+            assert_eq!(
+                brightness.size.height,
+                px(27.),
+                "not a slim button's height"
+            );
+            assert_eq!(
+                (brightness.left(), brightness.top()),
+                (group.left(), group.top()),
+                "it doesn't lead the group"
+            );
+            let darkest = window.find("brightness-darkest").bounds();
+            let lightest = window.find("brightness-lightest").bounds();
+            assert!(darkest.right() <= slider.left() && slider.right() <= lightest.left());
+            assert_eq!(slider.size.width, px(120.), "the track isn't 120px wide");
+            assert!(
+                painted_at(window, brightness).is_none(),
+                "it has a background of its own"
+            );
+        })
+        .unwrap();
+
+        let (dark_low, dark_high) = {
+            let range = theme::mode_brightness_range(true);
+            (*range.start(), *range.end())
+        };
+        let light_high = *theme::mode_brightness_range(false).end();
+        let last = (theme::appearances().len() - 1) as f32;
+        assert_eq!(
+            ribbon.read_with(cx, |r, cx| r.brightness_slider(cx)),
+            Some(theme::appearance_index(true, 0) as f32),
+            "the thumb isn't on dark mode at 0"
+        );
+        let drag = |cx: &mut TestAppContext, to_right: bool| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let slider = window.find("brightness-slider").bounds();
+                let end = if to_right {
+                    slider.right() + px(40.)
+                } else {
+                    slider.left() - px(40.)
+                };
+                window.drag(slider.center(), point(end, slider.center().y), cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        };
+
+        // All the way right: light mode at its lightest, its text as it was.
+        drag(cx, true);
+        cx.update(|cx| {
+            assert!(!cx.theme().is_dark(), "it didn't reach light mode");
+            assert_eq!(theme::brightness(cx), light_high);
+            assert_eq!(
+                *theme::palette(cx),
+                theme::brightened(&theme::LIGHT, light_high)
+            );
+            assert_eq!(
+                Theme::global(cx).foreground,
+                theme::color(theme::LIGHT.text),
+                "the text changed"
+            );
+        });
+        assert_eq!(ribbon.read_with(cx, |r, cx| r.brightness_slider(cx)), Some(last));
+
+        // All the way left: dark mode at its darkest.
+        drag(cx, false);
+        cx.update(|cx| {
+            assert!(cx.theme().is_dark(), "it didn't reach dark mode");
+            assert_eq!(theme::brightness(cx), dark_low);
+            assert_eq!(
+                *theme::palette(cx),
+                theme::brightened(&theme::DARK, dark_low)
+            );
+        });
+        assert_eq!(ribbon.read_with(cx, |r, cx| r.brightness_slider(cx)), Some(0.));
+
+        // Set some other way, the thumb follows. At the brightest dark mode
+        // allows, the command area has moved, and a button on it still shows
+        // lighter than it, as far as it did at 0.
+        cx.update(|cx| theme::set_brightness(true, dark_high, cx));
+        ribbon.update(cx, |r, cx| r.select_tab(RibbonTab::Project, cx));
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let area = painted_at(window, window.find("ribbon-controls").bounds())
+                .expect("the command area isn't painted");
+            let moved = theme::brightened(&theme::DARK, dark_high).ribbon;
+            assert_eq!(area, theme::color(moved), "the command area didn't move");
+            let button = painted_at(window, window.find("new-project").bounds())
+                .expect("the button isn't painted");
+            let shown: gpui_kit::Rgba = area.blend(button).into();
+            let area_rgb: gpui_kit::Rgba = area.into();
+            assert!(
+                shown.r > area_rgb.r + 0.05,
+                "the button {shown:?} isn't lighter than the command area {area_rgb:?}"
+            );
+            // Its base, moved as the base is.
+            let base = (theme::brightened(&theme::DARK, dark_high).base & 0xff) as f32;
+            assert!(
+                (shown.r * 255. - base).abs() < 1.,
+                "the button is {shown:?}, not the moved base"
+            );
+        })
+        .unwrap();
+        assert_eq!(
+            ribbon.read_with(cx, |r, cx| r.brightness_slider(cx)),
+            Some(theme::appearance_index(true, dark_high) as f32),
+            "the thumb didn't follow"
+        );
+
+        // Double-clicking it puts the mode showing back to 0, the slider
+        // with it.
+        ribbon.update(cx, |r, cx| r.select_tab(RibbonTab::Application, cx));
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.double_click("brightness-darkest", cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update(|cx| {
+            assert!(cx.theme().is_dark());
+            assert_eq!(theme::brightness(cx), 0, "a double-click didn't reset it");
+            assert_eq!(*theme::palette(cx), theme::DARK);
+        });
+        assert_eq!(
+            ribbon.read_with(cx, |r, cx| r.brightness_slider(cx)),
+            Some(theme::appearance_index(true, 0) as f32)
+        );
+        // Double-clicking the track near its end resets it too, rather than
+        // the second click moving it there.
+        drag(cx, true);
+        cx.update_window(handle, |_, window, cx| {
+            use gpui_kit::{InputEvent as _, MouseButton, MouseDownEvent, MouseUpEvent};
+            window.render_frame(cx);
+            let slider = window.find("brightness-slider").bounds();
+            let position = point(slider.right() - px(4.), slider.center().y);
+            for click_count in [1, 2] {
+                let down = MouseDownEvent {
+                    button: MouseButton::Left,
+                    position,
+                    modifiers: Default::default(),
+                    click_count,
+                    first_mouse: false,
+                };
+                window.dispatch_event(down.to_platform_input(), cx);
+                let up = MouseUpEvent {
+                    button: MouseButton::Left,
+                    position,
+                    modifiers: Default::default(),
+                    click_count,
+                };
+                window.dispatch_event(up.to_platform_input(), cx);
+                window.render_frame(cx);
+            }
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update(|cx| {
+            assert!(!cx.theme().is_dark());
+            assert_eq!(theme::brightness(cx), 0, "the second click moved it");
+        });
+        assert_eq!(
+            ribbon.read_with(cx, |r, cx| r.brightness_slider(cx)),
+            Some(theme::appearance_index(false, 0) as f32)
+        );
+
+        // Collapsed, it shows, being primary.
+        ribbon.update(cx, |r, cx| r.toggle_collapsed(cx));
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("dark-mode").is_none());
+            assert!(
+                window.try_find("brightness").is_some(),
+                "the collapsed ribbon leaves out Brightness"
+            );
+        })
+        .unwrap();
     }
 
     #[cfg(target_os = "macos")]
@@ -1952,13 +2202,10 @@ mod tests {
         assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     }
 
-    /// In the theme, dark and light, the ribbon's tabs are drawn as gpui-kit
-    /// draws them: the Project tab, open when the window opens, shows as
-    /// selected straight after the project indicator, which sits on a text
-    /// input's background, the theme's well, with no border of its own. gpui-kit's
-    /// own line along the bottom of the tabs is clipped away; the ribbon's line
-    /// in its place runs beneath the indicator and closed tabs, but not beneath
-    /// the open one.
+    /// In the theme, dark and light, the ribbon's project indicator leads the
+    /// tab row in its own colour, with no border, then the chevron, then the
+    /// Project tab, open when the window opens, the tab row's full height;
+    /// nothing in the tab row has a border.
     #[gpui_kit::test]
     async fn ribbon_tabs_are_drawn_beside_the_project_indicator(cx: &mut TestAppContext) {
         use gpui_kit::component::{Theme, ThemeMode};
@@ -1984,9 +2231,7 @@ mod tests {
                     prefix.left().as_f32() * scale,
                     prefix.right().as_f32() * scale,
                 );
-                let top = prefix.top().as_f32() * scale;
                 let quads = window.painted_quads();
-                let theme = Theme::global(cx);
                 let area = crate::project_indicator::block(cx);
                 // Pure black in dark mode; a text input's background in light.
                 let expected = match mode {
@@ -2035,79 +2280,133 @@ mod tests {
                     chevron.left().as_f32() * scale >= right - 1.,
                     "{mode:?}: the chevron {chevron:?} isn't after the indicator"
                 );
-                let project_tab = quads.iter().find(|quad| {
-                    quad.bounds.origin.x.0 >= chevron_right - 1.
-                        && quad.bounds.origin.x.0 - chevron_right < 8. * scale
-                        && (quad.bounds.origin.y.0 - top).abs() < 4.
-                        && quad.bounds.size.width.0 > 40. * scale
-                        && quad.background.as_solid() == Some(theme.tab_active)
+                // The Project tab, open, starts straight after the chevron,
+                // the full height of the tab row.
+                let row = window.find("ribbon-tabs-row").bounds();
+                let project_tab = window.find(("ribbon-tab", 0usize)).bounds();
+                assert!(
+                    (project_tab.left().as_f32() * scale - chevron_right).abs() < 1.,
+                    "{mode:?}: the Project tab {project_tab:?} isn't right after the chevron"
+                );
+                assert_eq!(
+                    (project_tab.top(), project_tab.size.height),
+                    (row.top(), gpui_kit::px(32.)),
+                    "{mode:?}: the Project tab isn't the tab row's height"
+                );
+                // Nothing in the tab row has a border: the tabs are flat.
+                // (The ribbon's own line along its bottom, beneath the
+                // commands, is no part of it.)
+                let bordered = quads.iter().find(|q| {
+                    let bw = &q.border_widths;
+                    q.bounds.origin.y.0 + q.bounds.size.height.0
+                        <= row.bottom().as_f32() * scale + 1.
+                        && q.border_color.a > 0.
+                        && (bw.top.0 > 0. || bw.bottom.0 > 0. || bw.left.0 > 0. || bw.right.0 > 0.)
                 });
                 assert!(
-                    project_tab.is_some(),
-                    "{mode:?}: no selected tab drawn right after the chevron"
+                    bordered.is_none(),
+                    "{mode:?}: something in the tab row has a border: {bordered:?}"
                 );
-                // The line along the bottom of the row shows beneath the
-                // indicator and beyond the tabs, but the open Project tab covers
-                // it, meeting the commands with no line between them.
-                let line = window.find("ribbon-tabs-line").bounds();
-                let line_y = (line.top().as_f32() + 0.5) * scale;
-                let top_at = |x: f32| {
-                    let mut covering: Vec<_> = quads
-                        .iter()
-                        .filter(|q| {
-                            let m = &q.content_mask.bounds;
-                            q.bounds.origin.x.0 <= x
-                                && q.bounds.origin.x.0 + q.bounds.size.width.0 > x
-                                && q.bounds.origin.y.0 <= line_y
-                                && q.bounds.origin.y.0 + q.bounds.size.height.0 > line_y
-                                && m.origin.x.0 <= x
-                                && m.origin.x.0 + m.size.width.0 > x
-                                && m.origin.y.0 <= line_y
-                                && m.origin.y.0 + m.size.height.0 > line_y
-                                && q.background.as_solid().is_some_and(|c| c.a > 0.)
-                        })
-                        .collect();
-                    covering.sort_by_key(|q| q.order);
-                    covering.last().and_then(|q| q.background.as_solid())
+            })
+            .unwrap();
+        }
+    }
+
+    /// The tab row has a background of its own, #333333 in dark mode, a step
+    /// lighter than the command area's #222222, and in light mode a step
+    /// darker; a closed tab shows the row's colour, having none of its own,
+    /// and the open tab the command area's, meeting the commands beneath it
+    /// with no line between them.
+    #[gpui_kit::test]
+    async fn ribbon_tab_row_and_open_tab_take_their_own_colours(cx: &mut TestAppContext) {
+        use gpui_kit::component::{Theme, ThemeMode};
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            Root::new(view, window, cx)
+        });
+        let handle = window.into();
+        for mode in [ThemeMode::Dark, ThemeMode::Light] {
+            cx.update(|cx| Theme::change(mode, None, cx));
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let palette = crate::theme::palette(cx);
+                let (area, tab_row) = (
+                    crate::theme::color(palette.ribbon),
+                    crate::theme::color(palette.ribbon_tabs),
+                );
+                if mode == ThemeMode::Dark {
+                    assert_eq!(
+                        (palette.ribbon, palette.ribbon_tabs),
+                        (0x222222, 0x333333),
+                        "the ribbon's dark colours"
+                    );
+                    assert!(tab_row.l > area.l, "dark: the tab row isn't lighter");
+                } else {
+                    assert!(tab_row.l < area.l, "light: the tab row isn't darker");
+                }
+                let scale = window.scale_factor();
+                let (width, rows, pixels) = crate::frame_image::pixels(window);
+                let at = |x: gpui_kit::Pixels, y: gpui_kit::Pixels| {
+                    let (x, y) = ((x.as_f32() * scale) as usize, (y.as_f32() * scale) as usize);
+                    assert!(x < width && y < rows, "({x}, {y}) is outside the frame");
+                    let p = pixels[y * width + x];
+                    gpui_kit::Rgba {
+                        r: p[0],
+                        g: p[1],
+                        b: p[2],
+                        a: 1.,
+                    }
                 };
-                let project_tab = project_tab.unwrap();
-                let tab_middle =
-                    project_tab.bounds.origin.x.0 + project_tab.bounds.size.width.0 / 2.;
-                assert_eq!(
-                    top_at(tab_middle),
-                    Some(theme.tab_active),
-                    "{mode:?}: a line shows beneath the open tab"
+                let same = |actual: gpui_kit::Rgba, expected: gpui_kit::Hsla, what: &str| {
+                    let expected: gpui_kit::Rgba = expected.into();
+                    assert!(
+                        (actual.r - expected.r).abs() < 0.01
+                            && (actual.g - expected.g).abs() < 0.01
+                            && (actual.b - expected.b).abs() < 0.01,
+                        "{mode:?}: {what} is {actual:?}, not {expected:?}"
+                    );
+                };
+                let row = window.find("ribbon-tabs-row").bounds();
+                let body = window.find("ribbon-controls").bounds();
+                assert_eq!(row.size.height, gpui_kit::px(32.), "{mode:?}: the tab row");
+                assert_eq!(body.top(), row.bottom(), "{mode:?}: a gap under the tabs");
+                // Project is open; Research, closed, has no background.
+                let open = window.find(("ribbon-tab", 0usize)).bounds();
+                let closed = window.find(("ribbon-tab", 3usize)).bounds();
+                let middle = row.top() + row.size.height / 2.;
+                same(at(open.left() + gpui_kit::px(2.), middle), area, "the open tab");
+                same(at(closed.left() + gpui_kit::px(2.), middle), tab_row, "a closed tab");
+                same(
+                    at(row.right() - gpui_kit::px(40.), middle),
+                    tab_row,
+                    "the tab row past the tabs",
                 );
-                assert_eq!(
-                    top_at((prefix.left().as_f32() + 4.) * scale),
-                    Some(theme.border),
-                    "{mode:?}: no line beneath the indicator"
+                // Down the open tab into the commands, not a pixel of anything
+                // else: no line between them.
+                let x = open.left() + open.size.width / 2.;
+                let mut y = open.top() + gpui_kit::px(1.);
+                while y < body.top() + gpui_kit::px(6.) {
+                    same(at(x, y), area, &format!("the open tab and commands at {y:?}"));
+                    y += gpui_kit::px(1.) / scale;
+                }
+                // Beside the open tab, the row's colour runs right down to the
+                // commands.
+                same(
+                    at(closed.left() + gpui_kit::px(2.), row.bottom() - gpui_kit::px(1.)),
+                    tab_row,
+                    "the bottom of a closed tab",
                 );
-                let far_right = (line.right().as_f32() - 60.) * scale;
-                assert_eq!(
-                    top_at(far_right),
-                    Some(theme.border),
-                    "{mode:?}: no line at the far right"
-                );
-                // No line runs along the bottom of the tabs, not even faintly:
-                // whatever border gpui-kit's bar draws there is clipped out of
-                // sight with room to spare.
-                let bottom_line = quads.iter().find(|quad| {
-                    let bottom = quad.bounds.origin.y.0 + quad.bounds.size.height.0;
-                    let width = quad.border_widths.bottom.0;
-                    let mask = &quad.content_mask.bounds;
-                    width > 0.
-                        && quad.border_color.a > 0.
-                        && quad.bounds.origin.y.0 < 4.
-                        && quad.bounds.size.width.0 > 1000.
-                        && quad.bounds.size.height.0 < 80. * scale / 2.
-                        // At least a whole device pixel below what shows,
-                        // so no softened edge of it does either.
-                        && bottom - width < mask.origin.y.0 + mask.size.height.0 + 1.
-                });
-                assert!(
-                    bottom_line.is_none(),
-                    "{mode:?}: a line runs along the bottom of the tabs: {bottom_line:?}"
+                same(
+                    at(closed.left() + gpui_kit::px(2.), body.top() + gpui_kit::px(1.)),
+                    area,
+                    "the commands beneath a closed tab",
                 );
             })
             .unwrap();
@@ -2136,23 +2435,11 @@ mod tests {
         });
         let handle = window.into();
         let ribbon = main.unwrap().read_with(cx, |main, _| main.ribbon.clone());
-        // The open tabs, each as its left edge and width, from the quads
-        // painted.
-        let open_tabs = |window: &mut gpui_kit::Window| {
-            let mut tabs: Vec<(i32, i32)> = window
-                .painted_quads()
-                .into_iter()
-                .filter(|q| {
-                    q.bounds.origin.y.0 < 4.
-                        && (55. ..70.).contains(&q.bounds.size.height.0)
-                        && (60. ..400.).contains(&q.bounds.size.width.0)
-                        && q.border_widths.left.0 > 0.
-                })
-                .map(|q| (q.bounds.origin.x.0 as i32, q.bounds.size.width.0 as i32))
-                .collect();
-            tabs.sort();
-            tabs.dedup();
-            tabs
+        // Every tab's bounds, in order.
+        let tab_bounds = |window: &mut gpui_kit::Window| {
+            (0..crate::ribbon::RibbonTab::ALL.len())
+                .map(|ix| window.find(("ribbon-tab", ix)).bounds())
+                .collect::<Vec<_>>()
         };
         for (tab, mode_of_tab, after) in [
             (
@@ -2178,23 +2465,28 @@ mod tests {
                     cx.run_until_parked();
                     cx.update_window(handle, |_, window, cx| {
                         window.render_frame(cx);
-                        open_tabs(window)
+                        tab_bounds(window)
                     })
                     .unwrap()
                 };
+                let closed = open(&[RibbonTab::Project], cx);
                 let beside_plain = open(&[RibbonTab::Project, after], cx);
                 let beside_tinted = open(&[tab, after], cx);
                 assert_eq!(
-                    beside_plain.last(),
-                    beside_tinted.last(),
-                    "{tab:?} {mode:?}: {after:?} moved beside the tinted tab"
+                    beside_plain, beside_tinted,
+                    "{tab:?} {mode:?}: a tab moved as {tab:?} was tinted"
+                );
+                assert_eq!(
+                    closed, beside_tinted,
+                    "{tab:?} {mode:?}: a tab moved as tabs opened"
                 );
 
                 open(&[tab], cx);
                 cx.update_window(handle, |_, window, cx| {
                     window.render_frame(cx);
                     let tint = crate::chat_input::mode_tint(mode_of_tab, cx);
-                    let body = Theme::global(cx).background.blend(tint);
+                    let area = crate::theme::color(crate::theme::palette(cx).ribbon);
+                    let body = area.blend(tint);
                     let quads = window.painted_quads();
                     assert!(
                         quads
@@ -2384,9 +2676,10 @@ mod tests {
     }
 
     /// The ribbon's buttons: full ones the height of the body inside 8px of
-    /// padding, slim ones 22px tall at the top of their column, 8px apart,
-    /// square, each on a background of its own apart from the body's; the
-    /// groups' title strips run the body's full height.
+    /// padding, slim ones 27px tall at the top of their column, 4px apart,
+    /// square and borderless, each on a background of its own apart from the
+    /// body's, #444444 on its #222222 in dark mode; the first group starts
+    /// 8px in, with no title strip.
     #[gpui_kit::test]
     async fn ribbon_buttons_are_full_or_slim_and_square(cx: &mut TestAppContext) {
         use gpui_kit::component::{Theme, ThemeMode};
@@ -2416,6 +2709,11 @@ mod tests {
                         && q.background.as_solid().is_some_and(|c| c.a > 0.)
                 })
                 .unwrap_or_else(|| panic!("{mode:?}: {button:?} has no background of its own"));
+            let widths = quad.border_widths;
+            assert!(
+                widths.top.0 == 0. && widths.bottom.0 == 0. && widths.left.0 == 0. && widths.right.0 == 0.,
+                "{mode:?}: {button:?} has a border"
+            );
             let radii = quad.corner_radii;
             assert!(
                 radii.top_left.0 == 0.
@@ -2430,8 +2728,15 @@ mod tests {
                 "{mode:?}: the background isn't laid over the body"
             );
             // Clearly apart from the body, though not starkly.
-            let body_color = Theme::global(cx).background;
+            let body_color = crate::theme::color(crate::theme::palette(cx).ribbon);
             let apart = (body_color.blend(color).l - body_color.l).abs();
+            if mode == ThemeMode::Dark {
+                let shown: gpui_kit::Rgba = body_color.blend(color).into();
+                assert!(
+                    (shown.r * 255. - 68.).abs() < 1. && (shown.g - shown.r).abs() < 0.001,
+                    "dark: {button:?} is {shown:?}, not #444444"
+                );
+            }
             assert!(
                 (0.06..0.16).contains(&apart),
                 "{mode:?}: {button:?} is {apart} apart from the body"
@@ -2461,22 +2766,17 @@ mod tests {
                 let px = gpui_kit::px;
                 let body = window.find("ribbon-controls").bounds();
                 let group = window.find("Project").bounds();
+                // No title strip: the group starts with its buttons, 8px in
+                // and 8px down, and ends 8px above the bottom.
                 assert_eq!(
-                    group.left(),
-                    body.left(),
-                    "{mode:?}: space before the first group's title strip"
-                );
-                // The group, and its title strip, run the body's full height;
-                // its buttons are padded 8px above and below.
-                assert_eq!(
-                    group.top(),
-                    body.top(),
-                    "{mode:?}: the group doesn't reach the top"
+                    (group.left() - body.left(), group.top() - body.top()),
+                    (px(8.), px(8.)),
+                    "{mode:?}: the first group isn't 8px in"
                 );
                 assert_eq!(
-                    group.bottom(),
-                    body.bottom(),
-                    "{mode:?}: the group doesn't reach the bottom"
+                    body.bottom() - group.bottom(),
+                    px(8.),
+                    "{mode:?}: the group isn't 8px above the bottom"
                 );
                 // Project's two commands are slim, stacked from the top.
                 let slim = window.find("new-project").bounds();
@@ -2486,17 +2786,18 @@ mod tests {
                     px(8.),
                     "{mode:?}: no 8px padding above the buttons"
                 );
+                assert_eq!(slim.left(), group.left(), "{mode:?}: space before New Project");
                 for button in [slim, below] {
                     assert_eq!(
                         button.size.height,
-                        px(22.),
+                        px(27.),
                         "{mode:?}: {button:?} isn't slim"
                     );
                 }
                 assert_eq!(
                     (below.left(), below.top() - slim.bottom()),
-                    (slim.left(), px(8.)),
-                    "{mode:?}: Open Project isn't stacked 8px under New Project"
+                    (slim.left(), px(4.)),
+                    "{mode:?}: Open Project isn't stacked 4px under New Project"
                 );
                 square_and_apart(window, slim, mode, cx);
             })
@@ -2512,6 +2813,7 @@ mod tests {
                 let px = gpui_kit::px;
                 let body = window.find("ribbon-controls").bounds();
                 let full = window.find("settings").bounds();
+                assert_eq!(full.size.height, px(58.), "{mode:?}: Settings isn't full");
                 assert_eq!(
                     full.top() - body.top(),
                     px(8.),
@@ -2524,6 +2826,84 @@ mod tests {
                 );
 
                 square_and_apart(window, full, mode, cx);
+            })
+            .unwrap();
+        }
+    }
+
+    /// On the Spec tab, whose five groups are Build, Components, Analysis,
+    /// Skills, and Refactor, a divider stands between each group and the
+    /// next, and none before the first: 4px wide, 4px from the buttons either
+    /// side, as tall as the buttons, from the top of the first to the bottom
+    /// of the last, its ends softly rounded, in the tab row's colour, which it
+    /// keeps on the Spec tab's tinted body, in dark and light mode alike.
+    #[gpui_kit::test]
+    async fn ribbon_groups_are_parted_by_dividers(cx: &mut TestAppContext) {
+        use gpui_kit::component::{Theme, ThemeMode};
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let handle = window.into();
+        let ribbon = main.unwrap().read_with(cx, |main, _| main.ribbon.clone());
+        ribbon.update(cx, |r, cx| r.select_tab(crate::ribbon::RibbonTab::Spec, cx));
+        let groups = ["Build", "Components", "Analysis", "Skills", "Refactor"];
+        for mode in [ThemeMode::Dark, ThemeMode::Light] {
+            cx.update(|cx| Theme::change(mode, None, cx));
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let px = gpui_kit::px;
+                let scale = window.scale_factor();
+                let body = window.find("ribbon-controls").bounds();
+                let tab_row = crate::theme::color(crate::theme::palette(cx).ribbon_tabs);
+                let quads = window.painted_quads();
+                assert!(window.try_find(("ribbon-divider", 0usize)).is_none());
+                assert!(window.try_find(("ribbon-divider", groups.len())).is_none());
+                for (ix, pair) in groups.windows(2).enumerate() {
+                    let (before, after) =
+                        (window.find(pair[0]).bounds(), window.find(pair[1]).bounds());
+                    let divider = window.find(("ribbon-divider", ix + 1)).bounds();
+                    assert_eq!(divider.size.width, px(4.), "{mode:?}: {pair:?}'s divider");
+                    assert_eq!(
+                        (divider.left() - before.right(), after.left() - divider.right()),
+                        (px(4.), px(4.)),
+                        "{mode:?}: {pair:?}'s divider isn't 4px from their buttons"
+                    );
+                    // As tall as the buttons: the tab's full buttons, from 8px
+                    // down to 8px above the bottom.
+                    assert_eq!(
+                        (divider.top() - body.top(), divider.size.height),
+                        (px(8.), px(58.)),
+                        "{mode:?}: {pair:?}'s divider isn't as tall as the buttons"
+                    );
+                    let quad = quads
+                        .iter()
+                        .find(|q| {
+                            (q.bounds.origin.x.0 - divider.left().as_f32() * scale).abs() < 1.
+                                && (q.bounds.size.width.0 - 4. * scale).abs() < 1.
+                                && q.background.as_solid().is_some()
+                        })
+                        .unwrap_or_else(|| panic!("{mode:?}: {pair:?}'s divider isn't drawn"));
+                    assert_eq!(
+                        quad.background.as_solid(),
+                        Some(tab_row),
+                        "{mode:?}: {pair:?}'s divider isn't the tab row's colour"
+                    );
+                    let radii = quad.corner_radii;
+                    assert!(
+                        radii.top_left.0 > 0. && radii.bottom_right.0 > 0.,
+                        "{mode:?}: {pair:?}'s divider's ends aren't rounded"
+                    );
+                }
             })
             .unwrap();
         }
@@ -4309,14 +4689,14 @@ mod tests {
         let main = main.unwrap();
         let handle = window.into();
         let ribbon = main.read_with(cx, |main, _| main.ribbon.clone());
-        let controls = ["project-directory", "build", "dark-mode", "settings"];
+        let controls = ["project-directory", "build", "brightness", "settings"];
 
         for (tab, shown) in [
             (RibbonTab::Project, Some("project-directory")),
             (RibbonTab::Code, None),
             (RibbonTab::Spec, Some("build")),
             (RibbonTab::Research, None),
-            (RibbonTab::Application, Some("dark-mode")),
+            (RibbonTab::Application, Some("brightness")),
         ] {
             ribbon.update(cx, |ribbon, cx| ribbon.select_tab(tab, cx));
             cx.run_until_parked();
@@ -4329,6 +4709,17 @@ mod tests {
                         expected,
                         "{control} under {tab:?}"
                     );
+                }
+                // Brightness is the Appearance group's one column.
+                if tab == RibbonTab::Application {
+                    let appearance = window.find("Appearance").bounds();
+                    let brightness = window.find("brightness").bounds();
+                    assert_eq!(
+                        (brightness.left(), brightness.right()),
+                        (appearance.left(), appearance.right()),
+                        "Appearance holds more than one column"
+                    );
+                    assert!(window.try_find("dark-mode").is_none());
                 }
                 // Analysis follows Build: Analyze Divergence, then View
                 // Divergence Reports.
@@ -4349,8 +4740,8 @@ mod tests {
         }
 
         // Ctrl+click opens tabs alongside each other: their groups sit side by
-        // side in the order of the tabs, with no divider between; a plain click
-        // opens one alone again.
+        // side in the order of the tabs, a divider between one tab's and the
+        // next's as between any groups; a plain click opens one alone again.
         ribbon.update(cx, |ribbon, cx| {
             ribbon.tab_clicked(RibbonTab::Application, 1, false, cx);
             ribbon.tab_clicked(RibbonTab::Project, 1, true, cx);
@@ -4372,14 +4763,18 @@ mod tests {
                 assert!(window.try_find(control).is_some(), "{control} isn't shown");
             }
             assert!(window.try_find("build").is_none());
-            // Project's groups come before Application's, with nothing between
-            // them but the gap: no divider.
+            // Project's groups come before Application's, a divider between
+            // them 4px from each.
             let project = window.find("Project").bounds();
             let appearance = window.find("Appearance").bounds();
+            let divider = window.find(("ribbon-divider", 1usize)).bounds();
             assert_eq!(
-                appearance.left() - project.right(),
-                gpui_kit::px(8.),
-                "something sits between Project's group {project:?} and Application's {appearance:?}"
+                (
+                    divider.left() - project.right(),
+                    appearance.left() - divider.right()
+                ),
+                (gpui_kit::px(4.), gpui_kit::px(4.)),
+                "the divider {divider:?} isn't 4px from Project's group {project:?} and Application's {appearance:?}"
             );
         })
         .unwrap();
@@ -4405,31 +4800,36 @@ mod tests {
         })
         .unwrap();
 
-        // Groups sit side by side with nothing between them but the gap: the
-        // title strip down each one's left edge marks where it starts.
+        // Groups sit side by side, a divider between them 4px from each, and
+        // none before the first.
         cx.update_window(handle, |_, window, _| {
             let appearance = window.find("Appearance").bounds();
             let preferences = window.find("Preferences").bounds();
+            let divider = window.find(("ribbon-divider", 1usize)).bounds();
             assert_eq!(
-                preferences.left() - appearance.right(),
-                gpui_kit::px(8.),
-                "something sits between {appearance:?} and {preferences:?}"
+                (
+                    divider.left() - appearance.right(),
+                    preferences.left() - divider.right()
+                ),
+                (gpui_kit::px(4.), gpui_kit::px(4.)),
+                "the divider {divider:?} isn't 4px from {appearance:?} and {preferences:?}"
             );
+            assert!(window.try_find(("ribbon-divider", 0usize)).is_none());
         })
         .unwrap();
 
-        // The tab row's height, down to the line along its bottom, which the
-        // collapsed row keeps; the left container ends on that line.
+        // The tab row's height, which the collapsed row keeps; the left
+        // container runs its full height.
         let expanded_row = cx
             .update_window(handle, |_, window, _| {
                 let left = window.find("ribbon-left").bounds();
-                let line = window.find("ribbon-tabs-line").bounds();
+                let row = window.find("ribbon-tabs-row").bounds();
                 assert_eq!(
-                    left.bottom(),
-                    line.top(),
-                    "the left container runs past the line"
+                    (left.top(), left.bottom()),
+                    (row.top(), row.bottom()),
+                    "the left container isn't the tab row's height"
                 );
-                (left.top(), line.bottom(), left.size.height)
+                (left.top(), row.bottom(), left.size.height)
             })
             .unwrap();
 
@@ -4453,7 +4853,7 @@ mod tests {
             let left = window.find("ribbon-left").bounds();
             assert_eq!(row.top(), top, "the collapsed row moved");
             assert_eq!(
-                row.bottom() + gpui_kit::px(1.),
+                row.bottom(),
                 line_bottom,
                 "the collapsed row {row:?} isn't the tab row's height"
             );
@@ -4503,7 +4903,7 @@ mod tests {
                 "new-project",
                 "project-directory",
                 "build",
-                "dark-mode",
+                "brightness",
                 "settings",
             ];
             for pair in small.windows(2) {
@@ -4513,11 +4913,20 @@ mod tests {
                     "{pair:?} overlap or touch"
                 );
             }
-            for control in small {
+            // Brightness is as wide as its icons and 120px track.
+            for control in small.into_iter().filter(|&c| c != "brightness") {
                 let bounds = window.find(control).bounds();
                 assert!(
                     bounds.size.width < gpui_kit::px(160.),
                     "{control} stretches: {bounds:?} in {row:?}"
+                );
+            }
+            // Small buttons stay 22px tall, whatever the tabs make them.
+            for control in ["new-project", "project-directory", "build", "settings"] {
+                assert_eq!(
+                    window.find(control).bounds().size.height,
+                    gpui_kit::px(22.),
+                    "{control} isn't small"
                 );
             }
         })
@@ -4637,6 +5046,112 @@ mod tests {
         .unwrap();
         cx.run_until_parked();
         cx.update(|cx| assert_eq!(chat.read(cx).value(cx).as_ref(), ""));
+    }
+
+    /// In a git repository, the git panel sits beneath the file tree with no
+    /// line between them: the tree on the darkest surface runs straight into
+    /// the panel's header on the ribbon's tab row colour, whose change of
+    /// colour is the edge, in dark and light mode alike.
+    #[gpui_kit::test]
+    async fn no_line_lies_between_the_tree_and_the_git_panel(cx: &mut TestAppContext) {
+        use gpui_kit::component::{Theme, ThemeMode};
+        let dir =
+            std::env::temp_dir().join(format!("suspense-sidebar-edge-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        for folder in [".claude", "assets", "spec/lib", "src", "targets"] {
+            std::fs::create_dir_all(dir.join(folder)).unwrap();
+        }
+        for (file, text) in [
+            ("piton.config.pi", "root: ./spec\ncodeRoot: ./src\n"),
+            (".gitignore", "targets/\n"),
+            ("spec/index.pi", "a: 1\n"),
+            ("spec/lib/index.pi", "b: 2\n"),
+            ("src/main.rs", "fn main() {}\n"),
+            ("targets/out", "\n"),
+        ] {
+            std::fs::write(dir.join(file), text).unwrap();
+        }
+        let git = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
+                .args(args)
+                .current_dir(&dir)
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "git {args:?}: {output:?}");
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "first"]);
+        std::fs::write(dir.join("src/main.rs"), "fn main() { go() }\n").unwrap();
+        std::fs::write(dir.join("assets/new.txt"), "new\n").unwrap();
+        crate::commit_notes::add(
+            &dir,
+            "Rewrite Editor spec with marquee selection and push/pull",
+        )
+        .unwrap();
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            ProjectDirectory::set(dir.clone(), cx);
+        });
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            Root::new(view, window, cx)
+        });
+        let handle: gpui_kit::AnyWindowHandle = window.into();
+        cx.wait_for(handle, Duration::from_secs(5), |window, _| {
+            window.try_find("git-header").is_some()
+                && window.try_find(("project-entry", 0usize)).is_some()
+        })
+        .await;
+        gpui_kit::VisualTestContext::from_window(handle, cx)
+            .simulate_resize(gpui_kit::size(gpui_kit::px(1000.), gpui_kit::px(974.)));
+        for mode in [ThemeMode::Dark, ThemeMode::Light] {
+            cx.update(|cx| Theme::change(mode, None, cx));
+            for _ in 0..3 {
+                cx.run_until_parked();
+                cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                    .unwrap();
+            }
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                crate::double_borders::assert_none(window);
+                let palette = crate::theme::palette(cx);
+                let tree = window.find("project-tree").bounds();
+                let header = window.find("git-header").bounds();
+                assert!(
+                    (header.top() - tree.bottom()).abs() < gpui_kit::px(0.5),
+                    "{mode:?}: something lies between the tree, ending at {:?}, and the \
+                     header, starting at {:?}",
+                    tree.bottom(),
+                    header.top()
+                );
+                let frame = crate::frame_image::Frame::of(window);
+                // Straight down across the edge, clear of the scroll column:
+                // the tree's colour, then the header's, and nothing between.
+                let x = tree.left() + gpui_kit::px(100.);
+                let edge = header.top().as_f32().round() as i32;
+                for dy in -3..3 {
+                    let y = gpui_kit::px((edge + dy) as f32 + 0.5);
+                    let expected = if dy < 0 {
+                        palette.darkest
+                    } else {
+                        palette.ribbon_tabs
+                    };
+                    assert_eq!(
+                        frame.at(gpui_kit::point(x, y)),
+                        expected,
+                        "{mode:?}: {dy}px from the edge between the tree and the git panel"
+                    );
+                }
+            })
+            .unwrap();
+        }
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// The project tree sits in a sidebar along the left, before prompt mode.
@@ -5220,5 +5735,183 @@ mod tests {
             window.try_find("palette").is_none() && chat.read(cx).is_focused(window, cx)
         })
         .await;
+    }
+
+    /// In the window as the app lays it out, in the sidebar above the git
+    /// panel, at each mode's brightness, the file tree's scroll column is laid
+    /// straight over the tree's darkest surface, with nothing of its own
+    /// beneath it: the surface down both of its sides, around its arrows, and
+    /// through the thumb at rest; the track black laid half way over that
+    /// surface, a pixel in from either side; the thumb's end black laid a
+    /// quarter over it; and each arrow, solid and faint, white laid about a
+    /// fifth over it. The tree has more rows than fit, so the thumb and the
+    /// track both show.
+    #[gpui_kit::test]
+    async fn the_trees_scroll_column_is_on_the_trees_surface_in_the_window(
+        cx: &mut TestAppContext,
+    ) {
+        use gpui_kit::component::{ActiveTheme as _, Theme, ThemeMode};
+        use gpui_kit::{Bounds, Pixels, point, px};
+        let dir =
+            std::env::temp_dir().join(format!("suspense-tree-column-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(dir.join("spec")).unwrap();
+        std::fs::write(dir.join("piton.config.pi"), "root: ./spec\n").unwrap();
+        for ix in 0..80 {
+            std::fs::write(dir.join(format!("file-{ix:02}.txt")), "\n").unwrap();
+        }
+        let git = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
+                .args(args)
+                .current_dir(&dir)
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "git {args:?}: {output:?}");
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "first"]);
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            ProjectDirectory::set(dir.clone(), cx);
+        });
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            Root::new(view, window, cx)
+        });
+        let handle: gpui_kit::AnyWindowHandle = window.into();
+        cx.wait_for(handle, Duration::from_secs(5), |window, _| {
+            window.try_find("git-header").is_some()
+                && window.try_find(("project-entry", 0usize)).is_some()
+                && window.try_find("project-tree-scroll-column").is_some()
+        })
+        .await;
+        gpui_kit::VisualTestContext::from_window(handle, cx)
+            .simulate_resize(gpui_kit::size(px(1000.), px(700.)));
+
+        // `color` laid over `surface`, as 0xRRGGBB.
+        let over = |surface: u32, color: gpui_kit::Hsla| {
+            let c: gpui_kit::Rgba = color.into();
+            [(16, c.r), (8, c.g), (0, c.b)]
+                .into_iter()
+                .fold(0u32, |rgb, (shift, channel)| {
+                    let s = ((surface >> shift) & 0xff) as f32 / 255.;
+                    let v = s * (1. - c.a) + channel * c.a;
+                    rgb | ((v * 255.).round() as u32) << shift
+                })
+        };
+        // The same, to a step in each channel.
+        let same = |a: u32, b: u32| {
+            (0..3).all(|ix| {
+                let channel = |c: u32| ((c >> (ix * 8)) & 0xff) as i32;
+                (channel(a) - channel(b)).abs() <= 1
+            })
+        };
+
+        for (mode, brightness) in [
+            (ThemeMode::Dark, 0),
+            (ThemeMode::Dark, 1),
+            (ThemeMode::Dark, -2),
+            (ThemeMode::Light, 0),
+        ] {
+            cx.update(|cx| {
+                Theme::change(mode, None, cx);
+                crate::theme::set_brightness(mode == ThemeMode::Dark, brightness, cx);
+            });
+            for _ in 0..3 {
+                cx.run_until_parked();
+                cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                    .unwrap();
+            }
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let case = format!("{mode:?} at {brightness}");
+                let surface = crate::theme::palette(cx).darkest;
+                let colors = crate::scrollbar::scroll_colors(cx.theme().is_dark());
+                let (track_color, end, arrow) = (
+                    over(surface, colors.track),
+                    over(surface, colors.thumb_end),
+                    over(surface, colors.arrow),
+                );
+                let frame = crate::frame_image::Frame::of(window);
+                let tree = window.find("project-tree").bounds();
+                let column = window.find("project-tree-scroll-column").bounds();
+                let track = window.find("project-tree-scroll-track").bounds();
+                let up = window.find("project-tree-scroll-up").bounds();
+                let down = window.find("project-tree-scroll-down").bounds();
+                let at = |x: f32, y: f32, from: Bounds<Pixels>| {
+                    frame.at(point(from.left() + px(x + 0.5), from.top() + px(y + 0.5)))
+                };
+                assert_eq!(column.right(), tree.right(), "{case}: the column isn't at the tree's right");
+                let height = track.size.height.as_f32() as i32;
+
+                // The thumb, at the top with the tree unscrolled, and the
+                // track below it, read down the column's middle: the thumb's
+                // inside is the surface, with a row at either end.
+                let inside: Vec<i32> = (0..height)
+                    .filter(|y| same(at(8., *y as f32, track), surface))
+                    .collect();
+                let (first, last) = (inside[0] - 1, *inside.last().unwrap() + 1);
+                assert_eq!(first, 0, "{case}: the thumb isn't at the top");
+                assert!(
+                    last > 10 && last < height - 10,
+                    "{case}: the thumb, rows {first} to {last} of {height}, leaves no track"
+                );
+
+                // The surface down both sides and beside the column, from the
+                // top of the up button to the bottom of the down button.
+                let mut y = 0.;
+                while y < column.size.height.as_f32() {
+                    for x in [-4., 0., 17.] {
+                        let c = at(x, y, column);
+                        assert!(
+                            same(c, surface),
+                            "{case}: {c:06x} at ({x}, {y}) of the column, not the tree's {surface:06x}"
+                        );
+                    }
+                    y += 1.;
+                }
+                // The track, inset a pixel either side.
+                for y in [last + 1, (last + height) / 2, height - 1] {
+                    for x in [1., 8., 16.] {
+                        let c = at(x, y as f32, track);
+                        assert!(
+                            same(c, track_color),
+                            "{case}: the track is {c:06x} at ({x}, {y}), not {track_color:06x}"
+                        );
+                    }
+                }
+                // The thumb: the surface itself, its full width, and its
+                // bottom end black laid a quarter over the surface.
+                for x in [1., 8., 16.] {
+                    let c = at(x, (last / 2) as f32, track);
+                    assert!(same(c, surface), "{case}: the thumb is {c:06x} at {x}");
+                    let c = at(x, last as f32, track);
+                    assert!(same(c, end), "{case}: the thumb's end is {c:06x} at {x}");
+                }
+                // Each button: the surface, and a faint solid arrow on it.
+                for button in [up, down] {
+                    let mut lit = 0;
+                    for y in 0..17 {
+                        for x in 0..18 {
+                            let c = at(x as f32, y as f32, button);
+                            assert!(
+                                same(c, surface) || same(c, arrow),
+                                "{case}: {c:06x} at ({x}, {y}) in a button"
+                            );
+                            lit += same(c, arrow) as usize;
+                        }
+                    }
+                    assert_eq!(lit, 18, "{case}: the arrow isn't 6, 6, 4 and 2 pixels");
+                }
+            })
+            .unwrap();
+        }
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

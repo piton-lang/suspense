@@ -103,7 +103,8 @@ shape RunTargetsShape:
             surface, errors not told apart. The output is clean, as a terminal
             would show it, as the @{RunTargetsShape.consoleOutput} says. It scrolls with a
             @{ScrollbarScope} whose lock to the bottom starts on, following the
-            latest output. A "Stop" button in the header stops it, and every
+            latest output. The well runs beneath its scroll column too, so the
+            column sits on the log's own surface, not the panel's base. A "Stop" button in the header stops it, and every
             process it started with it, while it runs; once it is over, a
             "Run again" button runs it afresh in its place.
 

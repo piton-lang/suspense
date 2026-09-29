@@ -5,6 +5,8 @@ from /scope/git import GitScope
 from /scope/no-project import NoProjectStateScope
 from /scope/open-file import OpenFileScope
 from /scope/project-directory import ProjectDirectoryScope
+from /scope/project-locations import ProjectLocationsScope
+from /scope/prompt-mode/modes import PromptModesScope
 from /ui/components/diff-view import DiffViewScope
 from /ui/components/scrollbar import ScrollbarScope
 
@@ -27,6 +29,39 @@ shape FileTreeShape:
         are shown when it is expanded. It scrolls with a @{ScrollbarScope}.
         Until a project is picked it reads "No project open", as the
         @{NoProjectStateScope} says.
+
+    look:
+        The tree sits on the darkest surface, #111111 in dark mode, a step
+        darker than the ribbon's command area, and in light mode a step
+        lighter than it instead, #e1e1e1. Each row is 24 pixels tall: an icon, then the
+        name 8 pixels after it, in regular text, with no chevrons. Rows start
+        16 pixels from the tree's left edge, and each level of a folder's
+        contents is indented 24 pixels further, so a file's icon sits beneath
+        its folder's name. Clicking a folder's row expands or collapses it.
+
+        A folder shows an outlined folder icon, the same whether it is
+        expanded or not. A file shows an outlined text file icon, with lines
+        across it; a .pi file's is a
+        code file icon, and the project's piton.config.pi a settings file icon
+        in the theme's orange. Icons are in muted text colour, except that the
+        spec location's folder, as the @{ProjectLocationsScope} says, and its
+        .pi files take Spec's colour, and the code location's folder takes
+        Code's colour, of the @{PromptModesScope}, each on its icon alone. A
+        folder or file whose name starts with a dot, other than a .gitignore
+        or similar file, and anything git ignores, is dimmed, name and icon
+        both, as tertiary text is; the dimming wins over the name's git status
+        colour. The spec and code locations are read from the project's
+        piton.config.pi when the project opens, and again whenever its top
+        folder is read anew.
+
+        The selected row, the file open in the editor or the folder last
+        clicked, has a background of the ribbon's command area colour, #222222
+        in dark mode, inset 8 pixels from either side of the tree, with softly
+        rounded corners, and its name in semibold. Hovering a row gives it the
+        same background, fainter. There are no lines between rows. The
+        permanent scrollbar keeps its column at the tree's right, so the
+        selected row's background is inset from that column rather than from
+        the panel's edge.
 
     refreshing:
         The tree refreshes by itself when files or folders are added, removed,
