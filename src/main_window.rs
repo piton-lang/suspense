@@ -56,18 +56,16 @@ const MIN_SIDEBAR_WIDTH: Pixels = px(160.);
 /// The shortest the file tree can be dragged, above the git panel.
 const MIN_FILE_TREE_HEIGHT: Pixels = px(80.);
 
-actions!(suspense, [Dismiss, FocusChat, TogglePalette]);
+actions!(suspense, [Dismiss, TogglePalette]);
 
 /// Esc closes what the window has open to dismiss, and otherwise goes on to
-/// wherever the keyboard is. Ctrl/Cmd+Enter moves focus to the chat input
-/// while it doesn't have it, and otherwise goes on to whatever it means
-/// there. Both are bound without a context, so they match ahead of any other
-/// binding and pass on what they don't take. Ctrl/Cmd+P opens or closes the
-/// palette.
+/// wherever the keyboard is; it is bound without a context, so it matches
+/// ahead of any other binding and passes on what it doesn't take. Ctrl/Cmd+P
+/// opens or closes the palette. Ctrl/Cmd+Enter, which moves focus to the chat
+/// input, isn't bound here: see [`MainWindow::intercept_focus_chat`].
 pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("escape", Dismiss, None),
-        KeyBinding::new("secondary-enter", FocusChat, None),
         #[cfg(target_os = "macos")]
         KeyBinding::new("cmd-p", TogglePalette, None),
         #[cfg(not(target_os = "macos"))]
@@ -183,6 +181,43 @@ impl MainWindow {
         })
     }
 
+    /// Ctrl/Cmd+Enter moves focus to the chat input from anywhere in the
+    /// window, with its cursor where it was, and sends nothing. It is caught
+    /// before any binding is matched, since the inputs, lists, and editors it
+    /// would otherwise reach bind it too, and while nothing has focus, no
+    /// binding would reach the window at all. It goes on to mean what it
+    /// means where it means something already: in the chat input, the
+    /// palette, a dialog, the list of recent projects, and an inset panel.
+    fn intercept_focus_chat(window: &Window, cx: &mut Context<Self>) -> Subscription {
+        let this = cx.weak_entity();
+        let handle = window.window_handle();
+        cx.intercept_keystrokes(move |event, window, cx| {
+            let keystroke = &event.keystroke;
+            if keystroke.key != "enter"
+                || keystroke.modifiers != Modifiers::secondary_key()
+                || window.window_handle() != handle
+            {
+                return;
+            }
+            let _ = this.update(cx, |this, cx| {
+                let busy_elsewhere = this
+                    .palette
+                    .as_ref()
+                    .is_some_and(|palette| palette.read(cx).is_open(window, cx))
+                    || window.has_active_dialog(cx)
+                    || this.ribbon.read(cx).project_indicator().read(cx).is_open()
+                    || this.panel_open();
+                let chat = this.prompt_mode.read(cx).chat_input_view();
+                if busy_elsewhere || chat.read(cx).has_keyboard(window, cx) {
+                    return;
+                }
+                this.prompt_mode
+                    .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx));
+                cx.stop_propagation();
+            });
+        })
+    }
+
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let ribbon = cx.new(Ribbon::new);
         let sidebar = cx.new(ProjectTree::new);
@@ -249,6 +284,7 @@ impl MainWindow {
                 }
             }),
         ];
+        subscriptions.push(Self::intercept_focus_chat(window, cx));
         // While the inset panel is open, nothing beneath it can take focus:
         // focus that leaves it goes back to where it was within it.
         let panel_focus = cx.focus_handle();
@@ -1661,25 +1697,6 @@ impl Render for MainWindow {
                 }
                 // Nothing to dismiss: Esc is for wherever the keyboard is.
                 cx.propagate();
-            }))
-            .on_action(cx.listener(|this, _: &FocusChat, window, cx| {
-                // Where Ctrl/Cmd+Enter means something already, it keeps its
-                // meaning: in the chat input, the palette, a dialog, the list
-                // of recent projects, and an inset panel over the chat input.
-                let busy_elsewhere = this
-                    .palette
-                    .as_ref()
-                    .is_some_and(|palette| palette.read(cx).is_open(window, cx))
-                    || window.has_active_dialog(cx)
-                    || this.ribbon.read(cx).project_indicator().read(cx).is_open()
-                    || this.panel_open();
-                let chat = this.prompt_mode.read(cx).chat_input_view();
-                if busy_elsewhere || chat.read(cx).has_keyboard(window, cx) {
-                    cx.propagate();
-                    return;
-                }
-                this.prompt_mode
-                    .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx))
             }))
             .on_action(cx.listener(
                 |this, _: &crate::project_indicator::ToggleProjectList, window, cx| {
@@ -4886,6 +4903,92 @@ mod tests {
         cx.update(|cx| assert_eq!(chat.read(cx).value(cx).as_ref(), "hi"));
         // The file got no new line from it.
         cx.update(|cx| assert_eq!(file.read(cx).text(cx).as_ref(), "# Notes\n"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Ctrl/Cmd+Enter focuses the chat input from inside the tree's name
+    /// field, whose own Enter would otherwise take it, and while nothing has
+    /// focus at all.
+    #[gpui_kit::test]
+    async fn ctrl_enter_focuses_the_chat_input_from_anywhere(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-focus-chat-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("notes.md"), "# Notes\n").unwrap();
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find(("project-entry", 0usize)).is_some()
+        })
+        .await;
+        let chat = main.read_with(cx, |main, cx| main.prompt_mode.read(cx).chat_input_view());
+        let tree = main.read_with(cx, |main, _| main.sidebar.clone());
+        let send = if cfg!(target_os = "macos") {
+            "cmd-enter"
+        } else {
+            "ctrl-enter"
+        };
+
+        // In the name field of a new file in the tree.
+        cx.update_window(handle, |_, window, cx| {
+            tree.update(cx, |tree, cx| {
+                tree.start_naming(
+                    crate::project_tree::Naming::NewFile(dir.clone()),
+                    window,
+                    cx,
+                )
+            });
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(!chat.read(cx).has_keyboard(window, cx));
+            window.input("new.md", cx);
+            window.press(send, cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            assert!(
+                chat.read(cx).has_keyboard(window, cx),
+                "Ctrl+Enter in the tree's name field left the chat unfocused"
+            );
+        })
+        .unwrap();
+        assert!(!dir.join("new.md").exists(), "Ctrl+Enter named the file");
+
+        // With nothing focused.
+        cx.update_window(handle, |_, window, cx| {
+            window.blur(cx);
+            assert!(!chat.read(cx).has_keyboard(window, cx));
+            window.press(send, cx);
+            assert!(
+                chat.read(cx).has_keyboard(window, cx),
+                "Ctrl+Enter with nothing focused left the chat unfocused"
+            );
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| window.input("hi", cx))
+            .unwrap();
+        cx.run_until_parked();
+        cx.update(|cx| assert_eq!(chat.read(cx).value(cx).as_ref(), "hi"));
 
         std::fs::remove_dir_all(&dir).ok();
     }

@@ -1,9 +1,9 @@
 use /lib
 use /ui/components/sidebar/Sidebar
 from /scope/application/Body import BodyScope
-from /scope/prompt-mode/message-list import MessageList
 from /ui/components/file-tree import FileTreeScope
 from /ui/components/git-panel import GitPanelScope
+from /ui/components/referenced-spec-sidebar import ReferencedSpecSidebarScope
 from /ui/components/sidebar import SidebarScope
 
 export sidebar ProjectSidebarScope:
@@ -26,7 +26,7 @@ concept ProjectSidebarConcept:
 shape ProjectSidebarShape:
     description:
         Runs the full height of the window beneath the ribbon, to the left of
-        the body and the chat input beneath it. The file tree fills it from
+        the body, and the chat input along its bottom. The file tree fills it from
         the top, and the git panel sits along the bottom, underneath it,
         taking only the height it needs, up to half the sidebar, or up to
         where the edge between them has been dragged, as the @{GitPanelScope}
@@ -35,4 +35,5 @@ shape ProjectSidebarShape:
     others:
         It is the only sidebar on the body's left. While a task runs, a second
         one, the running task's referenced spec, slides out at the right of
-        the message list, as the @{MessageList} says.
+        the message list and the chat input, as the
+        @{ReferencedSpecSidebarScope} says.

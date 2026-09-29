@@ -19,7 +19,8 @@ export sidebar ReferencedSpecSidebarScope:
 
 concept ReferencedSpecSidebarConcept:
     pitch:
-        A second @{SidebarScope}, at the right of the message list, that lists
+        A second @{SidebarScope}, at the right of the message list and the
+        chat input beneath it, that lists
         the spec files the running task references, so it's clear what part of
         the spec the harness is working from, and the constraints it has taken
         from it for the task.
@@ -28,9 +29,10 @@ concept ReferencedSpecSidebarConcept:
 
 shape ReferencedSpecSidebarShape:
     description:
-        It runs the full height of the message list, above the chat input,
-        which stays across the full width of prompt mode. It keeps the width
-        it was dragged to while the application runs.
+        It runs the full height of the body, beside both the message list and
+        the chat input beneath it, which stops at its left edge rather than
+        running beneath it. It keeps the width it was dragged to while the
+        application runs.
 
         Its two panels, the referenced files above the understanding, sit one
         above the other: the referenced files only as tall as their rows need,
@@ -45,7 +47,8 @@ shape ReferencedSpecSidebarShape:
         There is no line anywhere in it, not between a header and its body,
         nor between one panel and the next: the change of colour is the edge.
         The only line is the one down its left edge, where it meets the
-        message list, which is the handle it is resized by. In light mode the
+        message list and the chat input, which is the handle it is resized
+        by. In light mode the
         same steps are taken, as the ribbon's are.
 
         Neither panel has a permanent scrollbar, since its column would break
@@ -66,12 +69,13 @@ shape ReferencedSpecSidebarShape:
         sent from the Code, Chain, or Spec tab until its run is over. Questions
         from the Ask tab never show it, even when one is sent from the queue.
 
-        When a task starts, it slides out from the message list's right edge,
-        growing from nothing to its width, its contents sliding into view from
-        behind that edge as it does. When the run is over, it slides back the
-        same way. The slide is quick and settles without bouncing. The message
-        list takes the rest of the width, laid out anew only once the slide
-        settles, as when a file's split opens.
+        When a task starts, it slides out from the right edge of the message
+        list and the chat input, growing from nothing to its width, its
+        contents sliding into view from behind that edge as it does. When the
+        run is over, it slides back the same way. The slide is quick and
+        settles without bouncing. The message list and the chat input take
+        the rest of the width, laid out anew only once the slide settles, as
+        when a file's split opens.
 
 export panel ReferencedFilesPanel:
     title: Referenced Spec

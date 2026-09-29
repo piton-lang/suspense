@@ -29,12 +29,13 @@ shape BodyShape:
         @{ProjectSidebarScope}, which runs the full height beside it, and
         reaching the window's right edge. It is part of the @{PromptEditor}.
 
-        The @{ChatInputScope} lives within the body, along its bottom, across
-        its full width: its left edge against the project sidebar, and its
-        right edge at the window's. Above it, the message list, with, while a
-        task runs, the @{ReferencedSpecSidebarScope} at its right; the chat
-        input runs beneath both, the right sidebar never reaching down beside
-        it.
+        The @{ChatInputScope} lives within the body, along its bottom: its
+        left edge against the project sidebar, and the message list above it.
+        While a task runs, the @{ReferencedSpecSidebarScope} runs the body's
+        full height at its right, beside both the message list and the chat
+        input, and the chat input's right edge is against it: the chat input
+        never runs beneath the right sidebar. While that sidebar isn't there,
+        the chat input reaches the window's right edge.
 
     contents:
         Everything that can be in the body:
@@ -42,8 +43,8 @@ shape BodyShape:
         - the @{MessageList}, the chat history, which fills the space above the chat input whenever no file is open
         - the hint shown in the message list's place before any task has been sent, or while no project is open, as the @{PromptEditor} and the @{NoProjectStateScope} say
         - an @{EditorScope}, in a split beside the message list, while a file is open
-        - the @{ReferencedSpecSidebarScope}, at the message list's right while a task runs
-        - the @{ChatInputScope}, along the bottom beneath all of these
+        - the @{ChatInputScope}, along the bottom beneath the message list and any file open beside it
+        - the @{ReferencedSpecSidebarScope}, at the right of all of these, the chat input included, while a task runs
 
         An @{InsetPanelScope} floats over the whole window, the body included,
         but is never part of it.
@@ -67,8 +68,8 @@ shape BodyShape:
         The slide is quick and settles without bouncing, and only then can
         the split be dragged. A file opened in place of one already showing
         doesn't slide, since the split is already open. The
-        @{ChatInputScope} is never split: it stays along the bottom, across
-        the full width of prompt mode.
+        @{ChatInputScope} is never split: it stays along the bottom, beneath
+        both the file and the chat history.
 
         Closing the file plays the slide in reverse, back into the
         sidebar: the file's side shrinks from whatever width it was

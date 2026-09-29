@@ -235,6 +235,12 @@ fn input_inset() -> Pixels {
     gpui_kit::component::Size::Medium.input_py()
 }
 
+/// The room a code editor keeps beside its text, on top of its padding: a
+/// gutter at its left, where line numbers would go, and a margin at its right
+/// that its lines wrap short of.
+const EDITOR_GUTTER: Pixels = px(10.);
+const EDITOR_WRAP_MARGIN: Pixels = px(10.);
+
 /// How the tint and the chain's icon slide between tabs: critically damped,
 /// so they settle without bouncing past.
 const CHAIN_SPRING: SpringConfig = SpringConfig::new(400., 40., 1.);
@@ -2270,9 +2276,16 @@ impl Render for ChatInput {
                     .flex_1()
                     .min_w_0()
                     // The editor pads its text more at the sides than above
-                    // and below; drawing it out sideways by the difference
-                    // insets the text evenly all round.
-                    .mx(input_inset() - gpui_kit::component::Size::Medium.input_px())
+                    // and below, and keeps a gutter at its left and a margin
+                    // its lines wrap short of at its right besides; drawing
+                    // it out sideways by the difference insets the text
+                    // evenly all round.
+                    .ml(input_inset()
+                        - gpui_kit::component::Size::Medium.input_px()
+                        - EDITOR_GUTTER)
+                    .mr(input_inset()
+                        - gpui_kit::component::Size::Medium.input_px()
+                        - EDITOR_WRAP_MARGIN)
                     .child(Editor::new(&self.editor).appearance(false).h(height))
                     .child(track_layout)
                     .child(self.completion.clone()),
@@ -2281,11 +2294,14 @@ impl Render for ChatInput {
         };
         // The input sits at the top of a dark inset as tall as the buttons
         // beside it, its first row level with Send, and grows down through
-        // it. Clicking the inset beneath the text focuses it.
+        // it. Clicking anywhere in the inset focuses the text.
         let editor = self.editor.clone();
         let input_area = div()
+            .id("prompt-box")
             .flex_1()
             .min_w_0()
+            // The editor, drawn out past the box's sides, is cut off at them.
+            .overflow_hidden()
             .self_stretch()
             .flex()
             .items_start()
@@ -2293,11 +2309,17 @@ impl Render for ChatInput {
                 this.cursor_text()
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                         editor.read(cx).focus_handle(cx).focus(window, cx);
+                        // Otherwise the chat input, which tracks focus around
+                        // the box, takes it back from the text as the press
+                        // bubbles up to it.
+                        window.prevent_default();
                     })
             })
             .rounded(cx.theme().radius)
             .bg(crate::theme::color(crate::theme::palette(cx).darkest))
             .child(input_area);
+        // Lets UI tests find the box; inert in normal builds.
+        let input_area = gpui_kit::TestSupportExt::test_support(input_area);
 
         div()
             .track_focus(&self.focus_handle)
@@ -3167,6 +3189,115 @@ mod tests {
 
     /// The send button is split: Ctrl+Shift+Enter opens its menu over the
     /// button, arrows move through it and Esc closes it, keeping the text;
+    /// The text sits 8 pixels in from the dark box's top, left, and right:
+    /// its lines starting 8 in from the top and left, and wrapping 8 short of
+    /// the right.
+    #[gpui_kit::test]
+    async fn the_text_is_inset_evenly_in_its_box(cx: &mut TestAppContext) {
+        use gpui_kit::px;
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            super::bind_keys(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut chat_input = None;
+        let window = cx.add_window(|window, cx| {
+            let input = cx.new(|cx| ChatInput::new(window, cx));
+            chat_input = Some(input.clone());
+            Root::new(cx.new(|_| AtBottom(input)), window, cx)
+        });
+        let chat_input = chat_input.unwrap();
+        let handle = window.into();
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("prompt-box").is_some()
+        })
+        .await;
+        let editor = chat_input.read_with(cx, |input, _| input.editor.clone());
+        cx.update_window(handle, |_, window, cx| {
+            editor.update(cx, |editor, cx| {
+                editor.set_value("W".repeat(4000), window, cx)
+            });
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            for _ in 0..3 {
+                window.render_frame(cx);
+            }
+            let boxed = window.find("prompt-box").bounds();
+            let text = editor.read(cx).text_bounds().unwrap();
+            // Where the lines start, past the editor's gutter, and where they
+            // wrap, short of its margin.
+            let (left, right) = (
+                text.left() + super::EDITOR_GUTTER,
+                text.right() - super::EDITOR_WRAP_MARGIN,
+            );
+            assert_eq!(
+                (left - boxed.left(), text.top() - boxed.top(), boxed.right() - right),
+                (px(8.), px(8.), px(8.)),
+                "the text's left, top, and right insets in {boxed:?}"
+            );
+        })
+        .unwrap();
+    }
+
+    /// Clicking anywhere in the dark box puts focus in the text: beneath it,
+    /// beside it, and in the inset around it.
+    #[gpui_kit::test]
+    async fn clicking_the_box_focuses_the_text(cx: &mut TestAppContext) {
+        use gpui_kit::{point, px};
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            super::bind_keys(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut chat_input = None;
+        let window = cx.add_window(|window, cx| {
+            let input = cx.new(|cx| ChatInput::new(window, cx));
+            chat_input = Some(input.clone());
+            Root::new(cx.new(|_| AtBottom(input)), window, cx)
+        });
+        let chat_input = chat_input.unwrap();
+        let handle = window.into();
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("prompt-box").is_some()
+        })
+        .await;
+        let editor_focused = |window: &Window, cx: &gpui_kit::App| {
+            chat_input
+                .read(cx)
+                .editor
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window)
+        };
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let size = window.find("prompt-box").bounds().size;
+            for (x, y) in [
+                (px(2.), px(2.)),
+                (px(2.), size.height - px(2.)),
+                (size.width - px(2.), px(2.)),
+                (size.width - px(2.), size.height - px(2.)),
+                (size.width / 2., size.height - px(2.)),
+            ] {
+                chat_input.read(cx).focus_handle.clone().focus(window, cx);
+                window.render_frame(cx);
+                assert!(!editor_focused(window, cx));
+                window.click_at("prompt-box", point(x, y), cx);
+                window.render_frame(cx);
+                assert!(
+                    editor_focused(window, cx),
+                    "clicking the box at {:?} of {size:?} left the text unfocused",
+                    (x, y)
+                );
+            }
+        })
+        .unwrap();
+    }
+
     /// Enter picks Preview Compiled Prompt, which asks for the prompt
     /// compiled and shows it in place of the input. Esc goes back to the
     /// input as it was, and Ctrl+Enter from the preview sends it.
