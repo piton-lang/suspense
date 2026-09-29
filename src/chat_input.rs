@@ -2161,7 +2161,7 @@ impl Render for ChatInput {
             tint_slide,
             move |this, position| this.bg(tint(position)),
         );
-        let input_row = div().flex().flex_row().items_end().gap_2();
+        let input_row = div().flex().flex_row().items_start().gap_2();
         let previewing = self.preview.is_some();
         let editing = self.editing.is_some();
         let send_tooltip = if queues {
@@ -2228,7 +2228,7 @@ impl Render for ChatInput {
             )
             .children(self.render_send_menu(cx));
         let send = gpui_kit::TestSupportExt::test_support(send);
-        // Above it, the send menu's Queue and Preview as buttons of their
+        // Beneath it, the send menu's Queue and Preview as buttons of their
         // own, offered when the menu is: not while a queued prompt is edited
         // or a preview shows, and Queue never on Ask, where a question never
         // queues.
@@ -2251,9 +2251,9 @@ impl Render for ChatInput {
             .flex_none()
             .w(SEND_COLUMN_WIDTH)
             .gap_1p5()
+            .child(send)
             .child(queue)
-            .child(preview)
-            .child(send);
+            .child(preview);
         let input_area = match &self.preview {
             Some(preview) => self.render_preview(&preview.clone(), window, cx),
             None => gpui_kit::TestSupportExt::test_support(
@@ -2268,14 +2268,22 @@ impl Render for ChatInput {
             )
             .into_any_element(),
         };
-        // The input sits at the bottom of a dark inset as tall as the buttons
-        // beside it, its single row level with Send, and grows up through it.
+        // The input sits at the top of a dark inset as tall as the buttons
+        // beside it, its first row level with Send, and grows down through
+        // it. Clicking the inset beneath the text focuses it.
+        let editor = self.editor.clone();
         let input_area = div()
             .flex_1()
             .min_w_0()
             .self_stretch()
             .flex()
-            .items_end()
+            .items_start()
+            .when(!previewing, |this| {
+                this.cursor_text()
+                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        editor.read(cx).focus_handle(cx).focus(window, cx);
+                    })
+            })
             .rounded(cx.theme().radius)
             .bg(crate::theme::color(crate::theme::palette(cx).darkest))
             .child(input_area);
@@ -4139,7 +4147,7 @@ mod tests {
                 "input {editor:?} and Send {send:?} differ in height"
             );
             assert!(
-                (editor.bottom() - send.bottom()).abs() <= gpui_kit::px(1.),
+                (editor.top() - send.top()).abs() <= gpui_kit::px(1.),
                 "input {editor:?} and Send {send:?} are not aligned"
             );
         })
@@ -4327,14 +4335,14 @@ mod tests {
     }
 
     /// Enter grows the input by one row in the very next frame, and it stays
-    /// put from then on: the bottom edge never moves, the first line never
+    /// put from then on: its bottom edge settles at once, the first line never
     /// scrolls out of view, and the cursor is always inside the input.
     async fn assert_enter_grows_without_flicker(scale_factor: f32, cx: &mut TestAppContext) {
         let (line_height, presses) = frames_after_enter(MAX_ROWS + 3, scale_factor, cx).await;
-        let bottom = presses[0][0].bottom;
         let one_row = presses[0][0].height;
         for (press, frames) in presses.iter().enumerate() {
             let rows = frames.last().unwrap().rows;
+            let bottom = frames.last().unwrap().bottom;
             let expected = one_row + line_height * (rows.min(MAX_ROWS) - 1) as f32;
             for (ix, frame) in frames.iter().enumerate().skip(1) {
                 let context = format!(
@@ -4346,7 +4354,7 @@ mod tests {
                 );
                 assert!(
                     (frame.bottom - bottom).abs() <= gpui_kit::px(0.5),
-                    "the bottom edge moved from {bottom:?}: {context}"
+                    "the bottom edge wasn't settled at {bottom:?}: {context}"
                 );
                 if rows <= MAX_ROWS {
                     assert!(
