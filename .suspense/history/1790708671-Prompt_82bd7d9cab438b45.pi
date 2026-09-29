@@ -1,0 +1,64 @@
+
+export anchor Prompt_82bd7d9cab438b45:
+    userPrompt:
+        \\\
+        Can we have an animation there ?
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Can we have an animation there ?
+            \\\
+        result:
+            \\\
+            Yes. I've added the animation to the spec; the code isn't changed yet. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            **What I changed:** I added a paragraph to `MessageListScrollingShape.scrollingPast` in `spec/scope/prompt-mode/message-list/Scrolling.pi`. It compiles into the "Scrolling Past" section of `.claude/reference/scope/prompt-mode/message-list/index.md`, and says:
+
+            - **Scrolling up:** the previous tasks slide down into view from above, already scrolled to their bottom. They push the latest task's header and output out below them, the two moving together as one column.
+            - **Scrolling down:** the latest task's header and output slide up into view from below, already at their top. They push the previous tasks out above them.
+            - **Timing:** the slide is quick and settles without bouncing, like the right sidebar's.
+            - **What moves:** only the space between the "previous tasks" row and the queue, and nothing is drawn outside it. The row and the queue stay put. The row shows its new text ("Back to the latest task" or the count) from the moment the slide starts.
+            - **During the slide:** the wheel scrolls neither view, and no scroll can cross back. A new scroll after the slide settles can.
+            - **Clicking the row** to expand or close the previous tasks is still not animated. I limited the animation to scrolling, since that's what you asked about.
+
+            I moved the latest task's header with its output rather than keeping it still. The code already hides that header while the previous tasks are expanded, so it belongs to the latest task's view.
+
+            **Anchors the code should follow:**
+            - `MessageListScrollingShape.scrollingPast` (`spec/scope/prompt-mode/message-list/Scrolling.pi`): the animation, plus the existing crossover rules it builds on.
+            - `RightSidebarScope`'s "Showing" description (`spec/ui/components/right-sidebar/index.pi`): the feel to match, "quick and settles without bouncing". In the code that slide uses `PANE_SLIDE_TIME`.
+            - In the code, the crossover is `scroll_past` and `scroll_past_ends` in `src/prompt_mode.rs`. The animated area is the content column built where `render_list` or `render_output` is chosen, together with `render_header`.
+
+            The constraints are in `.suspense/history/1790708627-Prompt_b6c1eab8f5657c78.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_b6c1eab8f5657c78

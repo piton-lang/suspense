@@ -863,6 +863,7 @@ impl HistoryList {
                     .disabled(!enabled)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         select(this).toggle();
+                        this.follow_task_history();
                         cx.notify();
                     })),
             )
@@ -1686,6 +1687,23 @@ struct FileTab {
     _subscriptions: Vec<Subscription>,
 }
 
+/// The latest task as the previous tasks were opened over it: which it was,
+/// among how many, and whether its output was locked to its bottom.
+struct OutputLeft {
+    task: Option<SharedString>,
+    tasks: usize,
+    locked: bool,
+}
+
+/// Scrolling past an end of the latest task, `up` into the previous tasks,
+/// or of the previous tasks back down to it, sliding one in for the other.
+struct ScrollSlide {
+    /// Counts the slides, so each springs from its start.
+    n: usize,
+    up: bool,
+    started: Instant,
+}
+
 /// How long the wheel must rest before a scroll counts as a new one, which
 /// can carry on past an end of the latest task or the previous tasks.
 const SCROLL_REST: Duration = Duration::from_millis(250);
@@ -1792,6 +1810,9 @@ struct ProjectSession {
     // How the project was left on screen, kept for when it's back.
     output_table: TaskTable,
     output_locked: bool,
+    /// The latest task, and whether its output was locked, as the previous
+    /// tasks were opened over it, for it to come back as it was left.
+    output_left: Option<OutputLeft>,
     header_prompt: HeaderPrompt,
     queue_scroll: ScrollHandle,
     ask_rows: MeasuredList,
@@ -1838,6 +1859,7 @@ impl ProjectSession {
             usage: ProjectUsage::default(),
             output_table: TaskTable::new(),
             output_locked: false,
+            output_left: None,
             header_prompt: HeaderPrompt::default(),
             queue_scroll: ScrollHandle::new(),
             ask_rows: ask_rows(),
@@ -1876,6 +1898,9 @@ pub struct PromptMode {
     /// telling a new scroll from one carried on.
     last_wheel: Rc<Cell<Option<Instant>>>,
     output_locked: bool,
+    /// The latest task, and whether its output was locked, as the previous
+    /// tasks were opened over it, for it to come back as it was left.
+    output_left: Option<OutputLeft>,
     queue_scroll: ScrollHandle,
     chat_input: Entity<ChatInput>,
     /// The queued prompt being edited in the chat input, by its id.
@@ -1911,6 +1936,12 @@ pub struct PromptMode {
     refs_opened: Option<(usize, Instant)>,
     /// The referenced spec sidebar, just closed, sliding back in.
     refs_closing: Option<RefsClosing>,
+    /// Scrolling past an end of the latest task or the previous tasks, the
+    /// one sliding in for the other, until it settles.
+    scroll_slide: Option<ScrollSlide>,
+    /// How tall the space between the previous tasks row and the queue was
+    /// last laid out, which a scroll's slide moves across.
+    slide_height: Rc<Cell<Pixels>>,
     /// The referenced spec sidebar's width, as last laid out once settled, so
     /// it opens at the width it was dragged to.
     refs_width: Rc<Cell<Pixels>>,
@@ -2089,6 +2120,7 @@ impl PromptMode {
             output_table: TaskTable::new(),
             last_wheel: Rc::default(),
             output_locked: false,
+            output_left: None,
             queue_scroll: ScrollHandle::new(),
             chat_input,
             editing_queued: None,
@@ -2107,6 +2139,8 @@ impl PromptMode {
             refs_shown: false,
             refs_opened: None,
             refs_closing: None,
+            scroll_slide: None,
+            slide_height: Rc::default(),
             refs_width: Rc::new(Cell::new(referenced_spec::WIDTH)),
             refs_split: cx.new(|_| ResizableState::default()),
             refs_scroll: ScrollHandle::new(),
@@ -2188,6 +2222,7 @@ impl PromptMode {
         swap(&mut self.usage, &mut other.usage);
         swap(&mut self.output_table, &mut other.output_table);
         swap(&mut self.output_locked, &mut other.output_locked);
+        swap(&mut self.output_left, &mut other.output_left);
         swap(&mut self.header_prompt, &mut other.header_prompt);
         swap(&mut self.queue_scroll, &mut other.queue_scroll);
         swap(&mut self.ask_rows, &mut other.ask_rows);
@@ -2232,6 +2267,7 @@ impl PromptMode {
         self.refs_shown = self.refs_wanted();
         self.refs_opened = None;
         self.refs_closing = None;
+        self.scroll_slide = None;
         // Likewise its answer drawer, open or not.
         self.drawer_closing = None;
         self.closed_question = None;
@@ -2383,6 +2419,7 @@ impl PromptMode {
     /// previous tasks and the answer drawer, scrolled to its end.
     pub fn reveal_task(&mut self, cx: &mut Context<Self>) {
         self.task_history.expanded = false;
+        self.output_left = None;
         self.close_answer_drawer();
         self.output_table.scroll_to_end();
         cx.notify();
@@ -2739,7 +2776,7 @@ impl PromptMode {
 
     /// A new wheel scroll `up`, or down, carries on past the latest task's
     /// top into the previous tasks, opening them on the latest, or past their
-    /// bottom back to the latest task, shown from its top. Returns whether
+    /// bottom back to the latest task, shown as it was left. Returns whether
     /// it did.
     fn scroll_past(&mut self, up: bool, cx: &mut Context<Self>) -> bool {
         if self.task_history.expanded {
@@ -2748,7 +2785,6 @@ impl PromptMode {
                 return false;
             }
             self.task_history.toggle();
-            self.scroll_output_to_top();
         } else {
             let scroll = self.output_table.scroll();
             if !up || self.tasks.len() < 2 || scroll.offset().y < -px(1.) {
@@ -2756,8 +2792,54 @@ impl PromptMode {
             }
             self.task_history.toggle();
         }
+        self.follow_task_history();
+        let n = self.scroll_slide.as_ref().map_or(0, |slide| slide.n + 1);
+        self.scroll_slide = Some(ScrollSlide {
+            n,
+            up,
+            started: Instant::now(),
+        });
         cx.notify();
         true
+    }
+
+    /// Keeps the latest task's place as the previous tasks open over it, and
+    /// puts it back as they close: locked, at its bottom and still following
+    /// its output; unlocked, where it was in its output. Its place is gone
+    /// once another task is the latest, and it comes back at its top,
+    /// unlocked.
+    fn follow_task_history(&mut self) {
+        let latest = self.tasks.last().map(|task| task.name.clone());
+        if self.task_history.expanded {
+            if self.output_left.is_none() {
+                self.output_left = Some(OutputLeft {
+                    task: latest,
+                    tasks: self.tasks.len(),
+                    locked: self.output_locked,
+                });
+            }
+            return;
+        }
+        let Some(left) = self.output_left.take() else {
+            return;
+        };
+        if left.task != latest || left.tasks != self.tasks.len() {
+            self.output_locked = false;
+            self.scroll_output_to_top();
+        } else if left.locked {
+            self.output_locked = true;
+            self.output_table.scroll_to_end();
+        } else {
+            // Its list kept its place while hidden.
+            self.output_locked = false;
+        }
+    }
+
+    /// Whether a scroll's crossing over is still sliding.
+    fn scroll_sliding(&self) -> bool {
+        self.scroll_slide
+            .as_ref()
+            .is_some_and(|slide| slide.started.elapsed() < PANE_SLIDE_TIME)
     }
 
     /// Over the latest task's output or the previous tasks, hears the wheel
@@ -2775,6 +2857,16 @@ impl PromptMode {
                         return;
                     }
                     let now = Instant::now();
+                    // While it slides, the wheel scrolls neither view, and a
+                    // scroll then is carried on rather than new.
+                    if this
+                        .upgrade()
+                        .is_some_and(|this| this.read(cx).scroll_sliding())
+                    {
+                        last.set(Some(now));
+                        cx.stop_propagation();
+                        return;
+                    }
                     let new = event.touch_phase == TouchPhase::Started
                         || last
                             .get()
@@ -5983,11 +6075,16 @@ impl PromptMode {
     /// The header pinned above the output: the latest task, unless the
     /// history is expanded, where it is listed.
     fn render_header(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let (ix, task) = self
-            .tasks
-            .last()
-            .filter(|_| !self.task_history.expanded)
-            .map(|task| (self.tasks.len() - 1, task))?;
+        if self.task_history.expanded {
+            return None;
+        }
+        self.render_latest_header(cx)
+    }
+
+    /// The latest task's header, whether or not the previous tasks cover it,
+    /// as while they slide in over it or away from it.
+    fn render_latest_header(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (ix, task) = self.tasks.last().map(|task| (self.tasks.len() - 1, task))?;
         let open = self.file_opener(cx);
         // Tinted like the tab the task was sent from, as the chat input's body
         // is: red for Code, purple for both, blue for Spec.
@@ -6339,6 +6436,62 @@ impl PromptMode {
         )
     }
 
+    /// The previous tasks, expanded in place of the latest task.
+    fn render_task_list(&self, cx: &mut Context<Self>) -> AnyElement {
+        let open_file = self.file_opener(cx);
+        self.task_history.render_list(
+            &self.tasks,
+            |this| &this.tasks,
+            |this| &mut this.tasks,
+            |this| &mut this.task_history,
+            &self.steps_shown,
+            &open_file,
+            cx,
+        )
+    }
+
+    /// A scroll's crossing over as it slides: the previous tasks stacked
+    /// above the latest task's header and output, one column as tall as two
+    /// of the space they share, moving down to bring the previous tasks in,
+    /// or up to bring the latest task back, clipped to that space.
+    fn render_scroll_slide(&self, slide: &ScrollSlide, cx: &mut Context<Self>) -> AnyElement {
+        let height = self.slide_height.get();
+        let (from, to) = if slide.up {
+            (-height, px(0.))
+        } else {
+            (px(0.), -height)
+        };
+        let spring = SpringAnimation::new(PANE_SPRING).to(to).from(from);
+        let column = v_flex()
+            .absolute()
+            .left_0()
+            .right_0()
+            .h(height * 2.)
+            .child(
+                v_flex()
+                    .h(height)
+                    .flex_none()
+                    .child(self.render_task_list(cx)),
+            )
+            .child(
+                v_flex()
+                    .h(height)
+                    .flex_none()
+                    .children(self.render_latest_header(cx))
+                    .child(v_flex().flex_1().min_h_0().child(self.render_output(cx))),
+            )
+            .with_spring(("scroll-slide", slide.n), spring, |this, top| this.top(top));
+        // Lets UI tests find the slide; inert in normal builds.
+        gpui_kit::TestSupportExt::test_support(div().id(("scroll-slide-view", slide.n)))
+            .relative()
+            .flex_1()
+            .min_h_0()
+            .overflow_hidden()
+            .child(column)
+            .child(self.scroll_past_ends(cx))
+            .into_any_element()
+    }
+
     /// The latest task's output, filling the space under the header.
     fn render_output(&self, cx: &mut Context<Self>) -> AnyElement {
         let Some(task) = self.tasks.last() else {
@@ -6432,29 +6585,44 @@ impl Render for PromptMode {
                 // Lets UI tests find the hint; inert in normal builds.
                 .child(gpui_kit::TestSupportExt::test_support(hint))
                 .into_any_element()
+        } else if let Some(slide) = self
+            .scroll_slide
+            .as_ref()
+            .filter(|_| self.scroll_sliding() && self.slide_height.get() > px(0.))
+        {
+            window.request_animation_frame();
+            self.render_scroll_slide(slide, cx)
         } else {
             let view = if self.task_history.expanded {
-                let open_file = self.file_opener(cx);
-                self.task_history.render_list(
-                    &self.tasks,
-                    |this| &this.tasks,
-                    |this| &mut this.tasks,
-                    |this| &mut this.task_history,
-                    &self.steps_shown,
-                    &open_file,
-                    cx,
-                )
+                self.render_task_list(cx)
             } else {
                 self.render_output(cx)
             };
             v_flex()
-                .relative()
                 .flex_1()
                 .min_h_0()
-                .child(view)
-                .child(self.scroll_past_ends(cx))
+                .children(self.render_header(cx))
+                .child(
+                    v_flex()
+                        .relative()
+                        .flex_1()
+                        .min_h_0()
+                        .child(view)
+                        .child(self.scroll_past_ends(cx)),
+                )
                 .into_any_element()
         };
+        // Measured each frame, for a scroll's slide to move across.
+        let content = div()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .on_prepaint({
+                let slide_height = self.slide_height.clone();
+                move |bounds, _, _| slide_height.set(bounds.size.height)
+            })
+            .child(content);
 
         let history = v_flex()
             .id("history")
@@ -6467,7 +6635,6 @@ impl Render for PromptMode {
                 self.render_selection_actions(cx),
                 cx,
             ))
-            .children(self.render_header(cx))
             .child(content)
             .children(self.render_queue(cx));
         // Lets UI tests find the history; inert in normal builds.
@@ -8295,7 +8462,24 @@ mod tests {
             });
             cx.run_until_parked();
         };
-        let rest = || std::thread::sleep(SCROLL_REST + Duration::from_millis(50));
+        // Long enough for a slide to settle and the wheel to rest after it.
+        let rest =
+            || std::thread::sleep(super::PANE_SLIDE_TIME + SCROLL_REST + Duration::from_millis(50));
+        let sliding = |cx: &mut TestAppContext, n: usize| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.try_find(("scroll-slide-view", n)).is_some()
+            })
+            .unwrap()
+        };
+        let click_row = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.click("history-toggle", cx)
+            })
+            .unwrap();
+            cx.run_until_parked();
+        };
         let expanded = |cx: &mut TestAppContext| {
             prompt_mode.read_with(cx, |this, _| this.task_history.expanded)
         };
@@ -8309,15 +8493,27 @@ mod tests {
             expanded(cx),
             "a new scroll up didn't open the previous tasks"
         );
-        // Carried on, down, it stays in the previous tasks.
+        assert!(sliding(cx, 0), "crossing over didn't slide");
+        // While it slides, the wheel doesn't cross back.
         wheel(cx, 0., -40.);
-        assert!(expanded(cx), "a scroll carried on crossed back");
+        assert!(expanded(cx), "a scroll while sliding crossed back");
         rest();
+        assert!(!sliding(cx, 0), "the slide didn't settle");
         wheel(cx, 0., -40.);
         assert!(
             !expanded(cx),
             "a new scroll down didn't bring back the latest task"
         );
+        assert!(sliding(cx, 1), "crossing back didn't slide");
+        rest();
+        assert!(!sliding(cx, 1));
+
+        // Clicking the row isn't animated.
+        click_row(cx);
+        assert!(expanded(cx));
+        assert!(!sliding(cx, 2), "clicking the row slid");
+        click_row(cx);
+        assert!(!expanded(cx));
 
         // With no previous tasks, nothing opens.
         prompt_mode.update(cx, |this, cx| {
@@ -8327,6 +8523,102 @@ mod tests {
         rest();
         wheel(cx, 0., 40.);
         assert!(!expanded(cx));
+    }
+
+    /// Closed, by a click or a scroll, the previous tasks give back the
+    /// latest task's output as it was left: where it was scrolled, or locked
+    /// to its bottom and following what arrived meanwhile; with another task
+    /// the latest since, at its top, unlocked.
+    #[gpui_kit::test]
+    async fn the_latest_task_comes_back_as_it_was_left(cx: &mut TestAppContext) {
+        use gpui_kit::{point, px};
+        let (prompt_mode, handle) = open(cx);
+        let long: String = (0..200).map(|n| format!("Line {n}\n\n")).collect();
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let first = this.push_task("First".into(), cx);
+                this.tasks[first].status = TaskStatus::Done;
+                let ix = this.push_task("Write a lot".into(), cx);
+                this.show_compiled(ix, "Prompt_0".into(), "Write a lot".into(), cx);
+                this.apply_event(ix, HarnessEvent::TextStarted, cx);
+                this.apply_event(ix, HarnessEvent::TextDelta(long.clone()), cx);
+            });
+        })
+        .unwrap();
+        cx.wait_for(handle, Duration::from_secs(2), |window, _| {
+            window.try_find("task-output-scroll-column").is_some()
+        })
+        .await;
+        let frames = |cx: &mut TestAppContext| {
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.render_frame(cx);
+            })
+            .unwrap();
+        };
+        let click_row = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.click("history-toggle", cx)
+            })
+            .unwrap();
+            frames(cx);
+        };
+        let more = |cx: &mut TestAppContext| {
+            prompt_mode.update(cx, |this, cx| {
+                this.apply_event(1, HarnessEvent::TextDelta(long.clone()), cx)
+            });
+        };
+        let scrolled = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| {
+                let scroll = this.output_table.scroll();
+                (scroll.offset().y, scroll.max_offset().y, this.output_locked)
+            })
+        };
+        frames(cx);
+
+        // Unlocked, partway down, it comes back just there.
+        prompt_mode.update(cx, |this, _| {
+            this.output_table
+                .scroll()
+                .set_offset(point(px(0.), px(-300.)))
+        });
+        frames(cx);
+        let (left, _, _) = scrolled(cx);
+        assert!(left < px(-1.), "the output didn't scroll");
+        click_row(cx);
+        more(cx);
+        click_row(cx);
+        assert_eq!(
+            scrolled(cx).0,
+            left,
+            "the output didn't come back where it was"
+        );
+        assert!(!scrolled(cx).2);
+
+        // Locked, it comes back locked at its bottom, with what arrived.
+        prompt_mode.update(cx, |this, cx| this.set_output_lock(true, cx));
+        frames(cx);
+        click_row(cx);
+        more(cx);
+        click_row(cx);
+        let (offset, max, locked) = scrolled(cx);
+        assert!(locked, "the lock didn't come back");
+        assert!(
+            (offset + max).abs() <= px(1.),
+            "locked, it isn't at its bottom: {offset:?} of {max:?}"
+        );
+
+        // With another task the latest since, it starts at its top.
+        click_row(cx);
+        prompt_mode.update(cx, |this, cx| {
+            this.push_task("Another".into(), cx);
+        });
+        click_row(cx);
+        let (offset, _, locked) = scrolled(cx);
+        assert_eq!(offset, px(0.));
+        assert!(!locked);
     }
 
     /// Previous tasks are grouped by the conversation they ran in: a group

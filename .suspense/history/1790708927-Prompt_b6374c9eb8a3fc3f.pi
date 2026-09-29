@@ -1,0 +1,66 @@
+
+export anchor Prompt_b6374c9eb8a3fc3f:
+    userPrompt:
+        \\\
+        Oh and the message list should scroll back to where it was previously, including if it was locked.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Oh and the message list should scroll back to where it was previously, including if it was locked.
+            \\\
+        result:
+            \\\
+            I've updated the spec so the latest task comes back where you left it, including its lock; the code isn't changed yet. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            **What I changed:** two edits to `MessageListScrollingShape.scrollingPast` in `spec/scope/prompt-mode/message-list/Scrolling.pi`, which compile into "Scrolling Past" in `.claude/reference/scope/prompt-mode/message-list/index.md`:
+
+            - **It comes back as it was left.** The spec said the latest task comes back "scrolled to its top". It now says: however Previous tasks are closed, by scrolling down or by clicking "Back to the latest task", the output returns to where it was when they were opened, with its lock as it was.
+              - **Locked:** it comes back at the bottom, still locked, showing any output that arrived while Previous tasks were open, and keeps following new output.
+              - **Unlocked:** it comes back at the same place in the output, however much arrived meanwhile. If that place no longer exists, for example because a newer task is now the latest, it comes back at its top, unlocked.
+            - **The slide:** scrolling down, the latest task's header and output now slide in already scrolled where they'll settle, not "already at their top".
+
+            I applied this to clicking the row as well as scrolling, since you said "scroll back to where it was previously" without limiting it to scrolling.
+
+            **Anchors the code should follow:**
+            - **`MessageListScrollingShape.scrollingPast`**, as above.
+            - **`MessageListScrollingShape.description`** (same file): each project keeps the output's scroll position and lock; unchanged.
+            - **In `src/prompt_mode.rs`:**
+              - `scroll_past` currently calls `scroll_output_to_top()` when closing Previous tasks. That call should go.
+              - The output's offset and `output_locked` should be remembered when Previous tasks open, and put back when they close, from both `scroll_past` and the row's toggle (`HistoryList::toggle` through `render_row`).
+              - A locked output should end up at the bottom, via `output_table.scroll_to_end()`.
+              - `render_scroll_slide` should draw the output at that remembered place during the slide.
+
+            The constraints are in `.suspense/history/1790708893-Prompt_128b8f3272b044ef.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_128b8f3272b044ef

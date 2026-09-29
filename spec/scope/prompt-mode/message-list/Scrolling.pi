@@ -29,7 +29,17 @@ export shape MessageListScrollingShape:
 
         With the previous tasks expanded and scrolled to their bottom, a new
         scroll down closes them, as clicking "Back to the latest task" does,
-        bringing back the latest task and its output, scrolled to its top.
+        bringing back the latest task and its output as they were left.
+
+        However the previous tasks are closed, by a scroll or by clicking
+        "Back to the latest task", the latest task's output comes back
+        scrolled just where it was when they were opened, with its lock to the
+        bottom as it was. Locked, it comes back at its bottom and still
+        locked, showing whatever output arrived while the previous tasks were
+        open, and goes on following new output. Unlocked, it comes back at
+        the same place in its output, however much arrived meanwhile; if that
+        place no longer exists, as when the latest task has changed since, it
+        comes back at its top, unlocked.
 
         A scroll carried on in the same motion, such as a fling's momentum
         still running when an end is reached, never crosses over. Output or a
@@ -38,3 +48,18 @@ export shape MessageListScrollingShape:
         crosses over. Scrolling sideways, dragging a scrollbar to an end, and
         scrolling anything inside that scrolls on its own, such as an open
         task's table in the list, never do.
+
+        Crossing over by scrolling is animated. Scrolling up, the previous
+        tasks slide down into view from above, already scrolled to their
+        bottom, pushing the latest task's header and output out below them, the
+        two moving together as one column. Scrolling down, the latest task's
+        header and output slide up into view from below, already scrolled where
+        they will settle,
+        pushing the previous tasks out above them. The slide is quick and
+        settles without bouncing, as the right sidebar's does. Only the space
+        between the previous tasks row and the queue moves, and nothing is
+        drawn outside it; the row and the queue stay where they are, the row reading what it will once the slide settles, from the
+        moment it starts. While it slides, the wheel scrolls neither view, and
+        no scroll then crosses back; a new scroll once it settles can.
+        Expanding or closing the previous tasks by clicking their row is not
+        animated.
