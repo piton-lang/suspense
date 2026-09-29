@@ -1513,11 +1513,10 @@ mod tests {
         fs::remove_dir_all(&dir).ok();
     }
 
-    /// The tree's scrollbar is laid over the tree's darkest surface, with no
-    /// line or background of its own: the surface down both of the column's
-    /// sides and around its buttons' arrows, and, with nothing to scroll, the
-    /// thumb filling the track as the surface, a row of black laid a quarter
-    /// over it at either end.
+    /// The tree's scrollbar is laid over the tree's darkest surface, as the
+    /// mockup is: #222222 down both of the column's sides and around its
+    /// buttons' arrows, and, with nothing to scroll, the thumb filling the
+    /// track in #222222 too, a row of #191919 at either end.
     #[gpui_kit::test]
     async fn the_scrollbar_is_laid_over_the_trees_surface(cx: &mut TestAppContext) {
         use gpui_kit::component::{Theme, ThemeMode};
@@ -1540,17 +1539,22 @@ mod tests {
             let at = |x: f32, y: f32, from: gpui_kit::Bounds<gpui_kit::Pixels>| {
                 frame.at(point(from.left() + px(x + 0.5), from.top() + px(y + 0.5)))
             };
+            let raised = 0x222222;
+            let near = |a: u32, b: u32| (a as i32 - b as i32).abs() <= 0x010101;
             for y in [0., 8., 20., column.size.height.as_f32() / 2., column.size.height.as_f32() - 1.] {
-                for x in [-1., 0., 17.] {
-                    assert_eq!(at(x, y, column), darkest, "beside the track at ({x}, {y})");
+                assert_eq!(at(-1., y, column), darkest, "beside the column at {y}");
+                for x in [0., 17.] {
+                    let c = at(x, y, column);
+                    assert!(near(c, raised), "the column's side is {c:06x} at ({x}, {y})");
                 }
             }
-            // The up button: its arrow, and the surface around it.
-            assert_eq!(at(2., 8., up), darkest, "the up button has a background");
-            assert_ne!(at(8., 10., up), darkest, "the up button has no arrow");
-            // The thumb fills the track: its ends, black laid a quarter over
-            // the surface, and the surface between.
-            let end = 0x0d0d0d;
+            // The up button: its arrow, and raised around it.
+            let c = at(2., 8., up);
+            assert!(near(c, raised), "the up button is {c:06x}");
+            assert!(!near(at(8., 10., up), raised), "the up button has no arrow");
+            // The thumb fills the track: its ends half way between the
+            // surface and the thumb, and raised between.
+            let end = 0x191919;
             let last = track.size.height.as_f32() - 1.;
             for x in [1., 8., 16.] {
                 for y in [0., last] {
@@ -1560,7 +1564,8 @@ mod tests {
                         "the thumb's end is {c:06x} at ({x}, {y})"
                     );
                 }
-                assert_eq!(at(x, last / 2., track), darkest, "the thumb at {x}");
+                let c = at(x, last / 2., track);
+                assert!(near(c, raised), "the thumb is {c:06x} at {x}");
             }
         })
         .unwrap();

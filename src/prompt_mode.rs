@@ -165,6 +165,9 @@ struct QueueItem {
     /// The images attached to it, by their paths from the project directory,
     /// known from the moment it is queued.
     images: Vec<String>,
+    /// It starts a new conversation rather than carrying on the tasks',
+    /// as its hidden anchor records once saved.
+    new_conversation: bool,
 }
 
 /// How a task's Send to Spec or Send to Code button stands. Only
@@ -1681,6 +1684,7 @@ struct ProjectSession {
     feeding: Arc<futures::lock::Mutex<()>>,
     session: Option<Session>,
     session_epoch: u64,
+    new_conversation_pending: bool,
     asks: Vec<Ask>,
     expanded_ask: Option<usize>,
     steps_shown: HashSet<usize>,
@@ -1728,6 +1732,7 @@ impl ProjectSession {
             feeding: Arc::default(),
             session: None,
             session_epoch: 0,
+            new_conversation_pending: false,
             asks: Vec::new(),
             expanded_ask: None,
             steps_shown: HashSet::new(),
@@ -1836,6 +1841,9 @@ pub struct PromptMode {
     /// Counts the times the tasks' conversation was left for a new one, so a
     /// run started before can't bring it back, nor can the history.
     session_epoch: u64,
+    /// New conversation was pressed with nothing queued: the next task sent
+    /// or queued starts the new conversation, and records so.
+    new_conversation_pending: bool,
     /// The questions asked from the Ask tab, oldest first, each run at once
     /// and apart from the tasks.
     asks: Vec<Ask>,
@@ -2011,6 +2019,7 @@ impl PromptMode {
             feeding: Arc::default(),
             session: None,
             session_epoch: 0,
+            new_conversation_pending: false,
             asks: Vec::new(),
             next_ask_id: 0,
             expanded_ask: None,
@@ -2065,6 +2074,10 @@ impl PromptMode {
         swap(&mut self.feeding, &mut other.feeding);
         swap(&mut self.session, &mut other.session);
         swap(&mut self.session_epoch, &mut other.session_epoch);
+        swap(
+            &mut self.new_conversation_pending,
+            &mut other.new_conversation_pending,
+        );
         swap(&mut self.asks, &mut other.asks);
         swap(&mut self.expanded_ask, &mut other.expanded_ask);
         swap(&mut self.steps_shown, &mut other.steps_shown);
@@ -3173,6 +3186,7 @@ impl PromptMode {
                     wait: false,
                     sent_from: saved.anchor.sent_from.clone(),
                     images: saved.anchor.attached_images.clone(),
+                    new_conversation: saved.anchor.new_conversation == Some(true),
                     saved: Some(saved),
                 }
             })
@@ -3264,6 +3278,9 @@ impl PromptMode {
         };
         self.next_queue_id += 1;
         let id = self.next_queue_id;
+        // The first task after New conversation, pressed with nothing
+        // queued, is the one to start the new conversation.
+        let new_conversation = std::mem::take(&mut self.new_conversation_pending);
         self.queue.push(QueueItem {
             id,
             text: text.clone().into(),
@@ -3271,6 +3288,7 @@ impl PromptMode {
             saved: None,
             sent_from: sent_from.clone(),
             images: attached.images.clone(),
+            new_conversation,
         });
         cx.notify();
 
@@ -3285,6 +3303,7 @@ impl PromptMode {
                 let mut anchor =
                     resolve_anchor(&text, mode, attached, sliced, code_task, lsp, &project_dir)?;
                 anchor.sent_from = sent_from;
+                anchor.new_conversation = Some(new_conversation);
                 prompt_queue::add_at(queued_at, anchor, text, &project_dir)
             }
         });
@@ -3317,6 +3336,8 @@ impl PromptMode {
         match saved {
             Ok(saved) => {
                 self.queue[ix].saved = Some(saved);
+                // Marked to start a new conversation while it was saved.
+                self.keep_new_conversation(ix);
                 if !self.queue[ix].wait {
                     self.auto_send_next(cx);
                 }
@@ -3442,6 +3463,7 @@ impl PromptMode {
                 match resolve_anchor(&text, mode, attached, sliced, code_task, lsp, &project_dir) {
                     Ok(mut anchor) => {
                         anchor.sent_from = sent_from;
+                        anchor.new_conversation = old.anchor.new_conversation;
                         prompt_queue::replace(old.file.clone(), anchor, text)
                             .map_err(|err| (old, err))
                     }
@@ -3461,7 +3483,14 @@ impl PromptMode {
                         return;
                     };
                     match saved {
-                        Ok(saved) => item.saved = Some(saved),
+                        Ok(saved) => {
+                            item.saved = Some(saved);
+                            // Marked to start a new conversation while it
+                            // saved.
+                            if let Some(ix) = this.queue.iter().position(|item| item.id == id) {
+                                this.keep_new_conversation(ix);
+                            }
+                        }
                         Err((old, err)) => {
                             // It stays as it was.
                             item.text = old_text;
@@ -3526,6 +3555,46 @@ impl PromptMode {
         self.send_next(cx);
     }
 
+    /// Toggles whether the queued prompt `id` starts a new conversation rather
+    /// than carrying on the tasks', saving it with the project.
+    fn toggle_queued_new_conversation(&mut self, id: usize, cx: &mut Context<Self>) {
+        let Some(ix) = self.queue.iter().position(|item| item.id == id) else {
+            return;
+        };
+        self.queue[ix].new_conversation = !self.queue[ix].new_conversation;
+        self.keep_new_conversation(ix);
+        cx.notify();
+    }
+
+    /// Moves the queued prompt `id` one place earlier, `up`, or later in the
+    /// queue, trading places with its neighbour there, on disk too. Both must
+    /// be saved.
+    fn move_queued(&mut self, id: usize, up: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(ix) = self.queue.iter().position(|item| item.id == id) else {
+            return;
+        };
+        let Some(other) = (if up { ix.checked_sub(1) } else { Some(ix + 1) })
+            .filter(|&other| other < self.queue.len())
+        else {
+            return;
+        };
+        let (low, high) = (ix.min(other), ix.max(other));
+        let (head, tail) = self.queue.split_at_mut(high);
+        let (Some(a), Some(b)) = (head[low].saved.as_mut(), tail[0].saved.as_mut()) else {
+            return;
+        };
+        if let Err(err) = prompt_queue::swap(a, b) {
+            window.push_notification(
+                Notification::error(format!("{err:#}")).title("Could not move the prompt"),
+                cx,
+            );
+            return;
+        }
+        self.queue.swap(low, high);
+        self.sync_editing_position(cx);
+        cx.notify();
+    }
+
     /// Removes a prompt that has not been sent from the queue, and its file.
     fn cancel(&mut self, id: usize, window: &mut Window, cx: &mut Context<Self>) {
         let Some(ix) = self.queue.iter().position(|item| item.id == id) else {
@@ -3547,6 +3616,9 @@ impl PromptMode {
                 Notification::error(format!("{err:#}")).title("Could not cancel the prompt"),
                 cx,
             );
+        } else if item.new_conversation {
+            // The new conversation passes to the task that now runs next.
+            self.mark_new_conversation();
         }
         if self.queue.is_empty() {
             self.queue_held = false;
@@ -3583,12 +3655,44 @@ impl PromptMode {
             (self.ask_session.take(), conversations::Kind::Questions)
         } else {
             self.session_epoch += 1;
+            self.mark_new_conversation();
             (self.session.take(), conversations::Kind::Tasks)
         };
         if let Some(left) = left {
             Self::keep_left(project_dir, kind, left.id, cx);
         }
         cx.notify();
+    }
+
+    /// Makes the next task to run start a new conversation: the first in the
+    /// queue, whose hidden anchor then records so, or with nothing queued,
+    /// the next task sent or queued.
+    fn mark_new_conversation(&mut self) {
+        if self.queue.is_empty() {
+            self.new_conversation_pending = true;
+            return;
+        }
+        self.queue[0].new_conversation = true;
+        self.keep_new_conversation(0);
+    }
+
+    /// Saves the queued prompt at `ix` again if whether it starts a new
+    /// conversation changed since its hidden anchor was saved.
+    fn keep_new_conversation(&mut self, ix: usize) {
+        let item = &mut self.queue[ix];
+        let new_conversation = item.new_conversation;
+        let Some(saved) = item.saved.as_mut() else {
+            return;
+        };
+        if saved.anchor.new_conversation.unwrap_or(false) == new_conversation {
+            return;
+        }
+        saved.anchor.new_conversation = Some(new_conversation);
+        // Unsaved, it still starts the new conversation while the
+        // application runs.
+        if let Err(err) = prompt_queue::rewrite(saved) {
+            eprintln!("could not keep that the queued prompt starts a new conversation: {err:#}");
+        }
     }
 
     /// Keeps with the project, in the background, that the conversation `id`
@@ -3983,7 +4087,15 @@ impl PromptMode {
                 .update(cx, |input, cx| input.set_busy(true, cx));
         }
 
-        let resume = Session::resume(&self.session, &project_dir);
+        // Whether it starts a new conversation is part of the prompt: a queued
+        // one's anchor says, and one sent now is the first after New
+        // conversation, if nothing else has been since.
+        let new_conversation = match &sending {
+            Sending::Queued(queued) => queued.anchor.new_conversation == Some(true),
+            Sending::Now(..) => std::mem::take(&mut self.new_conversation_pending),
+        };
+        let resume = Session::resume(&self.session, &project_dir).filter(|_| !new_conversation);
+        let new_conversation = resume.is_none();
         let epoch = self.session_epoch;
         let lsp = self.chat_input.read(cx).lsp();
         // A prompt that works on the code or the spec is sent against a
@@ -4051,6 +4163,9 @@ impl PromptMode {
                         anchor
                     }
                 };
+                // The history records whether it started a new conversation.
+                let mut anchor = anchor;
+                anchor.new_conversation = Some(new_conversation);
                 let file = hidden_anchor::save(&anchor, &text, &project_dir)?;
                 // Cancelled by now, it is saved to the history as cancelled,
                 // but never compiled, nor run.
@@ -4429,6 +4544,7 @@ impl PromptMode {
             .iter()
             .any(|ask| ask.id != run && ask.task.status.is_active());
         let resume = Session::resume(&self.ask_session, &project_dir);
+        let new_conversation = resume.is_none();
         let epoch = self.ask_session_epoch;
         let lsp = self.chat_input.read(cx).lsp();
         let compile = cx.background_spawn({
@@ -4454,6 +4570,9 @@ impl PromptMode {
                         (anchor, Some(err))
                     }
                 };
+                // Saved with whether it started a new conversation.
+                let mut anchor = anchor;
+                anchor.new_conversation = Some(new_conversation);
                 let file = hidden_anchor::save_ask(&anchor, &text, &project_dir);
                 let compiled = match (resolve_error, &file) {
                     (Some(err), _) => Err(err),
@@ -5582,6 +5701,13 @@ impl PromptMode {
                 )
         };
 
+        // Two prompts trade places once both are saved.
+        let movable = |a: usize, b: usize| {
+            self.queue
+                .get(a)
+                .zip(self.queue.get(b))
+                .is_some_and(|(a, b)| a.saved.is_some() && b.saved.is_some())
+        };
         let list = expanded.then(|| {
             v_flex()
                 .id("queue-list")
@@ -5622,6 +5748,43 @@ impl PromptMode {
                         .when(item.saved.is_none(), |row| {
                             row.child(div().flex_none().child(Spinner::new().small()))
                         })
+                        .child(
+                            Button::new(("new-conversation-queued", ix))
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::Sparkles)
+                                .selected(item.new_conversation)
+                                .tooltip(if item.new_conversation {
+                                    "Starts a new conversation; click to carry on the conversation instead"
+                                } else {
+                                    "Carries on the conversation; click to start a new one instead"
+                                })
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.toggle_queued_new_conversation(id, cx)
+                                })),
+                        )
+                        .child(
+                            Button::new(("move-queued-up", ix))
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::ChevronUp)
+                                .tooltip("Move this prompt up")
+                                .disabled(ix == 0 || !movable(ix - 1, ix))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.move_queued(id, true, window, cx)
+                                })),
+                        )
+                        .child(
+                            Button::new(("move-queued-down", ix))
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::ChevronDown)
+                                .tooltip("Move this prompt down")
+                                .disabled(ix + 1 >= count || !movable(ix, ix + 1))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.move_queued(id, false, window, cx)
+                                })),
+                        )
                         .child(
                             Button::new(("edit-queued", ix))
                                 .ghost()
@@ -6923,10 +7086,10 @@ mod tests {
                 )
             });
             // Now that they overflow, the same scrollbar as every other runs
-            // down their right, laid over their body's surface: the body's
-            // colour down both its sides and beside its buttons' arrows, and
-            // the track, black laid half way over it, inset between. Scrolled
-            // to the top, the thumb is at the track's top.
+            // down their right, laid over their body's surface: its line, white
+            // laid over the body, down both its sides, and the track, the
+            // body's own colour, inset between. Scrolled to the top, the thumb
+            // is at the track's top.
             let frame = crate::frame_image::Frame::of(window);
             let body = crate::theme::palette(cx).ribbon;
             let colors = crate::scrollbar::scroll_colors(true);
@@ -6935,18 +7098,17 @@ mod tests {
             assert_eq!(column.right(), sidebar.right());
             let at = |x: f32, y: gpui_kit::Pixels| frame.at(point(column.left() + px(x + 0.5), y));
             let low = track.bottom() - px(2.5);
+            let c: gpui_kit::Rgba = colors.raised.into();
+            let channel = ((body >> 16) & 0xff) as f32;
+            let raised =
+                ((channel * (1. - c.a) + 255. * c.r * c.a).round() as u32) * 0x010101;
+            let near = |a: u32, b: u32| (a as i32 - b as i32).abs() <= 0x010101;
             for y in [column.top() + px(2.5), track.top() + track.size.height / 2., low] {
-                assert_eq!(at(0., y), body, "the column's left side at {y:?}");
-                assert_eq!(at(17., y), body, "the column's right side at {y:?}");
+                let (left, right) = (at(0., y), at(17., y));
+                assert!(near(left, raised), "the column's left side at {y:?} is {left:06x}");
+                assert!(near(right, raised), "the column's right side at {y:?} is {right:06x}");
             }
-            let dark = at(8., low);
-            let c: gpui_kit::Rgba = colors.track.into();
-            let expected = ((((body >> 16) & 0xff) as f32 * (1. - c.a)).round() as u32) * 0x010101;
-            assert!(
-                (dark as i32 - expected as i32).abs() <= 0x010101,
-                "the track is {dark:06x} on {body:06x}, not {expected:06x}"
-            );
-            assert_eq!(at(0., low), body, "the track isn't inset");
+            assert_eq!(at(8., low), body, "the track isn't the body's colour");
         })
         .unwrap();
         std::fs::remove_dir_all(&dir).ok();
@@ -8165,6 +8327,190 @@ mod tests {
         cx.run_until_parked();
         assert_eq!(shown(cx), Some(1_200));
         assert_eq!(left(&dir).as_deref(), Some("s3"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Ctrl+N in the chat input starts a new conversation, as New
+    /// conversation does, and whether a task starts one is part of it: the
+    /// first queued prompt's hidden anchor records it, passing it on to the
+    /// next if that one is cancelled, and with nothing queued, the next task
+    /// queued records it.
+    #[gpui_kit::test]
+    async fn ctrl_n_starts_a_new_conversation_with_the_next_prompt(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-ctrl-n-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let dir = std::fs::canonicalize(&dir).unwrap();
+        for text in ["first", "second"] {
+            prompt_queue::add(HiddenAnchor::random(), text.into(), &dir).unwrap();
+        }
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| {
+            crate::chat_input::bind_keys(cx);
+            ProjectDirectory::set(dir.clone(), cx)
+        });
+        cx.run_until_parked();
+        let chat = prompt_mode.read_with(cx, |this, _| this.chat_input_view());
+        // A task of the conversation runs.
+        prompt_mode.update(cx, |this, _| {
+            this.session = Some(Session {
+                project_dir: dir.clone(),
+                id: "s1".into(),
+                context: Some(1_000),
+            });
+            this.working = true;
+        });
+        let press = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                chat.update(cx, |input, cx| input.focus_editor_for_test(window, cx));
+                window.press("ctrl-n", cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        };
+        let marks = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| {
+                this.queue
+                    .iter()
+                    .map(|item| {
+                        let saved = item.saved.as_ref().unwrap();
+                        let (anchor, _) =
+                            HiddenAnchor::parse(&std::fs::read_to_string(&saved.file).unwrap())
+                                .unwrap();
+                        (item.new_conversation, anchor.new_conversation)
+                    })
+                    .collect::<Vec<_>>()
+            })
+        };
+        assert_eq!(marks(cx), [(false, None), (false, None)]);
+
+        press(cx);
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(
+                this.session_epoch, 1,
+                "Ctrl+N didn't leave the conversation"
+            );
+            assert!(this.session.is_none());
+            assert!(!this.new_conversation_pending);
+        });
+        assert_eq!(marks(cx), [(true, Some(true)), (false, None)]);
+
+        // Cancelled, the first passes it on to the next.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let first = this.queue[0].id;
+                this.cancel(first, window, cx);
+            })
+        })
+        .unwrap();
+        assert_eq!(marks(cx), [(true, Some(true))]);
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let second = this.queue[0].id;
+                this.cancel(second, window, cx);
+            })
+        })
+        .unwrap();
+
+        // With nothing queued, the next task queued starts it.
+        prompt_mode.read_with(cx, |this, _| assert!(this.new_conversation_pending));
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                for text in ["third", "fourth"] {
+                    this.enqueue(
+                        text.into(),
+                        true,
+                        crate::chat_input::SendMode::Code,
+                        crate::hidden_anchor::Attached::default(),
+                        false,
+                        None,
+                        None,
+                        window,
+                        cx,
+                    );
+                }
+            })
+        })
+        .unwrap();
+        prompt_mode.read_with(cx, |this, _| {
+            assert!(!this.new_conversation_pending);
+            let marked: Vec<bool> = this
+                .queue
+                .iter()
+                .map(|item| item.new_conversation)
+                .collect();
+            assert_eq!(marked, [true, false]);
+        });
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Queued prompts can be moved up and down the queue, and each toggled to
+    /// start a new conversation or carry on the tasks', all kept with the
+    /// project.
+    #[gpui_kit::test]
+    async fn queued_prompts_can_be_reordered_and_start_new_conversations(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-reorder-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let dir = std::fs::canonicalize(&dir).unwrap();
+        for text in ["first", "second", "third"] {
+            prompt_queue::add(HiddenAnchor::random(), text.into(), &dir).unwrap();
+        }
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        prompt_mode.update(cx, |this, _| this.queue_expanded = true);
+        let click = |cx: &mut TestAppContext, id: &'static str, ix: usize| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.click((id, ix), cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        };
+        let on_disk = |dir: &std::path::Path| {
+            prompt_queue::load(dir)
+                .into_iter()
+                .map(|queued| (queued.text, queued.anchor.new_conversation))
+                .collect::<Vec<_>>()
+        };
+
+        // The first can't move up, nor the last down.
+        click(cx, "move-queued-up", 0);
+        click(cx, "move-queued-down", 2);
+        assert_eq!(
+            prompt_mode.read_with(cx, |this, _| this.queued_texts()),
+            ["first", "second", "third"]
+        );
+
+        click(cx, "move-queued-down", 0);
+        assert_eq!(
+            prompt_mode.read_with(cx, |this, _| this.queued_texts()),
+            ["second", "first", "third"]
+        );
+        click(cx, "move-queued-up", 2);
+        assert_eq!(
+            prompt_mode.read_with(cx, |this, _| this.queued_texts()),
+            ["second", "third", "first"]
+        );
+        click(cx, "new-conversation-queued", 1);
+        assert_eq!(
+            on_disk(&dir),
+            [
+                ("second".to_string(), None),
+                ("third".to_string(), Some(true)),
+                ("first".to_string(), None)
+            ]
+        );
+        // Moved, it keeps its mark; toggled again, it carries on.
+        click(cx, "move-queued-up", 1);
+        assert_eq!(on_disk(&dir)[0], ("third".to_string(), Some(true)));
+        click(cx, "new-conversation-queued", 0);
+        assert_eq!(on_disk(&dir)[0], ("third".to_string(), Some(false)));
+        prompt_mode.read_with(cx, |this, _| {
+            assert!(this.queue.iter().all(|item| !item.new_conversation));
+        });
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -10600,6 +10946,7 @@ mod tests {
                     wait: true,
                     sent_from,
                     images: Vec::new(),
+                    new_conversation: false,
                 });
                 cx.notify();
             })

@@ -143,19 +143,27 @@ pub fn palette(cx: &App) -> &'static Palette {
     shifted(dark, brightness_of(dark, cx))
 }
 
-/// How far the brightness setting runs either way from 0, before what a mode
-/// allows narrows it.
-pub const BRIGHTNESS_LIMIT: i32 = 10;
+/// The grey the Brightness slider crosses from dark mode to light mode on:
+/// #777777, lightness 50 in CIELAB, halfway between black and white to the
+/// eye. Dark mode's base runs up to just below it, light mode's down to it,
+/// so the base moves through it with no jump.
+pub const MIDDLE_GREY: u32 = 0x77;
 
-/// How far, in each channel, `step` moves every grey: 2% of their lightness a
-/// step, rounded half away from 0 to a whole channel value, so every grey
-/// moves by exactly the same amount and the steps between them keep their
-/// size.
+/// How far, in channel values, the base can be from the middle grey and still
+/// feel it: within this, the steps between the greys narrow, so crossing
+/// between the modes, where the steps turn round, changes as little as it
+/// can.
+const MIDDLE_BAND: f32 = 48.;
+
+/// How much the steps between the greys narrow on the middle grey itself:
+/// to half, so the change of mode moves every surface half as far, while
+/// every step keeps its direction and the greys their order.
+const MIDDLE_NARROWING: f32 = 0.5;
+
+/// How far, in each channel, `step` moves the base: one channel value a step,
+/// so the slider moves the interface as finely as a colour can.
 pub fn brightness_shift(step: i32) -> i32 {
-    // 2% of 255 is 5.1: in tenths, 51 a step, kept in integers so the
-    // rounding is exact and the same either way.
-    let tenths = step * 51;
-    (tenths + 5 * tenths.signum()) / 10
+    step
 }
 
 /// The palette's neutral greys, which brightness moves: every surface, the
@@ -199,24 +207,123 @@ pub fn greys(palette: &Palette) -> [(&'static str, u32); 13] {
     ]
 }
 
-/// `color`'s red, green, and blue, each moved by `shift`, clipped to black
-/// and white.
-fn shift_channels(color: u32, shift: i32) -> u32 {
+/// A channel of `color`, `at` bits up.
+fn channel(color: u32, at: u32) -> i32 {
+    ((color >> at) & 0xff) as i32
+}
+
+/// A colour from its red, green, and blue, each clipped to black and white.
+fn from_channels(f: impl Fn(u32) -> f32) -> u32 {
     [16, 8, 0].into_iter().fold(0, |out, at| {
-        let channel = ((color >> at) & 0xff) as i32;
-        out | (((channel + shift).clamp(0, 255) as u32) << at)
+        out | ((f(at).round().clamp(0., 255.) as u32) << at)
     })
 }
 
-/// `palette` at brightness `step`: every neutral grey moved by the same
-/// amount of lightness, everything else as it is. Within the mode's range no
-/// grey clips, so the steps between them and their order stay as at 0.
-pub fn brightened(palette: &Palette, step: i32) -> Palette {
-    let shift = brightness_shift(step);
-    let mut p = *palette;
-    for grey in greys_mut(&mut p) {
-        *grey = shift_channels(*grey, shift);
+/// `a` laid `amount` of the way toward `b`.
+fn mix(a: u32, b: u32, amount: f32) -> u32 {
+    from_channels(|at| {
+        let (a, b) = (channel(a, at) as f32, channel(b, at) as f32);
+        a + (b - a) * amount
+    })
+}
+
+/// How near the middle grey dark or light mode's base is at `step`, from 0,
+/// out of the middle band, to 1, on the middle grey, easing in and out.
+fn nearness_to_middle(dark: bool, step: i32) -> f32 {
+    let reference = if dark { &DARK } else { &LIGHT };
+    let base = channel(reference.base, 0) + brightness_shift(step);
+    let t = (1. - (base - MIDDLE_GREY as i32).abs() as f32 / MIDDLE_BAND).clamp(0., 1.);
+    t * t * (3. - 2. * t)
+}
+
+/// `color`, or as little of the way toward `toward` as it takes for `ok`,
+/// or `toward` itself if nothing short of it will do.
+fn legible(color: u32, toward: u32, ok: impl Fn(u32) -> bool) -> u32 {
+    if ok(color) {
+        return color;
     }
+    if !ok(toward) {
+        return toward;
+    }
+    let (mut low, mut high) = (0f32, 1f32);
+    for _ in 0..16 {
+        let middle = (low + high) / 2.;
+        if ok(mix(color, toward, middle)) {
+            high = middle;
+        } else {
+            low = middle;
+        }
+    }
+    mix(color, toward, high)
+}
+
+/// Dark or light mode's palette at brightness `step`. Every neutral grey
+/// moves with the base by the same amount; near the middle grey the steps
+/// between them narrow, all alike, so the two modes meet there with as
+/// little change as turning the text round allows. Text and hues
+/// stay as given unless the base has come too near them to keep the
+/// contrast the theme asks, and then move only as far toward white, in dark
+/// mode, or black, in light mode, as it takes. The bevel keeps the lift it
+/// has at 0.
+pub fn brightened(dark: bool, step: i32) -> Palette {
+    let own = if dark { DARK } else { LIGHT };
+    let shift = brightness_shift(step);
+    let width = 1. - MIDDLE_NARROWING * nearness_to_middle(dark, step);
+    let mut p = own;
+    for grey in greys_mut(&mut p) {
+        *grey = from_channels(|at| {
+            let step = (channel(*grey, at) - channel(own.base, at)) as f32;
+            (channel(own.base, at) + shift) as f32 + step * width
+        });
+    }
+
+    // Text and hues, only as far from what they were as the contrast needs:
+    // what the theme asks, or what they had at 0 if that was less.
+    let toward = if dark { 0xffffff } else { 0x000000 };
+    let on = |surfaces: &[(u32, u32)], color: u32, asked: f32, moved: u32| {
+        surfaces
+            .iter()
+            .all(|&(now, then)| contrast(moved, now) >= asked.min(contrast(color, then)))
+    };
+    let read = [
+        (p.base, own.base),
+        (p.recessed, own.recessed),
+        (p.well, own.well),
+        (p.overlay, own.overlay),
+    ];
+    let controls = [
+        (p.raised, own.raised),
+        (p.hover, own.hover),
+        (p.pressed, own.pressed),
+        (p.selected, own.selected),
+    ];
+    let base = [(p.base, own.base)];
+    p.text = legible(own.text, toward, |c| {
+        on(&read, own.text, 4.5, c) && on(&controls, own.text, 4., c)
+    });
+    p.text_secondary = legible(own.text_secondary, toward, |c| {
+        on(&read, own.text_secondary, 4.5, c)
+    });
+    p.text_disabled = legible(own.text_disabled, toward, |c| {
+        on(&base, own.text_disabled, f32::INFINITY, c)
+    });
+    for (moved, given) in [
+        (&mut p.text_tertiary, own.text_tertiary),
+        (&mut p.accent, own.accent),
+        (&mut p.success, own.success),
+        (&mut p.warning, own.warning),
+        (&mut p.error, own.error),
+        (&mut p.purple, own.purple),
+        (&mut p.cyan, own.cyan),
+        (&mut p.orange, own.orange),
+    ] {
+        *moved = legible(given, toward, |c| on(&base, given, 3., c));
+    }
+
+    // The bevel's light and shade, as much lighter and darker as at 0.
+    let (then, now) = (channel(own.base, 0) as f32, channel(p.base, 0) as f32);
+    p.bevel_light = (own.bevel_light * (255. - then) / (255. - now).max(1.)).min(1.);
+    p.bevel_shade = (own.bevel_shade * then / now.max(1.)).min(1.);
     p
 }
 
@@ -242,6 +349,7 @@ pub fn contrast(a: u32, b: u32) -> f32 {
 /// recessed, well, and overlay surfaces; primary text 4 to 1 on controls in
 /// any state; tertiary text, the status colours, and the accent 3 to 1 on the
 /// base.
+#[cfg(test)]
 pub fn keeps_contrast(p: &Palette) -> bool {
     let read = [p.base, p.recessed, p.well, p.overlay];
     let controls = [p.raised, p.hover, p.pressed, p.selected];
@@ -262,26 +370,32 @@ pub fn keeps_contrast(p: &Palette) -> bool {
         && hues.into_iter().all(|hue| contrast(hue, p.base) >= 3.)
 }
 
-/// Whether `palette` can be moved to brightness `step`: within the setting's
-/// ends, no grey pushed below black or above white, and every text keeping
-/// its contrast.
-pub fn brightness_allowed(palette: &Palette, step: i32) -> bool {
-    let shift = brightness_shift(step);
-    let clips = greys(palette).into_iter().any(|(_, grey)| {
+/// Whether dark or light mode can be at brightness `step`: no grey pushed
+/// below black or above white, and its base on its own side of the middle
+/// grey, dark mode's below it and light mode's on it or above.
+pub fn brightness_allowed(dark: bool, step: i32) -> bool {
+    let reference = if dark { &DARK } else { &LIGHT };
+    let base = channel(reference.base, 0) + brightness_shift(step);
+    let side = if dark {
+        base < MIDDLE_GREY as i32
+    } else {
+        base >= MIDDLE_GREY as i32
+    };
+    let clips = greys(reference).into_iter().any(|(_, grey)| {
         [16, 8, 0].into_iter().any(|at| {
-            let channel = ((grey >> at) & 0xff) as i32 + shift;
-            !(0..=255).contains(&channel)
+            let moved = channel(grey, at) + brightness_shift(step);
+            !(0..=255).contains(&moved)
         })
     });
-    step.abs() <= BRIGHTNESS_LIMIT && !clips && keeps_contrast(&brightened(palette, step))
+    side && !clips
 }
 
-/// How far `palette`'s brightness can go either way: from 0 out to the last
-/// step allowed before one isn't.
-pub fn brightness_range(palette: &Palette) -> std::ops::RangeInclusive<i32> {
+/// How far dark or light mode's brightness can go either way: from 0 out to
+/// the last step allowed before one isn't.
+pub fn brightness_range(dark: bool) -> std::ops::RangeInclusive<i32> {
     let reach = |direction: i32| {
         let mut step = 0;
-        while brightness_allowed(palette, step + direction) {
+        while brightness_allowed(dark, step + direction) {
             step += direction;
         }
         step
@@ -292,7 +406,7 @@ pub fn brightness_range(palette: &Palette) -> std::ops::RangeInclusive<i32> {
 /// The brightness range of dark or light mode, worked out once.
 pub fn mode_brightness_range(dark: bool) -> std::ops::RangeInclusive<i32> {
     static RANGES: std::sync::LazyLock<[std::ops::RangeInclusive<i32>; 2]> =
-        std::sync::LazyLock::new(|| [brightness_range(&LIGHT), brightness_range(&DARK)]);
+        std::sync::LazyLock::new(|| [brightness_range(false), brightness_range(true)]);
     RANGES[dark as usize].clone()
 }
 
@@ -324,15 +438,16 @@ pub fn appearance_index(dark: bool, step: i32) -> usize {
 /// the application.
 fn shifted(dark: bool, step: i32) -> &'static Palette {
     static PALETTES: std::sync::LazyLock<[Vec<Palette>; 2]> = std::sync::LazyLock::new(|| {
-        let every = |palette: &Palette| {
-            (-BRIGHTNESS_LIMIT..=BRIGHTNESS_LIMIT)
-                .map(|step| brightened(palette, step))
+        let every = |dark: bool| {
+            mode_brightness_range(dark)
+                .map(|step| brightened(dark, step))
                 .collect()
         };
-        [every(&LIGHT), every(&DARK)]
+        [every(false), every(true)]
     });
-    let step = step.clamp(-BRIGHTNESS_LIMIT, BRIGHTNESS_LIMIT);
-    &PALETTES[dark as usize][(step + BRIGHTNESS_LIMIT) as usize]
+    let range = mode_brightness_range(dark);
+    let step = step.clamp(*range.start(), *range.end());
+    &PALETTES[dark as usize][(step - range.start()) as usize]
 }
 
 /// Each mode's brightness, and the gpui-kit themes built for the steps taken
@@ -476,6 +591,7 @@ pub const BEVEL: Pixels = px(1.);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Bevel {
     Raised,
+    #[cfg_attr(not(test), allow(dead_code))]
     Pressed,
 }
 
@@ -904,51 +1020,40 @@ mod tests {
         }
     }
 
-    /// Every step of brightness a mode allows moves every grey by the same
-    /// amount: the difference between any two greys, in every channel, is
-    /// what it is at 0, so their order and the steps between them never
-    /// change, and a lighter box on a darker one stays lighter.
+    /// Away from the middle grey, every step of brightness moves every grey
+    /// by the same amount, so the steps between them stay as at 0; nearer,
+    /// they narrow, but no grey ever passes another it was lighter or darker
+    /// than, and a raised box stays lighter than the base.
     #[test]
     fn brightening_keeps_every_step_and_order() {
-        use super::{brightened, brightness_range, brightness_shift, greys};
-        for (name, p) in [("dark", DARK), ("light", LIGHT)] {
-            let range = brightness_range(&p);
-            assert!(range.contains(&0), "{name}: 0 is out of range");
+        use super::{
+            brightened, brightness_shift, greys, mode_brightness_range, nearness_to_middle,
+        };
+        for (name, dark, p) in [("dark", true, DARK), ("light", false, LIGHT)] {
             let at_zero = greys(&p);
-            for step in range {
-                let moved = greys(&brightened(&p, step));
-                for ((grey, before), (_, after)) in at_zero.iter().zip(&moved) {
-                    for at in [16, 8, 0] {
-                        let channel = |c: u32| ((c >> at) & 0xff) as i32;
-                        assert_eq!(
-                            channel(*after) - channel(*before),
-                            brightness_shift(step),
-                            "{name} at {step}: {grey} didn't move with the rest"
-                        );
+            for step in mode_brightness_range(dark) {
+                let q = brightened(dark, step);
+                let moved = greys(&q);
+                if nearness_to_middle(dark, step) == 0. {
+                    for ((grey, before), (_, after)) in at_zero.iter().zip(&moved) {
+                        for at in [16, 8, 0] {
+                            let channel = |c: u32| ((c >> at) & 0xff) as i32;
+                            assert_eq!(
+                                channel(*after) - channel(*before),
+                                brightness_shift(step),
+                                "{name} at {step}: {grey} didn't move with the rest"
+                            );
+                        }
                     }
                 }
                 for (a, before_a) in &at_zero {
                     for (b, before_b) in &at_zero {
                         let after = |grey: &str| moved.iter().find(|(n, _)| *n == grey).unwrap().1;
-                        let lightness = |c: u32| Hsla::from(color(c)).l;
-                        assert_eq!(
-                            (after(a) & 0xff) as i32 - (after(b) & 0xff) as i32,
-                            (*before_a & 0xff) as i32 - (*before_b & 0xff) as i32,
-                            "{name} at {step}: the step from {b} to {a} changed"
-                        );
-                        assert_eq!(
-                            lightness(*before_a).total_cmp(&lightness(*before_b)),
-                            lightness(after(a)).total_cmp(&lightness(after(b))),
-                            "{name} at {step}: {a} and {b} changed order"
-                        );
+                        if before_a > before_b {
+                            assert!(after(a) >= after(b), "{name} at {step}: {a} went past {b}");
+                        }
                     }
                 }
-            }
-            // A raised box stays lighter than the base, and a well on the
-            // side of it it is at 0; the ribbon's base-coloured buttons stay
-            // on their side of its command area.
-            for step in brightness_range(&p) {
-                let q = brightened(&p, step);
                 assert!(q.raised > q.base, "{name} at {step}: raised isn't lighter");
                 assert_eq!(
                     q.well < q.base,
@@ -960,123 +1065,117 @@ mod tests {
                     p.base > p.ribbon,
                     "{name} at {step}: the ribbon's buttons turned"
                 );
+                assert_eq!(
+                    q.ribbon_tabs > q.ribbon,
+                    p.ribbon_tabs > p.ribbon,
+                    "{name} at {step}: the ribbon's tab row turned"
+                );
+                assert_ne!(q.selected, q.base, "{name} at {step}: selection vanished");
             }
         }
-        // A step is 2% of the lightness, 5.1 of 255, rounded half away from 0.
-        assert_eq!(
-            (-10..=10).map(brightness_shift).collect::<Vec<_>>(),
-            [
-                -51, -46, -41, -36, -31, -26, -20, -15, -10, -5, 0, 5, 10, 15, 20, 26, 31, 36, 41,
-                46, 51
-            ]
-        );
     }
 
-    /// The range each mode allows is worked out, not written down: it runs
-    /// from 0 out to the last step at which no grey clips below black or
-    /// above white and every text keeps the contrast the theme asks of it on
-    /// every surface; the next step either way, within -10 to +10, breaks
-    /// one of them.
+    /// The slider runs from dark mode as dark as it goes before a grey
+    /// clips, up through the middle grey, #777777, into light mode, up to
+    /// where a grey would clip above white; the base never jumps on the way,
+    /// and no neighbouring appearances are far apart.
     #[test]
-    fn brightness_stops_before_clipping_or_losing_contrast() {
+    fn brightness_runs_through_the_middle_grey() {
         use super::{
-            BRIGHTNESS_LIMIT, brightened, brightness_allowed, brightness_range, brightness_shift,
-            greys, keeps_contrast, mode_brightness_range,
+            MIDDLE_GREY, appearances, brightened, brightness_allowed, mode_brightness_range,
         };
-        let clips = |p: &Palette, step: i32| {
-            greys(p).into_iter().any(|(_, grey)| {
-                let v = (grey & 0xff) as i32 + brightness_shift(step);
-                !(0..=255).contains(&v)
-            })
-        };
-        let contrast_holds = |p: &Palette| {
-            [p.text, p.text_secondary].into_iter().all(|text| {
-                [p.base, p.recessed, p.well, p.overlay]
-                    .into_iter()
-                    .all(|surface| contrast(text, surface) >= 4.5)
-            }) && [p.raised, p.hover, p.pressed, p.selected]
-                .into_iter()
-                .all(|control| contrast(p.text, control) >= 4.)
-                && [
-                    p.text_tertiary,
-                    p.success,
-                    p.warning,
-                    p.error,
-                    p.accent,
-                    p.orange,
-                ]
-                .into_iter()
-                .all(|hue| contrast(hue, p.base) >= 3.)
-        };
-        for (name, dark, p, expected) in [
-            ("dark", true, DARK, -3..=1),
-            ("light", false, LIGHT, -4..=2),
-        ] {
-            let range = brightness_range(&p);
-            assert_eq!(range, expected, "{name}'s range");
-            assert_eq!(mode_brightness_range(dark), range);
-            for step in range.clone() {
-                let q = brightened(&p, step);
-                assert!(!clips(&p, step), "{name} at {step} clips");
+        assert_eq!(mode_brightness_range(true), -0x11..=0x76 - 0x44);
+        assert_eq!(mode_brightness_range(false), 0x77 - 0xd0..=0xff - 0xf5);
+        for dark in [true, false] {
+            let range = mode_brightness_range(dark);
+            assert!(range.contains(&0));
+            for beyond in [*range.start() - 1, *range.end() + 1] {
+                assert!(!brightness_allowed(dark, beyond), "{dark} allows {beyond}");
+            }
+        }
+        let bases: Vec<u32> = appearances()
+            .iter()
+            .map(|&(dark, step)| brightened(dark, step).base & 0xff)
+            .collect();
+        assert_eq!(bases.first(), Some(&0x33));
+        assert_eq!(bases.last(), Some(&0xda));
+        assert!(
+            bases.contains(&MIDDLE_GREY),
+            "it never reaches the middle grey"
+        );
+        for pair in bases.windows(2) {
+            assert_eq!(pair[1], pair[0] + 1, "the base jumped");
+        }
+        // Every grey changes gently from one position to the next, even
+        // across the change of mode.
+        for pair in appearances().windows(2) {
+            let (a, b) = (
+                brightened(pair[0].0, pair[0].1),
+                brightened(pair[1].0, pair[1].1),
+            );
+            for ((grey, x), (_, y)) in super::greys(&a).iter().zip(&super::greys(&b)) {
+                let step = ((x & 0xff) as i32 - (y & 0xff) as i32).abs();
+                assert!(step <= 36, "{grey} jumps {step} at {pair:?}");
+            }
+        }
+    }
+
+    /// Text keeps its contrast on the base all the way along, in both modes,
+    /// through the middle grey: primary text at least 4.5 to 1, the rest as
+    /// much as a colour can get. Away from the middle, it and the hues are
+    /// exactly as given; nearer, they only ever move further from the base.
+    #[test]
+    fn text_stays_readable_through_the_middle() {
+        use super::{appearances, brightened};
+        for &(dark, step) in appearances() {
+            let p = brightened(dark, step);
+            let given = if dark { DARK } else { LIGHT };
+            assert!(
+                contrast(p.text, p.base) >= 4.5,
+                "{dark} at {step}: text {:06x} on {:06x}",
+                p.text,
+                p.base
+            );
+            let pairs = [
+                (p.text, given.text),
+                (p.text_secondary, given.text_secondary),
+                (p.text_tertiary, given.text_tertiary),
+                (p.text_disabled, given.text_disabled),
+                (p.accent, given.accent),
+                (p.success, given.success),
+                (p.warning, given.warning),
+                (p.error, given.error),
+                (p.purple, given.purple),
+                (p.cyan, given.cyan),
+                (p.orange, given.orange),
+            ];
+            for (moved, was) in pairs {
                 assert!(
-                    contrast_holds(&q) && keeps_contrast(&q),
-                    "{name} at {step} loses contrast"
+                    contrast(moved, p.base) >= contrast(was, p.base) - 1e-3,
+                    "{dark} at {step}: {was:06x} moved closer to the base"
                 );
             }
-            for beyond in [*range.start() - 1, *range.end() + 1] {
-                assert!(!brightness_allowed(&p, beyond), "{name} allows {beyond}");
-                if beyond.abs() <= BRIGHTNESS_LIMIT {
-                    assert!(
-                        clips(&p, beyond) || !contrast_holds(&brightened(&p, beyond)),
-                        "{name} stops at {beyond} for no reason"
-                    );
-                }
+            let brighter_than_given = if dark { step > 0 } else { step < 0 };
+            if !brighter_than_given {
+                assert_eq!(
+                    pairs.map(|(a, _)| a),
+                    pairs.map(|(_, b)| b),
+                    "{dark} at {step}"
+                );
             }
+            assert_eq!(p.accent_fill, given.accent_fill);
+            assert_eq!(p.dim, given.dim);
         }
-        // Dark mode's darkest grey would go below black first; its secondary
-        // text would lose its contrast first the other way. Light mode's well
-        // would go past white first; its tertiary text the other way.
-        assert!(clips(&DARK, -4) && !contrast_holds(&brightened(&DARK, 2)));
-        assert!(clips(&LIGHT, 3) && !contrast_holds(&brightened(&LIGHT, -5)));
-    }
-
-    /// Brightness moves only the greys: text, the accent, the status and
-    /// other hues, and the strengths of what is laid over the surfaces are
-    /// the same at every step.
-    #[test]
-    fn brightness_leaves_text_and_hues_alone() {
-        use super::{BRIGHTNESS_LIMIT, brightened};
-        for p in [DARK, LIGHT] {
-            for step in -BRIGHTNESS_LIMIT..=BRIGHTNESS_LIMIT {
-                let q = brightened(&p, step);
-                let kept = |p: &Palette| {
-                    (
-                        [
-                            p.text,
-                            p.text_secondary,
-                            p.text_tertiary,
-                            p.text_disabled,
-                            p.accent,
-                            p.accent_fill,
-                            p.success,
-                            p.warning,
-                            p.error,
-                            p.purple,
-                            p.cyan,
-                            p.orange,
-                        ],
-                        [p.dim, p.bevel_light, p.bevel_shade],
-                    )
-                };
-                assert_eq!(kept(&q), kept(&p), "at {step}");
-            }
-            assert_eq!(brightened(&p, 0), p, "0 isn't the palette as given");
+        for dark in [true, false] {
+            let given = if dark { DARK } else { LIGHT };
+            assert_eq!(brightened(dark, 0), given, "0 isn't the palette as given");
+            assert!(super::keeps_contrast(&brightened(dark, 0)));
         }
     }
 
     /// Setting a mode's brightness moves the palette and gpui-kit's theme at
-    /// once, its text as it was; each mode keeps its own, starting at 0; and
-    /// a setting past what the mode allows stops at its end.
+    /// once; each mode keeps its own, starting at 0; and a setting past what
+    /// the mode allows stops at its end.
     #[gpui_kit::test]
     fn each_mode_keeps_its_own_brightness(cx: &mut TestAppContext) {
         use super::{brightened, brightness, palette, set_brightness};
@@ -1085,8 +1184,8 @@ mod tests {
             super::init(cx);
             Theme::change(ThemeMode::Dark, None, cx);
             assert_eq!(brightness(cx), 0);
-            assert_eq!(set_brightness(true, 1, cx), 1);
-            assert_eq!(*palette(cx), brightened(&DARK, 1));
+            assert_eq!(set_brightness(true, 5, cx), 5);
+            assert_eq!(*palette(cx), brightened(true, 5));
             let theme = Theme::global(cx);
             assert_eq!(theme.background, color(0x494949), "the base didn't move");
             assert_eq!(theme.foreground, color(DARK.text), "the text moved");
@@ -1094,13 +1193,13 @@ mod tests {
             Theme::change(ThemeMode::Light, None, cx);
             assert_eq!(brightness(cx), 0, "light mode took dark mode's");
             assert_eq!(*palette(cx), LIGHT);
-            assert_eq!(set_brightness(false, -10, cx), -4, "past the end");
-            assert_eq!(Theme::global(cx).background, color(LIGHT.base - 0x141414));
+            assert_eq!(set_brightness(false, -200, cx), -0x59, "past the end");
+            assert_eq!(Theme::global(cx).background, color(0x777777));
 
             Theme::change(ThemeMode::Dark, None, cx);
-            assert_eq!(brightness(cx), 1, "dark mode lost its own");
+            assert_eq!(brightness(cx), 5, "dark mode lost its own");
             assert_eq!(Theme::global(cx).background, color(0x494949));
-            assert_eq!(set_brightness(true, 5, cx), 1, "past the end");
+            assert_eq!(set_brightness(true, 500, cx), 0x32, "past the end");
             assert_eq!(set_brightness(true, 0, cx), 0);
             assert_eq!(Theme::global(cx).background, color(DARK.base));
         });

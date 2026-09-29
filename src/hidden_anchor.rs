@@ -113,6 +113,10 @@ pub struct HiddenAnchor {
     /// Sent with the `piton slice` of each spec it references, rather than
     /// links to them, written as `sliced: true` after the mode.
     pub sliced: bool,
+    /// Whether the prompt starts a new conversation rather than carrying on
+    /// the one its tab shares, written as `newConversation` after `sliced`;
+    /// none for a prompt saved before this was kept.
+    pub new_conversation: Option<bool>,
     /// Text attached to the prompt, written as `attachedText` after the mode:
     /// each piece a list of quoted lines, taken as it is rather than as Piton.
     pub attached_text: Vec<String>,
@@ -197,6 +201,7 @@ impl HiddenAnchor {
             imports: Imports::default(),
             mode: None,
             sliced: false,
+            new_conversation: None,
             attached_text: Vec::new(),
             attached_images: Vec::new(),
             system_prompt: None,
@@ -254,6 +259,10 @@ impl HiddenAnchor {
         if self.sliced {
             source.push('\n');
             writeln!(source, "{SLICED_LINE}").ok();
+        }
+        if let Some(new_conversation) = self.new_conversation {
+            source.push('\n');
+            writeln!(source, "{NEW_CONVERSATION_PREFIX}{new_conversation}").ok();
         }
         if !self.attached_text.is_empty() {
             source.push('\n');
@@ -390,6 +399,7 @@ impl HiddenAnchor {
                         || *line == ATTACHED_TEXT_LINE
                         || *line == ATTACHED_IMAGES_LINE
                         || *line == SLICED_LINE
+                        || line.starts_with(NEW_CONVERSATION_PREFIX)
                         || line.starts_with(MODE_PREFIX)
                 };
                 let end = lines.iter().position(property).unwrap_or(lines.len());
@@ -408,6 +418,20 @@ impl HiddenAnchor {
         }
         let sliced = rest.first() == Some(&SLICED_LINE);
         if sliced {
+            rest = &rest[1..];
+            rest = rest.strip_prefix(&[""]).unwrap_or(rest);
+        }
+        // Saved only by versions that keep whether a prompt starts a new
+        // conversation.
+        let new_conversation = rest
+            .first()
+            .and_then(|line| line.strip_prefix(NEW_CONVERSATION_PREFIX))
+            .and_then(|value| match value.trim() {
+                "true" => Some(true),
+                "false" => Some(false),
+                _ => None,
+            });
+        if new_conversation.is_some() {
             rest = &rest[1..];
             rest = rest.strip_prefix(&[""]).unwrap_or(rest);
         }
@@ -504,6 +528,7 @@ impl HiddenAnchor {
                 imports,
                 mode,
                 sliced,
+                new_conversation,
                 attached_text,
                 attached_images,
                 system_prompt,
@@ -525,6 +550,9 @@ const MODE_PREFIX: &str = "    mode: ";
 
 /// The line of [`HiddenAnchor::source`] saying the prompt is sent sliced.
 const SLICED_LINE: &str = "    sliced: true";
+
+/// The start of the `newConversation` line of [`HiddenAnchor::source`].
+const NEW_CONVERSATION_PREFIX: &str = "    newConversation: ";
 
 /// The line opening the `systemPrompt` property of [`HiddenAnchor::source`].
 const SYSTEM_PROMPT_LINE: &str = "    systemPrompt:";
@@ -1249,8 +1277,9 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        CodeTask, HiddenAnchor, Imports, MODE_PREFIX, PROMPT_INDENT, SYSTEM_PROMPT_LINE,
-        code_to_spec_system_prompt, compile, mode_of, spec_files, system_prompt,
+        CodeTask, HiddenAnchor, Imports, MODE_PREFIX, NEW_CONVERSATION_PREFIX, PROMPT_INDENT,
+        SYSTEM_PROMPT_LINE, code_to_spec_system_prompt, compile, mode_of, spec_files,
+        system_prompt,
     };
     use crate::chat_input::SendMode;
     use crate::project_directory::CONFIG_FILE_NAME;
@@ -1269,6 +1298,7 @@ mod tests {
             imports,
             mode: None,
             sliced: false,
+            new_conversation: None,
             attached_text: Vec::new(),
             attached_images: Vec::new(),
             system_prompt: None,
@@ -1324,6 +1354,23 @@ mod tests {
         assert_eq!(parsed.mode, Some(SendMode::Both));
         assert_eq!(parsed.system_prompt, anchor.system_prompt);
         assert_eq!(parsed.source(&text), source);
+
+        // Whether it starts a new conversation, either way, reads back too.
+        for new_conversation in [true, false] {
+            anchor.new_conversation = Some(new_conversation);
+            let source = anchor.source(prompt);
+            assert!(
+                source.contains(&format!(
+                    "\n\n{MODE_PREFIX}combined\n\n{NEW_CONVERSATION_PREFIX}{new_conversation}\n\n{SYSTEM_PROMPT_LINE}\n"
+                )),
+                "{source}"
+            );
+            let (parsed, text) = HiddenAnchor::parse(&source).unwrap();
+            assert_eq!(text, prompt);
+            assert_eq!(parsed.new_conversation, Some(new_conversation));
+            assert_eq!(parsed.system_prompt, anchor.system_prompt);
+            assert_eq!(parsed.source(&text), source);
+        }
     }
 
     /// A project without saved templates gives each mode its default, naming

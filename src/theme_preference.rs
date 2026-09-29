@@ -75,32 +75,43 @@ fn brightness_file() -> Option<PathBuf> {
 }
 
 /// Dark and light mode's brightness from `file`, a line for each mode, such
-/// as `dark -2`; a mode missing or unreadable is at 0.
+/// as `dark-level -12`, in channel values; a mode missing or unreadable is
+/// at 0. A line from before, such as `dark -2`, counted the slider's old
+/// steps of 2% each, and is read as the same brightness.
 fn load_brightness(file: &Path) -> Option<(i32, i32)> {
     let text = fs::read_to_string(file).ok()?;
-    let mut steps = (0, 0);
+    // Each mode's level, and its old step, if given.
+    let mut found: [(Option<i32>, Option<i32>); 2] = Default::default();
     for line in text.lines() {
         let mut words = line.split_whitespace();
-        let (Some(mode), Some(step)) = (words.next(), words.next()) else {
+        let (Some(key), Some(value)) = (words.next(), words.next()) else {
             continue;
         };
-        let Ok(step) = step.parse::<i32>() else {
+        let Ok(value) = value.parse::<i32>() else {
             continue;
         };
-        match mode {
-            "dark" => steps.0 = step,
-            "light" => steps.1 = step,
+        match key {
+            "dark-level" => found[0].0 = Some(value),
+            "light-level" => found[1].0 = Some(value),
+            "dark" => found[0].1 = Some(value),
+            "light" => found[1].1 = Some(value),
             _ => {}
         }
     }
-    Some(steps)
+    let level = |(level, old): (Option<i32>, Option<i32>)| {
+        // An old step was 5.1 channel values, rounded half away from 0.
+        level
+            .or(old.map(|step| (step * 51 + 5 * step.signum()) / 10))
+            .unwrap_or(0)
+    };
+    Some((level(found[0]), level(found[1])))
 }
 
 fn save_brightness_to(dark: i32, light: i32, file: &Path) -> Result<()> {
     if let Some(dir) = file.parent() {
         fs::create_dir_all(dir).with_context(|| format!("could not create {}", dir.display()))?;
     }
-    fs::write(file, format!("dark {dark}\nlight {light}\n"))
+    fs::write(file, format!("dark-level {dark}\nlight-level {light}\n"))
         .with_context(|| format!("could not save {}", file.display()))
 }
 
@@ -137,12 +148,15 @@ mod tests {
         fs::remove_dir_all(&dir).ok();
 
         assert_eq!(load_brightness(&file), None);
-        save_brightness_to(-3, 2, &file).unwrap();
-        assert_eq!(load_brightness(&file), Some((-3, 2)));
-        save_brightness_to(1, 0, &file).unwrap();
-        assert_eq!(load_brightness(&file), Some((1, 0)));
-        fs::write(&file, "light -4\n").unwrap();
-        assert_eq!(load_brightness(&file), Some((0, -4)));
+        save_brightness_to(-17, 10, &file).unwrap();
+        assert_eq!(load_brightness(&file), Some((-17, 10)));
+        save_brightness_to(40, 0, &file).unwrap();
+        assert_eq!(load_brightness(&file), Some((40, 0)));
+        fs::write(&file, "light-level -60\n").unwrap();
+        assert_eq!(load_brightness(&file), Some((0, -60)));
+        // Saved before, in steps of 2%, it loads as the same brightness.
+        fs::write(&file, "dark -3\nlight 2\n").unwrap();
+        assert_eq!(load_brightness(&file), Some((-15, 10)));
         fs::remove_dir_all(&dir).ok();
     }
 

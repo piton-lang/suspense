@@ -37,6 +37,14 @@ pub const COLOUR_IS_EDGE: bool = true;
 /// How tall the header, the branch's row, is.
 pub const HEADER_HEIGHT: Pixels = px(32.);
 
+/// How tall the panel starts, until the edge above it is dragged: room for
+/// the summary, the message, and a few commit notes.
+pub const START_HEIGHT: Pixels = px(200.);
+
+/// The shortest it can be dragged: its header alone, the body scrolling
+/// beneath it.
+pub const MIN_HEIGHT: Pixels = HEADER_HEIGHT;
+
 /// The body's padding at either side and at the bottom.
 pub const PADDING: Pixels = px(8.);
 
@@ -393,6 +401,9 @@ pub struct GitPanel {
     /// The commit message each project switched away from was left with,
     /// for when it's back.
     left_messages: HashMap<PathBuf, String>,
+    /// Its body, beneath the header, scrolls when the panel is shorter than
+    /// it.
+    scroll: ScrollHandle,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -430,6 +441,7 @@ impl GitPanel {
             busy: None,
             _refresh: Task::ready(()),
             left_messages: HashMap::new(),
+            scroll: ScrollHandle::new(),
             _subscriptions: subscriptions,
         };
         this.open(window, cx);
@@ -866,6 +878,7 @@ impl Render for GitPanel {
 
         let body = v_flex()
             .id("git-body")
+            .flex_none()
             .px(PADDING)
             .pb(PADDING)
             .gap(GAP)
@@ -942,12 +955,35 @@ impl Render for GitPanel {
 
         // No line above it, nor between its header and body: the change of
         // colour is the edge.
+        // It fills the height its sidebar gives it, and its body scrolls
+        // beneath the header when it is taller than that, on the body's
+        // colour all the way down.
+        let scrolled = div()
+            .id("git-scroll")
+            .size_full()
+            .overflow_y_scroll()
+            .track_scroll(&self.scroll)
+            .child(gpui_kit::TestSupportExt::test_support(body));
         let panel = v_flex()
             .id("git-panel")
-            .flex_none()
+            .size_full()
             .text_sm()
+            .bg(crate::theme::color(palette.ribbon))
             .child(gpui_kit::TestSupportExt::test_support(header))
-            .child(gpui_kit::TestSupportExt::test_support(body));
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .child(crate::scrollbar::with_scrollbar(
+                        "git-scroll",
+                        &self.scroll,
+                        // Lets UI tests find it; inert in normal builds.
+                        gpui_kit::TestSupportExt::test_support(scrolled),
+                        true,
+                        None,
+                        cx,
+                    )),
+            );
         // Lets UI tests find the panel; inert in normal builds.
         gpui_kit::TestSupportExt::test_support(panel).into_any_element()
     }

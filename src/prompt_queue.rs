@@ -70,6 +70,48 @@ pub fn replace(file: PathBuf, anchor: HiddenAnchor, text: String) -> Result<Queu
     Ok(QueuedPrompt { file, anchor, text })
 }
 
+/// Saves `queued` again as it now is, as when it is marked to start a new
+/// conversation, keeping its place in the queue.
+pub fn rewrite(queued: &QueuedPrompt) -> Result<()> {
+    fs::write(&queued.file, queued.anchor.source(&queued.text))
+        .with_context(|| format!("could not save {}", queued.file.display()))
+}
+
+/// Swaps the places of two queued prompts in the queue: each takes the other's
+/// mark of when it was queued, which orders the files, keeping its own name.
+pub fn swap(a: &mut QueuedPrompt, b: &mut QueuedPrompt) -> Result<()> {
+    let renamed = |from: &QueuedPrompt, to: &QueuedPrompt| {
+        to.file.with_file_name(format!(
+            "{}-{}.pi",
+            stamp_of(&to.file).unwrap_or_default(),
+            from.anchor.name()
+        ))
+    };
+    let (new_a, new_b) = (renamed(a, b), renamed(b, a));
+    let parked = a.file.with_extension("moving");
+    fs::rename(&a.file, &parked).with_context(|| format!("could not move {}", a.file.display()))?;
+    if let Err(err) = fs::rename(&b.file, &new_b) {
+        fs::rename(&parked, &a.file).ok();
+        return Err(err).with_context(|| format!("could not move {}", b.file.display()));
+    }
+    if let Err(err) = fs::rename(&parked, &new_a) {
+        fs::rename(&new_b, &b.file).ok();
+        fs::rename(&parked, &a.file).ok();
+        return Err(err).with_context(|| format!("could not move {}", a.file.display()));
+    }
+    a.file = new_a;
+    b.file = new_b;
+    Ok(())
+}
+
+/// The mark of when the prompt in `file` was queued, as its name starts.
+fn stamp_of(file: &Path) -> Option<&str> {
+    file.file_name()?
+        .to_str()?
+        .split_once('-')
+        .map(|(stamp, _)| stamp)
+}
+
 /// The project's queued prompts, in the order they were queued. Files that do
 /// not read back as a hidden anchor are left out.
 pub fn load(project_dir: &Path) -> Vec<QueuedPrompt> {
@@ -105,7 +147,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    use super::{add, add_at, load, remove, replace, stamp};
+    use super::{add, add_at, load, remove, replace, stamp, swap};
     use crate::hidden_anchor::HiddenAnchor;
 
     /// Prompts queued in a row keep the order they were queued in, whatever
@@ -176,6 +218,22 @@ mod tests {
             .map(|queued| queued.text)
             .collect();
         assert_eq!(texts[1], "second, edited");
+
+        // Swapped, two prompts trade places, and load back so.
+        let mut queue = load(&project_dir);
+        let (head, tail) = queue.split_at_mut(1);
+        swap(&mut head[0], &mut tail[0]).unwrap();
+        let texts: Vec<String> = load(&project_dir)
+            .into_iter()
+            .map(|queued| queued.text)
+            .collect();
+        assert_eq!(
+            texts[..2],
+            ["second, edited", "Update @{ApplicationScope}\n\n  indented"]
+        );
+        let (head, tail) = queue.split_at_mut(1);
+        swap(&mut head[0], &mut tail[0]).unwrap();
+        assert_eq!(queue[0].file, first.file);
 
         remove(&first.file).unwrap();
         remove(&first.file).unwrap();

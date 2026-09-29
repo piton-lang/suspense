@@ -56,8 +56,17 @@ const SEND_MENU_SHORTCUT: &str = "Ctrl+Shift+Enter";
 
 actions!(
     chat_input,
-    [NextMode, PreviousMode, ToggleSendMenu, SendPreviewed]
+    [
+        NextMode,
+        PreviousMode,
+        ToggleSendMenu,
+        SendPreviewed,
+        StartNewConversation
+    ]
 );
+
+/// Ctrl+N starts a new conversation: Ctrl on macOS too, as Ctrl+Tab is.
+const NEW_CONVERSATION_SHORTCUT: &str = "Ctrl+N";
 
 #[cfg(target_os = "macos")]
 const PREVIEW_HINT: &str = "⌘Enter to send · Esc to edit";
@@ -182,6 +191,9 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("secondary-shift-enter", ToggleSendMenu, Some(CONTEXT)),
         // Sends a previewed prompt, when the text input isn't there to.
         KeyBinding::new("secondary-enter", SendPreviewed, Some(CONTEXT)),
+        // Ctrl+N starts a new conversation for the selected tab, as its New
+        // conversation button does.
+        KeyBinding::new("ctrl-n", StartNewConversation, Some(CONTEXT)),
     ]);
 }
 
@@ -1984,10 +1996,10 @@ impl Render for ChatInput {
         // conversation left.
         let new_conversation_tooltip = if self.conversation_running {
             format!(
-                "Start a new conversation for {runs}; the {run} running finishes in the conversation left"
+                "Start a new conversation for {runs} ({NEW_CONVERSATION_SHORTCUT}); the {run} running finishes in the conversation left"
             )
         } else if context.is_some() {
-            format!("Start a new conversation for {runs}")
+            format!("Start a new conversation for {runs} ({NEW_CONVERSATION_SHORTCUT})")
         } else {
             format!("The next {run} already starts a new conversation")
         };
@@ -2211,6 +2223,13 @@ impl Render for ChatInput {
                 cx.listener(|this, _: &PreviousMode, window, cx| this.cycle_tab(-1, window, cx)),
             )
             .on_action(cx.listener(|this, _: &ToggleSendMenu, _, cx| this.toggle_send_menu(cx)))
+            // Ctrl+N does what New conversation does, and nothing while it is
+            // disabled.
+            .on_action(cx.listener(|this, _: &StartNewConversation, _, cx| {
+                if this.context.is_some() || this.conversation_running {
+                    cx.emit(NewConversation);
+                }
+            }))
             .on_action(cx.listener(|this, _: &SendPreviewed, window, cx| {
                 if this.preview.is_some() {
                     this.submit(window, cx);

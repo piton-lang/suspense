@@ -52,6 +52,9 @@ const MIN_SPLIT_WIDTH: Pixels = px(240.);
 const SIDEBAR_WIDTH: Pixels = px(260.);
 const MIN_SIDEBAR_WIDTH: Pixels = px(160.);
 
+/// The shortest the file tree can be dragged, above the git panel.
+const MIN_FILE_TREE_HEIGHT: Pixels = px(80.);
+
 actions!(suspense, [Dismiss, FocusChat, TogglePalette]);
 
 /// Esc closes what the window has open to dismiss, and otherwise goes on to
@@ -86,6 +89,9 @@ pub struct MainWindow {
     palette: Option<Entity<Palette>>,
     _palette_subscription: Option<Subscription>,
     sidebar_split: Entity<ResizableState>,
+    /// How tall the git panel is, beneath the file tree, until the edge
+    /// between them is dragged again.
+    git_height: Pixels,
     /// A changed file's diff, or the new project form, floating over the
     /// window in an inset panel.
     diff: Option<Entity<DiffView>>,
@@ -282,6 +288,7 @@ impl MainWindow {
             palette: None,
             _palette_subscription: None,
             sidebar_split: cx.new(|_| ResizableState::default()),
+            git_height: crate::git_panel::START_HEIGHT,
             diff: None,
             new_project: None,
             spec_component: None,
@@ -1489,6 +1496,85 @@ impl MainWindow {
     }
 }
 
+impl MainWindow {
+    /// The file tree, with the git panel beneath it while it shows, the edge
+    /// between them dragged to resize the git panel, the tree taking what it
+    /// leaves. The git panel's header's change of colour is that edge, so no
+    /// line is drawn there, but one shows while it is hovered or dragged.
+    fn render_project_sidebar(&self, cx: &mut Context<Self>) -> AnyElement {
+        if !self.git_panel.read(cx).is_shown() {
+            return div()
+                .size_full()
+                .child(self.sidebar.clone())
+                .into_any_element();
+        }
+        let ring = cx.theme().ring;
+        use gpui_kit::base::ElementExt as _;
+        let edge = div()
+            .id("git-resize")
+            .group("git-resize")
+            .absolute()
+            .top(-GIT_EDGE_REACH)
+            .left_0()
+            .right_0()
+            .h(GIT_EDGE_REACH * 2.)
+            .flex()
+            .items_center()
+            .cursor_row_resize()
+            .on_prepaint(|bounds, _, cx| {
+                crate::hit_areas::register_resize("git-resize".into(), bounds, cx)
+            })
+            .child(
+                div()
+                    .w_full()
+                    .h(px(1.))
+                    .group_hover("git-resize", |line| line.bg(ring)),
+            )
+            .on_drag(GitResize, |_, _, _, cx| cx.new(|_| gpui_kit::EmptyView));
+        gpui_kit::component::v_flex()
+            .id("project-sidebar")
+            .size_full()
+            .on_drag_move(
+                cx.listener(|this, event: &DragMoveEvent<GitResize>, _, cx| {
+                    let bounds = event.bounds;
+                    // The tree keeps its least height, the git panel its header.
+                    let most = (bounds.size.height - MIN_FILE_TREE_HEIGHT)
+                        .max(crate::git_panel::MIN_HEIGHT);
+                    let height = (bounds.bottom() - event.event.position.y)
+                        .clamp(crate::git_panel::MIN_HEIGHT, most);
+                    if height != this.git_height {
+                        this.git_height = height;
+                        cx.notify();
+                    }
+                }),
+            )
+            .child(div().flex_1().min_h_0().child(self.sidebar.clone()))
+            .children(crate::sidebar::between(
+                true,
+                crate::git_panel::COLOUR_IS_EDGE,
+                cx,
+            ))
+            .child(
+                div()
+                    .relative()
+                    .flex_none()
+                    .h(self.git_height)
+                    // Never taller than the sidebar leaves it, the tree its
+                    // least height, however the window is resized.
+                    .max_h(relative(1.))
+                    .child(self.git_panel.clone())
+                    .child(gpui_kit::TestSupportExt::test_support(edge)),
+            )
+            .into_any_element()
+    }
+}
+
+/// Dragging the edge between the file tree and the git panel.
+struct GitResize;
+
+/// How far either side of the edge above the git panel reaches for a drag.
+const GIT_EDGE_REACH: Pixels = px(3.);
+
 impl Render for MainWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
@@ -1653,20 +1739,7 @@ impl Render for MainWindow {
                             resizable_panel()
                                 .size(SIDEBAR_WIDTH)
                                 .size_range(MIN_SIDEBAR_WIDTH..Pixels::MAX)
-                                .child(
-                                    // The file tree, with the git panel beneath it
-                                    // while it shows: its header's change of
-                                    // colour is the edge between them.
-                                    gpui_kit::component::v_flex()
-                                        .size_full()
-                                        .child(div().flex_1().min_h_0().child(self.sidebar.clone()))
-                                        .children(crate::sidebar::between(
-                                            self.git_panel.read(cx).is_shown(),
-                                            crate::git_panel::COLOUR_IS_EDGE,
-                                            cx,
-                                        ))
-                                        .child(self.git_panel.clone()),
-                                ),
+                                .child(self.render_project_sidebar(cx)),
                             resizable_panel()
                                 .size_range(MIN_SPLIT_WIDTH..Pixels::MAX)
                                 .child(self.prompt_mode.clone()),
@@ -1925,7 +1998,7 @@ mod tests {
             assert_eq!(theme::brightness(cx), light_high);
             assert_eq!(
                 *theme::palette(cx),
-                theme::brightened(&theme::LIGHT, light_high)
+                theme::brightened(false, light_high)
             );
             assert_eq!(
                 Theme::global(cx).foreground,
@@ -1942,7 +2015,7 @@ mod tests {
             assert_eq!(theme::brightness(cx), dark_low);
             assert_eq!(
                 *theme::palette(cx),
-                theme::brightened(&theme::DARK, dark_low)
+                theme::brightened(true, dark_low)
             );
         });
         assert_eq!(ribbon.read_with(cx, |r, cx| r.brightness_slider(cx)), Some(0.));
@@ -1957,7 +2030,7 @@ mod tests {
             window.render_frame(cx);
             let area = painted_at(window, window.find("ribbon-controls").bounds())
                 .expect("the command area isn't painted");
-            let moved = theme::brightened(&theme::DARK, dark_high).ribbon;
+            let moved = theme::brightened(true, dark_high).ribbon;
             assert_eq!(area, theme::color(moved), "the command area didn't move");
             let button = painted_at(window, window.find("new-project").bounds())
                 .expect("the button isn't painted");
@@ -1968,7 +2041,7 @@ mod tests {
                 "the button {shown:?} isn't lighter than the command area {area_rgb:?}"
             );
             // Its base, moved as the base is.
-            let base = (theme::brightened(&theme::DARK, dark_high).base & 0xff) as f32;
+            let base = (theme::brightened(true, dark_high).base & 0xff) as f32;
             assert!(
                 (shown.r * 255. - base).abs() < 1.,
                 "the button is {shown:?}, not the moved base"
@@ -5048,6 +5121,129 @@ mod tests {
         cx.update(|cx| assert_eq!(chat.read(cx).value(cx).as_ref(), ""));
     }
 
+    /// The git panel starts at its starting height beneath the file tree, the
+    /// edge between them dragged to resize it, and its body scrolls beneath
+    /// its header once it is shorter than what it holds.
+    #[gpui_kit::test]
+    async fn the_git_panel_resizes_and_scrolls(cx: &mut TestAppContext) {
+        use gpui_kit::{point, px};
+        let dir = std::env::temp_dir().join(format!("suspense-git-resize-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(dir.join("spec")).unwrap();
+        std::fs::write(dir.join("piton.config.pi"), "root: ./spec\n").unwrap();
+        std::fs::write(dir.join("spec/index.pi"), "a: 1\n").unwrap();
+        let git = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
+                .args(args)
+                .current_dir(&dir)
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "git {args:?}: {output:?}");
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "first"]);
+        std::fs::write(dir.join("spec/index.pi"), "a: 2\n").unwrap();
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            ProjectDirectory::set(dir.clone(), cx);
+        });
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            Root::new(view, window, cx)
+        });
+        let handle: gpui_kit::AnyWindowHandle = window.into();
+        cx.wait_for(handle, Duration::from_secs(5), |window, _| {
+            window.try_find("git-header").is_some()
+        })
+        .await;
+        gpui_kit::VisualTestContext::from_window(handle, cx)
+            .simulate_resize(gpui_kit::size(px(1000.), px(800.)));
+        let frame = |cx: &mut TestAppContext| {
+            for _ in 0..3 {
+                cx.run_until_parked();
+                cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                    .unwrap();
+            }
+        };
+        frame(cx);
+        let panel = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, _| window.find("git-panel").bounds())
+                .unwrap()
+        };
+        let start = panel(cx);
+        assert!(
+            (start.size.height - crate::git_panel::START_HEIGHT).abs() < px(1.),
+            "the git panel starts {start:?}"
+        );
+
+        // Dragged up, it grows, and the file tree gives way.
+        cx.update_window(handle, |_, window, cx| {
+            let edge = point(start.center().x, start.top());
+            window.drag(edge, edge - point(px(0.), px(100.)), cx);
+        })
+        .unwrap();
+        frame(cx);
+        let grown = panel(cx);
+        assert!(
+            (grown.size.height - start.size.height - px(100.)).abs() < px(2.),
+            "dragged up, the git panel is {grown:?}"
+        );
+        assert_eq!(grown.bottom(), start.bottom());
+
+        // Dragged down to just below its header, its body scrolls beneath it.
+        cx.update_window(handle, |_, window, cx| {
+            let edge = point(grown.center().x, grown.top());
+            let to = point(
+                edge.x,
+                grown.bottom() - crate::git_panel::HEADER_HEIGHT - px(40.),
+            );
+            window.drag(edge, to, cx);
+        })
+        .unwrap();
+        frame(cx);
+        let short = panel(cx);
+        let (scroll, body) = cx
+            .update_window(handle, |_, window, _| {
+                (
+                    window.find("git-scroll").bounds(),
+                    window.find("git-body").bounds(),
+                )
+            })
+            .unwrap();
+        assert!(short.size.height < px(100.), "the git panel is {short:?}");
+        assert!(
+            body.size.height > scroll.size.height,
+            "its body {body:?} fits in {scroll:?}"
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.scroll(
+                "git-scroll",
+                gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-200.))),
+                cx,
+            );
+        })
+        .unwrap();
+        frame(cx);
+        let scrolled = cx
+            .update_window(handle, |_, window, _| window.find("git-body").bounds())
+            .unwrap();
+        assert!(
+            scrolled.top() < body.top(),
+            "its body didn't scroll: {body:?} then {scrolled:?}"
+        );
+        assert!(
+            (scrolled.bottom() - scroll.bottom()).abs() < px(1.),
+            "scrolled to its end, the body {scrolled:?} ends where {scroll:?} does"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// In a git repository, the git panel sits beneath the file tree with no
     /// line between them: the tree on the darkest surface runs straight into
     /// the panel's header on the ribbon's tab row colour, whose change of
@@ -5739,13 +5935,12 @@ mod tests {
 
     /// In the window as the app lays it out, in the sidebar above the git
     /// panel, at each mode's brightness, the file tree's scroll column is laid
-    /// straight over the tree's darkest surface, with nothing of its own
-    /// beneath it: the surface down both of its sides, around its arrows, and
-    /// through the thumb at rest; the track black laid half way over that
-    /// surface, a pixel in from either side; the thumb's end black laid a
-    /// quarter over it; and each arrow, solid and faint, white laid about a
-    /// fifth over it. The tree has more rows than fit, so the thumb and the
-    /// track both show.
+    /// straight over the tree's darkest surface: the track is that surface, a
+    /// pixel in from either side; the column's line down both sides, the
+    /// buttons, and the thumb at rest are all the same colour laid over it;
+    /// the thumb's end is half way between the two; and each
+    /// arrow, solid and faint, is laid over its button. The tree has more rows
+    /// than fit, so the thumb and the track both show.
     #[gpui_kit::test]
     async fn the_trees_scroll_column_is_on_the_trees_surface_in_the_window(
         cx: &mut TestAppContext,
@@ -5833,11 +6028,8 @@ mod tests {
                 let case = format!("{mode:?} at {brightness}");
                 let surface = crate::theme::palette(cx).darkest;
                 let colors = crate::scrollbar::scroll_colors(cx.theme().is_dark());
-                let (track_color, end, arrow) = (
-                    over(surface, colors.track),
-                    over(surface, colors.thumb_end),
-                    over(surface, colors.arrow),
-                );
+                let raised = over(surface, colors.raised);
+                let (end, arrow) = (over(surface, colors.thumb_end), over(raised, colors.arrow));
                 let frame = crate::frame_image::Frame::of(window);
                 let tree = window.find("project-tree").bounds();
                 let column = window.find("project-tree-scroll-column").bounds();
@@ -5852,9 +6044,9 @@ mod tests {
 
                 // The thumb, at the top with the tree unscrolled, and the
                 // track below it, read down the column's middle: the thumb's
-                // inside is the surface, with a row at either end.
+                // inside is raised, with a row at either end.
                 let inside: Vec<i32> = (0..height)
-                    .filter(|y| same(at(8., *y as f32, track), surface))
+                    .filter(|y| same(at(8., *y as f32, track), raised))
                     .collect();
                 let (first, last) = (inside[0] - 1, *inside.last().unwrap() + 1);
                 assert_eq!(first, 0, "{case}: the thumb isn't at the top");
@@ -5863,15 +6055,21 @@ mod tests {
                     "{case}: the thumb, rows {first} to {last} of {height}, leaves no track"
                 );
 
-                // The surface down both sides and beside the column, from the
-                // top of the up button to the bottom of the down button.
+                // The column's line down both sides, from the top of the up
+                // button to the bottom of the down button, and the tree's
+                // surface beside it.
                 let mut y = 0.;
                 while y < column.size.height.as_f32() {
-                    for x in [-4., 0., 17.] {
+                    let c = at(-4., y, column);
+                    assert!(
+                        same(c, surface),
+                        "{case}: {c:06x} beside the column at {y}, not the tree's {surface:06x}"
+                    );
+                    for x in [0., 17.] {
                         let c = at(x, y, column);
                         assert!(
-                            same(c, surface),
-                            "{case}: {c:06x} at ({x}, {y}) of the column, not the tree's {surface:06x}"
+                            same(c, raised),
+                            "{case}: {c:06x} at ({x}, {y}) of the column, not {raised:06x}"
                         );
                     }
                     y += 1.;
@@ -5881,27 +6079,27 @@ mod tests {
                     for x in [1., 8., 16.] {
                         let c = at(x, y as f32, track);
                         assert!(
-                            same(c, track_color),
-                            "{case}: the track is {c:06x} at ({x}, {y}), not {track_color:06x}"
+                            same(c, surface),
+                            "{case}: the track is {c:06x} at ({x}, {y}), not {surface:06x}"
                         );
                     }
                 }
-                // The thumb: the surface itself, its full width, and its
-                // bottom end black laid a quarter over the surface.
+                // The thumb: raised, its full width, and its bottom end half
+                // way between it and the surface.
                 for x in [1., 8., 16.] {
                     let c = at(x, (last / 2) as f32, track);
-                    assert!(same(c, surface), "{case}: the thumb is {c:06x} at {x}");
+                    assert!(same(c, raised), "{case}: the thumb is {c:06x} at {x}");
                     let c = at(x, last as f32, track);
                     assert!(same(c, end), "{case}: the thumb's end is {c:06x} at {x}");
                 }
-                // Each button: the surface, and a faint solid arrow on it.
+                // Each button: raised, and a faint solid arrow on it.
                 for button in [up, down] {
                     let mut lit = 0;
                     for y in 0..17 {
                         for x in 0..18 {
                             let c = at(x as f32, y as f32, button);
                             assert!(
-                                same(c, surface) || same(c, arrow),
+                                same(c, raised) || same(c, arrow),
                                 "{case}: {c:06x} at ({x}, {y}) in a button"
                             );
                             lit += same(c, arrow) as usize;

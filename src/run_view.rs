@@ -851,7 +851,8 @@ pub mod tests {
     }
 
     /// The log's scroll column has no colour of its own: it sits on the log's
-    /// own surface, the well, as the log does, down both of its sides.
+    /// own surface, the well, as the log does, its line down both of its
+    /// sides laid over the well.
     #[cfg(unix)]
     #[gpui_kit::test]
     async fn the_logs_scroll_column_is_on_the_logs_surface(cx: &mut TestAppContext) {
@@ -897,6 +898,15 @@ pub mod tests {
                 window.render_frame(cx);
                 window.render_frame(cx);
                 let well = crate::theme::palette(cx).well;
+                use gpui_kit::component::ActiveTheme as _;
+                let raised = crate::scrollbar::scroll_colors(cx.theme().is_dark()).raised;
+                let raised: gpui_kit::Rgba = crate::theme::color(well).blend(raised).into();
+                let raised = [raised.r, raised.g, raised.b]
+                    .into_iter()
+                    .fold(0u32, |rgb, c| rgb << 8 | (c * 255.).round() as u32);
+                let near = |a: u32, b: u32| {
+                    (0..3).all(|ix| (((a >> (ix * 8)) & 0xff) as i32 - ((b >> (ix * 8)) & 0xff) as i32).abs() <= 1)
+                };
                 let frame = crate::frame_image::Frame::of(window);
                 let log = window.find("run-output").bounds();
                 let column = window.find("run-output-scroll-column").bounds();
@@ -905,9 +915,14 @@ pub mod tests {
                 let bottom = window.find("run-output-scroll-down").bounds().bottom();
                 let mut y = column.top() + px(0.5);
                 while y < bottom {
-                    for x in [log.right() - px(4.), column.left() + px(0.5), column.right() - px(0.5)] {
+                    let c = frame.at(point(log.right() - px(4.), y));
+                    assert_eq!(c, well, "{mode:?}: {c:06x} at {y:?} in the log, not the well");
+                    for x in [column.left() + px(0.5), column.right() - px(0.5)] {
                         let c = frame.at(point(x, y));
-                        assert_eq!(c, well, "{mode:?}: {c:06x} at ({x:?}, {y:?}), not the well");
+                        assert!(
+                            near(c, raised),
+                            "{mode:?}: {c:06x} at ({x:?}, {y:?}), not {raised:06x} over the well"
+                        );
                     }
                     y += px(7.);
                 }
