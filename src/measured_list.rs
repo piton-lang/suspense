@@ -220,6 +220,35 @@ impl MeasuredList {
         point(px(0.), -y.min(max).max(px(0.)))
     }
 
+    /// How far it has to scroll up to reach its top: as it was laid out, once
+    /// its first row is in view; otherwise at least as far as its view is
+    /// tall, by the heights known so far.
+    pub fn to_top(&self) -> Pixels {
+        let viewport = self.state.viewport_bounds();
+        if self.count() == 0 {
+            return px(0.);
+        }
+        match self.state.bounds_for_item(0) {
+            Some(first) => (viewport.top() - first.top()).max(px(0.)),
+            None => (-self.offset().y).max(viewport.size.height),
+        }
+    }
+
+    /// How far it has to scroll down to reach its bottom: as it was laid out,
+    /// once its last row is in view; otherwise at least as far as its view is
+    /// tall, by the heights known so far.
+    pub fn to_bottom(&self) -> Pixels {
+        let viewport = self.state.viewport_bounds();
+        let count = self.count();
+        if count == 0 {
+            return px(0.);
+        }
+        match self.state.bounds_for_item(count - 1) {
+            Some(last) => (last.bottom() - viewport.bottom()).max(px(0.)),
+            None => (self.offset().y + self.max_offset().y).max(viewport.size.height),
+        }
+    }
+
     /// How far it can scroll.
     pub fn max_offset(&self) -> Point<Pixels> {
         let total = *self.tops().last().unwrap_or(&px(0.));

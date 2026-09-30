@@ -26,9 +26,12 @@ shape HarnessIntegrationShape:
     description:
         Should always run in auto mode.
 
-        The compiled systemPrompt of a prompt's hidden anchor is appended to
-        the harness's own system prompt, for example with
-        `--append-system-prompt`.
+        The project's system prompt, its system template filled in, as the
+        @{ModeSystemPromptsScope} says, is appended to the harness's own
+        system prompt, for example with `--append-system-prompt`, the same for
+        every prompt of a conversation whatever its mode. The compiled
+        systemPrompt of a prompt's hidden anchor, its mode's instructions,
+        heads the prompt's own message instead.
 
         The prompt is given to the harness on its standard input, and what the
         harness does is streamed back as it happens. A task's run takes its
@@ -72,6 +75,19 @@ shape HarnessIntegrationShape:
 
         When the harness picked isn't installed, a run fails saying that it
         can't be run, as any run that can't be started does.
+
+    protectedLocations:
+        Where the harness takes rules for what its tools may do, as Claude
+        Code does with `--disallowedTools`, a run is told what its mode keeps
+        it off. A Code task is told it may not edit the spec location, and a
+        Spec task the code location; the application puts back whatever
+        changes there all the same. A Code task and a question from the Ask
+        tab are also told they may not read the spec location, alongside that,
+        so they read the compiled reference instead, as the
+        @{ModeSystemPromptsScope} says. This rule is only a nudge, not
+        enforcement: a shell command can still read the files, and nothing
+        puts anything back or stops the run when one does. A harness that
+        takes no such rules is told nothing of either.
 
     feeding:
         A task's run is given its prompt as a stream of messages: Claude Code

@@ -1,0 +1,6 @@
+- [The Chain tab's icon is drawn in Chain's colour, the purple of the mode colours, selected or not](spec/scope/prompt-mode/chat-input/index.pi)
+- [Every tab's label is in its mode's colour at full strength: Code red, Chain's icon purple, Spec blue, Ask green, Freeform grey](spec/scope/prompt-mode/chat-input/index.pi)
+- [Unselected, Chain shows a broken chain dimmed to 50% opacity](spec/scope/prompt-mode/chat-input/index.pi)
+- [Selected, Chain shows a joined chain at full opacity](spec/scope/prompt-mode/chat-input/index.pi)
+- [Chain has no line along its bottom or sides; the tab bar draws no lines at all](spec/scope/prompt-mode/chat-input/index.pi)
+- [Chain never shows a focus outline](spec/scope/prompt-mode/chat-input/index.pi)

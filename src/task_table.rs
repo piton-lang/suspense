@@ -912,11 +912,161 @@ impl Reply {
         (!text.is_empty()).then(|| text.join("\n\n"))
     }
 
+    /// Where it is in its changes, so what shows it knows when to lay it
+    /// out again: which reply it is, and how many changes it has had.
+    pub(crate) fn version(&self) -> (u64, u64) {
+        (self.uid, self.edit)
+    }
+
+    /// Its rows read as a chat reply: the steps up to its answer, each tool
+    /// call and piece of reply text before its last tool call, and its
+    /// answer, the pieces of reply text after it; errors, and pieces not yet
+    /// begun, are neither.
+    pub(crate) fn chat_rows(&self) -> ChatRows {
+        let start = self.last_tool_row.map_or(0, |last| last + 1);
+        let mut rows = ChatRows::default();
+        for ix in 0..self.rows.len() {
+            match self.row(ix) {
+                Some(OutputRow::Text(text)) if !text.trim().is_empty() => {
+                    if ix < start {
+                        rows.steps.push(ix);
+                    } else {
+                        rows.answer.push(ix);
+                    }
+                }
+                Some(OutputRow::Tool(_)) => rows.steps.push(ix),
+                _ => {}
+            }
+        }
+        rows
+    }
+
+    /// The errors it ended with, in order.
+    pub(crate) fn errors(&self) -> Vec<&str> {
+        self.parts
+            .iter()
+            .filter_map(|part| match part {
+                ReplyPart::Error(error) => Some(error.as_str()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// What its `steps` did, summed up by kind, as "Read 3 files, searched
+    /// twice, ran 1 command", or, where a step is of no kind that can be
+    /// summed up, "Worked through 6 steps".
+    pub(crate) fn steps_summary(&self, steps: &[usize]) -> String {
+        let calls: Vec<&ToolCall> = steps
+            .iter()
+            .filter_map(|ix| match self.row(*ix)? {
+                OutputRow::Tool(call) => Some(call),
+                _ => None,
+            })
+            .collect();
+        let worked_through = || match steps.len() {
+            1 => "Worked through 1 step".to_string(),
+            n => format!("Worked through {n} steps"),
+        };
+        // Read, searched, edited, ran, fetched, searched the web, agents.
+        let mut counts = [0usize; 7];
+        for call in &calls {
+            let slot = match call.name.as_str() {
+                "Read" | "NotebookRead" => 0,
+                "Glob" | "Grep" | "LS" => 1,
+                "Edit" | "MultiEdit" | "Write" | "NotebookEdit" => 2,
+                "Bash" | "BashOutput" | "KillShell" | "KillBash" => 3,
+                "WebFetch" => 4,
+                "WebSearch" => 5,
+                "Task" | "Agent" => 6,
+                _ => return worked_through(),
+            };
+            counts[slot] += 1;
+        }
+        let times = |n: usize| match n {
+            1 => "once".to_string(),
+            2 => "twice".to_string(),
+            n => format!("{n} times"),
+        };
+        let plural =
+            |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+        let parts: Vec<String> = counts
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| **n > 0)
+            .map(|(slot, &n)| match slot {
+                0 => format!("read {}", plural(n, "file", "files")),
+                1 => format!("searched {}", times(n)),
+                2 => format!("edited {}", plural(n, "file", "files")),
+                3 => format!("ran {}", plural(n, "command", "commands")),
+                4 => format!("fetched {}", plural(n, "page", "pages")),
+                5 => format!("searched the web {}", times(n)),
+                _ => format!("started {}", plural(n, "agent", "agents")),
+            })
+            .collect();
+        if parts.is_empty() {
+            return worked_through();
+        }
+        let summary = parts.join(", ");
+        let mut chars = summary.chars();
+        match chars.next() {
+            Some(first) => first.to_uppercase().chain(chars).collect(),
+            None => summary,
+        }
+    }
+
     fn has_text(&self) -> bool {
         self.parts
             .iter()
             .any(|part| matches!(part, ReplyPart::Text(text) if !text.trim().is_empty()))
     }
+}
+
+/// A reply's rows read as a chat reply: see [`Reply::chat_rows`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct ChatRows {
+    pub steps: Vec<usize>,
+    pub answer: Vec<usize>,
+}
+
+/// Row `ix` of `reply`, reply text, as the markdown it is shown as, and
+/// where its state is kept, at the table numbered `table`; none for a row
+/// that isn't text.
+pub(crate) fn reply_markdown(
+    table: usize,
+    reply: &Reply,
+    ix: usize,
+) -> Option<(MarkdownKey, SharedString)> {
+    let shown = reply.shown_text(ix)?;
+    let key = MarkdownKey {
+        kind: MarkdownKind::Output,
+        table,
+        row: ix,
+    };
+    Some((key, shown))
+}
+
+/// `shown` markdown at `key`, its state kept so it is parsed once, and
+/// measures as tall out of view as in it.
+pub(crate) fn prepared_markdown(
+    key: MarkdownKey,
+    shown: SharedString,
+    open: Option<&OpenFile>,
+    cx: &mut App,
+) -> TextView {
+    MarkdownStates::prepare(key, &shown, cx);
+    shown_markdown_view(key, shown, open, cx)
+}
+
+/// A tool call as one short line: its most telling argument, with the
+/// project directory written relative to it, on its first line.
+pub(crate) fn tool_argument(call: &ToolCall, project_dir: Option<&Path>) -> Option<String> {
+    let summary = call.summary.as_deref()?;
+    let relative = relative_to_project(summary, project_dir);
+    let line = relative
+        .lines()
+        .find(|line| !line.trim().is_empty())?
+        .trim();
+    Some(line.to_string())
 }
 
 /// Whether a table's steps up to its answer are shown, and how to show or
@@ -1108,7 +1258,6 @@ impl TaskTable {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn list(&self) -> &MeasuredList {
         &self.list
     }
@@ -1987,6 +2136,44 @@ mod tests {
     /// tool call, each piece on a paragraph of its own, or all its reply text
     /// when it made none. With nothing said after its last call, or nothing
     /// said at all, it has none.
+    /// Read as a chat reply, the steps are what came before the last tool
+    /// call, summed up by kind where they can be, and the answer what came
+    /// after it.
+    #[test]
+    fn chat_rows_sum_up_the_steps_before_the_answer() {
+        fn reply(tools: &[&str]) -> Reply {
+            let mut reply = Reply::default();
+            reply.apply(HarnessEvent::TextStarted);
+            reply.apply(HarnessEvent::TextDelta("Looking.".into()));
+            for (ix, name) in tools.iter().enumerate() {
+                reply.apply(HarnessEvent::ToolStarted {
+                    id: ix.to_string(),
+                    name: (*name).into(),
+                });
+            }
+            reply.apply(HarnessEvent::TextStarted);
+            reply.apply(HarnessEvent::TextDelta("The answer.".into()));
+            reply
+        }
+        let summed = reply(&["Read", "Grep", "Read", "Glob", "Bash", "Read"]);
+        let chat = summed.chat_rows();
+        assert_eq!(chat.steps.len(), 7);
+        assert_eq!(chat.answer.len(), 1);
+        assert_eq!(
+            summed.steps_summary(&chat.steps),
+            "Read 3 files, searched twice, ran 1 command"
+        );
+        let other = reply(&["Read", "mcp__thing"]);
+        assert_eq!(
+            other.steps_summary(&other.chat_rows().steps),
+            "Worked through 3 steps"
+        );
+        let plain = reply(&[]);
+        let chat = plain.chat_rows();
+        assert!(chat.steps.is_empty());
+        assert_eq!(chat.answer.len(), 2, "with no tool call, it is all answer");
+    }
+
     #[test]
     fn final_output_is_the_text_after_the_last_tool_call() {
         /// A reply to `events`, a tool call written as `tool:<id>`, the end

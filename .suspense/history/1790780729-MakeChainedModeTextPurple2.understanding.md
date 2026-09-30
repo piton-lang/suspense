@@ -1,0 +1,6 @@
+- [While Chain is selected, the Code and Spec labels are drawn in Chain's purple, like its icon](spec/scope/prompt-mode/chat-input/index.pi)
+- [With Chain not selected, each tab's label is in its own mode's colour at full strength: Code red, Spec blue, Ask green, Freeform grey](spec/scope/prompt-mode/chat-input/index.pi)
+- [Chain's icon is in Chain's purple, selected or not: joined at full opacity when selected, broken at 50% when not](spec/scope/prompt-mode/chat-input/index.pi)
+- [Selecting Chain slides Code and Spec together beneath it, and deselecting slides them apart](spec/scope/prompt-mode/chat-input/index.pi)
+- [Chain's colour is the purple of the mode colours, or the one chosen for Chain in the theme editor](spec/scope/prompt-mode/modes/index.pi)
+- [The tab bar draws no lines at all, Chain included](spec/scope/prompt-mode/chat-input/index.pi)

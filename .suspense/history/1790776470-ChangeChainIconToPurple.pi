@@ -1,0 +1,60 @@
+from /scope/prompt-mode/chat-input import ChatInputScope
+
+export anchor ChangeChainIconToPurple:
+    userPrompt:
+        \\\
+        Also let's change the colour of the chain icon in @{ChatInputScope} to the chain mode purple.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Also let's change the colour of the chain icon in @{ChatInputScope} to the chain mode purple.
+            \\\
+        result:
+            \\\
+            The spec now says the Chain tab's icon is drawn in Chain's purple, selected or not. I changed the spec only, not the code; `piton check`, `piton format --check` and `piton build` all pass.
+
+            **What changed** in `spec/scope/prompt-mode/chat-input/index.pi`:
+            - **`ChatInputShape.chain`:** the icon is drawn in Chain's colour, the purple from the mode colours, whether the tab is selected or not. It uses the same rule as the other tabs, whose labels always show in their mode's colour.
+            - **The tab-bar paragraph that lists each tab's colour:** it now includes "Chain's icon purple" alongside Code red, Spec blue, Ask green and Freeform grey.
+
+            Nothing else about the icon changed:
+            - **Unselected:** it's still a broken chain at 50% opacity, so it will read as faded purple.
+            - **Selected:** it's still a joined chain at full opacity.
+
+            "Chain's colour" is the purple midway between Code's and Spec's. If a colour is chosen for Chain in the theme editor, that one is used instead.
+
+            **What the code step should follow:** `ChatInputShape.chain`, with the colour coming from `PromptModesShape.colours`. In `src/chat_input.rs` around line 1950, `chain_icon` currently takes `tab_active_foreground` when selected and `tab_foreground` at 50% when not. It should take `mode_color(SendMode::Both, cx)` at full strength when selected, and the same colour at 50% opacity when not.
+            \\\
+
+    sentFrom: Prompt_ac893554daeed77c
+
+    references:
+        - @{ChatInputScope}

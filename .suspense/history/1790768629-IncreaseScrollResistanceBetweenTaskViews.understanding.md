@@ -1,0 +1,5 @@
+- [Crossing between the latest task and previous tasks needs 320 pixels of build-up past the end, about six wheel notches](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [A steady scroll never drains while steps come less than 200 ms apart, so it still crosses without stopping](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [The build-up drains to nothing within half a second of the last step once the scroll stops](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [The stretch pulls the view by less than scrolled, stiffening, about 64 pixels by the barrier and never more](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [The glow grows as the build-up nears the barrier, at its largest just before crossing](spec/scope/prompt-mode/message-list/Scrolling.pi)

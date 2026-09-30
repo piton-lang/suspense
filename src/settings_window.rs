@@ -22,7 +22,7 @@ use crate::growing_input::GrowToFit;
 use crate::piton_syntax;
 use crate::project_directory::ProjectDirectory;
 use crate::system_prompts::{
-    self, CODE_LOCATION, CODE_PROMPT, CODE_RESULT, HARNESS_DIRECTORY, PITON_FLUENCY, Prompt,
+    self, CODE_LOCATION, CODE_PROMPT, CODE_RESULT, HARNESS_DIRECTORY, PITON_FLUENCY_FILE, Prompt,
     SPEC_LOCATION, SPEC_PROMPT, SPEC_READING, SPEC_RESULT,
 };
 
@@ -431,8 +431,9 @@ impl Render for SettingsWindow {
                      They are saved with the project as they are edited. \
                      {CODE_LOCATION} and {SPEC_LOCATION} stand for codeRoot and \
                      root in piton.config.pi, {SPEC_READING} for the injected \
-                     spec reading, and {PITON_FLUENCY} for what \
-                     `piton agent --print-fluency` prints for the project."
+                     spec reading, and {PITON_FLUENCY_FILE} for the file \
+                     `piton agent --print-fluency` is written to at each spec \
+                     build, which only the Spec and Chain prompts point at."
                 ),
                 "Open a project to edit its system prompts.",
             ),

@@ -825,11 +825,17 @@ fn blank_for_lsp(line: &str) -> String {
 
 /// The instructions a prompt sent in `mode` is given at the top of its
 /// message: the mode's template, the project's own, with the code and spec
-/// locations filled in, but not the spec-reading prompt nor the fluency, which
-/// the conversation's system prompt gives (see [`project_system_prompt`]).
-/// `${UNDERSTANDING_FILE}` is left as written, filled in as the prompt is
-/// sent. None for a mode with none, as Freeform, or a template left empty.
+/// locations and the fluency file filled in, but not the spec-reading
+/// prompt, which the conversation's system prompt gives (see
+/// [`project_system_prompt`]). Spec and Chain, which write Piton, have the
+/// fluency file written first if it never has been (see
+/// [`crate::piton_fluency`]). `${UNDERSTANDING_FILE}` is left as written,
+/// filled in as the prompt is sent. None for a mode with none, as Freeform,
+/// or a template left empty.
 pub fn instructions(mode: SendMode, project_dir: &Path) -> Result<Option<String>> {
+    if matches!(mode, SendMode::Spec | SendMode::Both) {
+        crate::piton_fluency::ensure(project_dir);
+    }
     filled_instructions(mode.into(), project_dir)
 }
 
@@ -894,20 +900,26 @@ fn filled_instructions(
     }
     let code = config_value(project_dir, "codeRoot")?;
     let spec = config_value(project_dir, "root")?;
-    let filled = system_prompts::fill_instructions(&template, &code, &spec);
+    // The fluency file, where it has been written.
+    let fluency_file = crate::piton_fluency::file(project_dir)
+        .exists()
+        .then(crate::piton_fluency::relative_file);
+    let filled =
+        system_prompts::fill_instructions(&template, &code, &spec, fluency_file.as_deref());
     Ok((!filled.trim().is_empty()).then_some(filled))
 }
 
 /// The project's system prompt, the same for every prompt of every
 /// conversation in it, whatever the mode: its system template with the code
-/// and spec locations, its spec-reading prompt, and `fluency` filled in.
-pub fn project_system_prompt(project_dir: &Path, fluency: &str) -> Result<Option<String>> {
+/// and spec locations and its spec-reading prompt filled in. It holds no
+/// fluency.
+pub fn project_system_prompt(project_dir: &Path) -> Result<Option<String>> {
     let template = system_prompts::load(system_prompts::Prompt::System, project_dir)?;
     let reading = system_prompts::load(system_prompts::Prompt::SpecReading, project_dir)?;
     let code = config_value(project_dir, "codeRoot")?;
     let spec = config_value(project_dir, "root")?;
     Ok(system_prompts::project_system_prompt(
-        &code, &spec, &template, &reading, fluency,
+        &code, &spec, &template, &reading,
     ))
 }
 
@@ -1446,8 +1458,8 @@ mod tests {
 
     /// A project without saved templates gives each mode's instructions as
     /// its default, naming this repository's code and spec locations from its
-    /// `piton.config.pi`, without the spec-reading prompt or the fluency, and
-    /// the mode reads back from them.
+    /// `piton.config.pi`, without the spec-reading prompt, and the mode reads
+    /// back from them. Only Spec and Chain point at the fluency file.
     #[test]
     fn instructions_fill_in_the_template() {
         let project_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/system-prompt-test");
@@ -1464,6 +1476,11 @@ mod tests {
             instructions(SendMode::Freeform, &project_dir).unwrap(),
             None
         );
+        // Written already, so no piton is run for it.
+        let fluency = crate::piton_fluency::file(&project_dir);
+        fs::create_dir_all(fluency.parent().unwrap()).unwrap();
+        fs::write(&fluency, "# Fluency\n").unwrap();
+        let fluency_file = crate::piton_fluency::relative_file();
         let reading = system_prompts::default_prompt(system_prompts::Prompt::SpecReading);
         for mode in SendMode::ALL
             .into_iter()
@@ -1476,12 +1493,19 @@ mod tests {
                     system_prompts::default_prompt(mode),
                     "./src",
                     "./spec",
+                    Some(&fluency_file),
                 )
             );
             assert!(
                 !given.contains(&reading[..40]),
                 "{mode:?} repeats the spec reading"
             );
+            assert_eq!(
+                given.contains(&format!("read {fluency_file} once")),
+                matches!(mode, SendMode::Spec | SendMode::Both),
+                "{mode:?}: {given}"
+            );
+            assert!(!given.contains("# Fluency"), "{mode:?} holds the fluency");
             assert_eq!(mode_of(&given), Some(mode));
         }
         assert_eq!(mode_of("Something else."), None);
@@ -1502,7 +1526,7 @@ mod tests {
         assert_eq!(instructions(SendMode::Ask, &project_dir).unwrap(), None);
         // A template saved before instructions were sent apart from the
         // system prompt, still naming the spec reading and the fluency, gives
-        // neither: the system prompt already has them.
+        // neither.
         system_prompts::save(
             SendMode::Spec,
             "Spec only.\n\n${SPEC_READING}\n\n${PITON_FLUENCY}\n\nWrite ${UNDERSTANDING_FILE}.",
@@ -1515,14 +1539,15 @@ mod tests {
                 .as_deref(),
             Some("Spec only.\n\nWrite ${UNDERSTANDING_FILE}.")
         );
-        system_prompts::save(SendMode::Spec, system_prompts::PITON_FLUENCY, &project_dir).unwrap();
+        system_prompts::save(SendMode::Spec, "${PITON_FLUENCY}", &project_dir).unwrap();
         assert_eq!(instructions(SendMode::Spec, &project_dir).unwrap(), None);
         fs::remove_dir_all(&project_dir).ok();
     }
 
-    /// The project's system prompt is its system template with the locations,
-    /// the spec-reading prompt, and the fluency filled in: the same however
-    /// often it is built, with nothing in it particular to a prompt.
+    /// The project's system prompt is its system template with the locations
+    /// and the spec-reading prompt filled in: the same however often it is
+    /// built, with nothing in it particular to a prompt, and no fluency, even
+    /// with the fluency file written.
     #[test]
     fn the_project_system_prompt_is_the_same_every_time() {
         let project_dir =
@@ -1534,16 +1559,19 @@ mod tests {
             project_dir.join(CONFIG_FILE_NAME),
         )
         .unwrap();
-        let first = project_system_prompt(&project_dir, "# Fluency")
-            .unwrap()
-            .unwrap();
-        let second = project_system_prompt(&project_dir, "# Fluency")
-            .unwrap()
-            .unwrap();
+        let fluency = crate::piton_fluency::file(&project_dir);
+        fs::create_dir_all(fluency.parent().unwrap()).unwrap();
+        fs::write(&fluency, "# Fluency\n").unwrap();
+        let first = project_system_prompt(&project_dir).unwrap().unwrap();
+        let second = project_system_prompt(&project_dir).unwrap().unwrap();
         assert_eq!(first, second);
         assert!(first.contains("./src") && first.contains("./spec"));
         assert!(first.contains("Before executing anything, read the spec"));
-        assert!(first.ends_with("# Fluency"));
+        assert!(first.contains("compiled reference under .claude/reference"));
+        assert!(
+            !first.contains("Fluency") && !first.contains("fluency.md"),
+            "the system prompt points at the fluency: {first}"
+        );
         assert!(!first.contains("${"), "a placeholder is left: {first}");
         fs::remove_dir_all(&project_dir).ok();
     }
@@ -1604,6 +1632,7 @@ mod tests {
             system_prompts::default_prompt(system_prompts::Prompt::CodeToSpec),
             "./src",
             "./spec",
+            None,
         );
         assert!(handoff.starts_with("This prompt was first sent to change the code"));
         assert!(handoff.contains("change the spec at ./spec so it describes"));
@@ -1818,7 +1847,9 @@ mod tests {
             system_prompts::UNDERSTANDING_FILE,
             system_prompts::default_prompt(system_prompts::Prompt::CodeToSpec)
         );
-        anchor.system_prompt = Some(system_prompts::fill(&template, "./src", "./spec", "", ""));
+        anchor.system_prompt = Some(system_prompts::fill_instructions(
+            &template, "./src", "./spec", None,
+        ));
         let prompt = format!("Change @{{ApplicationScope}}.\n{TRICKY}");
         let result = format!("Done.\n{TRICKY}");
         anchor.code_task = Some(CodeTask {
@@ -2066,7 +2097,6 @@ mod tests {
             "./src",
             "./spec",
             system_prompts::default_prompt(system_prompts::Prompt::SpecReading),
-            "",
         ));
 
         let dir = project_dir.join("target/hidden-anchor-test");

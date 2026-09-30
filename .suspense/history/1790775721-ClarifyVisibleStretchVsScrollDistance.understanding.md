@@ -1,0 +1,5 @@
+- [Crossing over takes 320 pixels of scrolling past the end, about six wheel notches](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [While stretched, the view is pulled past its end by less than scrolled, about 64 pixels by the barrier and never more](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [The pulled view leaves an empty band in the body's colour between it and the row or queue](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [The build-up never drains while steps come less than 200 ms apart; after that it drains to nothing within 500 ms](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [The glow grows as the build-up nears the barrier, at its largest a little under the height of the space](spec/scope/prompt-mode/message-list/Scrolling.pi)

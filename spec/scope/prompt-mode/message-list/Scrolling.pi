@@ -24,17 +24,38 @@ export shape MessageListScrollingShape:
         resists it, and it crosses over only once it has pushed far enough
         into the stretch to get past a barrier at its far side. The only
         scroll that stops at an end is a fling's momentum still running when
-        it gets there, and a scroll carried on from a slide (below).
+        it gets there, and a scroll that has already crossed over is spent
+        (below).
+
+        How the view came to be at its end makes no difference. A scroll
+        begun with the view already resting there, scrolled there some time
+        before, opened there by clicking the previous tasks row, or left
+        there when a slide settled, pulls into the stretch from its very
+        first step, exactly as one that scrolls the view there and carries
+        on; it never has to move the view first, and nothing it does is
+        swallowed by the view before the stretch takes it.
 
         The barrier is a distance to scroll past. The distance a scroll goes
         past the end builds up, and it crosses over the moment that reaches
-        200 pixels, about two notches of a mouse wheel or a short swipe on a
-        trackpad, however quickly or slowly it gets there. Scrolling back the
+        768 pixels, about twelve or thirteen notches of a mouse wheel or a firm swipe on a
+        trackpad, however quickly or slowly it gets there, so the end is felt
+        as a real resistance before the view gives way. The scroll that
+        brings the view to its end counts too: whatever of it goes past the
+        end starts the build-up, rather than being lost. Scrolling back the
         other way takes the build-up down again, and scrolls the view once it
-        is gone. The build-up drains away on its own once the scrolling
-        pauses, back to nothing within half a second of the last scroll, so a
-        nudge into the stretch that goes no further never crosses over later.
-        Momentum, and any scroll during a slide, add nothing to it.
+        is gone.
+
+        The build-up never drains while the scroll goes on. A scroll goes on
+        for as long as the wheel or trackpad keeps scrolling, with less than
+        200 milliseconds between one step and the next, as between the
+        notches of a wheel spun steadily, however slowly; each step adds all
+        of itself to the build-up, so a steady scroll of any speed reaches the
+        barrier and crosses over without being stopped and started again.
+        Only once the scroll has stopped, 200 milliseconds after its last
+        step, does the build-up drain away on its own, back to nothing within
+        half a second of that last step, so a nudge into the stretch that
+        goes no further never crosses over later. Momentum, and any scroll
+        during a slide, add nothing to it.
 
         The stretch is felt as well as seen. While anything has built up, the
         view at that end is pulled past its end, following the scroll but by
@@ -87,7 +108,10 @@ export shape MessageListScrollingShape:
         comes back at its top, unlocked.
 
         A fling's momentum still running when an end is reached stops there,
-        never pulling into the stretch or crossing over. Output or a
+        never pulling into the stretch or crossing over. Momentum is only what
+        comes after the platform says the fingers have lifted from the
+        trackpad; where it never says, as on Linux, no scroll is taken for
+        momentum, and every one pulls into the stretch. Output or a
         list too short to scroll is always at both its ends, so any scroll
         over it that leads somewhere pulls into the stretch. Only the wheel or trackpad
         crosses over. Scrolling sideways, dragging a scrollbar to an end, and
@@ -105,13 +129,21 @@ export shape MessageListScrollingShape:
         settles without bouncing, as the right sidebar's does. Only the space
         between the previous tasks row and the queue moves, and nothing is
         drawn outside it; the row and the queue stay where they are, the row reading what it will once the slide settles, from the
-        moment it starts. While it slides, the wheel scrolls neither view, and
-        no scroll then crosses back. A scroll carried on from the slide stops
-        at the end it lands on rather than pulling into the stretch, so one
-        long scroll never crosses twice; a new scroll, begun once the wheel or
-        trackpad has been still for 80 milliseconds, counted from the last
-        scroll whether that came during the slide or after, or once fingers
-        are lifted from the trackpad and put back, pulls into the stretch as
-        usual. Scrolling during the slide doesn't make that wait any longer.
+        moment it starts.
+
+        The scroll that crosses over stops at the moment of the switch. The
+        step that takes it past the barrier is used up by the crossing, all of
+        it, however far past the barrier it reached, and none of it scrolls
+        the view beneath. Whatever more of that same scroll follows, as the
+        wheel keeps turning, the fingers keep moving, or a fling's momentum
+        runs on, is swallowed: during the slide and after it has settled, it
+        scrolls neither view, pulls into no stretch, and never crosses back,
+        so the view it switched to is left exactly as it arrived, scrolled
+        where the slide brought it. Only a new scroll moves anything again: one
+        begun once the wheel or trackpad has been still for 80 milliseconds,
+        counted from the last scroll step whether that came during the slide
+        or after, or once fingers are lifted from the trackpad and put back.
+        That new scroll behaves as any other, scrolling the view, or, with the
+        view at its end, pulling into the stretch from its first step.
         Expanding or closing the previous tasks by clicking their row is not
         animated.

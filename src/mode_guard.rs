@@ -118,6 +118,16 @@ pub fn protected(mode: SendMode, locations: &Locations) -> Option<(PathBuf, &'st
     }
 }
 
+/// The location a run in `mode` is told it may not read, so it learns the
+/// spec from its compiled reference: the spec's source, for a Code task or a
+/// question.
+pub fn unread(mode: SendMode, locations: &Locations) -> Option<PathBuf> {
+    match mode {
+        SendMode::Code | SendMode::Ask => locations.spec.clone(),
+        SendMode::Both | SendMode::Spec | SendMode::Freeform => None,
+    }
+}
+
 /// A file as it was when the run began.
 struct Kept {
     contents: Vec<u8>,

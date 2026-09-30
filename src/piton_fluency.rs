@@ -1,33 +1,68 @@
 //! The project's Piton fluency: what `piton agent --print-fluency` prints, run
-//! in the project directory, filled in for `${PITON_FLUENCY}` in a mode's
-//! system prompt (see [`crate::system_prompts`]). It is run once per project,
-//! in the background as the project is opened, and kept while the application
-//! runs; a prompt sent before it has finished waits for it. Without `piton`, or
-//! when it fails, the fluency is empty.
+//! in the project directory, written to `.suspense/fluency.md` for the work
+//! that writes Piton to read. It is never part of a system prompt: the Spec
+//! and Chain instructions point at the file through `${PITON_FLUENCY_FILE}`
+//! (see [`crate::system_prompts`]). It is written each time the application
+//! runs a spec build (see [`crate::piton_build`]), so it keeps in step with
+//! the project's piton, and before a Spec or Chain prompt when it has never
+//! been written. Without `piton`, or when it fails, nothing is written, and a
+//! file written before is left as it was.
 
-use std::collections::HashMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::Mutex;
 
-type Cache = Mutex<HashMap<PathBuf, Arc<OnceLock<String>>>>;
+use crate::hidden_anchor::APP_DIR;
 
-fn cache() -> &'static Cache {
-    static CACHE: OnceLock<Cache> = OnceLock::new();
-    CACHE.get_or_init(Default::default)
+/// The file's name in the project's data.
+const FILE: &str = "fluency.md";
+
+/// Writes of the file one at a time, so one prompt never reads it half
+/// written by another.
+static WRITING: Mutex<()> = Mutex::new(());
+
+/// The fluency file's path from the project directory, as the instructions
+/// name it.
+pub fn relative_file() -> String {
+    format!("{APP_DIR}/{FILE}")
 }
 
-/// The project's fluency, running `piton` for it the first time it is asked
-/// for. Blocks until it has run, so call it off the UI thread.
-pub fn get(project_dir: &Path) -> String {
-    let cell = cache()
-        .lock()
-        .unwrap()
-        .entry(project_dir.to_path_buf())
-        .or_default()
-        .clone();
-    cell.get_or_init(|| print_prompt("piton", project_dir))
-        .clone()
+/// The fluency file of the project in `project_dir`.
+pub fn file(project_dir: &Path) -> PathBuf {
+    project_dir.join(APP_DIR).join(FILE)
+}
+
+/// Writes the project's fluency to its file, as a spec build does, running
+/// `piton` for it. Blocks until it has run, so call it off the UI thread.
+/// Returns whether the file is there once done: a fluency that can't be
+/// printed leaves a file written before as it was.
+pub fn write(project_dir: &Path) -> bool {
+    write_with("piton", project_dir)
+}
+
+/// Writes the fluency as [`write`] does, unless the file is already there.
+/// Returns whether it is there once done.
+pub fn ensure(project_dir: &Path) -> bool {
+    file(project_dir).exists() || write(project_dir)
+}
+
+/// Writes the fluency as [`write`] does, printed by `program` rather than
+/// `piton`.
+pub(crate) fn write_with(program: &str, project_dir: &Path) -> bool {
+    let fluency = print_prompt(program, project_dir);
+    let _writing = WRITING.lock();
+    let file = file(project_dir);
+    if !fluency.trim().is_empty() {
+        let written = file
+            .parent()
+            .is_some_and(|dir| fs::create_dir_all(dir).is_ok())
+            && fs::write(&file, format!("{fluency}\n")).is_ok();
+        if written {
+            return true;
+        }
+    }
+    file.exists()
 }
 
 /// What `program agent --print-fluency` prints in `project_dir`, or nothing
@@ -49,7 +84,7 @@ fn print_prompt(program: &str, project_dir: &Path) -> String {
 mod tests {
     use std::path::Path;
 
-    use super::print_prompt;
+    use super::{file, print_prompt, write_with};
 
     /// Without `piton`, the fluency is empty rather than an error.
     #[test]
@@ -63,5 +98,30 @@ mod tests {
     fn a_failing_piton_gives_no_fluency() {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         assert_eq!(print_prompt("false", dir), "");
+    }
+
+    /// What piton prints is written to the file as it printed it; a fluency
+    /// that can't be printed writes nothing, and leaves a file written
+    /// before as it was.
+    #[cfg(unix)]
+    #[test]
+    fn the_fluency_is_written_to_its_file() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = std::env::temp_dir().join(format!("suspense-fluency-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(!write_with("no-such-piton-binary", &dir));
+        assert!(!file(&dir).exists(), "a missing piton wrote a file");
+
+        let piton = dir.join("piton");
+        std::fs::write(&piton, "#!/bin/sh\nprintf '# Fluency\\n\\n${x} {y}\\n'\n").unwrap();
+        std::fs::set_permissions(&piton, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(write_with(piton.to_str().unwrap(), &dir));
+        let written = std::fs::read_to_string(file(&dir)).unwrap();
+        assert_eq!(written, "# Fluency\n\n${x} {y}\n");
+
+        assert!(write_with("false", &dir), "a failing piton lost the file");
+        assert_eq!(std::fs::read_to_string(file(&dir)).unwrap(), written);
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

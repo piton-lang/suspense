@@ -1,0 +1,3509 @@
+{
+  "userPrompt": "Okay, well it actually sounds like maybe whenever suspense does a spec build. Or honestly, I think... Yeah, probably whenever suspense does a spec build, it should also write the fluency file to the .suspense directory. like you suggested. I think I'm fine with the size of it for now. Maybe that's an optimization that we can tackle later. But beyond that, everything else is fine, so give me the entire prompt again, please. ",
+  "harness": "claude",
+  "systemPrompt": "We're working in a project whose code is located in ./src and whose spec is located in ./spec. Each prompt starts with a <task-instructions> block saying what that prompt is for and what it may change. Follow the block at the top of the prompt you are answering; an earlier prompt's block no longer applies.\n\nBefore executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.\n\nThis project is written in Piton, a declarative language for agent guidance.\n\n- Source of truth: the `.pi` files under `/home/hyphyphyph/piton/repl/spec`. Compiled Markdown is derived output.\n- Make lasting changes in the Piton source, then run `piton build`; never hand-edit generated artifacts.\n- Compiled reference documents live under `.claude/reference`. Links between them are lazy: follow one when the work touches what it describes.\n- Scoped guidance is written to `CLAUDE.md` files placed next to the code they describe.\n- `piton check` validates the specbase; `piton reach` shows what the entrypoints can see; `piton slice file.pi#Anchor.property` prints just the spec one thing depends on.\n\n# Piton Fluency\n\nThis is a working reference for Piton, the Belay framework bundled with it, the\nproject configuration, the package manager and the tooling. Read it before you\nread or change a Piton specbase. It is generated from the specification in\n`spec/` by the GenerateFluencyPrompt skill. Where the compiler behaves\ndifferently from the spec, the text below says so, and section 16 lists every\nknown gap.\n\n## 1. What Piton is, and why\n\nPiton is a declarative, whitespace-structured language for writing agent\nguidance: skills, agents, commands, scoped instructions and reference\ndocuments. Its author calls it a \"semi-natural programming language\". Prose and\nstructure are both first-class. A value can be a paragraph of plain English or\na typed, inherited, composed data structure, and most files mix the two.\n\nThe founding thesis (`spec/scope/founding-thesis/`) explains the design:\n\n- Every programming language is an abstraction over the layer beneath it. Once\n  an abstraction is accepted, nobody cares how its compiled output is produced,\n  as long as the output is good. Agentic development is the next step in that\n  history. In this model the agent is the compiler.\n- Humans are good at designing coherent systems, not at typing out the latest\n  accepted abstraction. Piton keeps the describing, constraining and thinking,\n  and hands the manual labour to the agent.\n- Prompting an agent session by session produces results that live in one\n  developer's memory and cannot be traced. AGENTS.md, CLAUDE.md and Markdown\n  skills help, but pure prose decays. It is ambiguous, it gets duplicated, and\n  it has no tools for reuse. Piton adds imports, inheritance, types and\n  references to prose, while keeping prose for the things prose says best\n  (\"the button should be blue with contrasting text\"). Plain prompting is fine\n  for a small one-off tool. A sufficiently complex system needs a traceable\n  artifact of the process itself, not just its output, and more so when\n  several people work on it.\n- The real problem is repetition. Much software work is the same patterns\n  again (CRUD APIs, layouts, navigation bars, modal forms). Functions, classes\n  and generics are ways of wrapping a problem once it becomes a pattern. The\n  aim is to keep designing systems and stop typing the patterns: \"I never\n  wanted to write code itself; I wanted to create.\"\n- The CNC analogy: G-code replaced the machinist's hand, and CAM then sat on\n  top of G-code by combining design intent with the machinist's expertise. The\n  CAM engineer never types G-code but is essential. CNC did not replace most of\n  the machinist's skill, and two jobs (engineer, machinist) became three (plus\n  the CAM engineer). The Piton author plays that role for agents.\n- The stated goal is that you can paste the specification into an agentic\n  coding tool and get a compiler for Piton and Belay back. This repository is\n  that experiment. The specification in `spec/` is written in Piton, and the\n  compiler in `crates/` is judged against it.\n\nCore facts:\n\n- **There is no runtime.** Piton compiles to data (JSON, YAML, Markdown)\n  through **renderers**. Frameworks such as Belay add **adapters** on top of\n  the renderers. There are no functions, no loops, and no conditionals except\n  the ternary operator. Every value is immutable.\n- **The `.pi` source is the source of truth.** Compiled Markdown under\n  `.claude/reference`, `.claude/skills`, `CLAUDE.md` files and so on is derived\n  output. Make lasting changes in the `.pi` files and rebuild. Never hand-edit\n  generated artifacts.\n- A **specbase** is a Piton project: a `piton.config.pi`, a source root\n  (usually `spec/`), an entry file, and the frameworks and packages it uses.\n- **Successful compilation shows that the guidance is well-formed. It does not\n  show that an agent will behave correctly.** Artifact generation is\n  predictable, but agent behaviour is probabilistic.\n\n## 2. Files, whitespace, comments, keywords\n\n- Source files use the `.pi` extension. A directory that contains an\n  `index.pi` is a module (section 7.2).\n- **Indentation defines structure**, as in Python. Tabs or any number of\n  spaces are accepted, but one file must be consistent. The canonical style is\n  4 spaces. `piton format` enforces it, and it cannot be configured.\n- **Comments** are line-only and start with `//`. There are no block comments.\n  **A comment has to be on its own line.** After code, `//` is just text, so\n  `url: https://example.com // note` is the string\n  `https://example.com // note`. The formatter adds one space after `//` when\n  there is none and touches nothing else in the comment, so commented-out code\n  keeps its spacing. To start a value with `//`, escape it:\n  `\\ // \\ Just Text`.\n- **Reserved words** have special meaning:\n\n  ```\n  anchor abstract export from import use as extends pass\n  this self super\n  true false null\n  any simple complex\n  string number boolean list dictionary\n  ```\n\n  You can't use them as your own keywords (`reserved-keyword`), but **you can\n  use them as keys**. As keys they are just strings: `null: text`,\n  `use: text` and `as: text` are ordinary properties.\n- **Keywords** are all lowercase and may be kebab-case\n  (`arithmetic-operator`). Users define their own with `as` (section 8.6).\n- **`pass`** fills the body of an anchor that has no properties of its own. An\n  anchor always needs something indented under it; `anchor X:` with nothing\n  under it is `empty-anchor`.\n\n  ```piton\n  anchor Child extends Base:\n      pass\n  ```\n\n## 3. Declarations and values\n\nA file is a sequence of top-level declarations. Top-level names are variables\nscoped to their file: they are global within the file and invisible outside it\nunless exported.\n\n```piton\nmyVariable: 42\nexport pi: 3.14\n\nexport anchor MyAnchor:\n    description: This is my anchor\n```\n\n`key: value` assigns a value, and the space after the colon is required. The\nvalue can sit on the same line or be indented on the lines below:\n\n```piton\nsameLine: Hello, World!\nnextLine:\n    Hello, World!\n```\n\nBoth produce `\"Hello, World!\"`. The leading indentation belongs to the syntax,\nnot to the string.\n\n**A property has to have a value.** A name with nothing after it and nothing\nindented under it is a compiler error (`empty-value`). If you mean nothing,\nwrite `null`. The one exception is a required property in an abstract anchor\n(`title:: string`); anywhere else a constraint with no value is\n`missing-value`.\n\n### 3.1 Types\n\nPiton is loosely typed, with optional constraints.\n\n| Type | Notes |\n| --- | --- |\n| `string` | Unicode text. Never quoted (section 3.3). |\n| `number` | One numeric type, a 64-bit IEEE 754 float, with no int/float distinction. |\n| `boolean` | Lowercase `true` and `false`. |\n| `null` | Lowercase `null`. It is the only \"nothing\" value (there is no `undefined`), and `{null == null}` is `true`. |\n| `list` | An ordered collection. Item types may be mixed unless a constraint says otherwise. |\n| `dictionary` | Key/value pairs. Keys are strings, and value types may be mixed unless constrained. |\n| anchor | The one user-defined type (section 8). |\n\n- **Simple types** are string, number, boolean and null.\n- **Complex types** are list, dictionary and anchor.\n- A **reference** is its own type, produced by `@{}` (section 6.5). It points\n  at an anchor or a property on one instead of copying it.\n\n- **Inference.** An unconstrained variable or property can hold any type,\n  inferred from how the value looks: `true` is a boolean but `true story` is\n  a string; `42` and `-42` are numbers but `42 things` is a string; `A + B`\n  and `This costs $5 + tax` are strings (no braces, no expression); `null` is\n  null; `\"false\"` is a string; `${a + b}` is always a string.\n\nEvery built-in type is described by an anchor that uses the abstract `type`\nkeyword (`spec/scope/language/types/lib/Type.pi`). A `type` anchor provides a\n`description` (simple or complex) and its `supportedOperators` (a list of\noperators, or null). Using an operator a type does not list is a compiler\nerror, but the compiler applies the coercion (4.2) and inference rules before\nit reports one:\n\n| Type | Supported operators |\n| --- | --- |\n| number | arithmetic `+ - * / %`, comparison `== != < <= > >=` |\n| string | concatenation `+`, `++`, comparison `== != < <= > >=` |\n| boolean | logical `&& \\|\\| !`, `==`, `!=` |\n| null | `==`, `!=` |\n| list | merge `+`, `++`, `==`, `!=` |\n| dictionary | `.`, merge `+`, `++`, `==`, `!=` |\n| anchor | `.`, `==`, `!=` |\n| reference | `==`, `!=` |\n\n### 3.2 Numbers\n\n```piton\nmyInt: 123\nmyFloat: 3.14\nmySmallFloat: 0.14\nmyBigNumber: 1_200_000.00\nnegative: -5\n```\n\n- **A decimal needs its leading `0`.** `0.14` is a number; `.5` is not a number\n  (unconstrained, it is the string `\".5\"`).\n- `_` may separate digits for readability.\n- **There is no exponent notation.** `1e3` is not a number (unconstrained, it\n  is silently the string `\"1e3\"`, not an error).\n- A negative number is written with a minus, like `-5`. A list item always has\n  a space after its dash, so `-5` is a number and `- 5` is a list item.\n- **The minus is only part of a number.** There's no minus in front of an\n  expression: `{-price}` is an error. Write `{0 - price}`.\n- Compiled numbers take their shortest form: `1_200_000.00` becomes `1200000`\n  and `0.50` becomes `0.5`.\n\n### 3.3 Strings and quotes\n\n- Strings are not quoted. **Quotes are ordinary characters in a value**, so\n  `greeting: \"Hello\"` is the string `\"Hello\"`, quotes and all, and\n  `\"false\"` is a string with quotes in it, never a boolean.\n- The one exception is inside an expression, where bare words are symbols, so\n  string operands are written in double quotes: `{\"Hello\" + name}`. There the\n  quotes are not part of the string.\n- In a multi-line block, consecutive lines join with one space. **A blank line\n  starts a new paragraph**, which compiles to a line break (`\\n`). Several\n  blank lines in a row still count as one.\n\n  ```piton\n  myString:\n      This broken string is not considered\n      a line break.\n\n      While this *is* a new paragraph because there was a blank line above.\n  ```\n\n  This compiles to\n  `\"This broken string is not considered a line break.\\nWhile this *is* a new paragraph because there was a blank line above.\"`.\n\n- **Markdown in a string is plain text.** Piton has no link syntax, so\n  `[the guide](./guide.md)` and `![A diagram](./diagram.png)` pass through\n  exactly as written. Nothing resolves, rewrites or checks them, and they are\n  never an error. The only links Piton makes are `@{}` references.\n\n### 3.4 Escaping\n\nEscaping works by wrapping. Put backslashes around the special characters,\nwith a space on each side. The spaces are part of the wrapper and are removed:\n`\\ {1 + 2 + 3} \\` compiles to the literal `{1 + 2 + 3}`. It is the only way to\nescape, and even a single character gets wrapped: `\\ : \\` gives `:`.\n\n- **Stacking.** To escape backslashes themselves, use more of them. The\n  closing wrapper must match the opening one, so anything inside can use fewer:\n  `\\\\ \\ {x} \\ \\\\` compiles to `\\ {x} \\`.\n- **Multi-line escape blocks.** A line holding only backslashes opens a block,\n  and a line with the same number of backslashes closes it. Everything in\n  between is kept exactly, line breaks and indentation included. The spec uses\n  three backslashes (`\\\\\\`) for these.\n- **Code fences are ordinary text.** A ```` ``` ```` fence does not protect\n  anything: expressions, comments, list items and keys inside it are still\n  parsed. So put an escape block inside the fence, the way every example in the\n  spec does:\n\n  ````piton\n  description:\n      ```piton\n      \\\\\\\n      anchor Example:\n          value: {1 + 2}\n      \\\\\\\n      ```\n  ````\n\n  This keeps the fence and the example exactly as written. Markdown tables\n  need the same treatment, because otherwise their rows join into one line.\n\n**Prose pitfalls.** Each of these silently changes the structure of a string\nblock:\n\n- A line that starts `- ` makes a list item, and a line that starts `+ ` or\n  `++ ` makes a composition line (section 5). A property declared `:: string`\n  then fails. Escape the start: `\\ - \\ item`.\n- A line shaped like `word: text` (`Similarly: ...`, `Inputs: none`, or a\n  wrapped line that happens to start with `type:`) becomes a dictionary key,\n  and the block turns into an implicit list. Escape the colon (`\\ : \\`) or\n  rewrap the paragraph.\n- Backticks do not protect anything. `` `{x}` `` is still an expression, and\n  `` `a + b` `` in a table cell is text only because it has no braces.\n- An expression in running text changes the value's shape when it evaluates\n  to a list, dictionary or anchor (section 6.2).\n\nWrapping stops text being parsed as syntax, but it doesn't change the inferred\ntype: `\\ false \\` is still the boolean `false`. To get the string, write\n`${false}`.\n\nThe wrapper is the only way to escape. A backslash that doesn't open a\nwrapper (a backslash followed by a space) is just a backslash, so `\\:` is the\ntwo characters `\\:`. Write `\\ : \\` to escape a colon.\n\n### 3.5 Lists\n\n```piton\nmarkdownStyle:\n    - One\n    - List\n    - Item\n\ninlineStyle: [This, is, a, list, of, strings]\n\nnestedMarkdownList:\n    - Level 1\n        - Level 2\n            - Level 3\n```\n\n`nestedMarkdownList` is `[Level 1, [Level 2, [Level 3]]]`.\n\n- **Items cannot be accessed by index.** By design there is no `myList[0]`.\n  Piton describes things; it does not compute them, and lists exist to be\n  merged and inherited.\n- **A list item is never a key**, even with a colon at the end. `- Settings:`\n  is just the string `\"Settings:\"`.\n- **Anything indented under a list item is not part of that item.** It becomes\n  the next item in the list, so a dictionary indented under an item is its own\n  item, right after it:\n\n  ```piton\n  repos:\n      - https://github.com/piton-lang/piton-rs\n          tag: v1\n      - https://github.com/piton-lang/other\n  ```\n\n  This compiles to\n  `[\"https://github.com/piton-lang/piton-rs\", {\"tag\": \"v1\"}, \"https://github.com/piton-lang/other\"]`.\n  A dictionary that ends up as an item of an explicit list cannot be addressed.\n\n### 3.6 Dictionaries\n\nA dictionary has one syntax, which is indentation:\n\n```piton\nfirstLevel:\n    secondLevel:\n        thirdLevel: This is a string\n```\n\n- Dot access works: `{firstLevel.secondLevel.thirdLevel}` gives\n  `\"This is a string\"`.\n- **Valid keys** contain Unicode letters, Unicode digits, `_` and `-`, and\n  nothing else (no spaces, no dots). Keys are always strings, even when they\n  look like something else, so `thisIsAKey`, `123`, `foo-bar`, `false` and\n  `null` are valid keys, while `This is a key` and `a.b` are not.\n- **A hyphen inside a name is part of the name.** `{config.foo-bar}` reads the\n  key `foo-bar`. For subtraction, put spaces around the minus: `{a - b}`.\n- A list indented under a key is that key's value. If the key also has\n  something above the list, like text or another dictionary, the value becomes\n  an implicit list (3.7) and the list goes in as one item:\n\n  ```piton\n  plain:\n      - x\n      - y\n  mixed:\n      text\n      - x\n      - y\n  ```\n\n  `plain` is `[\"x\", \"y\"]`; `mixed` is `[\"text\", [\"x\", \"y\"]]`.\n\n### 3.7 Implicit lists\n\nA block that mixes prose, list items and keys becomes an **implicit list**\nthat keeps the source order:\n\n```piton\ncombined:\n    This is a string\n\n    - This\n    - Is\n    - A\n    - List\n\n    nestedDictionary:\n        deeplyNestedDictionary: This is a string\n```\n\nThis compiles to\n`[\"This is a string\", [\"This\", \"Is\", \"A\", \"List\"], {\"nestedDictionary\": {\"deeplyNestedDictionary\": \"This is a string\"}}]`.\n\n- **Keys declared directly in the mixed block stay addressable.**\n  `{combined.nestedDictionary.deeplyNestedDictionary}` still resolves.\n- The prose and list elements cannot be addressed, because there is no list\n  access.\n- An expression in running text that gives a list, dictionary or anchor also\n  makes an implicit list (section 6.2).\n\n## 4. Variables and type constraints\n\n- A variable is declared by naming it at the top level of a file:\n  `myVariable: 42`.\n- The file is its scope. `export` makes it visible to other files.\n- **Inside an expression, a plain name always means a variable from the file\n  (or something imported), even inside an anchor.** To reach a property on the\n  anchor you are in, use `this` or `self`:\n\n  ```piton\n  x: top-level\n\n  anchor Card:\n      x: card\n      fromFile: {x}\n      fromCard: {this.x}\n  ```\n\n  `Card.fromFile` is `\"top-level\"` and `Card.fromCard` is `\"card\"`.\n- Everything is immutable. There is no compile-time mutability.\n\n### 4.1 Constraint syntax\n\nA constraint is written `name:: type: value`. **The whitespace after `::` and\nafter `:` is mandatory**, so `myVariable::number:42` is an error\n(`constraint-spacing`), in blocks as well as at the top level.\n\n```piton\ncount:: number: 42\ntags:: string[]: [foo, bar, baz]\nconfig:: dictionary:\n    a:: number: 1\n    b:: string: foo\na:: complex: [1, 2, 3]\nc:: simple: 1\ng:: any: 1\nh:: any:\n    - String\n    - [1, 2, 3]\n```\n\n- `simple` accepts string, number, boolean or null. `complex` accepts list,\n  dictionary or anchor. `any` accepts anything.\n- `T[]` is a list of `T`, for any type, including anchor types (`Foo[]`).\n- `extends Foo[]` (or `extends Foo`) accepts anything that inherits from the\n  anchor `Foo` (section 8.4). You can use it anywhere, but it is most at home\n  in abstracts. The spec also uses it on exported lists:\n  `export ARITHMETIC_OPERATORS:: extends ArithmeticOperator[]: ...`.\n- An anchor-typed constraint (`f:: Foo: {Foo}`) is satisfied by the anchor or a\n  copy of it (section 6.1).\n- A file that names an abstract as a type must import it with\n  `from ./Foo import Foo`. `use` alone is not enough (section 7.3).\n\n### 4.2 Multiple constraints and coercion\n\nCoercion is intentionally limited. With several constraints, they are tried\n**left to right** and the first type the value can validly represent wins.\n\n```piton\nfirst:: number:: string: 42\nsecond:: string:: number: 42\nwritten:: string: 1.0\nevaluated:: string: {1.0}\nquoted:: boolean:: number:: string: \"false\"\n```\n\n- `first` is the number `42`; `second` is the string `\"42\"`.\n- **A literal keeps its text when coerced to a string.** `written` is\n  `\"1.0\"`. An expression is evaluated first and its result is coerced, so\n  `evaluated` is `\"1\"`.\n- `quoted` is the string `\"false\"`, quotes and all, because quotes are\n  ordinary characters and `\"false\"` is not a boolean.\n- **Booleans and null are never coerced**, to strings or anything else. `flag:: string: false`\n  is a compiler error (`type-mismatch`), not the string `\"false\"`. If you want\n  the string, write `${false}`.\n- Lists, dictionaries and anchors are never coerced into unrelated types.\n- If no constraint accepts the value, compilation fails with `type-mismatch`.\n- These rules are about constraints. Operators such as `+` have their own\n  rules (section 6.4).\n\n### 4.3 Required and optional properties\n\nIn an abstract anchor:\n\n```piton\nabstract anchor Card:\n    title:: string\n    subtitle:: string:: null\n    footer:: string:: null: null\n\nanchor MyCard extends Card:\n    title: Hello\n    subtitle: null\n```\n\n- A constraint with no value is **required**. Anything that extends the anchor\n  has to give it a value (`unimplemented-property` otherwise). Adding `null` to\n  the constraint lets that value be null, but it still has to be written, so\n  `title` and `subtitle` are required.\n- A property with a default value is **optional**. The usual way to write one\n  is to allow null and default to null, like `footer`. `x:: string:: null: null`\n  gives `null`. The language server does not complain about a missing\n  optional property.\n- **A child can't redeclare a constraint it inherits**, only give it a value.\n  If `subtitle` is already constrained, `subtitle: Hi` is fine and\n  `subtitle:: string: Hi` is `redeclared-constraint`.\n\n## 5. Composition lines inside blocks\n\n**Blocks are built from top to bottom. A line that starts with `+` or `++`\ntakes everything above it and combines it with that line's value**, using the\noperator of the same name (section 6.4).\n\n```piton\nanchor BaseAnchor:\n    items:\n        - A\n        - B\n        - C\n\nanchor ChildAnchor extends BaseAnchor:\n    items:\n        + {super.items}\n        - D\n        - E\n        - F\n```\n\n`ChildAnchor.items` is `[A, B, C, D, E, F]`: the block starts empty, the `+`\nbrings in `super.items`, then D, E and F are added. Without the `+`\n(`- {super.items}`) the result is `[[A, B, C], D, E, F]`.\n\n- On lists, `+` merges and **removes duplicates, keeping the last\n  occurrence**. Items `A, B, C, D` followed by `+ {super.items}` give\n  `[D, A, B, C]`.\n- On lists, `++` keeps everything: items `A, B, C, D` followed by\n  `++ {super.items}` give `[A, B, C, D, A, B, C]`.\n- On dictionaries, `+` is a shallow merge and `++` a deep merge.\n- **On strings, `+` joins with nothing in between and `++` joins with a line\n  break:**\n\n  ```piton\n  anchor Base:\n      d: Base text.\n\n  anchor Plus extends Base:\n      d:\n          Child text.\n          + {super.d}\n\n  anchor DoublePlus extends Base:\n      d:\n          Child text.\n          ++ {super.d}\n  ```\n\n  `Plus.d` is `\"Child text.Base text.\"` and `DoublePlus.d` is\n  `\"Child text.\\nBase text.\"`.\n- A block holding only `+ {x}` is the same as `{x}`.\n- To put inherited prose in front with a space, interpolate instead:\n  `${super.description} and more from the child.`\n\n## 6. Expressions\n\n**Nothing is evaluated unless it is in braces.** `a + b` is the string\n`\"a + b\"`, and `{a + b}` is `3` when `a` is 1 and `b` is 2. The braces keep the\ncompiler simple, and they mean an unrecognized word never silently falls back\nto being a string.\n\n- Inside the braces, **bare words are symbols**. Quote string operands:\n  `{2 + \"Hello\"}` gives `\"2Hello\"`. An unknown name is `unresolved-symbol`.\n  List literals inside braces follow the same rule: `{[\"A\", \"B\"] + [\"C\"]}`.\n- **Keep the whole expression inside the braces.** `{this.flag && false}`\n  evaluates; `{this.flag} && false` is text around an expression.\n- **Braces that don't hold a valid expression are an error**, and so is an\n  empty `{}` or `${}`. To write braces as text, escape them: `\\ {1 +} \\`.\n- **Forward references resolve.** Unresolved references are errors, and so are\n  cyclic values: `A: {B}` together with `B: {A}` fails with `cyclic-value`.\n- Collections are copied by value:\n\n  ```piton\n  myList: [1, 2, 3]\n  myDictionary:\n      list: {myList}\n  newList: {myDictionary.list + [4, 5, 6]}\n  ```\n\n  `newList` is `[1, 2, 3, 4, 5, 6]`.\n- **Anchors are copied too, but the copy still knows which anchor it is.** If\n  `x` is `{Foo}`, then `{x == Foo}` is `true`, `${x}` is `\"Foo\"`, and `x`\n  passes a `Foo` type constraint. The output is still a copy of Foo's content.\n  For a link instead of a copy, use `@{Foo}`.\n\n### 6.1 The four expression forms\n\n| Form | Name | Result |\n| --- | --- | --- |\n| `{expr}` | Standard | The intrinsic value with its type preserved. An anchor serializes as its resolved content (a copy that keeps its identity). |\n| `${expr}` | String | Converts the result to a string. |\n| `#{expr}` | Numeric | Converts the result to a number. |\n| `@{expr}` | Reference | A reference to an anchor or a property on one. Renders as a link or path, never as the content. |\n\nUse `@{X}` to point at another document, `{X}` to embed a copy of it, and\n`${X}` to mention it by name.\n\n### 6.2 Expressions in text\n\nIf the whole value is one expression (`total: {a + b}`), it keeps its type. If\nthere is other text around it:\n\n- `${x}` turns the result into a string, so the whole value is a string.\n- `{x}` with a simple value drops it into the text: `Total: {a + b}` is\n  `\"Total: 3\"`.\n- `{x}` with a list, dictionary or anchor copies it in and **turns the\n  property into an implicit list**. `See {Foo} for details` becomes a list of\n  `\"See\"`, a copy of Foo, and `\"for details\"`.\n- `@{x}` puts in a reference, which ends up as a link or a path.\n\n### 6.3 Conversions\n\n`${}` (string):\n\n- A string is returned unchanged. A number becomes its text form. A boolean\n  becomes `true` or `false`. Null becomes `null`.\n- An anchor becomes its name as written in the source: `${Child}` gives\n  `\"Child\"`, and `${self}` gives the name of the current most-derived anchor.\n  It is not turned into a title.\n- A named list or dictionary becomes its name: `Anchor.propertyName`, or just\n  the variable name at the top of a file. So if `tags` is a top-level list,\n  `${tags}` is `\"tags\"`.\n- A list or dictionary with no name (`${[1, 2]}`) is `no-string-form`.\n- **`${}` never pulls in the contents** of a list, dictionary or anchor, only\n  its name. For the contents use `{x}`; for a link use `@{x}`. In\n  `Metadata.pi`:\n\n  ```piton\n  export anchor Metadata:\n      name: Piton\n      version:: string: 1.0\n\n  export byName: Information about Piton ${Metadata}\n  export byValue: Information about Piton {Metadata}\n  export byLink: Information about Piton @{Metadata}\n  ```\n\n  `byName` is `\"Information about Piton Metadata\"`, `byValue` is\n  `[\"Information about Piton\", {\"name\": \"Piton\", \"version\": \"1.0\"}]`, and\n  `byLink` is `\"Information about Piton ./Metadata.json:Metadata\"` (in\n  Markdown, `[Metadata](./Metadata.md#metadata)`).\n- The result is never re-parsed as source.\n- In structured output the value stays a string; whatever escaping the output\n  format needs is applied when it is serialized.\n\n`#{}` (numeric):\n\n- A number is returned unchanged. A string converts only if the **entire**\n  string is a valid Piton numeric literal: `#{\"42\"}` gives `42`. It is never\n  evaluated as an expression.\n- Booleans, null, collections and anchors are rejected (`not-a-number`).\n- The result is a number you can keep computing with. In structured output it\n  stays numeric; it becomes text only when the output format needs text.\n\n### 6.4 Operators\n\n| Group | Operators | Rules |\n| --- | --- | --- |\n| Access | `.` | Property access on dictionaries and anchors. |\n| Arithmetic | `+ - * / %` | Numbers only. Division or modulo by zero is an error. `%` keeps the sign of the left side: `{-7 % 3}` is `-1`. |\n| Comparison | `== != < <= > >=` | The result is a boolean. `==` and `!=` work on every type (see below). `< <= > >=` work on numbers and on strings (by Unicode code point); anything else, or a number against a string, is an error. |\n| Logical | `&& \\|\\| !` | Booleans only. **There is no truthiness**; anything else is `invalid-operand`. **No short-circuiting**: both sides are always evaluated and must be booleans, so `{true \\|\\| 5}` and `{false && 1 / 0 == 1}` are both errors. |\n| Conditional | `cond ? a : b` | The condition must be a boolean (`invalid-condition`). Only the selected branch is evaluated. Chainable in either slot. |\n| Concatenation / merge | `+` | Dispatches on the operand types (table below). |\n| Duplicate merge | `++` | Lists: joined in order, duplicates kept. Dictionaries: deep merge (nested dictionaries on both sides are merged all the way down; otherwise the right side wins). Strings: joined with a line break. |\n\n**`+` dispatch:**\n\n| Left | Right | Operation |\n| --- | --- | --- |\n| number | number | addition |\n| string | simple | concatenation |\n| simple | string | concatenation |\n| string | list, dictionary or anchor | implicit list |\n| list, dictionary or anchor | string | implicit list |\n| list | list | merge: joined in order, duplicates removed, last occurrence kept |\n| dictionary | dictionary | shallow merge: keys from both, right side wins |\n| anything else | | compiler error |\n\n- Concatenation stringifies the non-string side by the `${}` rules:\n  `{2 + \"Hello\"}` is `\"2Hello\"` and `{\"Enabled: \" + true}` is\n  `\"Enabled: true\"`.\n- A list, dictionary or anchor is never stringified by `+`. If `tags` is\n  `[a, b]`, `{\"Tags: \" + tags}` is `[\"Tags: \", [\"a\", \"b\"]]`. Use `${tags}` if\n  you want the name.\n- `{[\"A\", \"B\", \"C\", \"D\"] + [\"A\", \"B\", \"C\"]}` is `[D, A, B, C]`;\n  `{[\"A\", \"B\", \"C\", \"D\"] ++ [\"A\", \"B\", \"C\"]}` is `[A, B, C, D, A, B, C]`.\n- `{1 + true}`, `{null + 1}` and `{1 ++ 2}` are errors (`invalid-operand`).\n\n**Equality:** lists and dictionaries are equal if everything inside them is\nequal. Anchors are equal only if they are the same anchor, and references only\nif they point at the same thing.\n\n**Precedence** (higher rows go first; the same row goes left to right, except\nthe ternary, which goes right to left; parentheses change the order):\n\n| Precedence | Operators |\n| --- | --- |\n| 1 (highest) | `.` |\n| 2 | `!` |\n| 3 | `*` `/` `%` |\n| 4 | `+` `-` `++` |\n| 5 | `<` `<=` `>` `>=` |\n| 6 | `==` `!=` |\n| 7 | `&&` |\n| 8 | `\\|\\|` |\n| 9 (lowest) | `? :` |\n\nSo `{1 + 2 == 3 && !false}` is `{((1 + 2) == 3) && (!false)}`, and\n`{a ? b : c ? d : e}` is `{a ? b : (c ? d : e)}`.\n\n**Control flow:** the ternary is the only conditional, and the only operator\nthat evaluates just one side. There are no loops and no functions.\n\n**Declaration operators:** `:` (assignment) and `::` (type annotation) are\ndocumented as operators in `spec/scope/language/operators/declaration/`\n(`DeclarationOperators`), but they are not expression operators: they aren't in\n`allOperators`, the precedence table, or any type's `supportedOperators`.\n\n**Why `+` and `++`:** on lists, `+` behaves like a set (duplicates removed,\nlast kept) and `++` like a list (duplicates kept). The spec explains this in\n`ConcatenationOperators.setsAndLists`.\n\n### 6.5 References `@{}`\n\n- The expression must identify an anchor or **a property on one**\n  (`@{Button}`, `@{Button.color}`). Anything else is `invalid-reference`.\n  **A plain list or dictionary at the top of a file can't be referenced**; to\n  link to it, put it in an anchor.\n- The referenced anchor joins the compilation dependency graph (for a\n  property, the anchor it is on), so it gets compiled and emitted.\n- References are resolved separately for each output target, through the\n  renderer or the framework adapter on top of it. If a target cannot represent\n  a reference, that is an error. A reference never silently becomes an\n  embedded copy or a plain name.\n- References compare with `==` and `!=`: equal if they point at the same\n  thing.\n- How each renderer writes one:\n\n  | Renderer | Reference to `Button` | Reference to `Button.color` |\n  | --- | --- | --- |\n  | JSON | `\"./Button.json:Button\"` | `\"./Button.json:Button.color\"` |\n  | YAML | `./Button.yaml:Button` | `./Button.yaml:Button.color` |\n  | Markdown | `[Button](./Button.md#button)` | `[Button.color](./Button.md#color)` |\n\n  JSON and YAML write the path to the other output file (relative to this\n  one), a colon, and the dot path. Markdown writes a relative link with the\n  anchor's name (or `Anchor.property`) as the link text, and a fragment for the\n  specific anchor or property heading. The link is **lazy**: the content is\n  not inlined, and an agent follows it only when the work touches what it\n  describes.\n- A Markdown link you write yourself (`[Button](./Button.md)`) is plain text,\n  not a reference. Only `@{...}` is resolved and checked.\n\n## 7. Modules and reuse\n\n### 7.1 Export and import\n\n```piton\nexport pi: 3.14\nmyVariable: 42\nexport anchor MyAnchor:\n    description: This is my anchor\n```\n\n`myVariable` is not exported, so no other file can import it.\n\n```piton\nfrom ./FirstFile import pi, MyAnchor\nfrom ./FirstFile import pi SliceOf, MyAnchor MyAliasedAnchor\nfrom /subdir/subdir/file import AnAnchor\nfrom ./path/to/directory import MyAnchor\nfrom .. import Something\nfrom my-package import MyAnchor\nfrom @piton/belay import ClaudeCodeAdapter\nfrom ./file import\n    FirstThing,\n    SecondThing,\n    ThirdThing\n```\n\n- Paths are relative to the current file. A path that starts with `/` is\n  relative to the `root` in `piton.config.pi`.\n- **The `.pi` extension is optional**, and `piton format` removes it.\n- A bare `.` or `..` points at the `index.pi` in that directory. A directory\n  path resolves to its `index.pi`.\n- Only exported names can be imported (`unresolved-export`). A missing module\n  is `unresolved-module`.\n- Aliasing is `Name Alias`, with no `as`. After aliasing, only the alias is in\n  scope (`pi` above is available only as `SliceOf`).\n- `export Name` on its own line re-exports something already declared or\n  imported.\n- **Circular imports are allowed.** Mutually referencing values are fine as\n  long as every value settles:\n\n  ```piton\n  anchor A:\n      description: This anchor talks about ${B}\n\n  anchor B:\n      description: This anchor talks about ${A}\n  ```\n\n  This works because both settle to strings (the anchor names). `A: {B}` with\n  `B: {A}` cannot resolve, so it fails. The only cycles that are errors are\n  ones that can't resolve and an anchor that ends up extending itself.\n\n### 7.2 Index files and re-export\n\nAn `index.pi` file exposes a directory as a module:\n\n```piton\nfrom ./MyAnchor import MyAnchor\nexport MyAnchor\n```\n\nThe shorter forms:\n\n```piton\nfrom ./MyAnchor export MyAnchor\nfrom ./MyAnchor export *\nfrom ./MyAnchor export MyAnchor MyAliasedAnchor, MyOtherAnchor MyOtherAliasedAnchor\n```\n\n**Importing a name into an index does not re-export it.** When an index uses\n`import`, consumers must import leaf anchors from their own files, or the\nindex must `export` them.\n\n### 7.3 `use`\n\n`use` brings the **user-defined keywords** a module exports into scope, and\nnothing else. `from ... import` never brings keywords.\n\n```piton\nuse ./CustomKeywords\n\nmy-custom-keyword Wow:\n    description: amazing\n```\n\n- Valid forms include `use ./CustomKeywords`, `use .`, `use ../cli`,\n  `use my-package`, `use my-package/MyAnchor` and `use @piton/belay`.\n- A file that declares with a keyword *and* names its abstract as a type needs\n  both lines: `use ./Foo` and `from ./Foo import Foo`.\n- Using a keyword without `use` gives `unknown-keyword`.\n\n### 7.4 Formatting of imports\n\n`piton format` sorts the imports: in each run of import lines, the `use`\nlines come first, then the `from` lines, each sorted by path, and the names in\neach line are sorted too. A blank line keeps two runs apart. It breaks an\nimport or `from ... export` line across lines when it has more than 2 items or\nruns past 80 columns, and drops the `.pi` extension from paths. You can write\nthose line breaks yourself on either kind of line.\n\n## 8. Anchors\n\nAn anchor is a named structural declaration that can take part in\ninheritance, typing, exports and composition. It is the core building block of\nPiton, something like a class that is never instantiated. An *object* is a\nvalue. An *anchor* is a declaration.\n\n```piton\nexport anchor MyFirstAnchor:\n    whatIsAnAnchor:\n        An anchor is a kind of object or document that is structured via\n        properties and values.\n    listTypes:\n        - List types\n        - are supported.\n    numberTypes: {3.14 - 3.14}\n    booleanTypes: true\n    nullType: null\n    booleanOperatorsAnd: {this.booleanTypes && false}\n    booleanOperatorsOr: {this.booleanTypes || false}\n```\n\nCompiled to JSON, an anchor becomes an object of its resolved properties\n(`numberTypes` is `0`, `booleanOperatorsAnd` is `false`,\n`booleanOperatorsOr` is `true`). Valid anchor keys follow the dictionary rules.\n\n### 8.1 Structural inheritance\n\n`anchor Child extends A, B:` copies the properties of every base and then\napplies the child's own. On a collision, **the right-most base wins, and the\nchild beats every base.** Type constraints from bases follow the same rule\n(abstracts have their own, 8.4). This is structural inheritance, not\npolymorphism.\n\n```piton\nanchor FirstBaseAnchor:\n    firstBaseAnchorProperty: Hello from the First Base Anchor\n    description: Description from FirstBaseAnchor\n\nanchor SecondBaseAnchor:\n    secondBaseAnchorProperty: Hello from the Second Base Anchor\n    description: Description from SecondBaseAnchor\n\nanchor ChildAnchor extends FirstBaseAnchor, SecondBaseAnchor:\n    childAnchorProperty: Hello from Child Anchor\n```\n\n`ChildAnchor.description` is `\"Description from SecondBaseAnchor\"`.\n\n- An anchor can't extend itself, directly or through others\n  (`inheritance-cycle`). Extending something that is not an anchor is\n  `invalid-base`; an unknown base is `unresolved-base`.\n- A child can't redeclare an inherited constraint (4.3).\n\n### 8.2 `super`\n\n`super` is everything the anchor inherits, merged the same way as property\ninheritance: left to right, last in line wins. **So if the last base doesn't\nhave the property, `super` still finds it on an earlier one.**\n\n```piton\nanchor Left:\n    d: from-left\n\nanchor Right:\n    other: x\n\nanchor Child extends Left, Right:\n    d: ${super.d} plus child\n```\n\n`Child.d` is `\"from-left plus child\"`. If no base has the property, that is a\ncompiler error. Use `${super.x}` to extend prose, and a `+ {super.items}`\nline to extend a list (section 5).\n\n### 8.3 `self` and `this`\n\n- **`self`** means the most-derived anchor, and it travels down the hierarchy.\n  When a base writes `${self.name}`, a child compiled from it shows the child's\n  name.\n- **`this`** is pinned to the anchor that lexically contains the expression.\n  When a base writes `${this.name}`, it always shows the base's own value,\n  including in anchors that inherit it. When a child overrides the property,\n  the override's own `this` refers to the child.\n\n```piton\nanchor Base:\n    name: Base Anchor\n    baseDescription: This is ${this.name}\n\nanchor MidChild extends Base:\n    name: MidChild Anchor\n    baseDescription: Override on baseDescription ${this.name}\n    childDescription: This is ${self.name}\n\nanchor FinalChild extends MidChild:\n    name: FinalChild Anchor\n```\n\n`FinalChild` is `{\"name\": \"FinalChild Anchor\", \"baseDescription\": \"Override on baseDescription MidChild Anchor\", \"childDescription\": \"This is FinalChild Anchor\"}`.\n\n- `self` only travels through inheritance. Reading a property from another\n  anchor gives that anchor's value, with `self` being that anchor:\n\n  ```piton\n  anchor Precedence:\n      note: ${self} rules apply\n\n  anchor Addition:\n      copied: ${Precedence.note}\n  ```\n\n  `Addition.copied` is `\"Precedence rules apply\"`.\n- `this` and `self` always mean an anchor, never a dictionary. Even inside a\n  nested dictionary, they mean the anchor it is in.\n- Using `self`, `this` or `super` outside an anchor is an error\n  (`invalid-self`, `invalid-this`, `invalid-super`).\n\n### 8.4 Abstract anchors\n\n```piton\nabstract anchor Construct:\n    description:: string\n    prompt:: string\n\nabstract anchor Skill extends Construct as skill:\n    useWhen:: string\n\nskill Review:\n    description: Reviews code\n    prompt: Review the diff\n    useWhen: Asked for a review\n```\n\n- An abstract anchor defines a shape without necessarily providing values. It\n  **never compiles on its own** and produces no output. A concrete anchor that\n  extends it *implements* it and must give every required property a value\n  (`unimplemented-property`). A property with a default is optional (4.3).\n- If nothing implements an abstract, you get a warning\n  (`unimplemented-abstract`), unless it's exported, since another file or\n  project may implement it.\n- An abstract may extend another abstract. The implementer has to fill in the\n  required properties from the whole chain.\n- **An anchor can implement more than one abstract**, even ones that share a\n  base, and it can extend concrete anchors as well. If two abstracts constrain\n  the same property to types that don't overlap at all (say string and\n  number), that is `conflicting-abstracts`. If they overlap, the right-most\n  one wins. Constraints from concrete bases follow normal inheritance.\n- Good practice is to export an abstract with a keyword. The keyword's anchor\n  always goes last in the chain, so it wins (8.6).\n- All the special constraints (`simple`, `complex`, `any`, `[]`, `extends`)\n  work inside abstracts.\n- **Anchor-type constraints:**\n\n  ```piton\n  abstract anchor A:\n      description:: string\n\n  abstract anchor B extends A:\n      name:: string\n\n  abstract anchor C:\n      listOfA:: A[]\n      listOfB:: B[]\n      listOfExtendsA:: extends A[]\n  ```\n\n  A plain anchor type only matches anchors that **directly implement** it, so\n  `listOfA` takes anchors implementing `A`, and something implementing `B`\n  does not fit even though `B extends A`. When an anchor has several\n  abstracts, the one that counts is the winning one: the keyword's abstract,\n  or else the right-most. `extends A[]` accepts any **concrete** anchor whose\n  inheritance chain includes `A`, so implementers of `A` or `B` both fit.\n- Extra properties a concrete anchor adds beyond the abstract's shape are\n  kept. Belay relies on this: extra properties on a construct are serialized\n  into the generated guidance.\n\n### 8.5 Value-less declarations\n\n`name:: type` with no value is only allowed inside an abstract anchor, where\nit declares a required property. Anywhere else it is `missing-value`, and an\nempty `name:` anywhere is `empty-value`.\n\n### 8.6 User-defined keywords\n\n`as` gives an anchor a keyword alias. Declaring with the keyword is syntactic\nsugar for `extends`:\n\n```piton\nanchor MyAnchor as my-anchor:\n    description: This is a description of my anchor\n\nanchor OtherBase:\n    description: Other Base\n\nmy-anchor ChildAnchor extends OtherBase:\n    description:\n        ${super.description}\n        My additional description\n```\n\n- `my-anchor ChildAnchor:` is exactly `anchor ChildAnchor extends MyAnchor:`.\n  Keywords exist to mark certain base anchors as the fundamental units of a\n  design.\n- `my-anchor ChildAnchor extends OtherBase:` is exactly\n  `anchor ChildAnchor extends OtherBase, MyAnchor:`. **The keyword's anchor is\n  the last base, so it wins collisions** with what is in `extends`. Here\n  `ChildAnchor.description` starts with \"This is a description of my anchor\".\n- Only one keyword per anchor, but `extends` can add more bases.\n- A keyword can be built on another keyword:\n  `export abstract operator ArithmeticOperator as arithmetic-operator:`\n  declares with the `operator` keyword and defines `arithmetic-operator`.\n- To declare with a keyword, a file must `use` the module that exports it.\n- A reserved word can't be a keyword (`reserved-keyword`).\n\n## 9. Compilation model\n\n- **`piton compile <file>`** produces one object with **one key per export**.\n  Anything not exported is left out, and so are abstract anchors. (The JSON\n  examples in the spec skip the export wrapper to stay short.)\n- **`piton build`** compiles the project. Everything exported from the entry\n  file is compiled, whether or not anything uses it, plus anything those\n  exports reference, so the links have somewhere to go. Everything else is\n  left out, and abstract anchors never compile.\n- **Renderers** decide the format: `json` (default), `yaml` or `markdown`.\n  Frameworks add adapters on top; Belay's adapters build on the Markdown\n  renderer.\n- **Markdown serialization** (used by the Markdown renderer and Belay; the\n  worked examples are in `spec/scope/belay/Compilation.pi`,\n  `MarkdownSerialization`):\n  - Anchor and property names become word-separated title headings.\n    `myProperty` becomes `My Property`, `t1` becomes `T 1`, and runs of\n    capitals are not split (`whatIsAType` becomes `What Is AType`). Heading\n    depth follows nesting, and bold labels (`**G**`) take over past level 6.\n  - **Every property of an anchor gets a heading**, even one holding a single\n    `false` or `42`, with the value under it.\n  - A **pure dictionary** is one whose every value is a simple value (string,\n    number, boolean, null) or another pure dictionary: no lists and no mixed\n    content anywhere inside. It is written as-is, indentation-structured,\n    inside a code fence, and its keys don't become headings, including when\n    it's embedded in mixed content.\n  - A dictionary that isn't pure, and any mixed content, gets a heading per\n    key instead.\n  - **Strings count as simple values, even long prose**, so a dictionary whose\n    values are all prose is fenced. To get a heading per key, start the block\n    with a line of prose before the keys, or make at least one value a list.\n  - Primitives become their text form (`false`, `42`, `null`).\n  - Explicit lists become Markdown lists with nested indentation.\n  - Mixed lists keep the order of their prose and structure.\n  - `{Other}` is serialized as a copy of the anchor's content. Only `@{Other}`\n    becomes a link.\n- **Interpolation boundary:** Piton evaluates expressions, and the output mode\n  decides how the results appear. The distinction between intrinsic values,\n  strings and references is preserved. Reference identity is never inferred\n  from a display heading.\n\n## 10. Project configuration (`piton.config.pi`)\n\nThe compiler reads `piton.config.pi` from the working directory. The\nconfiguration anchors come from the bundled `@piton/config`. The file exports\nits main `piton-config` anchor, and the language server treats it as a project\nconfig, not as an ordinary source file.\n\n```piton\nuse @piton/config\nuse @piton/belay\nuse @piton/packaging\n\nfrom @piton/belay import ClaudeCodeAdapter\n\nexport piton-config Config:\n    root: ./spec\n    entry: ./spec/index.pi\n    output: ./dist\n    renderer: json\n\n    frameworks:\n        - {BelayConfiguration}\n\n    packages:\n        - {MyPackage}\n\n    dependencies:\n        - https://github.com/org/repo\n            tag: 1.0\n\nbelay-config BelayConfiguration:\n    codeRoot: ./src\n    shapeRoot: ./spec/shape\n\n    adapters:\n        - {ClaudeCodeAdapter}\n\npiton-package MyPackage:\n    name: my-package\n    root: ./spec/pkg\n```\n\n| Field | Meaning |\n| --- | --- |\n| `root` | Required. The source root; `/`-imports resolve from it. |\n| `entry` | Optional. Defaults to `index.pi` inside `root`; if that doesn't exist, it's an error. |\n| `output` | Optional. Where `piton build` writes renderer output. Defaults to `./dist`. With a framework, the renderer output is only written when `output` or `renderer` is set. |\n| `renderer` | Optional. `json`, `yaml` or `markdown`. Defaults to `json`. |\n| `frameworks` | Optional. Framework configurations to turn on (Belay's `belay-config`). |\n| `packages` | Optional. The packages this repository **offers** to other projects (section 12). |\n| `dependencies` | Optional. The packages this project installs (section 12). |\n\nWhat the bundled packages define:\n\n```piton\nexport abstract anchor PitonConfig as piton-config:\n    root:: string\n    entry:: string:: null: null\n    output:: string:: null: null\n    renderer:: string:: null: null\n    frameworks:: list:: null: null\n    packages:: list:: null: null\n    dependencies:: list:: null: null\n\nexport abstract anchor FrameworkConfig as framework-config:\n    pass\n\nexport abstract anchor PitonPackage as piton-package:\n    name:: string:: null: null\n    root:: string\n    dependencies:: list:: null: null\n```\n\n(`PitonConfig` and `FrameworkConfig` come from `@piton/config`, `PitonPackage`\nfrom `@piton/packaging`, and `BelayConfig`, keyword `belay-config`, from\n`@piton/belay`; see 11.1.)\n\n**Frameworks.** A framework extends what the compiler outputs by adding\nadapters on top of the renderers. Belay is the only framework today. **You can\nuse and import a bundled framework's keywords and modules whether or not it is\nregistered**, and each file still has to `use` or `import` what it needs;\nregistration is not an implicit import. **Registering the framework in\n`frameworks:` is what turns on its output.**\n\nConfiguration diagnostics include `missing-config`, `unknown-config-key`,\n`unknown-framework`, `unknown-adapter`, `invalid-adapter`,\n`package-without-root`, `invalid-package-name` and `multiple-pins`.\n\n## 11. Belay: the agentic framework\n\nBelay is bundled as `@piton/belay`. It gives Piton a vocabulary for agents and\ncompiles it into the artifacts that agentic coding tools read. The division of\nlabour:\n\n- **Piton** handles parsing, evaluation, imports, exports, inheritance,\n  reachability and the renderers.\n- **Belay** adds the constructs and the adapters that turn them into files for\n  each platform.\n- The **consuming platform** executes the result. Successful compilation is\n  not proof of correct agent execution.\n\nBesides the four constructs, Belay provides `belay-config`, the adapters and\nthe special imports.\n\nSource authority: lasting changes go into the Piton source. Generated guidance\nis derived from the resolved source and configuration, and implementation is\nassessed against the specification. The compiler loads the four constructs and\nthe three adapters from the spec's own `.pi` files\n(`spec/scope/belay/anchors/`, `spec/scope/belay/adapters/`), so the compiler\nand the spec can't disagree: changing `Skill.pi` changes the framework.\n\n### 11.1 Configuration\n\nA project turns on Belay by listing a `belay-config` anchor under\n`frameworks`:\n\n| Field | Meaning |\n| --- | --- |\n| `codeRoot` | Required. Where the app's code lives, relative to the project config. |\n| `shapeRoot` | Optional. Where the shape instructions live. Without it, `BELAY_SHAPE_ROOT` is the project root and nothing is placed by shape. |\n| `adapters` | Required. The adapters to build for: `ClaudeCodeAdapter`, `CodexAdapter`, `OpenCodeAdapter`. |\n| `crossDiscovery` | Optional. `separate` when each tool's output is deployed apart (every adapter writes its own complete tree); `allow` to accept that OpenCode offers other tools' command skills as ordinary skills. Without it, the enabled tools share one project (11.5). |\n| `instructionByteLimit` | Optional number. The instruction byte limit to check against, for targets that have one. |\n\nAdapter and other paths are relative to the project root (where\n`piton.config.pi` lives).\n\n### 11.2 The four constructs\n\nEvery construct extends the abstract `Construct`, whose `description` and\n`prompt` are both optional (`:: string:: null: null`). Any other property is\npreserved and serialized as Markdown after the prompt.\n\n| Keyword | Extra required field | Meaning | Output |\n| --- | --- | --- | --- |\n| `instruction` | none | Persistent guidance tied to a code scope. **Its placement is part of its meaning.** | Mapped from `shapeRoot` to the matching `codeRoot` directory (11.3). Instructions for the same scope combine into one guidance file per target. Each is also kept in the compiled shape-reference tree. |\n| `skill` | `useWhen:: string` | Instructions the agent loads selectively for one kind of work. | Name from the anchor through the adapter's naming rules. Discovery description is `<description> Use when <useWhen>`. Body is `prompt`, then the extra properties. The platform decides when to load it. |\n| `command` | none | An explicit entrypoint that invokes a prompt or directs work through skills. | Name is `x-` plus the normalized name. A native command, or the explicit-invocation equivalent the adapter defines. |\n| `agent` | `role:: string` | A role and the instructions for performing it. | Identity is the kebab-case anchor name, unless the target needs another form. The body starts with `You are a <role>`, then the prompt, then the extra properties. |\n\n- Abstract constructs can supply shared structure. Required fields\n  (`useWhen`, `role`) are checked only on concrete constructs, after\n  inheritance resolves.\n- Description and prompt are left out of the output when missing. **If the\n  target needs a description and there isn't one, that is\n  `missing-description`**: Claude Code needs one for agents; Codex for skills,\n  commands and agents; OpenCode for skills and agents.\n- The role introduction is literal: `role: careful reviewer` gives\n  `You are a careful reviewer`.\n- The skill description is literal too: `description: Reviews code.` with\n  `useWhen: asked for a review` gives\n  `Reviews code. Use when asked for a review`.\n\n```piton\nuse @piton/belay\n\nexport skill AnswerSpecQuestions:\n    description: Reads the spec and answers questions about it.\n    useWhen: asked how part of the specification works\n    prompt:\n        Read the spec under spec/ and understand the language and features\n        before answering.\n    reportFormat:\n        Save every report as a standalone HTML file.\n```\n\n`reportFormat` is an extra property. It renders as a `# Report Format` section\nafter the prompt.\n\n**Native options.** Some property names are target metadata rather than prose\nand are never serialized into the body: `tools`, `model`, `allowed-tools`,\n`mode`, `permission`, `agent`, `model_reasoning_effort` and `sandbox_mode`.\nEach adapter supports a subset (11.5). An option the target cannot represent\nis `unsupported-option`, and an invalid value is `invalid-option`. How these\nare typed is still an open decision (11.7).\n\n### 11.3 Shape mapping (instructions)\n\nThe tree under `shapeRoot` roughly mirrors the tree under `codeRoot`:\n\n| Source | Existing scope | Generic output |\n| --- | --- | --- |\n| `spec/shape/components/button/Button.pi` | `src/components/button` | `src/components/button/AGENTS.md` |\n| `spec/shape/components/input/Input.pi` and `InputDesign.pi` | `src/components/input` | one combined `src/components/input/AGENTS.md` |\n| `spec/shape/components/nonexistent/Component.pi` | `src/components` (walked up) | `src/components/AGENTS.md` |\n\n- The instruction's directory relative to `shapeRoot` is resolved under\n  `codeRoot`. If it is missing, Belay walks upward to the nearest directory\n  that exists, **stopping at `codeRoot`**.\n- Each adapter uses its own filename: `CLAUDE.md` for Claude Code, `AGENTS.md`\n  for Codex and OpenCode. The file holds a heading per instruction\n  (`# Button Shape`) and its content.\n- Falling back to a parent changes placement only. The shape-reference tree\n  (`<referenceRoot>/shape/...`) keeps the original relative location.\n- What happens to an instruction outside `shapeRoot` is an open decision, so\n  the compiler refuses to guess and reports an error\n  (`instruction-placement-unspecified`). Keep instructions under `shapeRoot`.\n- Loading differs per tool (11.5), so placement does not guarantee the\n  instruction is in the initial context.\n\n### 11.4 References and special imports\n\n- **Emission.** Belay emits only what the build emits: the entry file's\n  exports and anything they reference.\n- **Reference tree.** Reached anchors are serialized into the adapter's\n  `referenceRoot`, **one Markdown file per source module**, keeping the\n  module's path under `root`. Each anchor is a heading in its module's file.\n  So `spec/components/Button.pi` becomes\n  `.claude/reference/components/Button.md`. The reference tree (and its\n  `shape/` subdirectory) is a Belay convention, **not a platform discovery\n  directory**: never assume a tool loads it. It is reached only through links.\n- `@{X}` in any generated file becomes a relative Markdown link to X's heading\n  in that tree, with a `#fragment`:\n  `[Button](../../reference/components/Button.md#button)`, or\n  `[Button.color](../../reference/components/Button.md#color)`. Links stay lazy\n  and are never replaced with Claude's eager `@import` syntax.\n- **A reference to a skill, command or agent** links to that construct's own\n  output, like its `SKILL.md`, and it isn't copied into the reference tree.\n- **Special imports.** Each is imported explicitly from `@piton/belay` and\n  resolved **at compile time, separately for each adapter and each output\n  file**, as a path relative to the generated file that uses it. Interpolate\n  them with `${...}`.\n\n  | Import | Resolves to |\n  | --- | --- |\n  | `BELAY_COMPILED_SHAPE` | The compiled copy of the shape for the adapter, under its reference directory (`.claude/reference/shape` for Claude Code). Not the same as `BELAY_SHAPE_ROOT`. |\n  | `BELAY_AGENT_ROOT` | The agent's directory: `.claude`, `.codex` or `.opencode`. |\n  | `BELAY_PROJECT_ROOT` | The project root, where `piton.config.pi` lives. |\n  | `BELAY_SHAPE_ROOT` | The configured `shapeRoot`, or the project root if unset. |\n  | `BELAY_CODE_ROOT` | The configured `codeRoot`. |\n\n  ```piton\n  use @piton/belay\n\n  from @piton/belay import BELAY_COMPILED_SHAPE\n\n  export skill Designer:\n      description: Designs components.\n      useWhen: asked to design a component\n      prompt: Read the shape documents under ${BELAY_COMPILED_SHAPE} first.\n  ```\n\n  In `.claude/skills/designer/SKILL.md` that becomes\n  `../../reference/shape`.\n\n  Special imports compose like any value:\n  `export FLUENCY_PROMPT_FILE: ${BELAY_PROJECT_ROOT}/FLUENCY_PROMPT.md` can\n  then be interpolated as `${FLUENCY_PROMPT_FILE}` in a skill prompt. The\n  repo's own `spec/agent/` (three skills and `command CheckSpecForProblems`,\n  re-exported from `spec/agent/index.pi`) are working examples.\n- `${Anchor}` gives the anchor's name as written, not a title.\n\n### 11.5 Adapters\n\n`@piton/belay` exports `ClaudeCodeAdapter`, `CodexAdapter` and\n`OpenCodeAdapter`. Each extends the abstract `belay-agent-adapter`\n(`description`, `targetId`, `instructionFile`, `referenceRoot`).\n\n| | Claude Code (`claude-code`) | Codex (`codex`) | OpenCode (`opencode`) |\n| --- | --- | --- | --- |\n| Instruction file | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md` |\n| Reference root | `.claude/reference` | `.codex/reference` | `.opencode/reference` |\n| Skill | `.claude/skills/<name>/SKILL.md`, YAML frontmatter `name`, `description` | `.agents/skills/<name>/SKILL.md`, same frontmatter | `.opencode/skills/<name>/SKILL.md`. Name 1–64 lowercase alphanumerics with single hyphens, matching its directory; description 1–1024 characters. |\n| Command | Translated: `.claude/skills/x-<name>/SKILL.md` with `disable-model-invocation: true`, invoked as `/x-<name>` | Translated: `.agents/skills/x-<name>/SKILL.md` plus `agents/openai.yaml` with `policy: allow_implicit_invocation: false`, invoked as `$x-<name>` | Native: `.opencode/commands/x-<name>.md`, identity from the filename, invoked as `/x-<name>` |\n| Agent | `.claude/agents/<name>.md`, frontmatter `name`, `description`, optional `tools`, `model` | `.codex/agents/<name>.toml` with `name`, `description`, `developer_instructions` (role, prompt, extras), optional `model`, `model_reasoning_effort`, `sandbox_mode` | `.opencode/agents/<name>.md`, frontmatter `description`, `mode` (`primary`, `subagent` or `all`; always explicit, default `subagent`), optional `model`, `permission`; identity from the filename |\n| Native options | agent: `tools`, `model`. skill and command: `allowed-tools`, `model`. | agent: `model`, `model_reasoning_effort`, `sandbox_mode`. None for skills or commands. | agent: `mode`, `model`, `permission`. command: `agent`, `model`. None for skills. |\n| Loading | Ancestor guidance loads at startup; nested guidance loads when Claude reads in that subtree. | A root-to-working-directory chain is built at run start. A same-directory `AGENTS.override.md` shadows generated guidance (`shadowed-instruction`); an instruction byte limit applies (`instruction-over-budget`). | Searches upward from the working directory and prefers `AGENTS.md` over its `CLAUDE.md` fallback. Nested files are not assumed to load (`unguaranteed-instruction-scope` unless configured). It also discovers Claude and `.agents` skills. |\n\nRules for every adapter:\n\n- **Pipeline:** take the emitted, validated constructs from Piton, build one\n  output plan per adapter, resolve instruction placement and reference\n  destinations, check shared paths and cross-discovery across the whole plan,\n  serialize, validate links, metadata, names and output ownership, then write.\n- Every adapter carries `documentationChecked` (currently `2026-09-21`): the\n  date its target's documentation was last checked, recorded in the\n  manifest's `targets`.\n- Constructs are consumed **after** imports and inheritance resolve. Each of\n  the four constructs is mapped explicitly for each target.\n- An adapter distinguishes native support, translation and unsupported\n  behaviour, and fails with an actionable diagnostic when required behaviour\n  can't be represented.\n- Model and permission settings are applied **only when configured\n  explicitly**. Absent settings are omitted so native defaults apply. Native\n  options are validated against the target platform version, and role,\n  prompt and other prose never get copied into metadata fields.\n- **A prompt that requests restraint is not an enforced restriction.** An\n  adapter claims enforcement only for controls the platform applies, and never\n  translates permissions in a way that silently widens access. Claude's\n  `allowed-tools` and subagent `tools` serve different purposes; neither is a\n  portable sandbox. Requesting an enforced restriction the adapter can't\n  represent is a diagnostic.\n- An adapter never silently turns an agent into a skill, or a command into an\n  automatically invoked skill, when that changes how it activates.\n- Names are normalized before planning, and commands keep the `x-` prefix\n  after normalization. Collisions are errors (`name-collision`,\n  `output-collision`) unless the artifacts are identical in content,\n  reference resolution and activation.\n- **Multiple adapters:** the tools read each other's files (Codex and\n  OpenCode both read `AGENTS.md`; OpenCode also discovers `.claude/skills` and\n  `.agents/skills`), so with several adapters Belay plans one shared project\n  and writes each artifact once, where the tools find it:\n  - the **first adapter listed owns the one reference tree**, and every\n    adapter links into it;\n  - an instruction file several adapters place at one path (`AGENTS.md`) is\n    **written once**, by the first of them listed;\n  - OpenCode **writes no copy of a skill** Claude Code or Codex already\n    writes where it discovers it, and links to theirs;\n  - a command's `x-` skill that OpenCode would discover is an error\n    (`cross-discovery-activation`) unless `opencode.json` hides it with a\n    skill permission (`\"permission\": {\"skill\": {\"x-*\": \"deny\"}}`; the last\n    matching pattern decides) or `crossDiscovery` is set;\n  - a skill OpenCode finds in two directories (all three adapters enabled)\n    is a `cross-target-discovery` warning, since nothing in the project can\n    stop it.\n\n  `crossDiscovery: separate` means each tool's tree is deployed apart: every\n  adapter writes its own complete tree, and incompatible writes to one path\n  are rejected (`output-collision`). The whole plan is still checked before\n  anything is written.\n- Generated links (from `@{...}` references) are relative to the file that\n  contains them and must point at planned outputs (`broken-reference-link`).\n  Markdown links you write in prose are text and are never checked.\n- Discovery metadata and body are emitted exactly once. Frontmatter is written\n  with a format-aware YAML or TOML encoder. Generated filenames and native\n  metadata are checked against the target's schema, and unsupported requested\n  capabilities are diagnosed before anything is written.\n\nAdapter specifics:\n\n- **Claude Code.** A skill's directory name is its frontmatter `name`. Claude\n  Code still reads `.claude/commands/`, but Belay emits commands only as\n  skills, never both for one command. Agent identity comes from the\n  normalized name, never a rendered heading. `allowed-tools`/`tools` are\n  never copied to another platform without a mapping.\n- **Codex.** Belay never writes `AGENTS.override.md` to win precedence.\n  Guidance below the directory a session starts in is not guaranteed to load.\n  The byte limit checked is `instructionByteLimit` (11.1). Commands never use\n  deprecated custom prompts or an invented `.codex/commands/`.\n  `developer_instructions` is one valid TOML string; a generic `tools` list is\n  never mapped to an invented field. Only the standalone custom-agent format is\n  targeted. Codex's sandbox and approval settings govern execution and\n  guidance can't override them; tool or model settings on a command are\n  diagnosed. A command must produce both its files, and an agent's TOML must\n  parse with `name`, `description` and `developer_instructions`.\n- **OpenCode.** Don't assume Claude's nested loading or Codex's chain. Extra\n  guidance files go through its explicit `instructions` configuration when a\n  deployment needs them, never by loading every nested instruction globally;\n  if shape scoping is required and can't be guaranteed, that is an error.\n  Unrecognized frontmatter never enforces policy. `model` values are\n  provider-qualified. Argument placeholders written in a command prompt are\n  kept. `allowed-tools` is never an enforced command setting. Agents use\n  `permission`, not the deprecated `tools`, mapped only when the meaning is\n  equivalent: allow/ask/deny is not a tool list, and ambiguous conversions are\n  rejected.\n\nOther Belay diagnostics include `invalid-artifact-name`,\n`missing-command-prefix`, `description-too-long`, `output-outside-project`,\n`unowned-output`, `duplicated-content` and `unrepresentable-reference`.\n\n### 11.6 Guarantees\n\n- Identical source, configuration, directory state and toolchain produce\n  identical bytes. Instructions combined into one file have a stable order.\n- Frontmatter values are quoted and escaped for the target format.\n- A missing reference target is reported instead of emitting a broken link.\n- Unsupported metadata is reported instead of being claimed as enforced.\n- Generated files are tracked in `.piton/manifest.json`, so cleanup never\n  deletes files users wrote. Its `targets` records, for each target, the\n  documentation date the generated files were validated against.\n- Failures name the source anchor and property. Output stays inside its\n  configured boundaries.\n\n### 11.7 Open decisions\n\n`spec/scope/belay/Decisions.pi` lists what is not decided. Tooling should say\nit is unspecified rather than guess:\n\n- Placement of instructions outside `shapeRoot`.\n- The types of `tools`, `allowed-tools` and `model`, and their mapping per\n  adapter.\n- Naming: skill filename normalization, command name normalization before the\n  `x-` prefix, acronym splitting and collision handling.\n- Whether workflows stay compositions of the four constructs. Do not add a\n  `workflow` keyword just because examples describe agent processes.\n- How platform-specific adapter options are written.\n\nDo not present any of these as settled. If your work depends on one, raise it\nwith the user.\n\n## 12. Package management\n\nPackages are git repositories, managed as **vendored dependencies**. Installed\npackages are stored inside the project and committed to version control, and\nthe tooling adds, updates, removes and inspects them. Nothing is fetched at\ncompile time.\n\n- **Offering packages.** A repository declares packages with `piton-package`\n  anchors (`PitonPackage` from `@piton/packaging`: `name`, `root`,\n  `dependencies`). A package anchor can live anywhere in the specbase but must\n  be listed under `packages:` in `piton.config.pi`. A package's `root` is\n  relative to `piton.config.pi`, like the project's own root. **`packages:` is what the\n  repository offers to other projects; a project never installs its own\n  packages.** One repository can offer several packages, each with its own\n  root and dependencies.\n- **Names.** `name` is what the package installs under. It exists because it\n  can be kebab-case (`my-package`), which an anchor name can't. Left out, the\n  anchor's own name is used. **Package names are flat: no `/`.** Names like\n  `@piton/belay` are only for the packages bundled with the compiler.\n- **Dependencies.** `dependencies:` lists git URLs, each with an optional\n  `commit:`, `tag:` or `branch:` on an indented line beneath it (a dictionary\n  item right after the URL). **Only one pin per URL**; more is\n  `multiple-pins`. Without a pin, the latest commit on the default branch is\n  used. **Pins are strings**: `@piton/config` types them as strings, so\n  `tag: 1.0` stays `\"1.0\"`. Other pin diagnostics are `dangling-pin` and\n  `unknown-pin`.\n- **Picking packages.** A repository can offer several packages. You get all\n  of them unless you list the ones you want with `packages:` under the URL:\n  `packages: [ui-kit]`.\n- **Project and package dependencies are separate.** The project's apply only\n  to the project, and each package declares its own.\n- **No nested dependencies.** When two packages need the same package at\n  different versions, **the one with the newest commit wins** and a warning is\n  shown.\n- **Installation.** Each package goes into `tethers/<name>`, next to\n  `piton.config.pi`, with the files from its `root`. A repository offering\n  `ui-kit` and `my-package` gives `tethers/ui-kit` and `tethers/my-package`.\n  Tethering removes every trace of git. A repository that offers no packages\n  is installed whole, under the name its URL implies.\n- **Importing.** An installed package is a location placeholder:\n  `from my-package import X`, `use my-package`, `use my-package/MyAnchor`.\n  Normal path resolution applies below it. A missing package is a compiler\n  error.\n- **Lock file.** `.piton/tether.lock`, next to `piton.config.pi`, keeps each\n  tethered package's URL, commit and a hash of its files. `tether` and\n  `update` write it, and it is committed with the project.\n- **Conflicts.** Before tether, update or any other operation on an installed\n  package, the tooling compares its files with the lock file and goes ahead\n  only if nothing changed. If the files were edited, it says so and asks the\n  user to untether (or `piton update --force` to discard the edits).\n\nThe commands:\n\n- `piton tether` on its own installs everything in `dependencies`. Given a\n  source URL, it adds it to `dependencies` in `piton.config.pi` and installs\n  it. `--as <name>` installs under another name.\n- `piton update [packages...] [--force] [--diff]` reinstalls from\n  `dependencies`, all packages when none are named. `--force` replaces a\n  package even if it was edited, discarding the edits with a warning;\n  `--diff` prints a coloured unified diff of every file each update changed.\n- `piton untether <package>` moves the package from `tethers/` to\n  `<root>/untethered/` and rewrites the imports that named it, making it the\n  project's own source. `--as <name>` renames it; `--no-rewrite` only moves\n  it.\n- `piton remove <package>` deletes an installed package and removes it from\n  `dependencies`. It refuses if the files were edited or if anything still\n  imports the package.\n\n## 13. CLI reference\n\nEvery command prints what it produced first, then a one-line outcome (✓ or\n✗), and its problems last: diagnostics, errors and warnings with their help\nand notes, then the error and warning count. On a terminal the output is\ncoloured and paths are marked `+`/`-`; piped or with `NO_COLOR`, it is plain\ntext and stdout carries the bare results.\n\n| Command | Behaviour |\n| --- | --- |\n| `piton check [paths...]` | Validates syntax, imports, references, types, inheritance, composition, exports and circular dependencies, reporting errors and warnings. Writes nothing. Exits 0 when there are no errors and 1 otherwise. Paths are optional files, directories or globs; the default is the project (or every `.pi` file under the working directory when there's no `piton.config.pi`). |\n| `piton build [config] [--dry-run]` | Builds the project configured by `piton.config.pi` (or the given config). Writes renderer output to `<output>/<path under root>.<ext>` (defaults: `./dist`, JSON), so `spec/components/Button.pi` becomes `dist/components/Button.json`: the entry file plus every file holding something the entry's exports reference. A registered framework's output replaces it unless the config sets `output` or `renderer`, which asks for both. Records every file in `.piton/manifest.json`. The whole plan is validated before anything is written. `--dry-run` reports without writing. |\n| `piton compile <path> [--renderer json\\|yaml\\|markdown] [--write] [--dependencies]` | Compiles one file to stdout (JSON by default): one key per export. `--write` writes `<file>.<ext>` next to each input and is required for globs. `--dependencies` wraps the result as `{\"value\": \"<compiled output as a string>\", \"dependencies\": [absolute source paths]}` so build tools know what to watch; bundled package files are left out. |\n| `piton format [path] [--check]` | Applies canonical formatting (4-space indents, constraint spacing, sorted and wrapped imports, no `.pi` in import paths, a space after `//`). `--check` reports without writing. `piton format -` reads source from stdin and writes the formatted text to stdout. It **only splits overflowing lines and never rejoins a paragraph**, so rewrap edited prose by hand, and don't reflow `key: value` blocks as prose. |\n| `piton reach [targets...] [--no-unreachable] [--no-paths]` | Starting from files, globs or anchor names (the entry by default), follows outgoing imports, references, inheritance and composition, direct and transitive. Reports what is reachable with its depth and the path taken, and what is unreachable. The flags hide the last two. Use it to find dead spec. Grouped by source, with a summary. No diagnostics; always exits 0. |\n| `piton slice <target> [--adapter <target>]` | Prints the part of the spec one thing depends on, as one Markdown document for an agent's prompt. The target is `file.pi#Anchor`, `file.pi#Anchor.property`, `file.pi#variable`, or a bare name looked up across the project (an error when more than one file declares it). Follows, transitively: what an anchor extends, every base that also declares a property, anchors named by type constraints, what a value read (`${Other.x}`, variables), and what it references or embeds. Imports alone bring nothing in. A whole anchor needs all its properties and bases; slicing a property leaves out the anchor's other properties; a reference to a property needs only that property. It also includes the **chain** from the project's entry down to the target (`Specification.Tooling`, `Tooling.cli`, `Cli.commands`): the shortest path the build takes, each link only that one property and not followed further. An export of the entry, a variable, and a file the build doesn't reach have no chain. Order: the target, then its dependencies nearest first (source order breaks ties), then the chain outermost first, so the same source prints the same bytes. Each declaration appears once, headed by its name as written (`SaveButton.color`), with its file, what it extends, its type and what it reads. References and embeds are written as names; cycles are followed until they come back around. Every path it prints is relative to the directory it runs in, and it finds the project by looking upward for `piton.config.pi`. `--adapter claude-code` (any Belay target the project builds) cites the compiled output instead: each location and every reference links to where `piton build` writes it (an embedded anchor to the section that embeds it), and no `.pi` file is ever cited; an abstract base or an anchor that is only read has no document of its own and is described without one. With `--adapter` the target itself must be something the build writes out. Markdown links the author wrote pass through unchanged. Exits 1 on errors. |\n| `piton init [directory] [--template <group/name>] [--adapter <id>...] [--list]` | Starts a new project from a template compiled into the compiler (no network needed). Templates come in groups: `piton/minimal` (plain Piton to JSON), `piton/library` (a package others can tether), `belay/application` (a shape instruction placed in `src/`, a skill, an agent and a command) and `belay/minimal` (the Belay config and one skill). Without a directory it first asks for the project's name and creates that directory (an empty answer, or no terminal, uses the working one). Then it asks for a group and a template (`--template belay` asks only for the template), and for a Belay template, which adapters to build for: a checklist of Claude Code, Codex and OpenCode with the template's default (Claude Code) checked, or `--adapter`, repeated or comma-separated. The chosen adapters replace the config's import and `adapters` list, and a template's `.adapters/<id>/` files (like OpenCode's `opencode.json`) are written only for the adapters chosen. Templates are the `group/name` directories in the compiler repo's `create-templates/`, each with a one-line `.template` description that is not written out; adding one is adding a directory, and every template must check cleanly, be formatted, and build. `--list` describes the groups and templates and does nothing else. With no terminal, a full template name is required. It never overwrites a file: if any it would write exists, it names each and writes none, and cancelling a question writes nothing. Prints each written path on stdout, then a summary and the next commands on stderr. Exits 1 on errors. |\n| `piton loc [paths...]` | Counts total, code, comment and blank lines per file, with a summary. Defaults to the project. No diagnostics; always exits 0. |\n| `piton lsp` | Runs the language server over stdio (section 14). |\n| `piton agent [claude] [--print-fluency] [args...]` | Launches the agent with a short project primer plus this fluency prompt (the project's `FLUENCY_PROMPT.md`, or the copy built into the compiler), passed to `claude` as `--append-system-prompt`. Extra arguments go to the agent. `--print-fluency` prints the prompt and does nothing else. |\n| `piton tether [source] [--as name]` | See section 12. |\n| `piton update [packages...] [--force] [--diff]` | See section 12. |\n| `piton untether <package> [--as name] [--no-rewrite]` | See section 12. |\n| `piton remove <package>` | See section 12. |\n\nEach CLI command in the spec is a `cli-command` anchor\n(`spec/scope/tooling/cli/index.pi`) with `commandName`, `positionalArguments`\nand `namedArguments`.\n\n## 14. Language server, editors, and JavaScript\n\n`piton lsp` provides, from the spec's feature list:\n\n- Diagnostics (not for missing optional properties), completion, hover (type,\n  source, documentation, inheritance chain, export status and compiled\n  interpretation), go-to-definition, find-references, and rename across the\n  whole specbase.\n- Auto-import, import organization, and code actions: import a missing\n  symbol, create an unresolved anchor, add an export, qualify an ambiguous\n  reference, resolve a simple inheritance conflict.\n- Document and workspace symbols, semantic highlighting, inlay hints\n  (resolved types, inherited origins, composition sources), formatting,\n  folding and selection ranges.\n- Inheritance, composition (`+`, `++`), override and conflict resolution;\n  reference resolution; validation and type information for expressions in\n  `{}`, `${}`, `#{}` and `@{}`; export validation; module resolution; cycle\n  detection (circular imports are fine and not reported).\n- Related-symbol navigation, a hierarchy view, resolved-value and provenance\n  inspection, compiled-output preview, source-to-output mapping, unused and\n  redundant definition detection, and documentation integration.\n- Incremental analysis and workspace indexing.\n- Diagnostics cover Belay semantics as well as Piton. Import organization\n  flags unused, duplicate, invalid and overly broad imports. Cycle detection\n  also catches an anchor that ends up extending itself, and shows the cycle.\n\nThere is no signature help.\n\nCompletion rules: never suggest things that don't exist; offer nothing on an\nempty value (`property: `), because prose probably follows; offer nothing\nafter a `.` inside a string.\n\nEditing rules every editor must follow, through the LSP or the editor\nextension:\n\n- Enter after a colon that opens a dictionary or anchor property starts a new\n  line indented one level deeper.\n- Enter on a blank line inside a dictionary or anchor starts a new line one\n  level shallower.\n- Format-on-save is optional. It adds the space after `//` and touches nothing\n  else that is commented.\n\nSupported editors and their highlighters (spec): VS Code (TextMate plus LSP);\nEmacs, Helix and Zed (tree-sitter plus LSP); Neovim and Vim (vim syntax);\nJetBrains (`jetbrains`); Sublime (sublime-syntax); Kate (KSyntaxHighlighting).\nEvery editor gets full LSP support. The integrations live under `editors/`.\n\n**Consuming Piton from JavaScript.** `packages/vite-plugin-piton` imports\n`.pi` files as modules, with HMR, dependency tracking (through\n`piton compile --dependencies`) and virtual modules. Each export in the Piton\nfile is a named export, and the default export is the whole file, the same as\n`piton compile` gives:\n\n```ts\nimport { SaveButton } from '../spec/app.pi';\nimport spec from '../spec/app.pi';\n\nconst button = SaveButton;\nconst cancel = spec.CancelButton;\n```\n\nIt has a configurable default renderer (`renderer: 'json' | 'yaml' |\n'markdown'`), and the renderers can also be imported as functions\n(`vite-plugin-piton/renderers`) and used inline. `packages/astro-piton` is an\nAstro integration that wraps the Vite plugin.\n\n## 15. Working on a specbase\n\n1. **Orient.** Open `piton.config.pi` to find `root`, `entry`, `output`, the\n   frameworks, the adapters, `codeRoot` and `shapeRoot`. Read the entry file,\n   usually `spec/index.pi`, because its exports are the compilation roots.\n   Follow the `index.pi` files down through the modules. In this repository,\n   `spec/index.pi` exports `Specification` (FoundingThesis, Language, Tooling,\n   Belay, PackageManagement) plus the skills and command in `spec/agent/`.\n2. **Read compiled reference for overview, and source for truth.**\n   `<referenceRoot>/**/*.md` is easy to browse, and its links are lazy, so\n   follow them only when relevant.\n3. **Edit the `.pi` source**, following the conventions around it:\n   - one exported anchor per file, named after the file;\n   - `index.pi` files that re-export with `from ./X export *`;\n   - abstract anchors exported with a keyword, and shared abstracts in a\n     `lib/` folder;\n   - lowerCamelCase property names;\n   - SCREAMING_CASE for exported constant lists;\n   - prose in string blocks, and structure in keys and lists;\n   - `@{X}` to link related documents;\n   - examples inside fences wrapped in a `\\\\\\` escape block.\n4. **Keep imports honest.** Use `use` for keywords and `from ... import` for\n   names; a file often needs both. A new file only compiles if the entry\n   reaches it, so export it through an index or reference it.\n5. **Validate.**\n   - Run `piton check`.\n   - `piton check` does **not** compile the examples inside escape blocks\n     (they are literal text). When you edit spec examples, extract each ` ```piton ` block,\n     run `piton compile` on it, and compare with any ` ```json ` block that\n     follows. Remember that compile output has only exported names.\n   - Run `piton build`, then look at the diff of the generated files.\n   - Run `piton reach` to confirm new anchors are reached.\n   - Run `piton format --check`.\n6. **Never hand-edit generated files.** That includes `CLAUDE.md` and\n   `AGENTS.md` under `codeRoot`, everything under `.claude/`, `.codex/`,\n   `.agents/`, `.opencode/` and the build output directory that is listed in\n   `.piton/manifest.json`, and the files in `.piton/` themselves.\n7. **Keep implementation and spec in agreement.** The implementation is judged\n   against the spec. When they disagree, report it instead of quietly bending\n   the spec to fit. Trust `piton compile` for how things behave today, and\n   flag the gap.\n\n## 16. Where the compiler differs from the spec\n\nChecked with `piton compile` and `piton build`:\n\n- The CLI has a few things the spec doesn't name: `build --dry-run`,\n  `tether --as`, agent argument passthrough, the `reach` flags, and\n  `format` with no path or `-`.\n\n- **Paragraph breaks.** The spec says a blank line in a string block starts a\n  new paragraph. The compiler joins the paragraphs with a single `\\n`, which\n  Markdown output renders as one paragraph with a soft line break.\n\nKnown limitations, where the spec is silent and the compiler's choice may\nsurprise you:\n\n- A `/`-rooted import inside an installed package resolves against the\n  consuming project's root, not the package's. Use relative imports inside a\n  package.\n- A required property from an abstract is not satisfied by a value inherited\n  from a concrete base (`needs Thing extends Base`, where `Base` supplies it):\n  the keyword's anchor comes last, and its value-less declaration wins. Give\n  the value on the anchor itself.\n- `piton check` with no paths checks what the entry reaches, so a file that\n  nothing imports is not checked. Name it: `piton check path/to/file.pi`.\n- **Prose directly in an anchor body is silently dropped.** `anchor A:` with\n  only a line of text under it (no key) compiles to an empty anchor, with no\n  diagnostic. Always put prose under a key, such as `description:`.\n- Mixed-type equality is simply unequal: `{1 == \"1\"}` is `false`, not an\n  error. The spec says `==` works on every type but doesn't spell this out.\n- Which constructs each adapter requires a `description` for (section 11.2)\n  is hardcoded in `crates/piton-belay/src/adapter.rs`, not declared in the\n  adapter `.pi` files.",
+  "instructions": "We're only asking a question about the code located in ./src and the spec located in ./spec. Don't edit either of them.",
+  "resumed": true,
+  "output": [
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "0a5c0542-f409-4ee6-9d44-7ab417789445",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "41547cb7-7766-4f9d-96d2-688a8da30597",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "b1dd98eb-46b4-4148-84bb-99ed38283d71",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "12353486-fd8c-4c14-b66f-60291ebeb23b",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "b1dd98eb-46b4-4148-84bb-99ed38283d71",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "",
+      "stdout": "",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "d1322101-f2f4-4a26-9e50-6afa00348755",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "0a5c0542-f409-4ee6-9d44-7ab417789445",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "",
+      "stdout": "",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "2d15b00c-f43d-4470-8ba2-313ebb1e2e8d",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8"
+    },
+    {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "/home/hyphyphyph/piton/repl",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "tools": [
+        "Task",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "ListAgents",
+        "Monitor",
+        "NotebookEdit",
+        "PushNotification",
+        "Read",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write",
+        "mcp__claude_ai_Claude_Docs__batch",
+        "mcp__claude_ai_Claude_Docs__create",
+        "mcp__claude_ai_Claude_Docs__delete",
+        "mcp__claude_ai_Claude_Docs__export",
+        "mcp__claude_ai_Claude_Docs__guide",
+        "mcp__claude_ai_Claude_Docs__query",
+        "mcp__claude_ai_Claude_Docs__read",
+        "mcp__claude_ai_Claude_Docs__update"
+      ],
+      "mcp_servers": [
+        {
+          "name": "backlog",
+          "status": "failed",
+          "source": "user"
+        },
+        {
+          "name": "claude.ai Claude Docs",
+          "status": "connected",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Drive",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Gmail",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Calendar",
+          "status": "needs-auth",
+          "source": "claudeai"
+        }
+      ],
+      "model": "claude-opus-5-5[1m]",
+      "permissionMode": "auto",
+      "slash_commands": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "deep-research",
+        "typesafe:typesafe-ai",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "output-style",
+        "context",
+        "effort",
+        "fast",
+        "focus",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "skill-doctor",
+        "goal",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "terminal_slash_commands": [
+        "doctor",
+        "color",
+        "focus",
+        "reload-plugins"
+      ],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.281",
+      "output_style": "default",
+      "agents": [
+        "claude",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
+      "skills": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "deep-research",
+        "typesafe:typesafe-ai",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "plugins": [
+        {
+          "name": "gitkraken-hooks",
+          "path": "/home/hyphyphyph/.claude/plugins/marketplaces/gitkraken/plugins/gitkraken-hooks",
+          "source": "gitkraken-hooks@gitkraken",
+          "version": "3.1.73"
+        },
+        {
+          "name": "warp",
+          "path": "/home/hyphyphyph/.claude/plugins/cache/claude-code-warp/warp/2.2.0",
+          "source": "warp@claude-code-warp",
+          "version": "2.2.0"
+        },
+        {
+          "name": "typesafe",
+          "path": "/home/hyphyphyph/.claude/plugins/cache/typesafe-ai/typesafe/0.5.7",
+          "source": "typesafe@typesafe-ai",
+          "version": "0.5.7"
+        },
+        {
+          "name": "agents-md",
+          "path": "builtin",
+          "source": "agents-md@builtin"
+        },
+        {
+          "name": "telemetry",
+          "path": "builtin",
+          "source": "telemetry@builtin"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "msg_lifecycle_v1",
+        "mcp_read_resource_v1",
+        "mcp_tool_ui_meta_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "35dd7499-8829-4e87-8b61-b0ce999a0f8b",
+      "memory_paths": {
+        "auto": "/home/hyphyphyph/.claude/projects/-home-hyphyphyph-piton-repl/memory/"
+      },
+      "messaging_socket_path": "/run/user/1000/cc-socks/172757.sock",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "per_turn_effort_active": true,
+      "view_mode": "default"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "d590e453-879c-4654-8cba-0fa02c072cb9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011CfZt1dh41BUAqNRMMF45T",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 1355,
+            "cache_read_input_tokens": 89074,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1355
+            },
+            "output_tokens": 8,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "dbbdff7b-a39f-45ac-8f17-5b98113dbebe",
+      "ttft_ms": 1303
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3dc8e893-235a-4604-aa74-d17aaaee86e2"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "14f63a71-11df-4fcd-a947-2e5e31492179"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f8113b7a-87b0-440b-8535-af2759f9f446"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 150,
+      "estimated_tokens_delta": 100,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "e411128e-bae4-4298-a136-7cda2242b2a3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 100
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "baddd5a8-f28f-4e8e-b7a4-eb18fd915c9e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3bf3360b-79a3-436b-985f-10603a45a7b6"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 321,
+      "estimated_tokens_delta": 171,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "0cad19a6-9225-4d1d-8d0e-46923a774563"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "CAQS+wkKEAgSGAI4AUIIdGhpbmtpbmcSDEgp3XbxIyIFYSJSDxoM0RNtbwh7sudSM7b7IjA0ub4rfHSWNNfQmV7RVSqOtswGQLwPCBiw7jz4KX0aFe9KyLpLTFP0tIKp0LgZ3ssqmAkTUXawraq698HgX0XggF4rKjF1BFbSVKO0h5wsukK6PmqZUcMvYEG4ns+nDxHt3vZAtEX7BTgXlSTRH9EemPmJ/r1nryj714+vRiAtoQF6Du+/F0MkemveIFQXspYuY9Zy/7m/VkbvQE+SDf09hTHtHGNiwYbMAIYIvzE72AM9dBlCumtvRm6p3VDUO9XwBZBCj9bqCj9SRoLZ/KdYjuSzzv8YMGjM0R7kMyoP73FZJ92fxsri75EWKjmWK/0UIrXt0+7mQR+Y07tTG3YGUXwE3f2QmVUv81eM0CcSOwh9WH2f++yQe0vDhhUxbq5QQx7RNzRpE8IiVgkDTPHQpMPtegZxIN1CV6T+TLk9Vpd9fRZ+a9VSHe6hs5ngiYiIkhofnQa+hn37fEq978nK75WnJzRwXsNohL0NRvTUmLHTscgvRe8MVCH4smmHHAuMw6OOdyPApjubamkcH2yMDgcGhU9YxCd3HgniC5dCJc69pa/nd6gP9xattp+XL2UfgOfGNUzCoIxjc4+aeHFGGQjjffVtrOjDWmlUGFK7kLj/PaXsVU8f16ZGUFZDyuNgkj9c96J1Y44vuKp96MfamnKeLcKM5+OWLBzOnGca1QcgbV4XdrLr28b/Yhb+VC51dyqRe8CaJcbvUomPqpz4xIzUJWouPPa/0mDBkfKFlu5ynvOnTZHseIPLwmh1YR5f81MJtwA1+l8s7kqtK/VX0c1tGbq8fgSANW61gzt2/cgjkQ1ND3Ph1Je96RViqLt3P7s6qn+PDIZiskrdjSIpqsSk9SLH79DxmA8CFTJSXQh/qK+ia956RYNw2ZIBpIl5a5sBC+uf1n9LWePbq7Iq1IWkYH7ITTrtEl1ml1Pmo9GtHIfJkkxUO9zCmRKw4M46WhZbjAQAQ/w0I8sWOb1ZvutbZHejLMhcTSHf+ERDaqYy0jYpOoCTAzzjwNuYkTSr/Uxb0Cz4gVpUKEYwbrAEAVypwg5Td5W8KOwLqI3bx6wQkHt+7xQ+m/Sfwi9zq3wsoMEtr2Iniz2tGyyeQr6phksJM4ciT5903Sluq8O1gsV8XsgASneqfibdVwl7fnQyMebsgHb3wLCAHbbgaJMUWhr48QI9NgGd+u5IczPuLBOYfStdFQ09SLDMoRhB+b+JP/E/A0UUomyvwLuPxqu3K/KcfF7YahcYbTVzhdIa9fe8Cbxvw5T8L8NcVwqiocDmxnd1hruUg77s6evy56EuIc22kDCro1zjfgyrinhmzWyqpkTgoc/KQyEjgRAQo5hyc81sUFdM1PkNTMMDNuKAKWCvIuHEDrjes2pFmxObV//M6cAhxufhpcUUQx7UZ9+nWW95iAed17UrXg8o1JZGy1f2Z13vy1ETWPYJBEJ3wyq/kKERbauMbCowmkCbhkDTlnTzRlQlH2ZNNCSH6hsFdfpj8tWG3ofmeH58bRVdx/ireUCg2x8r0mabX5N7CfR7hfVeUEwA+UhpJhP3hImkjp/PyiU3fgJ1kP1u7YvXhxc8zQTqQQUjfbPEFDrGdNrUWmg6qHI1vSixIOrx0VTDiQTkvIhZ13o9UFIYAQ=="
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "93fe00fa-b556-4fe4-8ff9-b823fac49a04"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CfZt1dh41BUAqNRMMF45T",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAQS+wkKEAgSGAI4AUIIdGhpbmtpbmcSDEgp3XbxIyIFYSJSDxoM0RNtbwh7sudSM7b7IjA0ub4rfHSWNNfQmV7RVSqOtswGQLwPCBiw7jz4KX0aFe9KyLpLTFP0tIKp0LgZ3ssqmAkTUXawraq698HgX0XggF4rKjF1BFbSVKO0h5wsukK6PmqZUcMvYEG4ns+nDxHt3vZAtEX7BTgXlSTRH9EemPmJ/r1nryj714+vRiAtoQF6Du+/F0MkemveIFQXspYuY9Zy/7m/VkbvQE+SDf09hTHtHGNiwYbMAIYIvzE72AM9dBlCumtvRm6p3VDUO9XwBZBCj9bqCj9SRoLZ/KdYjuSzzv8YMGjM0R7kMyoP73FZJ92fxsri75EWKjmWK/0UIrXt0+7mQR+Y07tTG3YGUXwE3f2QmVUv81eM0CcSOwh9WH2f++yQe0vDhhUxbq5QQx7RNzRpE8IiVgkDTPHQpMPtegZxIN1CV6T+TLk9Vpd9fRZ+a9VSHe6hs5ngiYiIkhofnQa+hn37fEq978nK75WnJzRwXsNohL0NRvTUmLHTscgvRe8MVCH4smmHHAuMw6OOdyPApjubamkcH2yMDgcGhU9YxCd3HgniC5dCJc69pa/nd6gP9xattp+XL2UfgOfGNUzCoIxjc4+aeHFGGQjjffVtrOjDWmlUGFK7kLj/PaXsVU8f16ZGUFZDyuNgkj9c96J1Y44vuKp96MfamnKeLcKM5+OWLBzOnGca1QcgbV4XdrLr28b/Yhb+VC51dyqRe8CaJcbvUomPqpz4xIzUJWouPPa/0mDBkfKFlu5ynvOnTZHseIPLwmh1YR5f81MJtwA1+l8s7kqtK/VX0c1tGbq8fgSANW61gzt2/cgjkQ1ND3Ph1Je96RViqLt3P7s6qn+PDIZiskrdjSIpqsSk9SLH79DxmA8CFTJSXQh/qK+ia956RYNw2ZIBpIl5a5sBC+uf1n9LWePbq7Iq1IWkYH7ITTrtEl1ml1Pmo9GtHIfJkkxUO9zCmRKw4M46WhZbjAQAQ/w0I8sWOb1ZvutbZHejLMhcTSHf+ERDaqYy0jYpOoCTAzzjwNuYkTSr/Uxb0Cz4gVpUKEYwbrAEAVypwg5Td5W8KOwLqI3bx6wQkHt+7xQ+m/Sfwi9zq3wsoMEtr2Iniz2tGyyeQr6phksJM4ciT5903Sluq8O1gsV8XsgASneqfibdVwl7fnQyMebsgHb3wLCAHbbgaJMUWhr48QI9NgGd+u5IczPuLBOYfStdFQ09SLDMoRhB+b+JP/E/A0UUomyvwLuPxqu3K/KcfF7YahcYbTVzhdIa9fe8Cbxvw5T8L8NcVwqiocDmxnd1hruUg77s6evy56EuIc22kDCro1zjfgyrinhmzWyqpkTgoc/KQyEjgRAQo5hyc81sUFdM1PkNTMMDNuKAKWCvIuHEDrjes2pFmxObV//M6cAhxufhpcUUQx7UZ9+nWW95iAed17UrXg8o1JZGy1f2Z13vy1ETWPYJBEJ3wyq/kKERbauMbCowmkCbhkDTlnTzRlQlH2ZNNCSH6hsFdfpj8tWG3ofmeH58bRVdx/ireUCg2x8r0mabX5N7CfR7hfVeUEwA+UhpJhP3hImkjp/PyiU3fgJ1kP1u7YvXhxc8zQTqQQUjfbPEFDrGdNrUWmg6qHI1vSixIOrx0VTDiQTkvIhZ13o9UFIYAQ=="
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1355,
+          "cache_read_input_tokens": 89074,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1355
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "f1baeef1-fa84-40ad-8253-2bc5bc7e4bdb",
+      "timestamp": "2026-09-30T15:43:25.374Z",
+      "request_id": "req_011CfZt1cmzCH5kPGWTWbcDE"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "174f5f0e-5f6b-47ad-b98b-2e7a1f691a0b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "6493df1a-b461-4c74-a6df-9ccf347014c4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Here's the full promp"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4fadb59c-5c66-447b-9007-909e1e7d21ed"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "t with"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1d82a66c-00ee-4d7e-91ff-63624935ccd3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "156ce15d-54f8-440b-879a-9d55cc7aba29"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " fluency written on each spec"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e3d06a24-9755-4dd8-842e-3626574714ea"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " build. Send it in **"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "152f3a0e-77fd-42d1-8b60-6fd7ea241ec8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Chain** mode.\n\n```"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "26beb793-985a-4833-a3dc-4f2104d95633"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "text\nChange how the harness"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f7f1a575-bdfe-47f6-9092-983a9b7b1dd7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " gives the agent the spec"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4aa3d331-3662-4916-af4e-58103b86097d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", so that reading the spec"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "852a0b9f-d22e-4e7a-b4ef-e295d8608543"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " com"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a21b995f-4cec-4cbd-ba40-d282528baf61"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "es\nfrom the compiled re"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "be7b3f2b-8ade-4123-b180-a8df6579dcb2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ference and the Piton flu"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "dd5233a1-a280-4fe5-abaa-38826603ebfb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ency is only given to work that"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7edcd02a-fcb5-4680-a94e-e06cf49b8699"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\nwrites Piton."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c9a2fafe-aae1-4174-aafc-0df94fa33292"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\nWhy: the fluency is "
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "af6084f2-a661-42aa-9483-9451d4f19838"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "~85k characters (~25"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "08160910-313a-4b9a-bb8e-2a4439751375"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "–33k tokens) and"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "51f3bb66-3a27-4157-a303-c0661bcf88a1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " currently sits in\nevery con"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "fefac6dc-071a-4cd0-9571-81148c8cbfb1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "versation's system prompt,"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f4ac1caa-624c-4c77-a12c-f7f3cb9ed2e9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " re-read on every turn of"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "aaa77ebd-82c0-4a48-b187-16834c872e88"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " every mode. Code\nand"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c70254a0-1dca-421e-8890-6ea31b976122"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Ask tasks never write"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c28aa883-b9b2-404d-8e2a-c6ace17aab99"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Piton, and agents m"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f10168fc-60c2-40fd-a43c-996ec1deaac2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ostly read the raw .p"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ef852881-5691-4981-9781-e8038598a31a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "i source\ninstead of the comp"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c0cccd38-6166-48a3-9be4-73ca58d71b3b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "iled reference under ${H"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f79c41e8-70ce-46a6-a7c7-9f08c5c072f7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ARNESS_DIR"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7b1bfcfb-39cf-4c7c-96ba-6c0c0619c976"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ECTORY}/reference"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e884b25a-c379-4c5e-b12c-ab85c977b9c7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", which\nalready has inherit"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0eb4d961-1de4-4919-bd3b-47f3b44bda3b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ance, expressions and links res"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0b97236b-24cf-433d-9a0b-542cbc811167"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "olved.\n\nWhat should be true"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b0fb5c4d-bbf3-4ca3-bedc-e1377396ef51"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " afterwards:\n\n1."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "9d9cb8e1-7d1c-4596-9022-d9669085d13b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Reading the spec. In"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2bb61f48-baaf-4345-ab5b-4ff56bb2343b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " every mode, the agent underst"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "9ac49ac9-9769-41eb-a66f-185288e5b9ed"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ands the spec from the\n   "
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f038d677-8cf9-42a8-928d-a4ac63721112"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "compiled reference (${H"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b25a8d0b-5ab1-41b3-85e0-07b4ef5f3b10"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ARNESS_DIR"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ad48e038-404e-4d67-81ef-b78abf5a1e20"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ECTORY}/reference"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "795a526b-b21a-4ce6-9695-a3cd0a263a78"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "/..., or\n   `pi"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d740c550-eb6b-4cfb-9cbf-cf0f787bbeb4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ton slice --adapter "
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "21e48284-d62e-44f1-9378-db446f2087cb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "<harness>` for one target),"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "615b7f1c-2117-456d-8707-6d10f0655740"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " never by reading .pi"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "84e1366b-2a19-4c7e-9128-a57685a1b6a5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n   source to learn what the sp"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c62147fa-281b-459a-bcd7-f9e24be48c86"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec says. The system template and the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f596da1f-8e6b-4f9e-a4eb-7d7fc731d3bb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n   spec-reading pr"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "59c40c2b-c341-4ca2-b2dd-c0f869152b86"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ompt say so. The spec"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ae113d82-af72-4568-85be-d577a8b8437d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " location is named only as where spec"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "97f95c5d-d73b-42cc-9e30-c7915d53f541"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n   edits go.\n\n2"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "022b2f3f-5f9d-400f-b439-5d34901eb0e5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". The shared system prompt"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4358f280-02bc-4a07-bbd1-d7a256014a5c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " no longer contains the flu"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1e5a3c71-ad33-4c31-9bf6-a551456ea0f3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ency. It stays\n   ident"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "23815c65-b3f4-4076-ab51-a7a6f5ca9c90"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ical for every mode in a con"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b36462a7-8e74-4a2d-a542-bb8c3b317a7b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "versation, so the prompt"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3c7f4f35-7c79-4ba2-b86a-60831ec42ea7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " cache still holds\n   when"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c63b5d7f-87c2-470b-9831-e59152ada91e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the mode changes. `${"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "54af1346-739e-4043-8a2f-f805622563dd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "PITON_FLUEN"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "840eedd8-b303-47e8-9883-3ef2f912d9c0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "CY}` is removed from"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c7eef2d6-dab9-4a50-83a2-b37bdfef79b2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the system\n   template.\n\n3"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b37f7916-e42f-497b-9c0a-69dcf0898235"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". The fluency is written to"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "6e4e2ae3-957b-4a8c-9d3a-15e1e2ccaaab"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a file in the project's app direct"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "668a6179-30a9-45e4-946f-c72e8d145a6c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ory\n   (.suspense"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4366c4be-4a33-479f-a232-a657663adc1f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "/fluency.md),"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d28c37e4-8458-49d7-82a6-760212092171"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " from `piton agent --print"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e20a091c-ef29-43bd-9a1a-829be366df73"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "-fluency`, every time"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "57925351-5b5f-4c17-8eeb-4d157d5e70f5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the\n   application runs a"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "9af74bd3-3c4f-4695-9ebc-d172990a0cc7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " spec build, so it stays"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ea1995fc-1545-4f6c-8ba1-56f895d4e53c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "808fd785-ac3a-4eec-a234-bf778751b830"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " step with the project's pi"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2593a48a-0d8e-444e-9d04-f24e223dc3c4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ton\n   and"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "63920148-a4fa-48dd-a71f-980e7d95f8e0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " FLUENCY_P"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "57bcb9a7-ea74-4f8d-a2af-16ecb6cd9ded"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ROMPT.md. If"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a8730904-db5b-4d1c-9a58-a3e018d7b398"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3990563a-e097-48dd-9007-313eb9eb22bb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Spec or Chain pr"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4195e68f-eae2-47b8-b341-a18d7e2479c6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ompt is sent before the file"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "cb3397a9-8346-4fd1-8e39-573f83e3e2b3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n   exists, it is written"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "9e218370-f1d6-49d2-a025-d5ad7ebabaa4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " then"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "eb073e23-0fb5-459d-9208-c15199a95375"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". A new placeholder,"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a5d06f7b-9da1-46ee-a483-3d0bab099c38"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `${PITON_FL"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "fb9c62c6-0d5f-4ec2-917a-95a9c9d098c5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "UENCY_FILE"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "15fc153e-72fd-4971-9a5a-9fbdf766969a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "}`,\n   stands for"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b5dcef36-ed76-4c06-965b-d83f31790b49"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " that file's path. Only the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "69a8318a-796f-4fa4-8b46-8a4ffd78f29d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Spec instructions and the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2b62fbe2-32ee-4406-bc9c-8a510cf8d4e5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Combined\n   (Ch"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "6d0be598-0c5b-4e62-a488-e72417cc1a17"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ain step 1) instructions"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "04a49bc7-9252-452d-b2ca-dbcd84e44572"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " use it: before creating or edit"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "617aae91-1ce1-401b-a833-cf6c060ea61a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ing any .pi\n   file"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0edb9f28-9f75-490f-8d9e-7add7e9dd34b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", read the fluency file once"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3aaa38cc-d633-49c3-ac0b-37fc624724cd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in the conversation. A"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "5bf50f98-17fd-4525-8f78-c6d90aa4691b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Code task sent to\n   "
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c363e079-90de-4d39-bc16-868f9e0d1992"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Spec gets it through the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c1cf432c-8a6a-49c0-88bc-7a8c200599e0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Spec instructions as usual"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4ed63e27-8e12-4b00-a829-760a8099cd6d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". Code, Ask and"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ffdded4f-f754-4e3c-bc8d-6b59b63f4f1d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the\n   spec-to-"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "552fd3b4-5640-43f9-b4e4-54de6eec5864"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "code step never mention it. If"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "928cc447-78e0-4b72-aefe-d1b7592f3840"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " there"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "aa60061a-d238-4e48-a85c-a37ce17d4741"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is no fluency (no pi"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "87e4016e-f1cd-46b8-8d41-0c3d6cb52b21"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ton, or\n   it"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a914f9e4-836b-4828-9932-f286bf3bc548"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " fails), no"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7333dfc1-205c-44b8-88e1-c7e49c1c40bd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " file is written and the sentence"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "bce91484-37dc-4f74-b359-59078f7fce96"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " that points to it is left\n   "
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ab857697-cfef-4524-bc73-cdd5669d275d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "out, the way an empty plac"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "15e1fb2b-eba4-4a49-8655-ec66918fb778"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "eholder already leaves no"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e763ed66-906c-4064-975e-ec80f1cce071"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " paragraph.\n\n4."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "284b65f0-3eba-4189-9499-c8f073627238"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Writing the spec."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "db5a11bc-806e-468e-8db5-58543bb2be87"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Spec and Chain-step"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "6f8ed7fa-423c-4988-b76b-acb26d739ef3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "-1 agents open a ."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "847b4282-ab93-40e8-ad14-fb42cfbac573"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "pi file only to\n   change"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1ee51423-eff0-44f6-a637-3e3313814a03"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it (Claude Code's"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "063fe1f5-9769-47a3-8d47-a1c21e4f8710"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Edit needs the file read"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "bdda29c0-c3c4-4a1b-8ae2-92c4c86b7716"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " first). After editing,\n   "
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d0ec41b2-98be-4117-87ba-b2b3d084024d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "they run `piton build` and"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "62931256-84fd-4dea-8657-ca01e72a9d5b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " check the result through the refresh"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "bf3d3e44-dbea-4c53-8586-ab233e7d4a5c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ed\n   reference, not by"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a3b9ce24-c794-4079-9654-945da3273f64"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " re-reading the source."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "973e32df-bd6a-4c07-9cb9-fdd59dab0446"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\n5. Understanding files c"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "5eaa16d2-247e-4491-a855-0da2d3ee2413"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ite the reference. The example const"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3a13aba1-21e0-40f8-a93d-d21e09e50a48"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "raint in the\n   Code"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "8cf92366-cf08-4f84-b96a-26defa533956"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", Spec and Combined"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "47bdef56-eb2e-4e0c-8c9f-4e1ff2b2a34f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " instructions links to a\n   "
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4636e053-b8df-4344-aafa-e5557a38772f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "${HARNESS_"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a2f21fad-7dfd-43c0-a4ca-0a5cb2373567"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "DIRECTORY}"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "9f06efcf-8af4-462b-acb2-76312947b620"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "/reference/...md file inst"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "5fa3aa28-963e-4fec-bcc7-11aa6f1a9ae9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ead of spec/...index."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "444d5c4d-a1f4-4061-aff8-1d8f4a88893d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "pi, and\n   the inst"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f22f8811-cf8e-46e8-a392-b2da9329cd16"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ructions say constraints link to"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "515cf539-a87a-43b3-beea-7e153ac4b34a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the reference.\n\n6. In"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d314f42a-ee1c-4486-a339-122a774c96d5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Code and Ask modes"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d0409b62-bdb5-4cec-9133-92101e1feede"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", the harness passes a read"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "148c3a4e-11e2-44ae-b410-8e32acd1efeb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "-deny rule for the sp"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "fa7370c0-9d0d-4efc-b599-48eb63b4a215"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec\n   location alongside the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d097b81b-00c1-440b-8d26-409390d059db"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " existing protected-edit r"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7f342cf8-7d6d-4a58-8f59-e2f43871c7e2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ule, where the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "82b65c98-87a3-49de-9d93-90e7e3acc742"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " harness\n   supports one ("
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e0f4e530-86c9-4f35-8076-f46c93dedb2c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Claude Code: --dis"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "9ccab7b2-c569-4442-aa64-604f0a87502c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "allowedTools). This is"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "8c436e6c-c958-4bbe-bffb-a5ed81892cd3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a nudge, not\n   "
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "10da107a-9a11-446e-81b8-c7cb5c84721c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "enforcement, because B"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "85a7f74e-6782-4b51-8651-1f98f677aa9f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ash can still read the files, and"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "94113895-928a-4695-b2f9-c2a08688a938"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the spec should\n   describe"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "cf308577-934b-4059-900d-a8320c3e63a8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it that way.\n\nSpec"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2a267bae-18f9-465c-8d5f-bbc27bbe4fa1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ": the current behaviour is"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7120c4cb-6308-4b6c-adc3-4e7b6f392de9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in spec/scope/pr"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "69b2b265-c2e4-4916-811f-0e9d892471ac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ompt-mode/mode"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "55d82dcb-5476-438d-8c94-122a1a1070f6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "-system-prompts/"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "79aa697a-2dfa-4d39-a825-495cd1cdab71"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\nindex.pi, spec/"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "00287e71-b853-4d0f-862f-a3cfbdcf0e7b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "scope/prompt-m"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "8de2be99-8969-4645-b565-cb80b2f4a45b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ode/index.pi, sp"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "311485a2-4554-48dc-a048-12957dfae587"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec/scope/project-data"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4e1797a2-fbaf-4e5c-9ec0-b120847d0fba"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "/index.pi\nand sp"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "db3ce6e1-c6ef-4770-bb9f-55038279bd43"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec/scope/settings-"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "021823ab-ecd9-4ff2-8ad8-1d4c501adef5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "window/index.pi (which"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e817b7c1-4488-44cf-993c-191bec7d8239"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " describes the fluency\nplac"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "309c2371-4290-47cc-bbc3-069b6ab62890"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "eholder in the prompt"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1a3196d9-e523-440d-b184-466fe8b18566"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " editor; add ${PIT"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "79a69ca4-2902-4bc4-afcd-561608d9d4ab"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ON_FLUENCY"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7e481677-fd8e-4ca0-a37c-e17786fd37a1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "_FILE} there and rem"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c0bd7b1b-4014-48cb-8f96-c05821c80a96"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ove\n${PITON_F"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "cb8477a9-05fb-422f-b74a-e20b93731b1c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "LUENCY}). The"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "bcab08df-cf31-4c83-abae-d1b447930dfd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project-data sp"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "5116afe7-84e0-4032-8863-2de420d6ae15"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec should list ."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7bc00d40-f51c-40f1-b35e-a448ed9b52dd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "suspense/fluency."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2f9820ff-0825-46b5-b7f4-7ff02204ae10"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "md as a"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "8c9d02a2-b1c0-4113-9057-90dbd3991358"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\ngenerated file. Update those"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "55344af7-7561-4767-847f-c7924b5d0e8a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " r"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "8f8777bf-1da0-4e53-8f96-34ce2bc9b993"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ather than adding parallel an"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ac741c6c-a7f5-4eb6-bda0-355609f3167a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "chors.\n\nCode: the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "39d8c608-a814-4fa4-ba37-9a5a44745989"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " templates' defaults are ba"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c8954b73-4945-4d27-b8f3-12f09be12cd5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ked in from .suspense/"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "05eea874-2044-49e2-aac4-b9b3b648fc5e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "system-prompts/*."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b3f65088-fa4f-493b-9c95-da926c621cb7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "md\n(system_prompts"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "edfdb58e-bd08-44ba-a3ee-afca7b509f48"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "::default_prompt), so"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c7ed37d3-88d1-4bf7-832f-1eac6f4cb91b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " update those files as well as\nsrc"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "65a706bc-b114-453d-a487-5e97f241e25c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "/system_prompts.r"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "03828418-26cf-40d4-8acf-e8682c9e8333"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "s, src/hidden_"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ffa02fa9-5c3c-4cd0-8ced-326cb2b24730"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "anchor.rs (project"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "6a5675a9-5947-4115-9d42-817a606cdef7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "_system_prompt),"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "be080233-ebcc-407b-9307-1067a7acfa59"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\nsrc/piton_fluency"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "666b3f51-27f9-4c69-b446-143b947a8cb8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".rs (write the file inst"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c452bafe-c87a-48fb-a3de-fea4a113eda6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ead of caching the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a4729df1-95e7-440d-a418-eeaa9345ca76"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " text for the\nsystem prompt"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ac4f2d93-69d4-4a57-88fe-527fb3a427a5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "), src/piton_build."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "204657a2-1ce6-4e17-995f-c61e0dfc605c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "rs (write it on"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4c8ad673-471b-43e0-8a6c-e48fb73df465"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " each spec build),"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3efe01e2-48e1-45ff-9b6d-edcdbea57451"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\nsrc/harness.rs"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "aebca591-f129-4efa-92df-cb0d41383bc5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " (the read-deny rule"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e80d1205-f914-49b9-88ca-1d13079c46ec"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ") and src/settings_window"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f6836cb1-1b7d-4a3f-8262-c8dcfebfd04a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".rs. Update the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2c240700-b2d0-432b-9674-c54aa91889ce"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\ntests that assert the flu"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a68cdede-41de-4af5-b010-119aea724d91"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ency is in the system prompt"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e6a02e15-4f34-479b-9e21-608ca8b6d06a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " so they assert it isn't"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "cfe9f362-845b-4573-9324-b645ee2a9755"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ",\nthat"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "dac66f1b-81b8-4b37-875f-ec90b2debc23"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "97edb93b-8a47-4927-8774-390c18288c93"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Spec and Combined instruct"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "365fa0f7-5d64-4d0b-b291-a2ec16b7c3a7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ions point to the fluency file"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0c7b97e4-dc7e-4028-8f40-c5c751796b00"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " while Code\nand Ask"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0094c67b-bde7-4e35-a49a-c1f03e7927f5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " don't, and that a spec"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "330b3b7c-f3e2-4e50-abc7-208edf18cc71"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " build writes the file"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "448b047f-5b1d-4ff5-a544-365528edf547"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n```"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "98906a1a-026e-4028-9d92-7d8c914bfd9f"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CfZt1dh41BUAqNRMMF45T",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Here's the full prompt with the fluency written on each spec build. Send it in **Chain** mode.\n\n```text\nChange how the harness gives the agent the spec, so that reading the spec comes\nfrom the compiled reference and the Piton fluency is only given to work that\nwrites Piton.\n\nWhy: the fluency is ~85k characters (~25–33k tokens) and currently sits in\nevery conversation's system prompt, re-read on every turn of every mode. Code\nand Ask tasks never write Piton, and agents mostly read the raw .pi source\ninstead of the compiled reference under ${HARNESS_DIRECTORY}/reference, which\nalready has inheritance, expressions and links resolved.\n\nWhat should be true afterwards:\n\n1. Reading the spec. In every mode, the agent understands the spec from the\n   compiled reference (${HARNESS_DIRECTORY}/reference/..., or\n   `piton slice --adapter <harness>` for one target), never by reading .pi\n   source to learn what the spec says. The system template and the\n   spec-reading prompt say so. The spec location is named only as where spec\n   edits go.\n\n2. The shared system prompt no longer contains the fluency. It stays\n   identical for every mode in a conversation, so the prompt cache still holds\n   when the mode changes. `${PITON_FLUENCY}` is removed from the system\n   template.\n\n3. The fluency is written to a file in the project's app directory\n   (.suspense/fluency.md), from `piton agent --print-fluency`, every time the\n   application runs a spec build, so it stays in step with the project's piton\n   and FLUENCY_PROMPT.md. If a Spec or Chain prompt is sent before the file\n   exists, it is written then. A new placeholder, `${PITON_FLUENCY_FILE}`,\n   stands for that file's path. Only the Spec instructions and the Combined\n   (Chain step 1) instructions use it: before creating or editing any .pi\n   file, read the fluency file once in the conversation. A Code task sent to\n   Spec gets it through the Spec instructions as usual. Code, Ask and the\n   spec-to-code step never mention it. If there is no fluency (no piton, or\n   it fails), no file is written and the sentence that points to it is left\n   out, the way an empty placeholder already leaves no paragraph.\n\n4. Writing the spec. Spec and Chain-step-1 agents open a .pi file only to\n   change it (Claude Code's Edit needs the file read first). After editing,\n   they run `piton build` and check the result through the refreshed\n   reference, not by re-reading the source.\n\n5. Understanding files cite the reference. The example constraint in the\n   Code, Spec and Combined instructions links to a\n   ${HARNESS_DIRECTORY}/reference/...md file instead of spec/...index.pi, and\n   the instructions say constraints link to the reference.\n\n6. In Code and Ask modes, the harness passes a read-deny rule for the spec\n   location alongside the existing protected-edit rule, where the harness\n   supports one (Claude Code: --disallowedTools). This is a nudge, not\n   enforcement, because Bash can still read the files, and the spec should\n   describe it that way.\n\nSpec: the current behaviour is in spec/scope/prompt-mode/mode-system-prompts/\nindex.pi, spec/scope/prompt-mode/index.pi, spec/scope/project-data/index.pi\nand spec/scope/settings-window/index.pi (which describes the fluency\nplaceholder in the prompt editor; add ${PITON_FLUENCY_FILE} there and remove\n${PITON_FLUENCY}). The project-data spec should list .suspense/fluency.md as a\ngenerated file. Update those rather than adding parallel anchors.\n\nCode: the templates' defaults are baked in from .suspense/system-prompts/*.md\n(system_prompts::default_prompt), so update those files as well as\nsrc/system_prompts.rs, src/hidden_anchor.rs (project_system_prompt),\nsrc/piton_fluency.rs (write the file instead of caching the text for the\nsystem prompt), src/piton_build.rs (write it on each spec build),\nsrc/harness.rs (the read-deny rule) and src/settings_window.rs. Update the\ntests that assert the fluency is in the system prompt so they assert it isn't,\nthat the Spec and Combined instructions point to the fluency file while Code\nand Ask don't, and that a spec build writes the file.\n```"
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1355,
+          "cache_read_input_tokens": 89074,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1355
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "861e442e-5cee-4213-ad32-da9cd1f114d9",
+      "timestamp": "2026-09-30T15:43:35.295Z",
+      "request_id": "req_011CfZt1cmzCH5kPGWTWbcDE"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0913f11a-7cde-44c1-8a6e-d7643bc3e1d6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {}
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1355,
+          "cache_read_input_tokens": 89074,
+          "output_tokens": 1664,
+          "output_tokens_details": {
+            "thinking_tokens": 192
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 1664,
+              "cache_read_input_tokens": 89074,
+              "cache_creation_input_tokens": 1355,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 1355
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "8c887e2e-8273-4189-ad1f-e01bbe94918b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "69579349-f001-4539-8f3e-bc7d00d6924c"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1790792400,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.23,
+            "resetsAt": 1790792400
+          },
+          "seven_day": {
+            "utilization": 0.22,
+            "resetsAt": 1791313200
+          }
+        }
+      },
+      "uuid": "41452e32-a742-4984-992f-d7001692e1eb",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8"
+    },
+    {
+      "duration_api_ms": 205418,
+      "stop_reason": "end_turn",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "total_cost_usd": 1.0496530000000002,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 1355,
+        "cache_read_input_tokens": 89074,
+        "output_tokens": 1664,
+        "output_tokens_details": {
+          "thinking_tokens": 192
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1355,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 1664,
+            "cache_read_input_tokens": 89074,
+            "cache_creation_input_tokens": 1355,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1355
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "modelUsage": {
+        "claude-opus-5-5[1m]": {
+          "inputTokens": 42,
+          "outputTokens": 18464,
+          "thinkingTokens": 4904,
+          "cacheReadInputTokens": 1541945,
+          "cacheCreationInputTokens": 46477,
+          "webSearchRequests": 0,
+          "costUSD": 1.0496530000000002,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "is_error": false,
+      "num_turns": 1,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "Here's the full prompt with the fluency written on each spec build. Send it in **Chain** mode.\n\n```text\nChange how the harness gives the agent the spec, so that reading the spec comes\nfrom the compiled reference and the Piton fluency is only given to work that\nwrites Piton.\n\nWhy: the fluency is ~85k characters (~25–33k tokens) and currently sits in\nevery conversation's system prompt, re-read on every turn of every mode. Code\nand Ask tasks never write Piton, and agents mostly read the raw .pi source\ninstead of the compiled reference under ${HARNESS_DIRECTORY}/reference, which\nalready has inheritance, expressions and links resolved.\n\nWhat should be true afterwards:\n\n1. Reading the spec. In every mode, the agent understands the spec from the\n   compiled reference (${HARNESS_DIRECTORY}/reference/..., or\n   `piton slice --adapter <harness>` for one target), never by reading .pi\n   source to learn what the spec says. The system template and the\n   spec-reading prompt say so. The spec location is named only as where spec\n   edits go.\n\n2. The shared system prompt no longer contains the fluency. It stays\n   identical for every mode in a conversation, so the prompt cache still holds\n   when the mode changes. `${PITON_FLUENCY}` is removed from the system\n   template.\n\n3. The fluency is written to a file in the project's app directory\n   (.suspense/fluency.md), from `piton agent --print-fluency`, every time the\n   application runs a spec build, so it stays in step with the project's piton\n   and FLUENCY_PROMPT.md. If a Spec or Chain prompt is sent before the file\n   exists, it is written then. A new placeholder, `${PITON_FLUENCY_FILE}`,\n   stands for that file's path. Only the Spec instructions and the Combined\n   (Chain step 1) instructions use it: before creating or editing any .pi\n   file, read the fluency file once in the conversation. A Code task sent to\n   Spec gets it through the Spec instructions as usual. Code, Ask and the\n   spec-to-code step never mention it. If there is no fluency (no piton, or\n   it fails), no file is written and the sentence that points to it is left\n   out, the way an empty placeholder already leaves no paragraph.\n\n4. Writing the spec. Spec and Chain-step-1 agents open a .pi file only to\n   change it (Claude Code's Edit needs the file read first). After editing,\n   they run `piton build` and check the result through the refreshed\n   reference, not by re-reading the source.\n\n5. Understanding files cite the reference. The example constraint in the\n   Code, Spec and Combined instructions links to a\n   ${HARNESS_DIRECTORY}/reference/...md file instead of spec/...index.pi, and\n   the instructions say constraints link to the reference.\n\n6. In Code and Ask modes, the harness passes a read-deny rule for the spec\n   location alongside the existing protected-edit rule, where the harness\n   supports one (Claude Code: --disallowedTools). This is a nudge, not\n   enforcement, because Bash can still read the files, and the spec should\n   describe it that way.\n\nSpec: the current behaviour is in spec/scope/prompt-mode/mode-system-prompts/\nindex.pi, spec/scope/prompt-mode/index.pi, spec/scope/project-data/index.pi\nand spec/scope/settings-window/index.pi (which describes the fluency\nplaceholder in the prompt editor; add ${PITON_FLUENCY_FILE} there and remove\n${PITON_FLUENCY}). The project-data spec should list .suspense/fluency.md as a\ngenerated file. Update those rather than adding parallel anchors.\n\nCode: the templates' defaults are baked in from .suspense/system-prompts/*.md\n(system_prompts::default_prompt), so update those files as well as\nsrc/system_prompts.rs, src/hidden_anchor.rs (project_system_prompt),\nsrc/piton_fluency.rs (write the file instead of caching the text for the\nsystem prompt), src/piton_build.rs (write it on each spec build),\nsrc/harness.rs (the read-deny rule) and src/settings_window.rs. Update the\ntests that assert the fluency is in the system prompt so they assert it isn't,\nthat the Spec and Combined instructions point to the fluency file while Code\nand Ask don't, and that a spec build writes the file.\n```",
+      "ttft_ms": 3755,
+      "type": "result",
+      "duration_ms": 13756,
+      "uuid": "bf3a8a51-be47-4049-9bef-f14dca1fcd09",
+      "ttft_stream_ms": 1740,
+      "time_to_request_ms": 437,
+      "first_content_frame_ms": 1740,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  ]
+}

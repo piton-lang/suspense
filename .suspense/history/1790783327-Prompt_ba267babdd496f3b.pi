@@ -1,0 +1,236 @@
+
+export anchor Prompt_ba267babdd496f3b:
+    userPrompt:
+        \\\
+        Change how the harness gives the agent the spec, so that reading the spec comes
+        from the compiled reference and the Piton fluency is only given to work that
+        writes Piton.
+
+        Why: the fluency is ~85k characters (~25–33k tokens) and currently sits in
+        every conversation's system prompt, re-read on every turn of every mode. Code
+        and Ask tasks never write Piton, and agents mostly read the raw .pi source
+        instead of the compiled reference under ${HARNESS_DIRECTORY}/reference, which
+        already has inheritance, expressions and links resolved.
+
+        What should be true afterwards:
+
+        1. Reading the spec. In every mode, the agent understands the spec from the
+           compiled reference (${HARNESS_DIRECTORY}/reference/..., or
+           `piton slice --adapter <harness>` for one target), never by reading .pi
+           source to learn what the spec says. The system template and the
+           spec-reading prompt say so. The spec location is named only as where spec
+           edits go.
+
+        2. The shared system prompt no longer contains the fluency. It stays
+           identical for every mode in a conversation, so the prompt cache still holds
+           when the mode changes. `${PITON_FLUENCY}` is removed from the system
+           template.
+
+        3. The fluency is written to a file in the project's app directory
+           (.suspense/fluency.md), from `piton agent --print-fluency`, every time the
+           application runs a spec build, so it stays in step with the project's piton
+           and FLUENCY_PROMPT.md. If a Spec or Chain prompt is sent before the file
+           exists, it is written then. A new placeholder, `${PITON_FLUENCY_FILE}`,
+           stands for that file's path. Only the Spec instructions and the Combined
+           (Chain step 1) instructions use it: before creating or editing any .pi
+           file, read the fluency file once in the conversation. A Code task sent to
+           Spec gets it through the Spec instructions as usual. Code, Ask and the
+           spec-to-code step never mention it. If there is no fluency (no piton, or
+           it fails), no file is written and the sentence that points to it is left
+           out, the way an empty placeholder already leaves no paragraph.
+
+        4. Writing the spec. Spec and Chain-step-1 agents open a .pi file only to
+           change it (Claude Code's Edit needs the file read first). After editing,
+           they run `piton build` and check the result through the refreshed
+           reference, not by re-reading the source.
+
+        5. Understanding files cite the reference. The example constraint in the
+           Code, Spec and Combined instructions links to a
+           ${HARNESS_DIRECTORY}/reference/...md file instead of spec/...index.pi, and
+           the instructions say constraints link to the reference.
+
+        6. In Code and Ask modes, the harness passes a read-deny rule for the spec
+           location alongside the existing protected-edit rule, where the harness
+           supports one (Claude Code: --disallowedTools). This is a nudge, not
+           enforcement, because Bash can still read the files, and the spec should
+           describe it that way.
+
+        Spec: the current behaviour is in spec/scope/prompt-mode/mode-system-prompts/
+        index.pi, spec/scope/prompt-mode/index.pi, spec/scope/project-data/index.pi
+        and spec/scope/settings-window/index.pi (which describes the fluency
+        placeholder in the prompt editor; add ${PITON_FLUENCY_FILE} there and remove
+        ${PITON_FLUENCY}). The project-data spec should list .suspense/fluency.md as a
+        generated file. Update those rather than adding parallel anchors.
+
+        Code: the templates' defaults are baked in from .suspense/system-prompts/*.md
+        (system_prompts::default_prompt), so update those files as well as
+        src/system_prompts.rs, src/hidden_anchor.rs (project_system_prompt),
+        src/piton_fluency.rs (write the file instead of caching the text for the
+        system prompt), src/piton_build.rs (write it on each spec build),
+        src/harness.rs (the read-deny rule) and src/settings_window.rs. Update the
+        tests that assert the fluency is in the system prompt so they assert it isn't,
+        that the Spec and Combined instructions point to the fluency file while Code
+        and Ask don't, and that a spec build writes the file.
+
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Change how the harness gives the agent the spec, so that reading the spec comes
+            from the compiled reference and the Piton fluency is only given to work that
+            writes Piton.
+
+            Why: the fluency is ~85k characters (~25–33k tokens) and currently sits in
+            every conversation's system prompt, re-read on every turn of every mode. Code
+            and Ask tasks never write Piton, and agents mostly read the raw .pi source
+            instead of the compiled reference under ${HARNESS_DIRECTORY}/reference, which
+            already has inheritance, expressions and links resolved.
+
+            What should be true afterwards:
+
+            1. Reading the spec. In every mode, the agent understands the spec from the
+               compiled reference (${HARNESS_DIRECTORY}/reference/..., or
+               `piton slice --adapter <harness>` for one target), never by reading .pi
+               source to learn what the spec says. The system template and the
+               spec-reading prompt say so. The spec location is named only as where spec
+               edits go.
+
+            2. The shared system prompt no longer contains the fluency. It stays
+               identical for every mode in a conversation, so the prompt cache still holds
+               when the mode changes. `${PITON_FLUENCY}` is removed from the system
+               template.
+
+            3. The fluency is written to a file in the project's app directory
+               (.suspense/fluency.md), from `piton agent --print-fluency`, every time the
+               application runs a spec build, so it stays in step with the project's piton
+               and FLUENCY_PROMPT.md. If a Spec or Chain prompt is sent before the file
+               exists, it is written then. A new placeholder, `${PITON_FLUENCY_FILE}`,
+               stands for that file's path. Only the Spec instructions and the Combined
+               (Chain step 1) instructions use it: before creating or editing any .pi
+               file, read the fluency file once in the conversation. A Code task sent to
+               Spec gets it through the Spec instructions as usual. Code, Ask and the
+               spec-to-code step never mention it. If there is no fluency (no piton, or
+               it fails), no file is written and the sentence that points to it is left
+               out, the way an empty placeholder already leaves no paragraph.
+
+            4. Writing the spec. Spec and Chain-step-1 agents open a .pi file only to
+               change it (Claude Code's Edit needs the file read first). After editing,
+               they run `piton build` and check the result through the refreshed
+               reference, not by re-reading the source.
+
+            5. Understanding files cite the reference. The example constraint in the
+               Code, Spec and Combined instructions links to a
+               ${HARNESS_DIRECTORY}/reference/...md file instead of spec/...index.pi, and
+               the instructions say constraints link to the reference.
+
+            6. In Code and Ask modes, the harness passes a read-deny rule for the spec
+               location alongside the existing protected-edit rule, where the harness
+               supports one (Claude Code: --disallowedTools). This is a nudge, not
+               enforcement, because Bash can still read the files, and the spec should
+               describe it that way.
+
+            Spec: the current behaviour is in spec/scope/prompt-mode/mode-system-prompts/
+            index.pi, spec/scope/prompt-mode/index.pi, spec/scope/project-data/index.pi
+            and spec/scope/settings-window/index.pi (which describes the fluency
+            placeholder in the prompt editor; add ${PITON_FLUENCY_FILE} there and remove
+            ${PITON_FLUENCY}). The project-data spec should list .suspense/fluency.md as a
+            generated file. Update those rather than adding parallel anchors.
+
+            Code: the templates' defaults are baked in from .suspense/system-prompts/*.md
+            (system_prompts::default_prompt), so update those files as well as
+            src/system_prompts.rs, src/hidden_anchor.rs (project_system_prompt),
+            src/piton_fluency.rs (write the file instead of caching the text for the
+            system prompt), src/piton_build.rs (write it on each spec build),
+            src/harness.rs (the read-deny rule) and src/settings_window.rs. Update the
+            tests that assert the fluency is in the system prompt so they assert it isn't,
+            that the Spec and Combined instructions point to the fluency file while Code
+            and Ask don't, and that a spec build writes the file.
+
+            \\\
+        result:
+            \\\
+            The spec now describes the new setup:
+            - agents read the spec from the compiled reference;
+            - the fluency is out of the shared system prompt;
+            - only Spec and Chain step 1 are pointed at a fluency file.
+
+            I changed the spec only, not the code; `piton check`, `piton format --check` and `piton build` all pass.
+
+            The spec's prompt section was behind the code. It still described one system prompt per mode, with no shared system template, no `<task-instructions>` block and no spec-to-code prompt. So I rewrote `ModeSystemPromptsShape` in place, rather than adding parallel anchors, to describe how it will work once this change is in.
+
+            **What changed**
+
+            `spec/scope/prompt-mode/mode-system-prompts/index.pi`, `ModeSystemPromptsShape`:
+            - **`description`**: the shared system template is the conversation's system prompt and stays identical in every mode, so the prompt cache holds. Each mode's instructions go at the head of the prompt's own message, in the `<task-instructions>` block.
+            - **`templates`**: the placeholders are now CODE_LOCATION, SPEC_LOCATION, HARNESS_DIRECTORY, SPEC_READING, PITON_FLUENCY_FILE and UNDERSTANDING_FILE; PITON_FLUENCY is gone. A paragraph holding PITON_FLUENCY_FILE is dropped whenever there's no fluency file.
+            - **`readingTheSpec`** (new): in every mode the agent learns the spec from `<harness dir>/reference` or `piton slice` with the harness's adapter, never from the `.pi` source. The spec location is named only as where spec edits go.
+            - **`writingTheSpec`** (new): Spec and Chain step 1 open a `.pi` file only to change it. After editing they run `piton build` and check the refreshed reference.
+            - **`pitonFluency`**:
+              - The fluency is never in the system prompt; it's written to `.suspense/fluency.md` on every spec build.
+              - If a Spec or Chain prompt is sent before the file exists, it's written then.
+              - Only the Spec and Chain instructions point at it. A Code task sent to Spec gets it through the Spec instructions. Code, Ask and spec-to-code never mention it.
+              - If piton is missing or fails, no file is written and the pointer paragraph is left out.
+            - **`understandingFile`** and **`defaults`**:
+              - Constraints link to the compiled reference.
+              - The default texts are quoted: the new spec-reading prompt, the Spec/Chain fluency paragraph, the edit-then-build paragraph, and the understanding paragraph, whose example now links to `${HARNESS_DIRECTORY}/reference/scope/prompt-mode/chat-input/index.md#chain`.
+              - The system template's default holds no fluency.
+            - **`codeToSpec`**: now covers the spec-to-code prompt as well.
+
+            Other files:
+            - **`spec/scope/harness-integration/index.pi`**:
+              - The description now says the project's system prompt is appended to the harness's and the mode's instructions head the message.
+              - New `protectedLocations`: Code tasks are told not to edit the spec and Spec tasks not to edit the code, and the app puts back changes either way. Code tasks and Ask questions are also told not to read the spec location, where the harness takes such rules. The read rule is described as a nudge, not enforcement, since a shell command can still read the files.
+            - **`spec/scope/spec-build/index.pi`**: every build writes the fluency file, whether or not the build succeeds; if the fluency can't be printed, the old file is left as it was.
+            - **`spec/scope/project-data/index.pi`**: `fluency.md` is listed as generated and machine-only, so git ignores it.
+            - **`spec/scope/settings-window/index.pi`**: PITON_FLUENCY is replaced by PITON_FLUENCY_FILE.
+            - **`spec/scope/prompt-mode/index.pi`**: the raw prompt's system prompt no longer lists the fluency.
+            - **`spec/scope/prompt-mode/modes/index.pi`**: `systemPrompts` now says each mode sends the shared system prompt plus its own instructions, and only Spec and Chain step 1 are pointed at the fluency.
+
+            **Anchors the code should follow**
+            - **`ModeSystemPromptsShape.templates`, `.pitonFluency`, `.readingTheSpec`, `.writingTheSpec`, `.understandingFile`, `.defaults`**:
+              - Update `src/system_prompts.rs`: replace `PITON_FLUENCY` with `PITON_FLUENCY_FILE`, and drop a paragraph holding it when there's no file.
+              - Update `src/hidden_anchor.rs` so `project_system_prompt` no longer takes the fluency.
+              - Update the baked defaults in `.suspense/system-prompts/`: system.md loses `${PITON_FLUENCY}`; spec-reading.md, spec.md, combined.md and code.md get the new texts quoted in `defaults`.
+            - **`SpecBuildShape.description`**:
+              - `src/piton_build.rs` writes `.suspense/fluency.md` on every build.
+              - `src/piton_fluency.rs` writes the file instead of caching the text, and writes it on demand for a Spec or Chain prompt when it's missing.
+            - **`HarnessIntegrationShape.protectedLocations`**: in `src/harness.rs`, add a `Read(<spec root>/**)` rule to `--disallowedTools` for Code tasks and Ask questions, alongside the existing edit rule.
+            - **`SettingsWindowShape.systemPrompts`**: the placeholder list in `src/settings_window.rs`.
+            - **`ProjectDataShape.machineOnly`**: add `/.suspense/fluency.md` to the new-project `.gitignore` in `src/new_project.rs`.
+
+            The tests should check that:
+            - the system prompt holds no fluency;
+            - the Spec and Chain instructions point to the fluency file, and Code, Ask and spec-to-code don't;
+            - the pointer paragraph disappears when there's no file;
+            - a spec build writes the file;
+            - Code and Ask runs get the read-deny rule.
+            \\\
+
+    sentFrom: Prompt_5005c6b5ae203ec0

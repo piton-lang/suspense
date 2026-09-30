@@ -1,8 +1,10 @@
 //! What a prompt tells the harness besides itself. A conversation's system
 //! prompt is the project's own, the same for every prompt sent in it whatever
 //! the mode, so the harness's prompt cache holds from one prompt to the next:
-//! the system template, filled in with the code and spec locations, the
-//! spec-reading prompt, and the Piton fluency (see [`project_system_prompt`]).
+//! the system template, filled in with the code and spec locations and the
+//! spec-reading prompt (see [`project_system_prompt`]). It never holds the
+//! Piton fluency: only the work that writes Piton, Spec and a Chain task's
+//! first step, is pointed at the file it is written to.
 //! What changes from one prompt to the next, each mode's instructions, goes in
 //! the prompt's own message instead, in a marked block ahead of it (see
 //! [`with_instructions`]). Each is a
@@ -13,9 +15,11 @@
 //! `${HARNESS_DIRECTORY}` for the harness's directory (see
 //! [`crate::harness::directory`]), `${SPEC_READING}` for the spec-reading
 //! prompt injected into it, saved beside the templates, and
-//! `${PITON_FLUENCY}` for the project's Piton fluency (see
-//! [`crate::piton_fluency`]), written like Piton interpolations and filled in
-//! before the prompt is compiled. `${UNDERSTANDING_FILE}` stands for the
+//! `${PITON_FLUENCY_FILE}` for the path of the file the project's Piton
+//! fluency is written to (see [`crate::piton_fluency`]), written like Piton
+//! interpolations and filled in before the prompt is compiled. With no
+//! fluency file, a paragraph holding `${PITON_FLUENCY_FILE}` is left out,
+//! whatever else it says. `${UNDERSTANDING_FILE}` stands for the
 //! task's understanding file (see [`crate::understanding`]); it reaches the
 //! compiled prompt as written, and is filled in as the prompt is sent, once
 //! the task's history record is named. Otherwise, like the prompt it is sent with, a template is Piton
@@ -39,7 +43,10 @@ pub const CODE_LOCATION: &str = "${CODE_LOCATION}";
 pub const SPEC_LOCATION: &str = "${SPEC_LOCATION}";
 pub const HARNESS_DIRECTORY: &str = "${HARNESS_DIRECTORY}";
 pub const SPEC_READING: &str = "${SPEC_READING}";
-pub const PITON_FLUENCY: &str = "${PITON_FLUENCY}";
+pub const PITON_FLUENCY_FILE: &str = "${PITON_FLUENCY_FILE}";
+/// Where a prompt saved before the fluency was moved out of the system
+/// prompt still names it, the paragraph holding it is left out.
+const PITON_FLUENCY: &str = "${PITON_FLUENCY}";
 pub const UNDERSTANDING_FILE: &str = "${UNDERSTANDING_FILE}";
 /// In the code-to-spec prompt, the code task's prompt as it was typed, and its
 /// final output: filled in as the prompt is sent, never read as Piton.
@@ -207,44 +214,80 @@ fn fill_paragraph(template: &str, placeholder: &str, value: &str) -> String {
     template.replace(placeholder, value.trim_end())
 }
 
+/// `text` without the paragraphs that hold `placeholder`.
+fn without_paragraphs(text: &str, placeholder: &str) -> String {
+    if !text.contains(placeholder) {
+        return text.to_string();
+    }
+    text.split("\n\n")
+        .filter(|paragraph| !paragraph.contains(placeholder))
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
 /// `template` with the spec-reading prompt `reading` injected, then the code
-/// and spec locations, the harness's directory, and the Piton fluency filled
-/// in, in it and in what was injected; an empty reading or fluency leaves no
-/// paragraph of its own behind. In `reading`, `${SPEC_READING}` is left as
-/// written.
-pub fn fill(template: &str, code: &str, spec: &str, reading: &str, fluency: &str) -> String {
+/// and spec locations and the harness's directory filled in, in it and in
+/// what was injected, and `${PITON_FLUENCY_FILE}` with `fluency_file`, the
+/// fluency file's path; an empty reading leaves no paragraph of its own
+/// behind, and with no fluency file, a paragraph holding it is left out. In
+/// `reading`, `${SPEC_READING}` is left as written. A paragraph still naming
+/// the fluency itself, as saved before it left the system prompt, is left
+/// out.
+fn fill_with(
+    template: &str,
+    code: &str,
+    spec: &str,
+    reading: &str,
+    fluency_file: Option<&str>,
+) -> String {
     let template = fill_paragraph(template, SPEC_READING, reading)
         .replace(CODE_LOCATION, code)
         .replace(SPEC_LOCATION, spec)
         .replace(HARNESS_DIRECTORY, crate::harness::directory());
-    // Last, so what piton printed reaches the harness exactly as printed.
-    fill_paragraph(&template, PITON_FLUENCY, fluency)
-        .trim_end()
-        .to_string()
+    let template = without_paragraphs(&template, PITON_FLUENCY);
+    let template = match fluency_file {
+        Some(file) => template.replace(PITON_FLUENCY_FILE, file),
+        None => without_paragraphs(&template, PITON_FLUENCY_FILE),
+    };
+    template.trim_end().to_string()
+}
+
+/// `template` with the spec-reading prompt `reading` injected, then the code
+/// and spec locations and the harness's directory filled in, as the system
+/// template is. It never points at the fluency file, so the system prompt is
+/// the same whatever the mode: a paragraph that does is left out.
+pub fn fill(template: &str, code: &str, spec: &str, reading: &str) -> String {
+    fill_with(template, code, spec, reading, None)
 }
 
 /// `template`, a mode's instructions or a handoff, filled in for a prompt's
-/// message: the code and spec locations and the harness's directory, but
-/// never the spec-reading prompt nor the fluency, which the conversation's
-/// system prompt gives once. A saved template that still names either leaves
-/// no paragraph of its own behind for it.
-pub fn fill_instructions(template: &str, code: &str, spec: &str) -> String {
-    fill(template, code, spec, "", "")
+/// message: the code and spec locations, the harness's directory, and
+/// `${PITON_FLUENCY_FILE}` with `fluency_file`, the fluency file's path, but
+/// never the spec-reading prompt, which the conversation's system prompt
+/// gives once. With no fluency file, a paragraph pointing at it is left out;
+/// a saved template that still names the spec reading or the fluency itself
+/// leaves no paragraph of its own behind for it.
+pub fn fill_instructions(
+    template: &str,
+    code: &str,
+    spec: &str,
+    fluency_file: Option<&str>,
+) -> String {
+    fill_with(template, code, spec, "", fluency_file)
 }
 
 /// The project's system prompt: its system template filled in with the code
-/// and spec locations, the spec-reading prompt, and the fluency. The same,
-/// byte for byte, on every prompt of every conversation, whatever the mode,
-/// until the templates or the fluency change: nothing in it is particular to
-/// a prompt. None when it is empty once filled in.
+/// and spec locations and the spec-reading prompt. The same, byte for byte,
+/// on every prompt of every conversation, whatever the mode, until the
+/// templates change: nothing in it is particular to a prompt, and it holds no
+/// fluency. None when it is empty once filled in.
 pub fn project_system_prompt(
     code: &str,
     spec: &str,
     template: &str,
     reading: &str,
-    fluency: &str,
 ) -> Option<String> {
-    let filled = fill(template, code, spec, reading, fluency);
+    let filled = fill(template, code, spec, reading);
     (!filled.trim().is_empty()).then_some(filled)
 }
 
@@ -316,9 +359,9 @@ mod tests {
 
     use super::{
         CODE_LOCATION, CODE_PROMPT, CODE_RESULT, NO_CODE_RESULT, NO_SPEC_RESULT, PITON_FLUENCY,
-        Prompt, SPEC_LOCATION, SPEC_PROMPT, SPEC_READING, SPEC_RESULT, UNDERSTANDING_FILE,
-        default_prompt, file, fill, fill_code_task, fill_instructions, fill_understanding, load,
-        project_system_prompt, save, save_missing,
+        PITON_FLUENCY_FILE, Prompt, SPEC_LOCATION, SPEC_PROMPT, SPEC_READING, SPEC_RESULT,
+        UNDERSTANDING_FILE, default_prompt, file, fill, fill_code_task, fill_instructions,
+        fill_understanding, load, project_system_prompt, save, save_missing,
     };
     use crate::chat_input::SendMode;
 
@@ -355,9 +398,14 @@ mod tests {
         let saved = fs::read_to_string(file(Prompt::SpecReading, manifest)).unwrap();
         assert_eq!(reading, saved.trim_end());
         assert!(
-            reading.starts_with("Before executing anything, read the spec it touches.")
+            reading.contains("Before executing anything, read the spec it touches.")
                 && reading.contains("Links to ${HARNESS_DIRECTORY}/reference/"),
             "the spec reading doesn't say to follow references: {reading}"
+        );
+        assert!(
+            reading.starts_with("Read the spec from its compiled reference")
+                && reading.contains("Never read the .pi source under ${SPEC_LOCATION}"),
+            "the spec reading doesn't send the harness to the reference: {reading}"
         );
         let system = default_prompt(Prompt::System);
         let saved = fs::read_to_string(file(Prompt::System, manifest)).unwrap();
@@ -367,20 +415,20 @@ mod tests {
             "the system template doesn't name the locations: {system}"
         );
         assert!(
-            system.ends_with(&format!("\n\n{SPEC_READING}\n\n{PITON_FLUENCY}")),
-            "the system template doesn't end with the spec reading and fluency: {system}"
+            system.ends_with(&format!("\n\n{SPEC_READING}")),
+            "the system template doesn't end with the spec reading: {system}"
+        );
+        assert!(
+            !system.contains("FLUENCY"),
+            "the system template holds the fluency: {system}"
         );
         assert!(
             !system.contains(UNDERSTANDING_FILE),
             "the system prompt names a task's file"
         );
-        let filled =
-            project_system_prompt("./src", "./spec", system, reading, "# Fluency").unwrap();
+        let filled = project_system_prompt("./src", "./spec", system, reading).unwrap();
         assert!(filled.contains("Links to .claude/reference/"), "{filled}");
-        assert!(
-            filled.ends_with("\n\n# Fluency") && !filled.contains("${"),
-            "{filled}"
-        );
+        assert!(!filled.contains("${"), "{filled}");
 
         // Freeform has no template.
         for mode in SendMode::ALL
@@ -394,13 +442,50 @@ mod tests {
                 !template.contains(SPEC_READING) && !template.contains(PITON_FLUENCY),
                 "{mode:?} repeats what the system prompt gives: {template}"
             );
+            // Only the work that writes Piton points at the fluency file.
+            let writes_piton = matches!(mode, SendMode::Spec | SendMode::Both);
+            assert_eq!(
+                template.contains(PITON_FLUENCY_FILE),
+                writes_piton,
+                "{mode:?}: {template}"
+            );
+            assert_eq!(
+                template.contains("Open a .pi file only to change it.")
+                    && template.contains("run `piton build`"),
+                writes_piton,
+                "{mode:?}: {template}"
+            );
+            // Its understanding file cites the compiled reference.
+            assert_eq!(
+                template.contains(
+                    "](${HARNESS_DIRECTORY}/reference/scope/prompt-mode/chat-input/index.md#chain)"
+                ),
+                mode != SendMode::Ask,
+                "{mode:?}: {template}"
+            );
+            assert!(!template.contains("index.pi)"), "{mode:?} cites the source");
             let asks = mode == SendMode::Ask;
             assert_eq!(
                 template.ends_with("rather than adding another."),
                 !asks,
                 "{mode:?} doesn't end as it should: {template}"
             );
-            let filled = fill_instructions(template, "./src", "./spec");
+            let filled =
+                fill_instructions(template, "./src", "./spec", Some(".suspense/fluency.md"));
+            assert_eq!(
+                filled.contains("read .suspense/fluency.md once in this conversation"),
+                writes_piton,
+                "{mode:?}: {filled}"
+            );
+            // With no fluency file, the paragraph pointing at it is left out,
+            // and the rest kept.
+            let without = fill_instructions(template, "./src", "./spec", None);
+            assert!(!without.contains("fluency"), "{mode:?}: {without}");
+            assert_eq!(
+                without.contains("Open a .pi file only to change it."),
+                writes_piton,
+                "{mode:?}: {without}"
+            );
             // Filled in only once the task's history record is named.
             assert_eq!(filled.contains(UNDERSTANDING_FILE), !asks, "{mode:?}");
             let sent = fill_understanding(
@@ -434,8 +519,12 @@ mod tests {
         assert_eq!(Prompt::CodeToSpec.key(), "code-to-spec");
         assert_eq!(Prompt::CodeToSpec.label(), "Code to spec");
         assert_eq!(Prompt::ALL[Prompt::ALL.len() - 2], Prompt::CodeToSpec);
-        let filled = fill_instructions(default, "./src", "./spec");
+        let filled = fill_instructions(default, "./src", "./spec", Some(".suspense/fluency.md"));
         assert!(filled.contains("the spec at ./spec ") && filled.contains("./src."));
+        assert!(
+            !filled.contains("fluency"),
+            "the code-to-spec prompt names the fluency"
+        );
         assert!(filled.contains(CODE_PROMPT) && filled.contains(CODE_RESULT));
     }
 
@@ -452,8 +541,12 @@ mod tests {
         assert_eq!(Prompt::SpecToCode.key(), "spec-to-code");
         assert_eq!(Prompt::SpecToCode.label(), "Spec to code");
         assert_eq!(Prompt::ALL.last(), Some(&Prompt::SpecToCode));
-        let filled = fill(default, "./src", "./spec", "Read.", "");
+        let filled = fill_instructions(default, "./src", "./spec", Some(".suspense/fluency.md"));
         assert!(filled.contains("./src") && filled.contains("./spec"));
+        assert!(
+            !filled.contains("fluency"),
+            "the spec-to-code step names the fluency"
+        );
         assert!(filled.contains(SPEC_PROMPT) && filled.contains(SPEC_RESULT));
         assert_eq!(
             fill_code_task(
@@ -497,27 +590,37 @@ mod tests {
     }
 
     /// The spec reading is injected with its own placeholders filled in, and
-    /// leaves no paragraph behind when blank; the fluency is taken as printed.
+    /// leaves no paragraph behind when blank. The system prompt never holds
+    /// the fluency: a paragraph naming it, or its file, is left out.
     #[test]
     fn injects_the_spec_reading() {
-        let template = "${SPEC_READING}\n\nCode in ${CODE_LOCATION}.\n\n${PITON_FLUENCY}";
+        let template = "${SPEC_READING}\n\nCode in ${CODE_LOCATION}.\n\n${PITON_FLUENCY}\n\n\
+                        Read ${PITON_FLUENCY_FILE} first.";
         assert_eq!(
             fill(
                 template,
                 "./src",
                 "./spec",
                 "See ${HARNESS_DIRECTORY} and ${SPEC_LOCATION}, not ${SPEC_READING}.",
-                "Keep ${CODE_LOCATION}",
             ),
-            "See .claude and ./spec, not ${SPEC_READING}.\n\nCode in ./src.\n\nKeep ${CODE_LOCATION}"
+            "See .claude and ./spec, not ${SPEC_READING}.\n\nCode in ./src."
+        );
+        assert_eq!(fill(template, "./src", "./spec", "  \n"), "Code in ./src.");
+        assert_eq!(fill("A.\n\n${SPEC_READING}\n\nB.", "", "", ""), "A.\n\nB.");
+    }
+
+    /// Instructions point at the fluency file where there is one, and leave
+    /// the paragraph that does out, whatever else it says, where there isn't.
+    #[test]
+    fn instructions_point_at_the_fluency_file_only_when_there_is_one() {
+        let template = "Spec only.\n\nRead ${PITON_FLUENCY_FILE} first, once.\n\nThen edit.";
+        assert_eq!(
+            fill_instructions(template, "./src", "./spec", Some(".suspense/fluency.md")),
+            "Spec only.\n\nRead .suspense/fluency.md first, once.\n\nThen edit."
         );
         assert_eq!(
-            fill(template, "./src", "./spec", "  \n", ""),
-            "Code in ./src."
-        );
-        assert_eq!(
-            fill("A.\n\n${SPEC_READING}\n\nB.", "", "", "", ""),
-            "A.\n\nB."
+            fill_instructions(template, "./src", "./spec", None),
+            "Spec only.\n\nThen edit."
         );
     }
 

@@ -395,6 +395,17 @@ fn send_colors(position: f32, cx: &App) -> ButtonCustomVariant {
 }
 
 /// `from` blended `t` of the way to `to`, at the tint's opacity.
+/// The colour of Code's or Spec's label, `own`, as far as the tabs have
+/// `joined` beneath the chain, from 0 apart to 1 joined: its own colour
+/// apart, `chain`'s joined, and between the two as they slide, always at
+/// full strength.
+fn joined_label_color(own: Hsla, chain: Hsla, joined: f32) -> Hsla {
+    Hsla {
+        a: 1.,
+        ..blend(own, chain, joined)
+    }
+}
+
 fn blend(from: Hsla, to: Hsla, t: f32) -> Hsla {
     let t = t.clamp(0., 1.);
     // A grey has no hue of its own, so blending to or from one keeps the
@@ -1945,17 +1956,18 @@ impl Render for ChatInput {
             a: 1.,
             ..tint(ix as f32)
         };
-        // A joined chain once selected, and a broken one dimmed to half
-        // opacity until then.
+        // In Chain's purple, selected or not: a joined chain once selected,
+        // and a broken one dimmed to half opacity until then.
+        let chain_color = mode_color(SendMode::Both, cx);
         let chain_icon = Icon::new(if unified {
             IconName::Link
         } else {
             IconName::Unlink
         })
         .text_color(if unified {
-            cx.theme().tab_active_foreground
+            chain_color
         } else {
-            cx.theme().tab_foreground.opacity(0.5)
+            chain_color.opacity(0.5)
         });
         // The strip, the selected tab, and the body beneath it: flat
         // surfaces with no line anywhere, the selected tab joined to the body.
@@ -1989,6 +2001,19 @@ impl Render for ChatInput {
                             .tooltip(|window, cx| {
                                 Tooltip::new(SendMode::Both.label()).build(window, cx)
                             })
+                    }
+                    // With Chain selected, Code and Spec take Chain's
+                    // purple, shifting to it as they slide together beneath
+                    // the chain and back as they part.
+                    mode @ (SendMode::Code | SendMode::Spec) => {
+                        let own = label_color(ix);
+                        tab.child(div().child(mode.label()).with_spring(
+                            ("chain-join-label", ix),
+                            join.clone(),
+                            move |label, joined| {
+                                label.text_color(joined_label_color(own, chain_color, joined))
+                            },
+                        ))
                     }
                     mode => tab.child(div().text_color(label_color(ix)).child(mode.label())),
                 })
@@ -2038,7 +2063,7 @@ impl Render for ChatInput {
             .child(measure_chain);
         let spec = div().relative().child(full_tab(2)).with_spring(
             "chain-join",
-            join,
+            join.clone(),
             move |this, joined| {
                 let joined = joined.clamp(0., 1.);
                 // What is left of the gap the chain holds open between Code
@@ -2554,6 +2579,27 @@ impl CompletionProvider for PromptCompletions {
 #[cfg(test)]
 mod tests {
     use super::{Lanes, SendMode};
+
+    /// Code's and Spec's labels are their own colour apart, Chain's purple
+    /// once joined beneath the chain, and between the two as they slide,
+    /// always at full strength.
+    #[test]
+    fn joined_labels_take_chains_colour() {
+        use gpui_kit::hsla;
+        let red = hsla(0., 0.7, 0.6, 1.);
+        let purple = hsla(0.8, 0.5, 0.6, 1.);
+        let at = |joined| super::joined_label_color(red, purple, joined);
+        let close = |a: gpui_kit::Hsla, b: gpui_kit::Hsla| {
+            (a.h - b.h).abs() < 1e-4 && (a.s - b.s).abs() < 1e-4 && (a.l - b.l).abs() < 1e-4
+        };
+        assert!(close(at(0.), red), "apart, it isn't its own colour");
+        assert!(close(at(1.), purple), "joined, it isn't Chain's purple");
+        let between = at(0.5);
+        assert!(!close(between, red) && !close(between, purple));
+        for joined in [0., 0.5, 1.] {
+            assert_eq!(at(joined).a, 1., "it isn't at full strength");
+        }
+    }
 
     /// A task queues only behind a task of its own lane: Code behind the
     /// code lane, Chain and Spec behind the spec lane, Freeform behind

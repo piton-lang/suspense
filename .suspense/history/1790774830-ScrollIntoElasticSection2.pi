@@ -1,0 +1,62 @@
+
+export anchor ScrollIntoElasticSection2:
+    userPrompt:
+        \\\
+        And even if I'm already scrolled all the way up or down, I should be able to scroll into the elastic section
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            And even if I'm already scrolled all the way up or down, I should be able to scroll into the elastic section
+            \\\
+        result:
+            \\\
+            I've added one rule to the spec: a scroll that starts when the view is already at its end stretches straight away. I changed the spec only, not the code; `piton check`, `piton format --check` and `piton build` all pass.
+
+            The new paragraph is in `spec/scope/prompt-mode/message-list/Scrolling.pi`, in `MessageListScrollingShape.scrollingPast`. It says it doesn't matter how the view got to its end:
+            - it was already resting there,
+            - it was scrolled there earlier,
+            - it was opened there by clicking the previous tasks row,
+            - or a slide settled there.
+
+            In every case a new scroll pulls into the stretch from its very first step. The view never has to move first, and it doesn't swallow any of the scroll before the stretch takes it.
+
+            "Up or down" here means the two ends that switch views: the top of the active task and the bottom of the previous tasks. If you also meant a bounce at the other two ends, where nothing switches, tell me and I'll add it.
+
+            Two existing exceptions still stand. The scroll that carries on straight out of a switch still stops at the end, so one long scroll can't switch twice. A fresh scroll after it stretches as normal.
+
+            **What the code step should follow:** `MessageListScrollingShape.scrollingPast` in `src/prompt_mode.rs`, around `scroll_past_ends`, `to_end` and `can_scroll_past`.
+
+            - **Suspected cause:** `to_end` decides the previous tasks are at their bottom from the list's `offset()` and `max_offset()`. Many of that list's row heights are only estimates until they're measured, so the list can sit at its visual bottom while `to_end` still reports a gap. A scroll starting there then doesn't stretch. I haven't confirmed this.
+            - **What to test:** first log `to_end` and `held_back` on real scrolls, with the view already resting at the active task's top and at the previous tasks' bottom. Then fix the at-end check so a view resting at its end always counts as at its end.
+            - **Tests to add:** a scroll starting at each of those two ends builds up from its first step, including after the previous tasks were opened by clicking their row.
+            \\\
+
+    sentFrom: ScrollIntoElasticSection

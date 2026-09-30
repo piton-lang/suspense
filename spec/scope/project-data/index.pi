@@ -3,6 +3,7 @@ use /lib
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/project-locations import ProjectLocationsScope
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from /scope/run-targets import RunTargetsScope
 
 export scope ProjectDataScope:
@@ -32,6 +33,7 @@ shape ProjectDataShape:
         - `commit-notes.json`: the Git panel's commit notes
         - `run.json`: the project's run targets, as the @{RunTargetsScope} says
         - `harness.json`: the last report the harness gave of the skills and agents it has
+        - `fluency.md`: the project's Piton fluency, as `piton agent --print-fluency` printed it at the last spec build, generated rather than edited, for the Spec and Chain prompts to point at, as the @{ModeSystemPromptsScope} says
         - `conversations.json`: which conversation of the tasks, and of the questions, was last left for a new one, as the @{HarnessIntegrationScope} says, so it isn't carried on again once the project is reopened
 
         The draft, `.suspense-draft.pi`, isn't in `.suspense`: it is the prompt
@@ -41,7 +43,9 @@ shape ProjectDataShape:
 
     machineOnly:
         Some of it belongs to one machine rather than to the project: the
-        harness report `.suspense/harness.json`, the queue `.suspense/queue/`,
+        harness report `.suspense/harness.json`, the fluency
+        `.suspense/fluency.md`, printed by this machine's piton, the queue
+        `.suspense/queue/`,
         the commit notes `.suspense/commit-notes.json`, the conversations left
         `.suspense/conversations.json`, whose conversations only this machine's
         harness knows, the snapshot index `.suspense/snapshot-index`, and the

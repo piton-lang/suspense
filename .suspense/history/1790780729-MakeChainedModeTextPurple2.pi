@@ -1,0 +1,58 @@
+
+export anchor MakeChainedModeTextPurple2:
+    userPrompt:
+        \\\
+        I think when we're in chained mode, both the code and spec text should go purple.  Red+purple+blue is a lot right now.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            I think when we're in chained mode, both the code and spec text should go purple.  Red+purple+blue is a lot right now.
+            \\\
+        result:
+            \\\
+            When Chain is selected, the spec now has the Code and Spec labels in Chain's purple, so the joined tab is a single colour. I changed the spec only, not the code; `piton check`, `piton format --check` and `piton build` all pass.
+
+            **What changed in `spec/scope/prompt-mode/chat-input/index.pi`:**
+            - **`ChatInputShape.tabs.chain`:** there's a new paragraph for when Chain is selected.
+              - The Code and Spec labels use Chain's purple, the same colour as its icon, instead of red and blue.
+              - The colour change follows the existing slide. As Code and Spec slide together, their labels fade from red and blue to purple. As they slide apart, they fade back, reaching their own colours as the tabs settle.
+            - **`ChatInputShape.tabs.overview`:** the rule that each tab's label is always in its own mode's colour now notes this one exception.
+
+            Nothing else changes. With Chain unselected, the tabs read Code red, Spec blue, Ask green and Freeform grey, and Chain's icon stays purple. Chain's purple is the mode colour, or whatever colour is chosen for Chain in the theme editor.
+
+            **What the code step should follow:** `ChatInputShape.tabs.chain` and `ChatInputShape.tabs.overview`, in `src/chat_input.rs` around line 1940:
+            - `label_color` currently gives each tab `tint(ix)` at full strength.
+            - For Code and Spec, blend that colour toward `mode_color(SendMode::Both, cx)` by the same spring value that slides the tabs together (`join`, running 0 to 1). The labels then reach full purple as the tabs meet and turn back as they part.
+            - The other tabs are unaffected.
+            - A test can check that, once the slide has settled with Chain selected, both labels are Chain's colour, and that they're red and blue again once it's deselected.
+            \\\
+
+    sentFrom: MakeChainedModeTextPurple

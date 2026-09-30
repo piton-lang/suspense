@@ -1,0 +1,67 @@
+
+export anchor MakeAskViewMoreConversational2:
+    userPrompt:
+        \\\
+        I think the ask view needs to be a big more conversational.  Less task list and more chat history.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            I think the ask view needs to be a big more conversational.  Less task list and more chat history.
+            \\\
+        result:
+            \\\
+            I've changed the spec only, not the code. The Ask pane was already a chat on the question side; what made it feel like a task list was that each answer was drawn as the full task table. Answers now read as chat replies. `piton check`, `piton format --check` and `piton build` all pass.
+
+            **What changed in the spec**
+
+            `spec/scope/prompt-mode/ask-conversation/index.pi`, `AskConversationShape`:
+            - **`conversation`:** the answer is now described as a chat reply, not a task, and is read as prose.
+            - **`answers` (new):**
+              - **No table:** an answer has no columns, no Type badges or Status labels, and no lines between rows.
+              - **The answer itself:** what's shown is the reply text after the harness's last tool call, rendered as markdown in the body text colour. A finished answer with nothing to show reads "No answer.", muted.
+              - **Earlier steps:** everything before the answer (tool calls and any text between them) folds into one small muted summary line with a chevron, such as "Read 3 files, searched twice, ran 1 command". Where the steps can't be summed up by kind, it reads "Worked through 6 steps". Clicking the line expands the steps in place as compact muted lines: the tool name, then its most telling argument. It starts collapsed and stays as you left it while the app runs. If the harness did nothing before replying, there's no summary line.
+              - **While running:** a status line takes the summary line's place, with a spinner, the latest thing the harness did, and a Stop button. The reply streams in beneath it as prose. Text the harness follows with a tool call moves into the steps once the call arrives, so only the answer stays as prose. When the question finishes, the status line becomes the summary line.
+              - **Failed or stopped:** a failed question ends with its error in the error colour; a stopped one ends with "Stopped", muted. Neither shows as a table status.
+            - **`scrolling`:** only what's in view is drawn, now counted in questions, dividers, summary lines and markdown blocks instead of table rows.
+            - **`selectingText`:** expanded steps can be selected as well.
+
+            `spec/ui/components/task-table/index.pi`, `TaskTableShape.description`: questions and answers are no longer listed as uses of the task table. Answers are named as the exception.
+
+            The question bubbles, times, Resend button, "New conversation" dividers, split, empty state and the stack of running questions shown on other tabs are unchanged.
+
+            **Anchors the code should follow**
+            - **`AskConversationShape.answers`:** the main change. In `src/prompt_mode/ask_pane.rs`, stop drawing each answer as a `TaskTable`. Draw the answer as markdown prose, with the collapsible summary line and the status line described above.
+            - **`AskConversationShape.conversation` and `AskConversationShape.scrolling`:** layout, spacing, and drawing only what's in view.
+            - **`TaskTableCollapsedStepsShape`:** where the answer starts, meaning the rows after the last tool call.
+            - **`TaskTableToolCallsShape`:** how each expanded step's argument is shortened.
+            \\\
+
+    sentFrom: MakeAskViewMoreConversational

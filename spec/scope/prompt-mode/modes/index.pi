@@ -76,6 +76,8 @@ shape PromptModesShape:
         mode, alone or in a batch.
 
     systemPrompts:
-        Each mode but Freeform sends its own system prompt, from the
-        @{ModeSystemPromptsScope}. A prompt keeps the mode it was sent in while
-        it waits in the queue.
+        Each mode but Freeform sends the project's system prompt, the same
+        whatever the mode, and instructions of its own, from the
+        @{ModeSystemPromptsScope}. Only Spec, and a Chain prompt's first step,
+        which write the spec, are pointed at the Piton fluency. A prompt keeps
+        the mode it was sent in while it waits in the queue.

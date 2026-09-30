@@ -1,0 +1,59 @@
+
+export anchor ElasticZoneSize2:
+    userPrompt:
+        \\\
+        Ok good.  I think we need a bit more -- currently how big is the elastic zone ?
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Ok good.  I think we need a bit more -- currently how big is the elastic zone ?
+            \\\
+        result:
+            \\\
+            I haven't changed the spec yet. "A bit more" could mean two different sizes, so I want to check which one first. I've only written the current rules into the understanding file.
+
+            The elastic zone has two sizes:
+
+            1. **How far you scroll:** 320 px of scrolling past the end before it switches. That's about six notches of a wheel, since one notch is about 60 px here.
+            2. **How far the view moves:** at most 64 px. The view follows your scroll at first, then gives less and less, so after six notches of scrolling it has only moved about 64 px. That leaves a 64 px empty band at the top or bottom, with the glow in the middle.
+
+            So you scroll 320 px but only see the view move 64 px. That may be why it feels small.
+
+            Which do you want bigger?
+
+            - **(a) The visible stretch.** The view pulls further, so the empty band is bigger and you can see more clearly that you're in the zone. Switching still takes the same six notches.
+            - **(b) The scroll distance.** It takes more notches to switch, so there's more resistance and the band stays the same size.
+            - **(c) Both.**
+
+            And by roughly how much? For the stretch I'd suggest 64 → 120 px, or about a third of the task view's height if you want it to scale with the window. For the distance I'd suggest 320 → 480 px, about eight notches. Give me the numbers, or say "double it", and I'll put exactly that into the spec.
+            \\\
+
+    sentFrom: ElasticZoneSize

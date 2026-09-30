@@ -29,9 +29,10 @@ shape TaskTableShape:
         A @{TableScope} with Type, Output, and Status columns, with one row per
         thing the harness did, in order: each piece of reply text, each tool
         call, and any error. It is the same table wherever a run's output is
-        shown, a task, a question, a previous task or answer, the palette's
-        search for a file, or a run in one of the application's own panels,
-        and each use says where it sits.
+        shown, a task, a previous task, the palette's search for a file, or a
+        run in one of the application's own panels, and each use says where
+        it sits. The answers to questions are the exception: they read as
+        chat replies, as the Ask conversation says.
 
     types: {TaskTableTypesShape}
     status: {TaskTableStatusShape}

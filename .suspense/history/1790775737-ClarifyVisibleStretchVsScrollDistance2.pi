@@ -1,0 +1,62 @@
+
+export anchor ClarifyVisibleStretchVsScrollDistance2:
+    userPrompt:
+        \\\
+        What's the difference b etween visible stretch and scroll distance ?
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            What's the difference b etween visible stretch and scroll distance ?
+            \\\
+        result:
+            \\\
+            I haven't changed the spec; I've only answered your question below.
+
+            The two numbers measure different things.
+
+            - **Scroll distance** is how much you move the wheel or trackpad past the end before it switches. It isn't drawn anywhere. It's counted from your input. At the moment that's 320 px, about 6 wheel notches.
+            - **Visible stretch** is how far the content actually slides on screen while you do that. It's the empty band that opens up at the top or bottom. At the moment that's 64 px at most.
+
+            The two are linked but deliberately unequal, like pulling a rubber band. The first notch moves the content almost a full notch. Each notch after that moves it less. By the sixth notch you've scrolled 320 px, but the content has moved only about 64 px, and then it switches.
+
+            So today you're pushing through about 5× more scroll than you can see. If the zone feels small, that could be because the band on screen is small (visible stretch), or because it switches too soon (scroll distance).
+
+            There's also a third option: have the content move 1:1 with your scroll, with no rubber band. Then the zone you see is exactly as big as the distance you scroll. For example, the band opens to 320 px and switches when it's fully open. That's simpler to judge by eye, but it loses the feeling of resistance.
+
+            Which do you want? Options:
+
+            - **(a)** A bigger band on screen, switching after the same 6 notches.
+            - **(b)** More notches before switching, with the same small band.
+            - **(c)** Both bigger.
+            - **(d)** 1:1: the band opens exactly as far as you scroll, and switches when it reaches a size you pick.
+            \\\
+
+    sentFrom: ClarifyVisibleStretchVsScrollDistance

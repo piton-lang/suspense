@@ -1,0 +1,4 @@
+- [Crossing over takes 512 pixels of scrolling past the end, about eight or nine wheel notches](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [The visible stretch stays about 64 pixels by the barrier and never more, giving less the further it is pulled](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [The build-up never drains while steps come less than 200 ms apart; after that it drains to nothing within 500 ms](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [The glow grows as the build-up nears the barrier](spec/scope/prompt-mode/message-list/Scrolling.pi)

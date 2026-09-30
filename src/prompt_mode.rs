@@ -2369,9 +2369,16 @@ impl Default for ScrollPush {
 }
 
 impl ScrollPush {
-    /// How far it has built up at `now`, drained since the last scroll.
+    /// How far it has built up at `now`: all of it while the scroll goes
+    /// on, draining only once it has stopped, [`SCROLL_HOLD`] after its last
+    /// step, to nothing by [`SCROLL_DRAIN`] after it.
     fn held(&self, now: Instant) -> f32 {
-        let drained = now.duration_since(self.at).as_secs_f32() / SCROLL_DRAIN.as_secs_f32();
+        let since = now.duration_since(self.at);
+        if since <= SCROLL_HOLD {
+            return self.amount;
+        }
+        let drained =
+            (since - SCROLL_HOLD).as_secs_f32() / (SCROLL_DRAIN - SCROLL_HOLD).as_secs_f32();
         self.amount * (1. - drained).max(0.)
     }
 
@@ -2384,22 +2391,35 @@ impl ScrollPush {
         if held <= 0. {
             return px(0.);
         }
-        let pull = (STRETCH_GIVE * (1. - (-held / STRETCH_GIVE).exp())).min(STRETCH_PULL);
+        let pull = (STRETCH_GIVE * held / (STRETCH_GIVE + held)).min(STRETCH_PULL);
         px(if self.up { pull } else { -pull })
     }
 }
 
+/// Whether each wheel event over the latest task or the previous tasks is
+/// written to standard error with what came of it, for seeing how a
+/// platform's scrolling reaches the stretch: set `SUSPENSE_SCROLL_LOG`.
+static SCROLL_LOG: std::sync::LazyLock<bool> =
+    std::sync::LazyLock::new(|| std::env::var_os("SUSPENSE_SCROLL_LOG").is_some());
+
 /// How far the stretch pulls the view by the barrier, and never more.
 const STRETCH_PULL: f32 = 64.;
 
-/// How quickly the stretch stiffens: it gives nearly all of a scroll at
-/// first, and about [`STRETCH_PULL`] of [`SCROLL_BARRIER`].
-const STRETCH_GIVE: f32 = 67.;
+/// How quickly the stretch stiffens, as a rubber band does: it gives all of
+/// a scroll at first, less and less the further it goes, and still gives a
+/// little right up to the barrier, reaching [`STRETCH_PULL`] just as the
+/// build-up reaches [`SCROLL_BARRIER`].
+const STRETCH_GIVE: f32 = STRETCH_PULL * SCROLL_BARRIER / (SCROLL_BARRIER - STRETCH_PULL);
 
 /// How far a scroll must push past an end to cross over.
-const SCROLL_BARRIER: f32 = 200.;
+const SCROLL_BARRIER: f32 = 768.;
 
-/// How long what a scroll built up against an end takes to drain away.
+/// How long a scroll's steps may be apart and it still goes on: until then,
+/// nothing it built up against an end drains.
+const SCROLL_HOLD: Duration = Duration::from_millis(200);
+
+/// How long after a scroll's last step what it built up against an end has
+/// drained away.
 const SCROLL_DRAIN: Duration = Duration::from_millis(500);
 
 /// How quickly the glow fades as the view crosses over.
@@ -2663,6 +2683,9 @@ pub struct PromptMode {
     /// fling's momentum, stopping at an end rather than pulling into the
     /// stretch, until a new scroll.
     scroll_held_back: Rc<Cell<bool>>,
+    /// Whether the scroll going on has crossed over, and is spent: all of it
+    /// that follows is swallowed, scrolling neither view, until a new scroll.
+    scroll_spent: Rc<Cell<bool>>,
     /// While a queued prompt is dragged: which, and the gap between prompts
     /// it would be dropped into, if any.
     queue_gap: Rc<Cell<Option<(usize, Option<usize>)>>>,
@@ -2878,6 +2901,7 @@ impl PromptMode {
             output_table: TaskTable::new(),
             last_wheel: Rc::default(),
             scroll_held_back: Rc::default(),
+            scroll_spent: Rc::default(),
             queue_gap: Rc::default(),
             tab_gap: Rc::default(),
             scroll_push: Rc::default(),
@@ -3003,13 +3027,6 @@ impl PromptMode {
         match dir.as_ref().and_then(|dir| self.background.remove(dir)) {
             Some(mut back) => self.swap_session(&mut back),
             None => {
-                // Printed once as the project opens, ready for its prompts.
-                if let Some(dir) = dir.clone() {
-                    cx.background_spawn(async move {
-                        crate::piton_fluency::get(&dir);
-                    })
-                    .detach();
-                }
                 self.project_dir = dir;
                 self.load_queue(cx);
                 self.load_history(cx);
@@ -3706,11 +3723,21 @@ impl PromptMode {
     /// from: the latest task's top, with previous tasks to open, or the
     /// previous tasks' bottom.
     fn can_scroll_past(&self, up: bool) -> bool {
+        self.to_end(up).is_some_and(|to_end| to_end <= 1.)
+    }
+
+    /// How far a scroll `up`, or down, has to go to reach the end it would
+    /// cross over from, as [`Self::can_scroll_past`] says; none when there
+    /// is nothing to cross over to that way.
+    ///
+    /// It goes by where the list laid its end row out, not by the heights it
+    /// has guessed for rows not yet measured, so a view resting at its end
+    /// is always at it, however it got there.
+    fn to_end(&self, up: bool) -> Option<f32> {
         if self.task_history.expanded {
-            let rows = &self.task_history.rows;
-            !up && rows.offset().y <= -rows.max_offset().y + px(1.)
+            (!up).then(|| f32::from(self.task_history.rows.to_bottom()))
         } else {
-            up && self.tasks.len() >= 2 && self.output_table.scroll().offset().y >= -px(1.)
+            (up && self.tasks.len() >= 2).then(|| f32::from(self.output_table.list().to_top()))
         }
     }
 
@@ -3790,6 +3817,7 @@ impl PromptMode {
         let this = cx.entity().downgrade();
         let last = self.last_wheel.clone();
         let held_back = self.scroll_held_back.clone();
+        let spent = self.scroll_spent.clone();
         let push = self.scroll_push.clone();
         canvas(
             |bounds, window, _| window.insert_hitbox(bounds, HitboxBehavior::Normal),
@@ -3807,6 +3835,7 @@ impl PromptMode {
                     {
                         last.set(Some(now));
                         held_back.set(true);
+                        spent.set(true);
                         push.set(ScrollPush::default());
                         cx.stop_propagation();
                         return;
@@ -3819,11 +3848,22 @@ impl PromptMode {
                             .is_none_or(|at| now.duration_since(at) >= SCROLL_REST)
                     {
                         held_back.set(false);
+                        spent.set(false);
                     }
                     if event.touch_phase == TouchPhase::Ended {
                         held_back.set(true);
                     }
                     last.set(Some(now));
+                    // A scroll that has crossed over is spent: what more of it
+                    // follows scrolls neither view, until a new scroll.
+                    if spent.get() {
+                        if *SCROLL_LOG {
+                            eprintln!("scroll: {:?} spent, swallowed", event.delta);
+                        }
+                        push.set(ScrollPush::default());
+                        cx.stop_propagation();
+                        return;
+                    }
                     let delta = event.delta.pixel_delta(window.line_height());
                     if delta.y.abs() <= delta.x.abs() {
                         return;
@@ -3832,6 +3872,8 @@ impl PromptMode {
                     let distance = f32::from(delta.y.abs());
                     let mut held = push.get();
                     held.amount = held.held(now);
+                    let before = held.amount;
+                    let mut reaching = false;
                     let pushing = if held.amount > 0. {
                         if held.up != up {
                             // Scrolling back takes it down, and scrolls the
@@ -3845,21 +3887,42 @@ impl PromptMode {
                             }
                             true
                         }
-                    } else if !held_back.get()
-                        && this
-                            .upgrade()
-                            .is_some_and(|this| this.read(cx).can_scroll_past(up))
+                    } else if let Some(to_end) = this
+                        .upgrade()
+                        .filter(|_| !held_back.get())
+                        .and_then(|this| this.read(cx).to_end(up))
+                        .filter(|to_end| *to_end < distance || *to_end <= 1.)
                     {
-                        // A scroll at an end starts pulling into the stretch.
+                        // A scroll at an end starts pulling into the stretch;
+                        // one reaching it, with whatever of it goes past,
+                        // the view scrolling to its end first.
+                        reaching = to_end > 1.;
                         held = ScrollPush {
                             up,
-                            amount: distance,
+                            amount: if reaching {
+                                distance - to_end
+                            } else {
+                                distance
+                            },
                             at: now,
                         };
                         true
                     } else {
                         false
                     };
+                    if *SCROLL_LOG {
+                        let to_end = this.upgrade().and_then(|this| this.read(cx).to_end(up));
+                        eprintln!(
+                            "scroll: {:?} {} {distance:.0}px phase={:?} held_back={} \
+                             to_end={to_end:?} built_up={before:.0}->{:.0} pushing={pushing} \
+                             reaching={reaching}",
+                            event.delta,
+                            if up { "up" } else { "down" },
+                            event.touch_phase,
+                            held_back.get(),
+                            if pushing { held.amount } else { 0. },
+                        );
+                    }
                     if !pushing {
                         push.set(ScrollPush::default());
                         return;
@@ -3867,11 +3930,17 @@ impl PromptMode {
                     held.at = now;
                     // The view's own scroll holds at its end while it is
                     // pulled.
-                    cx.stop_propagation();
+                    if !reaching {
+                        cx.stop_propagation();
+                    }
                     if held.amount >= SCROLL_BARRIER {
+                        // The step that crosses over is used up by it, all of
+                        // it, and the rest of its scroll is spent.
+                        cx.stop_propagation();
                         let pull = held.pull(now);
                         push.set(ScrollPush::default());
                         held_back.set(true);
+                        spent.set(true);
                         this.update(cx, |this, cx| {
                             if this.scroll_past(held.up, cx) {
                                 if let Some(slide) = this.scroll_slide.as_mut() {
@@ -5782,10 +5851,7 @@ impl PromptMode {
                 if freeform {
                     return conversation_system;
                 }
-                // Waits for the project's fluency if it is still being
-                // printed.
-                let fluency = crate::piton_fluency::get(&project_dir);
-                hidden_anchor::project_system_prompt(&project_dir, &fluency)
+                hidden_anchor::project_system_prompt(&project_dir)
                     .ok()
                     .flatten()
             })
@@ -5996,8 +6062,14 @@ impl PromptMode {
                         }
                         None => None,
                     };
+                    // Told, too, not to read the spec's source, as a Code
+                    // task, so it reads the compiled reference instead.
+                    let unread = guarded.and_then(|mode| {
+                        mode_guard::unread(mode, &crate::project_tree::Locations::read(&project_dir))
+                    });
                     let protected = harness::Protected {
                         root: guard.as_ref().map(mode_guard::Guard::root),
+                        unread,
                     };
                     // What it may change, the guard of a task running beside
                     // it keeps rather than putting back.
@@ -6462,8 +6534,7 @@ impl PromptMode {
         let system = {
             let project_dir = project_dir.clone();
             cx.background_spawn(async move {
-                let fluency = crate::piton_fluency::get(&project_dir);
-                hidden_anchor::project_system_prompt(&project_dir, &fluency)
+                hidden_anchor::project_system_prompt(&project_dir)
                     .ok()
                     .flatten()
             })
@@ -6557,7 +6628,16 @@ impl PromptMode {
                     log.record.instructions = instructions;
                     log.record.resumed = resume.is_some();
                     let mut usage_run = None;
-                    let mut events = harness::send_with_images(
+                    // A question is told not to read the spec's source, so it
+                    // reads the compiled reference instead.
+                    let protected = harness::Protected {
+                        root: None,
+                        unread: mode_guard::unread(
+                            SendMode::Ask,
+                            &crate::project_tree::Locations::read(&project_dir),
+                        ),
+                    };
+                    let mut events = harness::send_kept_off(
                         message,
                         sent_system.clone(),
                         compiled.images,
@@ -6565,6 +6645,7 @@ impl PromptMode {
                             .clone()
                             .map(|session| harness::Resume { session, fork }),
                         project_dir.clone(),
+                        protected,
                     );
                     let compiled = Compiled::new(anchor.into(), prompt);
                     if this
@@ -9871,6 +9952,30 @@ mod tests {
         ));
     }
 
+    /// The stretch gives nearly all of a scroll at first, less the further
+    /// it goes, and reaches its most only as the build-up nears the barrier.
+    #[test]
+    fn the_stretch_stiffens_up_to_the_barrier() {
+        use super::{SCROLL_BARRIER, STRETCH_PULL, ScrollPush};
+        let now = std::time::Instant::now();
+        let pull = |amount: f32| {
+            f32::from(
+                ScrollPush {
+                    up: true,
+                    amount,
+                    at: now,
+                }
+                .pull(now),
+            )
+        };
+        assert!(pull(5.) > 4.5, "it resists from the start");
+        // Still giving, however far it has gone, up to the barrier.
+        assert!(pull(SCROLL_BARRIER * 0.5) + 1. < pull(SCROLL_BARRIER * 0.75));
+        assert!(pull(SCROLL_BARRIER * 0.75) < STRETCH_PULL - 0.5);
+        assert!(pull(SCROLL_BARRIER) >= STRETCH_PULL - 0.5);
+        assert!(pull(SCROLL_BARRIER * 2.) <= STRETCH_PULL);
+    }
+
     /// A task from the history replays its recorded output into the task it
     /// was; one with no record is shown as not recorded, with nothing pending.
     /// A wheel scroll up from the top of the latest task's output pulls it
@@ -9978,7 +10083,7 @@ mod tests {
         // Scrolled back, it goes down; scrolled on, past the barrier, it
         // crosses over.
         wheel(cx, 0., -60.);
-        wheel(cx, 0., 100.);
+        wheel(cx, 0., 680.);
         assert!(!expanded(cx), "scrolling back didn't take it down");
         wheel(cx, 0., 60.);
         assert!(
@@ -9992,7 +10097,10 @@ mod tests {
         rest();
         assert!(!sliding(cx, 0), "the slide didn't settle");
         assert!(!glowing(cx), "the glow didn't fade");
-        wheel(cx, 0., -120.);
+        for _ in 0..6 {
+            wheel(cx, 0., -120.);
+        }
+        assert!(expanded(cx), "it crossed back short of the barrier");
         wheel(cx, 0., -120.);
         assert!(
             !expanded(cx),
@@ -10002,10 +10110,25 @@ mod tests {
         rest();
         assert!(!sliding(cx, 1));
 
+        // A steady scroll, a wheel's notches a little apart, never drains,
+        // and crosses over without stopping, each way.
+        let steady = |cx: &mut TestAppContext, y: f32| {
+            for _ in 0..13 {
+                wheel(cx, 0., y);
+                std::thread::sleep(Duration::from_millis(150));
+            }
+        };
+        steady(cx, 60.);
+        assert!(expanded(cx), "a steady scroll up didn't cross over");
+        rest();
+        steady(cx, -60.);
+        assert!(!expanded(cx), "a steady scroll down didn't cross back");
+        rest();
+
         // Clicking the row isn't animated.
         click_row(cx);
         assert!(expanded(cx));
-        assert!(!sliding(cx, 2), "clicking the row slid");
+        assert!(!sliding(cx, 4), "clicking the row slid");
         click_row(cx);
         assert!(!expanded(cx));
 
@@ -10024,6 +10147,250 @@ mod tests {
             resting,
             "it stretches with nowhere to cross to"
         );
+    }
+
+    /// The scroll that crosses over stops there: neither the step that
+    /// crosses nor any more of the same scroll moves the view it switched
+    /// to, during the slide or after; only a new scroll, after the wheel has
+    /// been still a moment, moves it. So each way.
+    #[gpui_kit::test]
+    async fn a_scroll_that_crosses_over_stops_there(cx: &mut TestAppContext) {
+        use gpui_kit::{ScrollDelta, ScrollWheelEvent, point, px};
+        let (prompt_mode, handle) = open(cx);
+        let long: String = (0..200).map(|n| format!("Line {n}\n\n")).collect();
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                for n in 0..60 {
+                    let ix = this.push_task(format!("Task {n}").into(), cx);
+                    this.tasks[ix].status = TaskStatus::Done;
+                }
+                let ix = this.push_task("Write a lot".into(), cx);
+                this.show_compiled(ix, "Prompt_0".into(), "Write a lot".into(), cx);
+                this.apply_event(ix, HarnessEvent::TextStarted, cx);
+                this.apply_event(ix, HarnessEvent::TextDelta(long.clone()), cx);
+            });
+        })
+        .unwrap();
+        cx.wait_for(handle, Duration::from_secs(2), |window, _| {
+            window.try_find("task-output-scroll-column").is_some()
+        })
+        .await;
+        let wheel = |cx: &mut TestAppContext, y: f32| {
+            let at = cx
+                .update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    window.viewport_size()
+                })
+                .unwrap();
+            let mut visual = gpui_kit::VisualTestContext::from_window(handle, cx);
+            visual.simulate_event(ScrollWheelEvent {
+                position: point(at.width / 2., at.height / 2.),
+                delta: ScrollDelta::Pixels(point(px(0.), px(y))),
+                ..Default::default()
+            });
+            cx.run_until_parked();
+        };
+        let expanded = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| this.task_history.expanded)
+        };
+        // How far the view shown is from the end it arrived at.
+        let from_end = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                .unwrap();
+            prompt_mode.read_with(cx, |this, _| {
+                if this.task_history.expanded {
+                    f32::from(this.task_history.rows.to_bottom())
+                } else {
+                    f32::from(this.output_table.list().to_top())
+                }
+            })
+        };
+        // Scrolling on, a step every 40 milliseconds, until the slide has
+        // settled and a little after.
+        let carry_on = |cx: &mut TestAppContext, y: f32| {
+            let until =
+                std::time::Instant::now() + super::PANE_SLIDE_TIME + Duration::from_millis(150);
+            while std::time::Instant::now() < until {
+                wheel(cx, y);
+                std::thread::sleep(Duration::from_millis(40));
+            }
+        };
+        let pause = || std::thread::sleep(super::SCROLL_DRAIN + Duration::from_millis(50));
+
+        for up in [true, false] {
+            let y = if up { 200. } else { -200. };
+            if up {
+                prompt_mode.update(cx, |this, _| this.output_table.scroll_to_top());
+            }
+            from_end(cx);
+            pause();
+            for _ in 0..4 {
+                wheel(cx, y);
+            }
+            assert_eq!(expanded(cx), up, "it didn't cross over");
+            carry_on(cx, y);
+            assert_eq!(expanded(cx), up, "the rest of the scroll crossed back");
+            assert!(
+                from_end(cx) <= 1.,
+                "the rest of the scroll moved the view it switched to, {} from its end",
+                from_end(cx)
+            );
+            // A new scroll the same way moves it on, away from the end it
+            // arrived at.
+            std::thread::sleep(super::SCROLL_REST + Duration::from_millis(20));
+            wheel(cx, y);
+            assert!(from_end(cx) > 100., "a new scroll didn't move the view");
+            // Back at its end, for the crossing back.
+            wheel(cx, -y);
+            pause();
+        }
+    }
+
+    /// A scroll begun with the view already resting at its end pulls into
+    /// the stretch from its first step, however the view got there: the
+    /// previous tasks opened on their bottom by a click, however many there
+    /// are and however few of their rows have been measured, and the latest
+    /// task's long output scrolled to its top.
+    #[gpui_kit::test]
+    async fn a_scroll_begun_at_an_end_stretches_at_once(cx: &mut TestAppContext) {
+        use gpui_kit::{ScrollDelta, ScrollWheelEvent, point, px};
+        let (prompt_mode, handle) = open(cx);
+        let long: String = (0..200).map(|n| format!("Line {n}\n\n")).collect();
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                for n in 0..60 {
+                    let text = if n % 3 == 0 {
+                        format!("Task {n}\n\nwith\n\nseveral\n\nlines")
+                    } else {
+                        format!("Task {n}")
+                    };
+                    let ix = this.push_task(text.into(), cx);
+                    this.tasks[ix].status = TaskStatus::Done;
+                }
+                let ix = this.push_task("Write a lot".into(), cx);
+                this.show_compiled(ix, "Prompt_0".into(), "Write a lot".into(), cx);
+                this.apply_event(ix, HarnessEvent::TextStarted, cx);
+                this.apply_event(ix, HarnessEvent::TextDelta(long.clone()), cx);
+            });
+        })
+        .unwrap();
+        cx.wait_for(handle, Duration::from_secs(2), |window, _| {
+            window.try_find("task-output-scroll-column").is_some()
+        })
+        .await;
+        let frame = |cx: &mut TestAppContext| {
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                .unwrap();
+        };
+        let wheel = |cx: &mut TestAppContext, y: f32| {
+            let at = cx
+                .update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    window.viewport_size()
+                })
+                .unwrap();
+            let mut visual = gpui_kit::VisualTestContext::from_window(handle, cx);
+            visual.simulate_event(ScrollWheelEvent {
+                position: point(at.width / 2., at.height / 2.),
+                delta: ScrollDelta::Pixels(point(px(0.), px(y))),
+                ..Default::default()
+            });
+            cx.run_until_parked();
+        };
+        let built_up = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| this.scroll_push.get().amount)
+        };
+        // A new scroll, the wheel having been still a while.
+        let still = || std::thread::sleep(super::SCROLL_DRAIN + Duration::from_millis(50));
+
+        // The latest task's output, resting at its top.
+        prompt_mode.update(cx, |this, _| this.output_table.scroll_to_top());
+        frame(cx);
+        frame(cx);
+        still();
+        wheel(cx, 40.);
+        assert_eq!(
+            built_up(cx),
+            40.,
+            "a scroll from the output's top didn't stretch"
+        );
+        still();
+
+        // The previous tasks, opened on their bottom by clicking their row.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("history-toggle", cx)
+        })
+        .unwrap();
+        frame(cx);
+        frame(cx);
+        assert!(prompt_mode.read_with(cx, |this, _| this.task_history.expanded));
+        still();
+        wheel(cx, -40.);
+        assert_eq!(
+            built_up(cx),
+            40.,
+            "a scroll from the previous tasks' bottom didn't stretch"
+        );
+    }
+
+    /// A scroll step that brings the output to its top counts whatever of it
+    /// goes past the top toward the barrier.
+    #[gpui_kit::test]
+    async fn a_step_reaching_the_top_builds_up_what_goes_past(cx: &mut TestAppContext) {
+        use gpui_kit::{ScrollDelta, ScrollWheelEvent, point, px};
+        let (prompt_mode, handle) = open(cx);
+        let long: String = (0..200).map(|n| format!("Line {n}\n\n")).collect();
+        cx.update_window(handle, |_, _, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                let first = this.push_task("First".into(), cx);
+                this.tasks[first].status = TaskStatus::Done;
+                let ix = this.push_task("Write a lot".into(), cx);
+                this.show_compiled(ix, "Prompt_0".into(), "Write a lot".into(), cx);
+                this.apply_event(ix, HarnessEvent::TextStarted, cx);
+                this.apply_event(ix, HarnessEvent::TextDelta(long.clone()), cx);
+            });
+        })
+        .unwrap();
+        cx.wait_for(handle, Duration::from_secs(2), |window, _| {
+            window.try_find("task-output-scroll-column").is_some()
+        })
+        .await;
+        let wheel = |cx: &mut TestAppContext, y: f32| {
+            let at = cx
+                .update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    window.viewport_size()
+                })
+                .unwrap();
+            let mut visual = gpui_kit::VisualTestContext::from_window(handle, cx);
+            visual.simulate_event(ScrollWheelEvent {
+                position: point(at.width / 2., at.height / 3.),
+                delta: ScrollDelta::Pixels(point(px(0.), px(y))),
+                ..Default::default()
+            });
+            cx.run_until_parked();
+        };
+        let expanded = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| this.task_history.expanded)
+        };
+        prompt_mode.update(cx, |this, _| {
+            this.output_table
+                .scroll()
+                .set_offset(point(px(0.), px(-100.)))
+        });
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+            .unwrap();
+        // 100 pixels to the top, then 150 past it.
+        wheel(cx, 250.);
+        assert!(!expanded(cx), "it crossed over before the barrier");
+        let top = prompt_mode.read_with(cx, |this, _| this.output_table.scroll().offset().y);
+        assert!(top >= px(-1.), "the step didn't take the output to its top");
+        wheel(cx, 500.);
+        assert!(!expanded(cx), "it crossed over before the barrier");
+        wheel(cx, 150.);
+        assert!(expanded(cx), "what went past the top didn't build up");
     }
 
     /// Closed, by a click or a scroll, the previous tasks give back the
@@ -12692,10 +13059,17 @@ mod tests {
         );
         assert!(!divider(usize::MAX, cx));
         cx.update_window(handle, |_, window, _| {
-            let answers = window.within("ask-pane");
+            let mut answers = window.within("ask-pane");
             assert!(
-                answers.try_find(("output-row", 0usize)).is_some(),
+                answers
+                    .within(("answer-of", super::ASK_IX - 1))
+                    .try_find(("answer-row", 0usize))
+                    .is_some(),
                 "no answer shows"
+            );
+            assert!(
+                answers.try_find(("output-type", 0usize)).is_none(),
+                "the answer is drawn as a table"
             );
         })
         .unwrap();
@@ -12738,11 +13112,12 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// A finished question shows only its answer in the Ask conversation,
-    /// with the steps before it collapsed behind a row that a click expands
-    /// and collapses again; a task shows its whole chain.
+    /// A finished question reads as a chat reply: only its answer as prose,
+    /// with the steps before it summed up in one line that a click expands
+    /// into compact lines and collapses again; a task shows its whole chain
+    /// as a table.
     #[gpui_kit::test]
-    async fn an_answer_collapses_its_steps_but_a_task_does_not(cx: &mut TestAppContext) {
+    async fn an_answer_sums_up_its_steps_but_a_task_does_not(cx: &mut TestAppContext) {
         let (prompt_mode, handle) = open(cx);
         let events = || {
             [
@@ -12775,37 +13150,97 @@ mod tests {
                 cx,
             );
         });
-        let steps = ("output-steps", super::ASK_IX - 1);
+        let steps = ("answer-steps", super::ASK_IX - 1);
         let rows = |cx: &mut TestAppContext| {
             frames(handle, cx);
             cx.update_window(handle, |_, window, cx| {
                 window.render_frame(cx);
-                let within = |window: &mut gpui_kit::Window, id: &'static str| {
-                    let scoped = window.within(id);
-                    (0..3usize)
-                        .filter(|row| scoped.try_find(("output-row", *row)).is_some())
-                        .count()
-                };
+                let count =
+                    |window: &mut gpui_kit::Window, within: &'static str, id: &'static str| {
+                        let scoped = window.within(within);
+                        (0..3usize)
+                            .filter(|row| scoped.try_find((id, *row)).is_some())
+                            .count()
+                    };
                 (
                     window.try_find(steps).is_some(),
-                    within(window, "ask-pane"),
-                    within(window, "task-output"),
+                    count(window, "ask-pane", "answer-step"),
+                    count(window, "ask-pane", "answer-row"),
+                    count(window, "ask-pane", "output-row"),
+                    count(window, "task-output", "output-row"),
                 )
             })
             .unwrap()
         };
-        let (toggle, answer_rows, task_rows) = rows(cx);
-        assert!(toggle, "the answer has no row for its steps");
-        assert_eq!(answer_rows, 1, "only the answer shows");
+        let (toggle, step_rows, answer_rows, table_rows, task_rows) = rows(cx);
+        assert!(toggle, "the answer has no line for its steps");
+        assert_eq!((step_rows, answer_rows), (0, 1), "only the answer shows");
+        assert_eq!(table_rows, 0, "the answer is drawn as a table");
         assert_eq!(task_rows, 3, "the task collapsed its chain");
+        prompt_mode.read_with(cx, |this, _| {
+            let reply = &this.asks[0].task.reply;
+            let chat = reply.chat_rows();
+            assert_eq!(chat.answer, [2]);
+            assert_eq!(reply.steps_summary(&chat.steps), "Read 1 file");
+        });
         cx.update_window(handle, |_, window, cx| window.click(steps, cx))
             .unwrap();
-        let (toggle, answer_rows, _) = rows(cx);
-        assert!(toggle, "expanding the steps took away their row");
-        assert_eq!(answer_rows, 3, "the steps did not expand");
+        let (toggle, step_rows, answer_rows, ..) = rows(cx);
+        assert!(toggle, "expanding the steps took away their line");
+        assert_eq!((step_rows, answer_rows), (2, 1), "the steps did not expand");
         cx.update_window(handle, |_, window, cx| window.click(steps, cx))
             .unwrap();
-        assert_eq!(rows(cx).1, 1, "the steps did not collapse again");
+        assert_eq!(rows(cx).1, 0, "the steps did not collapse again");
+    }
+
+    /// A question that failed ends with its error, one stopped with
+    /// "Stopped", and one finished with nothing to say with "No answer.";
+    /// the steps are summed up by kind where they can be.
+    #[gpui_kit::test]
+    async fn an_answer_ends_as_its_question_did(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        prompt_mode.update(cx, |this, cx| {
+            this.on_ask_tab = true;
+            let failed = this.push_ask("Will it fail?".into(), cx);
+            this.update_ask(
+                failed,
+                |ask| {
+                    ask.apply(HarnessEvent::Failed("no harness".into()));
+                    ask.end();
+                },
+                cx,
+            );
+            let empty = this.push_ask("Anything?".into(), cx);
+            this.update_ask(
+                empty,
+                |ask| {
+                    ask.set_compiled(super::Compiled::new("Prompt_0".into(), "Anything?".into()));
+                    ask.apply(HarnessEvent::Finished {
+                        is_error: false,
+                        result: String::new(),
+                    });
+                    ask.end();
+                },
+                cx,
+            );
+            let stopped = this.push_ask("Still there?".into(), cx);
+            this.update_ask(stopped, |ask| ask.apply(HarnessEvent::TextStarted), cx);
+            this.stop_ask(stopped, cx);
+        });
+        frames(handle, cx);
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.asks[0].task.status, TaskStatus::Failed);
+            assert_eq!(this.asks[0].task.reply.errors(), ["no harness"]);
+            assert_eq!(this.asks[1].task.status, TaskStatus::Done);
+            assert!(this.asks[1].task.reply.chat_rows().answer.is_empty());
+            assert_eq!(this.asks[2].task.status, TaskStatus::Cancelled);
+        });
+        for id in 1..=3 {
+            assert!(
+                bounds_of(handle, ("question-end", super::ASK_IX - id), cx).is_some(),
+                "question {id} has no end"
+            );
+        }
     }
 
     /// Selecting some of an answer's text in the Ask conversation offers a
@@ -12825,10 +13260,10 @@ mod tests {
                 window.render_frame(cx);
                 let row = window
                     .within("ask-pane")
-                    .find(("output-row", 0usize))
+                    .find(("answer-row", 0usize))
                     .bounds();
-                // Along the answer's text, beneath the tags heading it.
-                let y = row.bottom() - gpui_kit::px(10.);
+                // Along the answer's text.
+                let y = row.center().y;
                 window.drag(
                     gpui_kit::point(row.left() + gpui_kit::px(1.), y),
                     gpui_kit::point(row.right() - gpui_kit::px(1.), y),
@@ -15539,10 +15974,7 @@ mod tests {
         crate::harness::use_program_for_test(Some(script));
         // The instructions heading each run's message; every run's system
         // prompt is the project's, the same whatever the mode.
-        let project_system = {
-            let fluency = crate::piton_fluency::get(&dir);
-            hidden_anchor::project_system_prompt(&dir, &fluency).unwrap()
-        };
+        let project_system = hidden_anchor::project_system_prompt(&dir).unwrap();
         let run = |n: usize| {
             let (message, system) = recorded_run(&runs, n);
             assert_eq!(
@@ -15647,6 +16079,7 @@ mod tests {
                         system_prompts::default_prompt(system_prompts::Prompt::CodeToSpec),
                         "./src",
                         "./spec",
+                        None,
                     ),
                     asked,
                     Some(result),
@@ -15850,12 +16283,7 @@ mod tests {
         send("Just this, as typed.", SendMode::Freeform, cx);
         tasks_done(5, cx);
 
-        let project = {
-            let fluency = crate::piton_fluency::get(&dir);
-            hidden_anchor::project_system_prompt(&dir, &fluency)
-                .unwrap()
-                .unwrap()
-        };
+        let project = hidden_anchor::project_system_prompt(&dir).unwrap().unwrap();
         let runs_seen: Vec<(String, Option<String>)> =
             (0..6).map(|n| recorded_run(&runs, n)).collect();
         for (n, (_, system)) in runs_seen.iter().enumerate() {
@@ -15867,6 +16295,10 @@ mod tests {
         }
         assert!(!project.contains(".understanding.md"), "{project}");
         assert!(!project.contains("We're working on the code "), "{project}");
+        assert!(
+            !project.contains("fluency"),
+            "the system prompt holds the fluency"
+        );
 
         // Each task's own instructions, with its understanding file, head its
         // message, and the prompt follows.
@@ -15898,15 +16330,38 @@ mod tests {
         let instructions = instructions_in(asked);
         assert!(instructions.starts_with("We're only asking a question "));
         assert!(!instructions.contains(".understanding.md"));
-        // None repeats the fluency or the spec reading.
+        // None repeats the spec reading. Only Spec and the chain's spec
+        // step, which write Piton, point at the fluency file, and only once
+        // it has been written, as a spec build writes it where piton runs.
+        let fluency = crate::piton_fluency::file(&dir).exists();
+        assert!(fluency, "the spec builds wrote no fluency file");
         for (n, (message, _)) in runs_seen.iter().enumerate().take(5) {
             assert!(
                 !message.contains("Before executing anything, read the spec"),
                 "run {n} repeats the spec reading"
             );
+            let points = instructions_in(message).contains(".suspense/fluency.md once");
+            assert_eq!(
+                points,
+                fluency && matches!(n, 1 | 2),
+                "run {n} points at the fluency file or doesn't as it should"
+            );
         }
         // Freeform, carrying on the conversation, has no instructions.
         assert_eq!(runs_seen[5].0, "Just this, as typed.");
+        // Code, the chain's code step, and the question are told not to read
+        // the spec's source; Spec and the chain's spec step aren't.
+        let spec_root = crate::project_tree::Locations::read(&dir).spec.unwrap();
+        let unread = format!("Read(/{}/**)", spec_root.display());
+        for n in 0..6 {
+            let denied =
+                std::fs::read_to_string(runs.join(format!("{n}.denied"))).unwrap_or_default();
+            assert_eq!(
+                denied.contains(&unread),
+                matches!(n, 0 | 3 | 4),
+                "run {n} was told {denied:?}"
+            );
+        }
 
         // Starting a new conversation, a Freeform prompt has no system prompt.
         prompt_mode.update(cx, |this, cx| this.new_conversation(cx));
@@ -16144,7 +16599,8 @@ mod tests {
 
     /// A stand-in harness in `dir` that keeps, for each run in turn, the
     /// system prompt it was given with `--append-system-prompt` in
-    /// `runs/N.system`, none when it was given none, and the message it was
+    /// `runs/N.system`, none when it was given none, the rules it was given
+    /// with `--disallowedTools` in `runs/N.denied`, and the message it was
     /// sent in `runs/N`; then, when it `finishes`, reports the conversation
     /// `s1` and says which run it was, else stops at once. Returns the script
     /// and the runs directory.
@@ -16166,13 +16622,14 @@ mod tests {
             &script,
             format!(
                 "#!/bin/sh\n\
-                 n=$(ls {runs} | grep -v system | wc -l | tr -d ' ')\n\
+                 n=$(ls {runs} | grep -v '\\.' | wc -l | tr -d ' ')\n\
                  file={runs}/$n\n\
                  : > \"$file\"\n\
                  fed=no\n\
                  while [ $# -gt 0 ]; do\n\
                  \x20 if [ \"$1\" = --append-system-prompt ]; then printf '%s' \"$2\" > \"$file.system\"; fi\n\
                  \x20 if [ \"$1\" = --input-format ]; then fed=yes; fi\n\
+                 \x20 case \"$1\" in --disallowedTools=*) printf '%s' \"${{1#--disallowedTools=}}\" > \"$file.denied\";; esac\n\
                  \x20 shift\n\
                  done\n\
                  if [ $fed = yes ]; then IFS= read -r line; printf '%s' \"$line\" > \"$file\"; else cat > \"$file\"; fi\n\
@@ -17366,11 +17823,11 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         assert_eq!(prompt.sections[0].title, "System prompt");
         let system_prompt = prompt.sections[0].copied().unwrap().to_string();
         assert_eq!(system_prompt, sent, "not the system prompt sent");
-        // The system prompt is the project's: the spec reading and the
-        // fluency, and nothing of the task's mode or what it was handed.
+        // The system prompt is the project's: the spec reading, and nothing
+        // of the task's mode or what it was handed, nor the fluency.
         for injected in [
             "Before executing anything, read the spec it touches",
-            "Piton Fluency",
+            "Read the spec from its compiled reference",
         ] {
             assert!(
                 system_prompt.contains(injected),
@@ -17381,6 +17838,8 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
             "We're working on the spec ",
             "Make it blue.",
             ".understanding.md",
+            "Piton Fluency",
+            "fluency.md",
         ] {
             assert!(
                 !system_prompt.contains(apart),
@@ -17405,14 +17864,22 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         }
         assert!(
             !instructions.contains("Piton Fluency"),
-            "the fluency is repeated"
+            "the fluency itself is sent"
         );
+        // Sent to Spec, it is pointed at the fluency file, once written.
+        if crate::piton_fluency::file(&dir).exists() {
+            assert!(
+                instructions.contains(".suspense/fluency.md once"),
+                "not pointed at the fluency file: {instructions}"
+            );
+        }
         for placeholder in [
             "CODE_LOCATION",
             "SPEC_LOCATION",
             "HARNESS_DIRECTORY",
             "SPEC_READING",
             "PITON_FLUENCY",
+            "PITON_FLUENCY_FILE",
             "UNDERSTANDING_FILE",
             "CODE_PROMPT",
             "CODE_RESULT",

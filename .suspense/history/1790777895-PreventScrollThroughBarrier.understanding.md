@@ -1,0 +1,6 @@
+- [The scroll that crosses the barrier ends there: neither view scrolls with any of it, during the slide or after](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [The step that reaches the barrier is taken whole by the crossing; none of it scrolls the view beneath](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [After a crossing, the view only scrolls again for a new scroll: the wheel still for 80 ms, or fingers lifted and put back](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [While the view slides, the wheel scrolls neither view and no scroll crosses back](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [Crossing over takes 768 pixels of scrolling past the end](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [A scroll begun with the view resting at its end pulls into the stretch from its first step](spec/scope/prompt-mode/message-list/Scrolling.pi)

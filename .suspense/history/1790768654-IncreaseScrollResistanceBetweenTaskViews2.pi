@@ -1,0 +1,57 @@
+
+export anchor IncreaseScrollResistanceBetweenTaskViews2:
+    userPrompt:
+        \\\
+        I think we need a little more "resistance" on the scroll-between behaviour for active task and previous tasks
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            I think we need a little more "resistance" on the scroll-between behaviour for active task and previous tasks
+            \\\
+        result:
+            \\\
+            I raised the distance you have to scroll past the end before the view switches, from 200 to 320 pixels. That's about six mouse-wheel notches instead of four, or a firmer trackpad swipe. I changed the spec only, not the code; `piton check`, `piton format --check` and `piton build` all pass.
+
+            The change is in `spec/scope/prompt-mode/message-list/Scrolling.pi`, under `MessageListScrollingShape.scrollingPast`.
+
+            Everything else about the behaviour stays as it was:
+            - A steady scroll still doesn't drain while its steps arrive less than 200 ms apart, so one continuous scroll still switches without stopping.
+            - The build-up still drains to nothing within half a second once the scroll stops.
+            - The rubber-band pull is still about 64 pixels at the barrier and never more. It now stiffens over the longer distance, so it's pulled out more slowly.
+            - The glow still grows toward the barrier.
+
+            **Anchor for the code step:** `MessageListScrollingShape.scrollingPast`. In `src/prompt_mode.rs`:
+            - **Barrier:** set `SCROLL_BARRIER` to `320.`.
+            - **Stretch:** retune `STRETCH_GIVE` so the pull reaches about 64 pixels at the new barrier, not before it. Something around 100 should do; I haven't checked the exact value.
+            - **Tests:** update any that count on the old distances. The steady-scroll check in `scrolling_past_an_end_crosses_over` uses four 60 px steps (240 px) and will need about six. `a_step_reaching_the_top_builds_up_what_goes_past` needs a bigger second step.
+            \\\
+
+    sentFrom: IncreaseScrollResistanceBetweenTaskViews

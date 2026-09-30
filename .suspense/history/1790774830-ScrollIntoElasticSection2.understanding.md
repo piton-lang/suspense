@@ -1,0 +1,7 @@
+- [A scroll begun with the view already resting at its end pulls into the stretch from its very first step](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [It makes no difference whether the view was scrolled there earlier, opened there by clicking the previous tasks row, or left there by a slide](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [Nothing of that scroll is swallowed by the view before the stretch takes it](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [The ends are the latest task's top, with previous tasks to open, and the previous tasks' bottom](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [It crosses over once the distance past the end builds up to 320 pixels](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [A scroll carried on from a slide stops at its end; a new one starts after 80 ms still or a new touch](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [Output or a list too short to scroll is always at both its ends](spec/scope/prompt-mode/message-list/Scrolling.pi)

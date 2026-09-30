@@ -1,0 +1,54 @@
+
+export anchor SetScrollDistanceTo512px2:
+    userPrompt:
+        \\\
+        I think the scroll distance should be 512px
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            I think the scroll distance should be 512px
+            \\\
+        result:
+            \\\
+            The scroll distance is now 512 px in the spec, about eight or nine wheel notches. The visible stretch stays at 64 px. I changed the spec only, not the code; `piton check`, `piton format --check` and `piton build` all pass.
+
+            **What changed:** in `spec/scope/prompt-mode/message-list/Scrolling.pi`, under `MessageListScrollingShape.scrollingPast`, the barrier went from "320 pixels, about six notches" to "512 pixels, about eight or nine notches". Nothing else changed:
+            - **Stretch:** the view still slides at most about 64 px, giving less the further it goes.
+            - **Draining:** the build-up still holds while you keep scrolling, then drains within half a second once you stop.
+            - **Glow:** it still grows as you near the barrier.
+
+            **Anchor for the code step:** `MessageListScrollingShape.scrollingPast`. In `src/prompt_mode.rs`:
+            - **Barrier:** set `SCROLL_BARRIER` to `512.`.
+            - **Stretch curve:** retuning `STRETCH_GIVE` alone won't work well. With the current formula, the pull is already about 63 px after roughly 250 px of scrolling, so it would sit flat for the last half of the zone. A better curve is `pull = STRETCH_PULL · (1 − e^(−h/64)) / (1 − e^(−512/64))`. It gives almost 1:1 at the first notch, keeps stiffening the whole way, and reaches exactly 64 px at the 512 px barrier.
+            - **Tests:** update the ones that count on 320 px: the build-up sequence and steady-scroll check in `scrolling_past_an_end_crosses_over`, `a_step_reaching_the_top_builds_up_what_goes_past`, and `the_stretch_stiffens_up_to_the_barrier`.
+            \\\
+
+    sentFrom: SetScrollDistanceTo512px

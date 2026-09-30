@@ -1,0 +1,61 @@
+
+export anchor PreventScrollThroughBarrier2:
+    userPrompt:
+        \\\
+        It seems like the scroll that pushes through the barrier follows through and scrolls whatever it beneath it.  It shouldn't.  The scroll should stop at the time of switch.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            It seems like the scroll that pushes through the barrier follows through and scrolls whatever it beneath it.  It shouldn't.  The scroll should stop at the time of switch.
+            \\\
+        result:
+            \\\
+            A scroll that pushes through the barrier now stops at the switch, according to the spec. I changed the spec only, not the code; `piton check`, `piton format --check` and `piton build` all pass.
+
+            **What the spec now says** (`spec/scope/prompt-mode/message-list/Scrolling.pi`, `MessageListScrollingShape.scrollingPast`):
+            - **The crossing step:** the scroll step that takes it past the barrier is used up by the switch, however far past the barrier it reached. None of it scrolls the view you land on.
+            - **The rest of that scroll:** anything more from the same scroll is thrown away, whether the wheel keeps turning, your fingers keep moving, or momentum keeps running. That holds during the slide and after it settles. It doesn't scroll either view, doesn't stretch, and doesn't switch back. The new view stays exactly where the slide left it.
+            - **The next scroll:** only a new scroll moves anything again. That means one started after the wheel or trackpad has been still for 80 ms, or after you lift your fingers and put them back. It then works as normal.
+            - **Replaced wording:** the old rule said a scroll carried on from the slide "stops at the end it lands on". That still let it scroll the new view up to its end, which is what you were seeing. I replaced it. The intro sentence now says a scroll that has already switched is spent.
+
+            **What the code step should follow:** `MessageListScrollingShape.scrollingPast`, in `scroll_past_ends` in `src/prompt_mode.rs`. I think the leak comes from two places:
+            1. **The crossing step:** when the step that crosses is also the one that reaches the end (`reaching`), the handler doesn't call `cx.stop_propagation()`. It should always stop propagation when it switches.
+            2. **The rest of the scroll after the slide:** once the slide has settled, the handler only stops that scroll from stretching. It still lets it through to the list underneath. The handler needs a "spent" state:
+               - it's set when the switch happens;
+               - it's cleared only by a new scroll (80 ms still, or `TouchPhase::Started`);
+               - while it's set, every scroll event is stopped.
+
+               It has to be separate from the existing `held_back` flag, because momentum outside a switch should still scroll the view normally.
+
+            The tests should check that, after a switch, carrying on scrolling with steps less than 80 ms apart leaves the new view's offset unchanged, both during and after the slide. They should also check that a scroll after an 80 ms pause does move it.
+            \\\
+
+    sentFrom: PreventScrollThroughBarrier

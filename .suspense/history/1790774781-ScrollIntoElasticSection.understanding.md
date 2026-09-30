@@ -1,0 +1,8 @@
+- [A scroll that starts with the view already resting at an end pulls into the stretch from its first step, just as one that arrives there does](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [The ends that stretch are the latest task's top, with previous tasks to open, and the previous tasks' bottom](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [One continuous scroll that reaches an end carries straight on into the stretch, with no pause or restart needed](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [It crosses over once the distance past the end builds up to 320 pixels](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [The build-up never drains while steps come less than 200 ms apart; after that it drains to nothing within 500 ms](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [Only a fling's momentum and a scroll carried on from a slide stop at an end; a new scroll starts after 80 ms still or a new touch](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [Output or a list too short to scroll is always at both its ends, so any scroll over it that leads somewhere stretches](spec/scope/prompt-mode/message-list/Scrolling.pi)
+- [With no previous tasks, scrolling up at the top stops without stretching](spec/scope/prompt-mode/message-list/Scrolling.pi)

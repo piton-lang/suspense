@@ -1,6 +1,7 @@
 use /lib
 from /scope/no-project import NoProjectStateScope
 from /scope/open-projects import OpenProjectsScope
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from /scope/running-activity import RunningActivityScope
 
 export scope SpecBuildScope:
@@ -19,6 +20,13 @@ shape SpecBuildShape:
         writing it out for the agents, the reference folder the harness reads
         included. A build runs either on its own, from a command, or ahead of
         other work that relies on the compiled spec.
+
+        Each build also writes the project's Piton fluency, what
+        `piton agent --print-fluency` prints, to the fluency file in the
+        project's data, as the @{ModeSystemPromptsScope} says, whether the
+        build succeeds or not, so the file keeps in step with the project's
+        piton. Where the fluency can't be printed, the file is left as it
+        was.
 
     onItsOwn:
         The Build Spec command, and Build in the palette, run a build on their

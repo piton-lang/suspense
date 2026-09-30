@@ -32,6 +32,7 @@ pub struct ProjectCreated(pub PathBuf, pub Option<String>);
 const GITIGNORE: &str = "\
 # Suspense's per-machine state. The prompt history is kept.
 /.suspense/harness.json
+/.suspense/fluency.md
 /.suspense/queue/
 /.suspense/commit-notes.json
 /.suspense/conversations.json

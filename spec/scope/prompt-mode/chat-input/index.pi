@@ -151,8 +151,11 @@ shape ChatInputShape:
             between its tabs, or around them. Each tab is only its label, in
             small text, with 8 pixels to each side of it and no border, and
             its label is always in its mode's colour at full strength, of the
-            @{PromptModesScope}, whether selected or not: Code red, Spec blue,
-            Ask green, and Freeform grey. The selected tab is marked only by
+            @{PromptModesScope}, whether selected or not: Code red, Chain's
+            icon purple, Spec blue, Ask green, and Freeform grey. The one
+            exception is Chain selected, when Code and Spec take Chain's purple
+            too, as the chain says. The selected
+            tab is marked only by
             its background, the same surface as the body beneath it, so it
             reads as a tab joined to that body; unselected tabs have none, and
             show the strip, lightening a little on hover. There is a tab for each of the
@@ -179,7 +182,9 @@ shape ChatInputShape:
         chain:
             Chain is a tab with unusual behaviour. It shows an icon rather than
             a label, reading "Code and Spec" as its tooltip, and selecting it
-            selects both Code and Spec. It never shows a focus outline, and its
+            selects both Code and Spec. Its icon is drawn in Chain's colour, the
+            purple of the @{PromptModesScope}, selected or not, as every
+            tab's label is in its mode's colour. It never shows a focus outline, and its
             icon looks evenly spaced between Code and Spec whichever of the two
             is selected.
 
@@ -202,6 +207,13 @@ shape ChatInputShape:
             beneath the two of them and Chain, reading as a single unified
             tab. Chain itself has a transparent background, so the joined Code
             and Spec show through underneath it.
+
+            While Chain is selected, the Code and Spec labels are drawn in
+            Chain's purple, the same colour as its icon, rather than red and
+            blue, so the unified tab reads as one mode in one colour. Their
+            colour follows the slide: as Code and Spec slide together, their
+            labels shift from red and blue to purple, and as they slide apart
+            they shift back, each reaching its own colour as the tabs settle.
 
         help:
             To the right of the tabs, filling the rest of the bar, a line of

@@ -1,0 +1,57 @@
+
+export anchor Prompt_fa9ea3f37f4a4a71:
+    userPrompt:
+        \\\
+        You're still not getting the scrolling between message and task history.  One big scroll, it'll kinda pause at the top of either screen but a continuous scroll should after a little extra perform the switch.  You *don't* have to stop the scroll and restart.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            You're still not getting the scrolling between message and task history.  One big scroll, it'll kinda pause at the top of either screen but a continuous scroll should after a little extra perform the switch.  You *don't* have to stop the scroll and restart.
+            \\\
+        result:
+            \\\
+            I've changed the spec only, not the code. `piton check`, `piton format --check` and `piton build` all pass.
+
+            **Why it doesn't switch today.** The spec already said one continuous scroll should cross over, but the code keeps draining the build-up while you're still scrolling. In `prompt_mode.rs`, `ScrollPush::held` starts draining from each scroll step, spread over 500 ms. On Wayland one wheel notch is 3 lines, about 60 px. If you spin the wheel steadily at 150–200 ms per notch, the build-up levels off around 150–200 px and never reaches the 200 px barrier. So it sits at the top until you stop and start a new scroll. I found this by reading the code; I haven't reproduced it in the app.
+
+            **Changes to `spec/scope/prompt-mode/message-list/Scrolling.pi`, in `MessageListScrollingShape.scrollingPast`:**
+            - **No draining while scrolling:** a scroll counts as still going while its steps arrive less than 200 ms apart. Each step adds all of itself to the build-up, so a steady scroll at any speed reaches the barrier and crosses over.
+            - **Drain after stopping:** the build-up only starts draining 200 ms after the last step, and is back to nothing within 500 ms of it. A small nudge into the stretch still never crosses over later.
+            - **Overshoot counts:** when a scroll step reaches the end, whatever part of it goes past the end starts the build-up instead of being lost.
+            - **Momentum:** only scrolling after the platform reports the fingers lifting counts as momentum. Wayland never reports this, so on Linux nothing counts as momentum.
+            - **Notch count:** 200 px is now described as about four wheel notches, not two.
+
+            **Anchor the code should follow:** `MessageListScrollingShape.scrollingPast`. The code changes are:
+            - Change `ScrollPush::held` and the stretch pull so they hold at full value until 200 ms after the last step, then drain to nothing by 500 ms. This needs a new constant next to `SCROLL_DRAIN`.
+            - In `scroll_past_ends`, add the part of a step that goes past the end to the build-up. The barrier, the carry-on-from-slide rule and the 80 ms rest all stay as they are.
+            \\\
+
+    sentFrom: Prompt_113f8b225993f74f

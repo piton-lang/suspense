@@ -5,12 +5,18 @@
 //! tinted box against the pane's right edge, its answer beneath it at the
 //! pane's full width, and a divider marks where each conversation begins.
 //!
+//! An answer reads as a chat reply rather than a task's table: its reply
+//! text after the harness's last tool call as markdown, with everything the
+//! harness did before it summed up in one muted line that expands into the
+//! steps, or, while it runs, a status line in that line's place.
+//!
 //! The whole conversation is one virtualized list: each question is a few
-//! rows of it, its box, its status line, its table's header, each of its
-//! table's rows, and its end, so however many questions there are, and
-//! however long their answers, only the rows in view are laid out.
+//! rows of it, its box, its summary or status line, each step shown, each
+//! piece of its answer, and its end, so however many questions there are,
+//! and however long their answers, only the rows in view are laid out.
 
 use super::*;
+use crate::task_table::ChatRows;
 
 /// The share of the width above the chat input the pane starts at, and the
 /// least and most its edge can be dragged to.
@@ -66,38 +72,80 @@ impl QuestionKey {
 enum PaneRow {
     /// A question's box, headed by a divider when it begins a conversation.
     Question(usize),
-    /// Its status line: while it runs, the latest thing the harness did.
-    Status(usize),
-    /// Its table's header, or "No output." for a finished one with none.
-    TableHeader(usize),
-    /// A row of its table.
-    TableRow(usize, usize),
-    /// The end of its table.
+    /// Its line summing up the steps before its answer, or, while it runs,
+    /// its status line; nothing when it is over with no steps.
+    Line(usize),
+    /// A step before its answer, by its row of the reply, shown while its
+    /// steps are expanded.
+    Step(usize, usize),
+    /// A piece of its answer, by its row of the reply.
+    Answer(usize, usize),
+    /// Its end: "No answer." for a finished one with nothing to show, the
+    /// error it failed with, or "Stopped".
     End(usize),
     /// After the last question: the divider New conversation put in, if the
     /// next question starts one, and the margin ending the list.
     Tail,
 }
 
-/// How many rows a question takes besides its table's: its box, status
-/// line, table header, and end.
-const QUESTION_ROWS: usize = 4;
+/// What a step or a piece of an answer shows: a tool call's name and most
+/// telling argument, or reply text as markdown, and where its state is kept.
+enum Piece {
+    Tool(String, Option<String>),
+    Text(MarkdownKey, SharedString),
+}
 
-/// What a question's box, status line, and table header showed, as last laid
-/// out, so they are measured again once that changes.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// How many rows a question takes besides its steps and answer: its box, its
+/// line, and its end.
+const QUESTION_ROWS: usize = 3;
+
+/// How a question's answer is laid out: its steps, whether they are shown,
+/// and the pieces of its answer.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct AnswerLayout {
+    chat: ChatRows,
+    shown: bool,
+}
+
+impl AnswerLayout {
+    fn items(&self) -> usize {
+        QUESTION_ROWS + self.shown_steps() + self.chat.answer.len()
+    }
+
+    fn shown_steps(&self) -> usize {
+        if self.shown { self.chat.steps.len() } else { 0 }
+    }
+
+    fn row_at(&self, question: usize, at: usize) -> PaneRow {
+        let steps = self.shown_steps();
+        match at {
+            0 => PaneRow::Question(question),
+            1 => PaneRow::Line(question),
+            at if at < 2 + steps => PaneRow::Step(question, self.chat.steps[at - 2]),
+            at if at < 2 + steps + self.chat.answer.len() => {
+                PaneRow::Answer(question, self.chat.answer[at - 2 - steps])
+            }
+            _ => PaneRow::End(question),
+        }
+    }
+}
+
+/// What a question showed, as last laid out, so its rows are measured again
+/// once that changes.
+#[derive(Clone, Debug, PartialEq)]
 struct Look {
     starts: bool,
     status: TaskStatus,
-    empty: bool,
+    reply: (u64, u64),
+    answer: AnswerLayout,
 }
 
 /// What the list was last laid out for.
 #[derive(Default)]
 struct PaneLaidOut {
     keys: Vec<QuestionKey>,
-    tables: Vec<TableSync>,
     looks: Vec<Option<Look>>,
+    markdown: u64,
     pending: bool,
 }
 
@@ -136,10 +184,10 @@ impl AskPane {
 }
 
 /// Where each question's rows start, what row `ix` shows, and how each
-/// question's table is laid out.
+/// question's answer is laid out.
 struct PaneLayout {
     starts: Vec<usize>,
-    tables: Vec<TableLayout>,
+    answers: Vec<AnswerLayout>,
 }
 
 impl PaneLayout {
@@ -149,19 +197,14 @@ impl PaneLayout {
             Err(0) => return PaneRow::Tail,
             Err(next) => next - 1,
         };
-        let Some(table) = self.tables.get(question) else {
+        let Some(answer) = self.answers.get(question) else {
             return PaneRow::Tail;
         };
         let at = ix - self.starts[question];
-        let items = table.items();
-        match at {
-            0 => PaneRow::Question(question),
-            1 => PaneRow::Status(question),
-            2 => PaneRow::TableHeader(question),
-            at if at < items + 3 => PaneRow::TableRow(question, at - 3),
-            at if at == items + 3 => PaneRow::End(question),
-            _ => PaneRow::Tail,
+        if at >= answer.items() {
+            return PaneRow::Tail;
         }
+        answer.row_at(question, at)
     }
 }
 
@@ -270,11 +313,16 @@ impl PromptMode {
     }
 
     /// Tells the list what changed since it was last laid out: questions
-    /// asked or loaded, what their tables hold, and what each question's
-    /// box, status line, and header show.
+    /// asked or loaded, and each question whose answer, steps shown, status,
+    /// or divider changed, or whose markdown finished parsing.
     fn lay_out_ask_pane(&self, keys: &[QuestionKey], cx: &App) -> PaneLayout {
         let rows = &self.ask_pane.rows;
         let mut laid_out = self.ask_pane.laid_out.borrow_mut();
+        let old_items = |looks: &[Option<Look>], ix: usize| {
+            looks[ix]
+                .as_ref()
+                .map_or(QUESTION_ROWS, |look| look.answer.items())
+        };
         if laid_out.keys != keys {
             let kept = laid_out.keys.len();
             // The list holds its tail from the first time it is laid out.
@@ -283,59 +331,64 @@ impl PromptMode {
                 let tail = rows.count().saturating_sub(1);
                 let added = keys.len() - kept;
                 rows.splice(tail..tail, added * QUESTION_ROWS);
-                laid_out
-                    .tables
-                    .extend((0..added).map(|_| TableSync::default()));
                 laid_out.looks.extend((0..added).map(|_| None));
             } else {
                 rows.reset(keys.len() * QUESTION_ROWS + 1);
-                laid_out.tables = keys.iter().map(|_| TableSync::default()).collect();
                 laid_out.looks = vec![None; keys.len()];
                 laid_out.pending = false;
             }
             laid_out.keys = keys.to_vec();
         }
+        // Markdown that has finished parsing is measured again.
+        let parsed: HashSet<usize> = MarkdownStates::changed_since(&mut laid_out.markdown, cx)
+            .into_iter()
+            .map(|key| key.table)
+            .collect();
         let starts_conversation = self.conversation_starts(keys);
         let mut base = 0;
         let mut starts = Vec::with_capacity(keys.len());
-        let mut tables = Vec::with_capacity(keys.len());
+        let mut answers = Vec::with_capacity(keys.len());
         for (ix, key) in keys.iter().enumerate() {
             starts.push(base);
+            let old = old_items(&laid_out.looks, ix);
             let Some(task) = self.question(*key) else {
-                let layout = laid_out.tables[ix]
-                    .layout()
-                    .unwrap_or(TableLayout::of(&Reply::default(), None));
-                tables.push(layout);
-                base += QUESTION_ROWS + layout.items();
+                let answer = laid_out.looks[ix]
+                    .as_ref()
+                    .map(|look| look.answer.clone())
+                    .unwrap_or_default();
+                base += old;
+                answers.push(answer);
                 continue;
             };
-            let table = key.table();
-            let layout = TableLayout::of(&task.reply, Some(self.steps_shown.contains(&table)));
-            laid_out.tables[ix].update(rows, base + 3, table, &task.reply, layout, cx);
+            let answer = AnswerLayout {
+                chat: task.reply.chat_rows(),
+                shown: self.steps_shown.contains(&key.table()),
+            };
             let look = Look {
                 starts: starts_conversation[ix],
                 status: task.status,
-                empty: task.reply.row_count() == 0,
+                reply: task.reply.version(),
+                answer: answer.clone(),
             };
-            if laid_out.looks[ix] != Some(look) {
-                rows.remeasure(base..base + 3);
-                let end = base + 3 + layout.items();
-                rows.remeasure(end..end + 1);
-                laid_out.looks[ix] = Some(look);
-            }
-            // While it runs, its status line follows the harness.
-            if task.status.is_active() {
+            let items = answer.items();
+            if items != old {
+                rows.splice(base..base + old, items);
+            } else if laid_out.looks[ix].as_ref() != Some(&look) || parsed.contains(&key.table()) {
+                rows.remeasure(base..base + items);
+            } else if task.status.is_active() {
+                // While it runs, its status line follows the harness.
                 rows.remeasure(base + 1..base + 2);
             }
-            tables.push(layout);
-            base += QUESTION_ROWS + layout.items();
+            laid_out.looks[ix] = Some(look);
+            base += items;
+            answers.push(answer);
         }
         let pending = self.ask_new_pending;
         if laid_out.pending != pending {
             rows.remeasure(base..base + 1);
             laid_out.pending = pending;
         }
-        PaneLayout { starts, tables }
+        PaneLayout { starts, answers }
     }
 
     /// The divider heading the conversation begun at `at`, in seconds since
@@ -449,18 +502,23 @@ impl PromptMode {
             })
             .child(h_flex().w_full().justify_end().child(bubble))
             .child(footer)
+            .pb(ANSWER_GAP)
             .into_any_element()
     }
 
-    /// A question's status line: while it runs, a spinner, the latest thing
-    /// the harness did, and Stop; once over, its status unless it is done.
-    fn question_status(
+    /// A question's line above its answer: while it runs, a spinner, the
+    /// latest thing the harness did, and Stop; once over, the steps before
+    /// its answer summed up, beside a chevron that expands them; nothing
+    /// when there were none.
+    fn answer_line(
         &self,
         key: QuestionKey,
         task: &PromptTask,
+        answer: &AnswerLayout,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let id = key.id();
+        let muted = cx.theme().muted_foreground;
         if task.status.is_active() {
             let stop = match key {
                 QuestionKey::Ask(ask) => Some(
@@ -478,9 +536,11 @@ impl PromptMode {
                 .id(("question-status", id))
                 .w_full()
                 .px_4()
-                .pt(ANSWER_GAP)
+                .pb_1()
                 .gap_2()
                 .items_center()
+                .text_sm()
+                .text_color(muted)
                 .child(div().flex_none().child(Spinner::new().small()))
                 .child(
                     div()
@@ -491,20 +551,178 @@ impl PromptMode {
                 .children(stop);
             return gpui_kit::TestSupportExt::test_support(row).into_any_element();
         }
-        if task.status == TaskStatus::Done {
+        if answer.chat.steps.is_empty() {
             return div().into_any_element();
         }
+        let table = key.table();
+        let toggle = h_flex()
+            .id(("answer-steps", id))
+            .gap_1p5()
+            .items_center()
+            .cursor_pointer()
+            .text_sm()
+            .text_color(muted)
+            .child(
+                Icon::new(if answer.shown {
+                    IconName::ChevronDown
+                } else {
+                    IconName::ChevronRight
+                })
+                .xsmall(),
+            )
+            .child(task.reply.steps_summary(&answer.chat.steps))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if !this.steps_shown.remove(&table) {
+                    this.steps_shown.insert(table);
+                }
+                cx.notify();
+            }));
         div()
             .w_full()
             .px_4()
-            .pt(ANSWER_GAP)
-            .child(
-                div()
-                    .id(("task-status", id))
-                    .flex_none()
-                    .child(task.status.tag(cx)),
-            )
+            .pb_1()
+            .child(gpui_kit::TestSupportExt::test_support(toggle))
             .into_any_element()
+    }
+
+    /// What row `ix` of `reply` shows as a step or a piece of an answer.
+    fn piece_of(key: QuestionKey, reply: &Reply, ix: usize, cx: &App) -> Option<Piece> {
+        match reply.row(ix)? {
+            OutputRow::Tool(call) => {
+                let project_dir = ProjectDirectory::get(cx);
+                Some(Piece::Tool(
+                    call.name.clone(),
+                    task_table::tool_argument(call, project_dir.as_deref()),
+                ))
+            }
+            _ => {
+                let (key, shown) = task_table::reply_markdown(key.table(), reply, ix)?;
+                Some(Piece::Text(key, shown))
+            }
+        }
+    }
+
+    /// A step before a question's answer, row `ix` of its reply, as a
+    /// compact muted line: a tool call's name, then its most telling
+    /// argument; reply text as muted markdown.
+    fn answer_step(
+        key: QuestionKey,
+        ix: usize,
+        piece: Piece,
+        open: &OpenFile,
+        cx: &mut App,
+    ) -> AnyElement {
+        let theme = cx.theme();
+        let (muted, mono) = (theme.muted_foreground, theme.mono_font_family.clone());
+        let step =
+            match piece {
+                Piece::Tool(name, argument) => h_flex()
+                    .gap_2()
+                    .min_w_0()
+                    .child(div().flex_none().child(name))
+                    .children(argument.map(|argument| {
+                        div().min_w_0().truncate().font_family(mono).child(argument)
+                    }))
+                    .into_any_element(),
+                Piece::Text(markdown, shown) => div()
+                    .min_w_0()
+                    .child(task_table::prepared_markdown(
+                        markdown,
+                        shown,
+                        Some(open),
+                        cx,
+                    ))
+                    .into_any_element(),
+            };
+        let step = div()
+            .id(("answer-step", ix))
+            .w_full()
+            .min_w_0()
+            .pl(px(18.))
+            .py_0p5()
+            .text_sm()
+            .text_color(muted)
+            .child(step);
+        div()
+            .id(("answer-steps-of", key.id()))
+            .w_full()
+            .px_4()
+            .child(gpui_kit::TestSupportExt::test_support(step))
+            .into_any_element()
+    }
+
+    /// A piece of a question's answer, row `ix` of its reply, as markdown in
+    /// the body's text colour, a paragraph after the one before it.
+    fn answer_piece(
+        key: QuestionKey,
+        ix: usize,
+        piece: Piece,
+        first: bool,
+        open: &OpenFile,
+        cx: &mut App,
+    ) -> AnyElement {
+        let foreground = cx.theme().foreground;
+        let text = match piece {
+            Piece::Text(markdown, shown) => Some(task_table::prepared_markdown(
+                markdown,
+                shown,
+                Some(open),
+                cx,
+            )),
+            Piece::Tool(..) => None,
+        };
+        let piece = div()
+            .id(("answer-row", ix))
+            .w_full()
+            .min_w_0()
+            .text_color(foreground)
+            .children(text);
+        div()
+            .id(("answer-of", key.id()))
+            .w_full()
+            .px_4()
+            .when(!first, |row| row.pt_2())
+            .child(gpui_kit::TestSupportExt::test_support(piece))
+            .into_any_element()
+    }
+
+    /// A question's end: the error it failed with, "Stopped" once stopped,
+    /// or "No answer." when it finished with nothing to show.
+    fn answer_end(
+        key: QuestionKey,
+        task: &PromptTask,
+        answer: &AnswerLayout,
+        cx: &App,
+    ) -> AnyElement {
+        let theme = cx.theme();
+        let end = v_flex()
+            .id(("question-end", key.id()))
+            .w_full()
+            .px_4()
+            .gap_1();
+        let end = match task.status {
+            TaskStatus::Failed => {
+                let errors = task.reply.errors();
+                let errors: Vec<SharedString> = if errors.is_empty() {
+                    vec!["Failed".into()]
+                } else {
+                    errors
+                        .into_iter()
+                        .map(|error| error.to_string().into())
+                        .collect()
+                };
+                end.pt_2().text_color(theme.danger).children(errors)
+            }
+            TaskStatus::Cancelled => end
+                .pt_2()
+                .text_color(theme.muted_foreground)
+                .child("Stopped"),
+            TaskStatus::Done if answer.chat.answer.is_empty() => {
+                end.text_color(theme.muted_foreground).child("No answer.")
+            }
+            _ => end,
+        };
+        gpui_kit::TestSupportExt::test_support(end).into_any_element()
     }
 
     /// The pane: its header, and the conversation beneath it, or, with no
@@ -619,51 +837,21 @@ impl PromptMode {
         } else if self.ask_pane.locked {
             rows.scroll_to_end();
         }
-        let theme = cx.theme();
-        let (border, muted) = (theme.border, theme.muted_foreground);
-        let (table_background, radius) = (theme.tokens.table, theme.radius);
         let keys: Rc<Vec<QuestionKey>> = Rc::new(keys.to_vec());
         let starts = Rc::new(self.conversation_starts(&keys));
         let this = cx.entity().downgrade();
         let open_file = self.file_opener(cx);
-        // Its tables tighten as the pane narrows, counting its padding.
-        let density = task_table::Density::of_list(rows, px(32.));
-        // Each question's table rows, finding its reply wherever it is kept.
-        let tables: Rc<Vec<RenderRow>> = Rc::new(
-            keys.iter()
-                .zip(&layout.tables)
-                .map(|(&key, &table_layout)| {
-                    let reply_of = task_table::reply_of({
-                        let this = this.clone();
-                        move |cx| {
-                            let prompt_mode = this.upgrade()?.read(cx);
-                            prompt_mode.question(key).map(|task| &task.reply)
-                        }
-                    });
-                    let steps = steps(key.table(), &self.steps_shown, &cx.entity());
-                    task_table::table_rows(
-                        key.table(),
-                        reply_of,
-                        table_layout,
-                        Some(open_file.clone()),
-                        Some(steps),
-                        density,
-                        cx,
-                    )
-                })
-                .collect(),
-        );
-        let render: RenderRow = Rc::new(move |ix, window, cx| {
+        let render: RenderRow = Rc::new(move |ix, _window, cx| {
             let Some(entity) = this.upgrade() else {
                 return div().into_any_element();
             };
             let row = layout.row_at(ix);
-            let inset = || div().w_full().px_4();
             let question = |question: usize, cx: &App| -> Option<(QuestionKey, bool)> {
                 let key = *keys.get(question)?;
                 entity.read(cx).question(key)?;
                 Some((key, starts[question]))
             };
+            let answer = |q: usize| layout.answers.get(q).cloned().unwrap_or_default();
             match row {
                 PaneRow::Question(q) => {
                     let Some((key, starts)) = question(q, cx) else {
@@ -676,83 +864,55 @@ impl PromptMode {
                         this.question_row(key, task, q == 0, starts, cx)
                     })
                 }
-                PaneRow::Status(q) => {
+                PaneRow::Line(q) => {
                     let Some((key, _)) = question(q, cx) else {
                         return div().into_any_element();
                     };
+                    let answer = answer(q);
                     entity.update(cx, |this, cx| {
                         let Some(task) = this.question(key) else {
                             return div().into_any_element();
                         };
-                        this.question_status(key, task, cx)
+                        this.answer_line(key, task, &answer, cx)
                     })
                 }
-                PaneRow::TableHeader(q) => {
+                PaneRow::Step(q, row) | PaneRow::Answer(q, row) => {
                     let Some((key, _)) = question(q, cx) else {
                         return div().into_any_element();
                     };
-                    let empty = entity
+                    let piece = entity
                         .read(cx)
                         .question(key)
-                        .is_none_or(|task| task.reply.row_count() == 0);
-                    if empty {
-                        return inset()
-                            .pt(ANSWER_GAP)
-                            .text_color(muted)
-                            .child("No output.")
-                            .into_any_element();
-                    }
-                    inset()
-                        .pt(ANSWER_GAP)
-                        .child(
-                            div()
-                                .overflow_hidden()
-                                .text_base()
-                                .line_height(relative(1.5))
-                                .rounded_t(radius)
-                                .border_t_1()
-                                .border_x_1()
-                                .border_color(border)
-                                .bg(table_background)
-                                .child(task_table::output_header(density, cx)),
-                        )
-                        .into_any_element()
-                }
-                PaneRow::TableRow(q, row) => {
-                    let Some(rows) = tables.get(q) else {
+                        .and_then(|task| Self::piece_of(key, &task.reply, row, cx));
+                    let Some(piece) = piece else {
                         return div().into_any_element();
                     };
-                    inset()
-                        .child(
-                            div()
-                                .text_base()
-                                .line_height(relative(1.5))
-                                .border_x_1()
-                                .border_color(border)
-                                .bg(table_background)
-                                .child(rows(row, window, cx)),
-                        )
-                        .into_any_element()
+                    if let PaneRow::Step(..) = layout.row_at(ix) {
+                        return Self::answer_step(key, row, piece, &open_file, cx);
+                    }
+                    let first = layout
+                        .answers
+                        .get(q)
+                        .and_then(|answer| answer.chat.answer.first())
+                        == Some(&row);
+                    Self::answer_piece(key, row, piece, first, &open_file, cx)
                 }
                 PaneRow::End(q) => {
-                    let has_table = layout.tables.get(q).is_some_and(|table| table.items() > 0);
-                    let id = keys.get(q).map_or(0, |key| key.id());
-                    let end = inset().id(("question-end", id)).when(has_table, |end| {
-                        end.child(
-                            div()
-                                .h(radius.max(px(1.)))
-                                .rounded_b(radius)
-                                .border_b_1()
-                                .border_x_1()
-                                .border_color(border)
-                                .bg(table_background),
-                        )
-                    });
-                    gpui_kit::TestSupportExt::test_support(end).into_any_element()
+                    let Some((key, _)) = question(q, cx) else {
+                        return div().into_any_element();
+                    };
+                    let answer = answer(q);
+                    let this = entity.read(cx);
+                    let Some(task) = this.question(key) else {
+                        return div().into_any_element();
+                    };
+                    Self::answer_end(key, task, &answer, cx)
                 }
                 PaneRow::Tail => {
                     let pending = entity.read(cx).ask_new_pending;
-                    inset()
+                    div()
+                        .w_full()
+                        .px_4()
                         .pt(if pending { QUESTION_GAP } else { px(0.) })
                         .pb(px(12.))
                         .when(pending, |tail| {
@@ -767,8 +927,7 @@ impl PromptMode {
             .flex_1()
             .min_h_0()
             .size_full()
-            .child(rows.element(render))
-            .child(task_table::follow_density(rows, density, px(32.)));
+            .child(rows.element(render));
         let list = gpui_kit::TestSupportExt::test_support(list);
         let this = cx.entity().downgrade();
         let toggle: SetLock = Rc::new(move |locked, _, cx| {

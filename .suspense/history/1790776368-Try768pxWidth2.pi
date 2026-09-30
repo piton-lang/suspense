@@ -1,0 +1,67 @@
+from /scope/prompt-mode/chat-input import ChatInputScope
+
+export anchor Try768pxWidth2:
+    userPrompt:
+        \\\
+        Maybe even 768px
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Maybe even 768px
+            \\\
+        result:
+            \\\
+            The scroll distance is now 768 px in the spec, about twelve or thirteen wheel notches. The visible stretch still tops out at 64 px. I changed the spec only, not the code; `piton check`, `piton format --check` and `piton build` all pass.
+
+            I took "768px" to mean the scroll distance again, not a width, since that's what you set to 512 px last time. Tell me if you meant something else.
+
+            **What changed:** in `spec/scope/prompt-mode/message-list/Scrolling.pi`, under `MessageListScrollingShape.scrollingPast`, the barrier went from "512 pixels, about eight or nine notches" to "768 pixels, about twelve or thirteen notches". Nothing else changed:
+            - **Stretch:** the view still slides at most 64 px, giving less the further it goes.
+            - **Draining:** the build-up still holds while you keep scrolling, then drains within half a second once you stop.
+            - **Glow:** it still grows as you near the barrier.
+
+            Roughly how far the view will move with the current rubber-band curve:
+
+            | Notches | Scrolled | View moved |
+            |---|---|---|
+            | 1 | 60 px | about 32 px |
+            | 4 | 250 px | about 55 px |
+            | 8 | 500 px | about 61 px |
+            | 13 (switch) | 768 px | 64 px |
+
+            **Anchor for the code step:** `MessageListScrollingShape.scrollingPast`. In `src/prompt_mode.rs`:
+            - **Barrier:** set `SCROLL_BARRIER` to `768.`. `STRETCH_GIVE` is calculated from the barrier and `STRETCH_PULL`, so the stretch will still reach exactly 64 px at the switch without further tuning.
+            - **Tests:** update the ones that count on 512 px:
+              - in `scrolling_past_an_end_crosses_over`: the build-up sequence (the scroll-back check, the step that crosses, and the five `-120` steps that cross back) and the steady-scroll loop, which needs about 13 steps of 60 px;
+              - the second and third steps of `a_step_reaching_the_top_builds_up_what_goes_past`.
+            \\\
+
+    sentFrom: Try768pxWidth

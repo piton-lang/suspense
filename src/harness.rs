@@ -147,12 +147,17 @@ pub fn send(
     send_with_images(prompt, system_prompt, Vec::new(), resume, project_dir)
 }
 
-/// Where a task's run may not change anything: `root`, which Claude Code is
-/// told it may not edit, so the harness knows at once; the application puts
-/// back whatever changes there all the same, as [`crate::mode_guard`] says.
+/// What a run is kept off: `root`, where it may not change anything, which
+/// Claude Code is told it may not edit, so the harness knows at once, the
+/// application putting back whatever changes there all the same, as
+/// [`crate::mode_guard`] says; and `unread`, which Claude Code is told it may
+/// not read, so it reads the compiled reference instead. That is only a
+/// nudge: a shell command can still read it, and nothing stops the run when
+/// one does.
 #[derive(Clone, Debug, Default)]
 pub struct Protected {
     pub root: Option<PathBuf>,
+    pub unread: Option<PathBuf>,
 }
 
 /// Runs the harness once as [`send`] does, giving it `images` alongside the
@@ -164,13 +169,33 @@ pub fn send_with_images(
     resume: Option<Resume>,
     project_dir: PathBuf,
 ) -> mpsc::UnboundedReceiver<HarnessEvent> {
-    start(
+    send_kept_off(
         prompt,
         system_prompt,
         images,
         resume,
         project_dir,
         Protected::default(),
+    )
+}
+
+/// Runs the harness once as [`send_with_images`] does, kept off what
+/// `protected` says, as a question is kept off the spec's source.
+pub fn send_kept_off(
+    prompt: String,
+    system_prompt: Option<String>,
+    images: Vec<PathBuf>,
+    resume: Option<Resume>,
+    project_dir: PathBuf,
+    protected: Protected,
+) -> mpsc::UnboundedReceiver<HarnessEvent> {
+    start(
+        prompt,
+        system_prompt,
+        images,
+        resume,
+        project_dir,
+        protected,
         false,
     )
     .events
@@ -548,8 +573,31 @@ fn image_blocks(paths: &[PathBuf]) -> Result<Vec<Value>> {
 /// The Claude Code permission rule denying its file tools anything under
 /// `root`: an absolute path is written after a double slash.
 fn denied_edits(root: &Path) -> Option<String> {
+    denied("Edit", root)
+}
+
+/// The rule telling Claude Code it may not read anything under `root`.
+fn denied_reads(root: &Path) -> Option<String> {
+    denied("Read", root)
+}
+
+/// A rule denying `tool` anything under `root`, an absolute path.
+fn denied(tool: &str, root: &Path) -> Option<String> {
     let root = root.to_str()?.trim_end_matches('/');
-    root.starts_with('/').then(|| format!("Edit(/{root}/**)"))
+    root.starts_with('/').then(|| format!("{tool}(/{root}/**)"))
+}
+
+/// Every rule `protected` gives Claude Code, joined with commas; none when
+/// it keeps the run off nothing.
+fn denied_rules(protected: &Protected) -> Option<String> {
+    let rules: Vec<String> = [
+        protected.root.as_deref().and_then(denied_edits),
+        protected.unread.as_deref().and_then(denied_reads),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    (!rules.is_empty()).then(|| rules.join(","))
 }
 
 fn image_args(agent: Agent, paths: &[PathBuf]) -> Vec<std::ffi::OsString> {
@@ -714,9 +762,10 @@ fn run(
             if let Some(system_prompt) = system_prompt {
                 command.args(["--append-system-prompt", system_prompt]);
             }
-            if let Some(rule) = protected.root.as_deref().and_then(denied_edits) {
-                // Joined, as the flag takes any number of rules.
-                command.arg(format!("--disallowedTools={rule}"));
+            if let Some(rules) = denied_rules(protected) {
+                // Joined in one argument, as the flag takes any number of
+                // rules and would otherwise take what follows as more.
+                command.arg(format!("--disallowedTools={rules}"));
             }
             // Fed, the prompt is the first of a stream of messages, each of
             // which the harness replays as it takes it in. Images go in the
@@ -1673,6 +1722,28 @@ pub(crate) mod tests {
             Some("Edit(//p/spec/**)")
         );
         assert_eq!(super::denied_edits(std::path::Path::new("spec")), None);
+    }
+
+    /// A run kept off the spec's source is told it may not read it, beside
+    /// any location it may not edit; one kept off nothing is told nothing.
+    #[test]
+    fn claude_code_may_not_read_an_unread_location() {
+        use std::path::PathBuf;
+        let rules = |root: Option<&str>, unread: Option<&str>| {
+            super::denied_rules(&super::Protected {
+                root: root.map(PathBuf::from),
+                unread: unread.map(PathBuf::from),
+            })
+        };
+        assert_eq!(
+            rules(Some("/p/spec"), Some("/p/spec")).as_deref(),
+            Some("Edit(//p/spec/**),Read(//p/spec/**)")
+        );
+        assert_eq!(
+            rules(None, Some("/p/spec")).as_deref(),
+            Some("Read(//p/spec/**)")
+        );
+        assert_eq!(rules(None, None), None);
     }
 
     /// A stand-in harness, written to `dir`: it says which conversation it

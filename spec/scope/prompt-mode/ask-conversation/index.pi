@@ -63,15 +63,50 @@ shape AskConversationShape:
         question again as the @{PromptSendingScope} says, the new question
         coming in at the bottom.
 
-        Its answer follows beneath it, against the pane's left edge and the
-        pane's full width, with no box: its @{TaskTableScope}, collapsing the
-        steps leading up to the answer as the table says, so what is read is
-        the answer. While the harness works on it, the table grows as the
-        harness does, beneath a status line with a spinner and the latest
-        thing the harness did, and a Stop button at the status line's right
-        stops just that question, leaving the others running. A question that
-        failed or was stopped shows its status in the table as any task
-        does. Questions are 16 pixels apart, and a question's answer 8 pixels
+        Its answer follows beneath it, as a chat reply rather than a task:
+        against the pane's left edge, across the pane's full width, with no
+        box. The answer is read as prose, not as a list of what the harness
+        did.
+
+    answers:
+        An answer is not drawn as a @{TaskTableScope}: it has no columns, no
+        Type badges or Status labels, and no lines between rows. What is
+        shown is the answer's reply text, the reply rows after the harness's
+        last tool call, as the table's collapsed steps count them, rendered
+        as markdown in the body's text colour, one paragraph after another,
+        as a message in a chat is. Code blocks, lists, tables, and links in it
+        are rendered as markdown renders them anywhere. An answer with no tool
+        calls is all reply text; a finished answer with nothing to show reads
+        "No answer.", muted.
+
+        Everything the harness did before the answer, its tool calls and any
+        reply text between them, is gathered into one line above the answer,
+        small and muted, beside a right chevron, summing it up, as "Read 3
+        files, searched twice, ran 1 command" or "Worked through 6 steps"
+        where it can't be summed up by kind. Clicking it expands the steps
+        in place, beneath it and above the answer, as compact muted lines,
+        one per step: a tool call as its tool's name, muted, then its most
+        telling argument, shortened as the @{TaskTableScope}'s tool calls
+        are, and reply text between them as muted markdown; clicking it again
+        collapses them. It starts collapsed, and stays as it was left for as
+        long as the application runs. An answer whose harness did nothing
+        before replying has no such line.
+
+        While the harness works on a question, a status line takes that
+        line's place: a spinner and the latest thing the harness did, muted,
+        with a Stop button at its right that stops just that question,
+        leaving the others running. Reply text streams in beneath it as
+        prose as the harness writes it; text it goes on to follow with a tool
+        call joins the steps once the call comes, so only the answer is left
+        as prose. Once the question finishes, the status line becomes the
+        summary line.
+
+        A question that failed ends its answer with the error, in the
+        theme's error colour, beneath whatever reply came before it. One that
+        was stopped ends with "Stopped", muted. Neither is shown as a status
+        in a table.
+
+        Questions are 16 pixels apart, and a question's answer 8 pixels
         beneath it.
 
         Questions asked while another is still running come in at the bottom
@@ -106,8 +141,8 @@ shape AskConversationShape:
         back to the bottom locks it again. Asking a question always scrolls it
         to the bottom and locks it. However many questions it holds, and
         however long their answers, it lays out only what is in view: each
-        question, divider, and row of an answer's table is drawn as it
-        scrolls into view, so a long conversation costs no more to show,
+        question, divider, summary line, and block of an answer's markdown is
+        drawn as it scrolls into view, so a long conversation costs no more to show,
         scroll, or resize than a short one.
 
     empty:
@@ -115,11 +150,11 @@ shape AskConversationShape:
         below.", muted, centred in it.
 
     selectingText:
-        The text of any question or answer in the pane can be selected by
-        dragging across it, as any text can. A drag that selects text ending
-        within the pane shows a @{SelectionPopoverScope} with two buttons:
-        "Copy", with a copy icon, and "Attach to prompt", with a paperclip
-        icon. Copy puts the selected text on the clipboard; Attach to prompt
+        The text of any question, answer, or expanded step in the pane can be
+        selected by dragging across it, as any text can. A drag that selects
+        text ending within the pane shows a @{SelectionPopoverScope} with two
+        buttons, "Copy", with a copy icon, and "Attach to prompt", with a
+        paperclip icon. Copy puts the selected text on the clipboard; Attach to prompt
         adds it to the prompt as an attachment. Either one clears the
         selection, and the popover closes when the pane goes.
 

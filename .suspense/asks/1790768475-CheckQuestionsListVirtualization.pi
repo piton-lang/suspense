@@ -1,0 +1,16 @@
+from /scope/prompt-mode/queue-list import QueueListScope
+
+export anchor CheckQuestionsListVirtualization:
+    userPrompt:
+        \\\
+        Is the scrolling in the questions list virtualized ?
+        \\\
+
+    mode: ask
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're only asking a question about the code located in ./src and the spec located in ./spec. Don't edit either of them.
+        \\\
