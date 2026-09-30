@@ -921,8 +921,9 @@ fn config(palette: &Palette, mode: ThemeMode, default: &Rc<ThemeConfig>) -> Valu
     set("list.hover.background", hex(p.hover));
     set("list.active.background", hex(p.selected));
     set("list.active.border", hex(p.accent));
-    set("table.background", hex(p.well));
-    set("table.even.background", hex_alpha(p.well, 0));
+    // A table's rows sit on the darkest surface, as the file tree does.
+    set("table.background", hex(p.darkest));
+    set("table.even.background", hex_alpha(p.darkest, 0));
     set("table.head.background", hex(p.raised));
     set("table.head.foreground", hex(p.text_secondary));
     set("table.foot.background", hex(p.raised));
@@ -1414,6 +1415,8 @@ mod tests {
                 same(theme.popover, p.overlay, "popover");
                 same(theme.list_hover, p.hover, "list_hover");
                 same(theme.list_active, p.selected, "list_active");
+                // A table's rows are on the file tree's darkest surface.
+                same(*theme.tokens.table, p.darkest, "table");
                 same(theme.primary, p.accent_fill, "primary");
                 same(theme.ring, p.accent, "ring");
                 same(theme.danger, p.error, "danger");

@@ -1,0 +1,56 @@
+
+export anchor Prompt_4e7c30174cddcbd8:
+    userPrompt:
+        \\\
+        @{Table} dark background should be the same dark background as @{FileTreeScope}
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            @{Table} dark background should be the same dark background as @{FileTreeScope}
+            \\\
+        result:
+            \\\
+            I've changed the spec so the table's dark background matches the file tree's. I didn't touch any code. `piton check` found no problems and `piton build` rebuilt the reference, including a new **Background** section in `.claude/reference/ui/components/table/TableScope.md`.
+
+            **Spec changes:**
+            - **`spec/ui/components/table/TableShape.pi`**: added a `background` property. A table's rows now sit on the same darkest surface as `FileTreeScope` (linked with `@{FileTreeScope}`): #111111 in dark mode and #e1e1e1 in light mode. That surface moves with the theme's brightness like the other greys, and it applies to every table. The header keeps its own raised look.
+            - **`spec/ui/theme/index.pi`** (`ThemeShape.surfaces`): the "well" surface (#2e2e2e / #f5f5f5) no longer lists task tables' bodies. It still covers the editor, code blocks and answers.
+
+            The constraints are in `.suspense/history/1790762275-Prompt_6dc9c9bc329c94d2.understanding.md`.
+
+            **Anchors the code should follow:**
+            - **`TableShape.background`**: the table body's colour must come from the same token as the file tree's darkest surface, so brightness changes move them together. Don't hard-code the hex values. Right now `src/theme.rs:924` sets `table.background` to `p.well`. `src/task_table.rs:1225` uses that token, and `src/prompt_mode.rs:1214`/`1497`/`1513` use it too, so check that those areas should change along with it.
+            - **`TableHeaderShape`**: the header still has the raised bevel. Leave `table.head.background` as it is.
+            - **`ThemeShape.surfaces`**: well stays #2e2e2e / #f5f5f5 for the editor, code blocks and answers.
+            - **`TableShape.legibility`**: text and hover/selected rows must stay legible on the darker surface in both modes. Check that `table.even.background`, `table.hover.background` and `table.active.background` still look right.
+            \\\
+
+    sentFrom: Prompt_6dc9c9bc329c94d2

@@ -1,0 +1,78 @@
+
+export anchor Prompt_ac39435478237ace:
+    userPrompt:
+        \\\
+        We should be able to send spec-only commands when only a code task is running.  Code tasks and spec tasks queue separately, even if they're sent from a code+spec.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            We should be able to send spec-only commands when only a code task is running.  Code tasks and spec tasks queue separately, even if they're sent from a code+spec.
+            \\\
+        result:
+            \\\
+            I've changed the spec so tasks run in two lanes: a code lane and a spec lane, each with its own queue. A Spec task sent while only a Code task is running now starts straight away and runs beside it. `piton format`, `piton check` (no problems) and `piton build` (75 files) all passed. No code was touched.
+
+            **Decisions of mine you should check** (the prompt didn't settle these):
+            - **Freeform** goes in the code lane, but it only starts when both lanes are free, and both stay busy while it runs, since it can change code or spec.
+            - **Conversation:** tasks still share one conversation. A task that starts while the other lane is running carries on a copy of it, the way concurrent questions already do. After that, tasks carry on the conversation of whichever task finished most recently.
+            - **Chain steps:** each step is sent when the step before it finishes, and goes to the front of its own lane's queue. While a chain's code step runs, the spec lane is free for other spec work. A step waiting in a queue is shown there and can be cancelled, which ends the chain.
+            - **Two running tasks:** the most recently sent one heads the view. The other one appears among the previous tasks as Running, with a Cancel button in its heading. "Send to task" only goes to the latest task.
+
+            **What changed, and the anchors the code should follow:**
+            - **`PromptSendingShape`** (`spec/scope/prompt-mode/sending/index.pi`):
+              - New `lanes` section: which modes go in which lane, what makes a lane busy, and at most one task per lane.
+              - `tasks`, `onTheApplicationsBehalf` and `resending` now say a task queues while its own lane is busy.
+              - `cancelling`: the Cancel button on the other lane's running task, and cancelling a task leaves the other lane alone.
+              - `sendingToATask`: messages only go to the latest task.
+            - **`PromptEditorShape`** (`spec/scope/prompt-mode/index.pi`):
+              - `chainedTasks`: steps use their own lanes and go to the front of that lane's queue. Chains are grouped by which step each was sent from, not by being next to each other in the history (the current `chain_steps` in `src/prompt_mode.rs` assumes they are adjacent).
+              - `header`: which task is the latest one.
+              - `previousTasks`: batch sends use lanes.
+              - `projects`: a project's queues only send into that project.
+            - **`QueueListShape`** (`spec/scope/prompt-mode/queue-list/index.pi`):
+              - The queue stays one list, and each lane sends its own prompts from it in list order.
+              - A waiting Freeform prompt holds back the spec prompts queued after it.
+              - New `lanes` section: each row gets a label ("Code", "Spec", "Chain", "Freeform", "Spec follow-up") in its mode's colour.
+              - Editing a prompt pauses only its own lane.
+              - "Send next" and auto-send work per lane.
+            - **`PromptModesShape`** (`spec/scope/prompt-mode/modes/index.pi`): the `tasks` and `freeform` wording for lanes.
+            - **`ChatInputScope`** (`spec/scope/prompt-mode/chat-input/index.pi`):
+              - The send button reads "Queue" only while the selected tab's lane is busy.
+              - New conversation marks the next task to start in either lane.
+            - **Harness integration** (`spec/scope/harness-integration/index.pi`, `context`): the copied conversation for concurrent tasks.
+            - **`RunningActivityShape`** (`spec/scope/running-activity/index.pi`): one row per running task. Clicking the other lane's task opens it among the previous tasks.
+
+            The task constraints are in `.suspense/history/1790762509-Prompt_f7414cf8a117c885.understanding.md`.
+
+            Two MCP connections aren't available in this session. The claude.ai Gmail, Google Calendar and Google Drive connectors need authorizing in your claude.ai connector settings. The `backlog` server failed to connect because its executable isn't on your PATH.
+            \\\
+
+    sentFrom: Prompt_f7414cf8a117c885

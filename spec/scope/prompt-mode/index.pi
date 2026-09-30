@@ -7,6 +7,7 @@ from /scope/harness-integration import HarnessIntegrationScope
 from /scope/no-project import NoProjectStateScope
 from /scope/open-projects import OpenProjectsScope
 from /scope/project-data import ProjectDataScope
+from /scope/prompt-mode/ask-conversation import AskConversationScope
 from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from /scope/prompt-mode/modes import PromptModesScope
 from /scope/prompt-mode/sending import PromptSendingScope
@@ -57,7 +58,7 @@ shape PromptEditorShape:
         clicked before, it selects or deselects that one as a plain click
         does. The selection is kept while the list is closed and opened again,
         until it is cleared or sent. Each open project keeps its own, as the
-        @{OpenProjectsScope} says. Previous answers have no checkboxes.
+        @{OpenProjectsScope} says.
 
         While any task is selected, the row shows the batch actions at its
         right, in place of nothing: "N selected", muted, counting every task
@@ -74,8 +75,8 @@ shape PromptEditorShape:
 
         A batch action sends each of its tasks to the other mode, as the
         @{PromptSendingScope} says for one, oldest first: the first starts
-        straight away while the harness is free and the rest queue behind it,
-        so they run in the order they were first sent, each saved in the
+        straight away while its lane is free and the rest queue behind it in
+        that lane, so they run in the order they were first sent, each saved in the
         history as a new task. Once sent, the tasks it sent are deselected,
         the rest of the selection is kept, and the list stays as it was, still
         expanded, with nothing opened. With no project open, it sends nothing,
@@ -127,7 +128,6 @@ shape PromptEditorShape:
         these filters", muted, centred. The filters are kept while the list is
         closed and opened again, and each open project keeps its own, as the
         @{OpenProjectsScope} says, but they are not saved with the project.
-        Previous answers have no filter bar.
 
     chainedTasks:
         A prompt sent in Chain runs as steps, each saved in the history as a
@@ -138,6 +138,18 @@ shape PromptEditorShape:
         one it was sent from, as the @{PromptSendingScope} says. Only the
         steps the chain sends itself belong to it; a task sent to the other
         mode by hand, or resent, from one of its steps is a task of its own.
+
+        Each step runs in the lane of the work it does, as the
+        @{PromptSendingScope} says: the Chain task and its spec follow-up in
+        the spec lane, the code step in the code lane. A step is sent once the
+        step before it finishes, never before, and goes to the head of its
+        lane's queue, ahead of the prompts already waiting there, so it runs
+        as soon as that lane is free, and straight away if it already is. The
+        lane it leaves is free for its own queue meanwhile, so a Spec task
+        sent while a chain's code step runs runs beside it. A step waiting for
+        its lane shows in the queue like any prompt, and can be cancelled
+        there, ending the chain. A step whose chain step before it failed or
+        was cancelled is never sent.
 
         In the previous tasks list, a chain's steps are grouped under one
         parent item, so they read as parts of a single chain. The parent is a
@@ -161,8 +173,11 @@ shape PromptEditorShape:
         is the parent's. They are listed in the order they ran.
 
         A chain is listed where its first step was sent, oldest first like
-        every other item; tasks sent while it ran, such as questions, are
-        never listed within it. A chain still running, or one whose later
+        every other item; tasks sent while it ran, such as questions or tasks
+        of the other lane run between its steps, are never listed within it,
+        and are listed after the chain, in the order they were sent. A chain's
+        steps are found by which step each was sent from, not by being next to
+        each other in the history. A chain still running, or one whose later
         steps haven't been sent yet, shows as many steps as have been, and
         a step still running shows as it would anywhere. When the latest
         task, heading the view, is a step of a chain, that chain's earlier
@@ -173,7 +188,10 @@ shape PromptEditorShape:
         it was sent from is missing, is listed as a task of its own.
 
     header:
-        The latest task heads the view whether or not the harness is working:
+        The latest task heads the view whether or not the harness is working.
+        It is the task sent most recently, whichever lane it runs in; a task
+        still running in the other lane is among the previous tasks, shown
+        running there, as any previous task is. The header shows
         its status, with a spinner while it is under way, the name of the
         hidden anchor it was compiled from, and the compiled markdown the
         harness actually received, which scrolls once it gets tall. Until it
@@ -197,7 +215,7 @@ shape PromptEditorShape:
         been sent: nothing rendered, nothing hidden. Clicking it never opens or
         closes anything else in the header. Until the task has compiled, it
         is disabled, its tooltip reading "No prompt sent yet". Only the
-        latest task's header has it; previous tasks and answers don't.
+        latest task's header has it; previous tasks and questions don't.
 
         The modal is titled "Raw prompt", with the task's mode, its hidden
         anchor's name, and the harness it was sent to beneath the title, or
@@ -250,7 +268,7 @@ shape PromptEditorShape:
         Tasks, the queue, and the auto-send switch belong to their project, as
         the @{OpenProjectsScope} says: the view shows the tasks and queue of the
         project on screen, while those of other open projects carry on in the
-        background. A project's queue only ever sends into that project.
+        background. A project's queues only ever send into that project.
 
     buildingTheSpec:
         A task builds the spec before it is sent, as the @{PromptModesScope}
@@ -269,9 +287,10 @@ shape PromptEditorShape:
         "Not recorded".
 
         Every question asked from the Ask tab is logged the same way, but among
-        the questions instead, so it never comes back as a task. The record is
-        saved when the run is over, and also when the question is closed or
-        replaced while it runs, with as much as the harness had done. A question
+        the questions instead, so it never comes back as a task: it comes back
+        in the @{AskConversationScope}. The record is saved when the run is
+        over, and also when the question is stopped while it runs, with as
+        much as the harness had done. A question
         that fails before it reaches the harness is logged too, with the error
         in its record.
 

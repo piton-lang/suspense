@@ -70,7 +70,7 @@ impl Section {
     fn holds(self, prompt: Prompt) -> bool {
         matches!(
             (self, prompt),
-            (Section::SystemPrompts, Prompt::Mode(_))
+            (Section::SystemPrompts, Prompt::System | Prompt::Mode(_))
                 | (
                     Section::InjectedPrompts,
                     Prompt::SpecReading | Prompt::CodeToSpec | Prompt::SpecToCode
@@ -609,6 +609,7 @@ mod tests {
         assert_eq!(
             listed,
             [
+                Prompt::System,
                 Prompt::Mode(SendMode::Code),
                 Prompt::Mode(SendMode::Both),
                 Prompt::Mode(SendMode::Spec),
@@ -621,7 +622,11 @@ mod tests {
         assert!(!system_prompts::file(SendMode::Freeform, &dir).exists());
 
         settings.update_in(cx, |this, window, cx| {
-            this.prompts[0]
+            // Code's, after the system prompt's.
+            this.prompts
+                .iter()
+                .find(|p| p.prompt == Prompt::Mode(SendMode::Code))
+                .unwrap()
                 .editor
                 .read(cx)
                 .focus_handle(cx)

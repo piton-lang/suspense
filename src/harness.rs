@@ -686,7 +686,7 @@ fn run(
         }
     }
     let mut command = Command::new(program);
-    let mut input = prompt_as_given(agent, prompt, system_prompt);
+    let mut input = prompt_as_given(agent, prompt, system_prompt, resume.is_some());
     match agent {
         Agent::Claude => {
             command.args([
@@ -699,8 +699,9 @@ fn run(
                 "--verbose",
                 "--include-partial-messages",
                 // A resumed conversation otherwise keeps the system prompt of
-                // its first run, and each prompt's own must apply, as its mode
-                // may differ.
+                // its first run. The project's is the same for every prompt,
+                // mode and all, so the prompt cache holds; but one edited since
+                // must apply.
                 "--system-prompt-snapshot",
                 "off",
             ]);
@@ -881,11 +882,19 @@ fn invocation(agent: Agent) -> &'static str {
 /// The prompt `agent` is given, as text, for `prompt` sent with
 /// `system_prompt`: the prompt alone for a harness that takes a system prompt
 /// of its own, where it goes apart (see [`Agent::takes_system_prompt`]), and
-/// otherwise the system prompt ahead of it, marked off from it. What the
-/// harness is sent is this, and so is what the raw prompt modal shows.
-pub fn prompt_as_given(agent: Agent, prompt: &str, system_prompt: Option<&str>) -> String {
+/// otherwise the system prompt ahead of it, marked off from it, on the first
+/// prompt of a conversation only, not once `resumed`. What the harness is
+/// sent is this, and so is what the raw prompt modal shows.
+pub fn prompt_as_given(
+    agent: Agent,
+    prompt: &str,
+    system_prompt: Option<&str>,
+    resumed: bool,
+) -> String {
     match system_prompt {
-        Some(system_prompt) if !agent.takes_system_prompt() => {
+        // Ahead of a conversation's first prompt only: it is the same for
+        // every prompt, and the conversation already holds it.
+        Some(system_prompt) if !agent.takes_system_prompt() && !resumed => {
             with_system_prompt(prompt, system_prompt)
         }
         _ => prompt.to_string(),
@@ -2611,6 +2620,30 @@ done
             super::with_system_prompt("Fix it.", "Be brief."),
             "<system-prompt>\nBe brief.\n</system-prompt>\n\nFix it."
         );
+    }
+
+    /// A harness that takes no system prompt of its own is given it ahead of
+    /// a conversation's first prompt only: carrying one on, it already holds
+    /// it. One that takes its own is never given it in the prompt.
+    #[test]
+    fn the_system_prompt_goes_ahead_of_the_first_prompt_only() {
+        use super::{Agent, prompt_as_given};
+        for agent in [Agent::Codex, Agent::OpenCode] {
+            assert_eq!(
+                prompt_as_given(agent, "Fix it.", Some("Be brief."), false),
+                "<system-prompt>\nBe brief.\n</system-prompt>\n\nFix it."
+            );
+            assert_eq!(
+                prompt_as_given(agent, "Fix it.", Some("Be brief."), true),
+                "Fix it."
+            );
+        }
+        for resumed in [false, true] {
+            assert_eq!(
+                prompt_as_given(Agent::Claude, "Fix it.", Some("Be brief."), resumed),
+                "Fix it."
+            );
+        }
     }
 
     #[test]

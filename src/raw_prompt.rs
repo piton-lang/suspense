@@ -37,11 +37,14 @@ const MAX_WIDTH: Pixels = px(1000.);
 const WIDTH_SHARE: f32 = 0.9;
 
 /// What a task's harness was given besides its compiled prompt: which harness
-/// it was, and the system prompt as it received it, if any.
+/// it was, the system prompt as it received it, if any, the instructions that
+/// headed its message, if any, and whether it carried on a conversation.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Given {
     pub harness: Agent,
     pub system_prompt: Option<String>,
+    pub instructions: Option<String>,
+    pub resumed: bool,
 }
 
 /// A headed section of the modal, with its text, or, where there is none,
@@ -81,6 +84,13 @@ impl RawPrompt {
         user_prompt: &str,
         given: Option<&Given>,
     ) -> Self {
+        // The message the prompt was sent as: its instructions, if it was
+        // given any, then the prompt.
+        let message = crate::system_prompts::with_instructions(
+            given.and_then(|given| given.instructions.as_deref()),
+            user_prompt,
+        );
+        let user_prompt = message.as_str();
         let sections = match given {
             Some(given) if !given.harness.takes_system_prompt() => vec![Section {
                 title: "Prompt",
@@ -88,6 +98,7 @@ impl RawPrompt {
                     given.harness,
                     user_prompt,
                     given.system_prompt.as_deref(),
+                    given.resumed,
                 )
                 .into()),
             }],
@@ -373,6 +384,8 @@ mod tests {
         let given = Given {
             harness: Agent::Claude,
             system_prompt: Some("Be brief.".into()),
+            instructions: None,
+            resumed: false,
         };
         let prompt = RawPrompt::new(
             Some(SendMode::Code),
@@ -401,15 +414,54 @@ mod tests {
             let given = Given {
                 harness,
                 system_prompt: Some("Be brief.".into()),
+                instructions: None,
+                resumed: false,
             };
             let prompt = RawPrompt::new(None, "Prompt_a".into(), "Fix it.", Some(&given));
             assert_eq!(prompt.sections.len(), 1);
             assert_eq!(prompt.sections[0].title, "Prompt");
             assert_eq!(
                 prompt.sections[0].copied().unwrap().as_ref(),
-                crate::harness::prompt_as_given(harness, "Fix it.", Some("Be brief."))
+                crate::harness::prompt_as_given(harness, "Fix it.", Some("Be brief."), false)
             );
         }
+    }
+
+    /// The user prompt shown is the message as sent: its instructions in
+    /// their block ahead of the prompt. A harness that takes no system prompt
+    /// of its own is given it only on a conversation's first prompt.
+    #[test]
+    fn the_message_shows_its_instructions() {
+        let given = Given {
+            harness: Agent::Claude,
+            system_prompt: Some("Be brief.".into()),
+            instructions: Some("Only the code.".into()),
+            resumed: true,
+        };
+        let prompt = RawPrompt::new(None, "Prompt_a".into(), "Fix it.", Some(&given));
+        assert_eq!(prompt.sections[0].copied().unwrap().as_ref(), "Be brief.");
+        assert_eq!(
+            prompt.sections[1].copied().unwrap().as_ref(),
+            "<task-instructions>\nOnly the code.\n</task-instructions>\n\nFix it."
+        );
+        let codex = |resumed| {
+            let given = Given {
+                harness: Agent::Codex,
+                system_prompt: Some("Be brief.".into()),
+                instructions: Some("Only the code.".into()),
+                resumed,
+            };
+            RawPrompt::new(None, "Prompt_a".into(), "Fix it.", Some(&given)).sections[0]
+                .copied()
+                .unwrap()
+                .to_string()
+        };
+        assert!(codex(false).starts_with("<system-prompt>\nBe brief."));
+        assert!(codex(false).ends_with("</task-instructions>\n\nFix it."));
+        assert!(
+            codex(true).starts_with("<task-instructions>"),
+            "resumed, it was given again"
+        );
     }
 
     /// The images given alongside the prompt are listed by their paths, in
@@ -425,6 +477,8 @@ mod tests {
             let given = Given {
                 harness,
                 system_prompt: Some("Be brief.".into()),
+                instructions: None,
+                resumed: false,
             };
             let prompt =
                 RawPrompt::new(None, "Prompt_a".into(), "Look.", Some(&given)).with_images(&images);
@@ -450,6 +504,8 @@ mod tests {
         let none = Given {
             harness: Agent::Claude,
             system_prompt: None,
+            instructions: None,
+            resumed: false,
         };
         let sent = RawPrompt::new(None, "".into(), "Hi", Some(&none));
         assert_eq!(sent.sections[0].text, Err(NO_SYSTEM_PROMPT));

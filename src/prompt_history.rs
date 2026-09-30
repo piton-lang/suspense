@@ -36,6 +36,17 @@ pub struct RunRecord {
     /// the prompt; none if none was sent. Only known once `harness` is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system_prompt: Option<String>,
+    /// The instructions heading the message the prompt was sent as, filled
+    /// in, as the harness received them ahead of the prompt; none for a
+    /// prompt sent with none, as Freeform, or saved before they were sent
+    /// apart from the system prompt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
+    /// The run carried on a conversation, rather than starting one; a harness
+    /// that takes no system prompt of its own is given it only ahead of a
+    /// conversation's first prompt.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub resumed: bool,
     /// Each line the harness printed, as JSON where it was, else as a string,
     /// and each message sent to the run while it worked, where it was sent,
     /// as `{"sent": {"text": …, "compiled": …}}`.
@@ -136,6 +147,9 @@ pub struct SavedPrompt {
     pub anchor: HiddenAnchor,
     pub text: String,
     pub record: Option<RunRecord>,
+    /// When it was sent, in seconds since the Unix epoch, from its file's
+    /// name; zero when that doesn't say.
+    pub sent_at: u64,
 }
 
 /// The record file saved beside `prompt_file`.
@@ -207,7 +221,7 @@ fn load_dir(dir: &Path) -> Vec<SavedPrompt> {
     files.sort();
     files
         .into_iter()
-        .filter_map(|(_, file)| {
+        .filter_map(|(sent_at, file)| {
             let (anchor, text) = HiddenAnchor::parse(&fs::read_to_string(&file).ok()?)?;
             let record = fs::read_to_string(record_path(&file))
                 .ok()
@@ -216,6 +230,7 @@ fn load_dir(dir: &Path) -> Vec<SavedPrompt> {
                 anchor,
                 text,
                 record,
+                sent_at,
             })
         })
         .collect()

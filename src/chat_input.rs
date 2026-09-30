@@ -226,7 +226,13 @@ const FREEFORM_TAB: usize = 4;
 const CHAIN_WIDTH_ESTIMATE: Pixels = px(40.);
 
 /// How wide the column of send, queue, and preview buttons is.
-const SEND_COLUMN_WIDTH: Pixels = px(88.);
+/// Wide enough for Send, its icon and its longest label, "Queue", with its
+/// chevron beside it, so neither runs past the chat input's padding.
+const SEND_COLUMN_WIDTH: Pixels = px(108.);
+
+/// The send button's chevron half, narrow enough that it and Send fit the
+/// column.
+const SEND_CHEVRON_WIDTH: Pixels = px(20.);
 
 /// How far the text sits in from the edges of the dark inset it is typed,
 /// or previewed, in: the editor's own padding above and below its text.
@@ -410,6 +416,81 @@ fn blend(from: Hsla, to: Hsla, t: f32) -> Hsla {
     }
 }
 
+/// One of the two lanes tasks run in, as the PromptSendingScope says, each
+/// with its own queue: work on the code, and work on the spec.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Lane {
+    Code,
+    Spec,
+}
+
+/// Which lanes are busy, or which a task keeps busy while it runs.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Lanes {
+    pub code: bool,
+    pub spec: bool,
+}
+
+impl Lanes {
+    pub const NONE: Self = Self {
+        code: false,
+        spec: false,
+    };
+    pub const ALL: Self = Self {
+        code: true,
+        spec: true,
+    };
+
+    /// Just `lane`.
+    pub fn only(lane: Lane) -> Self {
+        let mut lanes = Self::NONE;
+        lanes.set(lane, true);
+        lanes
+    }
+
+    /// The lanes a task sent in `mode` keeps busy while it runs: its own, or
+    /// both for a Freeform task, which may change the code or the spec. One
+    /// whose mode isn't known runs in the code lane; a question in none.
+    pub fn of(mode: Option<SendMode>) -> Self {
+        match mode {
+            Some(SendMode::Ask) => Self::NONE,
+            Some(SendMode::Freeform) => Self::ALL,
+            Some(mode) => Self::only(mode.lane().unwrap_or(Lane::Code)),
+            None => Self::only(Lane::Code),
+        }
+    }
+
+    pub fn any(self) -> bool {
+        self.code || self.spec
+    }
+
+    pub fn set(&mut self, lane: Lane, busy: bool) {
+        match lane {
+            Lane::Code => self.code = busy,
+            Lane::Spec => self.spec = busy,
+        }
+    }
+
+    /// Whether these share a lane with `other`.
+    pub fn overlaps(self, other: Self) -> bool {
+        (self.code && other.code) || (self.spec && other.spec)
+    }
+
+    /// These, with `other`'s added, or taken away.
+    pub fn with(self, other: Self, busy: bool) -> Self {
+        Self {
+            code: if other.code { busy } else { self.code },
+            spec: if other.spec { busy } else { self.spec },
+        }
+    }
+
+    /// Whether a task sent in `mode` would queue while these are busy: its
+    /// lane is, or for a Freeform task, either is. A question never queues.
+    pub fn queues(self, mode: SendMode) -> bool {
+        self.overlaps(Self::of(Some(mode)))
+    }
+}
+
 /// What a prompt is sent to work on: the selected tab.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SendMode {
@@ -435,6 +516,17 @@ impl SendMode {
             SendMode::Spec => "Spec",
             SendMode::Ask => "Ask",
             SendMode::Freeform => "Freeform",
+        }
+    }
+
+    /// The lane a task sent in this mode runs in: the code lane for Code and
+    /// Freeform, the spec lane for Spec and the chain, whose first step
+    /// writes the spec; none for a question.
+    pub fn lane(self) -> Option<Lane> {
+        match self {
+            SendMode::Code | SendMode::Freeform => Some(Lane::Code),
+            SendMode::Both | SendMode::Spec => Some(Lane::Spec),
+            SendMode::Ask => None,
         }
     }
 
@@ -565,7 +657,8 @@ pub struct ChatInput {
     /// from Freeform to Code instead of back across Spec and Ask.
     tint_target: f32,
     lsp: Option<Arc<PitonSession>>,
-    busy: bool,
+    /// The lanes with a task under way, where a task sent queues.
+    busy: Lanes,
     /// The context of the conversation the selected tab's next prompt carries
     /// on, in tokens; `None` when the next prompt starts a new one.
     context: Option<u64>,
@@ -698,7 +791,7 @@ impl ChatInput {
             selected_tab: DEFAULT_TAB,
             tint_target: DEFAULT_TAB as f32,
             lsp: None,
-            busy: false,
+            busy: Lanes::NONE,
             context: None,
             conversation_running: false,
             can_send_to_task: false,
@@ -1558,7 +1651,7 @@ impl ChatInput {
         cx.notify();
     }
 
-    pub fn set_busy(&mut self, busy: bool, cx: &mut Context<Self>) {
+    pub fn set_busy(&mut self, busy: Lanes, cx: &mut Context<Self>) {
         self.busy = busy;
         cx.notify();
     }
@@ -1727,6 +1820,18 @@ impl ChatInput {
         TABS[self.selected_tab]
     }
 
+    /// Selects the tab of `mode`, as clicking it does.
+    pub(crate) fn select_mode(
+        &mut self,
+        mode: SendMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(ix) = TABS.iter().position(|tab| *tab == mode) {
+            self.select_tab(ix, window, cx);
+        }
+    }
+
     pub(crate) fn select_tab(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
         // The prompt would compile differently in another mode.
         if ix != self.selected_tab {
@@ -1810,9 +1915,10 @@ impl Render for ChatInput {
         let text = self.editor.read(cx).value();
         let (height, one_row) = self.fit.heights(&self.editor, window, cx);
         let empty = text.is_empty();
-        // A question is asked straight away, beside whatever the harness is
-        // working on, so it never queues.
-        let queues = self.busy && TABS[self.selected_tab] != SendMode::Ask;
+        // A task queues only behind one of its own lane; a question is asked
+        // straight away, beside whatever the harness is working on, so it
+        // never queues.
+        let queues = self.busy.queues(TABS[self.selected_tab]);
 
         // Follows how the editor is laid out, to fit it anew.
         let track_layout =
@@ -2173,6 +2279,11 @@ impl Render for ChatInput {
                     // As tall as the input's single line, so the two line up.
                     .h(one_row)
                     .flex_1()
+                    // It and its chevron fit the column together, its icon
+                    // and label kept close rather than spread by the
+                    // button's usual padding.
+                    .min_w_0()
+                    .px_2()
                     .font_weight(FontWeight::SEMIBOLD)
                     .rounded_l(px(2.))
                     .rounded_r_none()
@@ -2192,7 +2303,9 @@ impl Render for ChatInput {
                     })
                     .icon(IconName::ChevronDown)
                     .h(one_row)
-                    .px_1p5()
+                    .flex_none()
+                    .w(SEND_CHEVRON_WIDTH)
+                    .px_0()
                     .rounded_r(px(2.))
                     .rounded_l_none()
                     .border_l_1()
@@ -2440,6 +2553,31 @@ impl CompletionProvider for PromptCompletions {
 
 #[cfg(test)]
 mod tests {
+    use super::{Lanes, SendMode};
+
+    /// A task queues only behind a task of its own lane: Code behind the
+    /// code lane, Chain and Spec behind the spec lane, Freeform behind
+    /// either; a question never does.
+    #[test]
+    fn tasks_queue_only_behind_their_own_lane() {
+        let code = Lanes {
+            code: true,
+            spec: false,
+        };
+        let spec = Lanes {
+            code: false,
+            spec: true,
+        };
+        let queues = |busy: Lanes| SendMode::ALL.map(|mode| busy.queues(mode));
+        // Code, Chain, Spec, Ask, Freeform.
+        assert_eq!(queues(code), [true, false, false, false, true]);
+        assert_eq!(queues(spec), [false, true, true, false, true]);
+        assert_eq!(queues(Lanes::ALL), [true, true, true, false, true]);
+        assert_eq!(queues(Lanes::NONE), [false; 5]);
+        assert_eq!(Lanes::of(Some(SendMode::Freeform)), Lanes::ALL);
+        assert_eq!(Lanes::of(None), code);
+    }
+
     // Explicit imports: globbing `gpui_kit::*` would bring in GPUI's `test`
     // macro and shadow Rust's `#[test]`.
     use std::cell::Cell;
@@ -4206,6 +4344,73 @@ mod tests {
                 "{color:?} at {position} is not a shade of green"
             );
         }
+    }
+
+    /// The body beneath the tabs has 8 pixels of padding all round, the
+    /// right included: the button column ends 8 pixels in from the chat
+    /// input's right edge, as the input box starts 8 in from its left.
+    #[gpui_kit::test]
+    async fn the_body_is_padded_evenly_at_either_side(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            super::bind_keys(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut input = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| ChatInput::new(window, cx));
+            input = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let input = input.unwrap();
+        let handle = window.into();
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("prompt-editor").is_some()
+        })
+        .await;
+        // With text, and the harness busy, Send reads "Queue", its longest.
+        cx.update_window(handle, |_, window, cx| {
+            input.update(cx, |this, cx| {
+                this.set_text_for_test("Hi", window, cx);
+                this.set_busy(super::Lanes::ALL, cx);
+            });
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.render_frame(cx);
+            let body = window.find("body-tint").bounds();
+            let boxed = window.find("prompt-box").bounds();
+            let rightmost = ["send", "send-options", "queue", "preview"]
+                .map(|id| window.find(id).bounds().right())
+                .into_iter()
+                .fold(gpui_kit::px(0.), gpui_kit::Pixels::max);
+
+            assert_eq!(boxed.left() - body.left(), gpui_kit::px(8.), "left padding");
+            assert_eq!(body.right() - rightmost, gpui_kit::px(8.), "right padding");
+            // Nothing in Send is squeezed: its halves are each at least as
+            // wide as they need.
+            let (send, options) = (
+                window.find("send").bounds(),
+                window.find("send-options").bounds(),
+            );
+            assert!(
+                send.size.width >= gpui_kit::px(88.),
+                "Send {send:?} is squeezed"
+            );
+            assert_eq!(
+                options.right(),
+                rightmost,
+                "the chevron isn't the column's end"
+            );
+            assert!(
+                body.right() <= window.viewport_size().width,
+                "the body runs past the window"
+            );
+        })
+        .unwrap();
     }
 
     /// With one line of text, the input is as tall as the Send button and

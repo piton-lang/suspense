@@ -104,6 +104,11 @@ pub fn swap(a: &mut QueuedPrompt, b: &mut QueuedPrompt) -> Result<()> {
     Ok(())
 }
 
+/// The mark of when the prompt in `file` was queued, as [`stamp`] took it.
+pub fn queued_at(file: &Path) -> Option<u128> {
+    stamp_of(file)?.parse().ok()
+}
+
 /// The mark of when the prompt in `file` was queued, as its name starts.
 fn stamp_of(file: &Path) -> Option<&str> {
     file.file_name()?

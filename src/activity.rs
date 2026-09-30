@@ -9,8 +9,9 @@ use gpui_kit::SharedString;
 /// Something running.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JobKind {
-    /// The task the harness is working on.
-    Task,
+    /// A task the harness is working on, by its index: the latest, or one
+    /// running in the other lane.
+    Task(usize),
     /// A question still running, by its id.
     Question(usize),
     /// `piton build`, run from the ribbon.

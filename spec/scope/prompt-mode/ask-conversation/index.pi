@@ -1,0 +1,141 @@
+use /lib
+use /ui
+from /scope/application/Body import BodyScope
+from /scope/harness-integration import HarnessIntegrationScope
+from /scope/open-projects import OpenProjectsScope
+from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/prompt-mode/modes import PromptModesScope
+from /scope/prompt-mode/sending import PromptSendingScope
+from /ui/components/scrollbar import ScrollbarScope
+from /ui/components/selection-popover import SelectionPopoverScope
+from /ui/components/task-table import TaskTableScope
+from /ui/theme import ThemeScope
+
+export ui-component AskConversationScope:
+    concept: {AskConversationConcept}
+
+concept AskConversationConcept:
+    pitch:
+        The questions asked from the Ask tab, read as a chat: every question
+        and its answer, one after another, in a pane of its own beside the
+        tasks, with each new conversation clearly marked where it begins.
+
+    shape: {AskConversationShape}
+
+shape AskConversationShape:
+    description:
+        While the @{ChatInputScope}'s Ask tab is selected, the
+        @{BodyScope} splits in two, side by side, above the chat input: the
+        body's tab bar and the selected tab's contents on the left, and this
+        pane on the right. It goes when another tab is selected, the left
+        side taking the body's full width again, and comes back as it was,
+        scrolled where it was, when Ask is selected again. Nothing slides as
+        it comes and goes.
+
+        It is drawn in the @{ThemeScope}'s roles, on the same base surface as
+        the selected tab's contents beside it, with the theme's line between
+        the two halves. Along its top runs a header as tall as the body's tab
+        bar, 32 pixels, on the tab bar's background with the theme's line
+        beneath it, reading "Questions" at its left, with 12 pixels of
+        padding, and at its right how many questions it holds, muted.
+
+    split:
+        The pane starts at half the width of the space it shares with the
+        left side. The line between them is a resize edge: hovering it shows
+        the resize cursor for left and right and a thin line in the theme's
+        accent, and dragging it moves it, following the pointer exactly, from
+        25% to 75% of that space, both sides laid out anew at each width. The
+        width it is dragged to is kept for as long as the application runs,
+        for every project, and none of it is saved.
+
+    conversation:
+        The pane lists every question of the project, those saved with it
+        and those asked since, running or finished, oldest at the top and the
+        newest at the bottom, the way a chat reads. Each is a message and its
+        reply. The question is shown as it was typed, not as it was compiled,
+        in a box on the theme's raised surface, faintly tinted Ask's colour,
+        as the @{PromptModesScope} colours it, with corners rounded 6 pixels,
+        set against the pane's right edge and at most 80% of its width,
+        wrapping within that, with anything it was sent with, attached text
+        and images, listed beneath its text as the chat input lists them.
+        Beneath the box, at its right, sits a small muted line with the time
+        it was asked and, once it is finished, a Resend button, which asks the
+        question again as the @{PromptSendingScope} says, the new question
+        coming in at the bottom.
+
+        Its answer follows beneath it, against the pane's left edge and the
+        pane's full width, with no box: its @{TaskTableScope}, collapsing the
+        steps leading up to the answer as the table says, so what is read is
+        the answer. While the harness works on it, the table grows as the
+        harness does, beneath a status line with a spinner and the latest
+        thing the harness did, and a Stop button at the status line's right
+        stops just that question, leaving the others running. A question that
+        failed or was stopped shows its status in the table as any task
+        does. Questions are 16 pixels apart, and a question's answer 8 pixels
+        beneath it.
+
+        Questions asked while another is still running come in at the bottom
+        in the order they were asked, each answered in its own place as its
+        harness goes, so answers can be filling in at once.
+
+    newConversation:
+        Where a new conversation begins, it is clearly marked: above the first
+        question of each conversation, the first question in the pane
+        included, runs a divider across the pane's full width, a line in Ask's
+        colour at either side of a label reading "New conversation", then,
+        muted, the date and time its first question was asked. A question
+        starts a new conversation as its saved record says, in its hidden
+        anchor's newConversation, as the @{ChatInputScope} says; a question
+        saved before that was recorded carries on the one above it, unless it
+        is the first. A question asked while another was running carries on a
+        copy of that conversation, as the @{HarnessIntegrationScope} says, and
+        is not marked.
+
+        Pressing New conversation for questions puts the divider in at the
+        bottom of the pane straight away, beneath the last question, reading
+        "New conversation" with no time, so it is plain that the next
+        question starts with no context; the time is filled in once that
+        question is asked. Pressed again with nothing asked since, it adds no
+        second divider.
+
+    scrolling:
+        The pane scrolls, with a @{ScrollbarScope}, and opens scrolled to the
+        bottom, on the newest question, the first time it is shown. While it
+        is at the bottom it stays locked there, following each question asked
+        and each answer as it grows; scrolling up unlocks it, and scrolling
+        back to the bottom locks it again. Asking a question always scrolls it
+        to the bottom and locks it. However many questions it holds, and
+        however long their answers, it lays out only what is in view: each
+        question, divider, and row of an answer's table is drawn as it
+        scrolls into view, so a long conversation costs no more to show,
+        scroll, or resize than a short one.
+
+    empty:
+        With no question asked yet, the pane reads "No questions yet. Ask one
+        below.", muted, centred in it.
+
+    selectingText:
+        The text of any question or answer in the pane can be selected by
+        dragging across it, as any text can. A drag that selects text ending
+        within the pane shows a @{SelectionPopoverScope} with two buttons:
+        "Copy", with a copy icon, and "Attach to prompt", with a paperclip
+        icon. Copy puts the selected text on the clipboard; Attach to prompt
+        adds it to the prompt as an attachment. Either one clears the
+        selection, and the popover closes when the pane goes.
+
+    elsewhere:
+        While another tab is selected, the questions still running stay in
+        view as small rows stacked directly above the chat input's tabs, the
+        newest nearest them, each showing its first line and the latest thing
+        the harness did, in a column that pushes what is above it up rather
+        than covering it, up to 240 pixels tall and scrolling beyond that. A
+        question leaves the stack once it finishes. Clicking one selects the
+        Ask tab, the pane scrolled to that question. There is no stack while
+        Ask is selected: its questions are in the pane.
+
+    projects:
+        The pane shows the questions of the project on screen, as the
+        @{OpenProjectsScope} says, and each project keeps how far its pane was
+        scrolled and whether it was locked to the bottom while the
+        application runs; questions of other projects carry on running in the
+        background.

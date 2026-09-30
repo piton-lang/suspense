@@ -1,0 +1,67 @@
+
+export anchor Prompt_cff9b7cc7460a783:
+    userPrompt:
+        \\\
+        Rather than Promopt_randomhash we should actually use the agent to give the prompt a meaningful title.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Rather than Promopt_randomhash we should actually use the agent to give the prompt a meaningful title.
+            \\\
+        result:
+            \\\
+            I've changed the spec so each task and question gets a name written by the agent instead of `Prompt_<random hex>`. I didn't touch the code. `piton check`, `piton format --check` and `piton build` all pass.
+
+            **What changed in the spec**
+
+            - **`spec/scope/prompt-mode/chat-input/index.pi`, `hiddenAnchor.naming` (new):**
+              - **Asking:** when a prompt is sent or queued, the harness is asked for a short title. The request uses a new baked prompt, `prompt-title`, and runs on its own with no session, using the small model the way commit notes do. It gets only the prompt as typed, without attachments.
+              - **Name format:** the title's words are capitalised and run together, keeping only letters and digits (for example `ChatTitlesFromTheAgent`). It is cut at a whole word to at most 40 characters. A name that would start with a digit gets `Prompt` in front.
+              - **Duplicates:** if the name is already used in the project's history, questions or queue, it gets the lowest free number from 2 up (for example `ChatTitlesFromTheAgent2`).
+              - **Timing:** the title is requested while the spec builds ahead of the task. The prompt is saved, queued and compiled once it has its name.
+              - **Fallback:** it goes back to `Prompt_` plus 16 random hex digits if there's no reply within 10 seconds, the request fails, or the title has no letters left after cutting. A task cancelled while it's being named is saved under the random name. Its header shows no name until it has one.
+              - **Names never change:** once given, a name stays fixed, so anything that refers to a task by name keeps working.
+              - **Resend or send to the other mode:** these reuse the original task's name with its number removed, then numbered again, without asking the harness. If the original name was random, a new title is requested.
+              - **Chain:** one title is requested per chain, and each step is named from it and numbered.
+              - **Other cases:** messages sent to a running task keep random names so they're never delayed. Old random names stay as they are.
+            - **`spec/scope/harness-integration/baked-prompts/index.pi`:** added `prompt-title.pi` to the list of baked prompts.
+            - **`spec/scope/harness-integration/index.pi`:** prompt titles now go to whichever harness is selected, use the small model (Claude Code's haiku), and take a single prompt, the same as commit notes and commit messages.
+
+            **What the code should follow**
+
+            - `ChatInputShape.hiddenAnchor.naming`: the main behaviour. Today the name comes from `HiddenAnchor::random_name`, called in `PromptTask::new`, and is applied with `anchor.rename` in `prompt_mode.rs`.
+            - `BakedSystemPromptsShape.prompts`: add a new `system-prompts/prompt-title.pi` and update `compiled.json`, modelled on `commit-note.pi`.
+            - `HarnessIntegrationShape.harnesses` and `HarnessIntegrationShape.feeding`: which model titling uses, and that it takes a single prompt.
+
+            I made a few choices myself that you may want to change: the 10-second timeout, the 40-character limit, the numbering starting at 2, and reusing the title on resend instead of asking again.
+            \\\
+
+    sentFrom: Prompt_2a1268e842c110a5

@@ -55,6 +55,7 @@ mod project_tree;
 mod prompt_history;
 mod prompt_mode;
 mod prompt_queue;
+mod prompt_title;
 mod raw_prompt;
 mod recent_projects;
 mod referenced_spec;

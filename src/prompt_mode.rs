@@ -21,10 +21,12 @@
 //!
 //! A question asked from the Ask tab is not one of those tasks: it runs
 //! straight away, beside any task the harness is working on and any other
-//! question, and never queues. Each slides up out of the chat input, above its
-//! tabs and over the message list, as a single row of its task table, stacked
-//! with the others. Once over, it opens onto its whole table, and only then
-//! does the message list dim behind it.
+//! question, and never queues. While the Ask tab is selected, the body splits
+//! to show every question and its answer as a chat (see [`ask_pane`]); on any
+//! other tab, the questions still running are rows stacked above the chat
+//! input's tabs.
+
+mod ask_pane;
 
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -59,8 +61,8 @@ use gpui_kit::*;
 use crate::activity::{Job, JobKind};
 use crate::attached_image::{self, AttachedImage};
 use crate::chat_input::{
-    self, ChatInput, FocusActiveEditor, NewConversation, PreviewPrompt, QueuedEdit, SendMode,
-    Submit, TabChanged,
+    self, ChatInput, FocusActiveEditor, Lanes, NewConversation, PreviewPrompt, QueuedEdit,
+    SendMode, Submit, TabChanged,
 };
 use crate::commit_notes;
 use crate::conversations;
@@ -77,6 +79,7 @@ use crate::piton_lsp::PitonSession;
 use crate::project_directory::ProjectDirectory;
 use crate::prompt_history::{self, RunRecord, SavedPrompt};
 use crate::prompt_queue::{self, QueuedPrompt};
+use crate::prompt_title;
 use crate::raw_prompt::{Given, RawPrompt, RawPromptView};
 use crate::referenced_spec;
 use crate::scrollbar::{self, SetLock};
@@ -92,6 +95,7 @@ use crate::task_table::{
 use crate::theme::Hue;
 use crate::understanding::{self, Understanding};
 use crate::usage::{self, Conversation, PlanLimits, ProjectUsage, UsageReport};
+use ask_pane::{ASK_SPLIT_SHARE, AskPane, AskSplitResize};
 
 /// How long the file pane takes to slide in from the sidebar, or back into it
 /// when closed, and how it moves: critically damped, so it settles without
@@ -121,33 +125,12 @@ const MAX_PROMPT_HEIGHT: Pixels = px(160.);
 /// row.
 const ASK_ROW_HEIGHT: Pixels = px(80.);
 
-/// The share of the space above the chat input the answer drawer opens to,
-/// and the least and most it can be dragged to.
-const DRAWER_SHARE: f32 = 0.8;
-const MIN_DRAWER_SHARE: f32 = 0.2;
-const MAX_DRAWER_SHARE: f32 = 0.95;
-
-/// The least an open question's table, or the previous answers, gets in the
-/// drawer, however little room the drawer's other rows leave.
-const MIN_DRAWER_FILL: Pixels = px(96.);
-
-/// How tall the strip along the drawer's top edge that resizes it is.
-const DRAWER_HANDLE_HEIGHT: Pixels = px(6.);
-
-/// How long the answer drawer takes to slide back down once closed, on
-/// [`ASK_SPRING`], after which it is gone.
-const DRAWER_CLOSE_TIME: Duration = Duration::from_millis(450);
-
-/// How a question slides up and expands: critically damped, so it settles
-/// without bouncing.
+/// How a running question's row slides up out of the chat input: critically
+/// damped, so it settles without bouncing.
 const ASK_SPRING: SpringConfig = SpringConfig::new(400., 40., 1.);
 
-/// How dark the message list gets behind an open question, and how quickly
-/// it fades there and back: slower than the slide, so the dimming is seen.
-const ASK_DIM_SPRING: SpringConfig = SpringConfig::new(120., 22., 1.);
-
-/// Where a previous answer's task index starts in its element ids, apart
-/// from the tasks' and the open questions'.
+/// Where a saved question's task index starts in its element ids, apart
+/// from the tasks' and the questions asked since.
 const ASK_HISTORY_IX: usize = usize::MAX / 2;
 
 /// Counted down from, by question id, for a question's task index in its
@@ -172,6 +155,12 @@ struct QueueItem {
     /// It starts a new conversation rather than carrying on the tasks',
     /// as its hidden anchor records once saved.
     new_conversation: bool,
+    /// The mode it was sent in, known from the moment it is queued, which
+    /// sets the lane it waits for.
+    mode: Option<SendMode>,
+    /// Its mark of when it was queued, which orders it on disk: see
+    /// [`prompt_queue::stamp`].
+    queued_at: u128,
 }
 
 /// How a task's Send to Spec or Send to Code button stands. Only
@@ -235,7 +224,9 @@ enum Sending {
     /// whether it is sent sliced, for a Code task sent to Spec, the code
     /// task it was sent from, and, for a task sent to the other mode, the
     /// name of the task it was sent from; for a chain or its code step,
-    /// whether a post-build spec update follows it.
+    /// whether a post-build spec update follows it; and, for one sent after
+    /// another, resent or a chain's next step, the name of the prompt it is
+    /// named after.
     Now(
         SendMode,
         Attached,
@@ -243,6 +234,7 @@ enum Sending {
         Option<CodeTask>,
         Option<String>,
         bool,
+        Option<String>,
     ),
     /// Out of the queue, saved with its anchor.
     Queued(QueuedPrompt),
@@ -295,6 +287,13 @@ struct PromptTask {
     changed: Option<ChangedFiles>,
     /// Its changed files are listed, rather than collapsed to their heading.
     changed_open: bool,
+    /// It started a new conversation rather than carrying one on, as its
+    /// hidden anchor recorded; false for one saved before that was.
+    new_conversation: bool,
+    /// When it was sent, in seconds since the Unix epoch, once known.
+    asked_at: Option<u64>,
+    /// Sends it more while it runs, where its harness can be fed more.
+    feed: Option<harness::Feed>,
 }
 
 /// Asks for a file's changes while a task ran, between the snapshots taken
@@ -564,6 +563,9 @@ impl PromptTask {
             session: None,
             changed: None,
             changed_open: false,
+            new_conversation: false,
+            asked_at: None,
+            feed: None,
         }
     }
 
@@ -601,6 +603,8 @@ impl PromptTask {
         task.name = saved.anchor.name().to_string().into();
         task.mode = anchor_mode(&saved.anchor);
         task.sent = SentAs::of(&saved.anchor);
+        task.new_conversation = saved.anchor.new_conversation.unwrap_or(false);
+        task.asked_at = (saved.sent_at > 0).then_some(saved.sent_at);
         task.marked_done = saved
             .record
             .as_ref()
@@ -613,6 +617,8 @@ impl PromptTask {
         task.given = record.harness().map(|harness| Given {
             harness,
             system_prompt: record.system_prompt.clone(),
+            instructions: record.instructions.clone(),
+            resumed: record.resumed,
         });
         if let Some(markdown) = record.user_prompt.clone() {
             task.set_compiled(Compiled::new(
@@ -735,7 +741,7 @@ impl PromptTask {
 /// A row saying how many previous items there are, which expands into a
 /// scrollable accordion of every one of them, oldest first, each headed by
 /// its status and prompt and opening onto its prompt and output. Previous
-/// tasks and previous answers are each one of these.
+/// tasks are one of these.
 ///
 /// The accordion is one virtualized list: each item's heading is a row of it,
 /// and so, while an item is open, are its prompt, its table's header, each of
@@ -798,8 +804,10 @@ struct HistoryLaidOut {
     markdown: u64,
     /// The items that began a conversation, each heading a group.
     groups: Vec<usize>,
-    /// Each item's place in its chain, which sets it in and heads a chain.
+    /// Each place's step in its chain, which sets it in and heads a chain.
     chains: Vec<Option<ChainStep>>,
+    /// The item listed at each place.
+    order: Vec<usize>,
     /// Which items the filters show, none while no filter is on.
     visible: Option<Vec<bool>>,
     /// The open item's changed files, how many and whether listed, which
@@ -869,39 +877,23 @@ impl HistoryList {
         )
     }
 
-    /// The previous answers, whose tables collapse their steps.
-    fn answers() -> Self {
-        Self::new(
-            ("ask-history-toggle", "ask-list", "ask-history-task"),
-            (
-                "previous answer",
-                "previous answers",
-                "Back to the questions",
-            ),
-            ASK_HISTORY_IX,
-            true,
-            false,
-            false,
-        )
-    }
-
-    /// The items of `tasks` that began a conversation: the first, and each
-    /// whose conversation isn't the one before it. One whose conversation
-    /// isn't known, as when it had no record, stays in the group before it.
-    fn session_groups(tasks: &[PromptTask]) -> Vec<usize> {
-        let chains = chain_steps(tasks);
+    /// Where the items of `tasks` that began a conversation are listed, as
+    /// `layout` lists them: the first, and each whose conversation isn't the
+    /// one listed before it. One whose conversation isn't known, as when it
+    /// had no record, stays in the group before it.
+    fn session_groups(tasks: &[PromptTask], layout: &ChainLayout) -> Vec<usize> {
         let mut last = None;
         (0..tasks.len())
-            .filter(|&ix| match &tasks[ix].session {
+            .filter(|&place| match &tasks[layout.order[place]].session {
                 Some(session) if last != Some(session) => {
                     last = Some(session);
                     true
                 }
-                _ => ix == 0,
+                _ => place == 0,
             })
             // A divider never falls between a chain's steps: it goes above
             // the chain.
-            .map(|ix| chains[ix].map_or(ix, |step| step.start))
+            .map(|place| layout.steps[place].map_or(place, |step| step.start))
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect()
@@ -1073,8 +1065,18 @@ impl HistoryList {
                 .as_ref()
                 .is_none_or(|visible| visible.get(item) != Some(&false))
         };
+        // A chain's steps are listed together beneath its parent row, where
+        // its first step was sent; rows are laid out by where each item is
+        // listed.
+        let layout = Rc::new(if self.by_session {
+            chain_layout(tasks)
+        } else {
+            ChainLayout::identity(count)
+        });
+        let shows_at = |place: usize| shows(layout.order[place]);
         // An open item filtered out is closed.
         let open = self.open.filter(|open| *open < count && shows(*open));
+        let open_at = open.map(|open| layout.place[open]);
         if visible
             .as_ref()
             .is_some_and(|visible| !visible.contains(&true))
@@ -1108,22 +1110,24 @@ impl HistoryList {
                     ..HistoryLaidOut::default()
                 };
             }
-            if laid_out.open != open {
+            if laid_out.open != open_at {
                 if let Some(was) = laid_out.open {
                     let table = laid_out.table.layout().map_or(0, |layout| layout.items());
                     self.rows.splice(was + 1..was + 1 + Self::block(table), 0);
                     self.rows.remeasure(was..was + 1);
                 }
-                if let Some(open) = open {
+                if let Some(open) = open_at {
                     self.rows.splice(open + 1..open + 1, Self::block(0));
                     self.rows.remeasure(open..open + 1);
                 }
-                laid_out.open = open;
+                laid_out.open = open_at;
                 laid_out.compiled = open.is_some_and(|open| tasks[open].compiled.is_some());
                 laid_out.slices_open = open.is_some_and(|open| tasks[open].slices_open);
                 laid_out.table = TableSync::default();
             }
-            if let (Some(open), Some((task_ix, reply, layout))) = (open, table_layout) {
+            if let (Some(open), Some(at), Some((task_ix, reply, layout))) =
+                (open, open_at, table_layout)
+            {
                 let compiled = tasks[open].compiled.is_some();
                 let slices_open = tasks[open].slices_open;
                 let prompt_changed = MarkdownStates::changed_since(&mut laid_out.markdown, cx)
@@ -1136,7 +1140,7 @@ impl HistoryList {
                     || slices_open != laid_out.slices_open
                     || prompt_changed
                 {
-                    self.rows.remeasure(open + 1..open + 2);
+                    self.rows.remeasure(at + 1..at + 2);
                     laid_out.compiled = compiled;
                     laid_out.slices_open = slices_open;
                 }
@@ -1144,17 +1148,17 @@ impl HistoryList {
                 // there is none.
                 let empty = reply.row_count() == 0;
                 if laid_out.table.layout().is_some_and(|was| was.items() == 0) != empty {
-                    self.rows.remeasure(open + 2..open + 3);
+                    self.rows.remeasure(at + 2..at + 3);
                 }
                 laid_out
                     .table
-                    .update(&self.rows, open + 3, task_ix, reply, layout, cx);
+                    .update(&self.rows, at + 3, task_ix, reply, layout, cx);
                 let changed = tasks[open]
                     .changed
                     .as_ref()
                     .map(|changed| (changed.files.len(), tasks[open].changed_open));
                 if laid_out.changed != changed {
-                    let end = open + 3 + laid_out.table.layout().map_or(0, |layout| layout.items());
+                    let end = at + 3 + laid_out.table.layout().map_or(0, |layout| layout.items());
                     self.rows.remeasure(end..end + 1);
                     laid_out.changed = changed;
                 }
@@ -1164,7 +1168,7 @@ impl HistoryList {
         // heading is measured again whenever that changes, as when a running
         // task reports a new one.
         let groups = if self.by_session {
-            Self::session_groups(tasks)
+            Self::session_groups(tasks, &layout)
         } else {
             Vec::new()
         };
@@ -1175,14 +1179,14 @@ impl HistoryList {
             .enumerate()
             .filter_map(|(ix, &start)| {
                 let end = groups.get(ix + 1).copied().unwrap_or(count);
-                (start..end).find(|&item| shows(item))
+                (start..end).find(|&place| shows_at(place))
             })
             .collect();
         {
             let mut laid_out = self.laid_out.borrow_mut();
             if laid_out.groups != groups {
                 let table = laid_out.table.layout().map_or(0, |layout| layout.items());
-                let row_of = |item: usize| match open {
+                let row_of = |item: usize| match open_at {
                     Some(open) if item > open => item + Self::block(table),
                     _ => item,
                 };
@@ -1202,28 +1206,28 @@ impl HistoryList {
         }
         // A chain's steps are set in beneath its parent row, so when one
         // gains a step, or a task becomes a step, every row is measured again.
-        let chains = Rc::new(if self.by_session {
-            chain_steps(tasks)
-        } else {
-            vec![None; count]
-        });
+        let chains = Rc::new(layout.steps.clone());
         {
             let mut laid_out = self.laid_out.borrow_mut();
-            if laid_out.chains != *chains || laid_out.visible != visible {
+            if laid_out.chains != *chains
+                || laid_out.order != layout.order
+                || laid_out.visible != visible
+            {
                 let rows = self.rows.count();
                 self.rows.remeasure(0..rows);
                 laid_out.chains = chains.to_vec();
+                laid_out.order = layout.order.clone();
                 laid_out.visible = visible.clone();
             }
         }
-        // Which items are hidden by the filters, laid out as nothing; and
+        // Which places are hidden by the filters, laid out as nothing; and
         // which head their chain, its first step shown carrying its parent.
-        let hidden: Rc<Vec<bool>> = Rc::new((0..count).map(|item| !shows(item)).collect());
+        let hidden: Rc<Vec<bool>> = Rc::new((0..count).map(|place| !shows_at(place)).collect());
         let heads: Rc<Vec<bool>> = Rc::new(
             (0..count)
-                .map(|item| {
-                    chains[item].is_some_and(|step| {
-                        !hidden[item] && (step.start..item).all(|earlier| hidden[earlier])
+                .map(|place| {
+                    chains[place].is_some_and(|step| {
+                        !hidden[place] && (step.start..place).all(|earlier| hidden[earlier])
                     })
                 })
                 .collect(),
@@ -1264,13 +1268,15 @@ impl HistoryList {
             );
             (layout.items(), rows)
         });
-        let open_rows = open.zip(table.as_ref().map(|(items, _)| *items));
+        let open_rows = open_at.zip(table.as_ref().map(|(items, _)| *items));
         let chain_color = chat_input::mode_color(SendMode::Both, cx);
         let render_chains = chains.clone();
         let heading_chains = chains.clone();
         let (heading_heads, render_heads) = (heads.clone(), heads.clone());
         let heading_hidden = hidden.clone();
+        let render_layout = layout.clone();
         let render_row = move |ix: usize, window: &mut Window, cx: &mut App| -> AnyElement {
+            let layout = &render_layout;
             let Some(entity) = this.upgrade() else {
                 return div().into_any_element();
             };
@@ -1281,15 +1287,18 @@ impl HistoryList {
             let room = density.inset(window.rem_size() * 0.75);
             let inset = || div().w_full().px(room);
             match row {
-                HistoryRow::Heading(item) => {
+                HistoryRow::Heading(place) => {
+                    let Some(&item) = layout.order.get(place) else {
+                        return div().into_any_element();
+                    };
                     let Some(task) = tasks_of(entity.read(cx)).get(item) else {
                         return div().into_any_element();
                     };
                     // Filtered out, it takes no room.
-                    if heading_hidden.get(item) == Some(&true) {
+                    if heading_hidden.get(place) == Some(&true) {
                         return div().into_any_element();
                     }
-                    let step = heading_chains.get(item).copied().flatten();
+                    let step = heading_chains.get(place).copied().flatten();
                     let is_open = open == Some(item);
                     let task_ix = id_base + item;
                     let checkbox = selected.as_ref().map(|selected| {
@@ -1372,6 +1381,18 @@ impl HistoryList {
                                 cx,
                             )
                         }))
+                        // A task running in the other lane, beside the latest,
+                        // can be cancelled from here.
+                        .when(id_base == 0 && task.can_cancel(), |heading| {
+                            let this = this_for_resend.clone();
+                            heading.child(cancel_button(("cancel-previous", task_ix)).on_click(
+                                move |_, _, cx| {
+                                    // The button's click isn't the heading's.
+                                    cx.stop_propagation();
+                                    this.update(cx, |this, cx| this.cancel_task(item, cx)).ok();
+                                },
+                            ))
+                        })
                         .child({
                             let this = this_for_resend.clone();
                             resend_button(("resend-previous", task_ix)).on_click(
@@ -1395,7 +1416,7 @@ impl HistoryList {
                             .flex_none()
                             .text_color(muted),
                         );
-                    let group = groups.binary_search(&item).ok();
+                    let group = groups.binary_search(&place).ok();
                     // Only touched by the colour of the mode it was sent in,
                     // far fainter than the latest task's header; hovered, the
                     // heading's own colour shows over it.
@@ -1423,18 +1444,20 @@ impl HistoryList {
                                 .text_color(muted)
                                 .child(format!("Session {}", group + 1))
                         }))
-                        .map(|heading| match step.filter(|_| heading_heads[item]) {
+                        .map(|heading| match step.filter(|_| heading_heads[place]) {
                             // A chain's first step heads it with its parent
                             // row, then sits set in beneath it as the others do.
                             Some(step) => {
-                                let steps = &tasks_of(entity.read(cx))
-                                    [step.start..(step.start + step.len).min(count)];
-                                let task_ix = id_base + step.start;
+                                let members = layout.members(step);
+                                let all = tasks_of(entity.read(cx));
+                                let steps: Vec<&PromptTask> =
+                                    members.iter().filter_map(|&ix| all.get(ix)).collect();
+                                let task_ix = id_base + members[0];
                                 heading
                                     .child(chain_parent(
                                         task_ix,
-                                        steps,
-                                        step.start + step.len >= count,
+                                        &steps,
+                                        members.contains(&(count - 1)),
                                         cx,
                                     ))
                                     .child(
@@ -1451,7 +1474,8 @@ impl HistoryList {
                         })
                         .into_any_element()
                 }
-                HistoryRow::Prompt(item) => {
+                HistoryRow::Prompt(place) => {
+                    let item = layout.order[place];
                     let task_ix = id_base + item;
                     let (shown, slices) = tasks_of(entity.read(cx))
                         .get(item)
@@ -1497,7 +1521,8 @@ impl HistoryList {
                     )
                     .into_any_element()
                 }
-                HistoryRow::TableHeader(item) => {
+                HistoryRow::TableHeader(place) => {
+                    let item = layout.order[place];
                     let empty = tasks_of(entity.read(cx))
                         .get(item)
                         .is_none_or(|task| task.reply.row_count() == 0);
@@ -1538,10 +1563,11 @@ impl HistoryList {
                         )
                         .into_any_element()
                 }
-                HistoryRow::End(item) => {
+                HistoryRow::End(place) => {
+                    let item = layout.order[place];
                     let has_table = open_rows.is_some_and(|(_, rows)| rows > 0);
                     // A previous task's changed files, beneath its table;
-                    // previous answers have none.
+                    // a question has none.
                     let changed = (id_base == 0)
                         .then(|| {
                             entity.update(cx, |this, cx| this.changed_files_of(item, item, cx))
@@ -1839,19 +1865,19 @@ fn add_commit_note(
 struct Ask {
     id: usize,
     task: PromptTask,
-    table: TaskTable,
-    /// Its output stays scrolled to the bottom.
-    locked: bool,
-    /// Its run, stopped when the question is closed.
+    /// Set when it is stopped, so its record says it was cancelled.
+    stopped: Arc<AtomicBool>,
+    /// Its run, stopped when the question is stopped.
     _run: Task<()>,
 }
 
 /// A question's run as far as it went, saved beside the question in
 /// `.suspense/asks` when dropped: once the run is over, or when the question
-/// is closed or replaced and its run stopped.
+/// is stopped.
 struct AskLog {
     file: Option<PathBuf>,
     record: RunRecord,
+    stopped: Arc<AtomicBool>,
 }
 
 impl Drop for AskLog {
@@ -1859,7 +1885,8 @@ impl Drop for AskLog {
         let Some(file) = self.file.take() else {
             return;
         };
-        let record = std::mem::take(&mut self.record);
+        let mut record = std::mem::take(&mut self.record);
+        record.cancelled |= self.stopped.load(Ordering::SeqCst);
         // Off the UI thread: a long run's output can be large.
         std::thread::spawn(move || prompt_history::save_record(&file, &record).ok());
     }
@@ -1873,6 +1900,10 @@ struct Session {
     id: String,
     /// How many tokens its context holds, as of its latest reply, once known.
     context: Option<u64>,
+    /// The system prompt its latest run was sent, which a Freeform prompt
+    /// carrying it on keeps, so the harness's cache holds; none when it was
+    /// sent none, or its run wasn't recorded with one.
+    system_prompt: Option<String>,
 }
 
 impl Session {
@@ -1915,9 +1946,32 @@ impl Session {
                 project_dir: project_dir.to_path_buf(),
                 id: id?,
                 context,
+                system_prompt: saved.record.as_ref()?.system_prompt.clone(),
             })
         })?;
         (Some(latest.id.as_str()) != left).then_some(latest)
+    }
+
+    /// A task's run in the conversation `id` is over, holding `context` as of
+    /// its latest reply: the tasks carry that one on from now, whichever
+    /// other task's was carried on before, as a task of the other lane may
+    /// have run beside it in a copy.
+    fn finished(
+        session: &mut Option<Self>,
+        id: String,
+        context: Option<u64>,
+        project_dir: &Path,
+        sent: Option<&str>,
+    ) {
+        if session.as_ref().is_some_and(|session| session.id == id) {
+            return;
+        }
+        *session = Some(Self {
+            project_dir: project_dir.to_path_buf(),
+            id,
+            context,
+            system_prompt: sent.map(str::to_string),
+        });
     }
 
     /// Follows a run's events: the conversation it reported, and how much
@@ -1934,6 +1988,7 @@ impl Session {
         run: &mut Option<String>,
         event: &HarnessEvent,
         project_dir: &Path,
+        sent: Option<&str>,
     ) -> Option<String> {
         match event {
             HarnessEvent::Session(id) => {
@@ -1951,6 +2006,7 @@ impl Session {
                     project_dir: project_dir.to_path_buf(),
                     id: id.clone(),
                     context,
+                    system_prompt: sent.map(str::to_string),
                 });
             }
             HarnessEvent::Usage { context } if current => {
@@ -2037,8 +2093,8 @@ impl TaskFilter {
     }
 }
 
-/// Where a task stands in the chain it is a step of: the chain's first step,
-/// this step's place in it, and how many steps it has so far.
+/// Where a task stands in the chain it is a step of: where the chain's first
+/// step is listed, this step's place in it, and how many steps it has so far.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct ChainStep {
     start: usize,
@@ -2046,59 +2102,122 @@ struct ChainStep {
     len: usize,
 }
 
-/// Each of `tasks`' place in its chain, if it is a step of one. A chain is a
-/// Chain task, then the Code step it sent straight after, sent from it, then,
-/// with a post-build spec update, the Spec follow-up that code step sent
-/// straight after, sent from it. A chain's steps run one after another,
-/// ahead of the queue, so they are always next to each other; a task sent
-/// or resent from a step by hand, later, is a task of its own.
-fn chain_steps(tasks: &[PromptTask]) -> Vec<Option<ChainStep>> {
-    let mut steps = vec![None; tasks.len()];
-    let sent_from = |ix: usize, from: usize| {
-        tasks.get(ix).is_some_and(|task| {
-            task.sent.sent_from.as_deref() == Some(tasks[from].name.as_ref())
-                && task.sent.code_task.is_some()
-        })
+/// How the previous tasks are listed: oldest first, but with each chain's
+/// steps together where its first step was sent, as the PromptEditorScope
+/// says, whatever tasks of the other lane ran between them.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct ChainLayout {
+    /// The task listed at each place.
+    order: Vec<usize>,
+    /// Where each task is listed.
+    place: Vec<usize>,
+    /// The step of a chain listed at each place, if it is one.
+    steps: Vec<Option<ChainStep>>,
+}
+
+impl ChainLayout {
+    /// `count` items listed as they are, none of them chained.
+    fn identity(count: usize) -> Self {
+        Self {
+            order: (0..count).collect(),
+            place: (0..count).collect(),
+            steps: vec![None; count],
+        }
+    }
+
+    /// The tasks of the chain listed from `step.start`, in the order they
+    /// ran.
+    fn members(&self, step: ChainStep) -> &[usize] {
+        &self.order[step.start..(step.start + step.len).min(self.order.len())]
+    }
+
+    /// The step of a chain that the task at `ix` is, if it is one.
+    fn step_of(&self, ix: usize) -> Option<ChainStep> {
+        self.steps[*self.place.get(ix)?]
+    }
+}
+
+/// How `tasks` are listed, each chain's steps together. A chain is a Chain
+/// task, then the Code step it sent once it was done, sent from it, then,
+/// with a post-build spec update, the Spec follow-up that code step sent,
+/// sent from it. Its steps are found by which step each was sent from, not by
+/// being next to each other, since tasks of the other lane may run between
+/// them: each is the first task after the step before it sent from it in its
+/// mode. A task sent or resent from a step by hand, later, is a task of its
+/// own.
+fn chain_layout(tasks: &[PromptTask]) -> ChainLayout {
+    let count = tasks.len();
+    // The tasks told what another did, by the name of the one they were sent
+    // from, oldest first.
+    let mut sent_from: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (ix, task) in tasks.iter().enumerate() {
+        if let Some(from) = task.sent.sent_from.as_deref()
+            && task.sent.code_task.is_some()
+        {
+            sent_from.entry(from).or_default().push(ix);
+        }
+    }
+    let mut claimed = vec![false; count];
+    let next = |claimed: &[bool], from: usize, mode: SendMode| {
+        sent_from
+            .get(tasks[from].name.as_ref())?
+            .iter()
+            .copied()
+            .find(|&ix| ix > from && !claimed[ix] && tasks[ix].sent.mode == Some(mode))
     };
-    let mut ix = 0;
-    while ix < tasks.len() {
+    let mut chains: Vec<Option<Vec<usize>>> = vec![None; count];
+    for ix in 0..count {
         if tasks[ix].sent.mode != Some(SendMode::Both) {
-            ix += 1;
             continue;
         }
-        let mut len = 1;
-        if tasks
-            .get(ix + 1)
-            .is_some_and(|task| task.sent.mode == Some(SendMode::Code))
-            && sent_from(ix + 1, ix)
-        {
-            len = 2;
-            if tasks[ix + 1].sent.post_build_update
-                && tasks
-                    .get(ix + 2)
-                    .is_some_and(|task| task.sent.mode == Some(SendMode::Spec))
-                && sent_from(ix + 2, ix + 1)
+        let mut chain = vec![ix];
+        if let Some(code) = next(&claimed, ix, SendMode::Code) {
+            claimed[code] = true;
+            chain.push(code);
+            if tasks[code].sent.post_build_update
+                && let Some(update) = next(&claimed, code, SendMode::Spec)
             {
-                len = 3;
+                claimed[update] = true;
+                chain.push(update);
             }
         }
-        for pos in 0..len {
-            steps[ix + pos] = Some(ChainStep {
-                start: ix,
-                pos,
-                len,
-            });
-        }
-        ix += len;
+        chains[ix] = Some(chain);
     }
-    steps
+    let mut layout = ChainLayout {
+        order: Vec::with_capacity(count),
+        place: vec![0; count],
+        steps: Vec::with_capacity(count),
+    };
+    for ix in (0..count).filter(|&ix| !claimed[ix]) {
+        match &chains[ix] {
+            Some(chain) => {
+                let start = layout.order.len();
+                for (pos, &step) in chain.iter().enumerate() {
+                    layout.order.push(step);
+                    layout.steps.push(Some(ChainStep {
+                        start,
+                        pos,
+                        len: chain.len(),
+                    }));
+                }
+            }
+            None => {
+                layout.order.push(ix);
+                layout.steps.push(None);
+            }
+        }
+    }
+    for (place, &ix) in layout.order.iter().enumerate() {
+        layout.place[ix] = place;
+    }
+    layout
 }
 
 /// A chain's parent row in the previous tasks, heading its `steps`: tinted
 /// the Chain colour, a joined chain icon, the prompt's first line, the
-/// chain's status as a whole, and how many steps it has; `latest` when its
-/// last step is the latest task. It has nothing to click.
-fn chain_parent(task_ix: usize, steps: &[PromptTask], latest: bool, cx: &App) -> AnyElement {
+/// chain's status as a whole, and how many steps it has; `latest` when a step
+/// of it is the latest task. It has nothing to click.
+fn chain_parent(task_ix: usize, steps: &[&PromptTask], latest: bool, cx: &App) -> AnyElement {
     let theme = cx.theme();
     let color = chat_input::mode_color(SendMode::Both, cx);
     let text = steps
@@ -2189,7 +2308,7 @@ fn chain_step_summary(
 
 /// A chain's status as a whole: running while any step is, failed or
 /// cancelled if any step was, and otherwise its last step's.
-fn chain_status(steps: &[PromptTask]) -> TaskStatus {
+fn chain_status(steps: &[&PromptTask]) -> TaskStatus {
     let statuses = steps.iter().map(|task| task.status);
     if let Some(active) = statuses.clone().find(|status| status.is_active()) {
         return active;
@@ -2225,10 +2344,13 @@ struct ScrollSlide {
     /// How far toward the barrier the glow had grown as it crossed over,
     /// fading out as the slide begins; none for a slide it didn't start.
     glow: f32,
+    /// How far the stretch had pulled the view as it crossed over, down
+    /// for up, the slide starting from there.
+    pull: Pixels,
 }
 
-/// A new scroll pushing against an end: which way, and how far past it, as
-/// of `at`, draining away once the scrolling pauses.
+/// A scroll pushing into the stretch at an end: which way, and how far past
+/// it, as of `at`, draining away once the scrolling pauses.
 #[derive(Clone, Copy)]
 struct ScrollPush {
     up: bool,
@@ -2252,9 +2374,29 @@ impl ScrollPush {
         let drained = now.duration_since(self.at).as_secs_f32() / SCROLL_DRAIN.as_secs_f32();
         self.amount * (1. - drained).max(0.)
     }
+
+    /// How far the stretch pulls the view past its end at `now`, down while
+    /// scrolling up: nearly as far as it built up at first, less the further
+    /// it goes, as a rubber band gives, and about [`STRETCH_PULL`] by the
+    /// barrier.
+    fn pull(&self, now: Instant) -> Pixels {
+        let held = self.held(now);
+        if held <= 0. {
+            return px(0.);
+        }
+        let pull = (STRETCH_GIVE * (1. - (-held / STRETCH_GIVE).exp())).min(STRETCH_PULL);
+        px(if self.up { pull } else { -pull })
+    }
 }
 
-/// How far a new scroll must push past an end to cross over.
+/// How far the stretch pulls the view by the barrier, and never more.
+const STRETCH_PULL: f32 = 64.;
+
+/// How quickly the stretch stiffens: it gives nearly all of a scroll at
+/// first, and about [`STRETCH_PULL`] of [`SCROLL_BARRIER`].
+const STRETCH_GIVE: f32 = 67.;
+
+/// How far a scroll must push past an end to cross over.
 const SCROLL_BARRIER: f32 = 200.;
 
 /// How long what a scroll built up against an end takes to drain away.
@@ -2263,14 +2405,10 @@ const SCROLL_DRAIN: Duration = Duration::from_millis(500);
 /// How quickly the glow fades as the view crosses over.
 const GLOW_FADE: Duration = Duration::from_millis(150);
 
-/// How long the wheel must rest before a scroll counts as a new one, which
-/// can carry on past an end of the latest task or the previous tasks: barely
-/// a pause, so crossing over feels immediate. A trackpad touch starting is a
-/// new scroll at once.
+/// How long the wheel must rest before a scroll counts as a new one, after a
+/// slide or a fling, which then pulls into the stretch at an end again:
+/// barely a pause. A trackpad touch starting is a new scroll at once.
 const SCROLL_REST: Duration = Duration::from_millis(80);
-
-/// Dragged by the answer drawer's top edge to resize it.
-struct DrawerResize;
 
 /// The gap an item dragged over the item at `ix`, whose bounds are
 /// `bounds`, would be dropped into, the pointer at `at`: the gap before it
@@ -2402,53 +2540,13 @@ impl Render for QueuedDrag {
     }
 }
 
-/// What is open in the answer drawer: the question open onto its table, and
-/// which expanding of the previous answers is showing.
-type DrawerContents = (Option<usize>, Option<usize>);
-
-/// The answer drawer, just closed, sliding back down to where it slid up
-/// from, still showing what it held until it is gone.
-struct DrawerClosing {
-    /// The question it held open, if it held one.
-    question: Option<ClosingQuestion>,
-    /// Which expanding of the previous answers it held, if it held them.
-    answers: Option<usize>,
-    /// How tall it was, and each thing filling it, as last laid out open.
-    height: Pixels,
-    fill: Pixels,
-    closed: Instant,
-}
-
-/// The question an answer drawer held as it closed.
-enum ClosingQuestion {
-    /// Closed down to its row, still among the questions.
-    Collapsed(usize),
-    /// Closed altogether: now the previous answer at `answer`, its table kept
-    /// to slide down with.
-    Closed {
-        id: usize,
-        answer: usize,
-        text: SharedString,
-        table: TaskTable,
-        locked: bool,
-    },
-}
-
-impl ClosingQuestion {
-    fn id(&self) -> usize {
-        match self {
-            Self::Collapsed(id) | Self::Closed { id, .. } => *id,
-        }
-    }
-}
-
 /// The work that belongs to one open project (see the OpenProjectsScope):
 /// swapped into [`PromptMode`] while the project is on screen, or while a run
 /// of it writes back from the background, and kept aside otherwise.
 struct ProjectSession {
     project_dir: Option<PathBuf>,
     tasks: Vec<PromptTask>,
-    working: bool,
+    working: Lanes,
     history_stale: bool,
     _history_load: Task<()>,
     task_history: HistoryList,
@@ -2456,18 +2554,17 @@ struct ProjectSession {
     queue_expanded: bool,
     auto_send: bool,
     queue_held: bool,
-    _pending: Task<()>,
-    feed: Option<harness::Feed>,
+    _pending: [Task<()>; 2],
     feeding: Arc<futures::lock::Mutex<()>>,
     session: Option<Session>,
     session_epoch: u64,
     new_conversation_pending: bool,
     asks: Vec<Ask>,
-    expanded_ask: Option<usize>,
     steps_shown: HashSet<usize>,
     answers: Vec<PromptTask>,
-    ask_history: HistoryList,
     _ask_history_load: Task<()>,
+    ask_pane: AskPane,
+    ask_new_pending: bool,
     ask_session: Option<Session>,
     ask_session_epoch: u64,
     usage: ProjectUsage,
@@ -2485,8 +2582,9 @@ struct ProjectSession {
     selected_file: Option<usize>,
 }
 
-/// The question rows in the stack, kept on the newest question as rows slide
-/// up into it, until scrolled away from it.
+/// The rows of the questions still running, stacked above the chat input's
+/// tabs off the Ask tab, kept on the newest as rows slide up into it, until
+/// scrolled away from it.
 fn ask_rows() -> MeasuredList {
     let rows = MeasuredList::new(task_table::OVERDRAW);
     rows.state().set_follow_mode(FollowMode::Tail);
@@ -2498,7 +2596,7 @@ impl ProjectSession {
         Self {
             project_dir,
             tasks: Vec::new(),
-            working: false,
+            working: Lanes::NONE,
             history_stale: false,
             _history_load: Task::ready(()),
             task_history: HistoryList::tasks(),
@@ -2506,18 +2604,17 @@ impl ProjectSession {
             queue_expanded: false,
             auto_send: true,
             queue_held: false,
-            _pending: Task::ready(()),
-            feed: None,
+            _pending: [Task::ready(()), Task::ready(())],
             feeding: Arc::default(),
             session: None,
             session_epoch: 0,
             new_conversation_pending: false,
             asks: Vec::new(),
-            expanded_ask: None,
             steps_shown: HashSet::new(),
             answers: Vec::new(),
-            ask_history: HistoryList::answers(),
             _ask_history_load: Task::ready(()),
+            ask_pane: AskPane::new(),
+            ask_new_pending: false,
             ask_session: None,
             ask_session_epoch: 0,
             usage: ProjectUsage::default(),
@@ -2538,8 +2635,9 @@ impl ProjectSession {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProjectActivity {
     pub project_dir: PathBuf,
-    /// The first line of the task the harness is working on, if it is.
-    pub task: Option<SharedString>,
+    /// Each task the harness is working on, one in each lane at most, by
+    /// its index, with its first line.
+    pub tasks: Vec<(usize, SharedString)>,
     /// Each question still running, by its id, with its first line.
     pub questions: Vec<(usize, SharedString)>,
 }
@@ -2561,14 +2659,18 @@ pub struct PromptMode {
     /// When the wheel last scrolled the latest task or the previous tasks,
     /// telling a new scroll from one carried on.
     last_wheel: Rc<Cell<Option<Instant>>>,
+    /// Whether the scroll going on is carried on from a slide, or is a
+    /// fling's momentum, stopping at an end rather than pulling into the
+    /// stretch, until a new scroll.
+    scroll_held_back: Rc<Cell<bool>>,
     /// While a queued prompt is dragged: which, and the gap between prompts
     /// it would be dropped into, if any.
     queue_gap: Rc<Cell<Option<(usize, Option<usize>)>>>,
     /// While a file's tab is dragged: which, and the gap between file tabs
     /// it would be dropped into, if any.
     tab_gap: Rc<Cell<Option<(EntityId, Option<usize>)>>>,
-    /// How far a new scroll has pushed against an end, toward the barrier
-    /// it must get past to cross over.
+    /// How far a scroll has pushed into the stretch at an end, toward the
+    /// barrier it must get past to cross over.
     scroll_push: Rc<Cell<ScrollPush>>,
     output_locked: bool,
     /// The latest task, and whether its output was locked, as the previous
@@ -2578,8 +2680,9 @@ pub struct PromptMode {
     chat_input: Entity<ChatInput>,
     /// The queued prompt being edited in the chat input, by its id.
     editing_queued: Option<usize>,
-    /// The harness is working on the latest task.
-    working: bool,
+    /// The lanes the harness is working on a task in, as the
+    /// PromptSendingScope says: a task of each lane runs beside the other's.
+    working: Lanes,
     /// The project changed while the harness worked; its history loads once
     /// the run is over.
     history_stale: bool,
@@ -2625,10 +2728,8 @@ pub struct PromptMode {
     refs_scroll: ScrollHandle,
     understanding_scroll: ScrollHandle,
     subagents_scroll: ScrollHandle,
-    _pending: Task<()>,
-    /// Sends the latest task more while it runs, where its harness can be
-    /// fed more.
-    feed: Option<harness::Feed>,
+    /// The run of each lane's task, by [`lane_slot`].
+    _pending: [Task<()>; 2],
     /// Taken by each message sent to the running task while it is compiled
     /// and sent, so messages reach it in the order they were sent.
     feeding: Arc<futures::lock::Mutex<()>>,
@@ -2644,50 +2745,30 @@ pub struct PromptMode {
     /// and apart from the tasks.
     asks: Vec<Ask>,
     next_ask_id: usize,
-    /// The finished question opened onto its whole task table, if any.
-    expanded_ask: Option<usize>,
-    /// The popover offering to copy text selected in an answer, or attach it
-    /// to the prompt: where the selecting drag ended, and what it selected.
+    /// The popover offering to copy text selected in the Ask conversation, or
+    /// attach it to the prompt: where the selecting drag ended, and what it selected.
     selection_popover: Option<(Point<Pixels>, String)>,
     /// The menu a task's Send to Spec or Send to Code button opens when
     /// right-clicked, while it is open.
     mark_menu: Option<MarkMenu>,
     /// The answers' tables whose steps were expanded, by task index.
     steps_shown: HashSet<usize>,
-    /// The share of the space above the chat input the answer drawer takes
-    /// while open; dragging its top edge changes it for the rest of the run.
-    drawer_share: f32,
-    /// What was open in the drawer when it was last dragged; while that is
-    /// still what's open, the drawer follows the drag rather than sliding.
-    drawer_dragged: Option<DrawerContents>,
-    /// What the drawer held as last drawn, to know when it opens and closes.
-    drawer_shown: DrawerContents,
-    /// The drawer is being drawn for the first time since it opened, so what
-    /// fills it slides up rather than starting where it ends.
-    drawer_opening: bool,
-    /// The drawer sliding back down, just closed.
-    drawer_closing: Option<DrawerClosing>,
-    /// The question just closed from the drawer, kept for it to slide down
-    /// with, should that close the drawer.
-    closed_question: Option<ClosingQuestion>,
-    /// The space above the chat input, the whole drawer, and what fills it,
-    /// as last laid out.
-    body_height: Rc<Cell<Pixels>>,
-    drawer_height: Rc<Cell<Pixels>>,
-    drawer_fill_height: Rc<Cell<Pixels>>,
-    /// The question rows in the stack above the tabs, as last laid out, which
-    /// the previous answers slide up from rather than covering.
-    stack_rows_height: Rc<Cell<Pixels>>,
     /// The question rows in the stack, drawn only as they come into view,
     /// and the questions they were last laid out for, oldest first.
     ask_rows: MeasuredList,
     ask_row_ids: RefCell<Vec<usize>>,
-    /// Every question asked before, oldest first: those saved with the
-    /// project, and those closed since.
+    /// The questions saved with the project, oldest first, loaded as it
+    /// opens; those asked since are among [`Self::asks`].
     answers: Vec<PromptTask>,
-    /// The row of previous answers, shown on the Ask tab.
-    ask_history: HistoryList,
     _ask_history_load: Task<()>,
+    /// The Ask conversation, shown beside the tab's contents on the Ask tab.
+    ask_pane: AskPane,
+    /// New conversation was pressed on the Ask tab with nothing asked since:
+    /// the pane marks, at its bottom, that the next question starts one.
+    ask_new_pending: bool,
+    /// The share of the width above the chat input the Ask conversation
+    /// takes, kept while the application runs, for every project.
+    ask_split_share: f32,
     /// The chat input's Ask tab is selected.
     on_ask_tab: bool,
     /// The conversation questions share, apart from the tasks'.
@@ -2709,6 +2790,9 @@ pub struct PromptMode {
     /// Writes a finished task's commit note: [`commit_notes::summarize`],
     /// replaced in tests.
     summarize: Summarize,
+    /// Asks the harness for a prompt's title, to name it by:
+    /// [`prompt_title::ask`], replaced in tests.
+    titler: prompt_title::Titler,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -2752,6 +2836,7 @@ impl PromptMode {
                             None,
                             None,
                             post_build_update,
+                            None,
                             window,
                             cx,
                         );
@@ -2792,6 +2877,7 @@ impl PromptMode {
             tasks: Vec::new(),
             output_table: TaskTable::new(),
             last_wheel: Rc::default(),
+            scroll_held_back: Rc::default(),
             queue_gap: Rc::default(),
             tab_gap: Rc::default(),
             scroll_push: Rc::default(),
@@ -2800,7 +2886,7 @@ impl PromptMode {
             queue_scroll: ScrollHandle::new(),
             chat_input,
             editing_queued: None,
-            working: false,
+            working: Lanes::NONE,
             history_stale: false,
             _history_load: Task::ready(()),
             task_history: HistoryList::tasks(),
@@ -2823,33 +2909,23 @@ impl PromptMode {
             refs_scroll: ScrollHandle::new(),
             understanding_scroll: ScrollHandle::new(),
             subagents_scroll: ScrollHandle::new(),
-            _pending: Task::ready(()),
-            feed: None,
+            _pending: [Task::ready(()), Task::ready(())],
             feeding: Arc::default(),
             session: None,
             session_epoch: 0,
             new_conversation_pending: false,
             asks: Vec::new(),
             next_ask_id: 0,
-            expanded_ask: None,
             selection_popover: None,
             mark_menu: None,
             steps_shown: HashSet::new(),
-            drawer_share: DRAWER_SHARE,
-            drawer_dragged: None,
-            drawer_shown: (None, None),
-            drawer_opening: false,
-            drawer_closing: None,
-            closed_question: None,
-            body_height: Rc::default(),
-            drawer_height: Rc::default(),
-            drawer_fill_height: Rc::default(),
-            stack_rows_height: Rc::default(),
             ask_rows: ask_rows(),
             ask_row_ids: RefCell::default(),
             answers: Vec::new(),
-            ask_history: HistoryList::answers(),
             _ask_history_load: Task::ready(()),
+            ask_pane: AskPane::new(),
+            ask_new_pending: false,
+            ask_split_share: ASK_SPLIT_SHARE,
             on_ask_tab: false,
             ask_session: None,
             ask_session_epoch: 0,
@@ -2859,6 +2935,11 @@ impl PromptMode {
             _preview: Task::ready(()),
             header_prompt: HeaderPrompt::default(),
             summarize: commit_notes::summarize,
+            #[cfg(not(test))]
+            titler: prompt_title::ask,
+            // Tests name their prompts at random, unless they say otherwise.
+            #[cfg(test)]
+            titler: prompt_title::never,
             _subscriptions: subscriptions,
         };
         this.project_changed(cx);
@@ -2879,7 +2960,6 @@ impl PromptMode {
         swap(&mut self.auto_send, &mut other.auto_send);
         swap(&mut self.queue_held, &mut other.queue_held);
         swap(&mut self._pending, &mut other._pending);
-        swap(&mut self.feed, &mut other.feed);
         swap(&mut self.feeding, &mut other.feeding);
         swap(&mut self.session, &mut other.session);
         swap(&mut self.session_epoch, &mut other.session_epoch);
@@ -2888,11 +2968,11 @@ impl PromptMode {
             &mut other.new_conversation_pending,
         );
         swap(&mut self.asks, &mut other.asks);
-        swap(&mut self.expanded_ask, &mut other.expanded_ask);
         swap(&mut self.steps_shown, &mut other.steps_shown);
         swap(&mut self.answers, &mut other.answers);
-        swap(&mut self.ask_history, &mut other.ask_history);
         swap(&mut self._ask_history_load, &mut other._ask_history_load);
+        swap(&mut self.ask_pane, &mut other.ask_pane);
+        swap(&mut self.ask_new_pending, &mut other.ask_new_pending);
         swap(&mut self.ask_session, &mut other.ask_session);
         swap(&mut self.ask_session_epoch, &mut other.ask_session_epoch);
         swap(&mut self.usage, &mut other.usage);
@@ -2944,10 +3024,6 @@ impl PromptMode {
         self.refs_opened = None;
         self.refs_closing = None;
         self.scroll_slide = None;
-        // Likewise its answer drawer, open or not.
-        self.drawer_closing = None;
-        self.closed_question = None;
-        self.drawer_shown = self.drawer_contents();
         self.selection_popover = None;
         let working = self.working;
         self.chat_input
@@ -2985,24 +3061,21 @@ impl PromptMode {
         fn activity(
             project_dir: Option<&PathBuf>,
             tasks: &[PromptTask],
-            working: bool,
+            working: Lanes,
             asks: &[Ask],
         ) -> Option<ProjectActivity> {
-            let task = tasks
-                .last()
-                .filter(|task| working && task.status.is_active())
-                .map(|task| first_line(&task.text));
+            let running = running_tasks(tasks, working);
             let questions: Vec<(usize, SharedString)> = asks
                 .iter()
                 .filter(|ask| ask.task.status.is_active())
                 .map(|ask| (ask.id, first_line(&ask.task.text)))
                 .collect();
-            if task.is_none() && questions.is_empty() {
+            if running.is_empty() && questions.is_empty() {
                 return None;
             }
             Some(ProjectActivity {
                 project_dir: project_dir?.clone(),
-                task,
+                tasks: running,
                 questions,
             })
         }
@@ -3035,14 +3108,12 @@ impl PromptMode {
     /// question still running, in the project on screen, then in each other
     /// open project, headed with its name.
     pub fn running_jobs(&self) -> Vec<Job> {
-        let task = self
-            .tasks
-            .last()
-            .filter(|task| self.working && task.status.is_active())
-            .map(|task| Job {
-                kind: JobKind::Task,
+        let tasks = running_tasks(&self.tasks, self.working)
+            .into_iter()
+            .map(|(ix, text)| Job {
+                kind: JobKind::Task(ix),
                 title: "Task".into(),
-                detail: Some(first_line(&task.text)),
+                detail: Some(text),
                 project: None,
             });
         let questions = self
@@ -3055,15 +3126,15 @@ impl PromptMode {
                 detail: Some(first_line(&ask.task.text)),
                 project: None,
             });
-        let mut jobs: Vec<Job> = task.into_iter().chain(questions).collect();
+        let mut jobs: Vec<Job> = tasks.chain(questions).collect();
         for busy in self
             .busy_projects()
             .into_iter()
             .filter(|busy| Some(&busy.project_dir) != self.project_dir.as_ref())
         {
             let project = Some(busy.project_dir.clone());
-            jobs.extend(busy.task.map(|task| Job {
-                kind: JobKind::Task,
+            jobs.extend(busy.tasks.into_iter().map(|(ix, task)| Job {
+                kind: JobKind::Task(ix),
                 title: crate::activity::title_in("Task", project.as_deref()),
                 detail: Some(task),
                 project: project.clone(),
@@ -3087,38 +3158,39 @@ impl PromptMode {
     }
 
     #[cfg(test)]
-    pub fn close_test_question(&mut self, id: usize, cx: &mut Context<Self>) {
-        self.close_ask(id, cx);
+    pub fn stop_test_question(&mut self, id: usize, cx: &mut Context<Self>) {
+        self.stop_ask(id, cx);
+    }
+
+    /// Brings the running task at `ix` into view: the latest task's output,
+    /// out from behind the previous tasks and scrolled to its end, or a task
+    /// running in the other lane opened among the previous tasks.
+    pub fn reveal_running_task(&mut self, ix: usize, cx: &mut Context<Self>) {
+        if ix + 1 >= self.tasks.len() {
+            return self.reveal_task(cx);
+        }
+        if !self.task_history.expanded {
+            self.task_history.toggle();
+            self.follow_task_history();
+        }
+        self.task_history.filters.clear();
+        self.task_history.open = Some(ix);
+        cx.notify();
     }
 
     /// Brings the latest task's output into view: out from behind the
-    /// previous tasks and the answer drawer, scrolled to its end.
+    /// previous tasks, scrolled to its end.
     pub fn reveal_task(&mut self, cx: &mut Context<Self>) {
         self.task_history.expanded = false;
         self.output_left = None;
-        self.close_answer_drawer();
         self.output_table.scroll_to_end();
         cx.notify();
-    }
-
-    /// Brings the question `id`'s row into view, closing the answer drawer
-    /// over it.
-    pub fn reveal_question(&mut self, _id: usize, cx: &mut Context<Self>) {
-        self.close_answer_drawer();
-        cx.notify();
-    }
-
-    fn close_answer_drawer(&mut self) {
-        self.expanded_ask = None;
-        if self.ask_history.expanded {
-            self.ask_history.toggle();
-        }
     }
 
     /// Whether the harness is working on a task or a question in any open
     /// project.
     pub fn is_working(&self) -> bool {
-        self.working
+        self.working.any()
             || self.asks.iter().any(|ask| ask.task.status.is_active())
             || !self.busy_projects().is_empty()
     }
@@ -3134,7 +3206,7 @@ impl PromptMode {
 
     #[cfg(test)]
     pub fn set_working(&mut self, working: bool) {
-        self.working = working;
+        self.working = if working { Lanes::ALL } else { Lanes::NONE };
     }
 
     /// Moves keyboard focus into the chat input.
@@ -3576,7 +3648,7 @@ impl PromptMode {
         cx.notify();
     }
 
-    /// A new wheel scroll `up`, or down, carries on past the latest task's
+    /// A wheel scroll `up`, or down, carries on past the latest task's
     /// top into the previous tasks, opening them on the latest, or past their
     /// bottom back to the latest task, shown as it was left. Returns whether
     /// it did.
@@ -3592,6 +3664,7 @@ impl PromptMode {
             up,
             started: Instant::now(),
             glow: 0.,
+            pull: px(0.),
         });
         cx.notify();
         true
@@ -3709,12 +3782,14 @@ impl PromptMode {
     }
 
     /// Over the latest task's output or the previous tasks, hears the wheel
-    /// before they do, so a new scroll begun at an end carries on past it,
-    /// as [`Self::scroll_past`] says. A scroll carried on, as a fling's
-    /// momentum is, or a sideways one, never does.
+    /// before they do, so a scroll reaching an end carries on into the
+    /// stretch there and past it, as [`Self::scroll_past`] says. A fling's
+    /// momentum, a scroll carried on from a slide, and a sideways one never
+    /// do.
     fn scroll_past_ends(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let this = cx.entity().downgrade();
         let last = self.last_wheel.clone();
+        let held_back = self.scroll_held_back.clone();
         let push = self.scroll_push.clone();
         canvas(
             |bounds, window, _| window.insert_hitbox(bounds, HitboxBehavior::Normal),
@@ -3731,14 +3806,23 @@ impl PromptMode {
                         .is_some_and(|this| this.read(cx).scroll_sliding())
                     {
                         last.set(Some(now));
+                        held_back.set(true);
                         push.set(ScrollPush::default());
                         cx.stop_propagation();
                         return;
                     }
-                    let new = event.touch_phase == TouchPhase::Started
+                    // A new scroll pulls into the stretch again; once the
+                    // fingers lift, what follows is a fling's momentum.
+                    if event.touch_phase == TouchPhase::Started
                         || last
                             .get()
-                            .is_none_or(|at| now.duration_since(at) >= SCROLL_REST);
+                            .is_none_or(|at| now.duration_since(at) >= SCROLL_REST)
+                    {
+                        held_back.set(false);
+                    }
+                    if event.touch_phase == TouchPhase::Ended {
+                        held_back.set(true);
+                    }
                     last.set(Some(now));
                     let delta = event.delta.pixel_delta(window.line_height());
                     if delta.y.abs() <= delta.x.abs() {
@@ -3749,21 +3833,24 @@ impl PromptMode {
                     let mut held = push.get();
                     held.amount = held.held(now);
                     let pushing = if held.amount > 0. {
-                        if held.up == up {
-                            held.amount += distance;
-                            true
-                        } else {
+                        if held.up != up {
                             // Scrolling back takes it down, and scrolls the
                             // view once it is gone.
                             held.amount -= distance;
                             held.amount > 0.
+                        } else {
+                            // Momentum adds nothing, but the end still holds.
+                            if !held_back.get() {
+                                held.amount += distance;
+                            }
+                            true
                         }
-                    } else if new
+                    } else if !held_back.get()
                         && this
                             .upgrade()
                             .is_some_and(|this| this.read(cx).can_scroll_past(up))
                     {
-                        // A new scroll against an end starts building up.
+                        // A scroll at an end starts pulling into the stretch.
                         held = ScrollPush {
                             up,
                             amount: distance,
@@ -3773,19 +3860,23 @@ impl PromptMode {
                     } else {
                         false
                     };
-                    held.at = now;
                     if !pushing {
                         push.set(ScrollPush::default());
                         return;
                     }
-                    // The end holds while it builds up.
+                    held.at = now;
+                    // The view's own scroll holds at its end while it is
+                    // pulled.
                     cx.stop_propagation();
                     if held.amount >= SCROLL_BARRIER {
+                        let pull = held.pull(now);
                         push.set(ScrollPush::default());
+                        held_back.set(true);
                         this.update(cx, |this, cx| {
                             if this.scroll_past(held.up, cx) {
                                 if let Some(slide) = this.scroll_slide.as_mut() {
                                     slide.glow = 1.;
+                                    slide.pull = pull;
                                 }
                             }
                         })
@@ -3931,6 +4022,7 @@ impl PromptMode {
             None,
             None,
             post_build_update,
+            None,
             window,
             cx,
         );
@@ -3975,7 +4067,8 @@ impl PromptMode {
     /// told what `code_task`, the Code task it was sent from, if any, did;
     /// sent to the other mode, knowing `sent_from`, the name of the task it
     /// was sent from; a chain or its code step followed by a post-build spec
-    /// update or not.
+    /// update or not; named after the prompt named `named_after`, if any, as
+    /// a resend is.
     #[allow(clippy::too_many_arguments)]
     fn send_as(
         &mut self,
@@ -3986,6 +4079,7 @@ impl PromptMode {
         code_task: Option<CodeTask>,
         sent_from: Option<String>,
         post_build_update: bool,
+        named_after: Option<String>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -3993,8 +4087,8 @@ impl PromptMode {
             return;
         }
         if mode == SendMode::Ask {
-            self.ask(text, attached, sliced, cx);
-        } else if self.working {
+            self.ask(text, attached, sliced, named_after, cx);
+        } else if self.working.queues(mode) {
             self.enqueue(
                 text,
                 false,
@@ -4004,6 +4098,7 @@ impl PromptMode {
                 code_task,
                 sent_from,
                 post_build_update,
+                named_after,
                 window,
                 cx,
             );
@@ -4017,14 +4112,15 @@ impl PromptMode {
                     code_task,
                     sent_from,
                     post_build_update,
+                    named_after,
                 ),
                 cx,
             );
         }
     }
 
-    /// Sends the task at `ix` of `tasks_of` again, as it was sent: of the
-    /// tasks or the previous answers. One of unknown mode goes from the selected tab.
+    /// Sends the task at `ix` of `tasks_of` again, as it was sent. One of
+    /// unknown mode goes from the selected tab.
     fn resend(
         &mut self,
         tasks_of: fn(&PromptMode) -> &Vec<PromptTask>,
@@ -4272,8 +4368,8 @@ impl PromptMode {
             return;
         }
         let sending = self.selected_for(to);
-        // The first starts at once if the harness is free, and so marks it
-        // working before the next is sent, which queues behind it.
+        // The first starts at once if its lane is free, and so marks the lane
+        // busy before the next is sent, which queues behind it.
         for &ix in &sending {
             self.send_to_other_mode(|this| &this.tasks, ix, window, cx);
         }
@@ -4369,6 +4465,8 @@ impl PromptMode {
             return;
         };
         let (text, sent) = (task.text.to_string(), task.sent.clone());
+        // Named after it, rather than titled again.
+        let named_after = Some(task.name.to_string());
         let code_task = match mode {
             Some(SendMode::Spec) if sent.mode == Some(SendMode::Code) => Some(code_task_of(task)),
             Some(_) => None,
@@ -4400,6 +4498,7 @@ impl PromptMode {
             code_task,
             sent_from,
             post_build_update,
+            named_after,
             window,
             cx,
         );
@@ -4408,9 +4507,10 @@ impl PromptMode {
     /// Whether the latest task is running with a harness that can be fed
     /// more, its output shown rather than the previous tasks.
     fn can_send_to_task(&self) -> bool {
-        self.working
-            && !self.task_history.expanded
-            && self.feed.as_ref().is_some_and(harness::Feed::is_open)
+        !self.task_history.expanded
+            && self.tasks.last().is_some_and(|task| {
+                task.status.is_active() && task.feed.as_ref().is_some_and(harness::Feed::is_open)
+            })
     }
 
     /// Sends `text`, with the text attached to it, to the task running, as
@@ -4436,9 +4536,15 @@ impl PromptMode {
             return;
         };
         let sliced = self.chat_input.read(cx).slices();
-        let Some(feed) = self.feed.clone().filter(harness::Feed::is_open) else {
+        // Only the latest task, whose output is shown, is sent to.
+        let Some(feed) = self
+            .tasks
+            .last()
+            .and_then(|task| task.feed.clone())
+            .filter(harness::Feed::is_open)
+        else {
             self.enqueue(
-                text, false, mode, attached, sliced, None, None, false, window, cx,
+                text, false, mode, attached, sliced, None, None, false, None, window, cx,
             );
             return;
         };
@@ -4474,7 +4580,8 @@ impl PromptMode {
                 ToTask::Over => {
                     this.in_project(&project_dir, cx, |this, cx| {
                         this.enqueue(
-                            text, false, mode, attached, sliced, None, None, false, window, cx,
+                            text, false, mode, attached, sliced, None, None, false, None, window,
+                            cx,
                         )
                     });
                 }
@@ -4513,6 +4620,8 @@ impl PromptMode {
                     sent_from: saved.anchor.sent_from.clone(),
                     images: saved.anchor.attached_images.clone(),
                     new_conversation: saved.anchor.new_conversation == Some(true),
+                    mode: anchor_mode(&saved.anchor),
+                    queued_at: prompt_queue::queued_at(&saved.file).unwrap_or_default(),
                     saved: Some(saved),
                 }
             })
@@ -4526,7 +4635,7 @@ impl PromptMode {
     /// so a run's task keeps its index; otherwise the history loads once the
     /// run is over, the run's own task among it.
     fn load_history(&mut self, cx: &mut Context<Self>) {
-        if self.working {
+        if self.working.any() {
             self.history_stale = true;
             return;
         }
@@ -4553,7 +4662,7 @@ impl PromptMode {
             let (tasks, session) = load.await;
             this.update(cx, |this, cx| {
                 this.in_project(&project_dir, cx, |this, cx| {
-                    if this.working {
+                    if this.working.any() {
                         this.history_stale = true;
                         return;
                     }
@@ -4574,11 +4683,12 @@ impl PromptMode {
         });
     }
 
-    /// Sends the next queued prompt if auto send is on and the queue is not
-    /// being held after a restore.
+    /// Sends the next queued prompt of each free lane if auto send is on and
+    /// the queue is not being held after a restore.
     fn auto_send_next(&mut self, cx: &mut Context<Self>) {
         if self.auto_send && !self.queue_held {
-            self.send_next(cx);
+            // Each prompt sent keeps its lane busy, so this ends.
+            while self.send_next(cx) {}
         }
     }
 
@@ -4598,18 +4708,61 @@ impl PromptMode {
         code_task: Option<CodeTask>,
         sent_from: Option<String>,
         post_build_update: bool,
-        window: &mut Window,
+        named_after: Option<String>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.enqueue_at(
+            false,
+            text,
+            wait,
+            mode,
+            attached,
+            sliced,
+            code_task,
+            sent_from,
+            post_build_update,
+            named_after,
+            cx,
+        );
+    }
+
+    /// Queues a prompt as [`Self::enqueue`] does, at the end of the queue, or
+    /// at its `head`, ahead of every prompt waiting, as a chain's next step
+    /// waits for its lane.
+    #[allow(clippy::too_many_arguments)]
+    fn enqueue_at(
+        &mut self,
+        head: bool,
+        text: String,
+        wait: bool,
+        mode: SendMode,
+        attached: Attached,
+        sliced: bool,
+        code_task: Option<CodeTask>,
+        sent_from: Option<String>,
+        post_build_update: bool,
+        named_after: Option<String>,
         cx: &mut Context<Self>,
     ) {
         let Some(project_dir) = self.project_dir.clone() else {
             return;
         };
+        // Named as it is queued, and known by that name from then on.
+        let naming = prompt_title::start(&project_dir, &text, named_after.as_deref(), self.titler);
         self.next_queue_id += 1;
         let id = self.next_queue_id;
         // The first task after New conversation, pressed with nothing
         // queued, is the one to start the new conversation.
         let new_conversation = std::mem::take(&mut self.new_conversation_pending);
-        self.queue.push(QueueItem {
+        // Its place on disk is taken now, not once it has compiled, so prompts
+        // queued in a row, as a batch sent to the other mode is, come back in
+        // the order they were queued; at the head, before the first.
+        let queued_at = match self.queue.first().filter(|_| head) {
+            Some(first) => first.queued_at.saturating_sub(1),
+            None => prompt_queue::stamp(),
+        };
+        let item = QueueItem {
             id,
             text: text.clone().into(),
             wait,
@@ -4617,44 +4770,43 @@ impl PromptMode {
             sent_from: sent_from.clone(),
             images: attached.images.clone(),
             new_conversation,
-        });
+            mode: Some(mode),
+            queued_at,
+        };
+        if head {
+            self.queue.insert(0, item);
+            if !self.in_background {
+                self.sync_editing_position(cx);
+            }
+        } else {
+            self.queue.push(item);
+        }
         cx.notify();
 
         let lsp = self.chat_input.read(cx).lsp();
-        // Its place on disk is taken now, not once it has compiled, so prompts
-        // queued in a row, as a batch sent to the other mode is, come back in
-        // the order they were queued.
-        let queued_at = prompt_queue::stamp();
         let save = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
                 let mut anchor =
                     resolve_anchor(&text, mode, attached, sliced, code_task, lsp, &project_dir)?;
+                anchor.rename(naming.wait());
                 anchor.sent_from = sent_from;
                 anchor.post_build_update = post_build_update;
                 anchor.new_conversation = Some(new_conversation);
                 prompt_queue::add_at(queued_at, anchor, text, &project_dir)
             }
         });
-        cx.spawn_in(window, async move |this, cx| {
+        cx.spawn(async move |this, cx| {
             let saved = save.await;
-            this.update_in(cx, |this, window, cx| {
-                this.in_project(&project_dir, cx, |this, cx| {
-                    this.queue_saved(id, saved, window, cx)
-                });
+            this.update(cx, |this, cx| {
+                this.in_project(&project_dir, cx, |this, cx| this.queue_saved(id, saved, cx));
             })
             .ok();
         })
         .detach();
     }
 
-    fn queue_saved(
-        &mut self,
-        id: usize,
-        saved: Result<QueuedPrompt>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn queue_saved(&mut self, id: usize, saved: Result<QueuedPrompt>, cx: &mut Context<Self>) {
         let Some(ix) = self.queue.iter().position(|item| item.id == id) else {
             // Cancelled while it was saved.
             if let Ok(saved) = saved {
@@ -4673,7 +4825,10 @@ impl PromptMode {
             }
             Err(err) => {
                 self.queue.remove(ix);
-                window.push_notification(
+                if !self.in_background {
+                    self.sync_editing_position(cx);
+                }
+                notify(
                     Notification::error(format!("{err:#}")).title("Could not queue the prompt"),
                     cx,
                 );
@@ -4787,6 +4942,8 @@ impl PromptMode {
             mode == SendMode::Both && self.chat_input.read(cx).post_build_update()
         };
         item.sent_from = sent_from.clone();
+        // Saved in another tab, it waits for that mode's lane.
+        let old_mode = item.mode.replace(mode);
         let save = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
@@ -4831,6 +4988,7 @@ impl PromptMode {
                             item.text = old_text;
                             item.images = old_images;
                             item.sent_from = old.anchor.sent_from.clone();
+                            item.mode = old_mode;
                             item.saved = Some(old);
                             window.push_notification(
                                 Notification::error(format!("{err:#}"))
@@ -4860,27 +5018,48 @@ impl PromptMode {
         }
     }
 
-    /// Sends the first queued prompt, if the harness is free and it is saved.
-    fn send_next(&mut self, cx: &mut Context<Self>) {
-        // Without a project it could not be sent, and must stay queued; nor
-        // while it is being edited.
-        if self.working
-            || self.project_dir.is_none()
-            || !self.queue.first().is_some_and(|item| {
-                item.saved.is_some() && (self.in_background || Some(item.id) != self.editing_queued)
-            })
-        {
-            return;
+    /// The place in the queue of the next prompt that can be sent: the first
+    /// whose lane is free, as the QueueListScope says. Each lane sends its
+    /// own prompts first to last, so a prompt that must wait, for its lane,
+    /// for being saved, or for being edited, holds back those of its lane
+    /// after it; a Freeform prompt, needing both lanes, holds back both.
+    fn next_sendable(&self) -> Option<usize> {
+        // Without a project it could not be sent, and must stay queued.
+        self.project_dir.as_ref()?;
+        let mut held = self.working;
+        for (ix, item) in self.queue.iter().enumerate() {
+            let lanes = Lanes::of(item.mode);
+            let ready = item.saved.is_some()
+                && (self.in_background || Some(item.id) != self.editing_queued);
+            if ready && !held.overlaps(lanes) {
+                return Some(ix);
+            }
+            held = held.with(lanes, true);
+            if held == Lanes::ALL {
+                return None;
+            }
         }
-        let item = self.queue.remove(0);
+        None
+    }
+
+    /// Sends the first queued prompt whose lane is free, once it is saved.
+    /// Returns whether it sent one.
+    fn send_next(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(ix) = self.next_sendable() else {
+            return false;
+        };
+        let item = self.queue.remove(ix);
         if self.queue.is_empty() {
             self.queue_held = false;
         }
-        let Some(saved) = item.saved else { return };
+        let Some(saved) = item.saved else {
+            return false;
+        };
         if !self.in_background {
             self.sync_editing_position(cx);
         }
         self.start(item.text.to_string(), Sending::Queued(saved), cx);
+        true
     }
 
     /// "Send next" was clicked: sends the first queued prompt, and releases a
@@ -4949,6 +5128,10 @@ impl PromptMode {
         };
         prompt_queue::swap(a, b)?;
         self.queue.swap(low, high);
+        // Each place keeps its mark, as the files traded theirs.
+        let (first, second) = (self.queue[low].queued_at, self.queue[high].queued_at);
+        self.queue[low].queued_at = second;
+        self.queue[high].queued_at = first;
         Ok(())
     }
 
@@ -4988,7 +5171,7 @@ impl PromptMode {
         self.auto_send = auto_send;
         if auto_send {
             self.queue_held = false;
-            self.send_next(cx);
+            self.auto_send_next(cx);
         }
         cx.notify();
     }
@@ -5009,6 +5192,9 @@ impl PromptMode {
         };
         let (left, kind) = if self.on_ask_tab {
             self.ask_session_epoch += 1;
+            // The Ask conversation marks at once that the next question
+            // starts a new one.
+            self.ask_new_pending = true;
             (self.ask_session.take(), conversations::Kind::Questions)
         } else {
             self.session_epoch += 1;
@@ -5067,11 +5253,11 @@ impl PromptMode {
     /// Code, Chain, or Spec tab runs, once it has anything to show. A
     /// Freeform prompt references nothing.
     fn refs_wanted(&self) -> bool {
-        self.working
-            && self
-                .tasks
-                .last()
-                .is_some_and(|task| !matches!(task.mode, Some(SendMode::Ask | SendMode::Freeform)))
+        self.tasks.last().is_some_and(|task| {
+            self.working.any()
+                && task.status.is_active()
+                && !matches!(task.mode, Some(SendMode::Ask | SendMode::Freeform))
+        })
             // It waits for something to show, and once out stays out until
             // the run is over.
             && (self.refs_shown || self.refs_have_contents())
@@ -5130,17 +5316,12 @@ impl PromptMode {
                 agents: task.subagents.clone(),
             }
         };
-        match chain_steps(&self.tasks)[latest] {
-            Some(step) => (step.start..=latest)
-                .map(|ix| {
-                    group(
-                        ix,
-                        Some(ChainStep {
-                            pos: ix - step.start,
-                            ..step
-                        }),
-                    )
-                })
+        let layout = chain_layout(&self.tasks);
+        match layout.step_of(latest) {
+            Some(step) => layout.members(step)[..=step.pos]
+                .iter()
+                .enumerate()
+                .map(|(pos, &ix)| group(ix, Some(ChainStep { pos, ..step })))
                 .collect(),
             None => vec![group(latest, None)],
         }
@@ -5323,7 +5504,7 @@ impl PromptMode {
     /// Whether any run the Chat tab shows is under way: a task on Code,
     /// Chain, or Spec, or a question on Ask.
     fn chat_running(&self) -> bool {
-        self.working || self.asks.iter().any(|ask| ask.task.status.is_active())
+        self.working.any() || self.asks.iter().any(|ask| ask.task.status.is_active())
     }
 
     /// Whether a run of the selected tab's conversation is under way: a task
@@ -5332,7 +5513,7 @@ impl PromptMode {
         if self.on_ask_tab {
             self.asks.iter().any(|ask| ask.task.status.is_active())
         } else {
-            self.working
+            self.working.any()
         }
     }
 
@@ -5427,8 +5608,8 @@ impl PromptMode {
         cx.notify();
     }
 
-    /// Replaces the previous answers with the questions saved in the current
-    /// project, read in the background. Questions asked now carry on the
+    /// Replaces the saved questions with those saved in the current project,
+    /// read in the background. Questions asked now carry on the
     /// conversation the last of them left off, unless one has been asked
     /// since.
     fn load_answers(&mut self, cx: &mut Context<Self>) {
@@ -5453,7 +5634,7 @@ impl PromptMode {
             let (answers, session) = load.await;
             this.update(cx, |this, cx| {
                 this.in_project(&project_dir, cx, |this, cx| {
-                    // Those still open are not previous answers yet.
+                    // Those asked since are listed as they were asked.
                     let open: Vec<SharedString> = this
                         .asks
                         .iter()
@@ -5471,7 +5652,6 @@ impl PromptMode {
                     if this.ask_session.is_none() && this.ask_session_epoch == 0 {
                         this.ask_session = session;
                     }
-                    this.ask_history.open = None;
                     cx.notify();
                 });
             })
@@ -5487,7 +5667,7 @@ impl PromptMode {
         };
         let task_ix = self.push_task(text.clone().into(), cx);
         self.tasks[task_ix].sent = match &sending {
-            Sending::Now(mode, attached, sliced, code_task, sent_from, post_build_update) => {
+            Sending::Now(mode, attached, sliced, code_task, sent_from, post_build_update, _) => {
                 SentAs {
                     mode: Some(*mode),
                     attached_text: attached.text.clone(),
@@ -5503,15 +5683,30 @@ impl PromptMode {
         };
         // Known by its anchor's name from now on, before the anchor is
         // resolved, so a task sent to the other mode from it knows it by that.
-        if let Sending::Queued(queued) = &sending {
-            self.tasks[task_ix].name = queued.anchor.name().to_string().into();
-        }
-        let name = self.tasks[task_ix].name.to_string();
+        // One sent now is named once its title comes, while the spec builds,
+        // and until then by the random name it would be given without one.
+        let naming = match &sending {
+            Sending::Queued(queued) => {
+                self.tasks[task_ix].name = queued.anchor.name().to_string().into();
+                None
+            }
+            Sending::Now(.., named_after) => {
+                let naming =
+                    prompt_title::start(&project_dir, &text, named_after.as_deref(), self.titler);
+                Some(cx.background_spawn(async move { naming.wait() }))
+            }
+        };
+        let known = self.tasks[task_ix].name.to_string();
         self.tasks[task_ix].mode = self.tasks[task_ix].sent.mode;
-        self.working = true;
+        // It runs in its own lane, beside a task of the other lane if one is
+        // running, as the PromptSendingScope says.
+        let lanes = Lanes::of(self.tasks[task_ix].mode);
+        let beside = self.working.any();
+        self.working = self.working.with(lanes, true);
         if !self.in_background {
+            let working = self.working;
             self.chat_input
-                .update(cx, |input, cx| input.set_busy(true, cx));
+                .update(cx, |input, cx| input.set_busy(working, cx));
         }
 
         // Whether it starts a new conversation is part of the prompt: a queued
@@ -5566,16 +5761,55 @@ impl PromptMode {
         };
         let build = builds.then(|| {
             let project_dir = project_dir.clone();
-            cx.background_spawn(async move { piton_build::build(&project_dir) })
+            cx.background_spawn(async move {
+                // What the build writes is kept by the guard of a task
+                // running beside it.
+                let _writing = mode_guard::Writing::start(None, &project_dir);
+                piton_build::build(&project_dir)
+            })
         });
+        // The system prompt it is sent with: the project's, the same for
+        // every prompt of the conversation whatever the mode, so the
+        // harness's prompt cache holds. A Freeform prompt keeps the one the
+        // conversation it carries on was sent, and one starting a
+        // conversation has none.
+        let conversation_system = resume
+            .as_ref()
+            .and_then(|_| self.session.as_ref()?.system_prompt.clone());
+        let system = {
+            let project_dir = project_dir.clone();
+            cx.background_spawn(async move {
+                if freeform {
+                    return conversation_system;
+                }
+                // Waits for the project's fluency if it is still being
+                // printed.
+                let fluency = crate::piton_fluency::get(&project_dir);
+                hidden_anchor::project_system_prompt(&project_dir, &fluency)
+                    .ok()
+                    .flatten()
+            })
+        };
         let compile = {
             let project_dir = project_dir.clone();
-            async move {
+            move |name: String| async move {
                 let anchor = match sending {
                     // Out of the queue first, so it is never sent twice.
                     Sending::Queued(queued) => {
                         prompt_queue::remove(&queued.file)?;
-                        queued.anchor
+                        let mut anchor = queued.anchor;
+                        // Its instructions as its mode's template now gives
+                        // them, not as they were queued: one queued before
+                        // they were sent apart from the system prompt would
+                        // otherwise send the fluency with it.
+                        if let Some(mode) = anchor.mode.filter(|mode| *mode != SendMode::Freeform) {
+                            anchor.system_prompt = hidden_anchor::instructions_for(
+                                mode,
+                                anchor.code_task.is_some(),
+                                &project_dir,
+                            )?;
+                        }
+                        anchor
                     }
                     Sending::Now(
                         mode,
@@ -5584,6 +5818,7 @@ impl PromptMode {
                         code_task,
                         sent_from,
                         post_build_update,
+                        _,
                     ) => {
                         let mut anchor = resolve_anchor(
                             &text,
@@ -5628,7 +5863,7 @@ impl PromptMode {
             }
         };
 
-        self._pending = cx.spawn(async move |this, cx| {
+        self._pending[lane_slot(lanes)] = cx.spawn(async move |this, cx| {
             // A build cancelled is abandoned: the task goes on without it.
             let build = match build {
                 Some(build) => {
@@ -5667,7 +5902,32 @@ impl PromptMode {
                     return;
                 }
             }
-            let compile = cx.background_spawn(compile);
+            // Named by now, unless it was cancelled first, when it keeps
+            // the random name it was known by.
+            let name = match naming {
+                Some(naming) => {
+                    match futures::future::select(naming, std::pin::pin!(until_cancelled()))
+                        .await
+                    {
+                        futures::future::Either::Left((name, _)) => Some(name),
+                        futures::future::Either::Right(_) => None,
+                    }
+                }
+                None => None,
+            };
+            let name = name.unwrap_or(known);
+            let named = this.update(cx, |this, cx| {
+                this.in_project(&project_dir, cx, |this, cx| {
+                    if let Some(task) = this.tasks.get_mut(task_ix) {
+                        task.name = name.clone().into();
+                    }
+                    cx.notify();
+                });
+            });
+            if named.is_err() {
+                return;
+            }
+            let compile = cx.background_spawn(compile(name));
             // What came of the prompt, saved beside it in the history once it
             // is over.
             let mut record = RunRecord::default();
@@ -5705,17 +5965,25 @@ impl PromptMode {
                             .display()
                             .to_string()
                     });
-                    // Its understanding file filled in, then, for one sent
-                    // from Code, what the code task did.
-                    let system_prompt = compiled.system_prompt_as_sent(shown_path.as_deref());
+                    // Its instructions head its message, its understanding
+                    // file filled in, then, for one sent from Code, what the
+                    // code task did; the system prompt is the project's.
+                    let instructions = compiled.instructions_as_sent(shown_path.as_deref());
+                    let message =
+                        system_prompts::with_instructions(instructions.as_deref(), &prompt);
+                    let sent_system = system.await;
                     // The harness the run goes to, which its usage came from.
                     let agent = crate::agent::current();
                     // What else the harness is given, kept for the raw
                     // prompt, with the task and in its record.
-                    record.sent_to(agent, system_prompt.as_deref());
+                    record.sent_to(agent, sent_system.as_deref());
+                    record.instructions = instructions.clone();
+                    record.resumed = resume.is_some();
                     let given = Given {
                         harness: agent,
-                        system_prompt: system_prompt.clone(),
+                        system_prompt: sent_system.clone(),
+                        instructions,
+                        resumed: resume.is_some(),
                     };
                     let mut usage_run = None;
                     // Whatever the harness does, what the task's mode may
@@ -5730,6 +5998,15 @@ impl PromptMode {
                     };
                     let protected = harness::Protected {
                         root: guard.as_ref().map(mode_guard::Guard::root),
+                    };
+                    // What it may change, the guard of a task running beside
+                    // it keeps rather than putting back.
+                    let writing = {
+                        let dir = project_dir.clone();
+                        cx.background_spawn(async move {
+                            mode_guard::Writing::start(guarded, &dir)
+                        })
+                        .await
                     };
                     // In a git repository, the working tree as the harness
                     // starts the task, to compare with how its run leaves it.
@@ -5748,12 +6025,14 @@ impl PromptMode {
                         feed,
                         stop,
                     } = harness::send_task(
-                        prompt.clone(),
-                        system_prompt,
+                        message,
+                        sent_system.clone(),
                         compiled.images.clone(),
+                        // Beside a task of the other lane, it carries on a copy
+                        // of the conversation, so neither writes over the other.
                         resume.clone().map(|session| harness::Resume {
                             session,
-                            fork: false,
+                            fork: beside,
                         }),
                         project_dir.clone(),
                         protected,
@@ -5764,7 +6043,9 @@ impl PromptMode {
                                 usage_run =
                                     Some(this.usage.start_run(Conversation::Tasks, epoch));
                                 // More can be sent to it while it runs.
-                                this.feed = feed;
+                                if let Some(task) = this.tasks.get_mut(task_ix) {
+                                    task.feed = feed;
+                                }
                                 // Cancelled, its run is stopped.
                                 if let Some(cancel) = this
                                     .tasks
@@ -5800,8 +6081,10 @@ impl PromptMode {
                         return;
                     }
                     let mut started = false;
-                    // The conversation this run reported.
+                    // The conversation this run reported, and what it held as
+                    // of its latest reply.
                     let mut run_session = None;
+                    let mut run_context = None;
                     loop {
                         // What the harness printed before it was cancelled is
                         // taken first, and kept; then, cancelled, the run is
@@ -5829,6 +6112,9 @@ impl PromptMode {
                             continue;
                         }
                         record.note(&event);
+                        if let HarnessEvent::Usage { context } = &event {
+                            run_context = Some(*context);
+                        }
                         if let HarnessEvent::Finished {
                             is_error: false,
                             result,
@@ -5850,6 +6136,7 @@ impl PromptMode {
                                         &mut run_session,
                                         &event,
                                         &project_dir,
+                                        sent_system.as_deref(),
                                     ) {
                                         Self::keep_left(
                                             project_dir.clone(),
@@ -5889,6 +6176,8 @@ impl PromptMode {
                             .ok();
                         }
                     }
+                    // What it last changed is kept by the guards beside it.
+                    cx.background_spawn(async move { drop(writing) }).await;
                     // And as its run leaves it, whatever was put back, with
                     // the files that changed between the two.
                     if let Some(before) = snapshot_before {
@@ -5941,6 +6230,25 @@ impl PromptMode {
                         })
                         .ok();
                     }
+                    // The tasks carry on the conversation of whichever task
+                    // finished last, as the HarnessIntegrationScope says, as
+                    // tasks of both lanes may have run at once.
+                    if let Some(id) = run_session.clone() {
+                        this.update(cx, |this, cx| {
+                            this.in_project(&project_dir, cx, |this, _| {
+                                if this.session_epoch == epoch {
+                                    Session::finished(
+                                        &mut this.session,
+                                        id,
+                                        run_context,
+                                        &project_dir,
+                                        sent_system.as_deref(),
+                                    );
+                                }
+                            });
+                        })
+                        .ok();
+                    }
                 }
                 Err(err) => {
                     let error = format!("{err:#}");
@@ -5985,10 +6293,10 @@ impl PromptMode {
             this.update(cx, |this, cx| {
                 let dir = project_dir.clone();
                 this.in_project(&dir, cx, |this, cx| {
-                // Nothing more can be sent to it; a message on its way is
-                // queued as a task instead.
-                this.feed = None;
                 if let Some(task) = this.tasks.get_mut(task_ix) {
+                    // Nothing more can be sent to it; a message on its way is
+                    // queued as a task instead.
+                    task.feed = None;
                     task.cancel = None;
                     task.end();
                     if task.marked_done != marked_done
@@ -6009,13 +6317,14 @@ impl PromptMode {
                         ));
                     }
                 }
-                this.working = false;
+                this.working = this.working.with(lanes, false);
                 if this.history_stale {
                     this.load_history(cx);
                 }
                 if !this.in_background {
+                    let working = this.working;
                     this.chat_input
-                        .update(cx, |input, cx| input.set_busy(false, cx));
+                        .update(cx, |input, cx| input.set_busy(working, cx));
                 }
                 // A Code, Chain, Spec, or Freeform task that finished well
                 // adds a note to the next commit, written in the background;
@@ -6031,23 +6340,22 @@ impl PromptMode {
                     add_commit_note(summarize, project_dir.clone(), asked, result, cx);
                 }
                 // A chain step done goes on to the next step of its chain,
-                // ahead of the queue: see `chain_next`.
+                // in its own lane, ahead of that lane's queue: see
+                // `chain_next`.
                 let next = this
                     .tasks
                     .get(task_ix)
                     .filter(|task| task.status == TaskStatus::Done && !is_cancelled())
                     .and_then(chain_next);
                 // Deferred: starting the next run replaces this task. Only this
-                // project's queue sends, whichever project is on screen.
+                // project's queues send, whichever project is on screen.
                 let prompt_mode = cx.entity();
                 let dir = project_dir.clone();
                 cx.defer(move |cx| {
                     prompt_mode.update(cx, |this, cx| {
                         this.in_project(&dir, cx, |this, cx| {
-                            // Nothing else can have started since this task
-                            // ended: this runs before any other input.
-                            if let Some((text, sending)) = next.filter(|_| !this.working) {
-                                this.start(text, sending, cx);
+                            if let Some((text, sending)) = next {
+                                this.chain_on(text, sending, cx);
                             }
                             this.auto_send_next(cx)
                         });
@@ -6060,13 +6368,66 @@ impl PromptMode {
         });
     }
 
+    /// Sends a chain's next step, `sending`, as [`chain_next`] makes it: at
+    /// once while its lane is free, and otherwise at the head of the queue,
+    /// ahead of every prompt waiting for its lane, where it shows and can be
+    /// cancelled.
+    fn chain_on(&mut self, text: String, sending: Sending, cx: &mut Context<Self>) {
+        let Sending::Now(
+            mode,
+            attached,
+            sliced,
+            code_task,
+            sent_from,
+            post_build_update,
+            named_after,
+        ) = sending
+        else {
+            return self.start(text, sending, cx);
+        };
+        if !self.working.queues(mode) {
+            let sending = Sending::Now(
+                mode,
+                attached,
+                sliced,
+                code_task,
+                sent_from,
+                post_build_update,
+                named_after,
+            );
+            return self.start(text, sending, cx);
+        }
+        self.enqueue_at(
+            true,
+            text,
+            false,
+            mode,
+            attached,
+            sliced,
+            code_task,
+            sent_from,
+            post_build_update,
+            named_after,
+            cx,
+        );
+    }
+
     /// Asks `text` straight away, beside any task the harness is working on,
     /// in place of any question still open. It is saved apart from the
     /// history, so it never becomes one of the tasks.
-    fn ask(&mut self, text: String, attached: Attached, sliced: bool, cx: &mut Context<Self>) {
+    fn ask(
+        &mut self,
+        text: String,
+        attached: Attached,
+        sliced: bool,
+        named_after: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         let Some(project_dir) = self.project_dir.clone() else {
             return;
         };
+        // Titled while its anchor is resolved.
+        let naming = prompt_title::start(&project_dir, &text, named_after.as_deref(), self.titler);
         let run = self.push_ask(text.clone().into(), cx);
         if let Some(ask) = self.asks.iter_mut().find(|ask| ask.id == run) {
             ask.task.sent = SentAs {
@@ -6089,6 +6450,30 @@ impl PromptMode {
         let resume = Session::resume(&self.ask_session, &project_dir);
         let new_conversation = resume.is_none();
         let epoch = self.ask_session_epoch;
+        if let Some(ask) = self.asks.iter_mut().find(|ask| ask.id == run) {
+            ask.task.new_conversation = new_conversation;
+            ask.task.asked_at = Some(ask_pane::now_secs());
+        }
+        // Asked, the new conversation New conversation marked has begun, and
+        // the Ask conversation goes to the bottom to follow it.
+        self.ask_new_pending = false;
+        self.ask_pane.locked = true;
+        // The project's system prompt, as every task is sent.
+        let system = {
+            let project_dir = project_dir.clone();
+            cx.background_spawn(async move {
+                let fluency = crate::piton_fluency::get(&project_dir);
+                hidden_anchor::project_system_prompt(&project_dir, &fluency)
+                    .ok()
+                    .flatten()
+            })
+        };
+        let stopped = self
+            .asks
+            .iter()
+            .find(|ask| ask.id == run)
+            .map(|ask| ask.stopped.clone())
+            .unwrap_or_default();
         let lsp = self.chat_input.read(cx).lsp();
         let compile = cx.background_spawn({
             let project_dir = project_dir.clone();
@@ -6113,8 +6498,10 @@ impl PromptMode {
                         (anchor, Some(err))
                     }
                 };
-                // Saved with whether it started a new conversation.
+                // Saved under its name, with whether it started a new
+                // conversation.
                 let mut anchor = anchor;
+                anchor.rename(naming.wait());
                 anchor.new_conversation = Some(new_conversation);
                 let file = hidden_anchor::save_ask(&anchor, &text, &project_dir);
                 let compiled = match (resolve_error, &file) {
@@ -6123,20 +6510,29 @@ impl PromptMode {
                     (None, Err(_)) => Err(anyhow::anyhow!("the question was not saved")),
                 };
                 (
+                    anchor.name().to_string(),
                     file,
                     compiled.map(|compiled| (anchor.name().to_string(), compiled)),
                 )
             }
         });
 
-        // Closing the question drops its run, which stops it.
+        // Stopping the question drops its run, which stops it.
         let task = cx.spawn(async move |this, cx| {
-            let (file, compiled) = compile.await;
+            let (name, file, compiled) = compile.await;
+            // Known by its name, as resending it names the next after it.
+            this.update(cx, |this, cx| {
+                this.in_project(&project_dir, cx, |this, cx| {
+                    this.update_ask(run, |task| task.name = name.into(), cx)
+                });
+            })
+            .ok();
             // What came of the question, saved beside it once the run is over,
-            // or stopped because the question was closed or replaced.
+            // or once it is stopped.
             let mut log = AskLog {
                 file: file.as_ref().ok().cloned(),
                 record: RunRecord::default(),
+                stopped,
             };
             let compiled = match file {
                 Ok(_) => compiled,
@@ -6144,20 +6540,26 @@ impl PromptMode {
             };
             match compiled {
                 Ok((anchor, compiled)) => {
-                    let prompt = compiled.user_prompt;
+                    let prompt = compiled.user_prompt.clone();
                     log.record.user_prompt = Some(prompt.clone());
-                    // A question has no understanding file.
-                    let system_prompt = compiled.system_prompt.map(|system_prompt| {
-                        system_prompts::fill_understanding(&system_prompt, None)
-                    });
+                    // Ask's instructions head its message, a question having
+                    // no understanding file; its system prompt is the
+                    // project's, the same as the tasks', so a conversation it
+                    // forks keeps its cache.
+                    let instructions = compiled.instructions_as_sent(None);
+                    let message =
+                        system_prompts::with_instructions(instructions.as_deref(), &prompt);
+                    let sent_system = system.await;
                     // The harness the question goes to, which its usage came
                     // from.
                     let agent = crate::agent::current();
-                    log.record.sent_to(agent, system_prompt.as_deref());
+                    log.record.sent_to(agent, sent_system.as_deref());
+                    log.record.instructions = instructions;
+                    log.record.resumed = resume.is_some();
                     let mut usage_run = None;
                     let mut events = harness::send_with_images(
-                        prompt.clone(),
-                        system_prompt,
+                        message,
+                        sent_system.clone(),
                         compiled.images,
                         resume
                             .clone()
@@ -6196,6 +6598,7 @@ impl PromptMode {
                                         &mut run_session,
                                         &event,
                                         &project_dir,
+                                        sent_system.as_deref(),
                                     ) {
                                         Self::keep_left(
                                             project_dir.clone(),
@@ -6232,14 +6635,9 @@ impl PromptMode {
                     .ok();
                 }
             }
-            // Once over, it opens onto its whole task table, in place of any
-            // other.
             this.update(cx, |this, cx| {
                 this.in_project(&project_dir, cx, |this, cx| {
                     this.update_ask(run, PromptTask::end, cx);
-                    if this.asks.iter().any(|ask| ask.id == run) {
-                        this.expand_ask(run, cx);
-                    }
                 });
             })
             .ok();
@@ -6256,15 +6654,14 @@ impl PromptMode {
         self.asks.push(Ask {
             id: self.next_ask_id,
             task: PromptTask::new(text),
-            table: TaskTable::new(),
-            locked: false,
+            stopped: Arc::default(),
             _run: Task::ready(()),
         });
         cx.notify();
         self.next_ask_id
     }
 
-    /// Updates the question `id`, if it is still open.
+    /// Updates the question `id`.
     fn update_ask(
         &mut self,
         id: usize,
@@ -6273,234 +6670,31 @@ impl PromptMode {
     ) {
         if let Some(ask) = self.asks.iter_mut().find(|ask| ask.id == id) {
             update(&mut ask.task);
-            if ask.locked {
-                ask.table.scroll_to_end();
-            }
             cx.notify();
         }
     }
 
-    /// Opens the finished question `id` onto its whole task table, closing
-    /// any other down to its row.
-    fn expand_ask(&mut self, id: usize, cx: &mut Context<Self>) {
-        if let Some(ask) = self.asks.iter().find(|ask| ask.id == id) {
-            ask.table.scroll_to_top();
-            self.expanded_ask = Some(id);
-            cx.notify();
-        }
-    }
-
-    /// Closes the question `id` down to its row.
-    fn collapse_ask(&mut self, id: usize, cx: &mut Context<Self>) {
-        if self.expanded_ask == Some(id) {
-            self.expanded_ask = None;
-            cx.notify();
-        }
-    }
-
-    /// The question opened onto its whole task table, if it is still open.
-    fn expanded(&self) -> Option<&Ask> {
-        let id = self.expanded_ask?;
-        self.asks
-            .iter()
-            .find(|ask| ask.id == id && ask.task.reply.is_done())
-    }
-
-    /// Whether the steps before the answer in the table for `task_ix` are
-    /// shown, and how to show or hide them.
-    fn steps(&self, task_ix: usize, cx: &Context<Self>) -> Steps {
-        steps(task_ix, &self.steps_shown, &cx.entity())
-    }
-
-    /// The previous answers are expanded on the Ask tab.
-    fn ask_history_shown(&self) -> bool {
-        self.on_ask_tab && self.ask_history.expanded
-    }
-
-    fn drawer_contents(&self) -> DrawerContents {
-        (
-            self.expanded().map(|ask| ask.id),
-            self.ask_history_shown().then_some(self.ask_history.opened),
-        )
-    }
-
-    /// Whether the answer drawer is open: a question onto its table, or the
-    /// previous answers expanded.
-    fn drawer_open(&self) -> bool {
-        self.drawer_contents() != (None, None)
-    }
-
-    /// How tall each thing filling the open drawer is: its share of the space
-    /// above the chat input, less what the drawer's other rows take, split
-    /// between the question and the previous answers if both are open.
-    fn drawer_fill(&self) -> Pixels {
-        // Sliding down, it keeps the size it was.
-        if let Some(closing) = &self.drawer_closing {
-            return closing.fill;
-        }
-        let (question, answers) = self.drawer_contents();
-        let open = question.iter().count() + answers.iter().count();
-        let body = self.body_height.get();
-        if open == 0 || body <= px(0.) {
-            return px(360.);
-        }
-        let rest = (self.drawer_height.get() - self.drawer_fill_height.get()).max(px(0.));
-        ((body * self.drawer_share - rest - self.drawer_bottom()) / open as f32)
-            .max(MIN_DRAWER_FILL)
-    }
-
-    /// How far above the chat input the drawer sits: on top of any question
-    /// rows still in the stack, so a running question stays in view whatever
-    /// is open, or right on the input when there are none.
-    fn drawer_bottom(&self) -> Pixels {
-        self.stack_rows_height.get()
-    }
-
-    /// Whether the drawer follows a drag rather than sliding: it was dragged
-    /// while what is open now was open.
-    fn drawer_follows_drag(&self) -> bool {
-        self.drawer_dragged == Some(self.drawer_contents())
-    }
-
-    /// Notes what the drawer holds as it is drawn: when it opens, so what
-    /// fills it slides up, and when it closes, so it slides back down still
-    /// showing what it held. Changing what it holds while open does neither.
-    fn follow_drawer(&mut self, window: &mut Window) {
-        let shown = self.drawer_contents();
-        let was = std::mem::replace(&mut self.drawer_shown, shown);
-        let closed_question = self.closed_question.take();
-        let open = shown != (None, None);
-        self.drawer_opening = open && was == (None, None);
-        if open {
-            self.drawer_closing = None;
-        } else if was != (None, None) {
-            let (question, answers) = was;
-            let question = question.map(|id| match closed_question {
-                Some(closed) if closed.id() == id => closed,
-                _ => ClosingQuestion::Collapsed(id),
-            });
-            // Each thing filling it, as it was last laid out.
-            let filling = question.iter().count() + answers.iter().count();
-            let fill = self.drawer_fill_height.get() / filling as f32;
-            self.drawer_closing = Some(DrawerClosing {
-                question,
-                answers,
-                height: self.drawer_height.get(),
-                fill,
-                closed: Instant::now(),
-            });
-            // Opened again, it slides up again, at the size it was dragged to.
-            self.drawer_dragged = None;
-        }
-        if self
-            .drawer_closing
-            .as_ref()
-            .is_some_and(|closing| closing.closed.elapsed() >= DRAWER_CLOSE_TIME)
-        {
-            self.drawer_closing = None;
-        }
-        if self.drawer_closing.is_some() {
-            window.request_animation_frame();
-        }
-    }
-
-    /// The question `id`'s task: among the questions, or, as the drawer
-    /// slides down with it just closed, among the previous answers.
-    fn question_task(&self, id: usize) -> Option<&PromptTask> {
-        if let Some(ask) = self.asks.iter().find(|ask| ask.id == id) {
-            return Some(&ask.task);
-        }
-        match self.drawer_closing.as_ref()?.question.as_ref()? {
-            ClosingQuestion::Closed {
-                id: closed,
-                answer,
-                text,
-                ..
-            } if *closed == id => self.answers.get(*answer).filter(|task| task.text == *text),
-            _ => None,
-        }
-    }
-
-    /// Resizes the open drawer so its top is at `y`, within `body`, the space
-    /// above the chat input.
-    fn drag_drawer(&mut self, y: Pixels, body: Bounds<Pixels>, cx: &mut Context<Self>) {
-        if !self.drawer_open() || body.size.height <= px(0.) {
-            return;
-        }
-        self.drawer_share =
-            ((body.bottom() - y) / body.size.height).clamp(MIN_DRAWER_SHARE, MAX_DRAWER_SHARE);
-        self.drawer_dragged = Some(self.drawer_contents());
-        cx.notify();
-    }
-
-    /// Closes the question `id`, stopping its run if it is still under way.
-    fn close_ask(&mut self, id: usize, cx: &mut Context<Self>) {
-        if let Some(ix) = self.asks.iter().position(|ask| ask.id == id) {
-            let Ask {
-                mut task,
-                table,
-                locked,
-                ..
-            } = self.asks.remove(ix);
-            // Stopped, if it was still running, and among the previous
-            // answers from now on.
-            task.end();
-            let closed = ClosingQuestion::Closed {
-                id,
-                answer: self.answers.len(),
-                text: task.text.clone(),
-                table,
-                locked,
-            };
-            self.answers.push(task);
-            // Open, or sliding down from where it was, it goes on showing as
-            // the drawer slides down.
-            if self.expanded_ask == Some(id) {
-                self.closed_question = Some(closed);
-            } else if let Some(closing) = &mut self.drawer_closing
-                && closing.question.as_ref().map(ClosingQuestion::id) == Some(id)
-            {
-                closing.question = Some(closed);
-            }
-        }
-        if self.expanded_ask == Some(id) {
-            self.expanded_ask = None;
-        }
-        cx.notify();
-    }
-
-    /// The questions, stacked above the chat input's tabs, the newest nearest
-    /// them, each sliding up out of the input as it is asked and pushing the
-    /// task view up to make room, so nothing of it is hidden. A question is a
-    /// single row of its task table: the latest thing the harness did while it
-    /// runs, or its status and first line once it is over. On the Ask tab, the
-    /// previous answers' row heads the stack. What is open in the answer
-    /// drawer leaves the stack.
+    /// Off the Ask tab, the questions still running, stacked above the chat
+    /// input's tabs, the newest nearest them, each sliding up out of the
+    /// input as it is asked and pushing the task view up to make room, so
+    /// nothing of it is hidden. Each is a row: its first line, the latest
+    /// thing the harness did, and Stop. A question leaves the stack once it
+    /// is over; on the Ask tab there is no stack, its questions being in the
+    /// Ask conversation.
     fn render_ask_stack(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if self.asks.is_empty() && !self.on_ask_tab {
-            self.stack_rows_height.set(px(0.));
-            return None;
-        }
-        let expanded = self.expanded().map(|ask| ask.id);
-        let history_row =
-            (self.on_ask_tab && !self.ask_history_shown()).then(|| self.render_ask_history_row(cx));
-        let ids: Vec<usize> = self
-            .asks
-            .iter()
-            .filter(|ask| expanded != Some(ask.id))
-            .map(|ask| ask.id)
-            .collect();
+        let ids: Vec<usize> = if self.on_ask_tab {
+            Vec::new()
+        } else {
+            self.asks
+                .iter()
+                .filter(|ask| ask.task.status.is_active())
+                .map(|ask| ask.id)
+                .collect()
+        };
         self.sync_ask_rows(&ids);
-        if history_row.is_none() && ids.is_empty() {
-            self.stack_rows_height.set(px(0.));
+        if ids.is_empty() {
             return None;
         }
-        // The question rows are measured, so the previous answers can slide up
-        // from on top of them.
-        let rows_height = self.stack_rows_height.clone();
-        // Its top line shows once it holds more than nothing, so the line never
-        // lies on the chat input's own as the first question starts to rise.
-        let has_content = history_row.is_some() || rows_height.get() > px(0.5);
         let entity = cx.entity().downgrade();
         let render: RenderRow = Rc::new(move |ix, _, cx| {
             let Some(entity) = entity.upgrade() else {
@@ -6509,9 +6703,8 @@ impl PromptMode {
             entity.update(cx, |this, cx| {
                 let id = this.ask_row_ids.borrow().get(ix).copied();
                 match id.and_then(|id| this.asks.iter().find(|ask| ask.id == id)) {
-                    // The stack's own top border, or the previous answers
-                    // row's bottom one, is the line above the first.
-                    Some(ask) => this.render_ask_card(ask, false, ix > 0, cx),
+                    // The stack's own top border is the line above the first.
+                    Some(ask) => this.render_running_question(ask, ix > 0, cx),
                     None => div().into_any_element(),
                 }
             })
@@ -6525,36 +6718,30 @@ impl PromptMode {
             .child(self.ask_rows.element(render));
         // Lets UI tests find the rows; inert in normal builds.
         let list = gpui_kit::TestSupportExt::test_support(list);
-        let content = (!ids.is_empty()).then(|| {
-            if ids.len() <= PLAIN_ASK_ROWS {
-                // Few enough to all be in view: drawn as they are.
-                v_flex()
-                    .children(
-                        self.asks
-                            .iter()
-                            .filter(|ask| expanded != Some(ask.id))
-                            .enumerate()
-                            .map(|(ix, ask)| self.render_ask_card(ask, false, ix > 0, cx)),
-                    )
-                    .into_any_element()
-            } else if total > MAX_ASK_STACK_HEIGHT + px(0.5) {
-                scrollbar::with_scrollbar("ask-rows", &self.ask_rows, list, false, None, cx)
-            } else {
-                list.into_any_element()
-            }
-        });
-        let rows = div()
-            .on_prepaint(move |bounds, _, _| rows_height.set(bounds.size.height))
-            .children(content);
+        let content = if ids.len() <= PLAIN_ASK_ROWS {
+            // Few enough to all be in view: drawn as they are.
+            v_flex()
+                .children(
+                    self.asks
+                        .iter()
+                        .filter(|ask| ids.contains(&ask.id))
+                        .enumerate()
+                        .map(|(ix, ask)| self.render_running_question(ask, ix > 0, cx)),
+                )
+                .into_any_element()
+        } else if total > MAX_ASK_STACK_HEIGHT + px(0.5) {
+            scrollbar::with_scrollbar("ask-rows", &self.ask_rows, list, false, None, cx)
+        } else {
+            list.into_any_element()
+        };
         let theme = cx.theme();
         let stack = v_flex()
             .id("ask")
             .flex_none()
             .bg(theme.tab_bar)
-            .when(has_content, |stack| stack.border_t_1())
+            .border_t_1()
             .border_color(theme.border)
-            .children(history_row)
-            .child(rows);
+            .child(content);
         // Lets UI tests find the questions; inert in normal builds.
         Some(gpui_kit::TestSupportExt::test_support(stack).into_any_element())
     }
@@ -6577,230 +6764,75 @@ impl PromptMode {
         }
     }
 
-    fn render_ask_history_row(&self, cx: &mut Context<Self>) -> AnyElement {
-        self.ask_history.render_row(
-            self.answers.len(),
-            !self.answers.is_empty(),
-            |this| &mut this.ask_history,
-            Vec::new(),
-            cx,
-        )
-    }
-
-    /// The answer drawer: a finished question open onto its whole table, or
-    /// the previous answers expanded, sliding up from on top of the questions
-    /// still in the stack over the task view, which dims behind it. Its top
-    /// edge resizes it.
-    fn render_ask_drawer(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if !self.drawer_open() {
-            return self.render_closing_drawer(cx);
-        }
-        let mut history: Vec<AnyElement> = Vec::new();
-        if self.ask_history_shown() {
-            history.push(self.render_ask_history_row(cx));
-            let open_file = self.file_opener(cx);
-            let list = self.ask_history.render_list(
-                &self.answers,
-                |this| &this.answers,
-                |this| &mut this.answers,
-                |this| &mut this.ask_history,
-                &self.steps_shown,
-                &open_file,
-                None,
-                cx,
-            );
-            let fill = self.drawer_fill();
-            let list = v_flex()
-                .id(("ask-history", self.ask_history.opened))
-                .flex_none()
-                .overflow_hidden()
-                .on_prepaint({
-                    let filled = self.drawer_fill_height.clone();
-                    move |bounds, _, _| filled.set(filled.get() + bounds.size.height)
-                })
-                .child(list);
-            // Slides up as the drawer opens, unless it is being dragged to
-            // size; expanded while the drawer already is, it changes what the
-            // drawer holds rather than sliding up again.
-            history.push(if self.drawer_follows_drag() {
-                list.h(fill).into_any_element()
-            } else {
-                let height = SpringAnimation::new(ASK_SPRING).to(fill);
-                let height = if self.drawer_opening {
-                    height.from(px(0.))
-                } else {
-                    height
-                };
-                list.with_spring(
-                    ("ask-history-slide", self.ask_history.opened),
-                    height,
-                    |this, height| this.h(height),
-                )
-                .into_any_element()
-            });
-        }
-        let card = self
-            .expanded()
-            // The drawer's top border is the line above it.
-            .map(|ask| self.render_ask_card(ask, true, false, cx));
-        let theme = cx.theme();
-        let ring = theme.ring;
-        let handle = div()
-            .id("ask-drawer-resize")
-            .group("ask-drawer-resize")
-            .absolute()
-            .top(-DRAWER_HANDLE_HEIGHT / 2.)
-            .left_0()
-            .right_0()
-            .h(DRAWER_HANDLE_HEIGHT)
-            .flex()
-            .items_center()
-            .cursor_row_resize()
-            .on_prepaint(|bounds, _, cx| {
-                crate::hit_areas::register_resize("ask-drawer-resize".into(), bounds, cx)
-            })
+    /// A running question's row in the stack: its first line, the latest
+    /// thing the harness did, and Stop, sliding up out of the chat input as
+    /// it is asked. Clicking it shows it in the Ask conversation. With
+    /// `line_above`, it draws the line between it and the row above it.
+    fn render_running_question(
+        &self,
+        ask: &Ask,
+        line_above: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let id = ask.id;
+        let stop = Button::new(("stop-ask-row", id))
+            .ghost()
+            .xsmall()
+            .icon(IconName::CircleStop)
+            .tooltip("Stop this question, leaving the others running")
+            .on_click(cx.listener(move |this, _, _, cx| {
+                // The button's click isn't the row's.
+                cx.stop_propagation();
+                this.stop_ask(id, cx)
+            }));
+        let row = h_flex()
+            .id(("ask-row", id))
+            .flex_none()
+            .gap_3()
+            .px_4()
+            .py_1p5()
+            .cursor_pointer()
+            .on_click(cx.listener(move |this, _, window, cx| this.reveal_question(id, window, cx)))
             .child(
                 div()
-                    .w_full()
-                    .h(px(2.))
-                    .group_hover("ask-drawer-resize", |line| line.bg(ring)),
-            )
-            .on_drag(DrawerResize, |_, _, _, cx| cx.new(|_| EmptyView));
-        // Lets UI tests find the edge; inert in normal builds.
-        let handle = gpui_kit::TestSupportExt::test_support(handle);
-        let drawer_height = self.drawer_height.clone();
-        self.drawer_fill_height.set(px(0.));
-        let drawer = v_flex()
-            .id("ask-drawer")
-            // Laid over what is beneath rather than beside it, taking no
-            // clicks or scrolling meant for it.
-            .absolute()
-            .left_0()
-            .right_0()
-            .bottom(self.drawer_bottom())
-            .occlude()
-            .justify_end()
-            .bg(theme.tab_bar)
-            .border_t_1()
-            .border_color(theme.border)
-            .on_prepaint(move |bounds, _, _| drawer_height.set(bounds.size.height))
-            // A drag that selects some of an answer's text offers to copy it
-            // or attach it to the prompt, once the selection has settled.
-            .on_mouse_up(
-                MouseButton::Left,
-                cx.listener(|_, event: &MouseUpEvent, window, cx| {
-                    let position = event.position;
-                    cx.defer_in(window, move |this, window, cx| {
-                        let text = TextSelection::selected_text(window, cx);
-                        if !text.trim().is_empty() && this.drawer_open() {
-                            this.selection_popover = Some((position, text));
-                            cx.notify();
-                        }
-                    });
-                }),
-            )
-            .children(history)
-            .children(card)
-            .child(handle);
-        // Lets UI tests find the drawer; inert in normal builds.
-        Some(gpui_kit::TestSupportExt::test_support(drawer).into_any_element())
-    }
-
-    /// The answer drawer just closed, sliding back down to the top of the
-    /// question rows in the stack, or the chat input when there are none,
-    /// showing what it held, at the size it was, until it is gone. It sits
-    /// over what is beneath as it did open, but nothing in it answers the
-    /// pointer any more.
-    fn render_closing_drawer(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let closing = self.drawer_closing.as_ref()?;
-        let mut contents: Vec<AnyElement> = Vec::new();
-        if let Some(opened) = closing.answers {
-            // Its toggle is not the stack's, which answers the pointer.
-            let toggle = format!("{}-closing", self.ask_history.toggle);
-            contents.push(self.ask_history.render_row_as(
-                SharedString::from(toggle).into(),
-                true,
-                self.answers.len(),
-                !self.answers.is_empty(),
-                |this| &mut this.ask_history,
-                Vec::new(),
-                cx,
-            ));
-            let open_file = self.file_opener(cx);
-            let list = self.ask_history.render_list(
-                &self.answers,
-                |this| &this.answers,
-                |this| &mut this.answers,
-                |this| &mut this.ask_history,
-                &self.steps_shown,
-                &open_file,
-                None,
-                cx,
-            );
-            contents.push(
-                v_flex()
-                    .id(("ask-history", opened))
                     .flex_none()
-                    .overflow_hidden()
-                    .h(closing.fill)
-                    .child(list)
-                    .into_any_element(),
-            );
-        }
-        let card = closing
-            .question
-            .as_ref()
-            .and_then(|question| match question {
-                ClosingQuestion::Collapsed(id) => {
-                    let ask = self.asks.iter().find(|ask| ask.id == *id)?;
-                    Some(self.render_ask_card(ask, true, false, cx))
-                }
-                ClosingQuestion::Closed {
-                    id, table, locked, ..
-                } => {
-                    let task = self.question_task(*id)?;
-                    Some(self.render_question_card(*id, task, (table, *locked), true, false, cx))
-                }
-            });
-        let theme = cx.theme();
-        let drawer = v_flex()
-            .relative()
+                    .max_w(relative(0.4))
+                    .truncate()
+                    .child(first_line(&ask.task.text)),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(latest_row(id, &ask.task.reply, cx)),
+            )
+            .child(stop);
+        // Lets UI tests find the row; inert in normal builds.
+        let row = gpui_kit::TestSupportExt::test_support(row);
+        let card = v_flex()
+            .id(("ask-card", id))
             .flex_none()
-            .h(closing.height)
+            // Anchored to the chat input, so it rises out of it rather than
+            // unrolling down onto it.
             .justify_end()
-            .bg(theme.tab_bar)
-            .border_t_1()
-            .border_color(theme.border)
-            .children(contents)
-            .children(card)
-            // Laid over what it holds, taking the pointer from it.
-            .child(div().absolute().inset_0().occlude());
-        // Clipped at the top of the stack as it slides down behind it, or
-        // into the chat input.
-        let height = SpringAnimation::new(ASK_SPRING)
-            .to(px(0.))
-            .from(closing.height);
-        let slide = div()
-            .id("ask-drawer-closing")
-            .absolute()
-            .left_0()
-            .right_0()
-            .bottom(self.drawer_bottom())
-            .flex()
-            .flex_col()
             .overflow_hidden()
-            .occlude()
-            .child(drawer);
-        // Lets UI tests find the drawer as it slides; inert in normal builds.
-        let slide = gpui_kit::TestSupportExt::test_support(slide).with_spring(
-            "ask-drawer-close",
-            height,
-            |this, height| this.h(height.max(px(0.))),
-        );
-        Some(slide.into_any_element())
+            .border_color(cx.theme().border)
+            .child(row);
+        let card = gpui_kit::TestSupportExt::test_support(card);
+        // Each question slides up from nothing, as far as its row.
+        let height = SpringAnimation::new(ASK_SPRING)
+            .to(ASK_ROW_HEIGHT)
+            .from(px(0.));
+        // Its line appears once there is more to it than the line, so the
+        // line never lies on the chat input's own as it starts to rise.
+        card.with_spring(("ask-slide", id), height, move |this, height| {
+            this.max_h(height)
+                .when(line_above && height > px(1.5), |this| this.border_t_1())
+        })
+        .into_any_element()
     }
 
-    /// Copies the text selected in an answer, closing the popover.
+    /// Copies the text selected in the Ask conversation, closing the popover.
     fn copy_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some((_, text)) = self.selection_popover.take() {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
@@ -6809,7 +6841,7 @@ impl PromptMode {
         cx.notify();
     }
 
-    /// Attaches the text selected in an answer to the prompt, closing the
+    /// Attaches the text selected in the Ask conversation to the prompt, closing the
     /// popover.
     fn attach_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some((_, text)) = self.selection_popover.take() {
@@ -6820,7 +6852,7 @@ impl PromptMode {
         cx.notify();
     }
 
-    /// The popover by text selected in an answer: Copy, and Attach to prompt.
+    /// The popover by text selected in the Ask conversation: Copy, and Attach to prompt.
     /// Pressing the mouse anywhere else closes it.
     fn render_selection_popover(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let (position, _) = self.selection_popover.as_ref()?;
@@ -6854,223 +6886,6 @@ impl PromptMode {
             },
             cx,
         ))
-    }
-
-    /// With `line_above`, the card draws the line between it and the card
-    /// above it; otherwise whatever holds it draws that line.
-    fn render_ask_card(
-        &self,
-        ask: &Ask,
-        expanded: bool,
-        line_above: bool,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        self.render_question_card(
-            ask.id,
-            &ask.task,
-            (&ask.table, ask.locked),
-            expanded,
-            line_above,
-            cx,
-        )
-    }
-
-    /// As [`Self::render_ask_card`], for the question `id`, wherever its task
-    /// and table are kept.
-    fn render_question_card(
-        &self,
-        id: usize,
-        task: &PromptTask,
-        (table, locked): (&TaskTable, bool),
-        expanded: bool,
-        line_above: bool,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let done = task.reply.is_done();
-        let close = Button::new(("close-ask", id))
-            .ghost()
-            .xsmall()
-            .icon(IconName::X)
-            .tooltip(if done { "Close" } else { "Stop and close" })
-            .on_click(cx.listener(move |this, _, _, cx| this.close_ask(id, cx)));
-
-        let content: Vec<AnyElement> = if expanded {
-            let open = self.file_opener(cx);
-            let heading = h_flex()
-                .id(("ask-heading", id))
-                .flex_none()
-                .gap_3()
-                .px_4()
-                .py_1p5()
-                .cursor_pointer()
-                .on_click(cx.listener(move |this, _, _, cx| this.collapse_ask(id, cx)))
-                .child(
-                    div()
-                        .flex_none()
-                        .child(task_title(ASK_IX - id, task, false, cx)),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .child(first_line(&task.text)),
-                )
-                .child(close);
-            let reply_of = task_table::reply_of({
-                let this = cx.entity().downgrade();
-                move |cx| {
-                    let this = this.upgrade()?.read(cx);
-                    Some(&this.question_task(id)?.reply)
-                }
-            });
-            let this = cx.entity().downgrade();
-            let toggle: SetLock = Rc::new(move |locked, _, cx| {
-                this.update(cx, |this, cx| {
-                    if let Some(ask) = this.asks.iter_mut().find(|ask| ask.id == id)
-                        && ask.locked != locked
-                    {
-                        ask.locked = locked;
-                        if ask.locked {
-                            ask.table.scroll_to_end();
-                        }
-                        cx.notify();
-                    }
-                })
-                .ok();
-            });
-            let output = table.render(
-                &task.reply,
-                reply_of,
-                TableView {
-                    id: ("ask-output", id).into(),
-                    scrollbar: format!("ask-output-{id}").into(),
-                    table: ASK_IX - id,
-                    open: Some(&open),
-                    steps: Some(self.steps(ASK_IX - id, cx)),
-                    lock: Some((locked, toggle)),
-                    padding: Edges {
-                        top: px(0.),
-                        right: px(16.),
-                        bottom: px(12.),
-                        left: px(16.),
-                    },
-                    max_height: None,
-                },
-                cx,
-            );
-            vec![heading.into_any_element(), output]
-        } else {
-            let summary = if done {
-                // Over: its status and the question, opening onto its table.
-                h_flex()
-                    .gap_3()
-                    .child(
-                        div()
-                            .flex_none()
-                            .child(task_title(ASK_IX - id, task, false, cx)),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .child(first_line(&task.text)),
-                    )
-                    .into_any_element()
-            } else {
-                latest_row(id, &task.reply, cx)
-            };
-            let row = h_flex()
-                .id(("ask-row", id))
-                .flex_none()
-                .gap_2()
-                .px_4()
-                .py_1p5()
-                .when(done, |row| {
-                    row.cursor_pointer()
-                        .on_click(cx.listener(move |this, _, _, cx| this.expand_ask(id, cx)))
-                })
-                .child(div().flex_1().min_w_0().child(summary))
-                .child(close);
-            // Lets UI tests find the row; inert in normal builds.
-            vec![gpui_kit::TestSupportExt::test_support(row).into_any_element()]
-        };
-
-        let card = v_flex()
-            .id(("ask-card", id))
-            .flex_none()
-            // Anchored to the chat input, so it rises out of it rather than
-            // unrolling down onto it.
-            .justify_end()
-            .overflow_hidden()
-            .border_color(cx.theme().border)
-            .when(expanded, |card| {
-                let filled = self.drawer_fill_height.clone();
-                card.on_prepaint(move |bounds, _, _| filled.set(filled.get() + bounds.size.height))
-            })
-            .children(content);
-        let card = gpui_kit::TestSupportExt::test_support(card);
-        if !expanded {
-            // Each question slides up from nothing, as far as its row.
-            let height = SpringAnimation::new(ASK_SPRING)
-                .to(ASK_ROW_HEIGHT)
-                .from(px(0.));
-            // Its line appears once there is more to it than the line, so the
-            // line never lies on the chat input's own as it starts to rise.
-            return card
-                .with_spring(("ask-slide", id), height, move |this, height| {
-                    this.max_h(height)
-                        .when(line_above && height > px(1.5), |this| this.border_t_1())
-                })
-                .into_any_element();
-        }
-        // Open, it fills the drawer: sliding there from wherever its row is as
-        // the drawer opens, unless the drawer is being dragged to size or
-        // slides down closed with it.
-        let fill = self.drawer_fill();
-        if self.drawer_follows_drag() || self.drawer_closing.is_some() {
-            return card.h(fill).into_any_element();
-        }
-        let height = SpringAnimation::new(ASK_SPRING).to(fill);
-        // Opened while the drawer already is, it changes what the drawer
-        // holds, rather than sliding up again.
-        let height = if self.drawer_opening {
-            height.from(px(0.))
-        } else {
-            height
-        };
-        card.with_spring(("ask-slide", id), height, |this, height| this.h(height))
-            .into_any_element()
-    }
-
-    /// A shade over everything above the chat input that fades in while the
-    /// answer drawer is open over it, drawing the eye to the drawer, and back
-    /// out once it closes. The stack of question rows pushes the list rather
-    /// than covering it, so leaves it undimmed.
-    fn render_ask_dim(&self, cx: &App) -> AnyElement {
-        let dim = crate::theme::dimming(cx);
-        // It fades in slower than the drawer slides, so the dimming is seen,
-        // and back out in step with the drawer sliding down.
-        let open = self.drawer_open();
-        let shade = SpringAnimation::new(if open { ASK_DIM_SPRING } else { ASK_SPRING })
-            .to(if open { dim.a } else { 0. })
-            .from(0.);
-        // Question rows the drawer sits on top of stay undimmed.
-        let dim = div()
-            .id("ask-dim")
-            .absolute()
-            .top_0()
-            .left_0()
-            .right_0()
-            .bottom(self.drawer_bottom())
-            .bg(black());
-        // Lets UI tests find the shade; inert in normal builds.
-        gpui_kit::TestSupportExt::test_support(dim)
-            .with_spring("ask-dim", shade, |this, shade| {
-                this.opacity(shade.clamp(0., 1.))
-            })
-            .into_any_element()
     }
 
     /// The header pinned above the output: the latest task, unless the
@@ -7198,6 +7013,28 @@ impl PromptMode {
         Some(gpui_kit::TestSupportExt::test_support(header).into_any_element())
     }
 
+    /// What a queued prompt's row says of the lane it waits for, and the mode
+    /// whose colour it reads in: its mode, "Chain" for one sent from the
+    /// Chain tab, and "Spec follow-up" for a chain's last step, sent from its
+    /// code step.
+    fn queued_label(&self, item: &QueueItem) -> Option<(&'static str, SendMode)> {
+        Some(match item.mode? {
+            SendMode::Both => ("Chain", SendMode::Both),
+            SendMode::Spec
+                if item.sent_from.as_deref().is_some_and(|from| {
+                    self.tasks.iter().any(|task| {
+                        task.name.as_ref() == from
+                            && task.sent.mode == Some(SendMode::Code)
+                            && task.sent.code_task.is_some()
+                    })
+                }) =>
+            {
+                ("Spec follow-up", SendMode::Spec)
+            }
+            mode => (mode.label(), mode),
+        })
+    }
+
     /// The queue along the bottom of the message list, as an expanding list
     /// with its controls. It only shows while something is queued.
     fn render_queue(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
@@ -7208,7 +7045,12 @@ impl PromptMode {
         let theme = cx.theme();
         let (border, muted, background) = (theme.border, theme.muted_foreground, theme.tab_bar);
         let expanded = self.queue_expanded;
-        let next_ready = self.queue.first().is_some_and(|item| item.saved.is_some());
+        // A prompt waits for "Send next" once its lane is free.
+        let lane_free = self
+            .queue
+            .iter()
+            .any(|item| !self.working.overlaps(Lanes::of(item.mode)));
+        let next_ready = self.next_sendable().is_some();
         let controls = {
             h_flex()
                 .gap_3()
@@ -7234,7 +7076,7 @@ impl PromptMode {
                         })),
                 )
                 .child(div().flex_1())
-                .when(!self.working, |row| {
+                .when(lane_free, |row| {
                     row.child(
                         Button::new("send-next")
                             .primary()
@@ -7407,6 +7249,16 @@ impl PromptMode {
                                 .text_color(muted)
                                 .child(format!("{}.", ix + 1)),
                         )
+                        // Which lane it waits for, in its mode's colour.
+                        .children(self.queued_label(item).map(|(label, mode)| {
+                            div()
+                                .id(("queued-lane", ix))
+                                .flex_none()
+                                .text_sm()
+                                .font_semibold()
+                                .text_color(chat_input::mode_color(mode, cx))
+                                .child(label)
+                        }))
                         .child(
                             v_flex()
                                 .flex_1()
@@ -7637,10 +7489,11 @@ impl PromptMode {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let height = self.slide_height.get();
+        // From wherever the stretch had pulled the view.
         let (from, to) = if slide.up {
-            (-height, px(0.))
+            (-height + slide.pull, px(0.))
         } else {
-            (px(0.), -height)
+            (slide.pull, -height)
         };
         let spring = SpringAnimation::new(PANE_SPRING).to(to).from(from);
         let column = v_flex()
@@ -7949,10 +7802,8 @@ impl Render for PromptMode {
                 input.set_can_send_to_task(can_send_to_task, cx)
             });
         }
-        self.follow_drawer(window);
-        // The popover for text selected in an answer goes with the drawer, as
-        // it starts to close.
-        if !self.drawer_open() {
+        // The popover for text selected in the Ask conversation goes with it.
+        if !self.on_ask_tab {
             self.selection_popover = None;
         }
         let hint = if ProjectDirectory::get(cx).is_some() {
@@ -7999,19 +7850,25 @@ impl Render for PromptMode {
             } else {
                 self.render_output(cx)
             };
+            // Pulled past its end by the stretch, the header and the view
+            // together, leaving an empty band, clipped to the space.
+            let pull = self.scroll_push.get().pull(Instant::now());
             v_flex()
+                .relative()
                 .flex_1()
                 .min_h_0()
-                .children(self.render_header(cx))
+                .overflow_hidden()
                 .child(
                     v_flex()
                         .relative()
+                        .top(pull)
                         .flex_1()
                         .min_h_0()
-                        .child(view)
-                        .children(self.render_scroll_glow(window, cx))
-                        .child(self.scroll_past_ends(cx)),
+                        .children(self.render_header(cx))
+                        .child(v_flex().relative().flex_1().min_h_0().child(view)),
                 )
+                .children(self.render_scroll_glow(window, cx))
+                .child(self.scroll_past_ends(cx))
                 .into_any_element()
         };
         // Measured each frame, for a scroll's slide to move across.
@@ -8054,44 +7911,63 @@ impl Render for PromptMode {
         };
         let body = div().relative().flex_1().min_h_0().child(shown);
         // Above the chat input: the task view, pushed up by the stack of
-        // questions beneath it, with the answer drawer sliding up over both
-        // and dimming them.
+        // questions still running beneath it.
         let body = div()
             .id("prompt-body")
             .relative()
             .flex_1()
             .min_h_0()
-            .on_prepaint({
-                let body_height = self.body_height.clone();
-                move |bounds, _, _| body_height.set(bounds.size.height)
-            })
-            // Dragging the answer drawer's top edge resizes it.
-            .on_drag_move(
-                cx.listener(|this, event: &DragMoveEvent<DrawerResize>, _, cx| {
-                    this.drag_drawer(event.event.position.y, event.bounds, cx)
-                }),
-            )
             .child(
                 v_flex()
                     .size_full()
                     .child(body)
                     .children(self.render_ask_stack(cx)),
             )
-            .child(self.render_ask_dim(cx))
-            .children(self.render_ask_drawer(cx))
-            .children(self.render_selection_popover(cx))
             .children(self.render_mark_menu());
         // Lets UI tests find the space above the chat input; inert in normal
         // builds.
         let body = gpui_kit::TestSupportExt::test_support(body);
+        // The tab bar along the top, the selected tab's contents beneath it.
+        let left = v_flex()
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .child(self.render_tabs(cx))
+            .child(body);
+        // On the Ask tab, the Ask conversation beside them, the edge between
+        // the two resizing the split.
+        let top = if self.on_ask_tab {
+            let split = h_flex()
+                .id("ask-split")
+                .relative()
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .on_drag_move(
+                    cx.listener(|this, event: &DragMoveEvent<AskSplitResize>, _, cx| {
+                        this.drag_ask_split(event.event.position.x, event.bounds, cx)
+                    }),
+                )
+                .child(left)
+                .child(self.render_ask_pane(cx))
+                .children(self.render_selection_popover(cx));
+            gpui_kit::TestSupportExt::test_support(split).into_any_element()
+        } else {
+            div()
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .flex()
+                .child(left)
+                .into_any_element()
+        };
 
-        // The tab bar along the top, the selected tab's contents beneath it,
-        // and the chat input along the bottom, with the referenced spec
-        // sidebar beside them all, never reaching over the chat input.
+        // The chat input along the bottom, beneath both sides of the split,
+        // with the referenced spec sidebar beside them all, never reaching
+        // over the chat input.
         let column = v_flex()
             .size_full()
-            .child(self.render_tabs(cx))
-            .child(body)
+            .child(top)
             .child(self.chat_input.clone());
         self.with_referenced_spec(column, window, cx)
     }
@@ -8132,21 +8008,52 @@ fn resolve_anchor(
     anchor.mode = Some(mode);
     anchor.sliced = sliced;
     anchor.attach(attached);
-    // Waits for the project's fluency if it is still being printed; every
-    // caller is already off the UI thread.
-    let fluency = crate::piton_fluency::get(project_dir);
     // A Code task sent to Spec is also told what the code task did, and a
     // chain's code step what its spec step did; in any other mode, the task
-    // it was handed on from is nothing to it.
+    // it was handed on from is nothing to it. Its mode's instructions go at
+    // the top of its message, not in the system prompt, which is the
+    // project's, the same for every prompt.
     anchor.code_task = code_task.filter(|_| hands_on(mode));
-    anchor.system_prompt = match (&anchor.code_task, mode) {
-        (Some(_), SendMode::Spec) => {
-            hidden_anchor::code_to_spec_system_prompt(project_dir, &fluency)?
-        }
-        (Some(_), _) => hidden_anchor::spec_to_code_system_prompt(project_dir, &fluency)?,
-        (None, _) => hidden_anchor::system_prompt(mode, project_dir, &fluency)?,
-    };
+    anchor.system_prompt =
+        hidden_anchor::instructions_for(mode, anchor.code_task.is_some(), project_dir)?;
     Ok(anchor)
+}
+
+/// The tasks of `tasks` the harness is working on while `working`, by their
+/// index, with each one's first line, oldest first.
+fn running_tasks(tasks: &[PromptTask], working: Lanes) -> Vec<(usize, SharedString)> {
+    if !working.any() {
+        return Vec::new();
+    }
+    tasks
+        .iter()
+        .enumerate()
+        // The latest, or one of the other lane still under way beside it.
+        .filter(|(ix, task)| {
+            task.status.is_active() && (task.cancel.is_some() || ix + 1 == tasks.len())
+        })
+        .map(|(ix, task)| (ix, first_line(&task.text)))
+        .collect()
+}
+
+/// Where a lane's run is kept among [`PromptMode::_pending`]: the code
+/// lane's, where a Freeform task, which keeps both busy, runs too, then the
+/// spec lane's.
+fn lane_slot(lanes: Lanes) -> usize {
+    if lanes.code { 0 } else { 1 }
+}
+
+/// Shows `notification` in the window, from where there is none at hand.
+fn notify(notification: Notification, cx: &mut App) {
+    cx.defer(move |cx| {
+        if let Some(handle) = cx.active_window().or_else(|| cx.windows().first().copied()) {
+            handle
+                .update(cx, |_, window, cx| {
+                    window.push_notification(notification, cx)
+                })
+                .ok();
+        }
+    });
 }
 
 /// Whether a task sent in `mode` can be told what the task it was handed on
@@ -8188,6 +8095,8 @@ fn chain_next(task: &PromptTask) -> Option<(String, Sending)> {
             Some(code_task),
             Some(task.name.to_string()),
             post_build_update,
+            // Each step is named after the chain's title.
+            Some(task.name.to_string()),
         ),
     ))
 }
@@ -8780,6 +8689,28 @@ mod tests {
         )
         .unwrap();
         settle(cx);
+        // Beside the sidebar, the chat input's buttons end 8 pixels short of
+        // its left edge, as they do the window's.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let sidebar = window.find("referenced-files").bounds();
+            let body = window.find("body-tint").bounds();
+            let rightmost = ["send", "send-options", "queue", "preview"]
+                .map(|id| window.find(id).bounds().right())
+                .into_iter()
+                .fold(gpui_kit::px(0.), gpui_kit::Pixels::max);
+            assert_eq!(
+                body.right(),
+                sidebar.left(),
+                "the chat input doesn't meet the sidebar"
+            );
+            assert_eq!(
+                sidebar.left() - rightmost,
+                gpui_kit::px(8.),
+                "the chat input's buttons aren't 8 pixels short of the sidebar"
+            );
+        })
+        .unwrap();
         cx.update_window(handle, |_, window, _| {
             assert!(window.try_find(("understanding-row", 1usize)).is_some());
             assert!(window.try_find(("understanding-row", 2usize)).is_none());
@@ -9657,7 +9588,7 @@ mod tests {
             .update_window(handle, |_, _, cx| {
                 prompt_mode.update(cx, |this, cx| {
                     let ix = this.push_task("Work in alpha".into(), cx);
-                    this.working = true;
+                    this.working = crate::chat_input::Lanes::ALL;
                     this.apply_event(ix, HarnessEvent::TextStarted, cx);
                     let question = this.start_test_question("Ask in alpha", cx);
                     (ix, question)
@@ -9668,12 +9599,12 @@ mod tests {
         cx.update(|cx| ProjectDirectory::set(b.clone(), cx));
         cx.run_until_parked();
         prompt_mode.update(cx, |this, cx| {
-            assert!(this.tasks.is_empty() && this.asks.is_empty() && !this.working);
+            assert!(this.tasks.is_empty() && this.asks.is_empty() && !this.working.any());
             assert!(this.is_working(), "alpha's work stopped counting");
             let busy = this.busy_projects();
             assert_eq!(busy.len(), 1);
             assert_eq!(busy[0].project_dir, a);
-            assert_eq!(busy[0].task.as_deref(), Some("Work in alpha"));
+            assert_eq!(busy[0].tasks, [(task, "Work in alpha".into())]);
             assert_eq!(busy[0].questions, [(question, "Ask in alpha".into())]);
             let jobs = this.running_jobs();
             assert_eq!(
@@ -9697,7 +9628,7 @@ mod tests {
         cx.run_until_parked();
         prompt_mode.update(cx, |this, _| {
             assert_eq!(this.tasks.len(), 1, "alpha's tasks were loaded again");
-            assert!(this.working);
+            assert!(this.working.any());
             assert!(this.tasks[0].reply.parts.iter().any(
                 |part| matches!(part, ReplyPart::Text(text) if text.contains("Still going."))
             ));
@@ -9942,10 +9873,11 @@ mod tests {
 
     /// A task from the history replays its recorded output into the task it
     /// was; one with no record is shown as not recorded, with nothing pending.
-    /// A new wheel scroll up from the top of the latest task's output
-    /// expands the previous tasks, and a new scroll down from their bottom
-    /// brings the latest task back; a scroll carried on in the same motion,
-    /// or a sideways one, never crosses over.
+    /// A wheel scroll up from the top of the latest task's output pulls it
+    /// into the stretch there, with no pause, and past the barrier expands
+    /// the previous tasks, and a scroll down from their bottom brings the
+    /// latest task back; a fling's momentum, a scroll carried on from a
+    /// slide, or a sideways one never crosses over.
     #[gpui_kit::test]
     async fn scrolling_past_an_end_crosses_over(cx: &mut TestAppContext) {
         use super::SCROLL_REST;
@@ -9958,7 +9890,7 @@ mod tests {
             }
             cx.notify();
         });
-        let wheel = |cx: &mut TestAppContext, x: f32, y: f32| {
+        let wheel_in = |cx: &mut TestAppContext, x: f32, y: f32, touch_phase| {
             let at = cx
                 .update_window(handle, |_, window, cx| {
                     window.render_frame(cx);
@@ -9969,9 +9901,20 @@ mod tests {
             visual.simulate_event(ScrollWheelEvent {
                 position: point(at.width / 2., at.height / 3.),
                 delta: ScrollDelta::Pixels(point(px(x), px(y))),
+                touch_phase,
                 ..Default::default()
             });
             cx.run_until_parked();
+        };
+        let wheel = |cx: &mut TestAppContext, x: f32, y: f32| {
+            wheel_in(cx, x, y, gpui_kit::TouchPhase::Moved)
+        };
+        let header_top = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.find("task-header").bounds().top()
+            })
+            .unwrap()
         };
         // Long enough for a slide to settle and the wheel to rest after it.
         let rest =
@@ -10003,18 +9946,33 @@ mod tests {
             .unwrap()
         };
 
+        let resting = header_top(cx);
         // Sideways, it stays.
         wheel(cx, 40., 5.);
         assert!(!expanded(cx));
         assert!(!glowing(cx));
-        rest();
-        // Short of the barrier, it builds up and glows, and the view holds.
+        // Carried straight on, with no pause, short of the barrier, it
+        // builds up and glows, pulling the view down by less than it
+        // scrolled.
         wheel(cx, 0., 120.);
         assert!(!expanded(cx), "it crossed over before the barrier");
         assert!(glowing(cx), "no glow as it built up");
-        // Left there, it drains away, and a new scroll starts again.
+        let pulled = header_top(cx) - resting;
+        assert!(
+            pulled > px(0.) && pulled < px(super::STRETCH_PULL),
+            "the stretch pulled the view {pulled:?}"
+        );
+        // Left there, it drains away and springs back, and a new scroll
+        // starts again.
         std::thread::sleep(super::SCROLL_DRAIN + Duration::from_millis(50));
         assert!(!glowing(cx), "the glow didn't drain away");
+        assert_eq!(header_top(cx), resting, "the view didn't spring back");
+        // A fling's momentum, once the fingers lift, stops at the end.
+        wheel_in(cx, 0., 0., gpui_kit::TouchPhase::Ended);
+        wheel(cx, 0., 240.);
+        assert!(!expanded(cx), "momentum crossed over");
+        assert!(!glowing(cx), "momentum pulled into the stretch");
+        std::thread::sleep(SCROLL_REST + Duration::from_millis(20));
         wheel(cx, 0., 120.);
         assert!(!expanded(cx), "what drained away still counted");
         // Scrolled back, it goes down; scrolled on, past the barrier, it
@@ -10057,9 +10015,15 @@ mod tests {
             cx.notify();
         });
         rest();
+        let resting = header_top(cx);
         wheel(cx, 0., 240.);
         assert!(!expanded(cx));
         assert!(!glowing(cx), "it glows with nowhere to cross to");
+        assert_eq!(
+            header_top(cx),
+            resting,
+            "it stretches with nowhere to cross to"
+        );
     }
 
     /// Closed, by a click or a scroll, the previous tasks give back the
@@ -10324,6 +10288,78 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// A task is named after the title the harness gives it, saved in the
+    /// history under that name, and a resend is named after it, numbered,
+    /// without asking again.
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn tasks_are_named_after_their_titles(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        fn titled(_: &std::path::Path, prompt: &str) -> anyhow::Result<String> {
+            assert_eq!(prompt, "Tidy the queue up");
+            Ok("Tidy the queue.".into())
+        }
+        cx.executor().allow_parking();
+        let (prompt_mode, handle) = open(cx);
+        let dir = cancel_project("titled", &prompt_mode, cx);
+        prompt_mode.update(cx, |this, _| this.titler = titled);
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send(
+                    "Tidy the queue up".into(),
+                    SendMode::Freeform,
+                    Vec::new(),
+                    window,
+                    cx,
+                )
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the naming", |this| {
+            this.tasks
+                .first()
+                .is_some_and(|task| task.name.as_ref() == "TidyTheQueue")
+        });
+        prompt_mode.update(cx, |this, cx| this.cancel_task(0, cx));
+        run_until(cx, &prompt_mode, "the cancel", |this| !this.working.any());
+        let saved = || {
+            let mut names: Vec<String> = std::fs::read_dir(dir.join(".suspense/history"))
+                .unwrap()
+                .filter_map(|entry| {
+                    let file = entry.unwrap().file_name().into_string().unwrap();
+                    let name = file.split_once('-')?.1.strip_suffix(".pi")?.to_string();
+                    Some(name)
+                })
+                .collect();
+            names.sort();
+            names
+        };
+        assert_eq!(saved(), ["TidyTheQueue"]);
+
+        // Resent, it isn't titled again.
+        fn untitled(_: &std::path::Path, _: &str) -> anyhow::Result<String> {
+            panic!("titled again")
+        }
+        prompt_mode.update(cx, |this, _| this.titler = untitled);
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.resend(|this| &this.tasks, 0, window, cx)
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the resend's naming", |this| {
+            this.tasks
+                .get(1)
+                .is_some_and(|task| task.name.as_ref() == "TidyTheQueue2")
+        });
+        prompt_mode.update(cx, |this, cx| this.cancel_task(1, cx));
+        run_until(cx, &prompt_mode, "the resend's cancel", |this| {
+            !this.working.any()
+        });
+        assert_eq!(saved(), ["TidyTheQueue", "TidyTheQueue2"]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// In a git repository, a task's run is snapshotted as the harness
     /// starts it and as it ends: the file the harness made is listed as
     /// changed during the task, the two trees are pinned under the private
@@ -10368,7 +10404,7 @@ mod tests {
         })
         .unwrap();
         run_until(cx, &prompt_mode, "the task", |this| {
-            !this.working
+            !this.working.any()
                 && this
                     .tasks
                     .first()
@@ -10416,6 +10452,7 @@ mod tests {
     fn restored_tasks_list_their_changed_files() {
         let (dir, before, after) = changed_repo("changed-restore");
         let saved = || SavedPrompt {
+            sent_at: 0,
             anchor: HiddenAnchor::random(),
             text: "Do it".into(),
             record: Some(RunRecord {
@@ -10513,7 +10550,8 @@ mod tests {
             cx.notify();
         });
         prompt_mode.read_with(cx, |this, _| {
-            let chains = super::chain_steps(&this.tasks);
+            let layout = super::chain_layout(&this.tasks);
+            let chains: Vec<_> = (0..this.tasks.len()).map(|ix| layout.step_of(ix)).collect();
             let step = |start, pos, len| Some(super::ChainStep { start, pos, len });
             assert_eq!(
                 chains,
@@ -10526,10 +10564,14 @@ mod tests {
                     None
                 ]
             );
-            assert_eq!(super::chain_status(&this.tasks[1..4]), TaskStatus::Failed);
+            let steps: Vec<_> = this.tasks[1..4].iter().collect();
+            assert_eq!(super::chain_status(&steps), TaskStatus::Failed);
             // The session changed at the code step, but the divider goes
             // above the chain.
-            assert_eq!(super::HistoryList::session_groups(&this.tasks), [0, 1]);
+            assert_eq!(
+                super::HistoryList::session_groups(&this.tasks, &layout),
+                [0, 1]
+            );
         });
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
@@ -11049,6 +11091,139 @@ mod tests {
         assert_eq!(groups[0].started_by.as_ref(), "the Spec step");
     }
 
+    /// A chain's steps are found by which step each was sent from, not by
+    /// being next to each other: a task of the other lane run between them
+    /// is listed after the chain, and the chain where its first step was
+    /// sent, its steps together.
+    #[test]
+    fn chain_steps_are_listed_together_whatever_ran_between() {
+        use crate::chat_input::SendMode;
+        use crate::hidden_anchor::CodeTask;
+        let mut tasks: Vec<PromptTask> = Vec::new();
+        let mut step = |mode: SendMode, from: Option<usize>, post_build: bool| {
+            let mut task = PromptTask::new("Build it".into());
+            task.name = format!("Task{}", tasks.len()).into();
+            task.sent.mode = Some(mode);
+            task.sent.sent_from = from.map(|from| tasks[from].name.to_string());
+            task.sent.code_task = from.map(|_| CodeTask::default());
+            task.sent.post_build_update = post_build;
+            tasks.push(task);
+        };
+        step(SendMode::Both, None, true); // 0: the chain
+        step(SendMode::Code, None, false); // 1: a Code task beside its spec step
+        step(SendMode::Spec, None, false); // 2: a Spec task beside its code step
+        step(SendMode::Code, Some(0), true); // 3: its code step
+        step(SendMode::Spec, None, false); // 4: another Spec task
+        step(SendMode::Spec, Some(3), false); // 5: its follow-up
+        let layout = super::chain_layout(&tasks);
+        assert_eq!(layout.order, [0, 3, 5, 1, 2, 4]);
+        let chain = |pos| {
+            Some(super::ChainStep {
+                start: 0,
+                pos,
+                len: 3,
+            })
+        };
+        assert_eq!(
+            layout.steps,
+            [chain(0), chain(1), chain(2), None, None, None]
+        );
+        assert_eq!(layout.step_of(5), chain(2));
+        assert_eq!(layout.place[1], 3);
+        assert_eq!(layout.members(chain(0).unwrap()), [0, 3, 5]);
+    }
+
+    /// Each lane sends its own queued prompts, first to last, whatever the
+    /// other lane is doing: a Spec prompt is sent while a Code task runs,
+    /// and a Code prompt while a Spec task does. A prompt that must wait
+    /// holds back those of its lane after it, and a Freeform prompt, needing
+    /// both lanes, holds back both.
+    #[gpui_kit::test]
+    async fn each_lane_sends_its_own_queued_prompts(cx: &mut TestAppContext) {
+        use crate::chat_input::{Lanes, SendMode};
+        let (prompt_mode, _handle) = open(cx);
+        prompt_mode.update(cx, |this, _| {
+            this.project_dir = Some(std::env::temp_dir());
+            let item = |id: usize, mode: SendMode, saved: bool| super::QueueItem {
+                id,
+                text: "queued".into(),
+                saved: saved.then(|| prompt_queue::QueuedPrompt {
+                    file: std::env::temp_dir().join("never-written.pi"),
+                    anchor: HiddenAnchor::random(),
+                    text: "queued".into(),
+                }),
+                wait: false,
+                sent_from: None,
+                images: Vec::new(),
+                new_conversation: false,
+                mode: Some(mode),
+                queued_at: id as u128,
+            };
+            let code_lane = Lanes {
+                code: true,
+                spec: false,
+            };
+            let spec_lane = Lanes {
+                code: false,
+                spec: true,
+            };
+            let cases = [
+                (
+                    code_lane,
+                    vec![(SendMode::Code, true), (SendMode::Spec, true)],
+                    Some(1),
+                ),
+                (
+                    spec_lane,
+                    vec![(SendMode::Spec, true), (SendMode::Code, true)],
+                    Some(1),
+                ),
+                (
+                    spec_lane,
+                    vec![(SendMode::Both, true), (SendMode::Code, true)],
+                    Some(1),
+                ),
+                (
+                    code_lane,
+                    vec![(SendMode::Freeform, true), (SendMode::Spec, true)],
+                    None,
+                ),
+                (
+                    spec_lane,
+                    vec![(SendMode::Freeform, true), (SendMode::Code, true)],
+                    None,
+                ),
+                (
+                    Lanes::NONE,
+                    vec![
+                        (SendMode::Code, false),
+                        (SendMode::Code, true),
+                        (SendMode::Spec, true),
+                    ],
+                    Some(2),
+                ),
+                (
+                    Lanes::ALL,
+                    vec![(SendMode::Code, true), (SendMode::Spec, true)],
+                    None,
+                ),
+                (Lanes::NONE, vec![(SendMode::Freeform, true)], Some(0)),
+            ];
+            for (working, queue, next) in cases {
+                this.working = working;
+                this.queue = queue
+                    .iter()
+                    .enumerate()
+                    .map(|(id, &(mode, saved))| item(id, mode, saved))
+                    .collect();
+                assert_eq!(this.next_sendable(), next, "{working:?} {queue:?}");
+            }
+            this.queue.clear();
+            this.working = Lanes::NONE;
+            this.project_dir = None;
+        });
+    }
+
     /// Previous tasks are grouped by the conversation they ran in: a group
     /// starts wherever the conversation changes, and a task whose
     /// conversation isn't known stays with the group before it.
@@ -11069,9 +11244,12 @@ mod tests {
             task(Some("b")),
             task(Some("a")),
         ];
-        assert_eq!(super::HistoryList::session_groups(&tasks), [0, 1, 4, 5]);
-        assert_eq!(super::HistoryList::session_groups(&tasks[1..]), [0, 3, 4]);
-        assert!(super::HistoryList::session_groups(&[]).is_empty());
+        let groups = |tasks: &[PromptTask]| {
+            super::HistoryList::session_groups(tasks, &super::chain_layout(tasks))
+        };
+        assert_eq!(groups(&tasks), [0, 1, 4, 5]);
+        assert_eq!(groups(&tasks[1..]), [0, 3, 4]);
+        assert!(groups(&[]).is_empty());
     }
 
     #[test]
@@ -11091,6 +11269,7 @@ mod tests {
         let anchor = HiddenAnchor::random();
         let name = anchor.name().to_string();
         let task = PromptTask::restore(SavedPrompt {
+            sent_at: 0,
             anchor,
             text: "Do it".into(),
             record: Some(record),
@@ -11103,6 +11282,7 @@ mod tests {
         ));
 
         let unrecorded = PromptTask::restore(SavedPrompt {
+            sent_at: 0,
             anchor: HiddenAnchor::random(),
             text: "Old".into(),
             record: None,
@@ -11220,6 +11400,7 @@ mod tests {
             failed.note(&event);
         }
         let failed = PromptTask::restore(SavedPrompt {
+            sent_at: 0,
             anchor: HiddenAnchor::random(),
             text: "Do it".into(),
             record: Some(failed),
@@ -11255,10 +11436,12 @@ mod tests {
         prompt_mode.update(cx, |this, cx| {
             let ix = this.push_task("Check a".into(), cx);
             this.tasks[ix].status = TaskStatus::Running;
-            this.working = true;
+            this.working = crate::chat_input::Lanes::ALL;
         });
         assert!(!offered(cx), "offered for a harness that can't be fed");
-        prompt_mode.update(cx, |this, _| this.feed = Some(feed.clone()));
+        prompt_mode.update(cx, |this, _| {
+            this.tasks.last_mut().unwrap().feed = Some(feed.clone())
+        });
         assert!(offered(cx));
 
         // Not while the previous tasks are expanded over its output.
@@ -11311,6 +11494,7 @@ mod tests {
                 record.note(&HarnessEvent::Output((*line).into()));
             }
             SavedPrompt {
+                sent_at: 0,
                 anchor: HiddenAnchor::random(),
                 text: "Do it".into(),
                 record: Some(record),
@@ -11325,6 +11509,7 @@ mod tests {
             ]),
             saved(&["not json"]),
             SavedPrompt {
+                sent_at: 0,
                 anchor: HiddenAnchor::random(),
                 text: "Old".into(),
                 record: None,
@@ -11451,6 +11636,7 @@ mod tests {
                 project_dir: this.project_dir.clone().unwrap(),
                 id: "s1".into(),
                 context: None,
+                system_prompt: None,
             });
             this.new_conversation(cx)
         });
@@ -11496,6 +11682,7 @@ mod tests {
                     &mut run,
                     event,
                     &dir,
+                    None,
                 ) {
                     PromptMode::keep_left(dir.clone(), crate::conversations::Kind::Tasks, left, cx);
                 }
@@ -11532,7 +11719,7 @@ mod tests {
         // New conversation while a task of it runs: the next task starts
         // afresh, with nothing to resume, and the conversation left is kept
         // with the project.
-        prompt_mode.update(cx, |this, _| this.working = true);
+        prompt_mode.update(cx, |this, _| this.working = crate::chat_input::Lanes::ALL);
         shown(cx);
         assert!(input.read_with(cx, |input, _| input.conversation_running()));
         cx.update_window(handle, |_, window, cx| window.click("new-conversation", cx))
@@ -11567,7 +11754,7 @@ mod tests {
             "a run of the old conversation brought it back"
         );
         assert_eq!(left(&dir).as_deref(), Some("s1"));
-        prompt_mode.update(cx, |this, _| this.working = false);
+        prompt_mode.update(cx, |this, _| this.working = crate::chat_input::Lanes::NONE);
 
         // A run started since is the new conversation.
         prompt_mode.update(cx, |this, cx| {
@@ -11601,7 +11788,7 @@ mod tests {
         // The first task of a conversation runs, and New conversation is
         // pressed before the harness says which conversation it is: once it
         // does, that one is kept as left too, and isn't carried on.
-        prompt_mode.update(cx, |this, _| this.working = true);
+        prompt_mode.update(cx, |this, _| this.working = crate::chat_input::Lanes::ALL);
         shown(cx);
         cx.update_window(handle, |_, window, cx| window.click("new-conversation", cx))
             .unwrap();
@@ -11625,7 +11812,7 @@ mod tests {
         cx.run_until_parked();
         assert_eq!(shown(cx), None, "the run's new conversation was carried on");
         assert_eq!(left(&dir).as_deref(), Some("s3"));
-        prompt_mode.update(cx, |this, _| this.working = false);
+        prompt_mode.update(cx, |this, _| this.working = crate::chat_input::Lanes::NONE);
 
         // The next task starts a conversation of its own, which is carried on.
         prompt_mode.update(cx, |this, cx| {
@@ -11725,8 +11912,9 @@ mod tests {
                 project_dir: dir.clone(),
                 id: "s1".into(),
                 context: Some(1_000),
+                system_prompt: None,
             });
-            this.working = true;
+            this.working = crate::chat_input::Lanes::ALL;
         });
         let press = |cx: &mut TestAppContext| {
             cx.update_window(handle, |_, window, cx| {
@@ -11795,6 +11983,7 @@ mod tests {
                         None,
                         None,
                         false,
+                        None,
                         window,
                         cx,
                     );
@@ -12224,8 +12413,8 @@ mod tests {
     }
 
     /// Each list that expands opens scrolled to its most recent items: the
-    /// previous tasks, the previous answers as their drawer slides up, and
-    /// the queue, each time it is opened, however it was scrolled before.
+    /// previous tasks and the queue, each time it is opened, however it was
+    /// scrolled before.
     #[gpui_kit::test]
     async fn expanded_lists_open_on_their_latest_items(cx: &mut TestAppContext) {
         const COUNT: usize = 40;
@@ -12257,25 +12446,7 @@ mod tests {
                         cx,
                     );
                 }
-                this.working = true;
-                this.on_ask_tab = true;
-                for n in 0..COUNT {
-                    let id = this.push_ask(format!("question {n}").into(), cx);
-                    this.update_ask(
-                        id,
-                        |ask| {
-                            ask.apply(HarnessEvent::TextStarted);
-                            ask.apply(HarnessEvent::TextDelta(format!("Answer {n}")));
-                            ask.apply(HarnessEvent::Finished {
-                                is_error: false,
-                                result: String::new(),
-                            });
-                        },
-                        cx,
-                    );
-                    this.close_ask(id, cx);
-                }
-                this.on_ask_tab = false;
+                this.working = crate::chat_input::Lanes::ALL;
                 assert_eq!(this.queue.len(), 12);
             });
         })
@@ -12304,16 +12475,8 @@ mod tests {
             .unwrap()
         };
 
-        for (toggle, list, item) in [
-            ("history-toggle", "task-list-scroll", "history-task"),
-            ("ask-history-toggle", "ask-list-scroll", "ask-history-task"),
-        ] {
-            if toggle == "ask-history-toggle" {
-                prompt_mode.update(cx, |this, cx| {
-                    this.on_ask_tab = true;
-                    cx.notify();
-                });
-            }
+        {
+            let (toggle, list, item) = ("history-toggle", "task-list-scroll", "history-task");
             for opening in 0..2 {
                 settle(cx);
                 cx.update_window(handle, |_, window, cx| window.click(toggle, cx))
@@ -12326,25 +12489,19 @@ mod tests {
                 assert!(!in_view(cx, list, (item, 0usize).into()));
                 // Scrolled away to the top before it is closed.
                 prompt_mode.update(cx, |this, _| {
-                    let history = if toggle == "history-toggle" {
-                        &this.task_history
-                    } else {
-                        &this.ask_history
-                    };
-                    history.rows.state().scroll_to(gpui_kit::ListOffset {
-                        item_ix: 0,
-                        offset_in_item: gpui_kit::px(0.),
-                    });
+                    this.task_history
+                        .rows
+                        .state()
+                        .scroll_to(gpui_kit::ListOffset {
+                            item_ix: 0,
+                            offset_in_item: gpui_kit::px(0.),
+                        });
                 });
                 settle(cx);
                 assert!(in_view(cx, list, (item, 0usize).into()));
                 cx.update_window(handle, |_, window, cx| window.click(toggle, cx))
                     .unwrap();
             }
-            prompt_mode.update(cx, |this, cx| {
-                this.on_ask_tab = false;
-                cx.notify();
-            });
         }
 
         for opening in 0..2 {
@@ -12367,150 +12524,475 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// On the Ask tab, a row of previous answers, the same as the row of
-    /// previous tasks, expands into every question asked before, each
-    /// opening onto its output. It shows only on the Ask tab, and dims the
-    /// message list while expanded there.
-    #[gpui_kit::test]
-    async fn ask_tab_lists_previous_answers_like_previous_tasks(cx: &mut TestAppContext) {
-        let (prompt_mode, handle) = open(cx);
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                // Off the Ask tab, there is no row.
-                assert!(this.render_ask_stack(cx).is_none());
-                this.on_ask_tab = true;
-                for text in ["first question", "second question"] {
-                    let id = this.push_ask(text.into(), cx);
-                    this.update_ask(
-                        id,
-                        |ask| {
-                            ask.apply(HarnessEvent::TextStarted);
-                            ask.apply(HarnessEvent::TextDelta(format!(
-                                "Answer to {text}. {}\n\n- {}\n- {}\n\nEnd.",
-                                "Words that go on. ".repeat(30),
-                                "A long bullet that keeps going on and on. ".repeat(12),
-                                "Short one."
-                            )));
-                            ask.apply(HarnessEvent::Finished {
-                                is_error: false,
-                                result: String::new(),
-                            });
-                        },
-                        cx,
-                    );
-                    this.close_ask(id, cx);
-                }
-                assert!(this.asks.is_empty());
-                assert_eq!(
-                    this.answers.len(),
-                    2,
-                    "closed questions are not previous answers"
-                );
-            });
-        })
-        .unwrap();
-
-        cx.wait_for(handle, Duration::from_secs(1), |window, _| {
-            window.try_find("ask-history-toggle").is_some()
-        })
-        .await;
-        cx.update_window(handle, |_, window, cx| {
-            window.click("ask-history-toggle", cx)
-        })
-        .unwrap();
-        cx.wait_for(handle, Duration::from_secs(2), |window, _| {
-            window.try_find(("ask-history-task", 0usize)).is_some()
-                && window.try_find(("ask-history-task", 1usize)).is_some()
-        })
-        .await;
-        assert!(prompt_mode.read_with(cx, |this, _| this.ask_history_shown()));
-
-        // The list slides up before its answers can be clicked.
-        let start = std::time::Instant::now();
-        let mut last = None;
-        loop {
-            let height = cx
-                .update_window(handle, |_, window, cx| {
-                    window.render_frame(cx);
-                    window.find("ask-list-scroll").bounds().size.height
-                })
-                .unwrap();
-            if last == Some(height) && height > gpui_kit::px(0.) {
-                break;
-            }
-            assert!(
-                start.elapsed() < Duration::from_secs(5),
-                "the list never settled"
-            );
-            last = Some(height);
-            std::thread::sleep(Duration::from_millis(50));
-        }
-        cx.update_window(handle, |_, window, cx| {
-            window.click(("ask-history-task", 1usize), cx)
-        })
-        .unwrap();
-        cx.wait_for(handle, Duration::from_secs(1), |window, _| {
-            window
-                .try_find(("history-panel", super::ASK_HISTORY_IX + 1))
-                .is_some()
-        })
-        .await;
-        assert_eq!(
-            prompt_mode.read_with(cx, |this, _| this.ask_history.open),
-            Some(1)
+    /// Finishes the question `id` with `answer` as its reply.
+    fn answer(
+        this: &mut PromptMode,
+        id: usize,
+        answer: &str,
+        cx: &mut gpui_kit::Context<PromptMode>,
+    ) {
+        this.update_ask(
+            id,
+            |ask| {
+                ask.apply(HarnessEvent::TextStarted);
+                ask.apply(HarnessEvent::TextDelta(answer.into()));
+                ask.apply(HarnessEvent::Finished {
+                    is_error: false,
+                    result: String::new(),
+                });
+                ask.end();
+            },
+            cx,
         );
-        // An answer with long lines wraps them within the list, so the open
-        // item ends just below its table, with no space left beneath it.
+    }
+
+    /// Draws a few frames, letting whatever measures or slides settle.
+    fn frames(handle: AnyWindowHandle, cx: &mut TestAppContext) {
+        for _ in 0..6 {
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                .unwrap();
+            cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    fn bounds_of(
+        handle: AnyWindowHandle,
+        id: impl Into<gpui_kit::ElementId>,
+        cx: &mut TestAppContext,
+    ) -> Option<Bounds> {
+        let id = id.into();
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
-            window.render_frame(cx);
-            crate::double_borders::assert_none(window);
-            let list = window.find("ask-list-scroll").bounds();
-            let panel = window
-                .find(("history-panel", super::ASK_HISTORY_IX + 1))
-                .bounds();
-            let end = window
-                .find(("history-panel-end", super::ASK_HISTORY_IX + 1))
-                .bounds();
-            let row = window.find(("output-row", 0usize)).bounds();
-            for (part, bounds) in [("prompt", panel), ("table", row), ("end", end)] {
-                assert!(
-                    bounds.right() <= list.right(),
-                    "the open answer's {part} {bounds:?} is wider than its list {list:?}"
-                );
-            }
-            assert!(
-                end.bottom() - row.bottom() < gpui_kit::px(32.),
-                "{:?} of space below the answer's last row",
-                end.bottom() - row.bottom()
-            );
-            // The open answer is the last item, so its end is the list's last
-            // row.
-            let rows = &prompt_mode.read(cx).ask_history.rows;
-            let item = rows.state().bounds_for_item(rows.count() - 1).unwrap();
-            assert!(
-                (item.bottom() - end.bottom()).abs() < gpui_kit::px(2.),
-                "the list measured the item {item:?} taller than it is drawn"
-            );
+            window.try_find(id).map(|found| found.bounds())
         })
-        .unwrap();
+        .unwrap()
+    }
 
-        // Off the Ask tab, the answers go, and the list is undimmed.
+    /// On the Ask tab, the body splits side by side above the chat input: the
+    /// task view on the left, and the Ask conversation on the right, half the
+    /// width to start with, headed as tall as the tab bar, and saying so
+    /// while no question has been asked. Its edge drags from a quarter to
+    /// three quarters of the width. Off the Ask tab, it goes.
+    #[gpui_kit::test]
+    async fn the_ask_tab_splits_the_body_with_the_ask_conversation(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        frames(handle, cx);
+        assert!(bounds_of(handle, "ask-pane", cx).is_none());
+        let whole = bounds_of(handle, "history", cx).unwrap();
+
+        prompt_mode.update(cx, |this, cx| {
+            this.on_ask_tab = true;
+            cx.notify();
+        });
+        frames(handle, cx);
+        let pane = bounds_of(handle, "ask-pane", cx).expect("no Ask conversation");
+        let split = bounds_of(handle, "ask-split", cx).unwrap();
+        let history = bounds_of(handle, "history", cx).unwrap();
+        let tabs = bounds_of(handle, "chat-tabs", cx).unwrap();
+        let px = gpui_kit::px;
+        assert!(
+            (pane.size.width - split.size.width * 0.5).abs() <= px(1.),
+            "the pane {pane:?} isn't half of {split:?}"
+        );
+        assert!((pane.right() - split.right()).abs() <= px(1.));
+        assert!(
+            history.right() <= pane.left() + px(1.),
+            "{history:?} runs beneath {pane:?}"
+        );
+        assert!(history.size.width < whole.size.width);
+        assert!(
+            pane.bottom() <= tabs.top() + px(1.),
+            "the pane runs over the chat input"
+        );
+        let header = bounds_of(handle, "ask-pane-header", cx).unwrap();
+        assert!((header.size.height - px(32.)).abs() <= px(1.), "{header:?}");
+        assert!(bounds_of(handle, "ask-pane-empty", cx).is_some());
+
+        prompt_mode.update(cx, |this, cx| {
+            this.drag_ask_split(split.left(), split, cx);
+            assert_eq!(this.ask_split_share, 0.75);
+            this.drag_ask_split(split.right(), split, cx);
+            assert_eq!(this.ask_split_share, 0.25);
+            this.drag_ask_split(split.left() + split.size.width * 0.6, split, cx);
+            assert!((this.ask_split_share - 0.4).abs() < 0.01);
+        });
+
         prompt_mode.update(cx, |this, cx| {
             this.on_ask_tab = false;
             cx.notify();
         });
-        cx.wait_for(handle, Duration::from_secs(1), |window, _| {
-            window.try_find("ask-history-toggle").is_none()
-        })
-        .await;
-        assert!(!prompt_mode.read_with(cx, |this, _| this.ask_history_shown()));
+        frames(handle, cx);
+        assert!(bounds_of(handle, "ask-pane", cx).is_none());
+        assert_eq!(bounds_of(handle, "history", cx).unwrap(), whole);
+        // The width it was dragged to comes back with it.
+        prompt_mode.update(cx, |this, cx| {
+            this.on_ask_tab = true;
+            cx.notify();
+        });
+        frames(handle, cx);
+        let pane = bounds_of(handle, "ask-pane", cx).unwrap();
+        let split = bounds_of(handle, "ask-split", cx).unwrap();
+        assert!((pane.size.width - split.size.width * 0.4).abs() <= px(1.));
     }
 
-    /// Questions saved with the project load back as previous answers, their
-    /// output replayed from their records.
+    /// The Ask conversation reads as a chat, oldest first: each question in a
+    /// box against the right, its answer beneath it, and a divider above the
+    /// first question of each conversation. New conversation puts one in at
+    /// the bottom at once, only one however often it is pressed, and the next
+    /// question asked begins that conversation.
     #[gpui_kit::test]
-    async fn saved_questions_load_as_previous_answers(cx: &mut TestAppContext) {
+    async fn the_ask_conversation_reads_as_a_chat_marking_each_new_conversation(
+        cx: &mut TestAppContext,
+    ) {
+        let dir = std::env::temp_dir().join(format!("suspense-ask-chat-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        frames(handle, cx);
+        prompt_mode.update(cx, |this, cx| {
+            this.on_ask_tab = true;
+            for (text, new) in [("First?", true), ("Second?", false), ("Third?", true)] {
+                let id = this.push_ask(text.into(), cx);
+                this.asks.last_mut().unwrap().task.new_conversation = new;
+                answer(this, id, &format!("The answer to {text}"), cx);
+            }
+        });
+        frames(handle, cx);
+        let pane = bounds_of(handle, "ask-pane", cx).unwrap();
+        let mut last_bottom = pane.top();
+        for id in 1..=3usize {
+            let question = bounds_of(handle, ("question", super::ASK_IX - id), cx)
+                .unwrap_or_else(|| panic!("question {id} isn't shown"));
+            assert!(
+                question.left() > pane.left() + pane.size.width * 0.3,
+                "question {id} {question:?} isn't against the right of {pane:?}"
+            );
+            assert!(
+                question.top() >= last_bottom,
+                "the questions are out of order"
+            );
+            last_bottom = question.bottom();
+        }
+        let divider = |id: usize, cx: &mut TestAppContext| {
+            bounds_of(handle, ("ask-conversation", id), cx).is_some()
+        };
+        assert!(
+            divider(super::ASK_IX - 1, cx),
+            "the first conversation isn't marked"
+        );
+        assert!(
+            !divider(super::ASK_IX - 2, cx),
+            "a question carrying on is marked"
+        );
+        assert!(
+            divider(super::ASK_IX - 3, cx),
+            "the new conversation isn't marked"
+        );
+        assert!(!divider(usize::MAX, cx));
+        cx.update_window(handle, |_, window, _| {
+            let answers = window.within("ask-pane");
+            assert!(
+                answers.try_find(("output-row", 0usize)).is_some(),
+                "no answer shows"
+            );
+        })
+        .unwrap();
+
+        prompt_mode.update(cx, |this, cx| {
+            this.ask_session = Some(Session {
+                project_dir: dir.clone(),
+                id: "questions".into(),
+                context: Some(1200),
+                system_prompt: None,
+            });
+            this.new_conversation(cx);
+            assert!(this.ask_new_pending);
+            this.new_conversation(cx);
+        });
+        frames(handle, cx);
+        assert!(
+            divider(usize::MAX, cx),
+            "New conversation isn't marked at the bottom"
+        );
+
+        prompt_mode.update(cx, |this, cx| {
+            this.ask(
+                "Fourth?".into(),
+                super::Attached::default(),
+                false,
+                None,
+                cx,
+            );
+            assert!(!this.ask_new_pending);
+            assert!(this.asks.last().unwrap().task.new_conversation);
+            assert!(this.asks.last().unwrap().task.asked_at.is_some());
+        });
+        frames(handle, cx);
+        assert!(!divider(usize::MAX, cx));
+        assert!(
+            divider(super::ASK_IX - 4, cx),
+            "the question asked isn't marked"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A finished question shows only its answer in the Ask conversation,
+    /// with the steps before it collapsed behind a row that a click expands
+    /// and collapses again; a task shows its whole chain.
+    #[gpui_kit::test]
+    async fn an_answer_collapses_its_steps_but_a_task_does_not(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        let events = || {
+            [
+                HarnessEvent::TextStarted,
+                HarnessEvent::TextDelta("Let me look.".into()),
+                tool("t1", "Read"),
+                HarnessEvent::ToolFinished {
+                    id: "t1".into(),
+                    is_error: false,
+                },
+                HarnessEvent::TextStarted,
+                HarnessEvent::TextDelta("It joins Code and Spec.".into()),
+            ]
+        };
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("What does the chain do?".into(), cx);
+            for event in events() {
+                this.apply_event(ix, event, cx);
+            }
+            this.on_ask_tab = true;
+            let id = this.push_ask("What does the chain do?".into(), cx);
+            this.update_ask(
+                id,
+                |ask| {
+                    for event in events() {
+                        ask.apply(event);
+                    }
+                    ask.end();
+                },
+                cx,
+            );
+        });
+        let steps = ("output-steps", super::ASK_IX - 1);
+        let rows = |cx: &mut TestAppContext| {
+            frames(handle, cx);
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let within = |window: &mut gpui_kit::Window, id: &'static str| {
+                    let scoped = window.within(id);
+                    (0..3usize)
+                        .filter(|row| scoped.try_find(("output-row", *row)).is_some())
+                        .count()
+                };
+                (
+                    window.try_find(steps).is_some(),
+                    within(window, "ask-pane"),
+                    within(window, "task-output"),
+                )
+            })
+            .unwrap()
+        };
+        let (toggle, answer_rows, task_rows) = rows(cx);
+        assert!(toggle, "the answer has no row for its steps");
+        assert_eq!(answer_rows, 1, "only the answer shows");
+        assert_eq!(task_rows, 3, "the task collapsed its chain");
+        cx.update_window(handle, |_, window, cx| window.click(steps, cx))
+            .unwrap();
+        let (toggle, answer_rows, _) = rows(cx);
+        assert!(toggle, "expanding the steps took away their row");
+        assert_eq!(answer_rows, 3, "the steps did not expand");
+        cx.update_window(handle, |_, window, cx| window.click(steps, cx))
+            .unwrap();
+        assert_eq!(rows(cx).1, 1, "the steps did not collapse again");
+    }
+
+    /// Selecting some of an answer's text in the Ask conversation offers a
+    /// popover to copy it or attach it to the prompt; either closes the
+    /// popover, and attaching lists the text above the chat input.
+    #[gpui_kit::test]
+    async fn selected_answer_text_can_be_copied_or_attached(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        prompt_mode.update(cx, |this, cx| {
+            this.on_ask_tab = true;
+            let id = this.push_ask("What does the chain do?".into(), cx);
+            answer(this, id, "It joins Code and Spec into one prompt.", cx);
+        });
+        frames(handle, cx);
+        let select_answer = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                let row = window
+                    .within("ask-pane")
+                    .find(("output-row", 0usize))
+                    .bounds();
+                // Along the answer's text, beneath the tags heading it.
+                let y = row.bottom() - gpui_kit::px(10.);
+                window.drag(
+                    gpui_kit::point(row.left() + gpui_kit::px(1.), y),
+                    gpui_kit::point(row.right() - gpui_kit::px(1.), y),
+                    cx,
+                );
+                window.render_frame(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.try_find("selection-popover").is_some()
+            })
+            .unwrap()
+        };
+
+        assert!(select_answer(cx), "no popover for the selected text");
+        cx.update_window(handle, |_, window, cx| window.click("selection-attach", cx))
+            .unwrap();
+        cx.run_until_parked();
+        let attached = prompt_mode.read_with(cx, |this, cx| {
+            this.chat_input
+                .read(cx)
+                .attachments()
+                .iter()
+                .map(|attachment| attachment.text().unwrap_or_default().to_string())
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(attached.len(), 1, "{attached:?}");
+        assert!(attached[0].contains("joins Code and Spec"), "{attached:?}");
+        assert!(prompt_mode.read_with(cx, |this, _| this.selection_popover.is_none()));
+
+        assert!(select_answer(cx), "no popover for the text selected again");
+        cx.update_window(handle, |_, window, cx| window.click("selection-copy", cx))
+            .unwrap();
+        cx.run_until_parked();
+        let copied = cx
+            .read_from_clipboard()
+            .and_then(|item| item.text())
+            .unwrap_or_default();
+        assert!(copied.contains("joins Code and Spec"), "{copied:?}");
+        assert!(prompt_mode.read_with(cx, |this, _| this.selection_popover.is_none()));
+    }
+
+    /// Off the Ask tab, the questions still running are rows stacked right
+    /// above the chat input's tabs, pushing the task view up; on the Ask tab
+    /// there is no stack, the questions being in the Ask conversation, where
+    /// a running one can be stopped, leaving the others running. A question
+    /// leaves the stack once it is over, and clicking a row shows it on the
+    /// Ask tab.
+    #[gpui_kit::test]
+    async fn running_questions_stack_above_the_tabs_off_the_ask_tab(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        let whole = {
+            frames(handle, cx);
+            bounds_of(handle, "history", cx).unwrap()
+        };
+        prompt_mode.update(cx, |this, cx| {
+            for text in ["Still thinking?", "Also thinking?"] {
+                let id = this.push_ask(text.into(), cx);
+                this.update_ask(id, |ask| ask.apply(HarnessEvent::TextStarted), cx);
+            }
+        });
+        let (row, tabs) = settle(
+            handle,
+            ("ask-row", 2usize),
+            |row, tabs| {
+                row.size.height > gpui_kit::px(0.)
+                    && (row.bottom() - tabs.top()).abs() <= gpui_kit::px(2.)
+            },
+            cx,
+        );
+        assert!(row.bottom() <= tabs.top() + gpui_kit::px(2.));
+        let history = bounds_of(handle, "history", cx).unwrap();
+        assert!(
+            history.size.height < whole.size.height,
+            "the stack covers the task view"
+        );
+
+        prompt_mode.update(cx, |this, cx| {
+            this.on_ask_tab = true;
+            cx.notify();
+        });
+        frames(handle, cx);
+        assert!(
+            bounds_of(handle, "ask", cx).is_none(),
+            "the stack shows on the Ask tab"
+        );
+        assert!(bounds_of(handle, ("question", super::ASK_IX - 1), cx).is_some());
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click(("stop-ask", 1usize), cx)
+        })
+        .unwrap();
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.asks[0].task.status, TaskStatus::Cancelled);
+            assert!(
+                this.asks[1].task.status.is_active(),
+                "the other question stopped"
+            );
+        });
+
+        prompt_mode.update(cx, |this, cx| {
+            this.on_ask_tab = false;
+            cx.notify();
+        });
+        // Once it has slid up whole, as tall as its row.
+        let (row, _) = settle(
+            handle,
+            ("ask-row", 2usize),
+            |row, _| row.size.height > gpui_kit::px(0.),
+            cx,
+        );
+        let _ = settle(
+            handle,
+            ("ask-card", 2usize),
+            |card, _| card.size.height >= row.size.height - gpui_kit::px(0.5),
+            cx,
+        );
+        assert!(
+            bounds_of(handle, ("ask-row", 1usize), cx).is_none(),
+            "a stopped question stayed in the stack"
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("ask-row", 2usize), cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        prompt_mode.read_with(cx, |this, cx| {
+            assert!(this.on_ask_tab, "the row didn't show its question");
+            assert_eq!(this.chat_input.read(cx).mode(), super::SendMode::Ask);
+            assert!(!this.ask_pane.locked);
+        });
+    }
+
+    /// However many questions the Ask conversation holds, it lays out only
+    /// what is in view, opening on the newest.
+    #[gpui_kit::test]
+    async fn a_long_ask_conversation_lays_out_only_what_is_in_view(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        prompt_mode.update(cx, |this, cx| {
+            this.on_ask_tab = true;
+            for n in 0..200 {
+                let id = this.push_ask(format!("Question {n}").into(), cx);
+                answer(this, id, &format!("Answer {n}"), cx);
+            }
+        });
+        frames(handle, cx);
+        assert!(bounds_of(handle, ("question", super::ASK_IX - 200), cx).is_some());
+        assert!(bounds_of(handle, ("question", super::ASK_IX - 1), cx).is_none());
+        prompt_mode.read_with(cx, |this, _| {
+            let rows = this.ask_pane.rows();
+            assert!(rows.count() > 200 * 4, "{} rows", rows.count());
+            let drawn = (0..rows.count())
+                .filter(|ix| rows.state().bounds_for_item(*ix).is_some())
+                .count();
+            assert!(drawn < 200, "{drawn} rows were laid out");
+        });
+    }
+
+    /// Questions saved with the project load back into the Ask conversation,
+    /// their output replayed from their records, with when they were asked.
+    #[gpui_kit::test]
+    async fn saved_questions_load_into_the_ask_conversation(cx: &mut TestAppContext) {
         let dir = std::env::temp_dir().join(format!("suspense-answers-{}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
         let anchor = HiddenAnchor::random();
@@ -12539,6 +13021,7 @@ mod tests {
             assert_eq!(this.answers.len(), 1);
             assert_eq!(this.answers[0].text.as_ref(), "What is it?");
             assert_eq!(this.answers[0].status, TaskStatus::Done);
+            assert!(this.answers[0].asked_at.is_some());
         });
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -12561,7 +13044,7 @@ mod tests {
             prompt_mode.update(cx, |this, cx| {
                 assert_eq!(this.queue.len(), 2, "the saved queue was not restored");
                 this.push_task("Working on this".into(), cx);
-                this.working = true;
+                this.working = crate::chat_input::Lanes::ALL;
             });
         })
         .unwrap();
@@ -12619,7 +13102,7 @@ mod tests {
         cx.update_window(handle, |_, _, cx| {
             prompt_mode.update(cx, |this, cx| {
                 assert!(!this.auto_send, "the switch did not turn auto-send off");
-                this.working = false;
+                this.working = crate::chat_input::Lanes::NONE;
                 cx.notify();
             });
         })
@@ -12650,7 +13133,7 @@ mod tests {
         cx.update_window(handle, |_, window, cx| {
             prompt_mode.update(cx, |this, cx| {
                 this.push_task("Working on this".into(), cx);
-                this.working = true;
+                this.working = crate::chat_input::Lanes::ALL;
                 this.send("Why?".into(), SendMode::Ask, Vec::new(), window, cx);
                 assert!(this.queue.is_empty(), "the question was queued");
                 assert_eq!(this.tasks.len(), 1);
@@ -12668,7 +13151,7 @@ mod tests {
         })
         .await;
         prompt_mode.read_with(cx, |this, _| {
-            assert!(this.working, "the task stopped working");
+            assert!(this.working.any(), "the task stopped working");
             assert_eq!(this.tasks[0].status, TaskStatus::Compiling);
         });
         assert!(!crate::hidden_anchor::history_dir(&dir).exists());
@@ -12731,475 +13214,6 @@ mod tests {
             );
             std::thread::sleep(Duration::from_millis(16));
         }
-    }
-
-    /// A running question rises out of the chat input rather than appearing at
-    /// its full height, pushing the message list up so none of it is hidden,
-    /// and undimmed. Opened onto its whole table, it becomes a drawer that
-    /// slides up over the message list instead, and the shade covers all the
-    /// space above the chat input.
-    #[gpui_kit::test]
-    async fn a_running_question_pushes_the_list_up_and_an_answer_slides_over_it(
-        cx: &mut TestAppContext,
-    ) {
-        let (prompt_mode, handle) = open(cx);
-        let find = |id: &'static str, cx: &mut TestAppContext| {
-            cx.update_window(handle, |_, window, cx| {
-                window.render_frame(cx);
-                window.try_find(id).map(|found| found.bounds())
-            })
-            .unwrap()
-        };
-        let history = find("history", cx).unwrap();
-        let body = find("prompt-body", cx).unwrap();
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                this.push_ask("What does the chain do?".into(), cx);
-            });
-        })
-        .unwrap();
-
-        let mut heights = Vec::new();
-        let start = std::time::Instant::now();
-        while start.elapsed() < Duration::from_secs(2) {
-            heights.push(find("ask", cx).unwrap().size.height);
-            std::thread::sleep(Duration::from_millis(8));
-        }
-        let settled = *heights.last().unwrap();
-        assert!(settled > gpui_kit::px(0.), "the question never rose");
-        assert!(
-            heights
-                .iter()
-                .any(|&height| height > gpui_kit::px(0.5) && height < settled - gpui_kit::px(0.5)),
-            "the question {heights:?} appeared without sliding up"
-        );
-        let (list, ask) = (find("history", cx).unwrap(), find("ask", cx).unwrap());
-        assert!(
-            (list.bottom() - ask.top()).abs() <= gpui_kit::px(1.)
-                && (list.size.height + ask.size.height - history.size.height).abs()
-                    <= gpui_kit::px(1.),
-            "the question {ask:?} did not push the message list {list:?} up from {history:?}"
-        );
-        assert!(find("ask-drawer", cx).is_none());
-
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                this.update_ask(
-                    1,
-                    |ask| {
-                        ask.apply(HarnessEvent::TextStarted);
-                        ask.apply(HarnessEvent::TextDelta("It joins Code and Spec.".into()));
-                        ask.end();
-                    },
-                    cx,
-                );
-                this.expand_ask(1, cx);
-            });
-        })
-        .unwrap();
-        std::thread::sleep(Duration::from_millis(600));
-        let drawer = find("ask-drawer", cx).expect("the answer is not in a drawer");
-        let list = find("history", cx).unwrap();
-        assert_eq!(
-            list, history,
-            "the answer pushed the message list instead of covering it"
-        );
-        assert!(
-            drawer.top() < list.bottom(),
-            "the drawer {drawer:?} is not over the list"
-        );
-        assert_eq!(
-            find("ask-dim", cx).unwrap(),
-            body,
-            "the shade does not cover the space"
-        );
-    }
-
-    /// While the harness works on a question, it is a single row directly
-    /// above the chat input's tabs, sliding up out of them; once it is over,
-    /// it expands into its whole task table, still above the tabs.
-    #[gpui_kit::test]
-    async fn a_question_is_a_row_above_the_tabs_until_it_is_over(cx: &mut TestAppContext) {
-        let (prompt_mode, handle) = open(cx);
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                let run = this.push_ask("What does the chain do?".into(), cx);
-                assert_eq!(run, 1);
-                for event in [
-                    tool("t1", "Read"),
-                    HarnessEvent::ToolInput {
-                        id: "t1".into(),
-                        summary: "src/chat_input.rs".into(),
-                    },
-                ] {
-                    this.update_ask(run, |ask| ask.apply(event), cx);
-                }
-            });
-        })
-        .unwrap();
-
-        // The row rises until it is whole, its bottom on the tabs' top.
-        let line_height = cx
-            .update_window(handle, |_, window, _| window.line_height())
-            .unwrap();
-        let (row, tabs) = settle(
-            handle,
-            ("ask-row", 1usize),
-            |row, _| row.size.height > gpui_kit::px(0.),
-            cx,
-        );
-        let (panel, _) = settle(
-            handle,
-            "ask",
-            |panel, _| panel.top() <= row.top() + gpui_kit::px(0.5),
-            cx,
-        );
-        assert!(
-            (panel.bottom() - tabs.top()).abs() <= gpui_kit::px(1.),
-            "the question {panel:?} is not right above the tabs {tabs:?}"
-        );
-        assert!(
-            row.size.height < line_height * 4.,
-            "the question {row:?} is more than a single row"
-        );
-        cx.update_window(handle, |_, window, _| {
-            assert!(window.try_find(("ask-output", 1usize)).is_none());
-        })
-        .unwrap();
-
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                this.update_ask(
-                    1,
-                    |ask| {
-                        ask.apply(HarnessEvent::TextStarted);
-                        ask.apply(HarnessEvent::TextDelta("It joins Code and Spec.".into()));
-                        ask.apply(HarnessEvent::Finished {
-                            is_error: false,
-                            result: String::new(),
-                        });
-                        ask.end();
-                    },
-                    cx,
-                );
-                this.expand_ask(1, cx);
-            });
-        })
-        .unwrap();
-
-        let (output, tabs) = settle(
-            handle,
-            ("ask-output", 1usize),
-            |output, _| output.size.height > line_height * 3.,
-            cx,
-        );
-        assert!(
-            output.bottom() <= tabs.top() + gpui_kit::px(1.),
-            "the expanded question {output:?} is not above the tabs {tabs:?}"
-        );
-        cx.update_window(handle, |_, window, _| {
-            assert!(window.try_find(("ask-row", 1usize)).is_none());
-            assert!(window.try_find(("output-row", 1usize)).is_some());
-        })
-        .unwrap();
-    }
-
-    /// A finished question shows only its answer, with the steps before it
-    /// collapsed behind a row that a click expands and collapses again; a
-    /// task shows its whole chain.
-    #[gpui_kit::test]
-    async fn an_answer_collapses_its_steps_but_a_task_does_not(cx: &mut TestAppContext) {
-        let (prompt_mode, handle) = open(cx);
-        let events = || {
-            [
-                HarnessEvent::TextStarted,
-                HarnessEvent::TextDelta("Let me look.".into()),
-                tool("t1", "Read"),
-                HarnessEvent::ToolFinished {
-                    id: "t1".into(),
-                    is_error: false,
-                },
-                HarnessEvent::TextStarted,
-                HarnessEvent::TextDelta("It joins Code and Spec.".into()),
-            ]
-        };
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                let ix = this.push_task("What does the chain do?".into(), cx);
-                for event in events() {
-                    this.apply_event(ix, event, cx);
-                }
-                let id = this.push_ask("What does the chain do?".into(), cx);
-                this.update_ask(
-                    id,
-                    |ask| {
-                        for event in events() {
-                            ask.apply(event);
-                        }
-                        ask.end();
-                    },
-                    cx,
-                );
-                this.expand_ask(id, cx);
-            });
-        })
-        .unwrap();
-        let steps = ("output-steps", super::ASK_IX - 1);
-        let rows = |cx: &mut TestAppContext| {
-            cx.update_window(handle, |_, window, cx| {
-                window.render_frame(cx);
-                let within = |window: &mut gpui_kit::Window, id: &'static str| {
-                    let scoped = window.within(id);
-                    (0..3usize)
-                        .filter(|row| scoped.try_find(("output-row", *row)).is_some())
-                        .count()
-                };
-                (
-                    window.try_find(steps).is_some(),
-                    within(window, "ask-drawer"),
-                    within(window, "task-output"),
-                )
-            })
-            .unwrap()
-        };
-        cx.wait_for(handle, Duration::from_secs(2), |window, _| {
-            window.try_find(steps).is_some()
-        })
-        .await;
-
-        // Counted once the drawer has slid open: only the rows in view are
-        // laid out.
-        let (row, _) = settle(
-            handle,
-            steps,
-            |row, _| row.size.height > gpui_kit::px(0.),
-            cx,
-        );
-        let _ = settle(
-            handle,
-            "ask-drawer",
-            |panel, _| panel.top() <= row.top(),
-            cx,
-        );
-        std::thread::sleep(Duration::from_millis(400));
-        let (toggle, answer_rows, task_rows) = rows(cx);
-        assert!(toggle, "the answer has no row for its steps");
-        assert_eq!(answer_rows, 1, "only the answer shows");
-        assert_eq!(task_rows, 3, "the task collapsed its chain");
-        cx.update_window(handle, |_, window, cx| window.click(steps, cx))
-            .unwrap();
-        cx.run_until_parked();
-        let (toggle, answer_rows, _) = rows(cx);
-        assert!(toggle, "expanding the steps took away their row");
-        assert_eq!(answer_rows, 3, "the steps did not expand");
-
-        cx.update_window(handle, |_, window, cx| window.click(steps, cx))
-            .unwrap();
-        cx.run_until_parked();
-        assert_eq!(rows(cx).1, 1, "the steps did not collapse again");
-    }
-
-    /// Selecting some of an answer's text offers a popover to copy it or attach
-    /// it to the prompt; either closes the popover, and attaching lists the
-    /// text above the chat input.
-    #[gpui_kit::test]
-    async fn selected_answer_text_can_be_copied_or_attached(cx: &mut TestAppContext) {
-        let (prompt_mode, handle) = open(cx);
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                let id = this.push_ask("What does the chain do?".into(), cx);
-                this.update_ask(
-                    id,
-                    |ask| {
-                        ask.apply(HarnessEvent::TextStarted);
-                        ask.apply(HarnessEvent::TextDelta(
-                            "It joins Code and Spec into one prompt.".into(),
-                        ));
-                        ask.end();
-                    },
-                    cx,
-                );
-                this.expand_ask(id, cx);
-            });
-        })
-        .unwrap();
-        let (row, _) = settle(
-            handle,
-            ("output-row", 0usize),
-            |row, _| row.size.height > gpui_kit::px(0.),
-            cx,
-        );
-        let _ = settle(
-            handle,
-            "ask-drawer",
-            |drawer, _| drawer.top() <= row.top(),
-            cx,
-        );
-        std::thread::sleep(Duration::from_millis(400));
-        let select_answer = |cx: &mut TestAppContext| {
-            cx.update_window(handle, |_, window, cx| {
-                window.render_frame(cx);
-                let row = window
-                    .within("ask-drawer")
-                    .find(("output-row", 0usize))
-                    .bounds();
-                // Along the answer's text, beneath the tags heading it.
-                let y = row.bottom() - gpui_kit::px(10.);
-                window.drag(
-                    gpui_kit::point(row.left() + gpui_kit::px(1.), y),
-                    gpui_kit::point(row.right() - gpui_kit::px(1.), y),
-                    cx,
-                );
-                window.render_frame(cx);
-            })
-            .unwrap();
-            cx.run_until_parked();
-            cx.update_window(handle, |_, window, cx| {
-                window.render_frame(cx);
-                window.try_find("selection-popover").is_some()
-            })
-            .unwrap()
-        };
-
-        assert!(select_answer(cx), "no popover for the selected text");
-        cx.update_window(handle, |_, window, cx| window.click("selection-attach", cx))
-            .unwrap();
-        cx.run_until_parked();
-        let attached = prompt_mode.read_with(cx, |this, cx| {
-            this.chat_input
-                .read(cx)
-                .attachments()
-                .iter()
-                .map(|attachment| attachment.text().unwrap_or_default().to_string())
-                .collect::<Vec<_>>()
-        });
-        assert_eq!(attached.len(), 1, "{attached:?}");
-        assert!(attached[0].contains("joins Code and Spec"), "{attached:?}");
-        assert!(prompt_mode.read_with(cx, |this, _| this.selection_popover.is_none()));
-
-        assert!(select_answer(cx), "no popover for the text selected again");
-        cx.update_window(handle, |_, window, cx| window.click("selection-copy", cx))
-            .unwrap();
-        cx.run_until_parked();
-        let copied = cx
-            .read_from_clipboard()
-            .and_then(|item| item.text())
-            .unwrap_or_default();
-        assert!(copied.contains("joins Code and Spec"), "{copied:?}");
-        assert!(prompt_mode.read_with(cx, |this, _| this.selection_popover.is_none()));
-    }
-
-    /// With a question still running, expanding the previous answers slides
-    /// the list up from on top of its row, which stays in view and undimmed,
-    /// rather than covering it.
-    #[gpui_kit::test]
-    async fn previous_answers_slide_up_from_pending_questions(cx: &mut TestAppContext) {
-        let (prompt_mode, handle) = open(cx);
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                this.on_ask_tab = true;
-                let old = this.push_ask("An old question".into(), cx);
-                this.update_ask(
-                    old,
-                    |ask| {
-                        ask.apply(HarnessEvent::TextStarted);
-                        ask.apply(HarnessEvent::TextDelta("An old answer.".into()));
-                        ask.end();
-                    },
-                    cx,
-                );
-                this.close_ask(old, cx);
-                let pending = this.push_ask("Still thinking?".into(), cx);
-                this.update_ask(pending, |ask| ask.apply(tool("t1", "Read")), cx);
-                this.ask_history.toggle();
-                cx.notify();
-            });
-        })
-        .unwrap();
-        let _ = settle(
-            handle,
-            ("ask-row", 2usize),
-            |row, _| row.size.height > gpui_kit::px(0.),
-            cx,
-        );
-        let mut last = None;
-        let drawer = loop {
-            let (drawer, _) = settle(handle, "ask-drawer", |_, _| true, cx);
-            if last == Some(drawer) {
-                break drawer;
-            }
-            last = Some(drawer);
-            std::thread::sleep(Duration::from_millis(50));
-        };
-        let (row, _) = settle(handle, ("ask-row", 2usize), |_, _| true, cx);
-        assert!(
-            (drawer.bottom() - row.top()).abs() <= gpui_kit::px(2.),
-            "the previous answers {drawer:?} don't sit on top of the pending question {row:?}"
-        );
-        cx.update_window(handle, |_, window, cx| {
-            window.render_frame(cx);
-            let dim = window.find("ask-dim").bounds();
-            assert!(
-                dim.bottom() <= row.top() + gpui_kit::px(2.),
-                "the shade {dim:?} covers the pending question {row:?}"
-            );
-        })
-        .unwrap();
-        let _ = row;
-    }
-
-    /// With another question still running, a finished one opened onto its
-    /// table slides up from on top of the running one's row, which stays in
-    /// view and undimmed, following the harness.
-    #[gpui_kit::test]
-    async fn an_open_answer_leaves_running_questions_in_view(cx: &mut TestAppContext) {
-        let (prompt_mode, handle) = open(cx);
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                let done = this.push_ask("Answered?".into(), cx);
-                let running = this.push_ask("Still thinking?".into(), cx);
-                this.update_ask(running, |ask| ask.apply(tool("t1", "Read")), cx);
-                this.update_ask(
-                    done,
-                    |ask| {
-                        ask.apply(HarnessEvent::TextStarted);
-                        ask.apply(HarnessEvent::TextDelta("Yes.".into()));
-                        ask.end();
-                    },
-                    cx,
-                );
-                this.expand_ask(done, cx);
-            });
-        })
-        .unwrap();
-        let mut last = None;
-        let drawer = loop {
-            let (drawer, _) = settle(handle, "ask-drawer", |_, _| true, cx);
-            if last == Some(drawer) {
-                break drawer;
-            }
-            last = Some(drawer);
-            std::thread::sleep(Duration::from_millis(50));
-        };
-        let (row, _) = settle(
-            handle,
-            ("ask-row", 2usize),
-            |row, _| row.size.height > gpui_kit::px(0.),
-            cx,
-        );
-        assert!(
-            (drawer.bottom() - row.top()).abs() <= gpui_kit::px(2.),
-            "the open answer {drawer:?} doesn't sit on top of the running question {row:?}"
-        );
-        cx.update_window(handle, |_, window, cx| {
-            window.render_frame(cx);
-            let dim = window.find("ask-dim").bounds();
-            assert!(
-                dim.bottom() <= row.top() + gpui_kit::px(2.),
-                "the shade {dim:?} covers the running question {row:?}"
-            );
-        })
-        .unwrap();
     }
 
     /// Only the output rows in view are laid out, however long the output; and
@@ -13630,215 +13644,6 @@ mod tests {
         assert!(scroll.max_offset().y > max, "the new rows aren't counted");
     }
 
-    /// An open question fills the answer drawer to 80% of the space above the
-    /// chat input; dragging the drawer's top edge resizes it, following the
-    /// pointer, and the size sticks for the next question opened.
-    #[gpui_kit::test]
-    async fn the_answer_drawer_opens_to_most_of_the_space_and_resizes(cx: &mut TestAppContext) {
-        let (prompt_mode, handle) = open(cx);
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                for question in ["What does the chain do?", "And the ribbon?"] {
-                    let id = this.push_ask(question.into(), cx);
-                    this.update_ask(
-                        id,
-                        |ask| {
-                            ask.apply(HarnessEvent::TextStarted);
-                            ask.apply(HarnessEvent::TextDelta("Briefly.".into()));
-                            ask.end();
-                        },
-                        cx,
-                    );
-                }
-                this.expand_ask(1, cx);
-            });
-        })
-        .unwrap();
-        let body = |cx: &mut TestAppContext| {
-            cx.update_window(handle, |_, window, cx| {
-                window.render_frame(cx);
-                window.find("prompt-body").bounds()
-            })
-            .unwrap()
-        };
-        // Its share counts from the chat input, taking in any question rows
-        // it sits on top of.
-        let share = |panel: Bounds, body: Bounds| (body.bottom() - panel.top()) / body.size.height;
-
-        let mut last = None;
-        let panel = loop {
-            let (panel, _) = settle(handle, "ask-drawer", |_, _| true, cx);
-            if last == Some(panel) {
-                break panel;
-            }
-            last = Some(panel);
-            std::thread::sleep(Duration::from_millis(50));
-        };
-        let space = body(cx);
-        assert!(
-            (share(panel, space) - 0.8).abs() < 0.02,
-            "the drawer {panel:?} takes {} of {space:?}",
-            share(panel, space)
-        );
-
-        // Dragged to half the space, it follows the pointer straight there.
-        cx.update_window(handle, |_, window, cx| {
-            let edge = window.find("ask-drawer-resize").bounds().center();
-            let to = gpui_kit::point(edge.x, space.top() + space.size.height * 0.5);
-            window.drag(edge, to, cx);
-            window.render_frame(cx);
-            window.render_frame(cx);
-            crate::double_borders::assert_none(window);
-        })
-        .unwrap();
-        let (panel, _) = settle(handle, "ask-drawer", |_, _| true, cx);
-        assert!(
-            (share(panel, space) - 0.5).abs() < 0.02,
-            "dragged, the drawer {panel:?} takes {} of {space:?}",
-            share(panel, space)
-        );
-
-        // Another question opened keeps that size.
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| this.expand_ask(2, cx))
-        })
-        .unwrap();
-        let mut last = None;
-        let panel = loop {
-            let (panel, _) = settle(handle, "ask-drawer", |_, _| true, cx);
-            if last == Some(panel) {
-                break panel;
-            }
-            last = Some(panel);
-            std::thread::sleep(Duration::from_millis(50));
-        };
-        assert!(
-            (share(panel, space) - 0.5).abs() < 0.02,
-            "reopened, the drawer {panel:?} takes {} of {space:?}",
-            share(panel, space)
-        );
-    }
-
-    /// Questions run at once, a row each, stacked above the tabs with the
-    /// newest nearest them, and leave the message list undimmed. A finished
-    /// one opens onto its whole table, which dims the list, and closes back
-    /// to its row; closing a question removes only it.
-    #[gpui_kit::test]
-    async fn questions_stack_and_only_an_open_answer_dims(cx: &mut TestAppContext) {
-        let (prompt_mode, handle) = open(cx);
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                this.push_ask("First question".into(), cx);
-                this.push_ask("Second question".into(), cx);
-                assert!(this.asks.iter().all(|ask| ask.task.status.is_active()));
-                assert!(
-                    this.expanded().is_none(),
-                    "a running question dims the list"
-                );
-            });
-        })
-        .unwrap();
-        let (second, _) = settle(
-            handle,
-            ("ask-row", 2usize),
-            |row, tabs| (row.bottom() - tabs.top()).abs() <= gpui_kit::px(2.),
-            cx,
-        );
-        // The first rises above the second, whole.
-        let (first, _) = settle(
-            handle,
-            ("ask-row", 1usize),
-            |row, _| {
-                row.bottom() <= second.top() + gpui_kit::px(1.)
-                    && row.size.height >= second.size.height - gpui_kit::px(1.)
-            },
-            cx,
-        );
-        assert!(
-            first.top() < second.top(),
-            "{first:?} is not above {second:?}"
-        );
-
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                this.update_ask(
-                    1,
-                    |ask| {
-                        ask.apply(HarnessEvent::Finished {
-                            is_error: false,
-                            result: "An answer.".into(),
-                        });
-                        ask.end();
-                    },
-                    cx,
-                );
-                this.expand_ask(1, cx);
-                assert!(
-                    this.expanded().is_some(),
-                    "an open answer leaves the list undimmed"
-                );
-                this.collapse_ask(1, cx);
-                assert!(this.expanded().is_none());
-                this.close_ask(1, cx);
-                assert_eq!(this.asks.iter().map(|ask| ask.id).collect::<Vec<_>>(), [2]);
-                assert!(this.is_working(), "closing one question stopped the other");
-            });
-        })
-        .unwrap();
-    }
-
-    /// However many questions are asked, the stack stops growing where it
-    /// scrolls, kept on the newest, and lays out only the rows in view.
-    #[gpui_kit::test]
-    async fn a_long_question_stack_lays_out_only_what_is_in_view(cx: &mut TestAppContext) {
-        let (prompt_mode, handle) = open(cx);
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                for n in 0..200 {
-                    let id = this.push_ask(format!("Question {n}").into(), cx);
-                    this.update_ask(
-                        id,
-                        |ask| {
-                            ask.apply(HarnessEvent::Finished {
-                                is_error: false,
-                                result: "An answer.".into(),
-                            });
-                            ask.end();
-                        },
-                        cx,
-                    );
-                }
-            });
-        })
-        .unwrap();
-        // The newest sits on the tabs once the rows have slid up.
-        settle(
-            handle,
-            ("ask-row", 200usize),
-            |row, tabs| (row.bottom() - tabs.top()).abs() <= gpui_kit::px(2.),
-            cx,
-        );
-        cx.update_window(handle, |_, window, cx| {
-            window.render_frame(cx);
-            let stack = window.find("ask-rows").bounds();
-            assert!(
-                stack.size.height <= super::MAX_ASK_STACK_HEIGHT + gpui_kit::px(0.5),
-                "{stack:?}"
-            );
-            assert!(window.try_find("ask-rows-scroll-column").is_some());
-            assert!(window.try_find(("ask-row", 1usize)).is_none());
-        })
-        .unwrap();
-        prompt_mode.read_with(cx, |this, _| {
-            let rows = &this.ask_rows;
-            assert_eq!(rows.count(), 200);
-            let drawn = (0..rows.count())
-                .filter(|ix| rows.state().bounds_for_item(*ix).is_some())
-                .count();
-            assert!(drawn < 40, "{drawn} question rows were laid out");
-        });
-    }
-
     /// The latest task's output has a scroll column along its right: square
     /// buttons at the top and bottom scroll it, and a button below them locks
     /// it to the bottom, where it stays as output keeps coming.
@@ -14086,7 +13891,7 @@ mod tests {
                     post_build_update: false,
                 };
                 this.answers.push(answer);
-                this.working = true;
+                this.working = crate::chat_input::Lanes::ALL;
                 this.resend(|this| &this.tasks, ix, window, cx);
                 assert_eq!(this.tasks.len(), 1, "the task resent moved");
                 assert_eq!(this.queue.len(), 1);
@@ -14097,7 +13902,7 @@ mod tests {
                 assert_eq!(this.asks[0].task.text.as_ref(), "Why?");
                 assert_eq!(this.asks[0].task.sent.attached_text, ["context"]);
                 assert!(this.asks[0].task.sent.sliced);
-                this.working = false;
+                this.working = crate::chat_input::Lanes::NONE;
             });
         })
         .unwrap();
@@ -14144,7 +13949,7 @@ mod tests {
         };
         let settle = |cx: &mut TestAppContext| {
             let start = std::time::Instant::now();
-            while prompt_mode.read_with(cx, |this, _| this.working) {
+            while prompt_mode.read_with(cx, |this, _| this.working.any()) {
                 assert!(
                     start.elapsed() < Duration::from_secs(20),
                     "the task never ended"
@@ -14357,6 +14162,8 @@ mod tests {
                     sent_from,
                     images: Vec::new(),
                     new_conversation: false,
+                    mode: Some(crate::chat_input::SendMode::Spec),
+                    queued_at: 0,
                 });
                 cx.notify();
             })
@@ -14507,7 +14314,7 @@ mod tests {
         // it was; being complete, it isn't sent back.
         cx.update_window(handle, |_, window, cx| {
             prompt_mode.update(cx, |this, cx| {
-                this.working = true;
+                this.working = crate::chat_input::Lanes::ALL;
                 this.resend(|this| &this.tasks, to_spec, window, cx);
                 this.send_to_other_mode(|this| &this.tasks, to_spec, window, cx);
                 let from: Vec<Option<String>> = this
@@ -14519,7 +14326,7 @@ mod tests {
                 // Queued again, the Code task isn't offered Send to Spec.
                 assert_eq!(this.offers_other_mode(&this.tasks[code]), None);
                 this.queue.clear();
-                this.working = false;
+                this.working = crate::chat_input::Lanes::NONE;
             })
         })
         .unwrap();
@@ -14578,7 +14385,7 @@ mod tests {
         })
         .unwrap();
         run_until(cx, &prompt_mode, "the Code task", |this| {
-            !this.working && this.tasks.len() == 1
+            !this.working.any() && this.tasks.len() == 1
         });
         assert_eq!(
             prompt_mode.read_with(cx, |this, _| this.tasks[0].status),
@@ -14601,7 +14408,7 @@ mod tests {
         .unwrap();
         assert!(!offered(0, cx));
         run_until(cx, &prompt_mode, "the task sent to Spec", |this| {
-            !this.working && this.tasks.len() == 2
+            !this.working.any() && this.tasks.len() == 2
         });
         assert_eq!(
             prompt_mode.read_with(cx, |this, _| this.tasks[1].status),
@@ -14619,7 +14426,7 @@ mod tests {
         })
         .unwrap();
         run_until(cx, &prompt_mode, "the Spec task", |this| {
-            !this.working && this.tasks.len() == 3
+            !this.working.any() && this.tasks.len() == 3
         });
         assert!(offered(2, cx));
         cx.update_window(handle, |_, window, cx| {
@@ -14629,7 +14436,7 @@ mod tests {
         })
         .unwrap();
         run_until(cx, &prompt_mode, "the task sent to Code", |this| {
-            !this.working && this.tasks.len() == 4
+            !this.working.any() && this.tasks.len() == 4
         });
         let names: Vec<String> = prompt_mode.read_with(cx, |this, _| {
             assert_eq!(this.tasks[3].status, TaskStatus::Done);
@@ -14730,13 +14537,13 @@ mod tests {
         })
         .unwrap();
         run_until(cx, &prompt_mode, "the new Code task", |this| {
-            !this.working && this.tasks.len() == 5
+            !this.working.any() && this.tasks.len() == 5
         });
         let last = 4;
         let last_name = prompt_mode.read_with(cx, |this, _| this.tasks[last].name.to_string());
         cx.update_window(handle, |_, window, cx| {
             prompt_mode.update(cx, |this, cx| {
-                this.working = true;
+                this.working = crate::chat_input::Lanes::ALL;
                 this.send_to_other_mode(|this| &this.tasks, last, window, cx);
             })
         })
@@ -14756,7 +14563,7 @@ mod tests {
                 prompt_queue::remove(&item.saved.unwrap().file).unwrap();
             }
             this.queue_held = false;
-            this.working = false;
+            this.working = crate::chat_input::Lanes::NONE;
         });
         crate::harness::use_program_for_test(None);
         std::fs::remove_dir_all(&dir).ok();
@@ -14944,7 +14751,7 @@ mod tests {
         // when sent at once, so it is complete once it is a task.
         cx.update_window(handle, |_, window, cx| {
             prompt_mode.update(cx, |this, cx| {
-                this.working = true;
+                this.working = crate::chat_input::Lanes::ALL;
                 this.resend(|this| &this.tasks, to_spec, window, cx);
                 this.resend(|this| &this.tasks, to_code, window, cx);
                 let from: Vec<Option<String>> = this
@@ -14960,7 +14767,7 @@ mod tests {
                     ]
                 );
                 this.queue.clear();
-                this.working = false;
+                this.working = crate::chat_input::Lanes::NONE;
             })
         })
         .unwrap();
@@ -15361,7 +15168,9 @@ mod tests {
             "a record was saved while the task ran"
         );
         prompt_mode.update(cx, |this, cx| this.cancel_task(0, cx));
-        run_until(cx, &prompt_mode, "the task ending", |this| !this.working);
+        run_until(cx, &prompt_mode, "the task ending", |this| {
+            !this.working.any()
+        });
         cx.run_until_parked();
         let record: RunRecord =
             serde_json::from_str(&std::fs::read_to_string(file.with_extension("json")).unwrap())
@@ -15499,9 +15308,8 @@ mod tests {
             })
         };
 
-        // Nothing selected, no actions; nor does the ask list have checkboxes.
+        // Nothing selected, no actions.
         assert_eq!(actions(cx), (false, false, false));
-        assert!(prompt_mode.read_with(cx, |this, _| !this.ask_history.selectable));
 
         // A click selects a task without opening it.
         click(("history-select", 0usize).into(), cx);
@@ -15554,9 +15362,10 @@ mod tests {
         assert!(selected(cx).is_empty());
         assert_eq!(actions(cx), (false, false, false));
 
-        // With the harness free, the first Code task starts at once and the
-        // next queues behind it, each to Spec; the Spec tasks then queue
-        // after them to Code, oldest first. Chain and unknown are left.
+        // With the harness free, the first Code task starts at once in the
+        // spec lane and the next queues behind it, each to Spec; the first
+        // Spec task sent to Code then starts at once in the code lane, beside
+        // it, and the next queues behind it. Chain and unknown are left.
         click(("history-select", 0usize).into(), cx);
         shift_click(5, cx);
         assert_eq!(selected(cx), [0, 1, 2, 3, 4, 5]);
@@ -15578,13 +15387,15 @@ mod tests {
         click("history-send-selected-to-code".into(), cx);
         still(cx);
         prompt_mode.read_with(cx, |this, _| {
-            assert_eq!(this.tasks.len(), 8);
+            assert_eq!(this.tasks.len(), 9);
+            assert_eq!(this.tasks[8].text.as_ref(), "Task 2");
+            assert_eq!(this.tasks[8].sent.mode, Some(SendMode::Code));
             let queued: Vec<_> = this
                 .queue
                 .iter()
                 .map(|item| item.text.to_string())
                 .collect();
-            assert_eq!(queued, ["Task 3", "Task 2", "Task 5"]);
+            assert_eq!(queued, ["Task 3", "Task 5"]);
         });
         assert_eq!(selected(cx), [1, 4]);
         assert_eq!(actions(cx), (false, false, true));
@@ -15593,7 +15404,7 @@ mod tests {
         // `batch_sent_tasks_run_in_order_in_the_other_mode` for them running.
         prompt_mode.update(cx, |this, _| this.queue.clear());
         let start = std::time::Instant::now();
-        while prompt_mode.read_with(cx, |this, _| this.working) {
+        while prompt_mode.read_with(cx, |this, _| this.working.any()) {
             assert!(
                 start.elapsed() < Duration::from_secs(20),
                 "the task never ended"
@@ -15616,6 +15427,9 @@ mod tests {
         if crate::piton_build::piton_missing() {
             return;
         }
+        // The stand-in harness is a real process, a run of each lane at
+        // once, whose events arrive from their own threads.
+        cx.executor().allow_parking();
         let (prompt_mode, handle) = open(cx);
         let dir = cancel_project("batch-send", &prompt_mode, cx);
         // A harness that is done at once.
@@ -15651,8 +15465,9 @@ mod tests {
                 }
                 this.send_selected_to(SendMode::Code, window, cx);
                 this.send_selected_to(SendMode::Spec, window, cx);
-                assert_eq!(this.tasks.len(), 6, "more than one started");
-                assert_eq!(this.queue.len(), 3);
+                // One starts in each lane, the rest queue behind it.
+                assert_eq!(this.tasks.len(), 7, "more than one started in a lane");
+                assert_eq!(this.queue.len(), 2);
                 assert_eq!(
                     this.task_history
                         .selected
@@ -15666,23 +15481,22 @@ mod tests {
         })
         .unwrap();
         run_until(cx, &prompt_mode, "the batch running", |this| {
-            !this.working && this.queue.is_empty() && this.tasks.len() == 9
+            !this.working.any() && this.queue.is_empty() && this.tasks.len() == 9
         });
         crate::harness::use_program_for_test(None);
         prompt_mode.read_with(cx, |this, _| {
-            let sent: Vec<_> = this.tasks[5..]
-                .iter()
-                .map(|task| (task.text.to_string(), task.sent.mode))
-                .collect();
-            assert_eq!(
-                sent,
-                [
-                    ("Task 0".to_string(), Some(SendMode::Code)),
-                    ("Task 3".to_string(), Some(SendMode::Code)),
-                    ("Task 1".to_string(), Some(SendMode::Spec)),
-                    ("Task 4".to_string(), Some(SendMode::Spec)),
-                ]
-            );
+            // Each lane runs its own in the order they were first sent.
+            let sent_in = |mode| {
+                this.tasks[5..]
+                    .iter()
+                    .filter(|task| task.sent.mode == Some(mode))
+                    .map(|task| task.text.to_string())
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(sent_in(SendMode::Code), ["Task 0", "Task 3"]);
+            assert_eq!(sent_in(SendMode::Spec), ["Task 1", "Task 4"]);
+            assert_eq!(this.tasks[5].text.as_ref(), "Task 0");
+            assert_eq!(this.tasks[6].text.as_ref(), "Task 1");
         });
         // Each is saved in the history as a new task. (Its files are named
         // to the second, so tasks this quick may load back in any order.)
@@ -15719,29 +15533,24 @@ mod tests {
         cx.executor().allow_parking();
         let (prompt_mode, handle) = open(cx);
         let dir = cancel_project("code-to-spec", &prompt_mode, cx);
-        // A harness that is done at once, keeping the system prompt of each
-        // run, in turn, in a file of its own.
-        let runs = dir.join("runs");
-        std::fs::create_dir_all(&runs).unwrap();
-        let script = dir.join("recording-harness.sh");
-        std::fs::write(
-            &script,
-            format!(
-                "#!/bin/sh\n\
-                 file={runs}/$(ls {runs} | wc -l | tr -d ' ')\n\
-                 : > \"$file\"\n\
-                 while [ $# -gt 0 ]; do\n\
-                 \x20 if [ \"$1\" = --append-system-prompt ]; then printf '%s' \"$2\" > \"$file\"; fi\n\
-                 \x20 shift\n\
-                 done\n\
-                 exit 0\n",
-                runs = runs.display()
-            ),
-        )
-        .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // A harness that is done at once, keeping the system prompt and the
+        // message of each run, in turn.
+        let (script, runs) = recording_harness(&dir, false);
         crate::harness::use_program_for_test(Some(script));
-        let run = |n: usize| std::fs::read_to_string(runs.join(n.to_string())).unwrap();
+        // The instructions heading each run's message; every run's system
+        // prompt is the project's, the same whatever the mode.
+        let project_system = {
+            let fluency = crate::piton_fluency::get(&dir);
+            hidden_anchor::project_system_prompt(&dir, &fluency).unwrap()
+        };
+        let run = |n: usize| {
+            let (message, system) = recorded_run(&runs, n);
+            assert_eq!(
+                system, project_system,
+                "run {n} wasn't sent the project's system prompt"
+            );
+            instructions_in(&message).to_string()
+        };
 
         let asked = "Make `{it}` do \\ {1 + 2} \\, per @{Nowhere}.\n\\\\\\\n  - ${CODE_RESULT}";
         let answer =
@@ -15824,7 +15633,7 @@ mod tests {
         })
         .unwrap();
         run_until(cx, &prompt_mode, "the code task sent to Spec", |this| {
-            !this.working && this.tasks.len() == 4
+            !this.working.any() && this.tasks.len() == 4
         });
         let told = CodeTask {
             prompt: asked.to_string(),
@@ -15832,26 +15641,22 @@ mod tests {
         };
         let handoff = |result: &str| {
             format!(
-                "\n\nThis prompt was first sent to change the code, and the code has been\n\
-                 changed to meet it. Now write the spec to describe what was built:\n\
-                 read the code the task changed, and change the spec at ./spec\n\
-                 so it describes that code as it now is, without changing the code at\n\
-                 ./src. Where the code did something the prompt didn't ask\n\
-                 for, describe what the code does, and say so in your reply.\n\
-                 \n\
-                 The prompt the code task was sent:\n\
-                 \n\
-                 {asked}\n\
-                 \n\
-                 What the code task said it built, its final output:\n\
-                 \n\
-                 {result}"
+                "\n\n{}",
+                system_prompts::fill_code_task(
+                    &system_prompts::fill_instructions(
+                        system_prompts::default_prompt(system_prompts::Prompt::CodeToSpec),
+                        "./src",
+                        "./spec",
+                    ),
+                    asked,
+                    Some(result),
+                )
             )
         };
         let told_spec = |sent: &str, result: &str| {
             assert!(
                 sent.starts_with("We're working on the spec "),
-                "not Spec's system prompt: {sent}"
+                "not Spec's instructions: {sent}"
             );
             assert!(sent.ends_with(&handoff(result)), "{sent}");
             assert_eq!(
@@ -15910,7 +15715,7 @@ mod tests {
         })
         .unwrap();
         run_until(cx, &prompt_mode, "the Spec task resent", |this| {
-            !this.working && this.tasks.len() == 5
+            !this.working.any() && this.tasks.len() == 5
         });
         prompt_mode.read_with(cx, |this, _| {
             assert_eq!(this.tasks[4].sent, this.tasks[3].sent);
@@ -15925,13 +15730,13 @@ mod tests {
                 this.send_to_other_mode(|this| &this.tasks, 3, window, cx);
                 this.send_to_other_mode(|this| &this.tasks, 4, window, cx);
                 assert_eq!(this.tasks.len(), 5, "a complete task was sent back");
-                assert!(!this.working);
+                assert!(!this.working.any());
                 this.send_to_other_mode(|this| &this.tasks, 2, window, cx)
             })
         })
         .unwrap();
         run_until(cx, &prompt_mode, "the Spec task sent to Code", |this| {
-            !this.working && this.tasks.len() == 6
+            !this.working.any() && this.tasks.len() == 6
         });
         prompt_mode.read_with(cx, |this, _| {
             assert_eq!(this.tasks[5].sent.mode, Some(SendMode::Code));
@@ -15954,7 +15759,7 @@ mod tests {
         })
         .unwrap();
         run_until(cx, &prompt_mode, "the batch sent to Spec", |this| {
-            !this.working && this.queue.is_empty() && this.tasks.len() == 8
+            !this.working.any() && this.queue.is_empty() && this.tasks.len() == 8
         });
         crate::harness::use_program_for_test(None);
         prompt_mode.read_with(cx, |this, _| {
@@ -15993,6 +15798,125 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// Every prompt sent in one conversation, whatever its mode, is sent the
+    /// same system prompt, byte for byte, so the harness's prompt cache holds:
+    /// the project's. What changes from prompt to prompt, its mode's
+    /// instructions with its understanding file, and a chain step's handoff,
+    /// heads its message instead. A question is sent the same system prompt.
+    /// A Freeform prompt has no instructions; carrying on a conversation, it
+    /// keeps the conversation's system prompt, and starting one, has none.
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn one_conversation_keeps_one_system_prompt(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        cx.executor().allow_parking();
+        let (prompt_mode, handle) = open(cx);
+        let dir = cancel_project("one-system-prompt", &prompt_mode, cx);
+        let (script, runs) = recording_harness(&dir, true);
+        crate::harness::use_program_for_test(Some(script));
+        let send = |text: &str, mode: SendMode, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                prompt_mode.update(cx, |this, cx| {
+                    this.chat_input
+                        .update(cx, |input, _| input.set_post_build_update(false));
+                    this.send(text.into(), mode, Vec::new(), window, cx)
+                })
+            })
+            .unwrap();
+        };
+        let tasks_done = |n: usize, cx: &mut TestAppContext| {
+            run_until(cx, &prompt_mode, "the tasks", move |this| {
+                !this.working.any()
+                    && this.tasks.len() == n
+                    && this.tasks.iter().all(|task| !task.status.is_active())
+            });
+        };
+
+        send("Change the code.", SendMode::Code, cx);
+        tasks_done(1, cx);
+        send("Change the spec.", SendMode::Spec, cx);
+        tasks_done(2, cx);
+        // A chain: its spec step, then its code step, handed the spec step.
+        send("Change both.", SendMode::Both, cx);
+        tasks_done(4, cx);
+        send("Why is it so?", SendMode::Ask, cx);
+        run_until(cx, &prompt_mode, "the question", |this| {
+            this.asks.len() + this.answers.len() > 0
+                && this.asks.iter().all(|ask| !ask.task.status.is_active())
+        });
+        send("Just this, as typed.", SendMode::Freeform, cx);
+        tasks_done(5, cx);
+
+        let project = {
+            let fluency = crate::piton_fluency::get(&dir);
+            hidden_anchor::project_system_prompt(&dir, &fluency)
+                .unwrap()
+                .unwrap()
+        };
+        let runs_seen: Vec<(String, Option<String>)> =
+            (0..6).map(|n| recorded_run(&runs, n)).collect();
+        for (n, (_, system)) in runs_seen.iter().enumerate() {
+            assert_eq!(
+                system.as_deref(),
+                Some(project.as_str()),
+                "run {n} was sent another system prompt"
+            );
+        }
+        assert!(!project.contains(".understanding.md"), "{project}");
+        assert!(!project.contains("We're working on the code "), "{project}");
+
+        // Each task's own instructions, with its understanding file, head its
+        // message, and the prompt follows.
+        let understanding = |message: &str| {
+            let instructions = instructions_in(message);
+            assert!(
+                instructions.contains(".suspense/history/")
+                    && instructions.contains(".understanding.md, and keep it current"),
+                "no understanding file: {instructions}"
+            );
+            instructions.to_string()
+        };
+        let (code, _) = &runs_seen[0];
+        assert!(understanding(code).starts_with("We're working on the code "));
+        assert!(code.ends_with("\n\nChange the code."), "{code}");
+        let (spec, _) = &runs_seen[1];
+        assert!(understanding(spec).starts_with("We're working on the spec "));
+        let (chain, _) = &runs_seen[2];
+        assert!(understanding(chain).contains("first step changes the spec only"));
+        let (step, _) = &runs_seen[3];
+        let handed = understanding(step);
+        assert!(handed.starts_with("We're working on the code "), "{handed}");
+        assert!(handed.contains("second step of a chain"), "{handed}");
+        assert!(handed.ends_with("Said run 2."), "{handed}");
+        // Each has its own understanding file.
+        assert_ne!(understanding(code), understanding(spec));
+        // The question's are Ask's, with no understanding file.
+        let (asked, _) = &runs_seen[4];
+        let instructions = instructions_in(asked);
+        assert!(instructions.starts_with("We're only asking a question "));
+        assert!(!instructions.contains(".understanding.md"));
+        // None repeats the fluency or the spec reading.
+        for (n, (message, _)) in runs_seen.iter().enumerate().take(5) {
+            assert!(
+                !message.contains("Before executing anything, read the spec"),
+                "run {n} repeats the spec reading"
+            );
+        }
+        // Freeform, carrying on the conversation, has no instructions.
+        assert_eq!(runs_seen[5].0, "Just this, as typed.");
+
+        // Starting a new conversation, a Freeform prompt has no system prompt.
+        prompt_mode.update(cx, |this, cx| this.new_conversation(cx));
+        send("Fresh.", SendMode::Freeform, cx);
+        tasks_done(6, cx);
+        crate::harness::use_program_for_test(None);
+        assert_eq!(recorded_run(&runs, 6), ("Fresh.".to_string(), None));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// A chain is sent as its steps: the Chain task writes the spec, then the
     /// same prompt goes to Code, the spec built again first, told what the
     /// spec step said; with Post-Build Spec Update on, the code step then
@@ -16008,34 +15932,12 @@ mod tests {
         cx.executor().allow_parking();
         let (prompt_mode, handle) = open(cx);
         let dir = cancel_project("chain-steps", &prompt_mode, cx);
-        // A harness that keeps each run's system prompt in a file of its
-        // own, and says which run it was before it is done.
-        let runs = dir.join("runs");
-        std::fs::create_dir_all(&runs).unwrap();
-        let script = dir.join("chain-harness.sh");
-        std::fs::write(
-            &script,
-            format!(
-                "#!/bin/sh\n\
-                 n=$(ls {runs} | wc -l | tr -d ' ')\n\
-                 file={runs}/$n\n\
-                 : > \"$file\"\n\
-                 while [ $# -gt 0 ]; do\n\
-                 \x20 if [ \"$1\" = --append-system-prompt ]; then printf '%s' \"$2\" > \"$file\"; fi\n\
-                 \x20 shift\n\
-                 done\n\
-                 IFS= read -r line\n\
-                 echo '{{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"s1\"}}'\n\
-                 echo '{{\"type\":\"stream_event\",\"parent_tool_use_id\":null,\"event\":{{\"type\":\"content_block_start\",\"index\":0,\"content_block\":{{\"type\":\"text\",\"text\":\"\"}}}}}}'\n\
-                 echo '{{\"type\":\"stream_event\",\"parent_tool_use_id\":null,\"event\":{{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{{\"type\":\"text_delta\",\"text\":\"Said run '$n'.\"}}}}}}'\n\
-                 echo '{{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Done.\"}}'\n",
-                runs = runs.display()
-            ),
-        )
-        .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // A harness that keeps each run's system prompt and message, and says
+        // which run it was before it is done.
+        let (script, runs) = recording_harness(&dir, true);
         crate::harness::use_program_for_test(Some(script));
-        let run = |n: usize| std::fs::read_to_string(runs.join(n.to_string())).unwrap();
+        // The instructions heading each step's message.
+        let run = |n: usize| instructions_in(&recorded_run(&runs, n).0).to_string();
         let send = |post_build: bool, cx: &mut TestAppContext| {
             cx.update_window(handle, |_, window, cx| {
                 prompt_mode.update(cx, |this, cx| {
@@ -16050,7 +15952,7 @@ mod tests {
         // Without a post-build spec update, the chain ends with its code step.
         send(false, cx);
         run_until(cx, &prompt_mode, "the chain's code step", |this| {
-            !this.working && this.tasks.len() == 2 && this.tasks[1].status == TaskStatus::Done
+            !this.working.any() && this.tasks.len() == 2 && this.tasks[1].status == TaskStatus::Done
         });
         let spec = run(0);
         assert!(spec.contains("first step changes the spec only"), "{spec}");
@@ -16085,7 +15987,9 @@ mod tests {
             &prompt_mode,
             "the chain's post-build spec update",
             |this| {
-                !this.working && this.tasks.len() == 5 && this.tasks[4].status == TaskStatus::Done
+                !this.working.any()
+                    && this.tasks.len() == 5
+                    && this.tasks[4].status == TaskStatus::Done
             },
         );
         crate::harness::use_program_for_test(None);
@@ -16154,7 +16058,7 @@ mod tests {
         .unwrap();
 
         let start = std::time::Instant::now();
-        while prompt_mode.read_with(cx, |this, _| this.working) {
+        while prompt_mode.read_with(cx, |this, _| this.working.any()) {
             assert!(
                 start.elapsed() < Duration::from_secs(20),
                 "the prompt never ended"
@@ -16236,6 +16140,79 @@ mod tests {
                 .is_some()
         }));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A stand-in harness in `dir` that keeps, for each run in turn, the
+    /// system prompt it was given with `--append-system-prompt` in
+    /// `runs/N.system`, none when it was given none, and the message it was
+    /// sent in `runs/N`; then, when it `finishes`, reports the conversation
+    /// `s1` and says which run it was, else stops at once. Returns the script
+    /// and the runs directory.
+    #[cfg(unix)]
+    fn recording_harness(dir: &std::path::Path, finishes: bool) -> (PathBuf, PathBuf) {
+        use std::os::unix::fs::PermissionsExt as _;
+        let runs = dir.join("runs");
+        std::fs::create_dir_all(&runs).unwrap();
+        let script = dir.join("recording-harness.sh");
+        let reply = if finishes {
+            "echo '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"s1\"}'\n\
+             echo '{\"type\":\"stream_event\",\"parent_tool_use_id\":null,\"event\":{\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}}'\n\
+             echo '{\"type\":\"stream_event\",\"parent_tool_use_id\":null,\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Said run '$n'.\"}}}'\n\
+             echo '{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Done.\"}'\n"
+        } else {
+            "exit 0\n"
+        };
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\n\
+                 n=$(ls {runs} | grep -v system | wc -l | tr -d ' ')\n\
+                 file={runs}/$n\n\
+                 : > \"$file\"\n\
+                 fed=no\n\
+                 while [ $# -gt 0 ]; do\n\
+                 \x20 if [ \"$1\" = --append-system-prompt ]; then printf '%s' \"$2\" > \"$file.system\"; fi\n\
+                 \x20 if [ \"$1\" = --input-format ]; then fed=yes; fi\n\
+                 \x20 shift\n\
+                 done\n\
+                 if [ $fed = yes ]; then IFS= read -r line; printf '%s' \"$line\" > \"$file\"; else cat > \"$file\"; fi\n\
+                 {reply}",
+                runs = runs.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        (script, runs)
+    }
+
+    /// Run `n` of a [`recording_harness`]: the message it was sent, as text,
+    /// and the system prompt it was given, if any.
+    fn recorded_run(runs: &std::path::Path, n: usize) -> (String, Option<String>) {
+        let sent = std::fs::read_to_string(runs.join(n.to_string())).unwrap();
+        // Fed, the message is a stream-json user message.
+        let message = match serde_json::from_str::<serde_json::Value>(&sent) {
+            Ok(line) => line["message"]["content"][0]["text"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string(),
+            Err(_) => sent,
+        };
+        let system = std::fs::read_to_string(runs.join(format!("{n}.system"))).ok();
+        (message, system)
+    }
+
+    /// The instructions heading a message, between their markers.
+    fn instructions_in(message: &str) -> &str {
+        let start = message
+            .strip_prefix(&format!("{}\n", crate::system_prompts::INSTRUCTIONS_OPEN))
+            .unwrap_or_else(|| panic!("no instructions block: {message}"));
+        let end = start
+            .find(&format!(
+                "\n{}\n\n",
+                crate::system_prompts::INSTRUCTIONS_CLOSE
+            ))
+            .unwrap_or_else(|| panic!("the instructions block isn't closed: {message}"));
+        &start[..end]
     }
 
     /// A project that builds and compiles, with a stand-in harness that
@@ -16475,7 +16452,7 @@ mod tests {
         })
         .unwrap();
         run_until(cx, &prompt_mode, "the second task ending", |this| {
-            !this.working
+            !this.working.any()
         });
         crate::harness::use_program_for_test(None);
 
@@ -16532,7 +16509,9 @@ mod tests {
         prompt_mode.read_with(cx, |this, _| {
             assert_eq!(this.tasks[0].status, TaskStatus::Cancelled)
         });
-        run_until(cx, &prompt_mode, "the task ending", |this| !this.working);
+        run_until(cx, &prompt_mode, "the task ending", |this| {
+            !this.working.any()
+        });
         // Long enough for a run to have started, had one been.
         std::thread::sleep(Duration::from_millis(300));
         cx.run_until_parked();
@@ -16668,7 +16647,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         .unwrap();
         press_send(cx);
         run_until(cx, &prompt_mode, "the task done", |this| {
-            !this.working && this.tasks.len() == 1
+            !this.working.any() && this.tasks.len() == 1
         });
         let paths = prompt_mode.read_with(cx, |this, _| this.tasks[0].sent.attached_images.clone());
         assert_eq!(paths.len(), 2);
@@ -16737,7 +16716,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         })
         .unwrap();
         run_until(cx, &prompt_mode, "the resend done", |this| {
-            !this.working && this.tasks.len() == 2
+            !this.working.any() && this.tasks.len() == 2
         });
         prompt_mode.read_with(cx, |this, _| {
             assert_eq!(this.tasks[1].sent.attached_images, paths)
@@ -16748,7 +16727,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         // the queue, and editing it brings them back into the chat input.
         cx.update_window(handle, |_, window, cx| {
             prompt_mode.update(cx, |this, cx| {
-                this.working = true;
+                this.working = crate::chat_input::Lanes::ALL;
                 this.queue_expanded = true;
                 this.resend(|this| &this.tasks, 0, window, cx);
                 assert_eq!(this.queue[0].images, paths);
@@ -16806,11 +16785,11 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
             2
         );
         prompt_mode.update(cx, |this, cx| {
-            this.working = false;
+            this.working = crate::chat_input::Lanes::NONE;
             this.send_next(cx);
         });
         run_until(cx, &prompt_mode, "the queued prompt done", |this| {
-            !this.working && this.queue.is_empty() && this.tasks.len() == 3
+            !this.working.any() && this.queue.is_empty() && this.tasks.len() == 3
         });
         assert_eq!(given(2), [a.clone(), b.clone()]);
 
@@ -16824,13 +16803,13 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
                     ..Default::default()
                 };
                 this.tasks[ix].mode = Some(SendMode::Code);
-                this.working = true;
+                this.working = crate::chat_input::Lanes::ALL;
                 this.send_to_other_mode(|this| &this.tasks, ix, window, cx);
                 let queued = this.queue.last().unwrap();
                 assert_eq!(queued.text.as_ref(), "Code it");
                 assert_eq!(queued.images, paths);
                 this.queue.clear();
-                this.working = false;
+                this.working = crate::chat_input::Lanes::NONE;
             })
         })
         .unwrap();
@@ -16861,8 +16840,8 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         }
         cx.update_window(handle, |_, window, cx| {
             prompt_mode.update(cx, |this, cx| {
-                this.feed = Some(feed.clone());
-                this.working = true;
+                this.tasks.last_mut().unwrap().feed = Some(feed.clone());
+                this.working = crate::chat_input::Lanes::ALL;
                 this.send_to_task(
                     "And this".into(),
                     SendMode::Freeform,
@@ -16901,8 +16880,8 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         );
         assert_eq!(given(1), [b.clone()]);
         prompt_mode.update(cx, |this, _| {
-            this.working = false;
-            this.feed = None;
+            this.working = crate::chat_input::Lanes::NONE;
+            this.tasks.last_mut().unwrap().feed = None;
         });
 
         // A question takes images as a task does.
@@ -16978,7 +16957,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         })
         .unwrap();
         run_until(cx, &prompt_mode, "both prompts running", |this| {
-            !this.working && this.queue.is_empty() && this.tasks.len() == 2
+            !this.working.any() && this.queue.is_empty() && this.tasks.len() == 2
         });
 
         let sent = hidden_anchor::with_attached_text(typed, &attached);
@@ -17058,7 +17037,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         })
         .unwrap();
         run_until(cx, &prompt_mode, "the resent prompt running", |this| {
-            !this.working && this.tasks.len() == 3
+            !this.working.any() && this.tasks.len() == 3
         });
         crate::harness::use_program_for_test(None);
         prompt_mode.read_with(cx, |this, _| {
@@ -17224,6 +17203,8 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
             this.tasks[0].given = Some(Given {
                 harness: Agent::Claude,
                 system_prompt: Some("Be brief.\n\nVery.".into()),
+                instructions: None,
+                resumed: false,
             });
             this.show_compiled(0, "Prompt_a".into(), sliced.into(), cx);
         });
@@ -17288,6 +17269,8 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
             this.tasks[ix].given = Some(Given {
                 harness: Agent::Claude,
                 system_prompt: Some(long.clone()),
+                instructions: None,
+                resumed: false,
             });
             this.show_compiled(ix, "Prompt_a".into(), "Short.".into(), cx);
         });
@@ -17373,7 +17356,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         })
         .unwrap();
         run_until(cx, &prompt_mode, "the code task sent to Spec", |this| {
-            !this.working && this.tasks.len() == 2
+            !this.working.any() && this.tasks.len() == 2
         });
         crate::harness::use_program_for_test(None);
 
@@ -17383,20 +17366,47 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         assert_eq!(prompt.sections[0].title, "System prompt");
         let system_prompt = prompt.sections[0].copied().unwrap().to_string();
         assert_eq!(system_prompt, sent, "not the system prompt sent");
+        // The system prompt is the project's: the spec reading and the
+        // fluency, and nothing of the task's mode or what it was handed.
         for injected in [
-            "We're working on the spec ",
             "Before executing anything, read the spec it touches",
             "Piton Fluency",
-            "This prompt was first sent to change the code",
-            "Make it blue.",
-            "Made it blue.",
-            ".understanding.md",
         ] {
             assert!(
                 system_prompt.contains(injected),
                 "no {injected:?}: {system_prompt}"
             );
         }
+        for apart in [
+            "We're working on the spec ",
+            "Make it blue.",
+            ".understanding.md",
+        ] {
+            assert!(
+                !system_prompt.contains(apart),
+                "{apart:?} in the system prompt"
+            );
+        }
+        // The message heads the prompt with its mode's instructions and what
+        // it was handed.
+        let message = prompt.sections[1].copied().unwrap().to_string();
+        let instructions = instructions_in(&message);
+        for injected in [
+            "We're working on the spec ",
+            "This prompt was first sent to change the code",
+            "Make it blue.",
+            "Made it blue.",
+            ".understanding.md",
+        ] {
+            assert!(
+                instructions.contains(injected),
+                "no {injected:?}: {instructions}"
+            );
+        }
+        assert!(
+            !instructions.contains("Piton Fluency"),
+            "the fluency is repeated"
+        );
         for placeholder in [
             "CODE_LOCATION",
             "SPEC_LOCATION",
@@ -17407,19 +17417,18 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
             "CODE_PROMPT",
             "CODE_RESULT",
         ] {
-            assert!(
-                !system_prompt.contains(&format!("${{{placeholder}}}")),
-                "{placeholder} was left: {system_prompt}"
-            );
+            for text in [&system_prompt, &message] {
+                assert!(
+                    !text.contains(&format!("${{{placeholder}}}")),
+                    "{placeholder} was left: {text}"
+                );
+            }
         }
         let compiled = prompt_mode.read_with(cx, |this, _| {
             this.tasks[1].compiled.as_ref().unwrap().markdown.clone()
         });
         assert_eq!(prompt.sections[1].title, "User prompt");
-        assert_eq!(
-            prompt.sections[1].copied().map(|text| text.to_string()),
-            Some(compiled)
-        );
+        assert!(message.ends_with(&format!("\n\n{compiled}")), "{message}");
         assert!(
             prompt.subtitle().starts_with("Spec · Prompt_"),
             "{}",
@@ -17452,7 +17461,11 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         std::fs::write(&record_file, serde_json::to_string(&record).unwrap()).unwrap();
         let old = raw_prompt_of(&PromptTask::restore(saved()));
         assert_eq!(old.sections[0].text, Err(NOT_RECORDED));
-        assert_eq!(old.sections[1], prompt.sections[1]);
+        // Nor were its instructions, so it shows the prompt alone.
+        assert_eq!(
+            old.sections[1].copied().map(|text| text.to_string()),
+            Some(compiled)
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -17479,7 +17492,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         })
         .unwrap();
         run_until(cx, &prompt_mode, "the prompt running", |this| {
-            !this.working && this.tasks.len() == 1
+            !this.working.any() && this.tasks.len() == 1
         });
         crate::harness::use_program_for_test(None);
         let prompt = raw_prompt_of_latest(cx, handle, &prompt_mode);
@@ -17532,7 +17545,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         })
         .unwrap();
         run_until(cx, &prompt_mode, "the task running", |this| {
-            !this.working && this.tasks.len() == 1
+            !this.working.any() && this.tasks.len() == 1
         });
         crate::harness::use_program_for_test(None);
         let prompt = raw_prompt_of_latest(cx, handle, &prompt_mode);

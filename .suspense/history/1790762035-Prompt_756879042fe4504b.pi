@@ -1,0 +1,69 @@
+
+export anchor Prompt_756879042fe4504b:
+    userPrompt:
+        \\\
+        Scrolling into the previous task section, we should be able to keep scrolling up from the message list, and it'll just have a sort of elastic resistance area.  Same thing scrolling back down into the message list.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Scrolling into the previous task section, we should be able to keep scrolling up from the message list, and it'll just have a sort of elastic resistance area.  Same thing scrolling back down into the message list.
+            \\\
+        result:
+            \\\
+            I've updated the spec only; the code hasn't been touched. `piton check`, `piton format --check` and `piton build` all pass, and I kept the constraints file current.
+
+            **What changed in the spec:** everything is in `MessageListScrollingShape.scrollingPast` (`spec/scope/prompt-mode/message-list/Scrolling.pi`).
+
+            - **Scrolling carries on past the end.** A scroll that reaches the top of the latest task, or the bottom of the previous tasks, now keeps going into an elastic stretch. There's no pause first. The old rule said a scroll stopped at the end and only a new scroll, after 80 ms of stillness, could build up. That rule is gone.
+            - **Two kinds of scroll still stop at the end:**
+              - a fling's momentum that is still running when it gets there;
+              - a scroll carried on from a slide, so one long scroll never crosses over twice.
+
+              After a slide, a new scroll is still needed: 80 ms of stillness, or lifting your fingers off the trackpad and putting them back.
+            - **The stretch now moves the view.** The old spec said "the end holds, and only the glow shows it". Now, while the push past the end is building up, the view is pulled past its end like a rubber band:
+              - At first it moves almost as far as you scroll, then less the further you pull, reaching about 64 pixels at the 200-pixel point where it crosses over, and never more.
+              - At the top of the latest task, its header and output move down together and leave an empty band in the body's colour above them. At the bottom of the previous tasks they move up and leave the band below.
+              - The previous-tasks row and the queue stay where they are, and nothing is drawn outside the space between them.
+              - The view's own scroll position doesn't change while it's pulled.
+              - As the build-up drains (within half a second of the last scroll), the view springs back smoothly without bouncing.
+            - **Crossing over** starts its slide from wherever the stretch has pulled the view.
+            - **With no previous tasks**, scrolling up stops at the top with no stretch and no glow.
+            - **Unchanged:** the 200-pixel barrier, the half-second drain, the mode-coloured glow, the slide animation, and the rule that only the wheel or trackpad crosses over.
+
+            A few details are my own choices rather than things you asked for: the 64-pixel maximum pull, momentum stopping dead instead of bouncing into the stretch, and the empty band being plain body colour.
+
+            **Anchors for the code to follow:** `MessageListScrollingShape.scrollingPast` in `spec/scope/prompt-mode/message-list/Scrolling.pi`, compiled to `.claude/reference/scope/prompt-mode/message-list/Scrolling.md`. The main work is:
+            - removing the "must come to rest first" gate, except after momentum and after a slide;
+            - drawing the pulled offset from the build-up with a curve that gives less the further it's pulled, so it springs back as the build-up drains;
+            - starting the crossing slide from that pulled offset.
+            \\\
+
+    sentFrom: Prompt_af18a8be4d5b5849

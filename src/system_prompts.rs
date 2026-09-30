@@ -1,4 +1,11 @@
-//! The system prompt each mode gives a prompt's hidden anchor. Each is a
+//! What a prompt tells the harness besides itself. A conversation's system
+//! prompt is the project's own, the same for every prompt sent in it whatever
+//! the mode, so the harness's prompt cache holds from one prompt to the next:
+//! the system template, filled in with the code and spec locations, the
+//! spec-reading prompt, and the Piton fluency (see [`project_system_prompt`]).
+//! What changes from one prompt to the next, each mode's instructions, goes in
+//! the prompt's own message instead, in a marked block ahead of it (see
+//! [`with_instructions`]). Each is a
 //! template saved with the project, one file per mode in
 //! `.suspense/system-prompts`, edited by hand or in the settings window (see
 //! [`crate::settings_window`]). In a template, `${CODE_LOCATION}` and
@@ -55,12 +62,14 @@ pub const NO_SPEC_RESULT: &str = "The spec task left no final output: it said no
 
 const DIR: &str = "system-prompts";
 
-/// A prompt saved in `.suspense/system-prompts`: a mode's template, the
-/// spec-reading prompt injected into them, the code-to-spec prompt added to
-/// a Code task sent to Spec, or the spec-to-code prompt added to the Code task
-/// a Chain task hands on to.
+/// A prompt saved in `.suspense/system-prompts`: the project's system prompt,
+/// a mode's instructions, the spec-reading prompt injected into the system
+/// prompt, the code-to-spec prompt added to the instructions of a Code task
+/// sent to Spec, or the spec-to-code prompt added to those of the Code task a
+/// Chain task hands on to.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Prompt {
+    System,
     Mode(SendMode),
     SpecReading,
     CodeToSpec,
@@ -70,7 +79,8 @@ pub enum Prompt {
 impl Prompt {
     /// Every prompt: the modes' templates, in order, then the injected ones.
     /// Freeform, which sends no system prompt, has none.
-    pub const ALL: [Prompt; 7] = [
+    pub const ALL: [Prompt; 8] = [
+        Prompt::System,
         Prompt::Mode(SendMode::ALL[0]),
         Prompt::Mode(SendMode::ALL[1]),
         Prompt::Mode(SendMode::ALL[2]),
@@ -83,6 +93,7 @@ impl Prompt {
     /// The name its file is saved under.
     pub fn key(self) -> &'static str {
         match self {
+            Prompt::System => "system",
             Prompt::Mode(mode) => mode.key(),
             Prompt::SpecReading => "spec-reading",
             Prompt::CodeToSpec => "code-to-spec",
@@ -93,6 +104,7 @@ impl Prompt {
     /// What it is called in the settings.
     pub fn label(self) -> &'static str {
         match self {
+            Prompt::System => "System",
             Prompt::Mode(mode) => mode.label(),
             Prompt::SpecReading => "Spec reading",
             Prompt::CodeToSpec => "Code to spec",
@@ -124,6 +136,7 @@ pub fn default_prompt(prompt: impl Into<Prompt>) -> &'static str {
     // Trimmed as a saved prompt is when it loads, so one left as the default
     // reads as the default.
     match prompt.into() {
+        Prompt::System => baked!("system"),
         Prompt::Mode(SendMode::Code) => baked!("code"),
         Prompt::Mode(SendMode::Both) => baked!("combined"),
         Prompt::Mode(SendMode::Spec) => baked!("spec"),
@@ -210,6 +223,46 @@ pub fn fill(template: &str, code: &str, spec: &str, reading: &str, fluency: &str
         .to_string()
 }
 
+/// `template`, a mode's instructions or a handoff, filled in for a prompt's
+/// message: the code and spec locations and the harness's directory, but
+/// never the spec-reading prompt nor the fluency, which the conversation's
+/// system prompt gives once. A saved template that still names either leaves
+/// no paragraph of its own behind for it.
+pub fn fill_instructions(template: &str, code: &str, spec: &str) -> String {
+    fill(template, code, spec, "", "")
+}
+
+/// The project's system prompt: its system template filled in with the code
+/// and spec locations, the spec-reading prompt, and the fluency. The same,
+/// byte for byte, on every prompt of every conversation, whatever the mode,
+/// until the templates or the fluency change: nothing in it is particular to
+/// a prompt. None when it is empty once filled in.
+pub fn project_system_prompt(
+    code: &str,
+    spec: &str,
+    template: &str,
+    reading: &str,
+    fluency: &str,
+) -> Option<String> {
+    let filled = fill(template, code, spec, reading, fluency);
+    (!filled.trim().is_empty()).then_some(filled)
+}
+
+/// Where a prompt's instructions start and end in its message.
+pub const INSTRUCTIONS_OPEN: &str = "<task-instructions>";
+pub const INSTRUCTIONS_CLOSE: &str = "</task-instructions>";
+
+/// The message a prompt is sent as: its `instructions`, if any, in a marked
+/// block, then the prompt itself.
+pub fn with_instructions(instructions: Option<&str>, prompt: &str) -> String {
+    match instructions.map(str::trim).filter(|text| !text.is_empty()) {
+        Some(instructions) => {
+            format!("{INSTRUCTIONS_OPEN}\n{instructions}\n{INSTRUCTIONS_CLOSE}\n\n{prompt}")
+        }
+        None => prompt.to_string(),
+    }
+}
+
 /// A compiled system prompt with the task it was handed from filled in: for a
 /// Spec task sent from a Code task, `${CODE_PROMPT}` with its prompt as typed,
 /// and `${CODE_RESULT}` with its final output, or with [`NO_CODE_RESULT`] when
@@ -262,9 +315,10 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        CODE_PROMPT, CODE_RESULT, NO_CODE_RESULT, NO_SPEC_RESULT, PITON_FLUENCY, Prompt,
-        SPEC_PROMPT, SPEC_READING, SPEC_RESULT, UNDERSTANDING_FILE, default_prompt, file, fill,
-        fill_code_task, fill_understanding, load, save, save_missing,
+        CODE_LOCATION, CODE_PROMPT, CODE_RESULT, NO_CODE_RESULT, NO_SPEC_RESULT, PITON_FLUENCY,
+        Prompt, SPEC_LOCATION, SPEC_PROMPT, SPEC_READING, SPEC_RESULT, UNDERSTANDING_FILE,
+        default_prompt, file, fill, fill_code_task, fill_instructions, fill_understanding, load,
+        project_system_prompt, save, save_missing,
     };
     use crate::chat_input::SendMode;
 
@@ -281,19 +335,19 @@ mod tests {
         save_missing(&dir).unwrap();
         assert!(!file(SendMode::Freeform, &dir).exists());
         assert!(
-            crate::hidden_anchor::system_prompt(SendMode::Freeform, &dir, "")
+            crate::hidden_anchor::instructions(SendMode::Freeform, &dir)
                 .unwrap()
                 .is_none()
         );
         fs::remove_dir_all(&dir).ok();
     }
 
-    /// Each mode's default is this repository's own saved template for it,
-    /// injects the spec-reading prompt, which tells the harness to follow
-    /// references in its own directory, gives the Piton fluency, and fills in
-    /// the configured locations and the fluency. Code, Chain, and
-    /// Spec then end asking for the understanding file; Ask ends with the
-    /// fluency.
+    /// The system template's default is this repository's own saved one: it
+    /// names both locations and injects the spec-reading prompt, then the
+    /// fluency. Each mode's default is this repository's own saved template,
+    /// its instructions, which name neither the spec reading nor the fluency,
+    /// since the system prompt gives both. Code, Chain, and Spec end asking
+    /// for the understanding file; Ask asks for none.
     #[test]
     fn defaults_are_this_repositorys_templates() {
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -302,42 +356,51 @@ mod tests {
         assert_eq!(reading, saved.trim_end());
         assert!(
             reading.starts_with("Before executing anything, read the spec it touches.")
-                && reading.contains(
-                    "Links to ${HARNESS_DIRECTORY}/reference/… in the prompt are the spec for \
-                     what they name. Read each one before changing anything it covers."
-                ),
+                && reading.contains("Links to ${HARNESS_DIRECTORY}/reference/"),
             "the spec reading doesn't say to follow references: {reading}"
         );
-        for mode in SendMode::ALL {
+        let system = default_prompt(Prompt::System);
+        let saved = fs::read_to_string(file(Prompt::System, manifest)).unwrap();
+        assert_eq!(system, saved.trim_end());
+        assert!(
+            system.contains(CODE_LOCATION) && system.contains(SPEC_LOCATION),
+            "the system template doesn't name the locations: {system}"
+        );
+        assert!(
+            system.ends_with(&format!("\n\n{SPEC_READING}\n\n{PITON_FLUENCY}")),
+            "the system template doesn't end with the spec reading and fluency: {system}"
+        );
+        assert!(
+            !system.contains(UNDERSTANDING_FILE),
+            "the system prompt names a task's file"
+        );
+        let filled =
+            project_system_prompt("./src", "./spec", system, reading, "# Fluency").unwrap();
+        assert!(filled.contains("Links to .claude/reference/"), "{filled}");
+        assert!(
+            filled.ends_with("\n\n# Fluency") && !filled.contains("${"),
+            "{filled}"
+        );
+
+        // Freeform has no template.
+        for mode in SendMode::ALL
+            .into_iter()
+            .filter(|mode| *mode != SendMode::Freeform)
+        {
             let saved = fs::read_to_string(file(mode, manifest)).unwrap();
             assert_eq!(default_prompt(mode), saved.trim_end(), "{mode:?}");
-            assert!(
-                default_prompt(mode).contains(&format!("\n\n{SPEC_READING}\n\n{PITON_FLUENCY}")),
-                "{mode:?} doesn't inject the spec reading"
-            );
-            let understanding = "Before changing anything, write the constraints this task \
-                must meet to ${UNDERSTANDING_FILE}, and keep it current";
-            let asks = mode == SendMode::Ask;
-            let ending = if asks {
-                format!("\n\n{PITON_FLUENCY}")
-            } else {
-                format!("\n\n{PITON_FLUENCY}\n\n{understanding}")
-            };
             let template = default_prompt(mode);
             assert!(
-                if asks {
-                    template.ends_with(&ending)
-                } else {
-                    template.contains(&ending) && template.ends_with("rather than adding another.")
-                },
+                !template.contains(SPEC_READING) && !template.contains(PITON_FLUENCY),
+                "{mode:?} repeats what the system prompt gives: {template}"
+            );
+            let asks = mode == SendMode::Ask;
+            assert_eq!(
+                template.ends_with("rather than adding another."),
+                !asks,
                 "{mode:?} doesn't end as it should: {template}"
             );
-            let filled = fill(template, "./src", "./spec", reading, "# Piton fluency");
-            assert!(filled.contains("\n\n# Piton fluency"), "{mode:?}: {filled}");
-            assert!(
-                filled.contains("Links to .claude/reference/… in the prompt"),
-                "{mode:?}: {filled}"
-            );
+            let filled = fill_instructions(template, "./src", "./spec");
             // Filled in only once the task's history record is named.
             assert_eq!(filled.contains(UNDERSTANDING_FILE), !asks, "{mode:?}");
             let sent = fill_understanding(
@@ -350,18 +413,7 @@ mod tests {
                 !asks,
                 "{mode:?}: {sent}"
             );
-            // Without piton, nothing is left in its place.
-            let without = fill(template, "./src", "./spec", reading, "");
-            assert!(
-                without.contains("covers.\n\nBefore changing")
-                    || asks && without.ends_with("covers."),
-                "{mode:?}: {without}"
-            );
         }
-        assert!(
-            fill(default_prompt(SendMode::Code), "./src", "./spec", "", "").contains("./src"),
-            "the code location isn't filled in"
-        );
     }
 
     /// The code-to-spec prompt's default is this repository's own saved
@@ -373,28 +425,17 @@ mod tests {
         let default = default_prompt(Prompt::CodeToSpec);
         let saved = fs::read_to_string(file(Prompt::CodeToSpec, manifest)).unwrap();
         assert_eq!(default, saved.trim_end());
-        assert_eq!(
-            default,
-            "This prompt was first sent to change the code, and the code has been\n\
-             changed to meet it. Now write the spec to describe what was built:\n\
-             read the code the task changed, and change the spec at ${SPEC_LOCATION}\n\
-             so it describes that code as it now is, without changing the code at\n\
-             ${CODE_LOCATION}. Where the code did something the prompt didn't ask\n\
-             for, describe what the code does, and say so in your reply.\n\
-             \n\
-             The prompt the code task was sent:\n\
-             \n\
-             ${CODE_PROMPT}\n\
-             \n\
-             What the code task said it built, its final output:\n\
-             \n\
-             ${CODE_RESULT}"
-        );
+        assert!(default.starts_with("This prompt was first sent to change the code"));
+        assert!(default.contains("change the spec at ${SPEC_LOCATION}"));
+        assert!(default.ends_with(
+            "The prompt the code task was sent:\n\n${CODE_PROMPT}\n\n\
+             What the code task said it built, its final output:\n\n${CODE_RESULT}"
+        ));
         assert_eq!(Prompt::CodeToSpec.key(), "code-to-spec");
         assert_eq!(Prompt::CodeToSpec.label(), "Code to spec");
         assert_eq!(Prompt::ALL[Prompt::ALL.len() - 2], Prompt::CodeToSpec);
-        let filled = fill(default, "./src", "./spec", "Read.", "");
-        assert!(filled.contains("the spec at ./spec\n") && filled.contains("\n./src."));
+        let filled = fill_instructions(default, "./src", "./spec");
+        assert!(filled.contains("the spec at ./spec ") && filled.contains("./src."));
         assert!(filled.contains(CODE_PROMPT) && filled.contains(CODE_RESULT));
     }
 

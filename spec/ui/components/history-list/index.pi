@@ -8,8 +8,8 @@ export ui-component HistoryListScope:
 
 concept HistoryListConcept:
     pitch:
-        A way back to everything sent before of one kind, such as previous tasks
-        or previous answers: a small row that expands into a list of every one
+        A way back to everything sent before of one kind, such as the
+        previous tasks: a small row that expands into a list of every one
         of them.
 
     shape: {HistoryListShape}
@@ -32,12 +32,12 @@ shape HistoryListShape:
         @{ScrollbarScope}. Each time it is expanded, it opens scrolled to the
         bottom, with the most recent items in view, however it was scrolled when
         last closed, the first time as much as any other, and whether it takes
-        the place of the latest task or slides up as a drawer. Each is headed by
+        the place of what it is shown over. Each is headed by
         its status and the first line of its prompt, with a Resend button at
         its right, when the use offers one, and opens onto the compiled
         prompt it was sent as and its @{TaskTableScope}. One item is open at a
         time. A use can say its tables collapse the steps leading up to the
-        result, as previous answers do; previous tasks show their tables whole.
+        result; previous tasks show their tables whole.
 
         An open item is exactly as wide as the list, however long the lines
         in its prompt or table, which wrap rather than running past the

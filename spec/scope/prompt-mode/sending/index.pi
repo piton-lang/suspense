@@ -24,17 +24,38 @@ shape PromptSendingShape:
         attached to it. Sending is never blocked by the harness working.
 
     tasks:
-        A task, a prompt in Code, Chain, Spec, or Freeform, is sent straight away while
-        the harness is free. While the harness is working, it waits in the
-        @{PromptEditor}'s queue instead, in the order it was sent, keeping its
-        mode and attachments, until its turn comes.
+        A task, a prompt in Code, Chain, Spec, or Freeform, is sent straight
+        away while its lane is free. While its lane is busy, it waits in its
+        queue instead, in the order it was sent, keeping its mode and
+        attachments, until its turn comes.
 
         When a task is actually sent, the spec is built ahead of it, as the
         @{SpecBuildScope} says, the task showing "Building" until the build is
         over; then its hidden anchor is compiled and run. It heads the
         @{MessageList} as the latest task, and is saved in the prompt history,
         as the @{ProjectDataScope} says. A prompt that fails to compile or run
-        fails its task, and doesn't stop the queue.
+        fails its task, and doesn't stop its queue.
+
+    lanes:
+        Tasks run in two lanes, the code lane and the spec lane, each with a
+        queue of its own, so work on the spec never waits on work on the code,
+        or the other way round. A task sent in Code goes to the code lane, and
+        one sent in Spec to the spec lane. A Chain task's steps each go to the
+        lane of the work they do, as the @{PromptEditor} says: its spec steps
+        to the spec lane and its code step to the code lane, even though they
+        were sent together from the Chain tab. A task sent in Freeform may
+        change either, so it goes to the code lane, and is only sent while no
+        task runs in either lane; while it runs, both lanes are busy, and
+        prompts for either queue behind it.
+
+        A lane is busy while a task of its own is building, compiling, or
+        running, or a Freeform task is. So a Spec task sent while only a Code
+        task runs is sent straight away and runs beside it, and a Code task
+        sent while only a Spec task runs does the same; a task only queues
+        behind a task of its own lane. At most one task runs in each lane, and
+        each lane's queue sends its prompts one at a time, first to last. Both
+        lanes belong to the same project, and a project's lanes only ever send
+        into that project.
 
     questions:
         A question, a prompt in Ask, never queues: it runs straight away, even
@@ -44,7 +65,9 @@ shape PromptSendingShape:
 
     sendingToATask:
         While a task is running, more can be sent to it, as to a terminal
-        session, from the @{ChatInputScope}'s "Send to task", as it says. What
+        session, from the @{ChatInputScope}'s "Send to task", as it says. It
+        goes to the latest task, whose output is shown; a task running in the
+        other lane, among the previous tasks, isn't sent to. What
         is sent is written as a hidden anchor and compiled like any prompt,
         unless the task was sent from Freeform, when it goes just as it was
         typed, with its attachments, its
@@ -64,7 +87,7 @@ shape PromptSendingShape:
     onTheApplicationsBehalf:
         Something in the application can send a prompt as if it were written in
         the chat input and sent from one of its tabs. It goes just the same
-        way: queued if the harness is busy, shown as a task, and entered in the
+        way: queued if its lane is busy, shown as a task, and entered in the
         history. What is being written in the chat input, and attached to it,
         is left alone.
 
@@ -77,8 +100,8 @@ shape PromptSendingShape:
 
         Resending sends the prompt as it was typed, in the mode it was sent in,
         with the text that was attached to it, and sliced or not as it was, as
-        though it were sent afresh from the chat input: a task queues while the
-        harness is working, a question runs straight away, and either is
+        though it were sent afresh from the chat input: a task queues while its
+        lane is busy, a question runs straight away, and either is
         compiled anew, against the spec and system prompt as they are now,
         building the spec first as any task does, and saved in the history as a
         new task or question. The prompt resent stays where it is. A prompt
@@ -87,10 +110,14 @@ shape PromptSendingShape:
         attached to it, is left alone, and so is the Slice toggle.
 
     cancelling:
-        The task under way can be cancelled, from a Cancel button: a small
+        A task under way can be cancelled, from a Cancel button: a small
         ghost button with a stop icon, whose tooltip says "Cancel this task",
         at the right of the latest task's header, beside its Resend button,
-        shown only while the task is building, compiling, or running. A task
+        shown only while the task is building, compiling, or running. With a
+        task running in each lane, the one that isn't the latest task shows
+        among the previous tasks as Running, with the same Cancel button at
+        the right of its heading, beside its Resend button, and clicking it
+        never opens or closes the item. A task
         is cancelled straight away, whatever the harness is in the middle of:
         a build or compile under way is abandoned before the task is run, and
         a run is stopped, the harness's process ended, not left to finish its
@@ -99,10 +126,11 @@ shape PromptSendingShape:
         A cancelled task keeps the output it had so far, and its status reads
         "Cancelled", as the @{MessageList} shows, in the history as much as in
         its header. It adds no commit note, and any change the harness had
-        already made to files is left as it is. The queue carries on after it,
-        as it does after a task that fails, sending the next prompt waiting in
-        it, and the next task carries on the same conversation. Questions are
-        not cancelled with it.
+        already made to files is left as it is. Its lane's queue carries on
+        after it, as it does after a task that fails, sending the next prompt
+        waiting in it, and the next task carries on the same conversation.
+        The task in the other lane, and questions, are not cancelled with
+        it.
 
     sendingToTheOtherMode:
         A task sent in Code alone can be sent to Spec, and one sent in Spec

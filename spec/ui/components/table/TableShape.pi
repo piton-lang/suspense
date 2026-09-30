@@ -4,6 +4,7 @@ from ./Drawing import TableDrawingShape
 from ./Header import TableHeaderShape
 from ./Measuring import TableMeasuringShape
 from ./Scrolling import TableScrollingShape
+from /ui/components/file-tree import FileTreeScope
 
 export shape TableShape:
     description:
@@ -18,6 +19,12 @@ export shape TableShape:
     drawing: {TableDrawingShape}
     measuring: {TableMeasuringShape}
     collapsedRows: {TableCollapsedRowsShape}
+
+    background:
+        The table's rows sit on the same darkest surface as the
+        @{FileTreeScope}, #111111 in dark mode and #e1e1e1 in light mode,
+        moving with it as the theme's brightness changes, wherever the table is
+        used. Only the header keeps its own raised look above them.
 
     legibility:
         The table should be readable at a glance. Make sure the font size is

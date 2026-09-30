@@ -980,8 +980,10 @@ impl MainWindow {
             .into_iter()
             .map(|busy| {
                 let mut what = Vec::new();
-                if busy.task.is_some() {
-                    what.push("Task running".to_string());
+                match busy.tasks.len() {
+                    0 => {}
+                    1 => what.push("Task running".to_string()),
+                    count => what.push(format!("{count} tasks running")),
                 }
                 match busy.questions.len() {
                     0 => {}
@@ -1153,7 +1155,7 @@ impl MainWindow {
                     self.restore_run(&view, window, cx);
                 }
             }
-            JobKind::Task | JobKind::Question(_) => {
+            JobKind::Task(_) | JobKind::Question(_) => {
                 if self.showing_divergence() {
                     self.minimize_divergence(window, cx);
                 } else if self.showing_rescope() {
@@ -1164,8 +1166,9 @@ impl MainWindow {
                     self.close_panel(window, cx);
                 }
                 self.prompt_mode.update(cx, |prompt_mode, cx| match kind {
-                    JobKind::Question(id) => prompt_mode.reveal_question(id, cx),
-                    _ => prompt_mode.reveal_task(cx),
+                    JobKind::Question(id) => prompt_mode.reveal_question(id, window, cx),
+                    JobKind::Task(ix) => prompt_mode.reveal_running_task(ix, cx),
+                    _ => {}
                 });
             }
         }
@@ -3316,6 +3319,47 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// In the window, the chat input's buttons end 8 pixels in from its
+    /// right edge, and that edge is the window's, with no sidebar beside it.
+    #[gpui_kit::test]
+    async fn the_chat_input_is_padded_at_its_right_in_the_window(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            Root::new(view, window, cx)
+        });
+        let handle: gpui_kit::AnyWindowHandle = window.into();
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("prompt-editor").is_some()
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.render_frame(cx);
+            let body = window.find("body-tint").bounds();
+            let rightmost = ["send", "send-options", "queue", "preview"]
+                .map(|id| window.find(id).bounds().right())
+                .into_iter()
+                .fold(gpui_kit::px(0.), gpui_kit::Pixels::max);
+            let width = window.viewport_size().width;
+            assert!(
+                body.right() <= width,
+                "the chat input {body:?} runs past the window {width:?}"
+            );
+            assert_eq!(
+                width - rightmost,
+                gpui_kit::px(8.),
+                "the buttons' right padding"
+            );
+        })
+        .unwrap();
+    }
+
     /// Clicking files in the project tree opens each in a tab of its own
     /// beneath the body's tab bar, after Chat, as wide as the bar, with the
     /// chat input beneath it and nothing sliding. Clicking an open file again
@@ -5074,7 +5118,7 @@ mod tests {
         view.update(cx, |view, cx| view.hold_running_for_test(false, cx));
         cx.update_window(handle, |_, _, cx| {
             let prompt_mode = main.read(cx).prompt_mode.clone();
-            prompt_mode.update(cx, |prompt_mode, cx| prompt_mode.close_test_question(1, cx));
+            prompt_mode.update(cx, |prompt_mode, cx| prompt_mode.stop_test_question(1, cx));
         })
         .unwrap();
         let start = std::time::Instant::now();

@@ -7,6 +7,12 @@
 //! a file changed or removed is written back as it was, and a file added is
 //! removed. What the application itself saves there meanwhile, from the
 //! editor, is taken as the location's new contents rather than put back.
+//!
+//! Tasks of the code lane and the spec lane run side by side, as the
+//! PromptSendingScope says, so a Code task's guard over the spec is running
+//! while a Spec task changes it. While another run whose mode may change a
+//! file is [`Writing`], or the spec is being built, a change there is taken
+//! as the location's new contents too, rather than put back.
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
@@ -22,6 +28,85 @@ const SWEEP_INTERVAL: Duration = Duration::from_millis(500);
 
 /// Every snapshot a run is guarding, so the application's own saves reach it.
 static GUARDING: Mutex<Vec<Weak<Mutex<Snapshot>>>> = Mutex::new(Vec::new());
+
+/// What each run under way may change, by the id of its [`Writing`].
+static WRITERS: Mutex<Vec<(u64, Writer)>> = Mutex::new(Vec::new());
+
+/// What a run under way may change: `mode`'s location in a project, or
+/// everything in it where `mode` is none, as a spec build writes throughout.
+#[derive(Clone)]
+struct Writer {
+    project_dir: PathBuf,
+    mode: Option<SendMode>,
+    locations: Locations,
+}
+
+impl Writer {
+    /// Whether this run may change `path`: under the spec for Spec, under the
+    /// code but not the spec for Code, and anywhere in its project for the
+    /// chain, Freeform, or a build.
+    fn covers(&self, path: &Path) -> bool {
+        let under = |dir: &Option<PathBuf>| dir.as_ref().is_some_and(|dir| path.starts_with(dir));
+        match self.mode {
+            Some(SendMode::Spec) => under(&self.locations.spec),
+            Some(SendMode::Code) => under(&self.locations.code) && !under(&self.locations.spec),
+            Some(SendMode::Ask) => false,
+            Some(SendMode::Both | SendMode::Freeform) | None => path.starts_with(&self.project_dir),
+        }
+    }
+}
+
+/// Whether a run under way, other than the guarded one, may change `path`.
+fn written_elsewhere(path: &Path) -> bool {
+    WRITERS
+        .lock()
+        .is_ok_and(|writers| writers.iter().any(|(_, writer)| writer.covers(path)))
+}
+
+/// Marks a run under way that may change its mode's location, so the guards
+/// of runs beside it take what it changes rather than putting it back. Once
+/// dropped, the guards take what it last changed, then guard it again.
+pub struct Writing {
+    id: u64,
+}
+
+impl Writing {
+    /// A run sent in `mode` in `project_dir` is under way; with no mode,
+    /// something that writes anywhere in the project, like a spec build.
+    /// Reads the project's locations, so it is best started off the main
+    /// thread.
+    pub fn start(mode: Option<SendMode>, project_dir: &Path) -> Self {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let id = NEXT.fetch_add(1, Ordering::SeqCst);
+        let writer = Writer {
+            project_dir: project_dir.to_path_buf(),
+            mode,
+            locations: Locations::read(project_dir),
+        };
+        if let Ok(mut writers) = WRITERS.lock() {
+            writers.push((id, writer));
+        }
+        Self { id }
+    }
+}
+
+impl Drop for Writing {
+    fn drop(&mut self) {
+        // What it changed since the guards last looked is theirs to keep.
+        let guarding: Vec<_> = GUARDING
+            .lock()
+            .map(|guarding| guarding.iter().filter_map(Weak::upgrade).collect())
+            .unwrap_or_default();
+        for snapshot in guarding {
+            if let Ok(mut snapshot) = snapshot.lock() {
+                snapshot.sweep();
+            }
+        }
+        if let Ok(mut writers) = WRITERS.lock() {
+            writers.retain(|(id, _)| *id != self.id);
+        }
+    }
+}
 
 /// The location a task sent in `mode` may not change, and what it is called:
 /// the spec for Code, the code for Spec, and none for the rest.
@@ -97,20 +182,37 @@ impl Snapshot {
             .filter(|path| !self.files.contains_key(path))
             .collect();
         for path in added {
+            // Added by a run beside it, it is kept.
+            if written_elsewhere(&path) {
+                if let Ok(contents) = std::fs::read(&path) {
+                    let stamp = stamp(&path);
+                    self.files.insert(path, Kept { contents, stamp });
+                }
+                continue;
+            }
             if std::fs::remove_file(&path).is_ok() {
                 self.note(&path);
                 remove_empty_parents(&path, &self.root);
             }
         }
         let mut put_back = Vec::new();
+        let mut gone = Vec::new();
         for (path, kept) in &mut self.files {
             let now = stamp(path);
             if now.is_some() && now == kept.stamp {
                 continue;
             }
-            let unchanged = now.is_some()
-                && std::fs::read(path).is_ok_and(|contents| contents == kept.contents);
-            if !unchanged {
+            let read = now.and_then(|_| std::fs::read(path).ok());
+            let unchanged = read
+                .as_ref()
+                .is_some_and(|contents| *contents == kept.contents);
+            if !unchanged && written_elsewhere(path) {
+                // Changed or removed by a run beside it: its new contents.
+                match read {
+                    Some(contents) => kept.contents = contents,
+                    None => gone.push(path.clone()),
+                }
+            } else if !unchanged {
                 if let Some(parent) = path.parent() {
                     std::fs::create_dir_all(parent).ok();
                 }
@@ -120,6 +222,9 @@ impl Snapshot {
                 put_back.push(path.clone());
             }
             kept.stamp = stamp(path);
+        }
+        for path in gone {
+            self.files.remove(&path);
         }
         for path in put_back {
             self.note(&path);
@@ -327,6 +432,36 @@ mod tests {
                 PathBuf::from("ui/a.pi")
             ]
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_code_run_keeps_what_a_spec_run_beside_it_changes() {
+        let dir = project("beside");
+        let guard = Guard::start(SendMode::Code, &dir).unwrap();
+        let spec_run = Writing::start(Some(SendMode::Spec), &dir);
+        std::fs::write(dir.join("spec/index.pi"), "by the spec task\n").unwrap();
+        std::fs::write(dir.join("spec/ui/new.pi"), "new\n").unwrap();
+        std::thread::sleep(SWEEP_INTERVAL * 2);
+        // What it changes as it ends is kept too.
+        std::fs::write(dir.join("spec/ui/a.pi"), "last\n").unwrap();
+        drop(spec_run);
+        // Once it is over, the spec is guarded again, as it now is.
+        std::fs::write(dir.join("spec/index.pi"), "by the code task\n").unwrap();
+        let put_back = guard.finish();
+        assert_eq!(
+            std::fs::read_to_string(dir.join("spec/index.pi")).unwrap(),
+            "by the spec task\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.join("spec/ui/new.pi")).unwrap(),
+            "new\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.join("spec/ui/a.pi")).unwrap(),
+            "last\n"
+        );
+        assert_eq!(put_back, [PathBuf::from("index.pi")]);
         std::fs::remove_dir_all(&dir).ok();
     }
 

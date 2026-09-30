@@ -33,6 +33,10 @@
     "replyFormat": "Reply with nothing but JSON, in this form, with scopes named exactly as in the map: {\"skills\": [{\"scope\": \"...\", \"worth\": 0.0, \"should\": true, \"why\": \"...\"}]}",
     "map": "Scopes"
   },
+  "PromptTitle": {
+    "request": "Below is a prompt given to a coding agent. Write a short title for it that says what it asks for: two to six words, in title case, with no punctuation, quotes, or trailing period. Reply with only the title.",
+    "prompt": "Prompt"
+  },
   "Rescope": {
     "intro": "We're looking for concepts that the spec located in <specRoot> describes again and again, in different scopes, that would be better as scopes of their own. The spec is written in Piton. Only read files, and don't change anything.",
     "task": "Read the spec files listed below. Find the concepts that several scopes each describe for themselves: the same behaviour, component, rule, or idea, written out more than once rather than referenced from one place. Leave out anything already a scope of its own, and anything described only once. For each concept worth extracting, give the scope it would become a name ending in Scope, say in one sentence what the concept is, say how much extracting it is worth, from 0 to 1, weighing how often it's repeated, how far the repetitions have drifted apart, and how much a single definition would help, and give one sentence on why. List every place the spec describes it, with the file relative to the project, the scope there, and a short excerpt.",

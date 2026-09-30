@@ -2,21 +2,19 @@ use /lib
 use /ui
 from /scope/application/MainWindow import MainWindowScope
 from /scope/harness-integration import HarnessIntegrationScope
+from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
 from /scope/harness-integration/catalog import HarnessCatalogScope
 from /scope/lsp import LSP
 from /scope/open-projects import OpenProjectsScope
 from /scope/project-data import ProjectDataScope
 from /scope/prompt-mode import PromptEditor
-from /scope/prompt-mode/answer-drawer import AnswerDrawerScope
+from /scope/prompt-mode/ask-conversation import AskConversationScope
 from /scope/prompt-mode/message-list import MessageList
 from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from /scope/prompt-mode/modes import PromptModesScope
 from /scope/prompt-mode/sending import PromptSendingScope
 from /shape/ChatInput import ChatInputInstruction
 from /ui/components/growing-text-input import GrowingTextInputScope
-from /ui/components/history-list import HistoryListScope
-from /ui/components/scrollbar import ScrollbarScope
-from /ui/components/selection-popover import SelectionPopoverScope
 from /ui/components/task-table import TaskTableScope
 
 export ui-component ChatInputScope:
@@ -66,9 +64,13 @@ shape ChatInputShape:
         the ${HarnessIntegrationScope}
 
         Sending sends the prompt in the selected tab's mode, as the
-        @{PromptSendingScope} says. While the harness is working, the send
-        button on the Code, Chain, Spec, and Freeform tabs reads "Queue", since the prompt
-        will queue. On the Ask tab it always reads "Send", because a question is
+        @{PromptSendingScope} says. While the selected tab's lane is busy, as
+        it says, the send button on the Code, Chain, Spec, and Freeform tabs
+        reads "Queue", since the prompt will queue: on Code while a task runs
+        in the code lane, on Chain and Spec while one runs in the spec lane,
+        and on Freeform while one runs in either, a Freeform task keeping
+        both busy. Otherwise it reads "Send", so Spec reads "Send" while only
+        a Code task runs. On the Ask tab it always reads "Send", because a question is
         never queued. The button is only disabled while the input is empty.
 
     instructions:
@@ -243,9 +245,10 @@ shape ChatInputShape:
             It can be pressed while a run in that conversation is under way, a
             task on Code, Chain, Spec, or Freeform, or any question on Ask, without
             waiting for it to finish. Pressed while a task runs, the prompts
-            sent meanwhile queue as ever, and the next task to run from the
-            queue, the first in it, starts a new conversation with no context,
-            the ones after it carrying that one on. That holds even when the
+            sent meanwhile queue or run as ever, and the next task to start,
+            whichever lane it runs in, whether sent straight away or from the
+            queue, starts a new conversation with no context, the ones after it
+            carrying that one on. That holds even when the
             running task is the first of its conversation and the harness
             hasn't yet said which conversation it is: once it does, it isn't
             carried on either.
@@ -365,65 +368,23 @@ shape ChatInputShape:
         all run at the same time; asking another never stops or waits for one
         already running.
 
-        Each question's progress and results are shown in a @{TaskTableScope}.
-        The questions stack directly above the tabs, the newest nearest them, in
-        a column that pushes the message list up to make room rather than
-        covering it, so none of a running task's progress is ever hidden behind
-        them. Each slides up out of the chat input with an animation as it is
-        asked, the message list giving way above it. While the harness works on
-        a question, it is a single row showing the latest thing the harness did.
-        A finished question is a row with its status and first line.
-
-        However many questions are asked, the stack is only as tall as its
-        rows, up to 240 pixels, the queue's most, and scrolls beyond that with
-        a @{ScrollbarScope}, kept on the newest question, nearest the tabs, as
-        each is asked. Once it holds more than fit, the stack lays out only
-        the rows in view, as a table does, so a long stack costs no more to show, scroll, or animate than a
-        short one, and the drawer's bottom follows the stack's top as ever.
-
-        Once a question is complete, it opens onto a heading, with its status
-        and first line, above its full task table, in the @{AnswerDrawerScope},
-        which it fills, the table scrolling once it is taller, with its lock to
-        the bottom off to start with. Only one question is open at a time:
-        opening another closes the one open back down to its row. An open
-        question leaves the stack for the drawer. Clicking an open question's
-        heading closes it down to its row in the stack, and clicking a finished
-        question's row opens it again. Each question has a close button, which
-        removes it and stops it if it is still running, leaving the others
-        running. A closed question becomes a previous answer.
+        Each question's progress and results are shown in a @{TaskTableScope},
+        and while the Ask tab is selected, the body splits to show every
+        question and its answer as a chat, in the @{AskConversationScope},
+        beside the selected tab's contents, each new conversation marked where
+        it begins. Each question slides in at the bottom of it as it is asked.
+        While another tab is selected, the questions still running stay in
+        view above the tabs, as the @{AskConversationScope} says, so none of a
+        question's progress, nor a running task's, is ever hidden behind
+        anything.
 
     answerSteps:
         For a question, only the answer matters, so wherever a finished
-        question's task table is shown, an open question and a previous answer,
-        the table collapses the steps leading up to the answer, as the
-        @{TaskTableScope} says. A question closed into the previous answers
-        starts collapsed again. Tasks are never collapsed like this: see the
-        @{MessageList}.
+        question's task table is shown, the table collapses the steps leading
+        up to the answer, as the @{TaskTableScope} says. Tasks are never
+        collapsed like this: see the @{MessageList}.
 
-    previousAnswers:
-        Previous answers are a @{HistoryListScope}, shown only while the Ask tab
-        is selected, at the top of the questions stacked above the tabs. It
-        lists every question asked before and closed: those saved with the
-        project and those closed since. Its row reads "No previous answers",
-        "1 previous answer", or "N previous answers", and while expanded,
-        "Back to the questions". Each previous answer offers Resend, which asks
-        its question again, as the @{PromptSendingScope} says. Expanded, the
-        row and the list go into the @{AnswerDrawerScope}, sliding up from on
-        top of any question rows still in the stack. The questions asked from
-        now on carry on the conversation the latest of them left off.
-
-    answerDrawer: @{AnswerDrawerScope}
-
-    selectingAnswerText:
-        The text of an answer being viewed, in the answer drawer, whether an
-        open question or a previous answer, can be selected by dragging across
-        it, as any text can. A drag that selects text ending within the drawer
-        shows a @{SelectionPopoverScope} with two buttons: "Copy", with a copy
-        icon, and "Attach to prompt", with a paperclip icon.
-
-        Copy puts the selected text on the clipboard. Attach to prompt adds it
-        to the prompt as an attachment. Either one clears the selection. The
-        popover also closes when the drawer closes.
+    askConversation: @{AskConversationScope}
 
     attachments:
         What is attached to the prompt is listed above the text input, between
@@ -477,8 +438,7 @@ shape ChatInputShape:
         the attachments it was sent with.
 
     projects:
-        The questions stacked above the tabs, the open answer, and the previous
-        answers belong to their project, as the @{OpenProjectsScope} says:
+        The questions, running and finished, belong to their project, as the @{OpenProjectsScope} says:
         switching projects shows those of the project switched to, while the
         questions of other projects carry on running in the background. The
         prompt being written, its attachments, the selected tab, and the Slice
@@ -533,9 +493,49 @@ shape ChatInputShape:
 
     hiddenAnchor:
         While the user will be able to type plain text, behind the scenes,
-        they'll be typing into a randomly-named piton anchor with a userPrompt
-        property.  It's this compiled anchor that will be send to the
-        @{HarnessIntegrationScope}
+        they'll be typing into a piton anchor with a userPrompt property,
+        named after what the prompt asks for, as its naming says. It's this
+        compiled anchor that will be send to the @{HarnessIntegrationScope}
+
+        naming:
+            Each task and question is named by the harness, rather than at
+            random, so its files, its snapshot refs, and its header say what it
+            was for. When a prompt is sent or queued, the harness is asked for
+            a short title for it with the prompt-title prompt of the
+            @{BakedSystemPromptsScope}, in a run of its own that keeps no
+            session, as the notes and commit messages are, with a small model
+            where the harness can be told one. It is given the prompt as typed,
+            and none of its attachments.
+
+            The title becomes the anchor's name: its words, each begun with a
+            capital letter, run together with nothing between them, keeping
+            only letters and digits, as in ChatTitlesFromTheAgent, and cut at a
+            whole word to no more than 40 characters. A name that would start
+            with a digit is begun with Prompt. A name already used by a task or
+            question of the project, in its history, its questions, or its
+            queue, is given the lowest number from 2 up that makes it unused,
+            as in ChatTitlesFromTheAgent2.
+
+            Asking never holds a prompt up for long: it is asked while the
+            spec builds ahead of a task, and a prompt is saved, queued, and
+            compiled once it has its name. A title that hasn't come back within
+            10 seconds, that the harness fails to give, or that leaves no
+            letter once cut down, is given up on, and the prompt is named as
+            before, Prompt_ followed by 16 random hexadecimal digits. A task
+            cancelled while it is being named is saved under that random name.
+            Until a task has its name, its header shows none.
+
+            A name, once given, never changes, so everything that knows a task
+            by it, the task sent to the other mode from it among them, keeps
+            finding it. A task resent or sent to the other mode is named after
+            the prompt it was sent from, its name without any number the
+            numbering added, numbered as above, without asking the harness
+            again, unless that name was a random one, when it is asked afresh.
+            A Chain prompt is asked for its title once, and each of its steps
+            is named from it, numbered as above. A message sent to a running
+            task, which is not a task of its own, is named at random, so it is
+            never held up. Prompts saved with random names by earlier versions
+            keep them.
 
         escaping:
             A prompt may hold anything, text pasted into it included, so it
@@ -604,7 +604,7 @@ shape ChatInputShape:
             anything is run.
 
             Wherever an attached prompt is shown, in the latest task's header,
-            among the previous tasks and answers, in the queue, and in the
+            among the previous tasks, in the questions of the Ask conversation, in the queue, and in the
             preview, its images are shown as thumbnails beneath the prompt as
             typed, between it and any slices, except in the latest task's
             header, where they come beneath the whole prompt, slices included.
@@ -648,7 +648,7 @@ shape ChatInputShape:
             shows what the harness would receive with the toggle as it is.
 
             Wherever a sliced prompt is shown, in the latest task's header,
-            among the previous tasks and answers, and in the preview, the
+            among the previous tasks, in the questions of the Ask conversation, and in the preview, the
             prompt as typed comes first, with any text attached to it, and the
             slices are collapsed beneath it into a single row reading "Show 1
             spec slice" or "Show N spec slices", muted, beside a right chevron,

@@ -24,7 +24,7 @@ shape RunningActivityShape:
         listed, newest last.
 
     running:
-        - the task the harness is working on, from the @{PromptEditor}, headed "Task" with the first line of its prompt
+        - each task the harness is working on, from the @{PromptEditor}, one in each lane at most, headed "Task" with the first line of its prompt
         - each question still running, from the @{ChatInputScope}'s Ask tab, headed "Question" with its first line
         - a spec build run on its own, as the @{SpecBuildScope} says, "Building the spec"
         - a divergence analysis in the @{DivergenceScope}, "Analyzing divergence"
@@ -51,8 +51,8 @@ shape RunningActivityShape:
         running, one row each, in the order above, each with a small spinner of
         its own. Clicking a row closes the list and reveals what it is, first switching to
         its project when it belongs to another:
-        - a task brings back the latest task's output, closing the previous tasks and any inset panel over it, and scrolls it to the end
-        - a question closes the answer drawer and any inset panel, so its row is in view
+        - the latest task brings back its output, closing the previous tasks and any inset panel over it, and scrolls it to the end; a task running in the other lane, among the previous tasks, expands the previous tasks and opens it there
+        - a question selects the chat input's Ask tab and closes any inset panel, scrolling the Ask conversation to it
         - a divergence analysis, a rescope search, or a run target brings its @{MinimizablePanelScope} back
         - a spec build has nothing to show, so its row only closes the list
 

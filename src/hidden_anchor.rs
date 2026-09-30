@@ -174,8 +174,8 @@ pub struct CodeTask {
 pub struct CompiledPrompt {
     pub user_prompt: String,
     pub system_prompt: Option<String>,
-    /// The code task it was sent from, which fills in its system prompt as it
-    /// is sent (see [`Self::system_prompt_as_sent`]).
+    /// The code task it was sent from, which fills in its instructions as it
+    /// is sent (see [`Self::instructions_as_sent`]).
     pub code_task: Option<CodeTask>,
     /// The images attached to it, to give the harness alongside the prompt,
     /// in the order they were attached; never part of the prompt's text.
@@ -183,11 +183,11 @@ pub struct CompiledPrompt {
 }
 
 impl CompiledPrompt {
-    /// The system prompt as the harness is sent it: `${UNDERSTANDING_FILE}`
+    /// Its instructions as they head its message: `${UNDERSTANDING_FILE}`
     /// filled in with `understanding`, the understanding file's path from the
     /// project directory, or nothing for a question; then the code task it was
     /// sent from, last, so nothing in what that holds is filled in.
-    pub fn system_prompt_as_sent(&self, understanding: Option<&str>) -> Option<String> {
+    pub fn instructions_as_sent(&self, understanding: Option<&str>) -> Option<String> {
         let system_prompt = self.system_prompt.as_deref()?;
         let filled = system_prompts::fill_understanding(system_prompt, understanding);
         Some(match &self.code_task {
@@ -823,51 +823,70 @@ fn blank_for_lsp(line: &str) -> String {
     out
 }
 
-/// The system prompt a prompt sent in `mode` is given: the project's template
-/// for it (see [`crate::system_prompts`]), with the project's spec-reading
-/// prompt injected, naming the code and spec locations set in its
-/// `piton.config.pi` and the harness's directory, and with the project's Piton
-/// `fluency`. A template that is empty once filled in gives none.
-pub fn system_prompt(mode: SendMode, project_dir: &Path, fluency: &str) -> Result<Option<String>> {
-    filled_prompt(mode.into(), project_dir, fluency)
+/// The instructions a prompt sent in `mode` is given at the top of its
+/// message: the mode's template, the project's own, with the code and spec
+/// locations filled in, but not the spec-reading prompt nor the fluency, which
+/// the conversation's system prompt gives (see [`project_system_prompt`]).
+/// `${UNDERSTANDING_FILE}` is left as written, filled in as the prompt is
+/// sent. None for a mode with none, as Freeform, or a template left empty.
+pub fn instructions(mode: SendMode, project_dir: &Path) -> Result<Option<String>> {
+    filled_instructions(mode.into(), project_dir)
 }
 
-/// The system prompt a Code task sent to Spec is given: Spec's, as
-/// [`system_prompt`] gives it, then, on a paragraph of its own, the project's
+/// The instructions a Code task sent to Spec is given: Spec's, as
+/// [`instructions`] gives them, then, on a paragraph of its own, the project's
 /// code-to-spec prompt, filled in as a template is. Its `${CODE_PROMPT}` and
 /// `${CODE_RESULT}` are left as written, to be filled in with the code task
-/// as it is sent (see [`CompiledPrompt::system_prompt_as_sent`]), so nothing
+/// as it is sent (see [`CompiledPrompt::instructions_as_sent`]), so nothing
 /// the code task said is compiled. Either left empty once filled in leaves
 /// the other alone.
-pub fn code_to_spec_system_prompt(project_dir: &Path, fluency: &str) -> Result<Option<String>> {
-    let spec = system_prompt(SendMode::Spec, project_dir, fluency)?;
-    let handoff = filled_prompt(system_prompts::Prompt::CodeToSpec, project_dir, fluency)?;
-    Ok(match (spec, handoff) {
-        (Some(spec), Some(handoff)) => Some(format!("{spec}\n\n{handoff}")),
-        (spec, handoff) => spec.or(handoff),
-    })
+pub fn code_to_spec_instructions(project_dir: &Path) -> Result<Option<String>> {
+    joined(
+        instructions(SendMode::Spec, project_dir)?,
+        filled_instructions(system_prompts::Prompt::CodeToSpec, project_dir)?,
+    )
 }
 
-/// The system prompt a chain's code step is given: Code's, as
-/// [`system_prompt`] gives it, then, on a paragraph of its own, the project's
+/// The instructions a chain's code step is given: Code's, as
+/// [`instructions`] gives them, then, on a paragraph of its own, the project's
 /// spec-to-code prompt, filled in as a template is. Its `${SPEC_PROMPT}` and
 /// `${SPEC_RESULT}` are left as written, to be filled in with the spec step
 /// as it is sent, as a code task sent to Spec fills in its own.
-pub fn spec_to_code_system_prompt(project_dir: &Path, fluency: &str) -> Result<Option<String>> {
-    let code = system_prompt(SendMode::Code, project_dir, fluency)?;
-    let handoff = filled_prompt(system_prompts::Prompt::SpecToCode, project_dir, fluency)?;
-    Ok(match (code, handoff) {
-        (Some(code), Some(handoff)) => Some(format!("{code}\n\n{handoff}")),
-        (code, handoff) => code.or(handoff),
+pub fn spec_to_code_instructions(project_dir: &Path) -> Result<Option<String>> {
+    joined(
+        instructions(SendMode::Code, project_dir)?,
+        filled_instructions(system_prompts::Prompt::SpecToCode, project_dir)?,
+    )
+}
+
+/// The instructions a prompt in `mode` is given, handed on from another task
+/// or not, as [`instructions`], [`code_to_spec_instructions`], or
+/// [`spec_to_code_instructions`] gives them.
+pub fn instructions_for(
+    mode: SendMode,
+    handed_on: bool,
+    project_dir: &Path,
+) -> Result<Option<String>> {
+    match (handed_on, mode) {
+        (true, SendMode::Spec) => code_to_spec_instructions(project_dir),
+        (true, SendMode::Code) => spec_to_code_instructions(project_dir),
+        _ => instructions(mode, project_dir),
+    }
+}
+
+fn joined(first: Option<String>, second: Option<String>) -> Result<Option<String>> {
+    Ok(match (first, second) {
+        (Some(first), Some(second)) => Some(format!("{first}\n\n{second}")),
+        (first, second) => first.or(second),
     })
 }
 
-/// `prompt`, the project's own, filled in as [`system_prompts::fill`] fills
-/// a template in; none when it is empty once filled in.
-fn filled_prompt(
+/// `prompt`, the project's own, filled in as instructions are (see
+/// [`system_prompts::fill_instructions`]); none when it is empty once filled
+/// in.
+fn filled_instructions(
     prompt: system_prompts::Prompt,
     project_dir: &Path,
-    fluency: &str,
 ) -> Result<Option<String>> {
     let template = system_prompts::load(prompt, project_dir)?;
     if template.trim().is_empty() {
@@ -875,9 +894,21 @@ fn filled_prompt(
     }
     let code = config_value(project_dir, "codeRoot")?;
     let spec = config_value(project_dir, "root")?;
-    let reading = system_prompts::load(system_prompts::Prompt::SpecReading, project_dir)?;
-    let filled = system_prompts::fill(&template, &code, &spec, &reading, fluency);
+    let filled = system_prompts::fill_instructions(&template, &code, &spec);
     Ok((!filled.trim().is_empty()).then_some(filled))
+}
+
+/// The project's system prompt, the same for every prompt of every
+/// conversation in it, whatever the mode: its system template with the code
+/// and spec locations, its spec-reading prompt, and `fluency` filled in.
+pub fn project_system_prompt(project_dir: &Path, fluency: &str) -> Result<Option<String>> {
+    let template = system_prompts::load(system_prompts::Prompt::System, project_dir)?;
+    let reading = system_prompts::load(system_prompts::Prompt::SpecReading, project_dir)?;
+    let code = config_value(project_dir, "codeRoot")?;
+    let spec = config_value(project_dir, "root")?;
+    Ok(system_prompts::project_system_prompt(
+        &code, &spec, &template, &reading, fluency,
+    ))
 }
 
 /// The mode of a prompt saved before modes were, read from the default system
@@ -1317,8 +1348,8 @@ mod tests {
 
     use super::{
         CodeTask, HiddenAnchor, Imports, MODE_PREFIX, NEW_CONVERSATION_PREFIX,
-        POST_BUILD_UPDATE_LINE, PROMPT_INDENT, SYSTEM_PROMPT_LINE, code_to_spec_system_prompt,
-        compile, mode_of, spec_files, system_prompt,
+        POST_BUILD_UPDATE_LINE, PROMPT_INDENT, SYSTEM_PROMPT_LINE, code_to_spec_instructions,
+        compile, instructions, mode_of, project_system_prompt, spec_files,
     };
     use crate::chat_input::SendMode;
     use crate::project_directory::CONFIG_FILE_NAME;
@@ -1413,11 +1444,12 @@ mod tests {
         }
     }
 
-    /// A project without saved templates gives each mode its default, naming
-    /// this repository's code and spec locations from its `piton.config.pi`,
-    /// and the mode reads back from it.
+    /// A project without saved templates gives each mode's instructions as
+    /// its default, naming this repository's code and spec locations from its
+    /// `piton.config.pi`, without the spec-reading prompt or the fluency, and
+    /// the mode reads back from them.
     #[test]
-    fn system_prompt_fills_in_the_template() {
+    fn instructions_fill_in_the_template() {
         let project_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/system-prompt-test");
         fs::remove_dir_all(&project_dir).ok();
         fs::create_dir_all(&project_dir).unwrap();
@@ -1427,25 +1459,30 @@ mod tests {
         )
         .unwrap();
 
-        // Freeform sends no system prompt at all.
+        // Freeform has no instructions at all.
+        assert_eq!(
+            instructions(SendMode::Freeform, &project_dir).unwrap(),
+            None
+        );
+        let reading = system_prompts::default_prompt(system_prompts::Prompt::SpecReading);
         for mode in SendMode::ALL
             .into_iter()
             .filter(|mode| *mode != SendMode::Freeform)
         {
-            let prompt = system_prompt(mode, &project_dir, "# Piton fluency")
-                .unwrap()
-                .unwrap();
+            let given = instructions(mode, &project_dir).unwrap().unwrap();
             assert_eq!(
-                prompt,
-                system_prompts::fill(
+                given,
+                system_prompts::fill_instructions(
                     system_prompts::default_prompt(mode),
                     "./src",
                     "./spec",
-                    system_prompts::default_prompt(system_prompts::Prompt::SpecReading),
-                    "# Piton fluency"
                 )
             );
-            assert_eq!(mode_of(&prompt), Some(mode));
+            assert!(
+                !given.contains(&reading[..40]),
+                "{mode:?} repeats the spec reading"
+            );
+            assert_eq!(mode_of(&given), Some(mode));
         }
         assert_eq!(mode_of("Something else."), None);
 
@@ -1456,22 +1493,59 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            system_prompt(SendMode::Code, &project_dir, "")
+            instructions(SendMode::Code, &project_dir)
                 .unwrap()
                 .as_deref(),
             Some("Code in ./src only.")
         );
         system_prompts::save(SendMode::Ask, "", &project_dir).unwrap();
+        assert_eq!(instructions(SendMode::Ask, &project_dir).unwrap(), None);
+        // A template saved before instructions were sent apart from the
+        // system prompt, still naming the spec reading and the fluency, gives
+        // neither: the system prompt already has them.
+        system_prompts::save(
+            SendMode::Spec,
+            "Spec only.\n\n${SPEC_READING}\n\n${PITON_FLUENCY}\n\nWrite ${UNDERSTANDING_FILE}.",
+            &project_dir,
+        )
+        .unwrap();
         assert_eq!(
-            system_prompt(SendMode::Ask, &project_dir, "").unwrap(),
-            None
+            instructions(SendMode::Spec, &project_dir)
+                .unwrap()
+                .as_deref(),
+            Some("Spec only.\n\nWrite ${UNDERSTANDING_FILE}.")
         );
-        // Nothing but the fluency, without piton, gives none either.
         system_prompts::save(SendMode::Spec, system_prompts::PITON_FLUENCY, &project_dir).unwrap();
-        assert_eq!(
-            system_prompt(SendMode::Spec, &project_dir, "").unwrap(),
-            None
-        );
+        assert_eq!(instructions(SendMode::Spec, &project_dir).unwrap(), None);
+        fs::remove_dir_all(&project_dir).ok();
+    }
+
+    /// The project's system prompt is its system template with the locations,
+    /// the spec-reading prompt, and the fluency filled in: the same however
+    /// often it is built, with nothing in it particular to a prompt.
+    #[test]
+    fn the_project_system_prompt_is_the_same_every_time() {
+        let project_dir =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("target/project-system-prompt-test");
+        fs::remove_dir_all(&project_dir).ok();
+        fs::create_dir_all(&project_dir).unwrap();
+        fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join(CONFIG_FILE_NAME),
+            project_dir.join(CONFIG_FILE_NAME),
+        )
+        .unwrap();
+        let first = project_system_prompt(&project_dir, "# Fluency")
+            .unwrap()
+            .unwrap();
+        let second = project_system_prompt(&project_dir, "# Fluency")
+            .unwrap()
+            .unwrap();
+        assert_eq!(first, second);
+        assert!(first.contains("./src") && first.contains("./spec"));
+        assert!(first.contains("Before executing anything, read the spec"));
+        assert!(first.ends_with("# Fluency"));
+        assert!(!first.contains("${"), "a placeholder is left: {first}");
+        fs::remove_dir_all(&project_dir).ok();
     }
 
     /// A prompt's imports name the spec files they come from, as
@@ -1510,7 +1584,7 @@ mod tests {
         "ends with \\",
     );
 
-    /// A Code task sent to Spec is given Spec's system prompt, then, on a
+    /// A Code task sent to Spec is given Spec's instructions, then, on a
     /// paragraph of its own, the code-to-spec prompt, filled in as a template
     /// is but for CODE_PROMPT and CODE_RESULT, left for when it is sent.
     /// Either one left empty leaves the other alone.
@@ -1525,36 +1599,26 @@ mod tests {
         )
         .unwrap();
 
-        let spec = system_prompt(SendMode::Spec, &project_dir, "# Fluency")
-            .unwrap()
-            .unwrap();
-        let handoff = system_prompts::fill(
+        let spec = instructions(SendMode::Spec, &project_dir).unwrap().unwrap();
+        let handoff = system_prompts::fill_instructions(
             system_prompts::default_prompt(system_prompts::Prompt::CodeToSpec),
             "./src",
             "./spec",
-            system_prompts::default_prompt(system_prompts::Prompt::SpecReading),
-            "# Fluency",
         );
         assert!(handoff.starts_with("This prompt was first sent to change the code"));
-        assert!(handoff.contains("change the spec at ./spec\nso it describes"));
-        assert!(handoff.contains("the code at\n./src."));
+        assert!(handoff.contains("change the spec at ./spec so it describes"));
         assert!(handoff.ends_with(&format!(
             "sent:\n\n{}\n\nWhat the code task said it built, its final output:\n\n{}",
             system_prompts::CODE_PROMPT,
             system_prompts::CODE_RESULT
         )));
-        let given = code_to_spec_system_prompt(&project_dir, "# Fluency")
-            .unwrap()
-            .unwrap();
+        let given = code_to_spec_instructions(&project_dir).unwrap().unwrap();
         assert_eq!(given, format!("{spec}\n\n{handoff}"));
         // A Spec task sent from Spec alone is given Spec's alone.
         assert!(!spec.contains("first sent to change the code"));
 
         system_prompts::save(system_prompts::Prompt::CodeToSpec, "  \n", &project_dir).unwrap();
-        assert_eq!(
-            code_to_spec_system_prompt(&project_dir, "# Fluency").unwrap(),
-            Some(spec)
-        );
+        assert_eq!(code_to_spec_instructions(&project_dir).unwrap(), Some(spec));
         system_prompts::save(
             system_prompts::Prompt::CodeToSpec,
             "Built: ${CODE_RESULT}",
@@ -1563,9 +1627,7 @@ mod tests {
         .unwrap();
         system_prompts::save(SendMode::Spec, "", &project_dir).unwrap();
         assert_eq!(
-            code_to_spec_system_prompt(&project_dir, "")
-                .unwrap()
-                .as_deref(),
+            code_to_spec_instructions(&project_dir).unwrap().as_deref(),
             Some("Built: ${CODE_RESULT}")
         );
         fs::remove_dir_all(&project_dir).ok();
@@ -1770,7 +1832,7 @@ mod tests {
         fs::write(&file, anchor.source("Write the spec.")).unwrap();
         let compiled = compile(&anchor, &file, project_dir).unwrap();
         assert_eq!(compiled.code_task, anchor.code_task);
-        let sent = compiled.system_prompt_as_sent(Some("u.md")).unwrap();
+        let sent = compiled.instructions_as_sent(Some("u.md")).unwrap();
         assert!(
             sent.starts_with("Spec, see [ApplicationScope]("),
             "the template's reference isn't resolved: {sent}"
@@ -1791,7 +1853,7 @@ mod tests {
         fs::write(&file, anchor.source("Write the spec.")).unwrap();
         let sent = compile(&anchor, &file, project_dir)
             .unwrap()
-            .system_prompt_as_sent(None)
+            .instructions_as_sent(None)
             .unwrap();
         assert!(
             sent.ends_with(&format!(

@@ -1,0 +1,76 @@
+
+export anchor Prompt_c044ce66bbe3c598:
+    userPrompt:
+        \\\
+        Suspense breaks Claude Code's prompt cache on nearly every prompt, and it's
+        using up my usage. In the session logs, each new prompt in a conversation
+        reads only Claude Code's own ~10k-token system prompt from cache and writes
+        the whole rest of the conversation to cache again, up to 900k+ tokens a
+        prompt. That's roughly 60% of this project's usage over the last three days.
+
+        The cause: we pass our instructions with --append-system-prompt and
+        --system-prompt-snapshot off, and they differ from one prompt to the next:
+        - ${UNDERSTANDING_FILE} is a new path for every task,
+        - each mode (Code, Spec, Combined, Ask) has its own template,
+        - a handoff (Code→Spec, a chain's code step) adds the other task's prompt and
+          result,
+        - asks fork the conversation with their own system prompt.
+        The system prompt comes before the conversation, so any change to it
+        invalidates the cache for everything after it.
+
+        The fix: a conversation's system prompt must be identical, byte for byte, on
+        every prompt sent in it, whatever the mode. Anything that changes from prompt
+        to prompt goes in that prompt's message instead.
+        - The system prompt holds only what's the same for the whole project: the
+          spec-reading prompt, the Piton fluency, and the code and spec locations.
+          Build it the same way every time, with no paths, timestamps, or anything
+          specific to a task, so it only changes when the project's templates or
+          fluency change.
+        - Each prompt's message starts with a clearly marked block holding its mode's
+          instructions (with ${UNDERSTANDING_FILE} filled in), and any handoff
+          content, followed by the prompt itself.
+        - The fluency is sent once per conversation, in the system prompt, and never
+          repeated in a prompt's message. The same goes for ${SPEC_READING}.
+        - Asks, which fork the task's conversation, send the same system prompt as
+          the conversation they fork, so the fork reuses its cache.
+        - Freeform stays free of our instructions: no instructions block in its
+          message. A Freeform prompt sent in an existing conversation keeps that
+          conversation's system prompt, so the cache holds. A new conversation
+          started in Freeform has none.
+        - For harnesses that take no system prompt of their own (Codex, OpenCode),
+          the system prompt goes ahead of the first prompt of a conversation only,
+          not ahead of every prompt.
+        - The templates saved in .suspense/system-prompts split accordingly: a
+          project-wide one for the system prompt, and the mode and handoff templates
+          for the per-prompt block. Saved templates that still use ${PITON_FLUENCY} or
+          ${SPEC_READING} in a mode template must not end up sending the fluency with
+          every prompt. Decide how to migrate them and say what you chose.
+        - The raw prompt modal shows what's actually sent: the system prompt, and the
+          message with its instructions block.
+
+        Spec first: update the spec wherever it describes the system prompts, their
+        templates, the raw prompt modal, and what the harness is sent. Then change the
+        code to match.
+
+        Tests: using the fake harness the tests already use, check that every prompt
+        sent in one conversation, across Code, Spec, Combined, Ask, Freeform, and a
+        chain's handoff, passes the exact same --append-system-prompt, and that the
+        understanding path and the mode's instructions end up in the message. Then
+        confirm it against the real thing: send two prompts in one conversation in
+        different modes with the real claude, and check that the second one's
+        stream-json usage shows cache_read_input_tokens covering the first prompt's
+        context, not just ~10k.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+        \\\

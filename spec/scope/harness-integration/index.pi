@@ -2,6 +2,7 @@ use /lib
 from ../project-data import ProjectDataScope
 from ../project-directory import ProjectDirectoryScope
 from ../prompt-mode/mode-system-prompts import ModeSystemPromptsScope
+from ../prompt-mode/sending import PromptSendingScope
 from ../settings-window import SettingsWindowScope
 from ../user-preferences import UserPreferencesScope
 from ./baked-prompts import BakedSystemPromptsScope
@@ -43,8 +44,8 @@ shape HarnessIntegrationShape:
         It is remembered for the user, as the @{UserPreferencesScope} says, not
         for a project. Every run the application starts goes to it, the tasks,
         the questions, the palette's file search, the one-off runs, and the
-        notes and commit messages it writes, and everything else works the
-        same whichever it is. A run already going when another is picked
+        notes, commit messages, and prompt titles it writes, and everything
+        else works the same whichever it is. A run already going when another is picked
         finishes with the harness it started with, and a conversation is only
         carried on by the harness it began with; the next request with another
         harness starts a new one.
@@ -65,9 +66,9 @@ shape HarnessIntegrationShape:
         Codex and OpenCode take no system prompt of their own, so it is given
         ahead of the prompt, marked off from it. Neither can carry on a copy of
         a conversation, so a question asked while another is running starts a
-        new conversation with them instead. The notes and commit messages are
-        written with a small model where the harness can be told one, Claude
-        Code's haiku, and with the harness's default model otherwise.
+        new conversation with them instead. The notes, commit messages, and
+        prompt titles are written with a small model where the harness can be
+        told one, Claude Code's haiku, and with the harness's default model otherwise.
 
         When the harness picked isn't installed, a run fails saying that it
         can't be run, as any run that can't be started does.
@@ -95,8 +96,8 @@ shape HarnessIntegrationShape:
         and can't be fed more while they work, so a task running with either
         takes its prompt as ever and can't be sent more.
 
-        Questions, the palette's file search, the one-off runs, and the notes
-        and commit messages each take a single prompt, as ever.
+        Questions, the palette's file search, the one-off runs, and the notes,
+        commit messages, and prompt titles each take a single prompt, as ever.
 
     images:
         Images attached to a prompt, as the @{ChatInputScope} says, are given
@@ -113,7 +114,12 @@ shape HarnessIntegrationShape:
     context:
         The harness keeps its context between requests instead of starting fresh
         each time. Tasks share one ongoing conversation, and each task sent
-        carries it on. When the project is opened, tasks carry on the latest
+        carries it on. A task that starts while a task of the other lane is
+        running, as the @{PromptSendingScope} lets it, carries on a copy of
+        that conversation as it was when it started, as a question does, so
+        tasks running at the same time never write over each other; the
+        conversation tasks carry on afterwards is that of whichever task
+        finished most recently. When the project is opened, tasks carry on the latest
         conversation in its history. Questions from the Ask tab share a separate
         conversation of their own, and when the project is opened they carry on
         the latest conversation among the questions saved with it. A question

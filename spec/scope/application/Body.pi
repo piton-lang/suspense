@@ -4,6 +4,7 @@ from ../editor import EditorScope
 from ../no-project import NoProjectStateScope
 from ../open-file import OpenFileScope
 from ../prompt-mode import PromptEditor
+from ../prompt-mode/ask-conversation import AskConversationScope
 from ../prompt-mode/chat-input import ChatInputScope
 from ../prompt-mode/message-list import MessageList
 from /ui/behaviours/drag-reorder import DragReorderBehaviour
@@ -49,8 +50,8 @@ shape BodyShape:
         Whenever something slides out or back along one of the body's edges,
         as the @{RightSidebarScope} does, everything else in the body moves
         smoothly with it, frame by frame, rather than jumping once the slide
-        is over: the tab bar, the selected tab's contents, and the chat input
-        all keep their right edge against the sliding edge throughout, so
+        is over: the tab bar, the selected tab's contents, the Ask
+        conversation while it shows, and the chat input all keep their right edge against the sliding edge throughout, so
         they narrow or widen together, in step with it and with each other.
         None of them lags behind another, is left at its old width until the
         slide settles, or runs beneath what is sliding. Their contents are
@@ -66,17 +67,35 @@ shape BodyShape:
         - the @{MessageList}, the chat history, shown beneath the tab bar while the Chat tab is selected
         - the hint shown in the message list's place before any task has been sent, or while no project is open, as the @{PromptEditor} and the @{NoProjectStateScope} say
         - an @{EditorScope} for each open file, shown beneath the tab bar while its tab is selected
-        - the @{ChatInputScope}, along the bottom beneath whichever tab is selected
+        - the @{AskConversationScope}, beside the tab bar and the selected tab's contents, while the chat input's Ask tab is selected
+        - the @{ChatInputScope}, along the bottom beneath whichever tab is selected, and beneath the Ask conversation too
         - the @{RightSidebarScope}, at the right of all of these, the tab bar and the chat input included, while a task runs
 
         An @{InsetPanelScope} floats over the whole window, the body included,
         but is never part of it.
 
+    askSplit:
+        While the chat input's Ask tab is selected, the body splits in two,
+        side by side, above the chat input, as the @{AskConversationScope}
+        says: the tab bar and the selected tab's contents, the message list or
+        an open file, take the left side, and the Ask conversation the right,
+        with a resize edge between them. The chat input still runs along the
+        bottom beneath both, from the project sidebar to the right sidebar
+        while a task runs, or to the window's right edge. Only the left side
+        has the tab bar; the Ask conversation has a header of its own, as
+        tall, level with it. Selecting another mode's tab takes the split
+        away at once, the left side taking the body's full width again, and
+        no tab, file, or scrolling on the left changes as the split comes or
+        goes. While the right sidebar slides, both sides move with it, the
+        Ask conversation keeping its right edge against the sliding edge and
+        its share of the width, as the sliding says.
+
     tabs:
         Along the top of the body runs a tab bar, in gpui-kit's default tab
         styling, across the width the message list takes: from the project
         sidebar to the right sidebar while a task runs, and to the
-        window's right edge otherwise. Its first tab, Chat, shows the message
+        window's right edge otherwise, or, while the body is split for Ask, to
+        the edge between it and the Ask conversation. Its first tab, Chat, shows the message
         list, and is always there: it can't be closed or moved. After it comes
         a tab for each open file, in the order they were opened unless they
         have been dragged since, scrolling sideways once there are more than
@@ -130,9 +149,10 @@ shape BodyShape:
         as it was, unsaved changes and all.
 
         Nothing slides: a file's tab is selected, and its editor shows, at
-        once, and closing it takes it away at once too. There is no split,
-        and no edge to drag; the file takes the tab bar's full width above the
-        chat input.
+        once, and closing it takes it away at once too. Files never split the
+        body among themselves; the file takes the tab bar's full width above
+        the chat input, beside the Ask conversation while the body is split
+        for Ask.
 
         Closing a file's tab, with its close button or the editor's, closes
         the file, the editor first asking to discard any unsaved changes.

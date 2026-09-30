@@ -29,7 +29,7 @@ shape OpenProjectsShape:
         What a project's work is, kept apart for each open project:
         - its tasks, from the @{PromptEditor}: the latest task and its output, the previous tasks, whether the harness is working on one, and the conversation tasks carry on
         - its queue, whether it is expanded, and its auto-send switch
-        - its questions, from the @{ChatInputScope}'s Ask tab: those stacked above the tabs, the one open in the answer drawer, the previous answers, and the conversation questions carry on
+        - its questions, from the @{ChatInputScope}'s Ask tab: every question, running or finished, in the Ask conversation, and the conversation questions carry on
         - a spec build run on its own in it
         - a divergence analysis, a rescope search, or a run target of it, each in its minimizable panel
 
@@ -41,7 +41,7 @@ shape OpenProjectsShape:
     keptAsLeft:
         Each open project also keeps how it was left on screen, so switching
         back to it shows it just as it was, with nothing to find again:
-        - the message list: how far the latest task's output was scrolled and whether it was locked to the bottom, how far its compiled prompt was scrolled, the previous tasks, whether they were expanded, which was open, which were selected, and how far they were scrolled, the queue's scrolling, and the question rows' scrolling
+        - the message list: how far the latest task's output was scrolled and whether it was locked to the bottom, how far its compiled prompt was scrolled, the previous tasks, whether they were expanded, which was open, which were selected, and how far they were scrolled, the queue's scrolling, the running question rows' scrolling, and how far the Ask conversation was scrolled and whether it was locked to the bottom
         - the files open in the body's tabs, in their order, which tab is selected, and each file's unsaved changes, its cursor, and its scrolling
         - the file tree's expanded folders, and the row selected
         - the Git panel's commit message, as far as it was written
@@ -62,7 +62,7 @@ shape OpenProjectsShape:
         attachments, the selected tab, and the Slice toggle stay with the
         person writing rather than a project. What the application keeps for
         the whole run rather than a project, such as the sidebar's width, the
-        answer drawer's height, and which ribbon tabs are open, stays as it is.
+        Ask conversation's width, and which ribbon tabs are open, stays as it is.
 
     switching:
         A project's history, answers, and queue are loaded from its data, as the

@@ -2,6 +2,7 @@ use /lib
 use /ui
 from /scope/project-data import ProjectDataScope
 from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/prompt-mode/modes import PromptModesScope
 from /scope/prompt-mode/sending import PromptSendingScope
 from /ui/behaviours/drag-reorder import DragReorderBehaviour
 from /ui/components/scrollbar import ScrollbarScope
@@ -11,7 +12,7 @@ export ui-component QueueListScope:
 
 concept QueueListConcept:
     pitch:
-        The tasks waiting their turn while the harness works, listed above the
+        The tasks waiting their turn while their lane is busy, listed above the
         chat input, where they can be reordered, edited, or cancelled before
         they are sent.
 
@@ -19,9 +20,26 @@ concept QueueListConcept:
 
 shape QueueListShape:
     description:
-        The queue holds the tasks sent while the harness is working, as the
+        The queue holds the tasks sent while their lane is busy, as the
         @{PromptSendingScope} says, in the order they were sent unless they
-        have been moved since, and sends them one at a time, first to last.
+        have been moved since. It is one list holding both lanes' queues: the
+        code lane's and the spec lane's prompts together, in one order. Each
+        lane sends its own prompts one at a time, first to last in that order,
+        whenever it is free, whatever the other lane's prompts are doing, so a
+        Spec prompt behind a Code prompt in the list is sent as soon as the
+        spec lane is free, without waiting for the Code prompt. A Freeform
+        prompt, which needs both lanes free, holds back the spec lane's
+        prompts queued after it until it has been sent, so it isn't passed
+        over for ever.
+
+    lanes:
+        Each queued prompt's row shows which lane it waits for: a small label
+        just before its text reading its mode, "Code", "Spec", or "Freeform",
+        tinted that mode's colour, as the @{PromptModesScope} colours it. A
+        prompt sent from the Chain tab waits in the spec lane, as its first
+        step writes the spec, and reads "Chain" in the Chain colour; a chain's
+        later step waiting for its lane reads what it is, "Code" or "Spec
+        follow-up", in that step's mode colour.
 
     placement:
         The queue sits along the bottom of the view, below the output and
@@ -90,7 +108,8 @@ shape QueueListShape:
         says it edits the prompt. Clicking it edits the prompt in the
         @{ChatInputScope}, as it says, and its row is highlighted while it is
         being edited. While it is, it is held where it is: it is never sent,
-        and a queue waiting on it waits, even with auto-send on. Saving the
+        and its lane, waiting on it, waits, even with auto-send on; the other
+        lane carries on. Saving the
         edit puts the new text, in the mode and with the attachments it was
         saved with, in its place in the queue, saved with the project in
         place of what it held, then lets the queue go on as before. An edit
@@ -100,18 +119,19 @@ shape QueueListShape:
         queue as it was, less that prompt when it was cancelled.
 
     queueingOnPurpose:
-        A prompt queued on purpose from the chat input's send menu, while the
-        harness is free, waits at the end of the queue rather than being sent
+        A prompt queued on purpose from the chat input's send menu, while its
+        lane is free, waits at the end of the queue rather than being sent
         at once: it goes when "Send next" is clicked, or when the next task is
-        over and auto-send is on.
+        in its lane is over and auto-send is on.
 
     autoSend:
-        A "Send next automatically" switch picks between sending the next
-        queued prompt as soon as the harness is free, and waiting. It starts
-        switched on. Switching it on while the harness is free sends the next
-        queued prompt straight away. Whenever the harness is free and the
-        queue is not empty, a "Send next" button sends the first queued
-        prompt.
+        A "Send next automatically" switch picks between sending each lane's
+        next queued prompt as soon as that lane is free, and waiting. It starts
+        switched on, and holds for both lanes. Switching it on sends the next
+        queued prompt of each free lane straight away. Whenever a queued
+        prompt's lane is free, a "Send next" button sends the first such
+        prompt in the list; with both lanes free and prompts of each queued,
+        clicking it again sends the other lane's.
 
     persistence:
         Queued prompts are saved with the project's data as they are queued,

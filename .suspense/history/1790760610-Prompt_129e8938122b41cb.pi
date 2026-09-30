@@ -1,0 +1,86 @@
+
+export anchor Prompt_129e8938122b41cb:
+    userPrompt:
+        \\\
+        I think when we're in ask mode, we should actually split the @{BodyScope} and have the Ask history list there.  It should be presented more like chat.  And we should clearly mark when a new context was started.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            I think when we're in ask mode, we should actually split the @{BodyScope} and have the Ask history list there.  It should be presented more like chat.  And we should clearly mark when a new context was started.
+            \\\
+        result:
+            \\\
+            I've changed the spec so that in Ask mode the body splits and the question history shows beside the tasks as a chat, with a clear marker where each new conversation starts. I haven't touched `src/`. `piton check` reports no problems, `piton format --check` passes, and `piton build` wrote 75 files and removed the old answer-drawer reference page. `piton reach` shows the new pane is reached from the entry.
+
+            A few choices here are mine, not yours — tell me if any should change:
+            - **Side by side.** The Ask history goes on the right, the tab bar and message list or file stay on the left, and the chat input still runs along the bottom beneath both.
+            - **Replace, don't add.** The history list, the pop-up answer panel and the stack of question rows are replaced by the new pane rather than kept alongside it. The per-question close button is gone too; a running question has a Stop button instead.
+            - **Chat look.** Each question sits in a lightly green-tinted box on the right, and its answer runs full width beneath it with no box.
+            - **Other tabs.** Questions still running show as small rows above the chat input's tabs. Clicking one switches to Ask and scrolls to it.
+
+            ## What changed in the spec
+
+            **New: `AskConversationScope`** (`spec/scope/prompt-mode/ask-conversation/index.pi`)
+            - **When it shows:** only while the Ask tab is selected, as a pane on the right of the body, above the chat input. It has a 32-pixel header reading "Questions" with a muted count.
+            - **Resizing:** it starts at half the width. The edge between the two sides drags from 25% to 75%, and the width is kept for as long as the app runs.
+            - **Chat layout:** every question in the project, oldest at the top. Each question is shown as typed, with a time line and a Resend button once finished. Its answer is the task table, with the steps leading up to the answer collapsed. A running question shows a spinner, the latest step and a Stop button.
+            - **New conversation marker:** a full-width divider in the Ask colour reading "New conversation" and the start time. It goes above the first question of each conversation, based on the `newConversation` flag saved with the question. Questions that carry on a copy of a running question's conversation aren't marked.
+              - Pressing New conversation adds a divider with no time at the bottom straight away; the time fills in when the next question is asked. Pressing it again with nothing asked since adds no second divider.
+            - **Scrolling:** it opens at the bottom and stays there while you're at the bottom. Scrolling up releases it, and asking a question jumps back down. Only what's in view is laid out.
+            - **Also:**
+              - Empty state: "No questions yet. Ask one below."
+              - Selecting text shows Copy and Attach to prompt.
+              - Each project keeps its own scroll position.
+
+            **Edited:**
+            - `BodyScope`:
+              - new `askSplit` property;
+              - `contents` lists the pane;
+              - `tabs` says the tab bar ends at the split while it's shown;
+              - `sliding` moves the pane with the right sidebar;
+              - `openFile` wording updated.
+            - `ChatInputShape`: `ask` and `answerSteps` rewritten; `previousAnswers`, `answerDrawer` and `selectingAnswerText` removed; `askConversation` added; `projects` and the two attachment sections updated; unused imports dropped.
+            - `PromptEditorShape`: `history` now says questions come back in the pane and are saved when stopped; mentions of previous answers removed from `previousTasks`, `previousTaskFilters` and `rawPrompt`.
+            - Wording updated to match in `HistoryListScope`, the running-activity list (a question row now switches to Ask and scrolls to it), and `OpenProjectsScope`.
+
+            **Deleted:** `AnswerDrawerScope` and `MessageListAskDimmingShape`, along with the `askDimming` entry in `MessageList`.
+
+            ## Anchors the code should follow
+            - `AskConversationScope` and all its shape properties (`split`, `conversation`, `newConversation`, `scrolling`, `empty`, `selectingText`, `elsewhere`, `projects`)
+            - `BodyShape.askSplit`, `.contents`, `.tabs`, `.sliding`, `.openFile`
+            - `ChatInputShape.ask`, `.answerSteps`, `.askConversation`, `.projects`
+            - `PromptEditorShape.history`
+            - `OpenProjectsScope` (`belongsToAProject`, `keptAsLeft`, `followsTheScreen`) and the running-activity `list`
+
+            The code should remove the answer drawer, its dimming, and the previous answers list and its expanded state. It should also stop showing finished questions in the stack above the tabs.
+            \\\
+
+    sentFrom: Prompt_ea5316472769c4c2

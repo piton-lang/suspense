@@ -40,8 +40,11 @@ shape PromptModesShape:
 
     tasks:
         A prompt sent in Code, Chain, Spec, or Freeform is a task, sent as the
-        @{PromptSendingScope} says. Tasks carry on one conversation, one at a
-        time, and queue while the harness is working. Before one is sent, the
+        @{PromptSendingScope} says. Tasks carry on one conversation, and run
+        in two lanes, as it says: Code tasks in the code lane and Spec tasks in
+        the spec lane, each queueing only behind tasks of its own lane, so a
+        Spec task runs beside a Code task rather than waiting for it. A Chain
+        task's steps each run in the lane of the work they do. Before one is sent, the
         spec is built ahead of it, as the @{SpecBuildScope} says. Once one
         finishes without error, having changed files, it adds a commit note to
         the @{GitPanelScope}.
@@ -57,8 +60,10 @@ shape PromptModesShape:
         typed, with anything attached to it, and nothing else: no system
         prompt, no hidden anchor compiled from it, no spec built ahead of it,
         no slices, whatever the Slice toggle says, and no understanding file.
-        Otherwise it is a task like any other: it queues while the harness is
-        working, carries on the tasks' conversation, heads the message list,
+        Otherwise it is a task like any other, in the code lane, though it
+        waits for both lanes to be free and keeps both busy while it runs,
+        since it may change the code or the spec: it queues while either is
+        busy, carries on the tasks' conversation, heads the message list,
         is saved in the prompt history, can be cancelled or resent, and adds a
         commit note once it finishes having changed files. It is saved in the
         history as a hidden anchor like any task's, recording its mode, so the
