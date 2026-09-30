@@ -43,7 +43,11 @@ shape SubagentsShape:
         step of a chain, the step's own: the spec step and a spec follow-up
         are Spec's, and the code step is Code's, never Chain's purple. Its
         tooltip names the mode, "Started by the Code task", "Started by the
-        Spec step", and so on.
+        Spec step", and so on. A task whose mode isn't known, as one from the
+        history saved before modes were, has no bar and keeps its spinner and
+        tick in their own colours, its tooltip reading "Started by the task".
+        A Chain task on its own, before its code step has been sent, is the
+        chain's spec step, so its subagents are Spec's and labelled "Spec".
 
         While a chain runs, the panel keeps the subagents of each of its
         steps, not only the step running: they are grouped by step, in the

@@ -1,0 +1,61 @@
+
+export anchor Prompt_177ad1eeb9030a55:
+    userPrompt:
+        \\\
+        @{RightSidebarScope} subagents should be listed under the referenced spec and understanding panels
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            @{RightSidebarScope} subagents should be listed under the referenced spec and understanding panels
+            \\\
+        result:
+            \\\
+            I didn't change anything this time: the spec already puts Subagents below Referenced Spec and Understanding. That change was made earlier in this session, and the code was built to match then. `piton check` finds no problems.
+
+            **What the spec says:**
+            - **`RightSidebarScope.panels`** (`spec/ui/components/right-sidebar/index.pi`): the order is Referenced Spec, Understanding, then Subagents.
+            - **`RightSidebarShape.description`:**
+              - Referenced Spec at the top, sized to its rows, up to half the sidebar.
+              - Understanding filling the middle.
+              - Subagents along the bottom once any start, up to 30%. With none, Understanding runs to the bottom.
+            - **`RightSidebarShape.resizingPanels`:** the top edge trades height between Referenced Spec and Understanding. The lower edge trades between Understanding and Subagents, with Subagents' bottom fixed to the sidebar's bottom.
+            - **Panel descriptions:** Subagents is "the bottom panel" (`subagents/index.pi`), and Understanding is the panel beneath the referenced files, above the subagents (`understanding/index.pi`).
+
+            **In the code:** `render` in `src/referenced_spec.rs` already lays the panels out in that order. The test `subagents_are_shown_by_the_mode_that_started_them` checks it.
+
+            If you're still seeing Subagents in the middle of the running app, it's probably a build from before that change. If it's up to date, tell me what you see.
+
+            The constraints are in `.suspense/history/1790754583-Prompt_b4336ec809db4101.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_b4336ec809db4101

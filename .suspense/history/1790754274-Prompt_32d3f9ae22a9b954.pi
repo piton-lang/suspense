@@ -1,0 +1,62 @@
+
+export anchor Prompt_32d3f9ae22a9b954:
+    userPrompt:
+        \\\
+        Subagents should be displayed according to what mode triggered them.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Subagents should be displayed according to what mode triggered them.
+            \\\
+        result:
+            \\\
+            Showing subagents by the mode that started them was already specified and built earlier in this session. The spec is the `byMode` section of `SubagentsPanel` in `spec/ui/components/right-sidebar/subagents/index.pi`, and the code is in `running_subagents` and `referenced_spec::render`. So this step only filled small gaps in the spec. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            **Already in place:**
+            - **Colour:** each subagent row has a 2px bar in the colour of the mode that started it, and its spinner and tick use that colour too.
+            - **Chain steps:** each step shows its own mode, so the spec step and follow-up are Spec and the code step is Code, never Chain purple.
+            - **Grouping:** during a chain, subagents are grouped by step under coloured labels.
+            - **Tooltip:** it names who started the subagent, for example "Started by the Code task".
+
+            **Added to the spec,** describing what the code already does:
+            - **Unknown mode:** a task whose mode isn't known, such as an old history item, gets no bar. Its spinner and tick keep their normal colours, and its tooltip reads "Started by the task".
+            - **Chain before its code step:** a Chain task on its own, before its code step has been sent, counts as the chain's spec step. Its subagents show as Spec, labelled "Spec".
+
+            **Anchors the code should follow:**
+            - **`SubagentsShape.byMode`**, as above.
+            - **In the code:** nothing needs changing. `running_subagents` in `src/prompt_mode.rs` already falls back to no colour and "the task" for an unknown mode, and treats a lone Chain task as step 0, "Spec".
+
+            The constraints are in `.suspense/history/1790754230-Prompt_dfa18e196a228b0f.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_dfa18e196a228b0f

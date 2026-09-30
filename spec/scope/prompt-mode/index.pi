@@ -87,13 +87,18 @@ shape PromptEditorShape:
         of the list, beneath their row and above the first item, on the tab
         bar's background with the theme's line beneath it, and scrolls with
         nothing: it stays put as the list scrolls. It holds two groups of
-        small toggle chips, each chip reading its label and, muted after it,
-        how many previous tasks it would show.
+        small toggle chips, the second set 12 pixels apart from the first,
+        wrapping onto another line when the bar is too narrow. Each chip
+        reads its label and, muted after it, how many previous tasks match
+        it on its own, whatever other chips are on; the latest task, heading
+        the view, is never counted.
 
         The first group filters by the mode each task was sent in, one chip
         per task mode in the @{PromptModesScope}'s order, "Code", "Chain",
-        "Spec", and "Freeform", each tinted its mode's colour while on. The
-        second filters by where a task stands with the other mode, as the
+        "Spec", and "Freeform", each tinted its mode's colour while on, its
+        border in that colour and its background a faint tint of it. The
+        second group's chips take the theme's accent the same way while on.
+        The second filters by where a task stands with the other mode, as the
         @{PromptSendingScope} says, with "Can send to Spec" for tasks that
         offer Send to Spec, "Can send to Code" for those that offer Send to
         Code, "Sent" for those already sent to the other mode or being sent
@@ -113,7 +118,9 @@ shape PromptEditorShape:
         above the steps still shown, and is hidden with its parent only when
         none of its steps shows. Session dividers show only above a session
         with a task shown. The row's count still counts every previous task,
-        and while any chip is on it reads, after it, "N shown". A hidden task
+        and while any chip is on, what the row reads, the count, or "Back to
+        the latest task" while the list is expanded, is followed by " · N
+        shown", N counting the previous tasks the filters show. A hidden task
         stays selected if it was, and is still counted in "N selected" and
         sent by the batch actions; an open task that is filtered out closes.
         With every task filtered out, the list reads "No previous tasks match

@@ -570,6 +570,7 @@ impl PromptTask {
     /// A task from the history, as it ended: its run's output is replayed
     /// through the harness's parser. A record holding only the task's mark
     /// leaves it a task without a record, marked.
+    #[cfg(test)]
     fn restore(saved: SavedPrompt) -> Self {
         Self::restore_in(saved, None)
     }
@@ -641,6 +642,36 @@ impl PromptTask {
 
     /// Folds a harness event into the task's output and status.
     fn apply(&mut self, event: HarnessEvent) {
+        self.apply_event(event);
+        self.settle_outcome();
+    }
+
+    /// Once its run is over, heads its final summary with what it did: the
+    /// spec, code, or other files its tool calls wrote or edited, and with
+    /// none, whether it answered.
+    fn settle_outcome(&mut self) {
+        if !self.reply.done {
+            return;
+        }
+        let project_dir = self.references.project_dir().to_path_buf();
+        let root = |key: &str| {
+            crate::hidden_anchor::config_value(&project_dir, key)
+                .ok()
+                .map(|dir| shell_paths::normalize(&project_dir.join(dir)))
+        };
+        let spec_dir = self.spec_dir.clone().or_else(|| root("root"));
+        let code_dir = root("codeRoot");
+        let tags = crate::task_table::outcome_tags(
+            &self.references.edited_paths(),
+            &project_dir,
+            spec_dir.as_deref(),
+            code_dir.as_deref(),
+            self.reply.final_output().is_some(),
+        );
+        self.reply.set_outcome(tags);
+    }
+
+    fn apply_event(&mut self, event: HarnessEvent) {
         if let HarnessEvent::Session(id) = &event {
             self.session.get_or_insert_with(|| id.clone().into());
         }
@@ -679,6 +710,11 @@ impl PromptTask {
     /// The run is over. One that ended without a result, as when the harness
     /// was stopped, failed, and nothing still running in it finished.
     fn end(&mut self) {
+        self.end_run();
+        self.settle_outcome();
+    }
+
+    fn end_run(&mut self) {
         self.subagents.end();
         // Cancelled, what it printed before it stopped is kept, and any call
         // in it still running was cancelled with it.
@@ -5409,7 +5445,7 @@ impl PromptMode {
             let session = Session::latest(&saved, &project_dir, left.as_deref());
             let answers = saved
                 .into_iter()
-                .map(PromptTask::restore)
+                .map(|saved| PromptTask::restore_in(saved, Some(&project_dir)))
                 .collect::<Vec<_>>();
             (answers, session)
         });
@@ -7472,6 +7508,16 @@ impl PromptMode {
         }
     }
 
+    /// How many previous tasks the filter chip `filter` matches on its own,
+    /// whatever other chips are on; the latest task, heading the view, isn't
+    /// one of them.
+    fn filter_count(&self, filter: TaskFilter) -> usize {
+        self.tasks[..self.tasks.len().saturating_sub(1)]
+            .iter()
+            .filter(|task| self.matches_filter(task, filter))
+            .count()
+    }
+
     /// Which previous tasks the filters on show: a task shows when it
     /// matches a chip on in each group that has one on. None while no chip
     /// is on, when every task shows.
@@ -7527,11 +7573,7 @@ impl PromptMode {
         );
         let chips = TaskFilter::ALL.iter().enumerate().map(|(ix, &filter)| {
             let on = self.task_history.filters.contains(&filter);
-            let count = self
-                .tasks
-                .iter()
-                .filter(|task| self.matches_filter(task, filter))
-                .count();
+            let count = self.filter_count(filter);
             let color = match filter {
                 TaskFilter::Mode(mode) => chat_input::mode_color(mode, cx),
                 _ => accent,
@@ -7921,8 +7963,11 @@ impl Render for PromptMode {
 
         // While any filter is on, the row says how many tasks show.
         self.task_history.shown.set(
-            self.task_visibility()
-                .map(|visible| visible.iter().filter(|&&shows| shows).count()),
+            // The previous tasks shown; the latest, heading the view, isn't one.
+            self.task_visibility().map(|visible| {
+                let previous = visible.len().saturating_sub(1);
+                visible[..previous].iter().filter(|&&shows| shows).count()
+            }),
         );
         let content = if self.tasks.is_empty() {
             // The hint may shrink below one line, so it wraps in a narrow view
@@ -10575,8 +10620,15 @@ mod tests {
         });
         assert_eq!(visible(cx), Some(vec![false, true, false, true]));
         render(cx);
+        // Of those, the latest task, heading the view, isn't counted.
         prompt_mode.read_with(cx, |this, _| {
-            assert_eq!(this.task_history.shown.get(), Some(2))
+            assert_eq!(this.task_history.shown.get(), Some(1))
+        });
+        // Each chip counts the previous tasks it matches alone: of the two
+        // Code tasks, the latest isn't one of the previous.
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.filter_count(TaskFilter::Mode(SendMode::Code)), 1);
+            assert_eq!(this.filter_count(TaskFilter::MarkedDone), 1);
         });
 
         // Nothing matching, the list says so.
@@ -10700,7 +10752,12 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let dir = std::fs::canonicalize(&dir).unwrap();
-        for text in ["first", "second", "third"] {
+        // The second wraps, so its row is taller than the others.
+        for text in [
+            "first",
+            "second word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word",
+            "third",
+        ] {
             prompt_queue::add(HiddenAnchor::random(), text.into(), &dir).unwrap();
         }
         let (prompt_mode, handle) = open(cx);
@@ -10746,6 +10803,22 @@ mod tests {
                     .sum();
                 covered >= to - from - 1.
             };
+            // Each switch is centred in its row, however tall.
+            for ix in 0..3usize {
+                let row = window.find(("queued-prompt", ix)).bounds();
+                assert!(
+                    (switches[ix].center().y - row.center().y).abs() <= gpui_kit::px(1.),
+                    "switch {ix} {:?} isn't centred in its row {row:?}",
+                    switches[ix]
+                );
+            }
+            let rows: Vec<_> = (0..2usize)
+                .map(|ix| window.find(("queued-prompt", ix)).bounds().size.height)
+                .collect();
+            assert!(
+                rows[1] > rows[0] + gpui_kit::px(4.),
+                "the rows aren't of different heights: {rows:?}"
+            );
             assert!(joined(0, 1), "the first two switches aren't joined");
             assert!(
                 !joined(1, 2),
@@ -10850,6 +10923,130 @@ mod tests {
             ["second", "third", "first"]
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A run's outcome tags follow the files its tool calls wrote or edited:
+    /// spec, code, or elsewhere outside the project's data; with none,
+    /// Answered when it gave a summary, else No changes. Reading never counts.
+    #[test]
+    fn outcome_tags_follow_what_a_run_wrote() {
+        use crate::task_table::{OutcomeTag::*, outcome_tags};
+        use std::path::{Path, PathBuf};
+        let dir = Path::new("/p");
+        let (spec, code) = (Some(Path::new("/p/spec")), Some(Path::new("/p/src")));
+        let tags = |files: &[&str], summary| {
+            let files: Vec<PathBuf> = files.iter().map(PathBuf::from).collect();
+            outcome_tags(&files, dir, spec, code, summary)
+        };
+        assert_eq!(
+            tags(&["/p/spec/a.pi", "/p/src/main.rs"], true),
+            [WroteSpec, WroteCode]
+        );
+        assert_eq!(tags(&["/p/.claude/reference/a.md"], true), [WroteSpec]);
+        assert_eq!(tags(&["/p/README.md"], false), [WroteFiles]);
+        assert_eq!(
+            tags(&["/p/.suspense/history/x.understanding.md"], true),
+            [Answered]
+        );
+        assert_eq!(tags(&[], true), [Answered]);
+        assert_eq!(tags(&[], false), [NoChanges]);
+    }
+
+    /// Once a task's run is over, its final summary is headed by what it
+    /// did, and not before; a file it only read counts for nothing.
+    #[gpui_kit::test]
+    async fn a_finished_run_is_tagged_with_what_it_did(cx: &mut TestAppContext) {
+        use crate::task_table::OutcomeTag;
+        let dir = std::env::temp_dir().join(format!("suspense-outcome-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("spec")).unwrap();
+        std::fs::write(
+            dir.join("piton.config.pi"),
+            "export piton-config Project:\n    root: ./spec\n\nbelay-config B:\n    codeRoot: ./src\n",
+        )
+        .unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        let tool = |id: &str, name: &str, file: &str| HarnessEvent::ToolCalled {
+            id: id.into(),
+            name: name.into(),
+            input: serde_json::json!({ "file_path": file }),
+            subagent: false,
+        };
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("Change it".into(), cx);
+            this.show_compiled(ix, "Prompt_0".into(), "Change it".into(), cx);
+            for event in [
+                HarnessEvent::ToolStarted {
+                    id: "t1".into(),
+                    name: "Edit".into(),
+                },
+                tool("t1", "Edit", "spec/a.pi"),
+                HarnessEvent::ToolStarted {
+                    id: "t2".into(),
+                    name: "Read".into(),
+                },
+                tool("t2", "Read", "src/main.rs"),
+                HarnessEvent::TextStarted,
+                HarnessEvent::TextDelta("Changed the spec.".into()),
+            ] {
+                this.apply_event(ix, event, cx);
+            }
+            assert!(
+                this.tasks[ix].reply.outcome().is_empty(),
+                "tagged while running"
+            );
+            this.apply_event(
+                ix,
+                HarnessEvent::Finished {
+                    is_error: false,
+                    result: "Changed the spec.".into(),
+                },
+                cx,
+            );
+            assert_eq!(this.tasks[ix].reply.outcome(), [OutcomeTag::WroteSpec]);
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.render_frame(cx);
+            assert!(
+                window.try_find("outcome-Wrote spec").is_some(),
+                "no tag shown"
+            );
+            assert!(window.try_find("outcome-Wrote code").is_none());
+        })
+        .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A task whose mode isn't known shows its subagents with no mode colour,
+    /// started by "the task"; a Chain task on its own, before its code step,
+    /// is the chain's spec step, its subagents Spec's.
+    #[gpui_kit::test]
+    async fn subagents_of_an_unknown_mode_or_a_lone_chain(cx: &mut TestAppContext) {
+        use crate::chat_input::{SendMode, mode_color};
+        let (prompt_mode, _) = open(cx);
+        prompt_mode.update(cx, |this, cx| {
+            this.push_task("Old".into(), cx);
+        });
+        let groups = cx.update(|cx| prompt_mode.read(cx).running_subagents(cx));
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].color, None);
+        assert_eq!(groups[0].label, None);
+        assert_eq!(groups[0].started_by.as_ref(), "the task");
+
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("Both".into(), cx);
+            this.tasks[ix].mode = Some(SendMode::Both);
+            this.tasks[ix].sent.mode = Some(SendMode::Both);
+        });
+        let spec = cx.update(|cx| mode_color(SendMode::Spec, cx));
+        let groups = cx.update(|cx| prompt_mode.read(cx).running_subagents(cx));
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].label.as_ref().map(|l| l.as_ref()), Some("Spec"));
+        assert_eq!(groups[0].color, Some(spec));
+        assert_eq!(groups[0].started_by.as_ref(), "the Spec step");
     }
 
     /// Previous tasks are grouped by the conversation they ran in: a group
@@ -12846,7 +13043,8 @@ mod tests {
                     .within("ask-drawer")
                     .find(("output-row", 0usize))
                     .bounds();
-                let y = row.center().y;
+                // Along the answer's text, beneath the tags heading it.
+                let y = row.bottom() - gpui_kit::px(10.);
                 window.drag(
                     gpui_kit::point(row.left() + gpui_kit::px(1.), y),
                     gpui_kit::point(row.right() - gpui_kit::px(1.), y),

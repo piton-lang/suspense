@@ -1,0 +1,68 @@
+
+export anchor Prompt_b4cb7cc722bd746e:
+    userPrompt:
+        \\\
+        The padding/margin etc all around the @{EditorScope} tab is still all weird.  Just make it normal.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            The padding/margin etc all around the @{EditorScope} tab is still all weird.  Just make it normal.
+            \\\
+        result:
+            \\\
+            I've specified plain, even spacing for the inside of the editor's tab: its header and the file view below it. The code isn't changed yet. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            Last time I took "the tab" to mean the file tab in the tab bar and fixed that. Since it's still weird, I think you mean the editor itself, whose layout the spec never pinned down. If it's still the tab bar, tell me.
+
+            **What was loose in the code:** the editor's header (in `src/file_view.rs`) has uneven padding: 12px left, 4px right, 4px top and bottom. Its height depends on the buttons inside it, and its buttons are larger than the tab bar's. Nothing lined the file's text up with the header.
+
+            **What I changed:** a new `layout` section on `EditorShape` in `spec/scope/editor/index.pi`.
+            - **Header:** 32px tall, matching the tab bar, with contents vertically centred. It has 12px padding on the left, 8px on the right and no margin. Its 1px bottom line is the only line in the tab.
+              - From left to right: the file's path, the unsaved dot 6px after it, then Save and ✕ at the far right, 4px apart.
+              - Both buttons are small borderless ghost buttons, 24px tall; ✕ is a 24px square.
+            - **File view:** fills the rest of the tab edge to edge, with no margin, border or rounded corners. The text starts 12px from the left, lined up with the path above it, and 8px below the header's line.
+            - **Error messages:** "can't read" and "can't save" rows use the same 12px inset, with 8px above and below.
+
+            The numbers are my choices for "normal"; change any that look off.
+
+            **Anchors the code should follow:**
+            - **`EditorShape.layout`** in `spec/scope/editor/index.pi`.
+            - **`BodyShape.tabs`:** the 32px tab bar that the header matches.
+            - **In the code:** `render` in `src/file_view.rs`.
+              - The header should get `.h(px(32.))` with its contents centred, `.pl_3()` and `.pr_2()`, and `.xsmall()` buttons at 24px.
+              - The editor's text inset needs checking. The editor has built-in padding, so it may need nudging with margins to land exactly 12px from the edge, as the chat input's editor does.
+
+            The constraints are in `.suspense/history/1790754773-Prompt_e62cb290399eb13a.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_e62cb290399eb13a

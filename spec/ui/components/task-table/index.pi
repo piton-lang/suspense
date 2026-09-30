@@ -1,6 +1,7 @@
 use /lib
 use /ui/components/table/Table
 from ./CollapsedSteps import TaskTableCollapsedStepsShape
+from ./Outcome import TaskTableOutcomeShape
 from ./Replies import TaskTableRepliesShape
 from ./Scrolling import TaskTableScrollingShape
 from ./Sent import TaskTableSentShape
@@ -35,6 +36,7 @@ shape TaskTableShape:
     types: {TaskTableTypesShape}
     status: {TaskTableStatusShape}
     replies: {TaskTableRepliesShape}
+    outcome: {TaskTableOutcomeShape}
     toolCalls: {TaskTableToolCallsShape}
     streaming: {TaskTableStreamingShape}
     scrolling: {TaskTableScrollingShape}

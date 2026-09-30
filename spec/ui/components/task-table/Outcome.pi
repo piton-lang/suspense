@@ -1,0 +1,50 @@
+use /lib
+from /scope/project-locations import ProjectLocationsScope
+from /scope/prompt-mode/modes import PromptModesScope
+
+export shape TaskTableOutcomeShape:
+    description:
+        Once a run is over, its final summary is headed by a row of small
+        tags saying what the run did, so what came of any prompt, a task or a
+        question, can be told at a glance. The final summary is the reply
+        text the run gave after its last tool call, or the final result shown
+        in its place; the tags head the last row of that text. They sit above
+        the row's text, in its Output cell, with a little room beneath them,
+        left to right in the order below, wrapping onto another line if the
+        cell is too narrow. Each is a small label in extra small text, with a
+        little padding either side and slightly rounded corners, 4 pixels
+        from the next. A run that gave no reply text after its last tool
+        call, such as one that failed or was cancelled before it gave one,
+        shows its tags on its last row instead, whatever that row is.
+
+    tags:
+        Each tag is shown only when it applies, worked out from what the run
+        did, not from what it was asked or what it said:
+
+        - "Wrote spec", in Spec's colour, when it wrote or edited a file in the spec location, as the @{ProjectLocationsScope} says, or under .claude/reference
+        - "Wrote code", in Code's colour, when it wrote or edited a file in the code location, the project config's codeRoot
+        - "Wrote files", in the theme's muted grey, when it wrote or edited a file in neither, outside the project's own data in .suspense
+        - "Answered", in Ask's colour, when it wrote or edited no file at all, or only files in .suspense, and gave a final summary, as a question almost always does
+        - "No changes", in the theme's muted grey, when it wrote or edited no such file and gave no final summary
+
+        So a run shows one or more of the first three, or exactly one of the
+        last two. The spec location is the one the task was sent against, as
+        its compiled prompt records, or for a run that doesn't record one,
+        the project config's root; a project whose config gives no codeRoot
+        has no code location, and nothing counts as code in it.
+
+        A file counts as written or edited when the run's tool calls report
+        writing or editing it, with a file tool or a shell command, as the
+        referenced spec works them out, a subagent's included; a file only
+        read never counts. Each colour is its mode's, as the
+        @{PromptModesScope} colours it, including any colour chosen in the
+        theme editor. The label is in the colour at full strength, on a faint
+        tint of it, about a sixth of its strength, readable in light and dark
+        mode.
+
+    notWhileRunning:
+        While the run is under way, no tags are shown; they appear once it is
+        over, however it ended, done, failed, or cancelled. A task or question restored from the
+        history, among the previous tasks or answers, shows them as its record
+        replays, worked out against the project it belongs to, the same as
+        when it ran.

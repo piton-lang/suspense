@@ -126,6 +126,11 @@ impl References {
         }
     }
 
+    /// Where relative paths are read from.
+    pub fn project_dir(&self) -> &Path {
+        &self.project_dir
+    }
+
     /// Every file the run's tool calls edited or wrote, wherever it is.
     pub fn edited_paths(&self) -> Vec<PathBuf> {
         self.files

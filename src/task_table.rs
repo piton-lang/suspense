@@ -236,6 +236,8 @@ pub(crate) struct Reply {
     /// it was worked out for, beside the line.
     raw_styles: RefCell<VecDeque<Option<(usize, Arc<JsonStyles>)>>>,
     pub(crate) done: bool,
+    /// Once the run is over, what it did, heading its final summary.
+    outcome: Vec<OutcomeTag>,
     /// Unique among replies, so a table drawn for one knows when it is given
     /// another.
     uid: u64,
@@ -515,6 +517,7 @@ impl Default for Reply {
             raw_tail: VecDeque::new(),
             raw_styles: RefCell::default(),
             done: false,
+            outcome: Vec::new(),
             uid: NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             edit: 0,
             changes: Vec::new(),
@@ -539,6 +542,38 @@ impl Reply {
                 ReplyPart::Sent(text) => OutputRow::Sent(text),
             },
         })
+    }
+
+    /// Heads the run's final summary with what it did, `tags`, once it is
+    /// over; nothing while it runs.
+    pub(crate) fn set_outcome(&mut self, tags: Vec<OutcomeTag>) {
+        if !self.done || self.outcome == tags {
+            return;
+        }
+        self.outcome = tags;
+        if let Some(row) = self.outcome_row() {
+            self.touch(row);
+        }
+    }
+
+    /// What the run did, once it is over.
+    #[cfg(test)]
+    pub(crate) fn outcome(&self) -> &[OutcomeTag] {
+        &self.outcome
+    }
+
+    /// The row its outcome heads: its final summary, the last row of reply
+    /// text after its last tool call, or with none, its last row.
+    fn outcome_row(&self) -> Option<usize> {
+        let last = self.rows.len().checked_sub(1)?;
+        for ix in (0..=last).rev() {
+            match self.row(ix)? {
+                OutputRow::Text(text) if !text.trim().is_empty() => return Some(ix),
+                OutputRow::Tool(_) => break,
+                _ => {}
+            }
+        }
+        Some(last)
     }
 
     /// The row the harness is on now.
@@ -1475,6 +1510,108 @@ pub(crate) fn output_header(density: Density, cx: &App) -> TableHeader {
     )
 }
 
+/// A tag saying what a run did, heading its final summary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum OutcomeTag {
+    WroteSpec,
+    WroteCode,
+    WroteFiles,
+    Answered,
+    NoChanges,
+}
+
+impl OutcomeTag {
+    fn label(self) -> &'static str {
+        match self {
+            OutcomeTag::WroteSpec => "Wrote spec",
+            OutcomeTag::WroteCode => "Wrote code",
+            OutcomeTag::WroteFiles => "Wrote files",
+            OutcomeTag::Answered => "Answered",
+            OutcomeTag::NoChanges => "No changes",
+        }
+    }
+
+    /// Its mode's colour, or none for the theme's muted grey.
+    fn mode(self) -> Option<crate::chat_input::SendMode> {
+        use crate::chat_input::SendMode;
+        match self {
+            OutcomeTag::WroteSpec => Some(SendMode::Spec),
+            OutcomeTag::WroteCode => Some(SendMode::Code),
+            OutcomeTag::Answered => Some(SendMode::Ask),
+            OutcomeTag::WroteFiles | OutcomeTag::NoChanges => None,
+        }
+    }
+}
+
+/// What a run did, from the files its tool calls wrote or edited, `edited`:
+/// spec in `spec_dir` or `.claude/reference`, code in `code_dir`, and files
+/// elsewhere outside the project's own data; with none, whether it gave a
+/// final summary, `summary`.
+pub(crate) fn outcome_tags(
+    edited: &[PathBuf],
+    project_dir: &Path,
+    spec_dir: Option<&Path>,
+    code_dir: Option<&Path>,
+    summary: bool,
+) -> Vec<OutcomeTag> {
+    let reference = project_dir.join(".claude/reference");
+    let data = project_dir.join(".suspense");
+    let (mut spec, mut code, mut other) = (false, false, false);
+    for file in edited {
+        if spec_dir.is_some_and(|dir| file.starts_with(dir)) || file.starts_with(&reference) {
+            spec = true;
+        } else if code_dir.is_some_and(|dir| file.starts_with(dir)) {
+            code = true;
+        } else if !file.starts_with(&data) {
+            other = true;
+        }
+    }
+    let mut tags = Vec::new();
+    for (wrote, tag) in [
+        (spec, OutcomeTag::WroteSpec),
+        (code, OutcomeTag::WroteCode),
+        (other, OutcomeTag::WroteFiles),
+    ] {
+        if wrote {
+            tags.push(tag);
+        }
+    }
+    if tags.is_empty() {
+        tags.push(if summary {
+            OutcomeTag::Answered
+        } else {
+            OutcomeTag::NoChanges
+        });
+    }
+    tags
+}
+
+/// The tags heading a run's final summary, 4 pixels apart.
+fn outcome_row_tags(tags: &[OutcomeTag], cx: &App) -> AnyElement {
+    let muted = cx.theme().muted_foreground;
+    h_flex()
+        .id("outcome-tags")
+        .flex_wrap()
+        .gap_1()
+        .pb_1()
+        .children(tags.iter().map(|&tag| {
+            let color = tag
+                .mode()
+                .map_or(muted, |mode| crate::chat_input::mode_color(mode, cx));
+            // Lets UI tests find each tag; inert in normal builds.
+            gpui_kit::TestSupportExt::test_support(
+                div().id(SharedString::from(format!("outcome-{}", tag.label()))),
+            )
+            .px_1p5()
+            .rounded_sm()
+            .text_xs()
+            .bg(color.opacity(0.16))
+            .text_color(color)
+            .child(tag.label())
+        }))
+        .into_any_element()
+}
+
 /// Row `row_ix` of a task's output table.
 fn output_row(
     task_ix: usize,
@@ -1582,10 +1719,14 @@ fn output_row(
             .into_any_element(),
         OutputRow::Sent(text) => sent_message(("output-sent", row_ix), text, cx),
     };
+    // Once the run is over, its final summary is headed by what it did.
+    let outcome = (reply.done && !reply.outcome.is_empty() && reply.outcome_row() == Some(row_ix))
+        .then(|| outcome_row_tags(&reply.outcome, cx));
     let detail = div()
         .id(("output-row", row_ix))
         .w_full()
         .min_w_0()
+        .children(outcome)
         .child(detail);
 
     let status = row_status(row, cx);

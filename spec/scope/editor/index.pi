@@ -22,6 +22,30 @@ shape EditorShape:
         under a header with the file's path in the project, a dot while it has
         unsaved changes, a save button, and a close button.
 
+    layout:
+        Everything in the tab is laid out the same plain way, with no stray
+        padding or margin anywhere. The header runs the tab's full width, 32
+        pixels tall, as tall as the body's tab bar, its contents centred up
+        and down in it, with 12 pixels of padding at its left and 8 at its
+        right, and a single 1 pixel line in the theme's line colour along its
+        bottom, the only line in the tab. In it, from the left: the file's
+        path, then 6 pixels after it the unsaved dot while there is one, then
+        at the far right the Save button and the close button, 4 pixels
+        apart. Both buttons are small ghost buttons 24 pixels tall, the
+        close button an icon button 24 pixels square, neither with a border.
+        The header has no margin of its own above, below, or beside it: it
+        starts at the top of the tab, directly beneath the tab bar, and its
+        left and right edges are the tab's.
+
+        Beneath the header, the file fills the rest of the tab edge to edge,
+        with no margin, border, or rounded corner around it, and nothing
+        between it and the header's line. Its text starts 12 pixels in from
+        the tab's left edge, the same as the path in the header above it, so
+        the two line up, and 8 pixels below the header's line. A message that
+        the file can't be read, or can't be saved, is set in by the same 12
+        pixels, in a row as tall as its text needs with 8 pixels above and
+        below it.
+
     syntaxHighlighting:
         Every file is highlighted in its language, using the grammars gpui-kit's
         editor comes with: Piton, and Astro, Bash, C, C++, C#, CMake, CSS,

@@ -1,0 +1,60 @@
+
+export anchor Prompt_eceee30e5d4c73e4:
+    userPrompt:
+        \\\
+        Any panel header should have a 1px bottom border that matches the background of the panel it is attached to.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Any panel header should have a 1px bottom border that matches the background of the panel it is attached to.
+            \\\
+        result:
+            \\\
+            I didn't change anything this time: the spec already gives every panel header a 1px bottom border in its panel body's colour. That rule was added earlier in this session, and the code was built to match. `piton check` finds no problems.
+
+            **Where it's specified:**
+            - **The general rule** is in `SidebarShape.headers` (`spec/ui/components/sidebar/index.pi`). Every panel header gets a 1px bottom border inside its own height, in exactly the body colour. It holds at every display scale and in light and dark mode, and follows the body colour as it changes.
+            - **The Panel keyword** (`spec/ui/components/sidebar/Panel.pi`) repeats it for every panel.
+            - **`RightSidebarShape.look` and `GitPanelShape.look`** point to the rule. Both bodies are #222222 in dark mode.
+
+            **In the code:**
+            - The right sidebar's panel headers use `sidebar::header` in `src/sidebar.rs`, which takes the body colour for its border.
+            - The Git panel's header in `src/git_panel.rs` has the same border.
+            - Pixel tests check that the last row of each header is the body colour.
+
+            If a header in the running app is missing it, it's probably an older build, or a header drawn somewhere else that I haven't found. Tell me which one and I'll cover it.
+
+            The constraints are in `.suspense/history/1790754711-Prompt_b9ee60dfcd1ee7b4.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_b9ee60dfcd1ee7b4

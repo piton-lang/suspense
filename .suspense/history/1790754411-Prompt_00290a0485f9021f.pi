@@ -1,0 +1,62 @@
+
+export anchor Prompt_00290a0485f9021f:
+    userPrompt:
+        \\\
+        The new context connector lines should actually be drawn between the new context toggles.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            The new context connector lines should actually be drawn between the new context toggles.
+            \\\
+        result:
+            \\\
+            The spec already asked for exactly this: the connector line runs between the new-context switches. It's in the `newConversation` section of `QueueListScope` in `spec/scope/prompt-mode/queue-list/index.pi`, and the code was built to match earlier in this session. So I only added one clarifying sentence. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            **What the spec already says:**
+            - **The line:** 1px, in the theme's line colour, centred on the switches. It runs from the bottom of one prompt's switch to the top of the next.
+            - **When prompts are joined:** a prompt that carries on the conversation is joined to the one above; one that starts a new conversation isn't. The first queued prompt is never joined upward.
+            - **Nothing else:** no gutter, dot or left-edge line.
+            - **Movement:** the line follows prompts as they're moved or toggled, and never passes under a switch.
+
+            **What I added:** each switch sits centred in its row however tall the row gets, for example with long text or attached images. The line stays unbroken from one switch to the next, with no gap where one row ends and the next begins.
+
+            **If it still looks wrong in the app,** the spec isn't the cause, since it already describes this behaviour. Tell me what you're seeing so I can target it: the line in the wrong place, gaps in it, or it joining the wrong prompts.
+
+            **Anchors the code should follow:**
+            - **`QueueListScope.newConversation`** in `spec/scope/prompt-mode/queue-list/index.pi`.
+            - **In the code:** `render_queue` in `src/prompt_mode.rs`. The switch sits in a column with a line segment above and below it. The column stretches to the row's full height, reaching past the row's 2px padding with a negative margin. The test `queued_context_lines_run_between_the_switches` checks the line against the switches' positions. It should also be tried with rows of different heights.
+
+            The constraints are in `.suspense/history/1790754369-Prompt_3f9c793824a0a9be.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_3f9c793824a0a9be

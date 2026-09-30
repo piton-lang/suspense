@@ -1,0 +1,68 @@
+
+export anchor Prompt_f30ad771e3bf7e26:
+    userPrompt:
+        \\\
+        Previous task list should have top filters in the header.  Filter by send to mode, filter by send to spec/send to code, etc.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Previous task list should have top filters in the header.  Filter by send to mode, filter by send to spec/send to code, etc.
+            \\\
+        result:
+            \\\
+            These filters were already specified and built earlier in this session: the `previousTaskFilters` section of `PromptEditorShape` in `spec/scope/prompt-mode/index.pi`, and the filter bar in `src/prompt_mode.rs`. So rather than redo them, I compared the spec with the code and tightened a few details. `piton check` finds no problems, formatting is clean, and `piton build` succeeded.
+
+            **Already in place:**
+            - **Mode chips:** Code, Chain, Spec, Freeform.
+            - **Other-mode chips:** "Can send to Spec", "Can send to Code", "Sent", "Marked done".
+            - **Combining:** chips in the same group mean either, and the two groups combine as both.
+            - **Clear** appears while any chip is on.
+            - **Hidden tasks:** they stay selected, and an open task that gets filtered out closes.
+            - **No matches:** the list reads "No previous tasks match these filters".
+            - **Persistence:** filters are kept per open project, but not saved.
+
+            **What I clarified in the spec:**
+            - **Chip counts:** each chip counts the previous tasks matching it on its own, whatever else is on, and never the latest task. The code currently counts the latest task too, so its numbers can be one higher. That's a small fix for the code step.
+            - **Chip look:** a mode chip that's on gets a border in its mode's colour with a faint tint behind it. The other-mode chips use the accent colour the same way. The second group sits 12px from the first, and the bar wraps when it's narrow. This matches the code.
+            - **Row text:** while filtering, " · N shown" follows whatever the row says. That includes "Back to the latest task" while the list is open, which the old wording didn't cover. This also matches the code.
+
+            **Anchors the code should follow:**
+            - **`PromptEditorShape.previousTaskFilters`**, as above.
+            - **In `src/prompt_mode.rs`:**
+              - The only change needed is in `render_task_filters`, which counts matches over `self.tasks`. It should leave out the last task, the latest one heading the view.
+              - It's worth checking whether `task_visibility` and the " · N shown" count should also leave out the latest task. As built, they include it.
+
+            The constraints are in `.suspense/history/1790754043-Prompt_e206c1782df65798.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_e206c1782df65798

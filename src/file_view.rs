@@ -814,6 +814,14 @@ impl FileView {
     }
 }
 
+/// The file's header: as tall as the body's tab bar, and its buttons.
+const HEADER_HEIGHT: Pixels = px(32.);
+const HEADER_BUTTON: Pixels = px(24.);
+
+/// How far the editor is set in so its content, inside its own 10 pixels of
+/// padding, starts 12 pixels from the tab's left edge.
+const TEXT_NUDGE: Pixels = px(2.);
+
 impl Render for FileView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let min_width = self.min_width(window, cx);
@@ -822,12 +830,16 @@ impl Render for FileView {
         let muted = cx.theme().muted_foreground;
         let danger = cx.theme().danger;
 
-        let header = h_flex()
+        // As tall as the body's tab bar, its contents centred up and down,
+        // 12 pixels in at its left and 8 at its right, its line the only one
+        // in the tab.
+        // Lets UI tests find the header; inert in normal builds.
+        let header = gpui_kit::TestSupportExt::test_support(h_flex().id("file-header"))
             .flex_none()
-            .gap_2()
+            .h(HEADER_HEIGHT)
+            .items_center()
             .pl_3()
-            .pr_1()
-            .py_1()
+            .pr_2()
             .border_b_1()
             .border_color(border)
             .child(
@@ -841,17 +853,19 @@ impl Render for FileView {
                 header.child(
                     div()
                         .id("unsaved-changes")
+                        .ml(px(6.))
                         .flex_none()
                         .size_2()
                         .rounded_full()
                         .bg(muted),
                 )
             })
-            .child(div().flex_1())
+            .child(div().flex_1().min_w_2())
             .child(
                 Button::new("save-file")
                     .ghost()
-                    .small()
+                    .xsmall()
+                    .h(HEADER_BUTTON)
                     .label("Save")
                     .tooltip(format!("Save ({SAVE_SHORTCUT})"))
                     .disabled(!self.dirty)
@@ -860,7 +874,9 @@ impl Render for FileView {
             .child(
                 Button::new("close-file")
                     .ghost()
-                    .small()
+                    .xsmall()
+                    .size(HEADER_BUTTON)
+                    .ml_1()
                     .icon(IconName::X)
                     .tooltip("Close file")
                     .on_click(cx.listener(|this, _, window, cx| this.close(window, cx))),
@@ -890,7 +906,7 @@ impl Render for FileView {
                     div()
                         .flex_none()
                         .px_3()
-                        .py_1()
+                        .py_2()
                         .border_b_1()
                         .border_color(border)
                         .text_color(danger)
@@ -899,7 +915,7 @@ impl Render for FileView {
             })
             .child(div().flex_1().min_h_0().map(|body| {
                 match &self.error {
-                    Some(error) => body.p_3().text_color(muted).child(error.clone()),
+                    Some(error) => body.px_3().py_2().text_color(muted).child(error.clone()),
                     // Read-only until the file's text is in, so nothing typed
                     // before is lost.
                     None => body
@@ -925,12 +941,23 @@ impl Render for FileView {
                         // ruler and its shade sit behind the text.
                         .bg(crate::theme::color(crate::theme::palette(cx).well))
                         .child(self.ruler(cx))
+                        // The editor pads its content 10 pixels at its left;
+                        // set in 2 more, its line numbers start 12 pixels in,
+                        // under the path in the header.
                         .child(
-                            Editor::new(&self.editor)
-                                .readonly(self.saved.is_none())
-                                .appearance(false)
-                                .rounded_none()
-                                .size_full(),
+                            gpui_kit::TestSupportExt::test_support(div().id("file-text"))
+                                .absolute()
+                                .top_0()
+                                .bottom_0()
+                                .left(TEXT_NUDGE)
+                                .right_0()
+                                .child(
+                                    Editor::new(&self.editor)
+                                        .readonly(self.saved.is_none())
+                                        .appearance(false)
+                                        .rounded_none()
+                                        .size_full(),
+                                ),
                         ),
                 }
             }))
@@ -1761,6 +1788,63 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&file).unwrap(), "Hi # Notes\n");
 
         std::fs::remove_file(&file).ok();
+    }
+
+    /// The header is as tall as the tab bar, 12 pixels in at its left and
+    /// 8 at its right, its buttons 24 pixels tall and centred; the file's
+    /// text starts 12 pixels in, under the path, and 8 below the header.
+    #[gpui_kit::test]
+    async fn the_editor_is_laid_out_plainly(cx: &mut TestAppContext) {
+        use gpui_kit::px;
+        const TEXT: &str = "first line\nsecond line\n";
+        let file = temp_file("file-view-layout", TEXT);
+        init(cx, None);
+        let (view, handle) = open(cx, &file, None);
+        cx.wait_for(handle, TIMEOUT, |_, cx| {
+            view.read(cx).editor.read(cx).value().as_ref() == TEXT
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let file = window.find("file-view").bounds();
+            let header = window.find("file-header").bounds();
+            let save = window.find("save-file").bounds();
+            let close = window.find("close-file").bounds();
+            let text = view
+                .read(cx)
+                .editor
+                .read(cx)
+                .range_to_bounds(&(0..0))
+                .expect("no text laid out");
+            assert_eq!(header.top(), file.top());
+            assert_eq!(header.size.height, px(32.));
+            assert_eq!((header.left(), header.right()), (file.left(), file.right()));
+            for button in [save, close] {
+                assert_eq!(button.size.height, px(24.));
+                assert!((button.center().y - header.center().y).abs() <= px(0.5));
+            }
+            assert_eq!(close.size.width, px(24.));
+            assert!((header.right() - close.right() - px(8.)).abs() <= px(0.5));
+            assert!((close.left() - save.right() - px(4.)).abs() <= px(0.5));
+            // The editor pads its content 10 pixels; set in 2, its line
+            // numbers start 12 in, under the path, and the text after them.
+            let editor = window.find("file-text").bounds();
+            assert_eq!(editor.left() - file.left(), super::TEXT_NUDGE);
+            assert_eq!(
+                gpui_kit::component::Size::Medium.input_px() + super::TEXT_NUDGE,
+                px(12.)
+            );
+            assert!(
+                text.left() > file.left() + px(12.),
+                "no line numbers before the text"
+            );
+            assert!(
+                (text.top() - header.bottom() - px(8.)).abs() <= px(1.),
+                "the text starts {:?} below the header",
+                text.top() - header.bottom()
+            );
+        })
+        .unwrap();
     }
 
     /// Dragging across text in the editor shows a popover by it: Copy puts

@@ -1,0 +1,58 @@
+
+export anchor Prompt_ff2fdd99917026a4:
+    userPrompt:
+        \\\
+        for the @{GitPanelScope} The commit message and buttons should actually be fixed to the bottom.  It's the list of automatically generated messages that should scroll.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the spec or reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](spec/scope/prompt-mode/chat-input/index.pi)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            for the @{GitPanelScope} The commit message and buttons should actually be fixed to the bottom.  It's the list of automatically generated messages that should scroll.
+            \\\
+        result:
+            \\\
+            I didn't change anything this time: the spec already fixes the commit message and buttons to the bottom and scrolls only the generated notes. That was specified earlier in this session and built to match. `piton check` finds no problems.
+
+            **What `GitPanelShape.scrolling` says** (`spec/ui/components/git-panel/index.pi`):
+            - **Fixed at the top:** the header (branch, Pull, Push) and the change summary.
+            - **Fixed at the bottom:** the message box, Generate and Commit, always in view however many notes there are.
+            - **Scrolling:** only the commit notes, between the two, with a scrollbar only while they overflow.
+            - **Shrinking:** the notes give up their room first when the panel gets shorter.
+
+            **In the code:** `render` in `src/git_panel.rs` lays the panel out as a fixed summary, a scrolling notes area and a fixed footer (`git-footer`). The test `the_git_panel_fits_its_contents` scrolls 40 notes and checks that the footer doesn't move and the summary stays in view.
+
+            If the running app still scrolls the message and buttons, it's likely an older build from before that change. Rebuilding should fix it. If it still happens after that, tell me what you see.
+
+            The constraints are in `.suspense/history/1790754661-Prompt_dc7f2f3c22adb0cd.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_dc7f2f3c22adb0cd
