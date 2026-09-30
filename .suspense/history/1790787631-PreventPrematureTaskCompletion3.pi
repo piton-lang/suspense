@@ -1,0 +1,175 @@
+
+export anchor PreventPrematureTaskCompletion3:
+    userPrompt:
+        \\\
+        A task must not show as finished while work its run started in the background
+        is still going. Right now a Claude Code task that starts a shell command in
+        the background (run_in_background, e.g. a long `cargo build`) and then ends
+        its turn to wait for it is marked finished: Claude Code emits a `result` when
+        the turn ends, and the harness takes that result as the last one, because the
+        only background work it waits on is subagents (`task_started` with
+        `task_type: local_agent`). The task closes, its input is closed so it can't be
+        fed more, and the build carries on unseen. When the build ends, the harness
+        would have woken the agent to act on it, but the task is already over.
+
+        What should be true afterwards:
+
+        1. Background work of any kind holds the run open. The run keeps the set of
+           Claude Code background tasks that have started and not yet ended, whatever
+           their task_type (local_agent, local_bash, or any kind added later):
+           `system` `task_started` adds its task_id, and `task_notification` for that
+           id removes it, whatever its status. `task_notification` doesn't say its
+           kind, so ids are matched against those seen starting.
+
+        2. A result only ends the run once every message sent has been taken in AND
+           no background task is still going. A result that comes while any is still
+           going is an answer (Answered, as a result is today while a subagent is
+           running): the task stays running, its input stays open, and it can still
+           be fed. The run ends on the first result after the last background task
+           has ended.
+
+        3. The Subagents panel is unchanged: it still lists only local_agent tasks.
+           Background shell tasks hold the run open but aren't shown as subagents.
+
+        4. A task isn't shown as finished until the harness process has exited as
+           well as having given its last result. If a last result has come but the
+           process is still running, the task stays running until it exits, then
+           finishes in the state of that last result. A process that exits with no
+           result finishes as it does today.
+
+        5. Stopping a task still ends it straight away, background work and all
+           (its whole process group is killed), whatever is still running.
+
+        Spec: the rule for when a run ends is in the harness-integration scope's
+        feeding paragraph ("A result no longer ends the task on its own: the run ends
+        with a result once every message sent has been taken in ..."), and the
+        subagents rule in the right sidebar's subagents component. Update those rather
+        than adding parallel anchors, and make the harness-integration scope say that
+        background tasks of every kind, not only subagents, hold the run open.
+
+        Code: src/harness.rs — Messages (rename `subagents` to something like
+        `background`, holding every started task id), Messages::read, Feed::read
+        (input closed only on the real last result), and the run loop / Stop::wait,
+        so the task finishes on process exit after the last result. subagent_event
+        stays as it is for the panel. Update the tests: the existing one that says a
+        background shell starts no subagent should still pass, and add tests that a
+        result while a local_bash task is running is Answered and keeps input open,
+        that the result after its task_notification is Finished, and that a task
+        whose last result has come doesn't finish until its process exits.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            A task must not show as finished while work its run started in the background
+            is still going. Right now a Claude Code task that starts a shell command in
+            the background (run_in_background, e.g. a long `cargo build`) and then ends
+            its turn to wait for it is marked finished: Claude Code emits a `result` when
+            the turn ends, and the harness takes that result as the last one, because the
+            only background work it waits on is subagents (`task_started` with
+            `task_type: local_agent`). The task closes, its input is closed so it can't be
+            fed more, and the build carries on unseen. When the build ends, the harness
+            would have woken the agent to act on it, but the task is already over.
+
+            What should be true afterwards:
+
+            1. Background work of any kind holds the run open. The run keeps the set of
+               Claude Code background tasks that have started and not yet ended, whatever
+               their task_type (local_agent, local_bash, or any kind added later):
+               `system` `task_started` adds its task_id, and `task_notification` for that
+               id removes it, whatever its status. `task_notification` doesn't say its
+               kind, so ids are matched against those seen starting.
+
+            2. A result only ends the run once every message sent has been taken in AND
+               no background task is still going. A result that comes while any is still
+               going is an answer (Answered, as a result is today while a subagent is
+               running): the task stays running, its input stays open, and it can still
+               be fed. The run ends on the first result after the last background task
+               has ended.
+
+            3. The Subagents panel is unchanged: it still lists only local_agent tasks.
+               Background shell tasks hold the run open but aren't shown as subagents.
+
+            4. A task isn't shown as finished until the harness process has exited as
+               well as having given its last result. If a last result has come but the
+               process is still running, the task stays running until it exits, then
+               finishes in the state of that last result. A process that exits with no
+               result finishes as it does today.
+
+            5. Stopping a task still ends it straight away, background work and all
+               (its whole process group is killed), whatever is still running.
+
+            Spec: the rule for when a run ends is in the harness-integration scope's
+            feeding paragraph ("A result no longer ends the task on its own: the run ends
+            with a result once every message sent has been taken in ..."), and the
+            subagents rule in the right sidebar's subagents component. Update those rather
+            than adding parallel anchors, and make the harness-integration scope say that
+            background tasks of every kind, not only subagents, hold the run open.
+
+            Code: src/harness.rs — Messages (rename `subagents` to something like
+            `background`, holding every started task id), Messages::read, Feed::read
+            (input closed only on the real last result), and the run loop / Stop::wait,
+            so the task finishes on process exit after the last result. subagent_event
+            stays as it is for the panel. Update the tests: the existing one that says a
+            background shell starts no subagent should still pass, and add tests that a
+            result while a local_bash task is running is Answered and keeps input open,
+            that the result after its task_notification is Finished, and that a task
+            whose last result has come doesn't finish until its process exits.
+            \\\
+        result:
+            \\\
+            The spec now says background work of any kind holds a Claude Code task open, and a task isn't finished until the harness process exits. I changed the spec only, not the code; `piton check`, `piton format --check` and `piton build` all pass, and I checked the result in the refreshed reference.
+
+            **`HarnessIntegrationShape.feeding`** (`spec/scope/harness-integration/index.pi`), rewritten in place:
+            - **Background tasks:** subagents, shell commands run in the background, and any kind the harness adds later all hold the run open. The run tracks each by id from its start until the harness says it has ended, however it ended. The end notice doesn't say what kind of task it was, so it's matched against the ids seen starting.
+            - **Last result:** a result ends the run only once every message sent has been taken in and no background task is still going. A result before then is just an answer: the task keeps running, its input stays open, and it can still be sent more.
+            - **Finishing:** at the last result the run's input is closed, but the task only shows as finished once the harness process has also exited. It then takes the state of that last result.
+            - **Unchanged:** a process that exits with no result fails as it does today. Stopping a task still ends it straight away, background work and all, because its whole process group is killed.
+
+            **`SubagentsPanelShape.description`** (`spec/ui/components/right-sidebar/subagents/index.pi`): the panel lists only subagents. Background shell commands hold the run open but aren't shown there.
+
+            I also fixed a mistake from the previous spec step in `HarnessIntegrationShape.protectedLocations`. A wrapped line starting with "enforcement:" was being read as a key, so the reference showed a stray "Enforcement" heading in the middle of the sentence. It now reads "only a nudge, and doesn't enforce anything, since a shell command can still read the files".
+
+            **What the code step should follow:** `HarnessIntegrationShape.feeding`, in `src/harness.rs`:
+            - **Tracking:** in `Messages`, rename `subagents` to something like `background`, holding every task id from `system` `task_started` whatever its `task_type`. `task_notification` removes the id whatever its status.
+            - **Deciding the last result:** `Messages::read` and `Feed::read` treat a result as the last one only when nothing is pending and `background` is empty. Any other result is `Answered` and leaves the input open.
+            - **Finishing:** the run loop and `Stop::wait` finish the task when the process exits after the last result, in that result's state.
+            - **Stopping:** unchanged.
+
+            The subagents panel should follow `SubagentsPanelShape.description`: leave `subagent_event` as it is, still limited to `local_agent`.
+
+            Tests:
+            - **Keep:** the existing test that a background shell starts no subagent.
+            - **Add:**
+              - a result while a `local_bash` task is running is `Answered` and keeps the input open;
+              - the result after that task's `task_notification` is `Finished`;
+              - a task whose last result has come doesn't finish until its process exits.
+            \\\
+
+    sentFrom: PreventPrematureTaskCompletion2

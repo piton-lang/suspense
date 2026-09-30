@@ -84,9 +84,9 @@ shape HarnessIntegrationShape:
         changes there all the same. A Code task and a question from the Ask
         tab are also told they may not read the spec location, alongside that,
         so they read the compiled reference instead, as the
-        @{ModeSystemPromptsScope} says. This rule is only a nudge, not
-        enforcement: a shell command can still read the files, and nothing
-        puts anything back or stops the run when one does. A harness that
+        @{ModeSystemPromptsScope} says. This rule is only a nudge, and
+        doesn't enforce anything, since a shell command can still read the
+        files, and nothing puts anything back or stops the run when one does. A harness that
         takes no such rules is told nothing of either.
 
     feeding:
@@ -102,11 +102,32 @@ shape HarnessIntegrationShape:
         call is over. The harness echoes each message back as it takes it in,
         with `--replay-user-messages`. A message taken in between turns is
         answered with a result of its own, and one taken while a turn is under
-        way is answered within that turn, sharing its result. A result no
-        longer ends the task on its own: the run ends with a result once every
-        message sent has been taken in, at which point its input is closed and
-        the task finishes, in the state of that last result. A run that is
-        stopped closes its input straight away.
+        way is answered within that turn, sharing its result.
+
+        A run can also start work in the background that goes on after its
+        turn ends: Claude Code's subagents, shell commands run in the
+        background, such as a long build, and any other kind of background
+        task it adds later. Every such task holds the run open, whatever its
+        kind. The run keeps each background task that has started and not yet
+        ended, by its id: one starts when the harness says a task has started,
+        and ends when the harness notifies that task's end, whatever it ended
+        as. A notification doesn't say what kind of task it is, so it is
+        matched by id against those seen starting. The harness wakes the run
+        when a background task ends, so it can act on what came of it.
+
+        A result no longer ends the task on its own. The run's last result is
+        the first to come once every message sent has been taken in and no
+        background task is still going. A result that comes before then, while
+        a message sent hasn't been taken in or a background task is still
+        going, is only an answer: the task keeps running, its input stays
+        open, and more can still be sent to it. At the last result the run's
+        input is closed, but the task is only shown as finished once the
+        harness's process has exited as well, and it then finishes in the
+        state of that last result; until the process exits, the task keeps
+        running. A process that exits without a last result finishes the task
+        as a run with no result does, failed. A run that is stopped closes its
+        input and ends straight away, whatever is still going in the
+        background, since its whole process group is ended with it.
 
         Codex's `codex exec` and OpenCode's `opencode run` read a single prompt
         and can't be fed more while they work, so a task running with either

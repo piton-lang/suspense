@@ -1,0 +1,15 @@
+
+export anchor PreventPrematureTaskCompletion:
+    userPrompt:
+        \\\
+        So over in another project, the task shows as complete, but it's currently actually compiling the rust app.  How did that happen and what can we do to prevent a task for showing as "closed" before it's actually done ?
+        \\\
+
+    mode: ask
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're only asking a question about the code located in ./src and the spec located in ./spec. Don't edit either of them.
+        \\\

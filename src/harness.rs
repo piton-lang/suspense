@@ -623,10 +623,11 @@ pub struct Messages {
     sent: usize,
     taken: usize,
     results: usize,
-    /// The subagents started and not yet ended. While any is at work the
-    /// run goes on, however many results it has reported: the harness
-    /// answers again once they end.
-    subagents: std::collections::HashSet<String>,
+    /// The background tasks started and not yet ended, by id, whatever
+    /// their kind: subagents, shell commands run in the background, or any
+    /// other. While any is going the run goes on, however many results it
+    /// has reported: the harness answers again once they end.
+    background: std::collections::HashSet<String>,
 }
 
 impl Default for Messages {
@@ -635,7 +636,7 @@ impl Default for Messages {
             sent: 1,
             taken: 0,
             results: 0,
-            subagents: Default::default(),
+            background: Default::default(),
         }
     }
 }
@@ -663,19 +664,23 @@ impl Messages {
             Some("result") => {
                 self.results += 1;
                 Some(
-                    self.subagents.is_empty()
+                    self.background.is_empty()
                         && (self.taken >= self.sent || self.results >= self.sent),
                 )
             }
             Some("system") => {
-                match subagent_event(line) {
-                    Some(HarnessEvent::SubagentStarted { id, .. }) => {
-                        self.subagents.insert(id);
+                // A notification doesn't say what kind of task ended, so it
+                // is matched by id against those seen starting.
+                if let Some(id) = str_at(line, "/task_id") {
+                    match str_at(line, "/subtype").as_deref() {
+                        Some("task_started") => {
+                            self.background.insert(id);
+                        }
+                        Some("task_notification") => {
+                            self.background.remove(&id);
+                        }
+                        _ => {}
                     }
-                    Some(HarnessEvent::SubagentEnded { id, .. }) => {
-                        self.subagents.remove(&id);
-                    }
-                    _ => {}
                 }
                 None
             }
@@ -861,6 +866,9 @@ fn run(
     });
 
     let mut replying = Replying::default();
+    // The run's last result, held back until its process has exited, so the
+    // task isn't shown finished while the harness is still at work.
+    let mut last = None;
     for line in BufReader::new(stdout).lines() {
         // Stopped, nothing more it prints is taken.
         if stop.is_stopped() {
@@ -889,7 +897,12 @@ fn run(
             Err(_) => Vec::new(),
         };
         for event in std::iter::once(HarnessEvent::Output(line)).chain(events) {
-            if tx.unbounded_send(replying.take(event)).is_err() {
+            let event = replying.take(event);
+            if matches!(event, HarnessEvent::Finished { .. }) {
+                last = Some(event);
+                continue;
+            }
+            if tx.unbounded_send(event).is_err() {
                 stop.stop();
                 return Ok(());
             }
@@ -901,6 +914,10 @@ fn run(
     // output is not waited on.
     if stop.is_stopped() {
         return Ok(());
+    }
+    // Its process over, it finishes in the state of its last result.
+    if let Some(last) = last {
+        tx.unbounded_send(last).ok();
     }
     let stderr = stderr.join().unwrap_or_default();
     if !replying.finished() {
@@ -2313,10 +2330,11 @@ wait
         );
     }
 
-    /// While a subagent it started is at work, a fed run goes on past its
-    /// results: the harness answers again once the subagent ends.
+    /// While a background task it started is going, a subagent or a shell
+    /// command alike, a fed run goes on past its results: the harness answers
+    /// again once the task ends.
     #[test]
-    fn a_fed_run_goes_on_while_a_subagent_works() {
+    fn a_fed_run_goes_on_while_a_background_task_works() {
         use super::Messages;
         let taken = json!({ "type": "user", "isReplay": true, "parent_tool_use_id": null,
             "message": { "role": "user", "content": [{ "type": "text", "text": "m" }] } });
@@ -2326,6 +2344,10 @@ wait
             "task_type": "local_bash" });
         let ended = json!({ "type": "system", "subtype": "task_notification", "task_id": "a1",
             "status": "completed" });
+        let shell_ended = json!({ "type": "system", "subtype": "task_notification",
+            "task_id": "b1", "status": "killed" });
+        let unknown_ended = json!({ "type": "system", "subtype": "task_notification",
+            "task_id": "z9", "status": "completed" });
         let result = json!({ "type": "result", "is_error": false, "result": "ok" });
         let mut messages = Messages::default();
         messages.read(&taken);
@@ -2333,8 +2355,104 @@ wait
         messages.read(&shell);
         assert_eq!(messages.read(&result), Some(false));
         messages.read(&ended);
-        // The shell command started nothing that holds the run open.
+        // The shell command still holds the run open.
+        assert_eq!(messages.read(&result), Some(false));
+        // A task never seen starting ends nothing.
+        messages.read(&unknown_ended);
+        assert_eq!(messages.read(&result), Some(false));
+        messages.read(&shell_ended);
         assert_eq!(messages.read(&result), Some(true));
+    }
+
+    /// A result while a shell command runs in the background is an answer,
+    /// and the run's input stays open, so it can still be fed; the result
+    /// after the command's end is its last, and closes it.
+    #[test]
+    fn a_background_shell_keeps_a_fed_run_open() {
+        let (feed, _events) = super::Feed::for_test();
+        let taken = json!({ "type": "user", "isReplay": true, "parent_tool_use_id": null,
+            "message": { "role": "user", "content": [{ "type": "text", "text": "m" }] } });
+        let shell = json!({ "type": "system", "subtype": "task_started", "task_id": "b1",
+            "description": "cargo build", "task_type": "local_bash" });
+        let ended = json!({ "type": "system", "subtype": "task_notification", "task_id": "b1",
+            "status": "completed" });
+        let result = json!({ "type": "result", "is_error": false, "result": "ok" });
+        feed.read(&taken, parse(&taken));
+        // Not a subagent: the panel isn't told of it.
+        assert!(feed.read(&shell, parse(&shell)).is_empty());
+        assert_eq!(
+            feed.read(&result, parse(&result)),
+            [HarnessEvent::Answered {
+                is_error: false,
+                result: "ok".into(),
+            }]
+        );
+        assert!(feed.is_open(), "an answer closed the run's input");
+        feed.read(&ended, parse(&ended));
+        assert_eq!(
+            feed.read(&result, parse(&result)),
+            [HarnessEvent::Finished {
+                is_error: false,
+                result: "ok".into(),
+            }]
+        );
+        assert!(!feed.is_open(), "the last result left the input open");
+    }
+
+    /// A run whose last result has come doesn't finish until the harness's
+    /// process has exited.
+    #[cfg(unix)]
+    #[test]
+    fn a_run_finishes_once_its_process_exits() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = std::env::temp_dir().join(format!("suspense-exit-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).unwrap();
+        let exited = dir.join("exited");
+        let script = dir.join("harness.sh");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\n\
+                 echo '{{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"s1\"}}'\n\
+                 echo '{{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Done.\"}}'\n\
+                 exec >/dev/null\n\
+                 sleep 0.5\n\
+                 touch {exited}\n",
+                exited = exited.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        super::use_program_for_test(Some(script));
+        let super::Run { mut events, .. } = super::send_task(
+            "Go.".into(),
+            None,
+            Vec::new(),
+            None,
+            dir.clone(),
+            Default::default(),
+        );
+        super::use_program_for_test(None);
+        let start = std::time::Instant::now();
+        let mut seen = Vec::new();
+        loop {
+            assert!(
+                start.elapsed() < std::time::Duration::from_secs(10),
+                "never finished"
+            );
+            match events.try_next() {
+                Ok(Some(HarnessEvent::Finished { result, .. })) => {
+                    assert_eq!(result, "Done.");
+                    assert!(exited.exists(), "finished before its process exited");
+                    break;
+                }
+                Ok(Some(event)) => seen.push(event),
+                Ok(None) => panic!("the run ended without finishing: {seen:?}"),
+                Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
+            }
+        }
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

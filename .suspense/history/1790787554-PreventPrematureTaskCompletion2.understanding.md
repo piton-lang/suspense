@@ -1,0 +1,8 @@
+- [Background tasks of every kind the run started hold it open, not only subagents](.claude/reference/scope/harness-integration/index.md#feeding)
+- [A task's background tasks are those started and not yet notified as ended, matched by id, whatever their kind](.claude/reference/scope/harness-integration/index.md#feeding)
+- [A result ends the run only once every message sent is taken in and no background task is still going; otherwise it is an answer and input stays open](.claude/reference/scope/harness-integration/index.md#feeding)
+- [The task finishes only once the harness process has exited after its last result, in that result's state](.claude/reference/scope/harness-integration/index.md#feeding)
+- [A process that exits with no result finishes as it does today](.claude/reference/scope/harness-integration/index.md#feeding)
+- [A stopped run closes its input and ends straight away, background work and all](.claude/reference/scope/harness-integration/index.md#feeding)
+- [The subagents panel lists only subagents; background shell commands hold the run open but aren't shown](.claude/reference/ui/components/right-sidebar/subagents/index.md#description)
+- [The read-deny rule is only a nudge: a shell command can still read the files](.claude/reference/scope/harness-integration/index.md#protected-locations)

@@ -2,6 +2,7 @@ use /lib
 use /ui
 use /ui/components/sidebar/Panel
 from .. import RightSidebarScope
+from /scope/harness-integration import HarnessIntegrationScope
 from /scope/prompt-mode/modes import PromptModesScope
 
 export panel SubagentsPanel:
@@ -24,6 +25,11 @@ concept SubagentsConcept:
 
 shape SubagentsShape:
     description:
+        It lists only subagents, the agents the harness started, never the
+        other background tasks a run starts, such as shell commands run in the
+        background, which hold the run open, as the
+        @{HarnessIntegrationScope} says, but aren't shown here.
+
         It is shown only once the run has started a subagent, and takes no
         room before. One row per subagent, in the order they started, each 24
         pixels tall, 8 pixels in from the panel's edges: a spinner while it is
