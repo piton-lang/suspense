@@ -1,0 +1,35 @@
+use /lib
+
+export shape TaskTableNoticesShape:
+    description:
+        A notice is something the application tells the run's reader about
+        the run, rather than something the harness did or a failure: chiefly
+        that it put back changes a task made where its mode may not change
+        anything, a Code task in the spec or a Spec task in the code. It is
+        passive. It is never shown as an error, never in the theme's error
+        colour, and never fails the task, changes its status, or counts among
+        the errors a run ended with.
+
+    row:
+        A notice is a row of its own, where it happened among the run's rows,
+        its badge reading "Notice" with an info icon, in the muted grey of a
+        badge that marks nothing wrong. Its output is a single line summing
+        it up, muted, beside a right chevron, such as "Put back 3 spec files
+        this Code task changed" or "Put back 1 code file this Spec task
+        changed". It has no status.
+
+    details:
+        Clicking the line expands the notice's details in place, beneath it,
+        and its chevron turns down; clicking it again collapses them. For
+        changes put back, the details say that a task in its mode may not
+        change that location, so what it changed there was put back as it
+        was, and then list each file put back, one per line, by its path in
+        the project. A notice starts collapsed, and each stays as it was left
+        for as long as the application runs.
+
+    kept:
+        A notice is kept with its task, and shown the same wherever the
+        task's output is, the latest task's table, a previous task opened,
+        and a Freeform or Ask reply read as a chat, where it sits among the
+        reply's steps as a muted line that expands the same way, never at
+        the reply's end with its errors.

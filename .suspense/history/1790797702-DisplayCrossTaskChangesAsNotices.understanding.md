@@ -1,0 +1,6 @@
+- [A Code task may not change the spec and a Spec task the code; the application puts back whatever changes there](.claude/reference/scope/harness-integration/index.md#protected-locations)
+- [What was put back is reported as a passive notice row, never as an error](.claude/reference/ui/components/task-table/index.md#notices)
+- [A notice's badge reads "Notice", muted, not in the error colour](.claude/reference/ui/components/task-table/index.md#types)
+- [A notice shows a one-line summary with a chevron and expands in place to its details, the files put back](.claude/reference/ui/components/task-table/index.md#notices)
+- [A notice starts collapsed and stays as it was left while the application runs](.claude/reference/ui/components/task-table/index.md#notices)
+- [A notice never fails the task or changes its status](.claude/reference/ui/components/task-table/index.md#notices)

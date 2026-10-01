@@ -274,6 +274,9 @@ pub enum MarkdownKind {
     /// A block of the prompt the latest task was sent as, in its header,
     /// where the prompt is drawn a block at a time; `row` is the block.
     PromptBlock,
+    /// A notice in a task's output, which changes height as it opens and
+    /// closes; it holds no markdown, but is told apart the same way.
+    Notice,
 }
 
 /// The parsed state of every piece of markdown shown, kept by where it's
@@ -455,6 +458,21 @@ impl MarkdownStates {
         changed.sort_by_key(|key| (key.kind as u8, key.table, key.row));
         changed.dedup();
         changed
+    }
+
+    /// Notes that what `key` shows changed height, as a notice opening or
+    /// closing does, so the lists showing it measure it again, as they do
+    /// markdown that has finished parsing.
+    pub fn touch(key: MarkdownKey, cx: &mut gpui_kit::App) {
+        cx.default_global::<MarkdownStates>();
+        let states = cx.global_mut::<MarkdownStates>();
+        if states.changed.len() >= MAX_CHANGED {
+            states.changed.pop_front();
+        }
+        states.latest += 1;
+        let latest = states.latest;
+        states.changed.push_back((latest, key));
+        cx.refresh_windows();
     }
 
     /// The number of the latest change, for a list starting out.

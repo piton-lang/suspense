@@ -1,0 +1,6 @@
+- [Changes put back where a task's mode may not change anything are reported as a passive notice, never an error](.claude/reference/scope/harness-integration/index.md#protected-locations)
+- [A notice never fails the task, changes its status, or counts among the run's errors](.claude/reference/ui/components/task-table/index.md#notices)
+- [A notice is its own row with a muted grey "Notice" badge and info icon, never the error colour, and no status](.claude/reference/ui/components/task-table/index.md#notices)
+- [Its output is one muted summary line with a right chevron, e.g. "Put back 3 spec files this Code task changed"](.claude/reference/ui/components/task-table/index.md#notices)
+- [Clicking expands the details in place: why, then each file's path; it starts collapsed and stays as left while the app runs](.claude/reference/ui/components/task-table/index.md#notices)
+- [In a chat reply a notice sits among the steps as a muted expandable line, never at the reply's end with errors](.claude/reference/ui/components/task-table/index.md#notices)

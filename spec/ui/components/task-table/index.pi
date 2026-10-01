@@ -1,6 +1,7 @@
 use /lib
 use /ui/components/table/Table
 from ./CollapsedSteps import TaskTableCollapsedStepsShape
+from ./Notices import TaskTableNoticesShape
 from ./Outcome import TaskTableOutcomeShape
 from ./Replies import TaskTableRepliesShape
 from ./Scrolling import TaskTableScrollingShape
@@ -43,6 +44,7 @@ shape TaskTableShape:
     scrolling: {TaskTableScrollingShape}
     collapsedSteps: {TaskTableCollapsedStepsShape}
     sent: {TaskTableSentShape}
+    notices: {TaskTableNoticesShape}
 
     legibility:
         The output from a realtime agent should be readable and meaningful.

@@ -1,5 +1,6 @@
 use /lib
 from /scope/harness-integration import HarnessIntegrationScope
+from /scope/prompt-mode/message-list import MessageList
 from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from /scope/prompt-mode/sending import PromptSendingScope
 from /scope/spec-build import SpecBuildScope
@@ -68,9 +69,9 @@ shape PromptModesShape:
         commit note once it finishes having changed files. It is saved in the
         history as a hidden anchor like any task's, recording its mode, so the
         queue and history hold it as they hold the others, but that anchor is
-        never compiled, imports nothing, and has no system prompt. Its header
-        shows the prompt as it was sent, with no hidden anchor named, and the
-        right sidebar doesn't slide out while it runs, since it
+        never compiled, imports nothing, and has no system prompt. It is
+        shown in the @{MessageList} as a regular chat, its prompt as it was
+        sent, with no hidden anchor named, and the right sidebar doesn't slide out while it runs, since it
         references nothing. What is sent to a running Freeform task, from Send
         to task, goes just as it was typed too. It is never sent to another
         mode, alone or in a batch.

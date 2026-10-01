@@ -261,8 +261,42 @@ pub(crate) enum ReplyPart {
     Text(TextPart),
     Tool(ToolCall),
     Error(String),
+    /// Something the application tells the reader about the run, such as
+    /// what it put back: passive, never an error.
+    Notice(Notice),
     /// A message sent to the run while it works, as typed.
     Sent(String),
+}
+
+/// A notice about a run: its one-line summary, and the details it opens
+/// onto.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Notice {
+    pub summary: String,
+    pub details: String,
+}
+
+/// Which notices are open, by their reply and their place in it, kept for as
+/// long as the application runs.
+#[derive(Default)]
+struct OpenNotices(std::collections::HashSet<(u64, usize)>);
+
+impl Global for OpenNotices {}
+
+/// Whether the notice at `part` of the reply numbered `reply` is open.
+fn notice_open(reply: u64, part: usize, cx: &App) -> bool {
+    cx.try_global::<OpenNotices>()
+        .is_some_and(|open| open.0.contains(&(reply, part)))
+}
+
+/// Opens or closes the notice at `part` of the reply numbered `reply`, shown
+/// at `key`, and has whatever shows it measure it again.
+fn toggle_notice(reply: u64, part: usize, key: MarkdownKey, cx: &mut App) {
+    let open = &mut cx.default_global::<OpenNotices>().0;
+    if !open.remove(&(reply, part)) {
+        open.insert((reply, part));
+    }
+    MarkdownStates::touch(key, cx);
 }
 
 /// Reply text, and the markdown it is shown as once worked out.
@@ -464,6 +498,7 @@ pub(crate) enum OutputRow<'a> {
     Text(&'a str),
     Tool(&'a ToolCall),
     Error(&'a str),
+    Notice(&'a Notice),
     /// A message sent to the run while it works, as typed.
     Sent(&'a str),
     /// The harness is still at work, and nothing is known of what comes next.
@@ -481,6 +516,8 @@ impl OutputRow<'_> {
                 (crate::theme::tag(kind.hue(), cx), kind.icon(), kind.label())
             }
             Self::Error(_) => (Tag::danger(), IconName::TriangleAlert, "Error"),
+            // Muted, as it marks nothing wrong.
+            Self::Notice(_) => (Tag::secondary(), IconName::Info, "Notice"),
             Self::Sent(_) => (Tag::primary(), IconName::Send, "Sent"),
             Self::Pending => {
                 return Skeleton::new()
@@ -499,7 +536,7 @@ impl OutputRow<'_> {
         match self {
             Self::Text(text) => text.trim().is_empty(),
             Self::Tool(call) => call.summary.is_none() && call.state == ToolState::Running,
-            Self::Error(_) | Self::Sent(_) => false,
+            Self::Error(_) | Self::Notice(_) | Self::Sent(_) => false,
             Self::Pending => true,
         }
     }
@@ -539,6 +576,7 @@ impl Reply {
                 ReplyPart::Text(text) => OutputRow::Text(text),
                 ReplyPart::Tool(call) => OutputRow::Tool(call),
                 ReplyPart::Error(error) => OutputRow::Error(error),
+                ReplyPart::Notice(notice) => OutputRow::Notice(notice),
                 ReplyPart::Sent(text) => OutputRow::Sent(text),
             },
         })
@@ -701,7 +739,7 @@ impl Reply {
                     self.last_tool_row = Some(self.rows.len());
                     true
                 }
-                ReplyPart::Error(_) => true,
+                ReplyPart::Error(_) | ReplyPart::Notice(_) => true,
                 ReplyPart::Sent(_) => {
                     self.last_sent_row = Some(self.rows.len());
                     true
@@ -891,6 +929,22 @@ impl Reply {
         self.refresh();
     }
 
+    /// Adds a notice to the end of the output: passive, never an error, so
+    /// it fails nothing and isn't among the run's errors.
+    pub(crate) fn push_notice(&mut self, summary: String, details: String) {
+        self.parts
+            .push(ReplyPart::Notice(Notice { summary, details }));
+        self.refresh();
+    }
+
+    /// Which part row `ix` shows.
+    pub(crate) fn part_of_row(&self, ix: usize) -> Option<usize> {
+        match self.rows.get(ix)? {
+            RowSource::Part(part) => Some(*part),
+            RowSource::Pending => None,
+        }
+    }
+
     /// The run's final output, its answer (see [`Layout::of`]): the reply
     /// text after its last tool call, or all of it when it made none, each
     /// piece on a paragraph of its own. None when there is no text there.
@@ -922,6 +976,7 @@ impl Reply {
     /// call and piece of reply text before its last tool call, and its
     /// answer, the pieces of reply text after it; errors, and pieces not yet
     /// begun, are neither.
+    #[cfg(test)]
     pub(crate) fn chat_rows(&self) -> ChatRows {
         let start = self.last_tool_row.map_or(0, |last| last + 1);
         let mut rows = ChatRows::default();
@@ -941,6 +996,46 @@ impl Reply {
         rows
     }
 
+    /// Its rows read as a chat, split at each message sent to the run while
+    /// it worked: the first segment answers the prompt, and each after it
+    /// starts at a message sent, by its row, and holds what came after it.
+    /// Each segment's steps and answer are as [`Self::chat_rows`] reads them,
+    /// its answer the reply text after its own last tool call.
+    pub(crate) fn chat_segments(&self) -> Vec<ChatSegment> {
+        let mut segments = vec![ChatSegment::default()];
+        let mut pieces: Vec<usize> = Vec::new();
+        let close = |pieces: &mut Vec<usize>, segment: &mut ChatSegment| {
+            let last_tool = pieces
+                .iter()
+                .rposition(|ix| matches!(self.row(*ix), Some(OutputRow::Tool(_))));
+            for (at, ix) in pieces.drain(..).enumerate() {
+                // A notice sits among the steps, never with the answer.
+                let notice = matches!(self.row(ix), Some(OutputRow::Notice(_)));
+                if notice || last_tool.is_some_and(|last| at <= last) {
+                    segment.rows.steps.push(ix);
+                } else {
+                    segment.rows.answer.push(ix);
+                }
+            }
+        };
+        for ix in 0..self.rows.len() {
+            match self.row(ix) {
+                Some(OutputRow::Text(text)) if !text.trim().is_empty() => pieces.push(ix),
+                Some(OutputRow::Tool(_) | OutputRow::Notice(_)) => pieces.push(ix),
+                Some(OutputRow::Sent(_)) => {
+                    close(&mut pieces, segments.last_mut().unwrap());
+                    segments.push(ChatSegment {
+                        sent: Some(ix),
+                        rows: ChatRows::default(),
+                    });
+                }
+                _ => {}
+            }
+        }
+        close(&mut pieces, segments.last_mut().unwrap());
+        segments
+    }
+
     /// The errors it ended with, in order.
     pub(crate) fn errors(&self) -> Vec<&str> {
         self.parts
@@ -956,6 +1051,16 @@ impl Reply {
     /// twice, ran 1 command", or, where a step is of no kind that can be
     /// summed up, "Worked through 6 steps".
     pub(crate) fn steps_summary(&self, steps: &[usize]) -> String {
+        // Notices are the application's, not steps the harness took.
+        let steps: Vec<usize> = steps
+            .iter()
+            .copied()
+            .filter(|ix| !matches!(self.row(*ix), Some(OutputRow::Notice(_))))
+            .collect();
+        if steps.is_empty() {
+            return "Notice".to_string();
+        }
+        let steps = steps.as_slice();
         let calls: Vec<&ToolCall> = steps
             .iter()
             .filter_map(|ix| match self.row(*ix)? {
@@ -1026,6 +1131,15 @@ impl Reply {
 pub(crate) struct ChatRows {
     pub steps: Vec<usize>,
     pub answer: Vec<usize>,
+}
+
+/// A stretch of a reply read as a chat: see [`Reply::chat_segments`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct ChatSegment {
+    /// The message sent to the run that it answers, by its row; none for the
+    /// first, which answers the prompt.
+    pub sent: Option<usize>,
+    pub rows: ChatRows,
 }
 
 /// Row `ix` of `reply`, reply text, as the markdown it is shown as, and
@@ -1866,6 +1980,10 @@ fn output_row(
             .text_color(theme.foreground)
             .child(error.to_string())
             .into_any_element(),
+        OutputRow::Notice(notice) => match reply.part_of_row(row_ix) {
+            Some(part) => notice_view(task_ix, reply.uid, part, row_ix, notice, cx),
+            None => div().into_any_element(),
+        },
         OutputRow::Sent(text) => sent_message(("output-sent", row_ix), text, cx),
     };
     // Once the run is over, its final summary is headed by what it did.
@@ -1907,6 +2025,60 @@ fn output_row(
             status,
             cx,
         ))
+}
+
+/// A notice, row `row` of the table numbered `table`, part `part` of the
+/// reply numbered `reply`: its summary, muted, beside a chevron, which opens
+/// its details in place beneath it and closes them again.
+pub(crate) fn notice_view(
+    table: usize,
+    reply: u64,
+    part: usize,
+    row: usize,
+    notice: &Notice,
+    cx: &App,
+) -> AnyElement {
+    let muted = cx.theme().muted_foreground;
+    let open = notice_open(reply, part, cx);
+    let key = MarkdownKey {
+        kind: MarkdownKind::Notice,
+        table,
+        row,
+    };
+    let summary = h_flex()
+        .id(("notice-summary", row))
+        .gap_1p5()
+        .items_center()
+        .cursor_pointer()
+        .text_color(muted)
+        .child(
+            Icon::new(if open {
+                IconName::ChevronDown
+            } else {
+                IconName::ChevronRight
+            })
+            .xsmall(),
+        )
+        .child(notice.summary.clone())
+        .on_click(move |_, _, cx| toggle_notice(reply, part, key, cx));
+    let details = open.then(|| {
+        let details = v_flex()
+            .id(("notice-details", row))
+            .pl(px(18.))
+            .pt_1()
+            .gap_0p5()
+            .text_sm()
+            .text_color(muted)
+            .children(notice.details.lines().map(|line| line.to_string()));
+        gpui_kit::TestSupportExt::test_support(details)
+    });
+    // Lets UI tests find the notice; inert in normal builds.
+    v_flex()
+        .w_full()
+        .min_w_0()
+        .child(gpui_kit::TestSupportExt::test_support(summary))
+        .children(details)
+        .into_any_element()
 }
 
 /// A message sent to a run while it works: its first line, the whole message
@@ -2172,6 +2344,25 @@ mod tests {
         let chat = plain.chat_rows();
         assert!(chat.steps.is_empty());
         assert_eq!(chat.answer.len(), 2, "with no tool call, it is all answer");
+    }
+
+    /// A notice is a row of its own, passive: never among the run's errors,
+    /// and among a chat reply's steps rather than its answer.
+    #[test]
+    fn notices_are_not_errors() {
+        let mut reply = Reply::default();
+        reply.apply(HarnessEvent::TextStarted);
+        reply.apply(HarnessEvent::TextDelta("Done it.".into()));
+        reply.push_notice("Put back 1 spec file".into(), "Why.\n- spec/a.pi".into());
+        reply.stop();
+        assert!(reply.errors().is_empty());
+        assert!(matches!(
+            reply.rows().last(),
+            Some(OutputRow::Notice(notice)) if notice.summary == "Put back 1 spec file"
+        ));
+        let segments = reply.chat_segments();
+        assert_eq!(segments[0].rows.answer, [0]);
+        assert_eq!(segments[0].rows.steps, [1]);
     }
 
     #[test]

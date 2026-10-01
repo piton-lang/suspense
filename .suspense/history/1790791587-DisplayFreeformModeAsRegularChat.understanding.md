@@ -1,0 +1,7 @@
+- [The message list shows tasks and output as a table, not a conversation, except Freeform, which reads as a chat](.claude/reference/scope/prompt-mode/message-list/index.md#description)
+- [With a Freeform task latest, the task view shows its Freeform conversation as a chat in place of the header and output table](.claude/reference/scope/prompt-mode/message-list/index.md#freeform)
+- [Each Freeform prompt is a tinted bubble on the right, as typed, with its attachments, time, and Resend or Cancel beneath](.claude/reference/scope/prompt-mode/message-list/index.md#freeform)
+- [Each reply is prose on the left, its steps summed up in one expandable line, as the Ask conversation's answers are](.claude/reference/scope/prompt-mode/ask-conversation/index.md#answers)
+- [Messages sent to a running Freeform task show as bubbles of their own, in place in the chat](.claude/reference/scope/prompt-mode/message-list/index.md#freeform)
+- [A Freeform prompt is sent just as typed: no compile, no hidden anchor named, no right sidebar](.claude/reference/scope/prompt-mode/modes/index.md#freeform)
+- [Scrolling past the chat's top still crosses into the previous tasks, as the latest task's output does](.claude/reference/scope/prompt-mode/message-list/index.md#scrolling-past)

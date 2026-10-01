@@ -2,6 +2,7 @@ use /lib
 use /ui
 from ./Backgrounds import MessageListBackgroundsShape
 from ./ChangedFiles import MessageListChangedFilesShape
+from ./Freeform import MessageListFreeformShape
 from ./Links import MessageListLinksShape
 from ./OutputTable import MessageListOutputTableShape
 from ./ReferencedSpec import MessageListReferencedSpecShape
@@ -23,7 +24,8 @@ shape MessageListShape:
     description:
         Shows tasks and their output, not a conversation. Prompts aren't shown
         on the right with responses on the left, and tool calls aren't gathered
-        into groups.
+        into groups. Freeform is the exception: a Freeform task is shown as a
+        regular chat, as its freeform says.
 
     sentPrompt: {MessageListSentPromptShape}
     status: {MessageListStatusShape}
@@ -33,3 +35,4 @@ shape MessageListShape:
     referencedSpec: {MessageListReferencedSpecShape}
     scrolling: {MessageListScrollingShape}
     changedFiles: {MessageListChangedFilesShape}
+    freeform: {MessageListFreeformShape}

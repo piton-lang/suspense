@@ -1091,9 +1091,17 @@ impl HistoryList {
                 .child("No previous tasks match these filters")
                 .into_any_element();
         }
+        // An open Freeform task is shown as a chat, with no table.
+        let freeform_open =
+            id_base == 0 && open.is_some_and(|open| tasks[open].mode == Some(SendMode::Freeform));
+        let no_reply = Reply::default();
         let table_layout = open.map(|open| {
             let task_ix = id_base + open;
-            let reply = &tasks[open].reply;
+            let reply = if freeform_open {
+                &no_reply
+            } else {
+                &tasks[open].reply
+            };
             let steps = collapse_steps.then(|| steps_shown.contains(&task_ix));
             (task_ix, reply, TableLayout::of(reply, steps))
         });
@@ -1147,7 +1155,11 @@ impl HistoryList {
                 // "No output." stands in the header's place, for as long as
                 // there is none.
                 let empty = reply.row_count() == 0;
-                if laid_out.table.layout().is_some_and(|was| was.items() == 0) != empty {
+                // An open Freeform task's reply stands there, measured again
+                // each time, as its steps show and hide.
+                if freeform_open
+                    || laid_out.table.layout().is_some_and(|was| was.items() == 0) != empty
+                {
                     self.rows.remeasure(at + 2..at + 3);
                 }
                 laid_out
@@ -1511,18 +1523,32 @@ impl HistoryList {
                     let Some(task) = tasks_of(entity.read(cx)).get(item) else {
                         return div().into_any_element();
                     };
+                    // A Freeform task's prompt is a message, as in its chat.
+                    let prompt = if freeform_open {
+                        entity
+                            .update(cx, |this, cx| this.freeform_prompt(item, cx))
+                            .unwrap_or_else(|| div().into_any_element())
+                    } else {
+                        task_prompt(task_ix, task, &open_file, Some(toggle), cx)
+                    };
                     // Lets UI tests find the panel; inert in normal builds.
                     gpui_kit::TestSupportExt::test_support(
                         inset()
                             .id(("history-panel", task_ix))
                             .pt_1()
                             .pb_3()
-                            .child(task_prompt(task_ix, task, &open_file, Some(toggle), cx)),
+                            .child(prompt),
                     )
                     .into_any_element()
                 }
                 HistoryRow::TableHeader(place) => {
                     let item = layout.order[place];
+                    // A Freeform task's reply, as in its chat.
+                    if freeform_open {
+                        return entity
+                            .update(cx, |this, cx| this.freeform_reply(item, cx))
+                            .unwrap_or_else(|| div().into_any_element());
+                    }
                     let empty = tasks_of(entity.read(cx))
                         .get(item)
                         .is_none_or(|task| task.reply.row_count() == 0);
@@ -2581,9 +2607,16 @@ struct ProjectSession {
     new_conversation_pending: bool,
     asks: Vec<Ask>,
     steps_shown: HashSet<usize>,
+    /// The chat segments whose steps are shown, by their prompt's element id
+    /// and their place in its reply, in the Ask conversation and the
+    /// Freeform chat.
+    chat_steps_shown: HashSet<(usize, usize)>,
     answers: Vec<PromptTask>,
     _ask_history_load: Task<()>,
     ask_pane: AskPane,
+    /// The Freeform chat the task view shows while the latest task was sent
+    /// in Freeform, as the MessageList's freeform says.
+    freeform_pane: AskPane,
     ask_new_pending: bool,
     ask_session: Option<Session>,
     ask_session_epoch: u64,
@@ -2631,9 +2664,11 @@ impl ProjectSession {
             new_conversation_pending: false,
             asks: Vec::new(),
             steps_shown: HashSet::new(),
+            chat_steps_shown: HashSet::new(),
             answers: Vec::new(),
             _ask_history_load: Task::ready(()),
             ask_pane: AskPane::new(),
+            freeform_pane: AskPane::new(),
             ask_new_pending: false,
             ask_session: None,
             ask_session_epoch: 0,
@@ -2776,6 +2811,10 @@ pub struct PromptMode {
     mark_menu: Option<MarkMenu>,
     /// The answers' tables whose steps were expanded, by task index.
     steps_shown: HashSet<usize>,
+    /// The chat segments whose steps are shown, by their prompt's element id
+    /// and their place in its reply, in the Ask conversation and the
+    /// Freeform chat.
+    chat_steps_shown: HashSet<(usize, usize)>,
     /// The question rows in the stack, drawn only as they come into view,
     /// and the questions they were last laid out for, oldest first.
     ask_rows: MeasuredList,
@@ -2786,6 +2825,9 @@ pub struct PromptMode {
     _ask_history_load: Task<()>,
     /// The Ask conversation, shown beside the tab's contents on the Ask tab.
     ask_pane: AskPane,
+    /// The Freeform chat the task view shows while the latest task was sent
+    /// in Freeform, as the MessageList's freeform says.
+    freeform_pane: AskPane,
     /// New conversation was pressed on the Ask tab with nothing asked since:
     /// the pane marks, at its bottom, that the next question starts one.
     ask_new_pending: bool,
@@ -2943,11 +2985,13 @@ impl PromptMode {
             selection_popover: None,
             mark_menu: None,
             steps_shown: HashSet::new(),
+            chat_steps_shown: HashSet::new(),
             ask_rows: ask_rows(),
             ask_row_ids: RefCell::default(),
             answers: Vec::new(),
             _ask_history_load: Task::ready(()),
             ask_pane: AskPane::new(),
+            freeform_pane: AskPane::new(),
             ask_new_pending: false,
             ask_split_share: ASK_SPLIT_SHARE,
             on_ask_tab: false,
@@ -2993,6 +3037,8 @@ impl PromptMode {
         );
         swap(&mut self.asks, &mut other.asks);
         swap(&mut self.steps_shown, &mut other.steps_shown);
+        swap(&mut self.chat_steps_shown, &mut other.chat_steps_shown);
+        swap(&mut self.freeform_pane, &mut other.freeform_pane);
         swap(&mut self.answers, &mut other.answers);
         swap(&mut self._ask_history_load, &mut other._ask_history_load);
         swap(&mut self.ask_pane, &mut other.ask_pane);
@@ -3650,8 +3696,12 @@ impl PromptMode {
         let latest = ix + 1 == self.tasks.len();
         // A raw output line only changes the raw tail at the end of the
         // output, so there is nothing to redraw while that is out of sight.
+        // The Freeform chat's status line shows the latest raw line too.
+        let freeform = self.tasks[ix].mode == Some(SendMode::Freeform);
         let unseen = matches!(event, HarnessEvent::Output(_))
-            && (!latest || self.task_history.expanded || !self.output_table.end_in_view());
+            && (!latest
+                || self.task_history.expanded
+                || (!freeform && !self.output_table.end_in_view()));
         // Follows new output only while already scrolled to the bottom.
         let scroll = self.output_table.scroll();
         let following = scroll.offset().y <= -scroll.max_offset().y + px(1.);
@@ -3737,7 +3787,17 @@ impl PromptMode {
         if self.task_history.expanded {
             (!up).then(|| f32::from(self.task_history.rows.to_bottom()))
         } else {
-            (up && self.tasks.len() >= 2).then(|| f32::from(self.output_table.list().to_top()))
+            let latest_freeform = self
+                .tasks
+                .last()
+                .is_some_and(|task| task.mode == Some(SendMode::Freeform));
+            (up && self.tasks.len() >= 2).then(|| {
+                f32::from(if latest_freeform {
+                    self.freeform_to_top()
+                } else {
+                    self.output_table.list().to_top()
+                })
+            })
         }
     }
 
@@ -5735,6 +5795,8 @@ impl PromptMode {
             return;
         };
         let task_ix = self.push_task(text.clone().into(), cx);
+        // Sent, the Freeform chat goes to its bottom to follow it.
+        self.lock_freeform_chat();
         self.tasks[task_ix].sent = match &sending {
             Sending::Now(mode, attached, sliced, code_task, sent_from, post_build_update, _) => {
                 SentAs {
@@ -6235,12 +6297,20 @@ impl PromptMode {
                                 .collect::<Vec<_>>()
                                 .join("\n");
                             let mode = guarded.map_or("", SendMode::label);
+                            // Passive: it fails nothing, and opens onto
+                            // the files put back.
+                            let summary = format!(
+                                "Put back {} {what} {} this {mode} task changed",
+                                put_back.len(),
+                                if put_back.len() == 1 { "file" } else { "files" },
+                            );
+                            let details = format!(
+                                "A {mode} task may not change the {what}, so what it changed there was put back as it was:\n{files}"
+                            );
                             this.update(cx, |this, cx| {
                                 this.in_project(&project_dir, cx, |this, cx| {
                                     if let Some(task) = this.tasks.get_mut(task_ix) {
-                                        task.reply.push_error(format!(
-                                            "A {mode} task may not change the {what}, so what it changed there was put back:\n{files}"
-                                        ));
+                                        task.reply.push_notice(summary, details);
                                     }
                                     cx.notify();
                                 });
@@ -6982,6 +7052,10 @@ impl PromptMode {
     /// as while they slide in over it or away from it.
     fn render_latest_header(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let (ix, task) = self.tasks.last().map(|task| (self.tasks.len() - 1, task))?;
+        // A Freeform task is a chat, with no header.
+        if task.mode == Some(SendMode::Freeform) {
+            return None;
+        }
         let open = self.file_opener(cx);
         // Tinted like the tab the task was sent from, as the chat input's body
         // is: red for Code, purple for both, blue for Spec.
@@ -7610,6 +7684,10 @@ impl PromptMode {
 
     /// The latest task's output, filling the space under the header.
     fn render_output(&self, cx: &mut Context<Self>) -> AnyElement {
+        // A Freeform task is shown as a chat, not a table.
+        if let Some(chat) = self.render_freeform_chat(cx) {
+            return chat;
+        }
         let Some(task) = self.tasks.last() else {
             return div().into_any_element();
         };
@@ -8606,6 +8684,7 @@ fn latest_row(id: usize, reply: &Reply, cx: &App) -> AnyElement {
             .truncate()
             .child(first_line(error))
             .into_any_element(),
+        OutputRow::Notice(notice) => muted(notice.summary.clone().into()),
         OutputRow::Sent(text) => task_table::sent_message(("ask-row-sent", id), text, cx),
         OutputRow::Text(_) | OutputRow::Pending => raw_line(),
     };
@@ -9754,6 +9833,7 @@ mod tests {
                 OutputRow::Text(text) => format!("text {text}"),
                 OutputRow::Tool(call) => format!("{} {}", call.name, call.state.label()),
                 OutputRow::Error(error) => format!("error {error}"),
+                OutputRow::Notice(notice) => format!("notice {}", notice.summary),
                 OutputRow::Sent(text) => format!("sent {text}"),
                 OutputRow::Pending => "pending".into(),
             })
@@ -10652,6 +10732,95 @@ mod tests {
         });
         assert!(find(cx, ("changed-files", key).into()));
         assert!(!find(cx, ("changed-files-toggle", key).into()));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// What a Code task changed in the spec is put back, and said so in a
+    /// passive notice, not an error: the task is done, and the notice opens
+    /// onto the files put back and closes again.
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn changes_put_back_are_a_notice(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        use std::os::unix::fs::PermissionsExt as _;
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        cx.executor().allow_parking();
+        let (prompt_mode, handle) = open(cx);
+        let dir = cancel_project("put-back-notice", &prompt_mode, cx);
+        // A harness that writes into the spec, then is done.
+        let script = dir.join("spec-writing-harness.sh");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\n\
+             IFS= read -r line\n\
+             echo stray > spec/stray.pi\n\
+             sleep 0.7\n\
+             echo '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"s1\"}'\n\
+             echo '{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Done.\"}'\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::harness::use_program_for_test(Some(script));
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send(
+                    "Change the code".into(),
+                    SendMode::Code,
+                    Vec::new(),
+                    window,
+                    cx,
+                )
+            })
+        })
+        .unwrap();
+        run_until(cx, &prompt_mode, "the task and its notice", |this| {
+            !this.working.any()
+                && this.tasks.first().is_some_and(|task| {
+                    task.reply
+                        .rows()
+                        .iter()
+                        .any(|row| matches!(row, OutputRow::Notice(_)))
+                })
+        });
+        crate::harness::use_program_for_test(None);
+        assert!(!dir.join("spec/stray.pi").exists(), "the spec file stayed");
+        let notice_row = prompt_mode.read_with(cx, |this, _| {
+            let task = &this.tasks[0];
+            assert_eq!(task.status, TaskStatus::Done, "the notice failed the task");
+            assert!(task.reply.errors().is_empty(), "{:?}", task.reply.errors());
+            task.reply
+                .rows()
+                .iter()
+                .position(|row| {
+                    matches!(row, OutputRow::Notice(notice)
+                    if notice.summary == "Put back 1 spec file this Code task changed")
+                })
+                .expect("no notice of the file put back")
+        });
+        let find = |id: (&'static str, usize), cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.try_find(id).is_some()
+            })
+            .unwrap()
+        };
+        settle_sidebar(cx, handle);
+        assert!(find(("notice-summary", notice_row), cx), "no notice shown");
+        assert!(!find(("notice-details", notice_row), cx), "it starts open");
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("notice-summary", notice_row), cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(find(("notice-details", notice_row), cx), "it didn't open");
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("notice-summary", notice_row), cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(!find(("notice-details", notice_row), cx), "it didn't close");
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -13241,6 +13410,120 @@ mod tests {
                 "question {id} has no end"
             );
         }
+    }
+
+    /// While the latest task was sent in Freeform, the task view shows its
+    /// Freeform conversation as a chat: each prompt a message, each reply
+    /// prose, a message sent to the run a message of its own, and no header
+    /// or table. A task of another mode shows as a task again, and a
+    /// Freeform task opened among the previous tasks is laid out as a chat.
+    #[gpui_kit::test]
+    async fn freeform_tasks_read_as_a_chat(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        let (prompt_mode, handle) = open(cx);
+        let push = |this: &mut PromptMode,
+                    mode: SendMode,
+                    text: &str,
+                    cx: &mut gpui_kit::Context<PromptMode>| {
+            let ix = this.push_task(text.to_string().into(), cx);
+            this.tasks[ix].mode = Some(mode);
+            this.tasks[ix].sent.mode = Some(mode);
+            ix
+        };
+        let sent_row = prompt_mode.update(cx, |this, cx| {
+            let code = push(this, SendMode::Code, "Change the code", cx);
+            this.tasks[code].status = TaskStatus::Done;
+            for text in ["Hello?", "And then?"] {
+                let ix = push(this, SendMode::Freeform, text, cx);
+                for event in [
+                    HarnessEvent::TextStarted,
+                    HarnessEvent::TextDelta(format!("Answer to {text}")),
+                ] {
+                    this.apply_event(ix, event, cx);
+                }
+            }
+            // A message sent to the latest while it ran, and its answer.
+            let latest = this.tasks.len() - 1;
+            this.apply_event(
+                latest,
+                HarnessEvent::Sent {
+                    text: "Also this".into(),
+                    compiled: "Also this".into(),
+                },
+                cx,
+            );
+            this.apply_event(latest, HarnessEvent::TextStarted, cx);
+            this.apply_event(latest, HarnessEvent::TextDelta("Did that too.".into()), cx);
+            for ix in 1..3 {
+                this.tasks[ix].reply.stop();
+                this.tasks[ix].status = TaskStatus::Done;
+            }
+            assert_eq!(
+                this.freeform_keys(),
+                [
+                    super::ask_pane::QuestionKey::Task(1),
+                    super::ask_pane::QuestionKey::Task(2)
+                ]
+            );
+            let segments = this.tasks[2].reply.chat_segments();
+            assert_eq!(segments.len(), 2, "{segments:?}");
+            segments[1].sent.unwrap()
+        });
+        frames(handle, cx);
+        cx.update_window(handle, |_, window, _| {
+            for ix in [1usize, 2] {
+                assert!(
+                    window.try_find(("question", ix)).is_some(),
+                    "no message {ix}"
+                );
+            }
+            assert!(
+                window.try_find(("question", 0usize)).is_none(),
+                "the Code task is in the chat"
+            );
+            assert!(
+                window.try_find(("sent-message", sent_row)).is_some(),
+                "no message sent"
+            );
+            assert!(
+                window.try_find("task-header").is_none(),
+                "a Freeform task has a header"
+            );
+            assert!(
+                window.try_find("task-output").is_none(),
+                "a Freeform task has a table"
+            );
+        })
+        .unwrap();
+
+        // Opened among the previous tasks, a Freeform task is a chat too.
+        prompt_mode.update(cx, |this, cx| {
+            let ix = push(this, SendMode::Code, "Back to code", cx);
+            this.tasks[ix].status = TaskStatus::Done;
+            this.task_history.toggle();
+            this.task_history.open = Some(1);
+            cx.notify();
+        });
+        frames(handle, cx);
+        cx.update_window(handle, |_, window, _| {
+            assert!(
+                window.try_find("freeform-chat").is_none(),
+                "the chat outlived Freeform"
+            );
+            assert!(
+                window.try_find(("history-panel", 1usize)).is_some(),
+                "not opened"
+            );
+            assert!(
+                window.try_find(("freeform-reply", 1usize)).is_some(),
+                "no chat reply opened"
+            );
+            assert!(
+                window.try_find(("question", 1usize)).is_some(),
+                "no message opened"
+            );
+        })
+        .unwrap();
     }
 
     /// Selecting some of an answer's text in the Ask conversation offers a
@@ -17132,18 +17415,12 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
             .unwrap();
         assert_eq!(saved.anchor.attached_images, paths);
         assert_eq!(PromptTask::restore(saved).sent.attached_images, paths);
-        // Beneath the prompt in the header, and in the raw prompt.
+        // In its message in the Freeform chat, and in the raw prompt.
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
-            let row = window.find(("header-images", 0usize)).bounds();
-            let prompt = window.find(("compiled-prompt", 0usize)).bounds();
-            assert!(
-                row.top() >= prompt.bottom() - gpui_kit::px(0.5),
-                "{row:?} {prompt:?}"
-            );
             assert!(
                 window
-                    .within(("header-images", 0usize))
+                    .within(("question", 0usize))
                     .try_find(("prompt-image", 1usize))
                     .is_some()
             );
@@ -17442,13 +17719,16 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
                     "it failed, or built the spec"
                 );
             }
-            // Its header shows the prompt as it was sent.
+            // It keeps the prompt as it was sent.
             assert_eq!(this.tasks[0].compiled.as_ref().unwrap().markdown, sent);
         });
-        // With no hidden anchor named.
+        // Shown as a chat, both prompts messages with Resend beneath them,
+        // with no header and no hidden anchor named.
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
-            assert!(window.try_find(("resend-latest", 1usize)).is_some());
+            assert!(window.try_find(("question", 0usize)).is_some());
+            assert!(window.try_find(("resend-question", 1usize)).is_some());
+            assert!(window.try_find("task-header").is_none());
             assert!(window.try_find(("prompt-anchor", 1usize)).is_none());
             assert!(window.try_find(("send-to-other-latest", 1usize)).is_none());
         })
@@ -17531,7 +17811,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         });
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
-            assert!(window.try_find(("resend-latest", 1usize)).is_some());
+            assert!(window.try_find(("resend-question", 1usize)).is_some());
             assert!(window.try_find(("send-to-other-latest", 1usize)).is_none());
             prompt_mode.update(cx, |this, cx| {
                 this.send_selected_to(SendMode::Spec, window, cx);
@@ -17962,7 +18242,14 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
             !this.working.any() && this.tasks.len() == 1
         });
         crate::harness::use_program_for_test(None);
-        let prompt = raw_prompt_of_latest(cx, handle, &prompt_mode);
+        // Its chat has no header to open it from; it opens all the same.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| this.open_raw_prompt(0, window, cx));
+        })
+        .unwrap();
+        let prompt = crate::raw_prompt::last_opened()
+            .expect("no raw prompt was opened")
+            .read_with(cx, |view, _| view.prompt().clone());
         assert_eq!(prompt.sections[0].text, Err(NO_SYSTEM_PROMPT));
         assert_eq!(
             prompt.sections[1].copied().map(|text| text.to_string()),

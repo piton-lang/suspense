@@ -1,0 +1,68 @@
+
+export anchor DisplayCrossTaskChangesAsNotices2:
+    userPrompt:
+        \\\
+        When code task tries to change spec or spec tries to change code and Suspense catches it, we only need a passive "notice" that's expandable to view the details.  Right now it displays as an Error which is misleading and alarming.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            When code task tries to change spec or spec tries to change code and Suspense catches it, we only need a passive "notice" that's expandable to view the details.  Right now it displays as an Error which is misleading and alarming.
+            \\\
+        result:
+            \\\
+            When Suspense puts back changes a task made outside its mode, the spec now shows that as a passive, expandable notice instead of an error. I changed the spec only, not the code; `piton check`, `piton format --check` and `piton build` all pass.
+
+            **What changed**
+            - **New `spec/ui/components/task-table/Notices.pi`** (`TaskTableNoticesShape`, wired into `TaskTableShape` as `notices`):
+              - **`description`:** a notice is the app telling you something about the run, such as that it put back changes a Code task made in the spec or a Spec task made in the code. It is never an error: never in the error colour, never fails the task, never changes its status, and never counts among the run's errors.
+              - **`row`:** it gets its own row where it happened, with a muted grey "Notice" badge and an info icon. The output is one muted line with a right chevron, such as "Put back 3 spec files this Code task changed". It has no status.
+              - **`details`:** clicking the line expands it in place. The details say the task's mode may not change that location, so its changes there were put back, then list each file's path. It starts collapsed and stays as you left it while the app runs.
+              - **`kept`:** it shows the same way everywhere the task's output appears. In an Ask or Freeform chat reply it sits among the steps as a muted expandable line, never with the errors at the end of the reply.
+            - **`TaskTableTypesShape`** (`Types.pi`): the badge list now includes "Notice".
+            - **`HarnessIntegrationShape.protectedLocations`**: now says the put-back is reported in the task's output as a passive notice, never an error.
+
+            **Anchors the code should follow**
+            - **`TaskTableNoticesShape`:**
+              - `src/task_table.rs` needs a notice part and row type alongside `Error` (say `ReplyPart::Notice { summary, details }` and `OutputRow::Notice`).
+              - Give it a muted badge, and a collapsible summary line whose details show in place.
+              - Keep it out of `Reply::errors()`, and out of anything that decides whether a task failed.
+            - **`HarnessIntegrationShape.protectedLocations`:** in `src/prompt_mode.rs` around line 6303, where the guard reports put-back files, push a notice instead of calling `push_error`.
+            - **`TaskTableNoticesShape.kept`:** in `src/prompt_mode/ask_pane.rs`, `chat_segments` and the chat rendering should treat a notice as a step, not an error.
+            - **Tests:** a task whose changes were put back finishes Done, shows a "Notice" row rather than an "Error" row, and its details expand and collapse.
+
+            **Two things I left alone.** The prompt was only about the put-back, so the spec doesn't cover them:
+            - **Build failure:** "piton build failed, so the compiled spec may be out of date" is also pushed as an error, though it doesn't fail the task either.
+            - **History save failure:** so is "Could not save this task to the history".
+
+            Either could become a notice too; say if you want that.
+            \\\
+
+    sentFrom: DisplayCrossTaskChangesAsNotices

@@ -16,7 +16,7 @@
 //! and however long their answers, only the rows in view are laid out.
 
 use super::*;
-use crate::task_table::ChatRows;
+use crate::task_table::ChatSegment;
 
 /// The share of the width above the chat input the pane starts at, and the
 /// least and most its edge can be dragged to.
@@ -43,12 +43,32 @@ const QUESTION_TINT: f32 = 0.12;
 /// the split.
 pub(super) struct AskSplitResize;
 
-/// A question in the pane: saved with the project, by its place among the
-/// saved questions, or asked since, by its id.
+/// A prompt in a chat: a question saved with the project, by its place
+/// among the saved questions, or asked since, by its id; or a Freeform task,
+/// by its place among the tasks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum QuestionKey {
     Answer(usize),
     Ask(usize),
+    Task(usize),
+}
+
+/// Which chat a list shows: the Ask conversation, or the Freeform chat in
+/// the task view (see the MessageList's freeform).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Chat {
+    Ask,
+    Freeform,
+}
+
+impl Chat {
+    /// The mode whose colour tints its prompts.
+    fn mode(self) -> SendMode {
+        match self {
+            Chat::Ask => SendMode::Ask,
+            Chat::Freeform => SendMode::Freeform,
+        }
+    }
 }
 
 impl QuestionKey {
@@ -58,6 +78,7 @@ impl QuestionKey {
         match self {
             Self::Answer(ix) => ASK_HISTORY_IX + ix,
             Self::Ask(id) => ASK_IX - id,
+            Self::Task(ix) => ix,
         }
     }
 
@@ -67,23 +88,28 @@ impl QuestionKey {
     }
 }
 
-/// What a row of the pane's list shows.
+/// What a row of a chat's list shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PaneRow {
-    /// A question's box, headed by a divider when it begins a conversation.
+    /// A prompt's box, headed by a divider when it begins a conversation.
     Question(usize),
-    /// Its line summing up the steps before its answer, or, while it runs,
-    /// its status line; nothing when it is over with no steps.
-    Line(usize),
-    /// A step before its answer, by its row of the reply, shown while its
-    /// steps are expanded.
+    /// A message sent to its run while it worked, by its row of the reply,
+    /// in a box of its own.
+    Sent(usize, usize),
+    /// A segment's line summing up the steps before its answer, or, while
+    /// the run is on its last segment, its status line; nothing when there
+    /// is neither.
+    Line(usize, usize),
+    /// A step before an answer, by its row of the reply, shown while its
+    /// segment's steps are expanded.
     Step(usize, usize),
-    /// A piece of its answer, by its row of the reply.
+    /// A piece of an answer, by its row of the reply.
     Answer(usize, usize),
     /// Its end: "No answer." for a finished one with nothing to show, the
-    /// error it failed with, or "Stopped".
+    /// error it failed with, or that it was stopped; for a task, the files
+    /// it changed beneath.
     End(usize),
-    /// After the last question: the divider New conversation put in, if the
+    /// After the last prompt: the divider New conversation put in, if the
     /// next question starts one, and the margin ending the list.
     Tail,
 }
@@ -93,40 +119,79 @@ enum PaneRow {
 enum Piece {
     Tool(String, Option<String>),
     Text(MarkdownKey, SharedString),
+    /// A notice, a muted line that opens onto its details: the notice, its
+    /// reply's number, and its part of the reply.
+    Notice(task_table::Notice, u64, usize),
 }
 
-/// How many rows a question takes besides its steps and answer: its box, its
-/// line, and its end.
-const QUESTION_ROWS: usize = 3;
+/// How many rows a prompt takes besides its segments': its box and its end.
+const QUESTION_ROWS: usize = 2;
 
-/// How a question's answer is laid out: its steps, whether they are shown,
-/// and the pieces of its answer.
-#[derive(Clone, Debug, Default, PartialEq)]
+/// How a prompt's reply is laid out: each segment of it, and whether its
+/// steps are shown.
+#[derive(Clone, Debug, PartialEq)]
 struct AnswerLayout {
-    chat: ChatRows,
-    shown: bool,
+    segments: Vec<(ChatSegment, bool)>,
+}
+
+impl Default for AnswerLayout {
+    fn default() -> Self {
+        Self {
+            segments: vec![(ChatSegment::default(), false)],
+        }
+    }
 }
 
 impl AnswerLayout {
-    fn items(&self) -> usize {
-        QUESTION_ROWS + self.shown_steps() + self.chat.answer.len()
+    fn segment_items((segment, shown): &(ChatSegment, bool)) -> usize {
+        usize::from(segment.sent.is_some())
+            + 1
+            + if *shown { segment.rows.steps.len() } else { 0 }
+            + segment.rows.answer.len()
     }
 
-    fn shown_steps(&self) -> usize {
-        if self.shown { self.chat.steps.len() } else { 0 }
+    fn items(&self) -> usize {
+        QUESTION_ROWS + self.segments.iter().map(Self::segment_items).sum::<usize>()
+    }
+
+    /// The last segment, which a running prompt's status line heads.
+    fn last(&self) -> usize {
+        self.segments.len().saturating_sub(1)
+    }
+
+    /// The first piece of the answer of segment `seg`, if any.
+    fn first_answer(&self, seg: usize) -> Option<usize> {
+        self.segments.get(seg)?.0.rows.answer.first().copied()
     }
 
     fn row_at(&self, question: usize, at: usize) -> PaneRow {
-        let steps = self.shown_steps();
-        match at {
-            0 => PaneRow::Question(question),
-            1 => PaneRow::Line(question),
-            at if at < 2 + steps => PaneRow::Step(question, self.chat.steps[at - 2]),
-            at if at < 2 + steps + self.chat.answer.len() => {
-                PaneRow::Answer(question, self.chat.answer[at - 2 - steps])
-            }
-            _ => PaneRow::End(question),
+        if at == 0 {
+            return PaneRow::Question(question);
         }
+        let mut at = at - 1;
+        for (seg, entry) in self.segments.iter().enumerate() {
+            let (segment, shown) = entry;
+            if let Some(sent) = segment.sent {
+                if at == 0 {
+                    return PaneRow::Sent(question, sent);
+                }
+                at -= 1;
+            }
+            if at == 0 {
+                return PaneRow::Line(question, seg);
+            }
+            at -= 1;
+            let steps = if *shown { segment.rows.steps.len() } else { 0 };
+            if at < steps {
+                return PaneRow::Step(question, segment.rows.steps[at]);
+            }
+            at -= steps;
+            if at < segment.rows.answer.len() {
+                return PaneRow::Answer(question, segment.rows.answer[at]);
+            }
+            at -= segment.rows.answer.len();
+        }
+        PaneRow::End(question)
     }
 }
 
@@ -231,6 +296,40 @@ impl PromptMode {
             .collect()
     }
 
+    /// The Freeform chat's prompts, oldest first: the latest task and the
+    /// Freeform tasks sent straight before it, back to the last task of
+    /// another mode, or to the first that started a new conversation. None
+    /// while the latest task isn't Freeform.
+    pub(super) fn freeform_keys(&self) -> Vec<QuestionKey> {
+        let mut keys = Vec::new();
+        for (ix, task) in self.tasks.iter().enumerate().rev() {
+            if task.mode != Some(SendMode::Freeform) {
+                break;
+            }
+            keys.push(QuestionKey::Task(ix));
+            if task.new_conversation {
+                break;
+            }
+        }
+        keys.reverse();
+        keys
+    }
+
+    /// The pane `chat` is shown in.
+    fn chat_pane(&self, chat: Chat) -> &AskPane {
+        match chat {
+            Chat::Ask => &self.ask_pane,
+            Chat::Freeform => &self.freeform_pane,
+        }
+    }
+
+    fn chat_pane_mut(&mut self, chat: Chat) -> &mut AskPane {
+        match chat {
+            Chat::Ask => &mut self.ask_pane,
+            Chat::Freeform => &mut self.freeform_pane,
+        }
+    }
+
     fn question(&self, key: QuestionKey) -> Option<&PromptTask> {
         match key {
             QuestionKey::Answer(ix) => self.answers.get(ix),
@@ -239,12 +338,19 @@ impl PromptMode {
                 .iter()
                 .find(|ask| ask.id == id)
                 .map(|ask| &ask.task),
+            QuestionKey::Task(ix) => self.tasks.get(ix),
         }
     }
 
     /// Whether each question begins a conversation: the first, and each whose
-    /// record says it started one.
+    /// record says it started one. The Freeform chat marks none.
     fn conversation_starts(&self, keys: &[QuestionKey]) -> Vec<bool> {
+        if keys
+            .first()
+            .is_some_and(|key| matches!(key, QuestionKey::Task(_)))
+        {
+            return vec![false; keys.len()];
+        }
         keys.iter()
             .enumerate()
             .map(|(ix, key)| {
@@ -284,6 +390,11 @@ impl PromptMode {
     /// Asks the question `key` again, as it was asked; it comes in at the
     /// bottom.
     fn resend_question(&mut self, key: QuestionKey, window: &mut Window, cx: &mut Context<Self>) {
+        // A Freeform task is resent as any task is.
+        if let QuestionKey::Task(ix) = key {
+            self.resend(|this| &this.tasks, ix, window, cx);
+            return;
+        }
         let Some(task) = self.question(key) else {
             return;
         };
@@ -315,9 +426,10 @@ impl PromptMode {
     /// Tells the list what changed since it was last laid out: questions
     /// asked or loaded, and each question whose answer, steps shown, status,
     /// or divider changed, or whose markdown finished parsing.
-    fn lay_out_ask_pane(&self, keys: &[QuestionKey], cx: &App) -> PaneLayout {
-        let rows = &self.ask_pane.rows;
-        let mut laid_out = self.ask_pane.laid_out.borrow_mut();
+    fn lay_out_chat(&self, chat: Chat, keys: &[QuestionKey], cx: &App) -> PaneLayout {
+        let pane = self.chat_pane(chat);
+        let rows = &pane.rows;
+        let mut laid_out = pane.laid_out.borrow_mut();
         let old_items = |looks: &[Option<Look>], ix: usize| {
             looks[ix]
                 .as_ref()
@@ -361,8 +473,16 @@ impl PromptMode {
                 continue;
             };
             let answer = AnswerLayout {
-                chat: task.reply.chat_rows(),
-                shown: self.steps_shown.contains(&key.table()),
+                segments: task
+                    .reply
+                    .chat_segments()
+                    .into_iter()
+                    .enumerate()
+                    .map(|(seg, segment)| {
+                        let shown = self.chat_steps_shown.contains(&(key.id(), seg));
+                        (segment, shown)
+                    })
+                    .collect(),
             };
             let look = Look {
                 starts: starts_conversation[ix],
@@ -377,13 +497,13 @@ impl PromptMode {
                 rows.remeasure(base..base + items);
             } else if task.status.is_active() {
                 // While it runs, its status line follows the harness.
-                rows.remeasure(base + 1..base + 2);
+                rows.remeasure(base + 1..base + items);
             }
             laid_out.looks[ix] = Some(look);
             base += items;
             answers.push(answer);
         }
-        let pending = self.ask_new_pending;
+        let pending = chat == Chat::Ask && self.ask_new_pending;
         if laid_out.pending != pending {
             rows.remeasure(base..base + 1);
             laid_out.pending = pending;
@@ -424,8 +544,10 @@ impl PromptMode {
     /// A question's box, against the pane's right edge: the question as
     /// typed, with anything it was sent with beneath it, then when it was
     /// asked and, once it is over, Resend.
+    #[allow(clippy::too_many_arguments)]
     fn question_row(
         &self,
+        chat: Chat,
         key: QuestionKey,
         task: &PromptTask,
         first: bool,
@@ -436,7 +558,7 @@ impl PromptMode {
         let id = key.id();
         let tint = Hsla {
             a: QUESTION_TINT,
-            ..chat_input::mode_color(SendMode::Ask, cx)
+            ..chat_input::mode_color(chat.mode(), cx)
         };
         let attached_text = task.sent.attached_text.iter().map(|text| {
             let lines = text.lines().count();
@@ -487,7 +609,21 @@ impl PromptMode {
                             .ok();
                     },
                 ))
-            });
+            })
+            // A Freeform task is cancelled from beneath its prompt while it
+            // runs.
+            .when_some(
+                match key {
+                    QuestionKey::Task(ix) if task.can_cancel() => Some(ix),
+                    _ => None,
+                },
+                |footer, ix| {
+                    footer.child(
+                        cancel_button(("cancel-freeform", ix))
+                            .on_click(cx.listener(move |this, _, _, cx| this.cancel_task(ix, cx))),
+                    )
+                },
+            );
         v_flex()
             .w_full()
             .px_4()
@@ -515,11 +651,13 @@ impl PromptMode {
         key: QuestionKey,
         task: &PromptTask,
         answer: &AnswerLayout,
+        seg: usize,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let id = key.id();
         let muted = cx.theme().muted_foreground;
-        if task.status.is_active() {
+        // Only the segment the run is on shows its status.
+        if task.status.is_active() && seg == answer.last() {
             let stop = match key {
                 QuestionKey::Ask(ask) => Some(
                     Button::new(("stop-ask", ask))
@@ -530,7 +668,7 @@ impl PromptMode {
                         .tooltip("Stop this question, leaving the others running")
                         .on_click(cx.listener(move |this, _, _, cx| this.stop_ask(ask, cx))),
                 ),
-                QuestionKey::Answer(_) => None,
+                QuestionKey::Answer(_) | QuestionKey::Task(_) => None,
             };
             let row = h_flex()
                 .id(("question-status", id))
@@ -551,10 +689,13 @@ impl PromptMode {
                 .children(stop);
             return gpui_kit::TestSupportExt::test_support(row).into_any_element();
         }
-        if answer.chat.steps.is_empty() {
+        let Some((segment, shown)) = answer.segments.get(seg) else {
+            return div().into_any_element();
+        };
+        if segment.rows.steps.is_empty() {
             return div().into_any_element();
         }
-        let table = key.table();
+        let shown = *shown;
         let toggle = h_flex()
             .id(("answer-steps", id))
             .gap_1p5()
@@ -563,21 +704,22 @@ impl PromptMode {
             .text_sm()
             .text_color(muted)
             .child(
-                Icon::new(if answer.shown {
+                Icon::new(if shown {
                     IconName::ChevronDown
                 } else {
                     IconName::ChevronRight
                 })
                 .xsmall(),
             )
-            .child(task.reply.steps_summary(&answer.chat.steps))
+            .child(task.reply.steps_summary(&segment.rows.steps))
             .on_click(cx.listener(move |this, _, _, cx| {
-                if !this.steps_shown.remove(&table) {
-                    this.steps_shown.insert(table);
+                if !this.chat_steps_shown.remove(&(id, seg)) {
+                    this.chat_steps_shown.insert((id, seg));
                 }
                 cx.notify();
             }));
         div()
+            .id(("answer-segment", seg))
             .w_full()
             .px_4()
             .pb_1()
@@ -585,9 +727,45 @@ impl PromptMode {
             .into_any_element()
     }
 
+    /// A message sent to a prompt's run while it worked, in a box of its own
+    /// on the right, laid out as a prompt's is.
+    fn sent_row(chat: Chat, key: QuestionKey, ix: usize, text: &str, cx: &App) -> AnyElement {
+        let theme = cx.theme();
+        let tint = Hsla {
+            a: QUESTION_TINT,
+            ..chat_input::mode_color(chat.mode(), cx)
+        };
+        let bubble = div()
+            .id(("sent-message", ix))
+            .max_w(relative(0.8))
+            .min_w_0()
+            .overflow_hidden()
+            .rounded(px(6.))
+            .bg(theme.secondary)
+            .child(div().px_3().py_2().bg(tint).child(text.to_string()));
+        div()
+            .id(("sent-of", key.id()))
+            .w_full()
+            .px_4()
+            .pt_2()
+            .pb(ANSWER_GAP)
+            .child(
+                h_flex()
+                    .w_full()
+                    .justify_end()
+                    .child(gpui_kit::TestSupportExt::test_support(bubble)),
+            )
+            .into_any_element()
+    }
+
     /// What row `ix` of `reply` shows as a step or a piece of an answer.
     fn piece_of(key: QuestionKey, reply: &Reply, ix: usize, cx: &App) -> Option<Piece> {
         match reply.row(ix)? {
+            OutputRow::Notice(notice) => Some(Piece::Notice(
+                notice.clone(),
+                reply.version().0,
+                reply.part_of_row(ix)?,
+            )),
             OutputRow::Tool(call) => {
                 let project_dir = ProjectDirectory::get(cx);
                 Some(Piece::Tool(
@@ -616,6 +794,9 @@ impl PromptMode {
         let (muted, mono) = (theme.muted_foreground, theme.mono_font_family.clone());
         let step =
             match piece {
+                Piece::Notice(notice, reply, part) => {
+                    task_table::notice_view(key.table(), reply, part, ix, &notice, cx)
+                }
                 Piece::Tool(name, argument) => h_flex()
                     .gap_2()
                     .min_w_0()
@@ -669,7 +850,7 @@ impl PromptMode {
                 Some(open),
                 cx,
             )),
-            Piece::Tool(..) => None,
+            Piece::Tool(..) | Piece::Notice(..) => None,
         };
         let piece = div()
             .id(("answer-row", ix))
@@ -689,10 +870,12 @@ impl PromptMode {
     /// A question's end: the error it failed with, "Stopped" once stopped,
     /// or "No answer." when it finished with nothing to show.
     fn answer_end(
+        &self,
         key: QuestionKey,
         task: &PromptTask,
         answer: &AnswerLayout,
-        cx: &App,
+        with_changed: bool,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = cx.theme();
         let end = v_flex()
@@ -713,15 +896,32 @@ impl PromptMode {
                 };
                 end.pt_2().text_color(theme.danger).children(errors)
             }
-            TaskStatus::Cancelled => end
-                .pt_2()
-                .text_color(theme.muted_foreground)
-                .child("Stopped"),
-            TaskStatus::Done if answer.chat.answer.is_empty() => {
+            TaskStatus::Cancelled => {
+                end.pt_2()
+                    .text_color(theme.muted_foreground)
+                    .child(match key {
+                        QuestionKey::Task(_) => "Cancelled",
+                        _ => "Stopped",
+                    })
+            }
+            TaskStatus::Done
+                if answer
+                    .segments
+                    .last()
+                    .is_none_or(|(segment, _)| segment.rows.answer.is_empty()) =>
+            {
                 end.text_color(theme.muted_foreground).child("No answer.")
             }
             _ => end,
         };
+        // A task's files changed while it ran, beneath its reply.
+        let changed = match key {
+            QuestionKey::Task(ix) if with_changed => {
+                self.changed_files_of(ix, id_of_latest(ix), cx)
+            }
+            _ => None,
+        };
+        let end = end.children(changed.map(|changed| div().pt_2().child(changed)));
         gpui_kit::TestSupportExt::test_support(end).into_any_element()
     }
 
@@ -825,16 +1025,31 @@ impl PromptMode {
     /// Every question and its answer, oldest first, as one list that scrolls,
     /// laying out only what is in view.
     fn render_conversation(&self, keys: &[QuestionKey], cx: &mut Context<Self>) -> AnyElement {
-        let layout = Rc::new(self.lay_out_ask_pane(keys, cx));
-        let rows = &self.ask_pane.rows;
-        if let Some(key) = self.ask_pane.reveal.take()
+        self.render_chat(Chat::Ask, keys, cx)
+    }
+
+    /// The Freeform chat the task view shows while the latest task was sent
+    /// in Freeform: each prompt and its reply, oldest first, laid out as the
+    /// Ask conversation is. None while the latest task isn't Freeform.
+    pub(super) fn render_freeform_chat(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let keys = self.freeform_keys();
+        (!keys.is_empty()).then(|| self.render_chat(Chat::Freeform, &keys, cx))
+    }
+
+    /// `chat`'s prompts, `keys`, and their replies, oldest first, as one list
+    /// that scrolls, laying out only what is in view.
+    fn render_chat(&self, chat: Chat, keys: &[QuestionKey], cx: &mut Context<Self>) -> AnyElement {
+        let layout = Rc::new(self.lay_out_chat(chat, keys, cx));
+        let pane = self.chat_pane(chat);
+        let rows = &pane.rows;
+        if let Some(key) = pane.reveal.take()
             && let Some(ix) = keys.iter().position(|k| *k == key)
         {
             rows.state().scroll_to(ListOffset {
                 item_ix: layout.starts[ix],
                 offset_in_item: px(0.),
             });
-        } else if self.ask_pane.locked {
+        } else if pane.locked {
             rows.scroll_to_end();
         }
         let keys: Rc<Vec<QuestionKey>> = Rc::new(keys.to_vec());
@@ -861,10 +1076,25 @@ impl PromptMode {
                         let Some(task) = this.question(key) else {
                             return div().into_any_element();
                         };
-                        this.question_row(key, task, q == 0, starts, cx)
+                        this.question_row(chat, key, task, q == 0, starts, cx)
                     })
                 }
-                PaneRow::Line(q) => {
+                PaneRow::Sent(q, row) => {
+                    let Some((key, _)) = question(q, cx) else {
+                        return div().into_any_element();
+                    };
+                    let text = entity.read(cx).question(key).and_then(|task| {
+                        match task.reply.row(row)? {
+                            OutputRow::Sent(text) => Some(text.to_string()),
+                            _ => None,
+                        }
+                    });
+                    match text {
+                        Some(text) => Self::sent_row(chat, key, row, &text, cx),
+                        None => div().into_any_element(),
+                    }
+                }
+                PaneRow::Line(q, seg) => {
                     let Some((key, _)) = question(q, cx) else {
                         return div().into_any_element();
                     };
@@ -873,7 +1103,7 @@ impl PromptMode {
                         let Some(task) = this.question(key) else {
                             return div().into_any_element();
                         };
-                        this.answer_line(key, task, &answer, cx)
+                        this.answer_line(key, task, &answer, seg, cx)
                     })
                 }
                 PaneRow::Step(q, row) | PaneRow::Answer(q, row) => {
@@ -890,11 +1120,9 @@ impl PromptMode {
                     if let PaneRow::Step(..) = layout.row_at(ix) {
                         return Self::answer_step(key, row, piece, &open_file, cx);
                     }
-                    let first = layout
-                        .answers
-                        .get(q)
-                        .and_then(|answer| answer.chat.answer.first())
-                        == Some(&row);
+                    let first = layout.answers.get(q).is_some_and(|answer| {
+                        (0..answer.segments.len()).any(|seg| answer.first_answer(seg) == Some(row))
+                    });
                     Self::answer_piece(key, row, piece, first, &open_file, cx)
                 }
                 PaneRow::End(q) => {
@@ -902,14 +1130,15 @@ impl PromptMode {
                         return div().into_any_element();
                     };
                     let answer = answer(q);
-                    let this = entity.read(cx);
-                    let Some(task) = this.question(key) else {
-                        return div().into_any_element();
-                    };
-                    Self::answer_end(key, task, &answer, cx)
+                    entity.update(cx, |this, cx| {
+                        let Some(task) = this.question(key) else {
+                            return div().into_any_element();
+                        };
+                        this.answer_end(key, task, &answer, true, cx)
+                    })
                 }
                 PaneRow::Tail => {
-                    let pending = entity.read(cx).ask_new_pending;
+                    let pending = chat == Chat::Ask && entity.read(cx).ask_new_pending;
                     div()
                         .w_full()
                         .px_4()
@@ -922,8 +1151,12 @@ impl PromptMode {
                 }
             }
         });
+        let (scroll_id, scrollbar_id) = match chat {
+            Chat::Ask => ("ask-pane-scroll", "ask-pane"),
+            Chat::Freeform => ("freeform-chat", "freeform-chat-scrollbar"),
+        };
         let list = div()
-            .id("ask-pane-scroll")
+            .id(scroll_id)
             .flex_1()
             .min_h_0()
             .size_full()
@@ -932,8 +1165,9 @@ impl PromptMode {
         let this = cx.entity().downgrade();
         let toggle: SetLock = Rc::new(move |locked, _, cx| {
             this.update(cx, |this, cx| {
-                if this.ask_pane.locked != locked {
-                    this.ask_pane.locked = locked;
+                let pane = this.chat_pane_mut(chat);
+                if pane.locked != locked {
+                    pane.locked = locked;
                     cx.notify();
                 }
             })
@@ -942,15 +1176,83 @@ impl PromptMode {
         div()
             .flex_1()
             .min_h_0()
+            .size_full()
             .child(scrollbar::with_scrollbar(
-                "ask-pane",
+                scrollbar_id,
                 rows,
                 list,
                 true,
-                Some((self.ask_pane.locked, toggle)),
+                Some((pane.locked, toggle)),
                 cx,
             ))
             .into_any_element()
+    }
+
+    /// The Freeform task at `ix`'s prompt, as the Freeform chat shows it,
+    /// for it open among the previous tasks.
+    pub(super) fn freeform_prompt(&self, ix: usize, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let task = self.tasks.get(ix)?;
+        Some(self.question_row(Chat::Freeform, QuestionKey::Task(ix), task, true, false, cx))
+    }
+
+    /// The Freeform task at `ix`'s reply, as the Freeform chat shows it, all
+    /// at once, for it open among the previous tasks, where its changed files
+    /// follow of their own.
+    pub(super) fn freeform_reply(&self, ix: usize, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let key = QuestionKey::Task(ix);
+        let task = self.tasks.get(ix)?;
+        let answer = AnswerLayout {
+            segments: task
+                .reply
+                .chat_segments()
+                .into_iter()
+                .enumerate()
+                .map(|(seg, segment)| {
+                    let shown = self.chat_steps_shown.contains(&(key.id(), seg));
+                    (segment, shown)
+                })
+                .collect(),
+        };
+        let open = self.file_opener(cx);
+        let mut children = Vec::new();
+        for at in 1..answer.items() - 1 {
+            let element = match answer.row_at(0, at) {
+                PaneRow::Sent(_, row) => match task.reply.row(row) {
+                    Some(OutputRow::Sent(text)) => {
+                        Some(Self::sent_row(Chat::Freeform, key, row, text, cx))
+                    }
+                    _ => None,
+                },
+                PaneRow::Line(_, seg) => Some(self.answer_line(key, task, &answer, seg, cx)),
+                PaneRow::Step(_, row) => Self::piece_of(key, &task.reply, row, cx)
+                    .map(|piece| Self::answer_step(key, row, piece, &open, cx)),
+                PaneRow::Answer(_, row) => {
+                    let first =
+                        (0..answer.segments.len()).any(|seg| answer.first_answer(seg) == Some(row));
+                    Self::piece_of(key, &task.reply, row, cx)
+                        .map(|piece| Self::answer_piece(key, row, piece, first, &open, cx))
+                }
+                _ => None,
+            };
+            children.extend(element);
+        }
+        children.push(self.answer_end(key, task, &answer, false, cx));
+        let reply = v_flex()
+            .id(("freeform-reply", ix))
+            .w_full()
+            .children(children);
+        // Lets UI tests find the reply; inert in normal builds.
+        Some(gpui_kit::TestSupportExt::test_support(reply).into_any_element())
+    }
+
+    /// How far the Freeform chat has to scroll up to reach its top.
+    pub(super) fn freeform_to_top(&self) -> Pixels {
+        self.freeform_pane.rows.to_top()
+    }
+
+    /// Locks the Freeform chat to its bottom, as sending a prompt does.
+    pub(super) fn lock_freeform_chat(&mut self) {
+        self.freeform_pane.locked = true;
     }
 
     /// Resizes the split so the pane's left edge is at `x`, within `bounds`,

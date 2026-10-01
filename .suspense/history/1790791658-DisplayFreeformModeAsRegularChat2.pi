@@ -1,0 +1,85 @@
+
+export anchor DisplayFreeformModeAsRegularChat2:
+    userPrompt:
+        \\\
+        Freeform mode needs be display as just a regular chat in the @{MessageList}
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Freeform mode needs be display as just a regular chat in the @{MessageList}
+            \\\
+        result:
+            \\\
+            The spec now shows Freeform tasks in the message list as a regular chat, laid out like the Ask conversation, instead of a task header and output table. I changed the spec only, not the code; `piton check`, `piton format --check` and `piton build` all pass.
+
+            **What changed**
+
+            New `spec/scope/prompt-mode/message-list/Freeform.pi`, `MessageListFreeformShape`, wired into `MessageListShape` as `freeform`:
+            - **`conversation`:** when the latest task is Freeform, the space between the previous tasks row and the queue shows a chat instead of the header and output table. The chat holds the latest task and the Freeform tasks sent just before it. It goes back to the last task of another mode, or to the first one that started a new conversation, and runs oldest at the top. Sending a task in another mode shows that task in the usual way.
+            - **`messages`:**
+              - Each prompt is a bubble on the right, faintly tinted Freeform's grey, showing it as typed with its attachments.
+              - Under the bubble is a muted line with the time, plus Resend once the task is over, or Cancel while it runs.
+              - Messages sent to the running task are bubbles of their own, placed where the harness took them in.
+              - Each reply is on the left, laid out like Ask answers:
+                - prose after the last tool call;
+                - one muted line summing up the earlier steps, which expands;
+                - a status line with a spinner while it runs;
+                - the error, "Cancelled" or "No answer." at the end.
+              - Changed files are listed under the reply.
+              - Spacing is 16 px between prompts and 8 px from a prompt to its reply.
+            - **`noTaskTrappings`:** no header, status label, hidden anchor name, compiled prompt or output table.
+            - **`scrolling`:**
+              - The chat opens at the bottom and stays locked there while the reply grows.
+              - Scrolling up unlocks it, and sending a prompt locks it again.
+              - Only what's in view is laid out.
+              - Scrolling past the top still switches to the previous tasks.
+            - **`previousTasks`:** a Freeform task in the previous tasks list keeps its grey-tinted heading. Opening it shows its prompt and reply in the chat layout.
+
+            Other files:
+            - **`spec/scope/prompt-mode/message-list/index.pi`:** the description ("tasks, not a conversation") now names Freeform as the exception.
+            - **`spec/scope/prompt-mode/modes/index.pi`:** `PromptModesShape.freeform` now says a Freeform task is shown in the message list as a regular chat, where it used to describe its header.
+
+            **Choices you may want to change:** "just a regular chat" didn't say which tasks belong in the chat or how replies look. I chose:
+            - the chat covers the run of consecutive Freeform tasks in the same conversation;
+            - replies use the Ask pane's style;
+            - each reply keeps its changed-files list.
+
+            **What the code step should follow**
+            - **`MessageListFreeformShape`** (all properties):
+              - In `src/prompt_mode.rs`, when the latest task's mode is `SendMode::Freeform`, render the Freeform chat instead of `render_latest_header` and `render_output`.
+              - Reuse the Ask pane's question bubble, answer line, step and answer-piece rendering and `Reply::chat_rows` from `src/prompt_mode/ask_pane.rs`. Its question layout is `question_row`.
+              - Tint the bubbles with `mode_color(SendMode::Freeform)`.
+              - Keep `scroll_past_ends` working over the chat.
+            - **`MessageListFreeformShape.previousTasks`:** an open Freeform task in the history list uses the same layout.
+            - **`MessageListScrollingShape.scrollingPast`:** still applies to the chat's top.
+            \\\
+
+    sentFrom: DisplayFreeformModeAsRegularChat

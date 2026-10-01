@@ -1,0 +1,64 @@
+use /lib
+from /scope/prompt-mode/ask-conversation import AskConversationScope
+from /scope/prompt-mode/modes import PromptModesScope
+from /scope/prompt-mode/sending import PromptSendingScope
+
+export shape MessageListFreeformShape:
+    description:
+        A Freeform task is shown as a regular chat, not as a task: its prompt
+        as a message on the right, and the harness's reply as a message on the
+        left, read as prose, as the @{AskConversationScope} shows a question
+        and its answer.
+
+    conversation:
+        While the latest task was sent in Freeform, the space between the
+        previous tasks row and the queue shows its conversation as a chat, in
+        place of the latest task's header and output table. The chat holds
+        the latest task and the Freeform tasks sent straight before it, back
+        to the last task of another mode, or to the first that started a new
+        conversation, oldest at the top and newest at the bottom. Sending
+        another Freeform prompt adds it at the bottom; sending a task in any
+        other mode shows that task as ever, and the chat goes with it.
+
+    messages:
+        Each prompt is shown as it was typed, in a box on the theme's raised
+        surface, faintly tinted Freeform's grey, as the @{PromptModesScope}
+        colours it, with corners rounded 6 pixels, set against the chat's
+        right edge and at most 80% of its width, with the text and images
+        attached to it listed beneath its text. Beneath the box, at its
+        right, a small muted line gives the time it was sent and, once its
+        task is over, its Resend button, as the @{PromptSendingScope} says;
+        while it runs, its Cancel button is there instead. A message sent to
+        the task while it ran is a box of its own, laid out the same way,
+        placed among the reply where the harness took it in.
+
+        Each reply follows beneath its prompt, against the chat's left edge,
+        at the chat's full width, with no box, laid out as the
+        @{AskConversationScope}'s answers are: the reply text after the
+        harness's last tool call rendered as markdown in the body's text
+        colour, everything before it summed up in one small muted line that
+        expands into the steps, a status line with a spinner and the latest
+        thing the harness did in that line's place while the task runs, and
+        the error it failed with, "Cancelled", or "No answer." at its end.
+        Beneath the reply, in a git repository, come the files changed while
+        it ran, as every task lists them. Prompts are 16 pixels apart, and a
+        reply starts 8 pixels beneath its prompt.
+
+    noTaskTrappings:
+        Nothing in the chat is shown as a task: there is no header, no status
+        label, no hidden anchor's name, no compiled prompt, and no output
+        table.
+
+    scrolling:
+        The chat scrolls, opening at its bottom, and stays locked to the
+        bottom while it is there, following the reply as it grows; scrolling
+        up unlocks it, and scrolling back to the bottom locks it again.
+        Sending a prompt scrolls it to the bottom and locks it. It lays out
+        only what is in view, however long the conversation. Scrolling past
+        its top crosses over into the previous tasks, as scrolling past the
+        top of the latest task's output does.
+
+    previousTasks:
+        Among the previous tasks, a Freeform task keeps its heading like any
+        task's, tinted grey, and opens onto its prompt and its reply laid out
+        as they are in the chat, rather than a compiled prompt and a table.

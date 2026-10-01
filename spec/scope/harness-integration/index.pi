@@ -9,6 +9,7 @@ from ./baked-prompts import BakedSystemPromptsScope
 from ./catalog import HarnessCatalogScope
 from ./one-off-run import OneOffAgentRunScope
 from /scope/prompt-mode/chat-input import ChatInputScope
+from /ui/components/task-table import TaskTableScope
 
 export scope HarnessIntegrationScope:
     concept: {HarnessIntegrationConcept}
@@ -81,7 +82,8 @@ shape HarnessIntegrationShape:
         Code does with `--disallowedTools`, a run is told what its mode keeps
         it off. A Code task is told it may not edit the spec location, and a
         Spec task the code location; the application puts back whatever
-        changes there all the same. A Code task and a question from the Ask
+        changes there all the same, and says so in the task's output as a
+        passive notice, never an error, as the @{TaskTableScope} says. A Code task and a question from the Ask
         tab are also told they may not read the spec location, alongside that,
         so they read the compiled reference instead, as the
         @{ModeSystemPromptsScope} says. This rule is only a nudge, and
