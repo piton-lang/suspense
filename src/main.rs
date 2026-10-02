@@ -15,6 +15,7 @@ mod console_text;
 mod conversations;
 mod diff;
 mod diff_view;
+mod disk_watch;
 mod divergence;
 mod divergence_view;
 #[cfg(test)]

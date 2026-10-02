@@ -1,0 +1,8 @@
+- [Each open project keeps the chat input's selected mode tab as it was left](.claude/reference/scope/open-projects/index.md#kept-as-left)
+- [A project opened for the first time in a launch starts on Chain](.claude/reference/scope/open-projects/index.md#kept-as-left)
+- [Switching projects selects the tab the project switched to was left on, at once](.claude/reference/scope/open-projects/index.md#follows-the-screen)
+- [The send button takes the tab's colour as when a tab is selected](.claude/reference/scope/open-projects/index.md#follows-the-screen)
+- [The tab brings what it shows, such as the Ask conversation while Ask is selected](.claude/reference/scope/open-projects/index.md#kept-as-left)
+- [The prompt being written, attachments, and Slice toggle stay with the person writing across a switch](.claude/reference/scope/open-projects/index.md#follows-the-screen)
+- [A queued prompt being edited keeps its tab until saved or cancelled; then the project's tab is selected](.claude/reference/scope/open-projects/index.md#follows-the-screen)
+- [What a project keeps as left lasts only while the application runs](.claude/reference/scope/open-projects/index.md#kept-as-left)

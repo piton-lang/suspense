@@ -1,0 +1,63 @@
+
+export anchor DisplayMostRecentActiveTask2:
+    userPrompt:
+        \\\
+        Let's say you send a chain task, then you send another one.  both spec tasks finish before the first code task.  The most recent active task should always display in the primaty message list mode
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Let's say you send a chain task, then you send another one.  both spec tasks finish before the first code task.  The most recent active task should always display in the primaty message list mode
+            \\\
+        result:
+            \\\
+            I've changed the spec so the task heading the message list is always the most recent task still running. The code isn't changed yet. `piton check` found no problems and `piton build` wrote 75 files.
+
+            **What changed in the spec**
+
+            All of it is in the Header part of the prompt editor (`spec/scope/prompt-mode/index.pi`). Before, the task heading the view was simply the one sent most recently, even if it had already finished. Now:
+
+            - **Which task heads the view:** of the tasks still under way (building, compiling or running) in either lane, the one sent most recently.
+            - **When nothing is under way:** the task that finished most recently, or before any has finished, the one sent most recently.
+            - **A finished task never stays on top while another is running:** when it finishes and the other lane still has a task running, that running task takes over the view at once. The finished task moves into the previous tasks.
+            - **Your example is written into the spec:** two Chain tasks are sent, and both spec steps finish. The first chain's code step heads the view while it runs, not the second chain's finished spec step. The second chain's code step heads the view once it is sent.
+            - **Everything else follows the task on top:** its header and output show as for a newly sent task. The previous tasks list, its count and the chain grouping all treat the task on top as the latest. "Send to task" already goes to whichever task that is.
+
+            **Anchors the code should follow**
+            - `.claude/reference/scope/prompt-mode/index.md#header` is the new rule.
+            - Unchanged but relevant:
+              - `#chained-tasks` and `#previous-tasks` in the same file.
+              - `.claude/reference/scope/prompt-mode/sending/index.md#lanes`.
+              - The "Send to task" and Cancel text in `.claude/reference/scope/prompt-mode/sending/index.md#prompt-sending-scope`.
+
+            The constraints are in `.suspense/history/1790931264-DisplayMostRecentActiveTask.understanding.md`.
+            \\\
+
+    sentFrom: DisplayMostRecentActiveTask

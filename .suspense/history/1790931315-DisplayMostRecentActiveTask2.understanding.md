@@ -1,0 +1,8 @@
+- [The latest task is the most recently sent task under way (building, compiling, or running) in either lane](.claude/reference/scope/prompt-mode/index.md#header)
+- [With no task under way, the latest is the one that finished most recently, or before any finished, the one sent most recently](.claude/reference/scope/prompt-mode/index.md#header)
+- [When the latest finishes while the other lane still runs, the running task heads the view at once](.claude/reference/scope/prompt-mode/index.md#header)
+- [Two chains: the first chain's running code step heads the view, not the second's finished spec step](.claude/reference/scope/prompt-mode/index.md#header)
+- [A task running in the other lane that isn't the latest shows among the previous tasks, running, with Cancel](.claude/reference/scope/prompt-mode/sending/index.md#prompt-sending-scope)
+- [The previous tasks, their row's count, and chain grouping follow whichever task is latest](.claude/reference/scope/prompt-mode/index.md#header)
+- ["Send to task" goes to the latest task](.claude/reference/scope/prompt-mode/sending/index.md#prompt-sending-scope)
+- [The previous tasks row counts every task but the latest](.claude/reference/scope/prompt-mode/index.md#previous-tasks)

@@ -1,0 +1,63 @@
+
+export anchor PersistModeTabState2:
+    userPrompt:
+        \\\
+        Each project should maintain whichever mode tab it was on.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Each project should maintain whichever mode tab it was on.
+            \\\
+        result:
+            \\\
+            I've changed the spec so each open project keeps its own mode tab, and switching back to a project selects the tab it was left on. The code isn't changed yet. `piton check` found no problems and `piton build` wrote 75 files.
+
+            **What changed in the spec**
+
+            1. **Open projects** (`spec/scope/open-projects/index.pi`):
+               - **Kept As Left:** the chat input's selected mode tab (Code, Chain, Spec, Ask or Freeform) is now on the list of what each project keeps. It comes with whatever that tab shows, such as the Ask conversation beside the body while Ask is selected.
+               - **First time:** a project opened for the first time in a launch starts on Chain.
+               - **Follows The Screen:** the selected tab no longer stays with the person writing. Switching projects selects the other project's tab at once, and the send button changes colour as it does when you pick a tab.
+               - **Editing a queued prompt:** an edit in progress keeps the tab it's being edited in. Once it's saved or cancelled, the current project's tab is selected.
+            2. **Chat input** (`spec/scope/prompt-mode/chat-input/index.pi`): the start-in-Chain rule and the Projects section now say the tab belongs to the project.
+
+            **Choices you may want to change**
+            - **Only for this run of the app:** like everything else a project keeps as left, the tab is remembered until you quit, not saved with the project.
+            - **The draft stays shared:** the prompt you're writing, its attachments and the Slice toggle still carry across project switches. You only asked about the mode tab.
+
+            **Anchors the code should follow**
+            - `.claude/reference/scope/open-projects/index.md#kept-as-left` and `#follows-the-screen`.
+            - In `.claude/reference/scope/prompt-mode/chat-input/index.md`, the "starts in the combined mode" paragraph and the Projects paragraph.
+
+            The constraints are in `.suspense/history/1790970355-PersistModeTabState.understanding.md`.
+            \\\
+
+    sentFrom: PersistModeTabState

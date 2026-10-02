@@ -3,6 +3,10 @@
 //! `piton lsp` for completions, hover, definitions, diagnostics and quick
 //! fixes. A header above it shows its path in the project, whether it has
 //! unsaved changes, and save and close buttons.
+//!
+//! It watches its file on disk: edited there, the file reloads, unless it has
+//! unsaved changes, when it asks what to do through [`ChangedOnDisk`], and
+//! can be merged in a [`DiffView`]; renamed there, the editor follows it.
 
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -31,6 +35,8 @@ use lsp_types::{
 };
 use serde_json::{Value, json};
 
+use crate::diff_view::{ApplyMerge, CancelMerge, DiffView};
+use crate::disk_watch;
 use crate::piton_lsp::{self, LspClient};
 use crate::piton_syntax;
 use crate::project_directory::ProjectDirectory;
@@ -43,6 +49,9 @@ const CONTEXT: &str = "FileView";
 
 /// How often what the server published is collected.
 const DIAGNOSTICS_INTERVAL: Duration = Duration::from_millis(100);
+
+/// How often what happened to the file on disk is collected.
+const DISK_INTERVAL: Duration = Duration::from_millis(100);
 
 #[cfg(target_os = "macos")]
 const SAVE_SHORTCUT: &str = "⌘S";
@@ -63,6 +72,10 @@ pub struct CloseFile;
 
 /// Emitted to attach text selected in the editor to the prompt.
 pub struct SendToPrompt(pub String);
+
+/// Emitted when the file was edited on disk while it has unsaved changes,
+/// to ask whether to keep them, reload, or merge.
+pub struct ChangedOnDisk;
 
 /// Emitted to open the file holding a definition, at the definition.
 pub struct OpenDefinition {
@@ -109,8 +122,20 @@ pub struct FileView {
     /// Where the popover for selected text shows, while it does: where the
     /// drag that selected the text ended.
     selection_popover: Option<Point<Pixels>>,
+    /// Whether it is being written, when what is on disk is its own doing.
+    saving: bool,
+    /// Whether the disk changed while it was being written, to look again
+    /// once it is.
+    recheck: bool,
+    /// Whether it was edited on disk with unsaved changes here, and that is
+    /// waiting to be answered.
+    conflict: bool,
+    /// The merge shown in place of the editor, while there is one.
+    merge: Option<(Entity<DiffView>, Vec<Subscription>)>,
     _load: Task<()>,
     _save: Task<()>,
+    _check_disk: Task<()>,
+    _watch_disk: Task<()>,
     _watch_diagnostics: Task<()>,
     _subscriptions: Vec<Subscription>,
 }
@@ -118,6 +143,7 @@ pub struct FileView {
 impl EventEmitter<CloseFile> for FileView {}
 impl EventEmitter<SendToPrompt> for FileView {}
 impl EventEmitter<OpenDefinition> for FileView {}
+impl EventEmitter<ChangedOnDisk> for FileView {}
 
 /// Where `offset` in `before` lands in `after`, the same text reformatted,
 /// which changes only whitespace: against the same character it was
@@ -172,6 +198,67 @@ fn offset_after_formatting(before: &str, after: &str, offset: usize) -> usize {
     at + room
 }
 
+/// Where `offset` in `before` lands in `after`, the same file as edited
+/// elsewhere: in a line both share, beside the same characters; in a line
+/// that changed, as far along the line that took its place as the line
+/// allows.
+fn offset_after_edit(before: &str, after: &str, offset: usize) -> usize {
+    let offset = offset.min(before.len());
+    let starts = |text: &str| {
+        std::iter::once(0)
+            .chain(text.match_indices('\n').map(|(ix, _)| ix + 1))
+            .collect::<Vec<_>>()
+    };
+    let (old_starts, new_starts) = (starts(before), starts(after));
+    let line = old_starts.partition_point(|start| *start <= offset) - 1;
+    let column = offset - old_starts[line];
+    let diff = similar::TextDiff::from_lines(before, after);
+    for op in diff.ops() {
+        let (old, new) = (op.old_range(), op.new_range());
+        if !old.contains(&line) {
+            continue;
+        }
+        if new.is_empty() {
+            // Its line is gone: to where the lines after it now start.
+            return new_starts.get(new.start).copied().unwrap_or(after.len());
+        }
+        let new_line = (new.start + (line - old.start)).min(new.end - 1);
+        let start = new_starts[new_line];
+        let end = after[start..]
+            .find('\n')
+            .map_or(after.len(), |end| start + end);
+        let mut at = (start + column).min(end);
+        while !after.is_char_boundary(at) {
+            at -= 1;
+        }
+        return at;
+    }
+    after.len()
+}
+
+/// Text as the editor holds it, with Unix line endings.
+fn normalized(text: String) -> String {
+    if text.contains('\r') {
+        text.replace("\r\n", "\n")
+    } else {
+        text
+    }
+}
+
+/// The file at `path` as the header names it: within the project, or in
+/// full outside of one.
+fn title_for(path: &Path, cx: &App) -> SharedString {
+    match ProjectDirectory::get(cx) {
+        Some(root) => path
+            .strip_prefix(&root)
+            .unwrap_or(path)
+            .display()
+            .to_string()
+            .into(),
+        None => path.display().to_string().into(),
+    }
+}
+
 impl FileView {
     /// Opens the file at `path`, with the cursor at `position` if given.
     pub fn new(
@@ -180,14 +267,7 @@ impl FileView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let title = match ProjectDirectory::get(cx) {
-            Some(root) => path
-                .strip_prefix(&root)
-                .unwrap_or(&path)
-                .display()
-                .to_string(),
-            None => path.display().to_string(),
-        };
+        let title = title_for(&path, cx);
         let language = language_for(&path);
         let editor = cx.new(|cx| {
             EditorState::new(window, cx)
@@ -243,10 +323,10 @@ impl FileView {
             .ok();
         });
 
-        Self {
+        let mut this = Self {
             path,
             language,
-            title: title.into(),
+            title,
             editor,
             error: None,
             save_error: None,
@@ -255,11 +335,272 @@ impl FileView {
             document: None,
             diagnostics: Vec::new(),
             selection_popover: None,
+            saving: false,
+            recheck: false,
+            conflict: false,
+            merge: None,
             _load: load,
             _save: Task::ready(()),
+            _check_disk: Task::ready(()),
+            _watch_disk: Task::ready(()),
             _watch_diagnostics: Task::ready(()),
             _subscriptions: subscriptions,
+        };
+        this._watch_disk = this.watch_disk(window, cx);
+        this
+    }
+
+    /// Collects what the watcher reports about the file's folders, and acts
+    /// on what happened to the file.
+    fn watch_disk(&self, window: &mut Window, cx: &mut Context<Self>) -> Task<()> {
+        let events = disk_watch::subscribe(&self.path, ProjectDirectory::get(cx).as_deref());
+        // Collected on a timer rather than awaited: the watcher reports from
+        // its own thread, which must not wake app tasks (tests forbid it).
+        cx.spawn_in(window, async move |this, cx| {
+            loop {
+                cx.background_executor().timer(DISK_INTERVAL).await;
+                let batch: Vec<_> = events.try_iter().collect();
+                if batch.is_empty() {
+                    continue;
+                }
+                let updated = this.update_in(cx, |this, window, cx| {
+                    this.on_disk_events(&batch, window, cx)
+                });
+                if updated.is_err() {
+                    break;
+                }
+            }
+        })
+    }
+
+    /// Follows the file renamed on disk, and looks again at what it holds
+    /// when it may have been written.
+    fn on_disk_events(
+        &mut self,
+        events: &[notify::Event],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let changes = disk_watch::changes(&self.path, events);
+        if let Some(to) = changes.renamed {
+            self.follow_rename(to, window, cx);
+            // Renamed and edited at once, it is both.
+            self.check_disk(window, cx);
+            return;
         }
+        if changes.vanished && !self.path.exists() {
+            // Gone without saying where: renamed to a file that appeared with
+            // just what it held, or else deleted, which leaves it as it is.
+            let moved_to = self.saved.as_ref().and_then(|saved| {
+                changes.appeared.iter().find(|path| {
+                    path.is_file()
+                        && std::fs::read_to_string(path)
+                            .is_ok_and(|text| normalized(text) == *saved)
+                })
+            });
+            if let Some(to) = moved_to.cloned() {
+                self.follow_rename(to, window, cx);
+            }
+            return;
+        }
+        if changes.written || changes.vanished {
+            self.check_disk(window, cx);
+        }
+    }
+
+    /// Follows the file to `path`, where it was renamed or moved, in the same
+    /// editor: its text, unsaved changes, cursor, and scrolling stay, and a
+    /// Piton file is closed in the server under its old path and opened under
+    /// its new one.
+    pub fn follow_rename(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        if path == self.path {
+            return;
+        }
+        self.title = title_for(&path, cx);
+        let language = language_for(&path);
+        if language != self.language {
+            self.editor.update(cx, |editor, cx| {
+                editor.set_highlighter(language.clone(), cx)
+            });
+            self.language = language;
+        }
+        self.path = path;
+        self.open_in_lsp(true, cx);
+        self._watch_disk = self.watch_disk(window, cx);
+        cx.notify();
+    }
+
+    /// Reads the file on disk again, and acts on how it differs from what
+    /// was last read or written.
+    fn check_disk(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.saved.is_none() || self.error.is_some() {
+            return;
+        }
+        if self.saving {
+            self.recheck = true;
+            return;
+        }
+        let read = cx.background_spawn({
+            let path = self.path.clone();
+            async move { std::fs::read_to_string(path) }
+        });
+        self._check_disk = cx.spawn_in(window, async move |this, cx| {
+            let Ok(text) = read.await else { return };
+            this.update_in(cx, |this, window, cx| {
+                this.disk_changed(normalized(text), window, cx)
+            })
+            .ok();
+        });
+    }
+
+    /// The file on disk holds `text`: reloaded when there are no unsaved
+    /// changes, and otherwise asked about.
+    fn disk_changed(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
+        if self.saving {
+            self.recheck = true;
+            return;
+        }
+        if self.saved.as_ref().is_none_or(|saved| *saved == text) {
+            return;
+        }
+        // Being asked or merged, the answer acts on the disk as it is then.
+        if self.conflict || self.merge.is_some() {
+            return;
+        }
+        if !self.dirty {
+            return self.reload(text, window, cx);
+        }
+        // Changed on disk to just what is here: nothing is unsaved any more.
+        if self.editor.read(cx).value().as_ref() == text {
+            self.saved = Some(text);
+            self.dirty = false;
+            cx.notify();
+            return;
+        }
+        self.conflict = true;
+        cx.emit(ChangedOnDisk);
+        cx.notify();
+    }
+
+    /// Shows `text` in place of what the editor holds, as the file now is
+    /// on disk: the cursor beside the same characters, the view where it
+    /// was, and nothing to undo back to.
+    fn reload(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_text(text, window, cx);
+        self.saved = Some(self.editor.read(cx).value().to_string());
+        self.dirty = false;
+        cx.notify();
+    }
+
+    /// Replaces the editor's text with `text`, keeping the cursor and the
+    /// view, and tells the server.
+    fn set_text(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.selection_popover = None;
+        self.editor.update(cx, |editor, cx| {
+            let before = editor.value().to_string();
+            let selected = editor.selected_range();
+            let scroll = editor.scroll_offset();
+            editor.set_value(text.clone(), window, cx);
+            let start = offset_after_edit(&before, &text, selected.start);
+            let end = offset_after_edit(&before, &text, selected.end).max(start);
+            editor.set_selected_range(start..end, cx);
+            editor.set_scroll_offset(scroll, cx);
+            editor.clear_hover_state(cx);
+            editor.clear_diagnostic_popover(cx);
+        });
+        if let Some(document) = &self.document {
+            document.sync(&self.editor.read(cx).value());
+        }
+        self.show_diagnostics(cx);
+    }
+
+    /// The file as it is on disk now, as the editor would hold it.
+    fn read_disk(&self) -> Option<String> {
+        std::fs::read_to_string(&self.path).ok().map(normalized)
+    }
+
+    /// Whether it was edited on disk with unsaved changes, and is waiting
+    /// to be asked what to do.
+    pub fn has_conflict(&self) -> bool {
+        self.conflict
+    }
+
+    /// Keeps the unsaved changes over what is on disk now, so saving writes
+    /// over it.
+    pub fn keep_mine(&mut self, cx: &mut Context<Self>) {
+        self.conflict = false;
+        if let Some(disk) = self.read_disk() {
+            self.dirty = self.editor.read(cx).value().as_ref() != disk;
+            self.saved = Some(disk);
+        }
+        cx.notify();
+    }
+
+    /// Discards the unsaved changes, reloading the file as it is on disk now.
+    pub fn reload_from_disk(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.conflict = false;
+        match self.read_disk() {
+            Some(disk) => self.reload(disk, window, cx),
+            None => cx.notify(),
+        }
+    }
+
+    /// Shows a merge of the file on disk and the unsaved text in place of
+    /// the editor.
+    pub fn start_merge(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.conflict = false;
+        self.selection_popover = None;
+        let mine = self.editor.read(cx).value().to_string();
+        let path = self.path.clone();
+        let diff = cx.new(|cx| DiffView::merging(path, mine, cx));
+        let subscriptions = vec![
+            cx.subscribe_in(&diff, window, |this, _, ApplyMerge(text), window, cx| {
+                this.apply_merge(text.clone(), window, cx)
+            }),
+            cx.subscribe_in(&diff, window, |this, _, _: &CancelMerge, window, cx| {
+                this.end_merge(window, cx)
+            }),
+        ];
+        diff.read(cx).focus_handle(cx).focus(window, cx);
+        self.merge = Some((diff, subscriptions));
+        cx.notify();
+    }
+
+    /// Puts the merged `text` in the editor, unsaved, against the file as it
+    /// is on disk now.
+    fn apply_merge(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(disk) = self.read_disk() {
+            self.saved = Some(disk);
+        }
+        self.set_text(text, window, cx);
+        self.dirty = self
+            .saved
+            .as_ref()
+            .is_none_or(|saved| self.editor.read(cx).value().as_ref() != saved);
+        self.merge = None;
+        self.focus_editor(window, cx);
+        cx.notify();
+    }
+
+    /// Shows the editor again with its text as it was, the unsaved changes
+    /// kept over what is on disk.
+    fn end_merge(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.merge = None;
+        self.keep_mine(cx);
+        self.focus_editor(window, cx);
+    }
+
+    /// Types `text` at the cursor, as the keyboard would.
+    #[cfg(test)]
+    pub fn type_text(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor
+            .update(cx, |editor, cx| editor.insert(text.to_string(), window, cx));
+    }
+
+    /// The merge shown in place of the editor, while there is one.
+    #[cfg(test)]
+    pub fn merge_view(&self) -> Option<Entity<DiffView>> {
+        self.merge.as_ref().map(|(diff, _)| diff.clone())
     }
 
     /// Shows a file that isn't on disk yet, starting with `text`, the cursor
@@ -371,6 +712,8 @@ impl FileView {
         let typed = self.editor.read(cx).value().to_string();
         let is_piton = self.path.extension().is_some_and(|ext| ext == "pi");
         let project_dir = ProjectDirectory::get(cx);
+        // What the disk shows until it is written is this save's own doing.
+        self.saving = true;
         let write = cx.background_spawn({
             let path = self.path.clone();
             let typed = typed.clone();
@@ -396,6 +739,7 @@ impl FileView {
         self._save = cx.spawn_in(window, async move |this, cx| {
             let written = write.await;
             this.update_in(cx, |this, window, cx| {
+                this.saving = false;
                 match written {
                     Ok(text) => {
                         this.save_error = None;
@@ -425,6 +769,9 @@ impl FileView {
                     Err(err) => {
                         this.save_error = Some(format!("Could not save this file: {err}").into())
                     }
+                }
+                if std::mem::take(&mut this.recheck) {
+                    this.check_disk(window, cx);
                 }
                 cx.notify();
             })
@@ -549,6 +896,12 @@ impl FileView {
     /// language support at it, or takes that away when the file is not Piton
     /// or the server is not running.
     fn attach_lsp(&mut self, cx: &mut Context<Self>) {
+        self.open_in_lsp(false, cx)
+    }
+
+    /// As [`Self::attach_lsp`], opening the file in the server afresh when
+    /// `reopen`, as once it is renamed.
+    fn open_in_lsp(&mut self, reopen: bool, cx: &mut Context<Self>) {
         let is_piton = self.path.extension().is_some_and(|ext| ext == "pi");
         // A file kept for a project not on screen isn't in the server, which
         // is the project on screen's, until its project is back.
@@ -558,11 +911,13 @@ impl FileView {
             .document
             .as_ref()
             .map(|document| Arc::as_ptr(&document.client));
-        if client.as_ref().map(Arc::as_ptr) == attached {
+        if client.as_ref().map(Arc::as_ptr) == attached && !reopen {
             return;
         }
 
         let text = self.editor.read(cx).value();
+        // Closed under its old path before it opens under its new one.
+        self.document = None;
         self.document = client.map(|client| Arc::new(Document::open(client, &self.path, &text)));
         self.diagnostics = Vec::new();
         self._watch_diagnostics = Task::ready(());
@@ -881,6 +1236,16 @@ impl Render for FileView {
                     .tooltip("Close file")
                     .on_click(cx.listener(|this, _, window, cx| this.close(window, cx))),
             );
+
+        // Merging, the merge shows in place of the editor.
+        if let Some((merge, _)) = &self.merge {
+            let view = v_flex()
+                .id("file-view")
+                .size_full()
+                .min_w(min_width)
+                .child(merge.clone());
+            return gpui_kit::TestSupportExt::test_support(view);
+        }
 
         let view = v_flex()
             .id("file-view")
@@ -2162,5 +2527,169 @@ mod tests {
         let line = before.find('\n').unwrap() + 1;
         assert_eq!(at(before, after, line), after.find('\n').unwrap() + 1);
         assert_eq!(at(before, after, before.len()), after.len());
+    }
+
+    #[test]
+    fn the_cursor_keeps_its_place_through_edits_elsewhere() {
+        use super::offset_after_edit;
+        let before = "one\ntwo\nthree\n";
+        // A line added above: beside the same characters, a line lower.
+        let after = "zero\none\ntwo\nthree\n";
+        let three = before.find("three").unwrap() + 2;
+        assert_eq!(
+            offset_after_edit(before, after, three),
+            after.find("three").unwrap() + 2
+        );
+        // Its own line changed: as far along the line that took its place.
+        let after = "one\nTWO!\nthree\n";
+        assert_eq!(offset_after_edit(before, after, 6), 6);
+        // Its line removed: where the lines after it now start.
+        let after = "one\nthree\n";
+        assert_eq!(offset_after_edit(before, after, 6), 4);
+        assert_eq!(offset_after_edit(before, after, before.len()), after.len());
+    }
+
+    /// Like `wait_for`, but lets real time pass: the watcher reports from its
+    /// own thread, which the test clock does not drive.
+    async fn wait_for_disk(
+        cx: &mut TestAppContext,
+        handle: AnyWindowHandle,
+        mut predicate: impl FnMut(&gpui_kit::App) -> bool,
+    ) {
+        for _ in 0..300 {
+            cx.run_until_parked();
+            if cx.update(|cx| predicate(cx)) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+            cx.executor().advance_clock(Duration::from_millis(50));
+        }
+        cx.wait_for(handle, Duration::ZERO, |_, cx| predicate(cx))
+            .await;
+    }
+
+    /// Edited on disk, the file reloads, the cursor beside the same
+    /// characters; renamed there, the editor follows it. With unsaved
+    /// changes, an edit on disk is asked about instead: kept, reloaded, or
+    /// merged, the merge putting its text in the editor. Its own saves are
+    /// never taken for changes on disk.
+    #[gpui_kit::test]
+    async fn follows_its_file_on_disk(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-disk-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("a.txt");
+        std::fs::write(&file, "one\ntwo\nthree\n").unwrap();
+        init(cx, None);
+        let (view, handle) = open(cx, &file, None);
+        let text = |cx: &gpui_kit::App| view.read(cx).editor.read(cx).value().to_string();
+        cx.wait_for(handle, TIMEOUT, |_, cx| text(cx) == "one\ntwo\nthree\n")
+            .await;
+        // Lets the watcher settle on the folder before anything changes.
+        std::thread::sleep(Duration::from_millis(200));
+
+        // Edited on disk with nothing unsaved: reloaded at once.
+        cx.update_window(handle, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.editor.update(cx, |editor, cx| {
+                    let _ = window;
+                    editor.set_selected_range(10..10, cx)
+                })
+            })
+        })
+        .unwrap();
+        std::fs::write(&file, "zero\none\ntwo\nthree\n").unwrap();
+        wait_for_disk(cx, handle, |cx| text(cx) == "zero\none\ntwo\nthree\n").await;
+        cx.update(|cx| {
+            assert!(!view.read(cx).is_dirty());
+            assert_eq!(view.read(cx).editor.read(cx).selected_range(), 15..15);
+        });
+
+        // Renamed on disk: followed, in the same editor.
+        let renamed = dir.join("b.txt");
+        std::fs::rename(&file, &renamed).unwrap();
+        wait_for_disk(cx, handle, |cx| view.read(cx).path() == renamed).await;
+        assert!(view.read_with(cx, |view, _| view.title().ends_with("b.txt")));
+
+        // Unsaved changes, then an edit on disk: asked about, not reloaded.
+        cx.update_window(handle, |_, window, cx| {
+            let focus = view.read(cx).editor.read(cx).focus_handle(cx);
+            focus.focus(window, cx);
+            view.update(cx, |view, cx| {
+                view.editor
+                    .update(cx, |editor, cx| editor.set_selected_range(0..0, cx))
+            });
+        })
+        .unwrap();
+        type_keys(cx, handle, "Hi ");
+        assert!(view.read_with(cx, |view, _| view.is_dirty()));
+        std::fs::write(&renamed, "zero\none\ntwo\nthree\nfour\n").unwrap();
+        wait_for_disk(cx, handle, |cx| view.read(cx).has_conflict()).await;
+        assert_eq!(cx.update(|cx| text(cx)), "Hi zero\none\ntwo\nthree\n");
+
+        // Kept: still unsaved, against the file as it now is.
+        view.update(cx, |view, cx| view.keep_mine(cx));
+        assert!(view.read_with(cx, |view, _| view.is_dirty() && !view.has_conflict()));
+
+        // Changed again, it asks again; reloaded, the changes go.
+        std::fs::write(&renamed, "five\n").unwrap();
+        wait_for_disk(cx, handle, |cx| view.read(cx).has_conflict()).await;
+        cx.update_window(handle, |_, window, cx| {
+            view.update(cx, |view, cx| view.reload_from_disk(window, cx))
+        })
+        .unwrap();
+        cx.update(|cx| {
+            assert_eq!(text(cx), "five\n");
+            assert!(!view.read(cx).is_dirty());
+        });
+
+        // Merged: every change taken from disk, the merge applied.
+        view.update(cx, |view, cx| {
+            view.editor
+                .update(cx, |editor, cx| editor.set_selected_range(0..0, cx))
+        });
+        type_keys(cx, handle, "six ");
+        std::fs::write(&renamed, "seven\n").unwrap();
+        wait_for_disk(cx, handle, |cx| view.read(cx).has_conflict()).await;
+        cx.update_window(handle, |_, window, cx| {
+            view.update(cx, |view, cx| view.start_merge(window, cx))
+        })
+        .unwrap();
+        let merge = view.read_with(cx, |view, _| view.merge_view()).unwrap();
+        cx.wait_for(handle, TIMEOUT, |_, cx| merge.read(cx).diff().has_changes())
+            .await;
+        assert_eq!(
+            merge.read_with(cx, |merge, _| merge.merged_text()),
+            Some("six five\n".to_string())
+        );
+        merge.update(cx, |merge, cx| merge.choose_all(true, cx));
+        cx.update_window(handle, |_, window, cx| window.click("merge-apply", cx))
+            .unwrap();
+        cx.run_until_parked();
+        cx.update(|cx| {
+            assert!(view.read(cx).merge_view().is_none());
+            assert_eq!(text(cx), "seven\n");
+            assert!(!view.read(cx).is_dirty());
+        });
+
+        // Its own save is not a change on disk.
+        view.update(cx, |view, cx| {
+            view.editor
+                .update(cx, |editor, cx| editor.set_selected_range(0..0, cx))
+        });
+        type_keys(cx, handle, "eight ");
+        cx.update_window(handle, |_, window, cx| window.press(SAVE, cx))
+            .unwrap();
+        wait_for_disk(cx, handle, |cx| !view.read(cx).is_dirty()).await;
+        for _ in 0..30 {
+            std::thread::sleep(Duration::from_millis(10));
+            cx.executor().advance_clock(Duration::from_millis(50));
+            cx.run_until_parked();
+        }
+        cx.update(|cx| {
+            assert!(!view.read(cx).has_conflict());
+            assert_eq!(text(cx), "eight seven\n");
+        });
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

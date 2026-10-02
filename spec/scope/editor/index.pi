@@ -3,6 +3,7 @@ use /ui
 from /scope/application/Body import BodyScope
 from /scope/lsp import LSP
 from /scope/open-file import OpenFileScope
+from /ui/components/diff-view import DiffViewScope
 from /ui/components/file-tree import FileTreeScope
 from /ui/components/selection-popover import SelectionPopoverScope
 
@@ -169,6 +170,71 @@ shape EditorShape:
         quickFixes:
             Ctrl+. (Cmd+. on macOS) lists the server's `textDocument/codeAction`
             fixes at the cursor, and picking one applies its edits to the file.
+
+    changesOnDisk:
+        watching:
+            The editor watches its file on disk while it is open, whether or
+            not its tab is selected, and notices when something else edits or
+            renames it: another program, a task, or the @{FileTreeScope}. Its
+            own saves, the formatting a Piton file gets as it is saved
+            included, are never taken for a change on disk.
+
+        reloading:
+            When the file is edited on disk and the editor has no unsaved
+            changes, it reloads at once, without asking, showing the file as
+            it now is on disk. As with saving, the cursor stays at the same
+            place in the text, beside the same characters it was beside, as
+            near as the new text allows, and the view stays scrolled just as
+            it was. The reload can't be undone into the text it replaced, and
+            a Piton file's new text goes to the server as a full-text
+            `textDocument/didChange`.
+
+        renaming:
+            When the file is renamed or moved on disk, whether the file system
+            reports it as a rename or the file vanishes while one with the
+            same contents appears in the project at the same moment, the
+            editor follows it to its new path in the same tab: its header
+            shows the new path, its tab the new name and path, and saving
+            writes to the new path. Nothing else about it changes: its text,
+            unsaved changes, cursor, and scrolling stay as they were, so a
+            rename alone never asks anything. A Piton file is closed on the
+            server under its old path with `textDocument/didClose`, and opened
+            under its new one with `textDocument/didOpen`, with the editor's
+            text. A rename that also changes the file's contents is a rename
+            and then an edit.
+
+        conflicts:
+            When the file is edited on disk while the editor has unsaved
+            changes, nothing is reloaded. Instead a dialog asks what to do,
+            titled "notes.md changed on disk" with the file's name, saying the
+            file was changed outside the editor while it has unsaved changes
+            here, with three buttons, the last one primary:
+
+            - "Keep Mine", which keeps the editor's text as it is, still
+                unsaved, so saving it writes over what is on disk
+            - "Reload", which discards the unsaved changes and reloads the
+                file as it now is on disk, as reloading says
+            - "Merge", which opens the merge, as merging says
+
+            The dialog shows as soon as the change is noticed, whichever tab is
+            selected, and choosing "Reload" or "Merge" selects the file's tab.
+            <Escape>, or closing the dialog, is "Keep Mine". While the dialog
+            is open, further changes to the file on disk don't open another;
+            the choice made acts on the file as it is on disk when it is
+            made. Each file in conflict gets a dialog of its own, one after
+            another. A file that conflicts again after "Keep Mine" asks again.
+
+        merging:
+            "Merge" shows, in place of the editor in the file's tab, a
+            @{DiffViewScope} that merges, as its merging says: the file as it
+            now is on disk on its left, and the editor's unsaved text on its
+            right. Applying the merge puts the merged text in the editor as
+            its text, still unsaved, with the cursor and view kept as when
+            reloading, so it is saved as any other change is, and the editor
+            shows again. Cancelling it shows the editor again, its text as it
+            was before the merge, as with "Keep Mine". While the merge shows,
+            the tab still shows the unsaved dot, and closing the tab asks
+            whether to discard the unsaved changes, as closing says.
 
     otherFiles:
         Each open file has an editor of its own. Opening another file opens

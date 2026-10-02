@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /scope/editor import EditorScope
 from /scope/git import GitScope
 from /scope/open-file import OpenFileScope
 from /scope/user-preferences import UserPreferencesScope
@@ -83,3 +84,32 @@ shape DiffViewShape:
         While the file is read it says "Loading…". A binary file says its
         changes can't be shown. An empty file says so. A file that can't be
         read says why.
+
+    merging:
+        It can also merge two versions of a file being edited, as the
+        @{EditorScope} opens it when the file changed on disk while it had
+        unsaved changes. Then its left side is the file as it now is on disk,
+        headed "On disk", and its right side the editor's unsaved text, headed
+        "Mine", in either layout, so it shows the changes that would turn what
+        is on disk into the editor's text. It follows the file on disk as it
+        changes, keeping each change's choice where the change is still there.
+
+
+        choosing:
+            Each change has two small buttons beside it, at its top: "Use
+            Disk", which takes the lines on disk for that change, and "Use
+            Mine", which keeps the editor's lines, the chosen one shown
+            selected. Every change starts on "Use Mine". The merged text is
+            the editor's text with each change set to "Use Disk" put back to
+            the lines on disk. A change set to "Use Disk" is shown dimmed on
+            the "Mine" side, its lines struck through, and a change keeping
+            "Use Mine" dimmed on the "On disk" side, so what the merge keeps
+            is always the side shown plain. Its header's counts and stepping
+            between changes work as ever.
+
+        header:
+            Its header reads the same, but in place of the button that opens
+            the file and the close button, it has "Use All Disk" and "Use All
+            Mine", which set every change at once, then "Cancel", and "Apply
+            Merge" as the primary button, which hands the merged text to the
+            editor. <Escape> is "Cancel".

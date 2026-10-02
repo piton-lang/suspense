@@ -1,6 +1,7 @@
 use /lib
 use /ui
 use /ui/components/sidebar/Panel
+from /scope/editor import EditorScope
 from /scope/git import GitScope
 from /scope/no-project import NoProjectStateScope
 from /scope/open-file import OpenFileScope
@@ -122,9 +123,9 @@ shape FileTreeShape:
         new folder is created, and shown selected. A renamed file or folder
         keeps its place in the tree's order by its new name, stays selected,
         and a folder stays expanded if it was. A file open in a tab that is
-        renamed, or is inside a renamed folder, opens again at its new path,
-        in the same tab, unless it has unsaved changes, when it stays as it
-        is.
+        renamed, or is inside a renamed folder, follows it to its new path,
+        in the same tab, keeping any unsaved changes, as the @{EditorScope}
+        says of a file renamed on disk.
 
     deleting:
         Delete first asks, in a dialog titled "Delete notes.md?" with the name

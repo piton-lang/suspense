@@ -45,6 +45,7 @@ shape OpenProjectsShape:
         - the files open in the body's tabs, in their order, which tab is selected, and each file's unsaved changes, its cursor, and its scrolling
         - the file tree's expanded folders, and the row selected
         - the Git panel's commit message, as far as it was written
+        - the chat input's selected mode tab, Code, Chain, Spec, Ask, or Freeform, and with it whatever that tab shows, such as the Ask conversation beside the body while Ask is selected; a project opened for the first time in a launch starts on Chain, as the chat input does
         - its minimizable panels, a divergence analysis, a rescope search, or the Run panel, minimized as it is switched away from, their work carrying on in the background
 
         Coming back to a project slides nothing in: its tabs show as they
@@ -59,8 +60,13 @@ shape OpenProjectsShape:
         project on screen's prompts. A file kept for a project not on screen
         isn't open in the language server, and is opened in it again once its
         project is back. The chat input's prompt being written, its
-        attachments, the selected tab, and the Slice toggle stay with the
-        person writing rather than a project. What the application keeps for
+        attachments, and the Slice toggle stay with the person writing rather
+        than a project; its selected mode tab is the project's, kept as left.
+        Switching projects selects the tab the project switched to was left
+        on, at once, the send button taking its colour as when a tab is
+        selected; a queued prompt being edited keeps the tab it is being
+        edited in until the edit is saved or cancelled, and the tab of the
+        project switched to is selected then. What the application keeps for
         the whole run rather than a project, such as the sidebar's width, the
         Ask conversation's width, and which ribbon tabs are open, stays as it is.
 

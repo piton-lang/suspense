@@ -44,6 +44,7 @@ use gpui_kit::base::ElementExt as _;
 use gpui_kit::base::TextSelection;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
+use gpui_kit::component::dialog::DialogFooter;
 use gpui_kit::component::label::Label;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::component::notification::Notification;
@@ -67,7 +68,7 @@ use crate::chat_input::{
 use crate::commit_notes;
 use crate::conversations;
 use crate::file_link::OpenFile;
-use crate::file_view::{CloseFile, FileView, OpenDefinition, SendToPrompt};
+use crate::file_view::{ChangedOnDisk, CloseFile, FileView, OpenDefinition, SendToPrompt};
 use crate::harness::{self, HarnessEvent};
 use crate::hidden_anchor::{self, Attached, CodeTask, HiddenAnchor};
 use crate::markdown;
@@ -321,11 +322,13 @@ struct ChangedFiles {
 }
 
 impl ChangedFiles {
-    /// The files between `before` and `after` in the repository `top`, each
-    /// marked as the agent's where it is among `edited`; none where git
-    /// can't say.
+    /// The project's own files between `before` and `after` in the
+    /// repository `top`, never what the application keeps in `.suspense` or
+    /// its draft, each marked as the agent's where it is among `edited`; none
+    /// where git can't say.
     fn read(top: PathBuf, before: String, after: String, edited: &[PathBuf]) -> Option<Self> {
-        let changes = task_snapshot::changes(&top, &before, &after).ok()?;
+        let changes =
+            task_snapshot::project_own(task_snapshot::changes(&top, &before, &after).ok()?);
         let by_agent = |path: &Path| {
             let full = shell_paths::normalize(&top.join(path));
             edited.iter().any(|edited| *edited == full)
@@ -1056,6 +1059,7 @@ impl HistoryList {
         steps_shown: &HashSet<usize>,
         open_file: &OpenFile,
         visible: Option<Vec<bool>>,
+        latest: Option<usize>,
         cx: &mut Context<PromptMode>,
     ) -> AnyElement {
         let count = tasks.len();
@@ -1469,7 +1473,7 @@ impl HistoryList {
                                     .child(chain_parent(
                                         task_ix,
                                         &steps,
-                                        members.contains(&(count - 1)),
+                                        latest.is_some_and(|latest| members.contains(&latest)),
                                         cx,
                                     ))
                                     .child(
@@ -2063,6 +2067,14 @@ struct RefsClosing {
     closed: Instant,
 }
 
+/// What was chosen for a file edited on disk while it had unsaved changes.
+#[derive(Clone, Copy)]
+enum ConflictChoice {
+    KeepMine,
+    Reload,
+    Merge,
+}
+
 /// A file open in a tab of the body.
 struct FileTab {
     view: Entity<FileView>,
@@ -2633,6 +2645,8 @@ struct ProjectSession {
     ask_row_ids: RefCell<Vec<usize>>,
     files: Vec<FileTab>,
     selected_file: Option<usize>,
+    latest_settled: Option<(usize, SharedString)>,
+    mode_tab: SendMode,
 }
 
 /// The rows of the questions still running, stacked above the chat input's
@@ -2682,6 +2696,9 @@ impl ProjectSession {
             ask_row_ids: RefCell::default(),
             files: Vec::new(),
             selected_file: None,
+            latest_settled: None,
+            // A project opened for the first time starts on Chain.
+            mode_tab: SendMode::Both,
         }
     }
 }
@@ -2761,6 +2778,18 @@ pub struct PromptMode {
     files: Vec<FileTab>,
     /// The file whose tab is selected, or none while Chat is.
     selected_file: Option<usize>,
+    /// The task last seen heading the view while under way, by its index and
+    /// name: once nothing is under way, the one that finished most recently,
+    /// which heads it then.
+    latest_settled: Option<(usize, SharedString)>,
+    /// The chat input's tab the project on screen was on, as it was left:
+    /// filled in as it is switched away from, and selected as it comes back.
+    mode_tab: SendMode,
+    /// Files edited on disk while they had unsaved changes, waiting to be
+    /// asked about, one after another.
+    disk_conflicts: Vec<WeakEntity<FileView>>,
+    /// The file being asked about, while it is.
+    conflict_asked: Option<EntityId>,
     /// The tab bar's sideways scrolling, once its tabs don't fit.
     tabs_scroll: ScrollHandle,
     /// Whether the referenced spec sidebar shows, as of the last frame.
@@ -2963,6 +2992,10 @@ impl PromptMode {
             queue_held: false,
             files: Vec::new(),
             selected_file: None,
+            latest_settled: None,
+            mode_tab: SendMode::Both,
+            disk_conflicts: Vec::new(),
+            conflict_asked: None,
             tabs_scroll: ScrollHandle::new(),
             refs_shown: false,
             refs_opened: None,
@@ -3055,6 +3088,8 @@ impl PromptMode {
         swap(&mut self.ask_row_ids, &mut other.ask_row_ids);
         swap(&mut self.files, &mut other.files);
         swap(&mut self.selected_file, &mut other.selected_file);
+        swap(&mut self.latest_settled, &mut other.latest_settled);
+        swap(&mut self.mode_tab, &mut other.mode_tab);
     }
 
     /// Follows the project on screen: the work of the one left keeps running
@@ -3065,6 +3100,8 @@ impl PromptMode {
         if dir == self.project_dir {
             return;
         }
+        // The tab the project left was on, kept for when it's back.
+        self.mode_tab = self.chat_input.read(cx).project_mode();
         let mut left = ProjectSession::new(None, cx);
         self.swap_session(&mut left);
         if let Some(left_dir) = left.project_dir.clone() {
@@ -3089,8 +3126,11 @@ impl PromptMode {
         self.scroll_slide = None;
         self.selection_popover = None;
         let working = self.working;
-        self.chat_input
-            .update(cx, |input, cx| input.set_busy(working, cx));
+        let mode_tab = self.mode_tab;
+        self.chat_input.update(cx, |input, cx| {
+            input.set_busy(working, cx);
+            input.set_project_mode(mode_tab, cx);
+        });
         cx.notify();
     }
 
@@ -3229,7 +3269,7 @@ impl PromptMode {
     /// out from behind the previous tasks and scrolled to its end, or a task
     /// running in the other lane opened among the previous tasks.
     pub fn reveal_running_task(&mut self, ix: usize, cx: &mut Context<Self>) {
-        if ix + 1 >= self.tasks.len() {
+        if ix >= self.tasks.len() || Some(ix) == self.latest_ix() {
             return self.reveal_task(cx);
         }
         if !self.task_history.expanded {
@@ -3373,6 +3413,15 @@ impl PromptMode {
             cx.subscribe(&view, |this, view, _: &CloseFile, cx| {
                 this.close_file_tab(view.entity_id(), cx)
             }),
+            // Edited on disk with unsaved changes, it asks what to do.
+            cx.subscribe_in(
+                &view,
+                window,
+                |this, view, _: &ChangedOnDisk, window, cx| {
+                    this.disk_conflicts.push(view.downgrade());
+                    this.ask_next_conflict(window, cx);
+                },
+            ),
             cx.subscribe_in(
                 &view,
                 window,
@@ -3390,6 +3439,106 @@ impl PromptMode {
             view,
             _subscriptions: subscriptions,
         }
+    }
+
+    /// Asks about the next file edited on disk while it had unsaved changes,
+    /// unless one is being asked about: keep the changes, reload, or merge.
+    /// A file of a project not on screen waits until it is.
+    fn ask_next_conflict(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.conflict_asked.is_some() {
+            return;
+        }
+        let on_screen: Vec<EntityId> = self.files.iter().map(|tab| tab.view.entity_id()).collect();
+        self.disk_conflicts.retain(|view| {
+            view.upgrade()
+                .is_some_and(|view| view.read(cx).has_conflict())
+        });
+        let Some(ix) = self
+            .disk_conflicts
+            .iter()
+            .position(|view| on_screen.contains(&view.entity_id()))
+        else {
+            return;
+        };
+        let Some(view) = self.disk_conflicts.remove(ix).upgrade() else {
+            return;
+        };
+        let id = view.entity_id();
+        self.conflict_asked = Some(id);
+        let name: SharedString = view.read(cx).path().file_name().map_or_else(
+            || view.read(cx).title(),
+            |name| name.to_string_lossy().into_owned().into(),
+        );
+        let this = cx.entity().downgrade();
+        window.open_alert_dialog(cx, move |alert, _, _| {
+            let choose = |choice: ConflictChoice| {
+                let this = this.clone();
+                move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
+                    this.update(cx, |this, cx| this.answer_conflict(id, choice, window, cx))
+                        .ok();
+                }
+            };
+            let on_close = choose(ConflictChoice::KeepMine);
+            alert
+                .title(SharedString::from(format!("{name} changed on disk")))
+                .description(SharedString::from(format!(
+                    "{name} was changed outside the editor while it has unsaved changes here."
+                )))
+                .footer(
+                    DialogFooter::new()
+                        .child(
+                            Button::new("conflict-keep-mine")
+                                .outline()
+                                .label("Keep Mine")
+                                .on_click(choose(ConflictChoice::KeepMine)),
+                        )
+                        .child(
+                            Button::new("conflict-reload")
+                                .outline()
+                                .label("Reload")
+                                .on_click(choose(ConflictChoice::Reload)),
+                        )
+                        .child(
+                            Button::new("conflict-merge")
+                                .primary()
+                                .label("Merge")
+                                .on_click(choose(ConflictChoice::Merge)),
+                        ),
+                )
+                // <Escape>, or closing it otherwise, keeps the changes.
+                .on_close(on_close)
+        });
+    }
+
+    /// Acts on what was chosen for the file `id` edited on disk, closes the
+    /// dialog, and asks about the next.
+    fn answer_conflict(
+        &mut self,
+        id: EntityId,
+        choice: ConflictChoice,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.conflict_asked != Some(id) {
+            return;
+        }
+        self.conflict_asked = None;
+        window.close_dialog(cx);
+        if let Some(ix) = self.file_tab_index(id) {
+            let view = self.files[ix].view.clone();
+            match choice {
+                ConflictChoice::KeepMine => view.update(cx, |view, cx| view.keep_mine(cx)),
+                ConflictChoice::Reload => {
+                    self.select_tab(Some(ix), cx);
+                    view.update(cx, |view, cx| view.reload_from_disk(window, cx));
+                }
+                ConflictChoice::Merge => {
+                    self.select_tab(Some(ix), cx);
+                    view.update(cx, |view, cx| view.start_merge(window, cx));
+                }
+            }
+        }
+        self.ask_next_conflict(window, cx);
     }
 
     /// Selects the tab of the file at `ix`, or Chat for none.
@@ -3451,9 +3600,9 @@ impl PromptMode {
     }
 
     /// A file or folder was renamed to `to`, or deleted: each file open in a
-    /// tab, when it is that file or inside that folder, opens again at its
-    /// new path in the same tab unless it has unsaved changes, or its tab
-    /// closes without asking.
+    /// tab, when it is that file or inside that folder, follows it to its new
+    /// path in the same tab, unsaved changes and all, or its tab closes
+    /// without asking.
     pub fn file_moved(
         &mut self,
         from: &Path,
@@ -3461,7 +3610,7 @@ impl PromptMode {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let moved: Vec<(EntityId, PathBuf, bool)> = self
+        let moved: Vec<(EntityId, PathBuf)> = self
             .files
             .iter()
             .filter_map(|tab| {
@@ -3472,21 +3621,18 @@ impl PromptMode {
                     Some(to) => to.join(within),
                     None => PathBuf::new(),
                 };
-                Some((tab.view.entity_id(), moved, view.is_dirty()))
+                Some((tab.view.entity_id(), moved))
             })
             .collect();
-        for (view, moved, dirty) in moved {
+        for (view, moved) in moved {
             match to {
-                Some(_) if dirty => {}
                 Some(_) => {
-                    let Some(ix) = self
-                        .files
-                        .iter()
-                        .position(|tab| tab.view.entity_id() == view)
-                    else {
+                    let Some(ix) = self.file_tab_index(view) else {
                         continue;
                     };
-                    self.files[ix] = self.file_tab(moved, None, window, cx);
+                    self.files[ix]
+                        .view
+                        .update(cx, |view, cx| view.follow_rename(moved, window, cx));
                     cx.notify();
                 }
                 None => self.close_file_tab(view, cx),
@@ -3680,8 +3826,40 @@ impl PromptMode {
         self.tasks.push(task);
         // A new task's output starts at its top.
         self.scroll_output_to_top();
+        self.settle_latest();
         cx.notify();
         self.tasks.len() - 1
+    }
+
+    /// The task heading the view as the latest: of the tasks under way, in
+    /// either lane, the one sent most recently; while none is, the one that
+    /// finished most recently, or else the one sent most recently.
+    fn latest_ix(&self) -> Option<usize> {
+        latest_of(&self.tasks, self.latest_settled.as_ref())
+    }
+
+    /// The latest task.
+    fn latest_task(&self) -> Option<&PromptTask> {
+        self.latest_ix().map(|ix| &self.tasks[ix])
+    }
+
+    /// Notes which task heads the view, for once nothing is under way, and
+    /// when another has come to head it, shows its output as a task just
+    /// sent shows its own: from its top.
+    fn settle_latest(&mut self) {
+        let Some(ix) = self.latest_ix() else {
+            self.latest_settled = None;
+            return;
+        };
+        let name = self.tasks[ix].name.clone();
+        let changed = self
+            .latest_settled
+            .as_ref()
+            .is_some_and(|(was, was_name)| *was != ix || *was_name != name);
+        if changed && ix + 1 != self.tasks.len() {
+            self.scroll_output_to_top();
+        }
+        self.latest_settled = Some((ix, name));
     }
 
     /// Applies a harness event to the task at `ix`.
@@ -3691,9 +3869,10 @@ impl PromptMode {
         }
         if self.in_background {
             self.tasks[ix].apply(event);
+            self.settle_latest();
             return;
         }
-        let latest = ix + 1 == self.tasks.len();
+        let latest = Some(ix) == self.latest_ix();
         // A raw output line only changes the raw tail at the end of the
         // output, so there is nothing to redraw while that is out of sight.
         // The Freeform chat's status line shows the latest raw line too.
@@ -3706,6 +3885,8 @@ impl PromptMode {
         let scroll = self.output_table.scroll();
         let following = scroll.offset().y <= -scroll.max_offset().y + px(1.);
         self.tasks[ix].apply(event);
+        // A task finishing may leave another heading the view.
+        self.settle_latest();
         if unseen {
             return;
         }
@@ -3743,7 +3924,7 @@ impl PromptMode {
     /// once another task is the latest, and it comes back at its top,
     /// unlocked.
     fn follow_task_history(&mut self) {
-        let latest = self.tasks.last().map(|task| task.name.clone());
+        let latest = self.latest_task().map(|task| task.name.clone());
         if self.task_history.expanded {
             if self.output_left.is_none() {
                 self.output_left = Some(OutputLeft {
@@ -3788,8 +3969,7 @@ impl PromptMode {
             (!up).then(|| f32::from(self.task_history.rows.to_bottom()))
         } else {
             let latest_freeform = self
-                .tasks
-                .last()
+                .latest_task()
                 .is_some_and(|task| task.mode == Some(SendMode::Freeform));
             (up && self.tasks.len() >= 2).then(|| {
                 f32::from(if latest_freeform {
@@ -4637,7 +4817,7 @@ impl PromptMode {
     /// more, its output shown rather than the previous tasks.
     fn can_send_to_task(&self) -> bool {
         !self.task_history.expanded
-            && self.tasks.last().is_some_and(|task| {
+            && self.latest_task().is_some_and(|task| {
                 task.status.is_active() && task.feed.as_ref().is_some_and(harness::Feed::is_open)
             })
     }
@@ -4667,8 +4847,7 @@ impl PromptMode {
         let sliced = self.chat_input.read(cx).slices();
         // Only the latest task, whose output is shown, is sent to.
         let Some(feed) = self
-            .tasks
-            .last()
+            .latest_task()
             .and_then(|task| task.feed.clone())
             .filter(harness::Feed::is_open)
         else {
@@ -5382,7 +5561,7 @@ impl PromptMode {
     /// Code, Chain, or Spec tab runs, once it has anything to show. A
     /// Freeform prompt references nothing.
     fn refs_wanted(&self) -> bool {
-        self.tasks.last().is_some_and(|task| {
+        self.latest_task().is_some_and(|task| {
             self.working.any()
                 && task.status.is_active()
                 && !matches!(task.mode, Some(SendMode::Ask | SendMode::Freeform))
@@ -5395,14 +5574,14 @@ impl PromptMode {
     /// Whether the running task has anything for the sidebar to show: a
     /// spec file referenced, a constraint understood, or a subagent started.
     fn refs_have_contents(&self) -> bool {
-        self.tasks.last().is_some_and(|task| {
+        self.latest_task().is_some_and(|task| {
             !task.understanding.rows.is_empty() || !task.subagents.list.is_empty()
         }) || !self.referenced_files().is_empty()
     }
 
     /// The spec files the running task references.
     fn referenced_files(&self) -> Vec<referenced_spec::Referenced> {
-        let (Some(project_dir), Some(task)) = (self.project_dir.as_deref(), self.tasks.last())
+        let (Some(project_dir), Some(task)) = (self.project_dir.as_deref(), self.latest_task())
         else {
             return Vec::new();
         };
@@ -5420,7 +5599,7 @@ impl PromptMode {
     /// a group per step labelled by what it did, in that step's own mode:
     /// the spec step and follow-up Spec's, the code step Code's.
     fn running_subagents(&self, cx: &App) -> Vec<referenced_spec::SubagentGroup> {
-        let Some(latest) = self.tasks.len().checked_sub(1) else {
+        let Some(latest) = self.latest_ix() else {
             return Vec::new();
         };
         let group = |ix: usize, step: Option<ChainStep>| {
@@ -7051,7 +7230,8 @@ impl PromptMode {
     /// The latest task's header, whether or not the previous tasks cover it,
     /// as while they slide in over it or away from it.
     fn render_latest_header(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let (ix, task) = self.tasks.last().map(|task| (self.tasks.len() - 1, task))?;
+        let ix = self.latest_ix()?;
+        let task = &self.tasks[ix];
         // A Freeform task is a chat, with no header.
         if task.mode == Some(SendMode::Freeform) {
             return None;
@@ -7492,6 +7672,7 @@ impl PromptMode {
             &self.steps_shown,
             &open_file,
             self.task_visibility(),
+            self.latest_ix(),
             cx,
         );
         // The filters stay put above the list as it scrolls.
@@ -7519,9 +7700,12 @@ impl PromptMode {
     /// whatever other chips are on; the latest task, heading the view, isn't
     /// one of them.
     fn filter_count(&self, filter: TaskFilter) -> usize {
-        self.tasks[..self.tasks.len().saturating_sub(1)]
+        let latest = self.latest_ix();
+        self.tasks
             .iter()
-            .filter(|task| self.matches_filter(task, filter))
+            .enumerate()
+            .filter(|(ix, _)| Some(*ix) != latest)
+            .filter(|(_, task)| self.matches_filter(task, filter))
             .count()
     }
 
@@ -7688,10 +7872,10 @@ impl PromptMode {
         if let Some(chat) = self.render_freeform_chat(cx) {
             return chat;
         }
-        let Some(task) = self.tasks.last() else {
+        let Some(task_ix) = self.latest_ix() else {
             return div().into_any_element();
         };
-        let task_ix = self.tasks.len() - 1;
+        let task = &self.tasks[task_ix];
         let this = cx.entity().downgrade();
         let reply_of = task_table::reply_of({
             let this = this.clone();
@@ -7936,6 +8120,8 @@ fn render_changed_files(
 
 impl Render for PromptMode {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // A task cancelled or failed may leave another heading the view.
+        self.settle_latest();
         // The chat input shows how much context its next prompt carries on.
         let context = self.context();
         if self.chat_input.read(cx).context() != context {
@@ -8178,18 +8364,34 @@ fn resolve_anchor(
     Ok(anchor)
 }
 
+/// Which of `tasks` heads the view as the latest task: the one sent most
+/// recently of those under way, in either lane; while none is, the one that
+/// finished most recently, `settled`, the task last seen heading the view
+/// while under way, by its index and name; or else the one sent most
+/// recently.
+fn latest_of(tasks: &[PromptTask], settled: Option<&(usize, SharedString)>) -> Option<usize> {
+    if let Some(active) = tasks.iter().rposition(|task| task.status.is_active()) {
+        return Some(active);
+    }
+    settled
+        .filter(|(ix, name)| tasks.get(*ix).is_some_and(|task| task.name == *name))
+        .map(|(ix, _)| *ix)
+        .or_else(|| tasks.len().checked_sub(1))
+}
+
 /// The tasks of `tasks` the harness is working on while `working`, by their
 /// index, with each one's first line, oldest first.
 fn running_tasks(tasks: &[PromptTask], working: Lanes) -> Vec<(usize, SharedString)> {
     if !working.any() {
         return Vec::new();
     }
+    let latest = latest_of(tasks, None);
     tasks
         .iter()
         .enumerate()
         // The latest, or one of the other lane still under way beside it.
         .filter(|(ix, task)| {
-            task.status.is_active() && (task.cancel.is_some() || ix + 1 == tasks.len())
+            task.status.is_active() && (task.cancel.is_some() || Some(*ix) == latest)
         })
         .map(|(ix, task)| (ix, first_line(&task.text)))
         .collect()
@@ -9732,6 +9934,52 @@ mod tests {
         }
         let [a, b] = dirs.map(|dir| std::fs::canonicalize(dir).unwrap());
         (a, b)
+    }
+
+    /// Each project keeps the chat input's tab it was on: one opened for the
+    /// first time starts on Chain, switching back selects the tab it was
+    /// left on, Ask's conversation with it, and a queued prompt being edited
+    /// keeps its tab until the edit is over.
+    #[gpui_kit::test]
+    async fn each_project_keeps_its_mode_tab(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        let (a, b) = two_projects("mode-tab");
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(a.clone(), cx));
+        cx.run_until_parked();
+        let chat = prompt_mode.read_with(cx, |this, _| this.chat_input_view());
+        let mode = |cx: &mut TestAppContext| chat.read_with(cx, |input, _| input.mode());
+        assert_eq!(mode(cx), SendMode::Both);
+
+        cx.update_window(handle, |_, window, cx| {
+            chat.update(cx, |input, cx| input.select_mode(SendMode::Ask, window, cx))
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(prompt_mode.read_with(cx, |this, _| this.on_ask_tab));
+
+        // Beta, opened for the first time, starts on Chain.
+        cx.update(|cx| ProjectDirectory::set(b.clone(), cx));
+        cx.run_until_parked();
+        assert_eq!(mode(cx), SendMode::Both);
+        assert!(!prompt_mode.read_with(cx, |this, _| this.on_ask_tab));
+        cx.update_window(handle, |_, window, cx| {
+            chat.update(cx, |input, cx| {
+                input.select_mode(SendMode::Code, window, cx)
+            })
+        })
+        .unwrap();
+
+        // Alpha comes back on Ask, its conversation with it; beta on Code.
+        cx.update(|cx| ProjectDirectory::set(a.clone(), cx));
+        cx.run_until_parked();
+        assert_eq!(mode(cx), SendMode::Ask);
+        assert!(prompt_mode.read_with(cx, |this, _| this.on_ask_tab));
+        cx.update(|cx| ProjectDirectory::set(b.clone(), cx));
+        cx.run_until_parked();
+        assert_eq!(mode(cx), SendMode::Code);
+        std::fs::remove_dir_all(&a).ok();
+        std::fs::remove_dir_all(&b).ok();
     }
 
     /// Switching projects leaves the work of the one left running in the
@@ -12421,6 +12669,101 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// Files edited on disk while they have unsaved changes are asked
+    /// about one after another, in a dialog named for the file: Merge
+    /// selects the file's tab and shows the merge in place of its editor,
+    /// and closing the dialog keeps the changes.
+    #[gpui_kit::test]
+    async fn files_changed_on_disk_are_asked_about_in_turn(cx: &mut TestAppContext) {
+        use super::ConflictChoice;
+        use gpui_kit::component::WindowExt as _;
+        let dir = std::env::temp_dir().join(format!("suspense-conflicts-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let dir = std::fs::canonicalize(&dir).unwrap();
+        let (first, second) = (dir.join("first.md"), dir.join("second.md"));
+        std::fs::write(&first, "first\n").unwrap();
+        std::fs::write(&second, "second\n").unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        for file in [&first, &second] {
+            cx.update_window(handle, |_, window, cx| {
+                prompt_mode.update(cx, |this, cx| this.open_file(file.clone(), window, cx))
+            })
+            .unwrap();
+        }
+        cx.run_until_parked();
+        let views = prompt_mode.read_with(cx, |this, _| this.open_file_views());
+        // Chat selected; both files have unsaved changes.
+        prompt_mode.update(cx, |this, cx| this.select_tab(None, cx));
+        for view in &views {
+            cx.update_window(handle, |_, window, cx| {
+                view.update(cx, |view, cx| view.type_text("mine ", window, cx))
+            })
+            .unwrap();
+        }
+        std::thread::sleep(Duration::from_millis(200));
+        std::fs::write(&first, "first, edited\n").unwrap();
+        std::fs::write(&second, "second, edited\n").unwrap();
+
+        let asked = |cx: &mut TestAppContext| {
+            for _ in 0..300 {
+                cx.run_until_parked();
+                if prompt_mode.read_with(cx, |this, _| this.conflict_asked.is_some())
+                    && prompt_mode.read_with(cx, |this, _| this.disk_conflicts.len() == 1)
+                {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+                cx.executor().advance_clock(Duration::from_millis(50));
+            }
+            panic!("not asked about both files");
+        };
+        asked(cx);
+        let first_asked = prompt_mode.read_with(cx, |this, _| this.conflict_asked.unwrap());
+        let (asked_view, other) = if first_asked == views[0].entity_id() {
+            (views[0].clone(), views[1].clone())
+        } else {
+            (views[1].clone(), views[0].clone())
+        };
+        cx.update_window(handle, |_, window, cx| {
+            assert!(window.has_active_dialog(cx));
+            prompt_mode.update(cx, |this, cx| {
+                this.answer_conflict(first_asked, ConflictChoice::Merge, window, cx)
+            });
+        })
+        .unwrap();
+        cx.run_until_parked();
+        prompt_mode.read_with(cx, |this, cx| {
+            assert_eq!(
+                this.open_file_view().map(|view| view.entity_id()),
+                Some(asked_view.entity_id()),
+                "Merge didn't select the file's tab"
+            );
+            assert!(asked_view.read(cx).merge_view().is_some());
+            // The other file is asked about next.
+            assert_eq!(this.conflict_asked, Some(other.entity_id()));
+        });
+
+        // Closed, as <Escape> closes it, the changes are kept.
+        cx.update_window(handle, |_, window, cx| {
+            assert!(window.has_active_dialog(cx));
+            let id = other.entity_id();
+            prompt_mode.update(cx, |this, cx| {
+                this.answer_conflict(id, ConflictChoice::KeepMine, window, cx)
+            });
+            assert!(!window.has_active_dialog(cx));
+        })
+        .unwrap();
+        cx.run_until_parked();
+        prompt_mode.read_with(cx, |this, cx| {
+            assert_eq!(this.conflict_asked, None);
+            assert!(other.read(cx).is_dirty() && !other.read(cx).has_conflict());
+        });
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// Ctrl+N in the chat input starts a new conversation, as New
     /// conversation does, and whether a task starts one is part of it: the
     /// first queued prompt's hidden anchor records it, passing it on to the
@@ -14656,6 +14999,8 @@ mod tests {
                     post_build_update: false,
                 };
                 this.tasks[ix].mode = mode;
+                // Over, so the next heads the view in its place.
+                this.tasks[ix].status = TaskStatus::Done;
             })
         };
         let offered = |id: (&'static str, usize), cx: &mut TestAppContext| {
@@ -17034,6 +17379,72 @@ mod tests {
         }
     }
 
+    /// The most recent task still under way heads the view, whichever lane
+    /// it runs in: as with two chains whose spec steps both finished before
+    /// the first's code step, that code step heads it while it runs, not the
+    /// second's finished spec step; the second's code step heads it once
+    /// sent; and with nothing under way, the task that finished last does.
+    #[gpui_kit::test]
+    async fn the_most_recent_active_task_heads_the_view(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        cx.run_until_parked();
+        let latest =
+            |cx: &mut TestAppContext| prompt_mode.read_with(cx, |this, _| this.latest_ix());
+        let push = |status: TaskStatus, cx: &mut TestAppContext| {
+            prompt_mode.update(cx, |this, cx| {
+                let ix = this.push_task(format!("Task {}", this.tasks.len()).into(), cx);
+                this.tasks[ix].status = status;
+                this.settle_latest();
+                ix
+            })
+        };
+        let finish = |ix: usize, cx: &mut TestAppContext| {
+            prompt_mode.update(cx, |this, cx| {
+                this.tasks[ix].status = TaskStatus::Done;
+                cx.notify();
+            });
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                .unwrap();
+        };
+
+        // The first chain's spec step, then the second's.
+        let first_spec = push(TaskStatus::Running, cx);
+        finish(first_spec, cx);
+        // The first chain's code step starts; the second's spec step runs
+        // beside it, sent last, so it heads the view.
+        let first_code = push(TaskStatus::Running, cx);
+        let second_spec = push(TaskStatus::Running, cx);
+        assert_eq!(latest(cx), Some(second_spec));
+        // The second's spec step finishes: the code step still running heads
+        // the view, and the finished step is among the previous tasks.
+        finish(second_spec, cx);
+        assert_eq!(latest(cx), Some(first_code));
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(
+                super::running_tasks(&this.tasks, crate::chat_input::Lanes::ALL)
+                    .into_iter()
+                    .map(|(ix, _)| ix)
+                    .collect::<Vec<_>>(),
+                vec![first_code]
+            );
+        });
+        // The second chain's code step, sent once the lane is free, heads it.
+        finish(first_code, cx);
+        assert_eq!(latest(cx), Some(first_code), "the task that finished last");
+        let second_code = push(TaskStatus::Running, cx);
+        assert_eq!(latest(cx), Some(second_code));
+        finish(second_code, cx);
+        assert_eq!(latest(cx), Some(second_code));
+
+        // Nothing under way: the task that finished most recently, even when
+        // sent before another.
+        let a = push(TaskStatus::Running, cx);
+        let b = push(TaskStatus::Running, cx);
+        finish(b, cx);
+        finish(a, cx);
+        assert_eq!(latest(cx), Some(a));
+    }
+
     /// The latest task's header offers Cancel only while the task is under
     /// way: building, compiling, or running.
     #[gpui_kit::test]
@@ -17076,6 +17487,8 @@ mod tests {
                 );
             })
             .unwrap();
+            // Over, so the next heads the view in its place.
+            prompt_mode.update(cx, |this, _| this.tasks[ix].status = TaskStatus::Done);
         }
         std::fs::remove_dir_all(&dir).ok();
     }

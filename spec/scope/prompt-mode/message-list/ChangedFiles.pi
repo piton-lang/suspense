@@ -21,9 +21,19 @@ export shape MessageListChangedFilesShape:
         headed "Files changed" with how many there are. The list is collapsed
         to its heading to start with, and expands when the heading is clicked.
 
+        Only the project's own files are listed, its spec, its code, and
+        anything else of its own, never what the application keeps for
+        itself: nothing in the project's .suspense directory, its history,
+        questions, reports, and the rest, as the @{ProjectDataScope} says,
+        and not the draft, .suspense-draft.pi, wherever it is. They are left out of the list and of its count alike,
+        for every task, those recorded before as well, and a file renamed into
+        or out of .suspense is listed only by its path outside it, as added or
+        deleted.
+
         While a task is still running, it has only its first snapshot, so it
-        shows no list yet. A task whose run changed nothing reads "No files
-        changed", muted. A task with no snapshots, as one from before they
+        shows no list yet. A task whose run changed nothing else, nothing at
+        all or only what the application keeps, reads "No files changed",
+        muted. A task with no snapshots, as one from before they
         were taken or one whose snapshot couldn't be taken, shows no list.
 
     whoChanged:

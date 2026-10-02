@@ -1,0 +1,71 @@
+
+export anchor Prompt_d605223454dde5cf:
+    userPrompt:
+        \\\
+        If a file is open in the editor and has been renamed or edited on the file system, it should reload. And if there are conflicts like local changes, an alert should pop up asking what you want to do. And the option to merge, which will then open a diff view, will be available. 
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            If a file is open in the editor and has been renamed or edited on the file system, it should reload. And if there are conflicts like local changes, an alert should pop up asking what you want to do. And the option to merge, which will then open a diff view, will be available. 
+            \\\
+        result:
+            \\\
+            I've written the spec for this; the code hasn't been touched. `piton check` reports no problems and `piton build` wrote 75 files.
+
+            **What changed in the spec**
+
+            1. **Editor** (`spec/scope/editor/index.pi`): a new **Changes On Disk** section with four parts:
+               - **Watching:** an open file is watched on disk whether or not its tab is selected. The editor's own saves, including the formatting a Piton file gets on save, never count as a change on disk.
+               - **Reloading:** if the file is edited on disk and there are no unsaved changes, the editor reloads straight away without asking. The cursor stays beside the same characters and the scroll position doesn't move. A Piton file's new text goes to the language server as a full-text `didChange`.
+               - **Renaming:** if the file is renamed or moved on disk, the editor follows it to the new path in the same tab. The header, the tab's name and tooltip, and where saving writes all switch to the new path. Unsaved changes, cursor and scrolling stay as they were, so a rename on its own never asks anything. A Piton file gets `didClose` under the old path and `didOpen` under the new one. A rename that also changes the contents is handled as a rename and then an edit.
+               - **Conflicts:** if the file is edited on disk while there are unsaved changes, nothing reloads. A dialog titled "notes.md changed on disk" offers three buttons:
+                 - "Keep Mine" keeps the editor's text, still unsaved. Escape or closing the dialog does the same.
+                 - "Reload" discards the unsaved changes and loads the file from disk.
+                 - "Merge" opens the merge view. It's the primary button.
+
+                 "Reload" and "Merge" also select the file's tab. Only one dialog shows per file, files in conflict are asked about one after another, and a file that changes again after "Keep Mine" asks again.
+               - **Merging:** the merge view replaces the editor in the file's tab. "Apply Merge" puts the merged text in the editor as unsaved changes; "Cancel" returns to the editor's text as it was.
+            2. **Diff view** (`spec/ui/components/diff-view/index.pi`): a new **Merging** mode.
+               - The left side is the file as it is on disk now, headed "On disk"; the right side is the editor's unsaved text, headed "Mine". It keeps following the file on disk.
+               - Each change has "Use Disk" and "Use Mine" buttons, and every change starts on "Use Mine". The side that won't be kept is dimmed, and "Mine" lines that will be replaced are struck through.
+               - The header swaps the open-file and close buttons for "Use All Disk", "Use All Mine", "Cancel", and "Apply Merge" as the primary button. Escape is "Cancel".
+            3. **File tree** (`spec/ui/components/file-tree/index.pi`, Naming): this changes existing behaviour. Before, a file renamed in the tree only moved to its new path if it had no unsaved changes; otherwise it stayed as it was. Now it always follows to the new path and keeps any unsaved changes, matching what the editor does for a rename on disk.
+
+            **Anchors the code should follow**
+            - `.claude/reference/scope/editor/index.md#changes-on-disk` and its sub-anchors `#watching`, `#reloading`, `#renaming`, `#conflicts`, `#merging`
+            - `.claude/reference/ui/components/diff-view/index.md#merging`, with `#choosing` and `#header` under it
+            - `.claude/reference/ui/components/file-tree/index.md#naming`
+            - Unchanged but relevant: the editor's `#saving` (keeping the cursor in place), `#language-support` and `#closing`, and the delete dialog in the file tree's `#deleting` as the pattern for the conflict dialog.
+
+            The constraints are in `.suspense/history/1790836506-Prompt_e18179c4cbce5083.understanding.md`.
+            \\\
+
+    sentFrom: Prompt_e18179c4cbce5083

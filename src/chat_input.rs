@@ -1831,6 +1831,38 @@ impl ChatInput {
         TABS[self.selected_tab]
     }
 
+    /// The tab the project on screen is on: while a queued prompt is being
+    /// edited, the one it will come back to once the edit is over.
+    pub(crate) fn project_mode(&self) -> SendMode {
+        match &self.editing {
+            Some(editing) => TABS[editing.set_aside.tab],
+            None => TABS[self.selected_tab],
+        }
+    }
+
+    /// Selects the tab of `mode`, the one a project switched to was left
+    /// on, at once, leaving focus where it is. A queued prompt being edited
+    /// keeps its tab, and `mode`'s is selected once the edit is over.
+    pub(crate) fn set_project_mode(&mut self, mode: SendMode, cx: &mut Context<Self>) {
+        let Some(ix) = TABS.iter().position(|tab| *tab == mode) else {
+            return;
+        };
+        if let Some(editing) = &mut self.editing {
+            editing.set_aside.tab = ix;
+            return;
+        }
+        if ix == self.selected_tab {
+            return;
+        }
+        // The prompt would compile differently in another mode.
+        self.preview = None;
+        self.send_menu = None;
+        self.move_tint(ix as isize - self.selected_tab as isize);
+        self.selected_tab = ix;
+        cx.emit(TabChanged);
+        cx.notify();
+    }
+
     /// Selects the tab of `mode`, as clicking it does.
     pub(crate) fn select_mode(
         &mut self,

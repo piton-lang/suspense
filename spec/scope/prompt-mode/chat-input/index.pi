@@ -167,7 +167,10 @@ shape ChatInputShape:
 
             The chat input starts in the combined mode: Chain is selected, so
             Code and Spec are selected together, and a prompt sent before
-            switching tabs changes the code and the spec together.
+            switching tabs changes the code and the spec together. Each open
+            project keeps the tab it was left on, as the @{OpenProjectsScope}
+            says, so a project starts on Chain the first time it is opened in
+            a launch, and switching back to it selects the tab it was on.
 
             Pressing <Ctrl+Tab> while in the chat input cycles from Code to
             Chain to Spec to Ask to Freeform and back to Code, <Ctrl+Shift+Tab> the other
@@ -453,8 +456,10 @@ shape ChatInputShape:
         The questions, running and finished, belong to their project, as the @{OpenProjectsScope} says:
         switching projects shows those of the project switched to, while the
         questions of other projects carry on running in the background. The
-        prompt being written, its attachments, the selected tab, and the Slice
-        toggle stay as they are across a switch, and are sent to the project on screen.
+        prompt being written, its attachments, and the Slice toggle stay as
+        they are across a switch, and are sent to the project on screen. The
+        selected tab is the project's: switching selects the tab the project
+        switched to was left on.
 
     escape:
         Pressing <Escape> while in the chat input takes focus out of the chat

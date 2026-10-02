@@ -217,6 +217,65 @@ impl FileDiff {
         }
         rows
     }
+
+    /// Which change each line belongs to, numbered in order, as
+    /// [`merge_parts`] numbers them; `None` for an unchanged line.
+    pub fn change_of_lines(&self) -> Vec<Option<usize>> {
+        let mut next = 0;
+        let mut previous = false;
+        self.lines
+            .iter()
+            .map(|line| {
+                let changed = line.kind != Kind::Unchanged;
+                if changed && !previous {
+                    next += 1;
+                }
+                previous = changed;
+                changed.then(|| next - 1)
+            })
+            .collect()
+    }
+}
+
+/// A change between two versions of a file, as either side has it, line
+/// endings and all.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MergeHunk {
+    pub old: String,
+    pub new: String,
+}
+
+/// A stretch of a file both versions share, or a change between them.
+#[derive(Clone, Debug, PartialEq)]
+pub enum MergePart {
+    Same(String),
+    Change(MergeHunk),
+}
+
+/// `old` and `new` as the text they share and the changes between them, in
+/// order, each change a run of changed lines as [`FileDiff`] shows it.
+pub fn merge_parts(old: &str, new: &str) -> Vec<MergePart> {
+    let diff = TextDiff::from_lines(old, new);
+    let mut parts: Vec<MergePart> = Vec::new();
+    for op in diff.ops() {
+        let old_text: String = diff.old_slices()[op.old_range()].concat();
+        let new_text: String = diff.new_slices()[op.new_range()].concat();
+        if op.tag() == similar::DiffTag::Equal {
+            parts.push(MergePart::Same(old_text));
+            continue;
+        }
+        match parts.last_mut() {
+            Some(MergePart::Change(hunk)) => {
+                hunk.old.push_str(&old_text);
+                hunk.new.push_str(&new_text);
+            }
+            _ => parts.push(MergePart::Change(MergeHunk {
+                old: old_text,
+                new: new_text,
+            })),
+        }
+    }
+    parts
 }
 
 enum Segment {
@@ -355,5 +414,33 @@ mod tests {
     fn finds_where_changes_start() {
         let rows = [false, true, true, false, true, false, false, true];
         assert_eq!(change_starts(rows.into_iter()), [1, 4, 7]);
+    }
+
+    /// The changes merged are the runs of changed lines the diff shows, in
+    /// the same order, each side kept whole, line endings and all.
+    #[test]
+    fn merge_parts_follow_the_lines_shown() {
+        use super::{MergeHunk, MergePart, merge_parts};
+        let old = "a\nb\nc\nd\ne\n";
+        let new = "a\nB\nc\nd\nE\nf\n";
+        let parts = merge_parts(old, new);
+        assert_eq!(
+            parts,
+            vec![
+                MergePart::Same("a\n".into()),
+                MergePart::Change(MergeHunk {
+                    old: "b\n".into(),
+                    new: "B\n".into()
+                }),
+                MergePart::Same("c\nd\n".into()),
+                MergePart::Change(MergeHunk {
+                    old: "e\n".into(),
+                    new: "E\nf\n".into()
+                }),
+            ]
+        );
+        let changes = FileDiff::compute(old, new).change_of_lines();
+        let numbered: Vec<_> = changes.into_iter().flatten().collect();
+        assert_eq!(numbered, vec![0, 0, 1, 1, 1]);
     }
 }

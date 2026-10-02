@@ -134,6 +134,43 @@ pub fn changes(top: &Path, before: &str, after: &str) -> Result<Vec<Change>> {
     Ok(changes)
 }
 
+/// Whether `path` is something the application keeps for itself rather than
+/// one of the project's own files: anything in a `.suspense` directory, or
+/// the draft, `.suspense-draft.pi`, wherever it is.
+pub fn is_application_data(path: &Path) -> bool {
+    path.file_name()
+        .is_some_and(|name| name == ".suspense-draft.pi")
+        || path
+            .components()
+            .any(|part| part.as_os_str() == ".suspense")
+}
+
+/// `changes` with what the application keeps for itself left out: a file
+/// renamed into it is listed as deleted from where it was, one renamed out of
+/// it as added where it is now.
+pub fn project_own(changes: Vec<Change>) -> Vec<Change> {
+    changes
+        .into_iter()
+        .filter_map(|change| {
+            let from_kept = change.from.as_deref().map(is_application_data);
+            match (is_application_data(&change.path), from_kept) {
+                (true, Some(false)) => Some(Change {
+                    kind: ChangeKind::Deleted,
+                    path: change.from?,
+                    from: None,
+                }),
+                (true, _) => None,
+                (false, Some(true)) => Some(Change {
+                    kind: ChangeKind::Added,
+                    path: change.path,
+                    from: None,
+                }),
+                (false, _) => Some(change),
+            }
+        })
+        .collect()
+}
+
 /// Reads `git diff --name-status -z`: each status, then its path, or for a
 /// rename or copy its old path and its new.
 fn parse(output: &str) -> Vec<Change> {
@@ -183,6 +220,41 @@ pub fn contents(top: &Path, tree: &str, path: &Path) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What the application keeps, in any `.suspense` directory or as the
+    /// draft, is left out; a rename across that line is an addition or a
+    /// deletion of the project's own file.
+    #[test]
+    fn leaves_out_what_the_application_keeps() {
+        let change = |kind, path: &str, from: Option<&str>| Change {
+            kind,
+            path: PathBuf::from(path),
+            from: from.map(PathBuf::from),
+        };
+        let changes = vec![
+            change(ChangeKind::Added, ".suspense/history/1-Task.pi", None),
+            change(ChangeKind::Modified, "app/.suspense/queue/a.pi", None),
+            change(ChangeKind::Modified, "spec/.suspense-draft.pi", None),
+            change(ChangeKind::Modified, "src/main.rs", None),
+            change(ChangeKind::Modified, "docs/suspense.md", None),
+            change(ChangeKind::Renamed, ".suspense/notes.md", Some("notes.md")),
+            change(ChangeKind::Renamed, "plan.md", Some(".suspense/plan.md")),
+            change(
+                ChangeKind::Renamed,
+                ".suspense/b.md",
+                Some(".suspense/a.md"),
+            ),
+        ];
+        assert_eq!(
+            project_own(changes),
+            vec![
+                change(ChangeKind::Modified, "src/main.rs", None),
+                change(ChangeKind::Modified, "docs/suspense.md", None),
+                change(ChangeKind::Deleted, "notes.md", None),
+                change(ChangeKind::Added, "plan.md", None),
+            ]
+        );
+    }
 
     fn git_in(dir: &Path, args: &[&str]) {
         let status = Command::new("git")

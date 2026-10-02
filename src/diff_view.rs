@@ -5,6 +5,9 @@
 //! collapses unchanged lines far from any change into a row that expands them;
 //! and steps from change to change with F7 and Shift+F7. It follows the file as
 //! it changes on disk.
+//!
+//! It can also merge: the file on disk against an editor's unsaved text, each
+//! change taken from either side, the result handed back to the editor.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -20,7 +23,9 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use crate::diff::{FileDiff, Kind, Line, SideRow, UnifiedRow, change_starts};
+use crate::diff::{
+    FileDiff, Kind, Line, MergeHunk, MergePart, SideRow, UnifiedRow, change_starts, merge_parts,
+};
 use crate::project_directory::ProjectDirectory;
 use crate::task_snapshot;
 
@@ -50,6 +55,22 @@ pub struct CloseDiff;
 /// Emitted to open the file in the editor instead.
 pub struct OpenInEditor(pub PathBuf);
 
+/// Emitted when a merge is applied, with the merged text.
+pub struct ApplyMerge(pub String);
+
+/// Emitted when a merge is cancelled.
+pub struct CancelMerge;
+
+/// A merge of the file on disk, on the left, and an editor's unsaved text,
+/// on the right.
+struct Merge {
+    mine: String,
+    /// The changes taken from disk, by what each side has, so a change keeps
+    /// its choice as the file on disk changes around it; every other change
+    /// keeps the editor's lines.
+    use_disk: HashSet<MergeHunk>,
+}
+
 /// How the changes are laid out.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Layout {
@@ -76,6 +97,8 @@ pub struct DiffView {
     expanded: HashSet<usize>,
     /// The change stepped to last, as an index into the change starts.
     current_change: Option<usize>,
+    /// While merging, what is merged and how.
+    merge: Option<Merge>,
     scroll: UniformListScrollHandle,
     focus_handle: FocusHandle,
     _refresh: Task<()>,
@@ -83,6 +106,8 @@ pub struct DiffView {
 
 impl EventEmitter<CloseDiff> for DiffView {}
 impl EventEmitter<OpenInEditor> for DiffView {}
+impl EventEmitter<ApplyMerge> for DiffView {}
+impl EventEmitter<CancelMerge> for DiffView {}
 
 impl Focusable for DiffView {
     fn focus_handle(&self, _: &App) -> FocusHandle {
@@ -126,6 +151,7 @@ impl DiffView {
             diff: FileDiff::default(),
             expanded: HashSet::new(),
             current_change: None,
+            merge: None,
             scroll: UniformListScrollHandle::new(),
             focus_handle: cx.focus_handle(),
             _refresh: refresh,
@@ -166,6 +192,111 @@ impl DiffView {
         // Read once, from the snapshots, in place of following the disk.
         view._refresh = load;
         view
+    }
+
+    /// A merge of the file at `path` as it is on disk, on the left, and
+    /// `mine`, an editor's unsaved text, on the right, following the disk.
+    /// Every change starts on the editor's side.
+    pub fn merging(path: PathBuf, mine: String, cx: &mut Context<Self>) -> Self {
+        let mut view = Self::new(path.clone(), cx);
+        let refresh = cx.spawn({
+            let mine = mine.clone();
+            async move |this, cx| {
+                loop {
+                    let content = cx
+                        .background_spawn({
+                            let path = path.clone();
+                            let mine = mine.clone();
+                            async move { read_merge(&path, mine) }
+                        })
+                        .await;
+                    let updated = this.update(cx, |this, cx| this.show(content, cx));
+                    if updated.is_err() {
+                        break;
+                    }
+                    cx.background_executor().timer(REFRESH_INTERVAL).await;
+                }
+            }
+        });
+        // Reads the disk against the editor's text, in place of the commit.
+        view._refresh = refresh;
+        view.merge = Some(Merge {
+            mine,
+            use_disk: HashSet::new(),
+        });
+        view
+    }
+
+    /// The changes being merged, in order, each with whether it is taken
+    /// from disk.
+    fn merge_hunks(&self) -> Vec<(MergeHunk, bool)> {
+        let (Some(merge), Content::Diff { old, new }) = (&self.merge, &self.content) else {
+            return Vec::new();
+        };
+        merge_parts(old, new)
+            .into_iter()
+            .filter_map(|part| match part {
+                MergePart::Change(hunk) => {
+                    let disk = merge.use_disk.contains(&hunk);
+                    Some((hunk, disk))
+                }
+                MergePart::Same(_) => None,
+            })
+            .collect()
+    }
+
+    /// Takes the change numbered `ix` from disk, or from the editor's text.
+    pub fn choose(&mut self, ix: usize, disk: bool, cx: &mut Context<Self>) {
+        let Some((hunk, _)) = self.merge_hunks().into_iter().nth(ix) else {
+            return;
+        };
+        if let Some(merge) = &mut self.merge {
+            if disk {
+                merge.use_disk.insert(hunk);
+            } else {
+                merge.use_disk.remove(&hunk);
+            }
+        }
+        cx.notify();
+    }
+
+    /// Takes every change from disk, or from the editor's text.
+    pub fn choose_all(&mut self, disk: bool, cx: &mut Context<Self>) {
+        let hunks = self.merge_hunks();
+        if let Some(merge) = &mut self.merge {
+            merge.use_disk.clear();
+            if disk {
+                merge
+                    .use_disk
+                    .extend(hunks.into_iter().map(|(hunk, _)| hunk));
+            }
+        }
+        cx.notify();
+    }
+
+    /// The merged text: the editor's, with each change taken from disk put
+    /// back as it is on disk.
+    pub fn merged_text(&self) -> Option<String> {
+        let merge = self.merge.as_ref()?;
+        let Content::Diff { old, new } = &self.content else {
+            return Some(merge.mine.clone());
+        };
+        Some(
+            merge_parts(old, new)
+                .into_iter()
+                .map(|part| match part {
+                    MergePart::Same(text) => text,
+                    MergePart::Change(hunk) if merge.use_disk.contains(&hunk) => hunk.old,
+                    MergePart::Change(hunk) => hunk.new,
+                })
+                .collect(),
+        )
+    }
+
+    fn apply_merge(&mut self, cx: &mut Context<Self>) {
+        if let Some(text) = self.merged_text() {
+            cx.emit(ApplyMerge(text));
+        }
     }
 
     #[cfg(test)]
@@ -344,24 +475,141 @@ impl DiffView {
                         Layout::Unified,
                     )),
             )
+            .map(|header| {
+                if self.merge.is_some() {
+                    return header
+                        .child(
+                            Button::new("merge-use-all-disk")
+                                .ghost()
+                                .xsmall()
+                                .label("Use All Disk")
+                                .disabled(!has_changes)
+                                .on_click(cx.listener(|this, _, _, cx| this.choose_all(true, cx))),
+                        )
+                        .child(
+                            Button::new("merge-use-all-mine")
+                                .ghost()
+                                .xsmall()
+                                .label("Use All Mine")
+                                .disabled(!has_changes)
+                                .on_click(cx.listener(|this, _, _, cx| this.choose_all(false, cx))),
+                        )
+                        .child(
+                            Button::new("merge-cancel")
+                                .ghost()
+                                .xsmall()
+                                .label("Cancel")
+                                .on_click(cx.listener(|_, _, _, cx| cx.emit(CancelMerge))),
+                        )
+                        .child(
+                            Button::new("merge-apply")
+                                .primary()
+                                .xsmall()
+                                .label("Apply Merge")
+                                .disabled(!matches!(self.content, Content::Diff { .. }))
+                                .on_click(cx.listener(|this, _, _, cx| this.apply_merge(cx))),
+                        );
+                }
+                header
+                    .child(
+                        Button::new("diff-open-file")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::FileText)
+                            .tooltip("Open the file in the editor")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                cx.emit(OpenInEditor(this.path.clone()))
+                            })),
+                    )
+                    .child(
+                        Button::new("close-diff")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::X)
+                            .tooltip("Close the diff")
+                            .on_click(cx.listener(|_, _, _, cx| cx.emit(CloseDiff))),
+                    )
+            })
+    }
+
+    /// While merging, which side each column is: "On disk" and "Mine".
+    fn render_merge_sides(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        self.merge.as_ref()?;
+        let theme = cx.theme();
+        let label = |text: &'static str| {
+            div()
+                .flex_1()
+                .min_w_0()
+                .pl(NUMBER_WIDTH)
+                .text_xs()
+                .font_medium()
+                .text_color(theme.muted_foreground)
+                .child(text)
+        };
+        let sides = h_flex()
+            .id("merge-sides")
+            .flex_none()
+            .h(ROW_HEIGHT)
+            .border_b_1()
+            .border_color(theme.border);
+        Some(
+            match self.layout {
+                Layout::SideBySide => sides
+                    .child(label("On disk"))
+                    .child(div().w_px().h_full().bg(theme.border))
+                    .child(label("Mine")),
+                Layout::Unified => sides.child(label("− On disk   + Mine")),
+            }
+            .into_any_element(),
+        )
+    }
+
+    /// While merging, how a line of `kind` in the change numbered `change`
+    /// shows: dimmed when the merge doesn't keep it, and struck through when
+    /// it is the editor's and the change is taken from disk.
+    fn merge_style(
+        &self,
+        kind: Kind,
+        change: Option<usize>,
+        hunks: &[(MergeHunk, bool)],
+    ) -> (bool, bool) {
+        let Some(disk) = change.and_then(|ix| hunks.get(ix)).map(|(_, disk)| *disk) else {
+            return (false, false);
+        };
+        match kind {
+            Kind::Removed => (!disk, false),
+            Kind::Added => (disk, disk),
+            Kind::Unchanged => (false, false),
+        }
+    }
+
+    /// The buttons choosing a side for the change numbered `change`, at its
+    /// top: "Use Disk" and "Use Mine", the chosen one selected.
+    fn render_choice(&self, change: usize, disk: bool, cx: &mut Context<Self>) -> AnyElement {
+        h_flex()
+            .absolute()
+            .top_0()
+            .right_2()
+            .h(ROW_HEIGHT)
+            .items_center()
+            .gap_0p5()
             .child(
-                Button::new("diff-open-file")
+                Button::new(("merge-use-disk", change))
                     .ghost()
                     .xsmall()
-                    .icon(IconName::FileText)
-                    .tooltip("Open the file in the editor")
-                    .on_click(
-                        cx.listener(|this, _, _, cx| cx.emit(OpenInEditor(this.path.clone()))),
-                    ),
+                    .label("Use Disk")
+                    .selected(disk)
+                    .on_click(cx.listener(move |this, _, _, cx| this.choose(change, true, cx))),
             )
             .child(
-                Button::new("close-diff")
+                Button::new(("merge-use-mine", change))
                     .ghost()
                     .xsmall()
-                    .icon(IconName::X)
-                    .tooltip("Close the diff")
-                    .on_click(cx.listener(|_, _, _, cx| cx.emit(CloseDiff))),
+                    .label("Use Mine")
+                    .selected(!disk)
+                    .on_click(cx.listener(move |this, _, _, cx| this.choose(change, false, cx))),
             )
+            .into_any_element()
     }
 
     fn render_body(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -395,19 +643,28 @@ impl DiffView {
             };
             this.update(cx, |this, cx| {
                 let current = this.current_change_row();
+                let marks = this.merge_marks();
                 match this.layout {
                     Layout::Unified => {
                         let rows = this.diff.unified(&this.expanded);
                         range
                             .map(|ix| {
-                                this.render_unified_row(ix, &rows[ix], current == Some(ix), cx)
+                                this.render_unified_row(
+                                    ix,
+                                    &rows[ix],
+                                    current == Some(ix),
+                                    &marks,
+                                    cx,
+                                )
                             })
                             .collect()
                     }
                     Layout::SideBySide => {
                         let rows = this.diff.side_by_side(&this.expanded);
                         range
-                            .map(|ix| this.render_side_row(ix, &rows[ix], current == Some(ix), cx))
+                            .map(|ix| {
+                                this.render_side_row(ix, &rows[ix], current == Some(ix), &marks, cx)
+                            })
                             .collect()
                     }
                 }
@@ -419,21 +676,72 @@ impl DiffView {
         crate::scrollbar::with_scrollbar("diff", &handle, list, true, None, cx)
     }
 
+    /// While merging, what is needed to show each line's place in it.
+    fn merge_marks(&self) -> Option<MergeMarks> {
+        self.merge.as_ref()?;
+        let changes = self.diff.change_of_lines();
+        let mut starts = HashSet::new();
+        let mut previous = None;
+        for (ix, change) in changes.iter().enumerate() {
+            if change.is_some() && *change != previous {
+                starts.insert(ix);
+            }
+            previous = *change;
+        }
+        Some(MergeMarks {
+            changes,
+            starts,
+            hunks: self.merge_hunks(),
+        })
+    }
+
+    /// How the line `line_ix` shows while merging: dimmed, struck through.
+    fn line_style(&self, line_ix: usize, marks: &Option<MergeMarks>) -> (bool, bool) {
+        let Some(marks) = marks else {
+            return (false, false);
+        };
+        self.merge_style(
+            self.diff.lines[line_ix].kind,
+            marks.changes[line_ix],
+            &marks.hunks,
+        )
+    }
+
+    /// The choice for the change starting at the line `line_ix`, if one does.
+    fn choice_at(
+        &self,
+        line_ix: Option<usize>,
+        marks: &Option<MergeMarks>,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let marks = marks.as_ref()?;
+        let line_ix = line_ix.filter(|ix| marks.starts.contains(ix))?;
+        let change = marks.changes[line_ix]?;
+        let disk = marks.hunks.get(change)?.1;
+        Some(self.render_choice(change, disk, cx))
+    }
+
     fn render_unified_row(
         &self,
         ix: usize,
         row: &UnifiedRow,
         current: bool,
+        marks: &Option<MergeMarks>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         match row {
             UnifiedRow::Collapsed { start, len } => self.render_collapsed(ix, *start, *len, cx),
             UnifiedRow::Line(line_ix) => {
                 let line = &self.diff.lines[*line_ix];
+                let (dim, struck) = self.line_style(*line_ix, marks);
+                let choice = self.choice_at(Some(*line_ix), marks, cx);
                 row_base(("diff-row", ix), line.kind, current, cx)
+                    .relative()
+                    .when(dim, |row| row.opacity(DIMMED))
                     .child(number(line.old, cx))
                     .child(number(line.new, cx))
-                    .child(line_text(line, cx))
+                    .child(line_text(line, struck, cx))
+                    .children(choice)
                     .into_any_element()
             }
         }
@@ -444,6 +752,7 @@ impl DiffView {
         ix: usize,
         row: &SideRow,
         current: bool,
+        marks: &Option<MergeMarks>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let (old, new) = match row {
@@ -454,9 +763,10 @@ impl DiffView {
         };
         let half = |line: Option<usize>, old_side: bool, cx: &mut Context<Self>| {
             let theme = cx.theme();
-            match line.map(|ix| &self.diff.lines[ix]) {
-                Some(line) => {
+            match line.map(|line_ix| (line_ix, &self.diff.lines[line_ix])) {
+                Some((line_ix, line)) => {
                     let number_on_side = if old_side { line.old } else { line.new };
+                    let (dim, struck) = self.line_style(line_ix, marks);
                     row_base(
                         ("diff-half", ix * 2 + old_side as usize),
                         line.kind,
@@ -465,8 +775,9 @@ impl DiffView {
                     )
                     .flex_1()
                     .min_w_0()
+                    .when(dim, |half| half.opacity(DIMMED))
                     .child(number(number_on_side, cx))
-                    .child(line_text(line, cx))
+                    .child(line_text(line, struck, cx))
                     .into_any_element()
                 }
                 // Nothing on this side: blank filler, so the sides stay level.
@@ -480,9 +791,13 @@ impl DiffView {
         };
         let left = half(old, true, cx);
         let right = half(new, false, cx);
+        let choice = self
+            .choice_at(old, marks, cx)
+            .or_else(|| self.choice_at(new, marks, cx));
         let border = cx.theme().border;
         h_flex()
             .id(("diff-row", ix))
+            .relative()
             .w_full()
             .h(ROW_HEIGHT)
             .when(current, |row| {
@@ -491,6 +806,7 @@ impl DiffView {
             .child(left)
             .child(div().w_px().h_full().bg(border))
             .child(right)
+            .children(choice)
             .into_any_element()
     }
 
@@ -524,6 +840,19 @@ impl DiffView {
         // Lets UI tests find the row; inert in normal builds.
         gpui_kit::TestSupportExt::test_support(row).into_any_element()
     }
+}
+
+/// How faint a line is that the merge doesn't keep.
+const DIMMED: f32 = 0.4;
+
+/// What each line's place in a merge is.
+struct MergeMarks {
+    /// Which change each line is in.
+    changes: Vec<Option<usize>>,
+    /// The lines changes start at.
+    starts: HashSet<usize>,
+    /// Each change, and whether it is taken from disk.
+    hunks: Vec<(MergeHunk, bool)>,
 }
 
 /// A colour's shade, readable in the light and the dark theme.
@@ -574,8 +903,9 @@ fn number(number: Option<usize>, cx: &App) -> Div {
         .children(number.map(|number| number.to_string()))
 }
 
-/// A line's marker (+, −, or nothing) and text, its changed words tinted.
-fn line_text(line: &Line, cx: &App) -> Div {
+/// A line's marker (+, −, or nothing) and text, its changed words tinted,
+/// struck through when `struck`.
+fn line_text(line: &Line, struck: bool, cx: &App) -> Div {
     let theme = cx.theme();
     let (marker, color) = match line.kind {
         Kind::Added => ("+", Some(tone(ColorName::Green, cx))),
@@ -610,7 +940,11 @@ fn line_text(line: &Line, cx: &App) -> Div {
                 .text_color(color.unwrap_or(theme.muted_foreground))
                 .child(marker),
         )
-        .child(StyledText::new(line.text.clone()).with_highlights(highlights))
+        .child(
+            div()
+                .when(struck, |text| text.line_through())
+                .child(StyledText::new(line.text.clone()).with_highlights(highlights)),
+        )
 }
 
 impl Render for DiffView {
@@ -623,11 +957,19 @@ impl Render for DiffView {
             .bg(cx.theme().background)
             .on_action(cx.listener(|this, _: &NextChange, _, cx| this.step_change(1, cx)))
             .on_action(cx.listener(|this, _: &PreviousChange, _, cx| this.step_change(-1, cx)))
+            // <Escape> cancels a merge.
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                if this.merge.is_some() && event.keystroke.key == "escape" {
+                    cx.stop_propagation();
+                    cx.emit(CancelMerge);
+                }
+            }))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, window, cx| this.focus_handle.focus(window, cx)),
             )
             .child(self.render_header(cx))
+            .children(self.render_merge_sides(cx))
             .child(div().flex_1().min_h_0().child(self.render_body(cx)));
         // Lets UI tests find the view; inert in normal builds.
         gpui_kit::TestSupportExt::test_support(view)
@@ -649,6 +991,23 @@ fn read(path: &Path) -> Content {
     Content::Diff {
         old: String::from_utf8_lossy(&old).into_owned(),
         new: String::from_utf8_lossy(&new).into_owned(),
+    }
+}
+
+/// The file as it is on disk, against `mine`, an editor's text for it. A
+/// file no longer on disk is empty there.
+fn read_merge(path: &Path, mine: String) -> Content {
+    let disk = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(err) => return Content::Failed(format!("Could not read the file: {err}").into()),
+    };
+    if disk.contains(&0) {
+        return Content::Binary;
+    }
+    Content::Diff {
+        old: String::from_utf8_lossy(&disk).replace("\r\n", "\n"),
+        new: mine,
     }
 }
 

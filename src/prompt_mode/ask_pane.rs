@@ -302,7 +302,10 @@ impl PromptMode {
     /// while the latest task isn't Freeform.
     pub(super) fn freeform_keys(&self) -> Vec<QuestionKey> {
         let mut keys = Vec::new();
-        for (ix, task) in self.tasks.iter().enumerate().rev() {
+        let Some(latest) = self.latest_ix() else {
+            return keys;
+        };
+        for (ix, task) in self.tasks[..=latest].iter().enumerate().rev() {
             if task.mode != Some(SendMode::Freeform) {
                 break;
             }

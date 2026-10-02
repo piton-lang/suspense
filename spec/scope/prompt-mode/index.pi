@@ -189,9 +189,23 @@ shape PromptEditorShape:
 
     header:
         The latest task heads the view whether or not the harness is working.
-        It is the task sent most recently, whichever lane it runs in; a task
-        still running in the other lane is among the previous tasks, shown
-        running there, as any previous task is. The header shows
+        It is always the most recent task still active: of the tasks under
+        way, building, compiling, or running, in either lane, the one sent
+        most recently. Only while no task is under way is it the task that
+        finished most recently, or, before any has finished, the one sent
+        most recently. A finished task never heads the view while another is
+        under way: when it finishes while a task in the other lane still
+        runs, that task heads the view in its place at once, and the task
+        that finished goes among the previous tasks. So with two Chain tasks
+        sent one after the other, once both their spec steps have finished,
+        the first chain's code step heads the view while it runs, not the
+        second chain's finished spec step, and the second chain's code step
+        heads it in turn once it is sent. A task still running in the other
+        lane that is not the latest is among the previous tasks, shown
+        running there, as any previous task is. Whichever task heads the
+        view, its header and output show as they do for a task just sent,
+        and the previous tasks, their row's count, and the chain grouping
+        follow it. The header shows
         its status, with a spinner while it is under way, the name of the
         hidden anchor it was compiled from, and the compiled markdown the
         harness actually received, which scrolls once it gets tall. Until it

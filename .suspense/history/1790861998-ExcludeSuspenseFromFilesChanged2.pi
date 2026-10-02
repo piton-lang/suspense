@@ -1,0 +1,64 @@
+
+export anchor ExcludeSuspenseFromFilesChanged2:
+    userPrompt:
+        \\\
+        Alright, so the files-changed record needs to be about actual spec or code files, not about suspense files.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src. Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec
+        at ./spec to meet it, and the spec has been built since. Now change
+        the code at ./src so it does what the spec now says, without
+        changing the spec. Follow the spec the prompt references, and the anchors the
+        spec step names below. Where the spec and the prompt disagree, follow the
+        spec, and say so in your reply.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Alright, so the files-changed record needs to be about actual spec or code files, not about suspense files.
+            \\\
+        result:
+            \\\
+            I've changed the spec so a task's "Files changed" list leaves out everything the app keeps in `.suspense`. The code isn't changed yet. `piton check` found no problems and `piton build` wrote 75 files.
+
+            **What changed in the spec**
+
+            All of it is in the List part of the message list's Changed Files section (`spec/scope/prompt-mode/message-list/ChangedFiles.pi`):
+
+            - **Only the project's own files are listed:** spec, code, and anything else of the project's own, such as a README. I didn't read your request as limiting the list to strictly spec and code files.
+            - **Left out:** everything inside `.suspense` (history, questions, reports and the rest) and the draft file `.suspense-draft.pi`, wherever it is.
+            - **The count matches:** the "Files changed" heading's count leaves out the same files as the list.
+            - **Older tasks too:** the filter applies to tasks recorded before this change as well, so it works on the list shown, not on how snapshots are taken. Snapshots themselves are unchanged.
+            - **Renames across the boundary:** a file renamed into or out of `.suspense` shows only by its path outside it, as added or deleted.
+            - **Nothing left:** a task that changed nothing, or only `.suspense` files, reads "No files changed".
+
+            **Anchors the code should follow**
+            - `.claude/reference/scope/prompt-mode/message-list/index.md#list` is the new rule.
+            - Unchanged but relevant:
+              - `#description` and `#who-changed` in the same file.
+              - The task snapshots in `.claude/reference/scope/project-data/index.md#task-snapshots`.
+              - The outcome tags in `.claude/reference/ui/components/task-table/index.md#tags`, which already ignore writes in `.suspense`, so the two now agree.
+
+            The constraints are in `.suspense/history/1790861936-ExcludeSuspenseFromFilesChanged.understanding.md`.
+            \\\
+
+    sentFrom: ExcludeSuspenseFromFilesChanged
