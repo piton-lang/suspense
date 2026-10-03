@@ -1,0 +1,19 @@
+
+export anchor IsolateSpecAndAskOnly:
+    userPrompt:
+        \\\
+        Well why do we need that?  We're not containerizing the build -- only spec and ask.
+
+        For the path thing, I mean we're not aiming to be able to reference stuff on the host.  The whole point is that we're isolating the spec (and code in the case of an ask) and keeping it contained.
+        \\\
+
+    mode: ask
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're only asking a question about the project. Answer it without changing anything.
+
+        The code is located in ./src.
+        \\\

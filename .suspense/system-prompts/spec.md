@@ -1,4 +1,4 @@
-We're working on the spec located in ${SPEC_LOCATION}. Don't edit the code located in ${CODE_LOCATION}.
+We're working on the spec located in ${SPEC_LOCATION}.
 
 Before creating or editing any .pi file, read ${PITON_FLUENCY_FILE} once in this conversation, unless you already have: it is how Piton is written.
 

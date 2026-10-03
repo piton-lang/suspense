@@ -1,0 +1,3419 @@
+{
+  "userPrompt": "Is there like, a lightweight docker sort of thing or ?",
+  "harness": "claude",
+  "systemPrompt": "We're working in a project whose code is located in ./src and whose spec is compiled to .claude/reference, which is where to read it; its Piton source in ./spec is only where edits to the spec go. Each prompt starts with a <task-instructions> block saying what that prompt is for and what it may change. Follow the block at the top of the prompt you are answering; an earlier prompt's block no longer applies.\n\nRead the spec from its compiled reference under .claude/reference, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with this harness's adapter. Never read the .pi source under ./spec to learn what the spec says; that is only where edits to the spec go.\n\nBefore executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.",
+  "instructions": "We're only asking a question about the code located in ./src and the spec located in ./spec. Don't edit either of them.",
+  "resumed": true,
+  "output": [
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "17167941-61d9-488d-bd43-adde0529dbb8",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "00157fbf-a250-4585-a2e1-6718a05fd798",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "2f2d6af8-def1-4124-a18d-d77cde71b47a",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "a70ed7c6-cf0a-4e62-bc19-74beef4c4d3f",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "2f2d6af8-def1-4124-a18d-d77cde71b47a",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "",
+      "stdout": "",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "bc5c425d-6875-493c-8dff-2735c37088c0",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "17167941-61d9-488d-bd43-adde0529dbb8",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "",
+      "stdout": "",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "691d94c0-2e00-48b5-bbac-3b436da44e4d",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8"
+    },
+    {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "/home/hyphyphyph/piton/repl",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "tools": [
+        "Task",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "ListAgents",
+        "Monitor",
+        "NotebookEdit",
+        "PushNotification",
+        "Read",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write",
+        "mcp__claude_ai_Claude_Docs__batch",
+        "mcp__claude_ai_Claude_Docs__create",
+        "mcp__claude_ai_Claude_Docs__delete",
+        "mcp__claude_ai_Claude_Docs__export",
+        "mcp__claude_ai_Claude_Docs__guide",
+        "mcp__claude_ai_Claude_Docs__query",
+        "mcp__claude_ai_Claude_Docs__read",
+        "mcp__claude_ai_Claude_Docs__update"
+      ],
+      "mcp_servers": [
+        {
+          "name": "backlog",
+          "status": "failed",
+          "source": "user"
+        },
+        {
+          "name": "claude.ai Claude Docs",
+          "status": "connected",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Drive",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Gmail",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Calendar",
+          "status": "needs-auth",
+          "source": "claudeai"
+        }
+      ],
+      "model": "claude-opus-5-5[1m]",
+      "permissionMode": "auto",
+      "slash_commands": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "deep-research",
+        "typesafe:typesafe-ai",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "output-style",
+        "context",
+        "effort",
+        "fast",
+        "focus",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "skill-doctor",
+        "goal",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "terminal_slash_commands": [
+        "doctor",
+        "color",
+        "focus",
+        "reload-plugins"
+      ],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.281",
+      "output_style": "default",
+      "agents": [
+        "claude",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
+      "skills": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "deep-research",
+        "typesafe:typesafe-ai",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "plugins": [
+        {
+          "name": "gitkraken-hooks",
+          "path": "/home/hyphyphyph/.claude/plugins/marketplaces/gitkraken/plugins/gitkraken-hooks",
+          "source": "gitkraken-hooks@gitkraken",
+          "version": "3.1.73"
+        },
+        {
+          "name": "warp",
+          "path": "/home/hyphyphyph/.claude/plugins/cache/claude-code-warp/warp/2.2.0",
+          "source": "warp@claude-code-warp",
+          "version": "2.2.0"
+        },
+        {
+          "name": "typesafe",
+          "path": "/home/hyphyphyph/.claude/plugins/cache/typesafe-ai/typesafe/0.5.7",
+          "source": "typesafe@typesafe-ai",
+          "version": "0.5.7"
+        },
+        {
+          "name": "agents-md",
+          "path": "builtin",
+          "source": "agents-md@builtin"
+        },
+        {
+          "name": "telemetry",
+          "path": "builtin",
+          "source": "telemetry@builtin"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "msg_lifecycle_v1",
+        "mcp_read_resource_v1",
+        "mcp_tool_ui_meta_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "8ecbd5cf-ff60-4ece-8893-89597bb4df70",
+      "memory_paths": {
+        "auto": "/home/hyphyphyph/.claude/projects/-home-hyphyphyph-piton-repl/memory/"
+      },
+      "messaging_socket_path": "/run/user/1000/cc-socks/3766905.sock",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "per_turn_effort_active": true,
+      "view_mode": "default"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "23daa8af-999f-4c56-bf39-0b91102d38e6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011Cff6Hz8yuU7DVVc3gArk8",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 2539,
+            "cache_read_input_tokens": 82950,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 2539
+            },
+            "output_tokens": 2,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [
+            {
+              "type": "thinking_dropped",
+              "path": "messages.2.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.11.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.14.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.17.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.20.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.23.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.26.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.29.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.32.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.35.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.38.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.41.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.44.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.47.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.50.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.53.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.56.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.59.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.62.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.65.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.71.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.74.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.77.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.80.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.89.content.0",
+              "reason": "prefix_binding_mismatch"
+            }
+          ],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3088f22d-c366-417c-abd3-7aa8d5be8a6d",
+      "ttft_ms": 1103
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "fc05edaa-b285-419f-8a23-76d1c4e26ace"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "3b85c134-b9e6-4495-a245-b8b30a0cad3d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "726a04ea-2eb9-43d5-a16c-d5373acbcfd6"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 150,
+      "estimated_tokens_delta": 100,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "800a2b08-d53f-42f5-adee-b13641801d8c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 100
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2e5dc2db-1a19-4bfe-b3c3-ebb9a4f9fadf"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 200,
+      "estimated_tokens_delta": 50,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "7ece569f-8b93-4bec-99ce-de532247cfcf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2df6e33a-043a-47d6-b8c1-1cabb1578155"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 300,
+      "estimated_tokens_delta": 100,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "7a8b019b-619e-4b2c-946b-c8f981180fab"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 100
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f059449f-ba15-4777-bd2f-8b916185015c"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 400,
+      "estimated_tokens_delta": 100,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "df805adb-c33f-4328-833c-126e16d07983"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 100
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "af0f47ad-a060-4509-abbc-3dca556f5a73"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 500,
+      "estimated_tokens_delta": 100,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "cf508235-678a-4041-a6b8-a460f067f68d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 100
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2fbedc6b-6998-4bb2-8ccc-6397d3fa5f88"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "23f6fcd6-f6ee-49ce-87bc-102708edbf7c"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 516,
+      "estimated_tokens_delta": 16,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "57d0452a-7838-4060-a5b4-7ebdbdd8ae55"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "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"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b35f8a2f-8cfb-4254-b694-01a2ccd06bbd"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011Cff6Hz8yuU7DVVc3gArk8",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "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"
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2539,
+          "cache_read_input_tokens": 82950,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 2539
+          },
+          "output_tokens": 2,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [
+          {
+            "type": "thinking_dropped",
+            "path": "messages.2.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.11.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.14.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.17.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.20.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.23.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.26.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.29.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.32.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.35.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.38.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.41.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.44.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.47.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.50.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.53.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.56.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.59.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.62.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.65.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.71.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.74.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.77.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.80.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.89.content.0",
+            "reason": "prefix_binding_mismatch"
+          }
+        ],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "772fa208-e974-4b06-87b8-acbad8438152",
+      "timestamp": "2026-10-03T09:47:31.814Z",
+      "request_id": "req_011Cff6HyaVyUskvbRJ478Qg"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2aca3acf-6519-4939-9609-48c722ff1b11"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "01f23a26-ae62-4b5c-91c3-b6409933b97b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Contain"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e7ccba14-bc7c-4748-a052-8496fac8b2b2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ers need a Linux kern"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1df0d16d-aa5c-4c18-bcb8-6a921281f2c6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "el, so on macOS and"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2c08879b-96a5-4689-8b27-c85e7a295b59"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Windows every"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c2c88a69-24b2-4231-af6c-9298364fc76d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " \"Docker-"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f65ea34c-2b8d-496f-951c-af7faf5df1a7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "like\" t"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "bdc07b0e-ed4d-46fd-bb16-84829f4a0f0f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ool runs inside a small V"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3a147996-7f48-4c2c-9594-97239adc26cb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "M. The ligh"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "54f96efd-43eb-45ab-b159-3ca544f589fa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ter ones just make"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "94d0f71d-011f-4cc0-83b2-ffdb4a534fa4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " that VM c"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "8b5972e4-8b2b-4c97-8b94-8ead1eae4cb2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "heaper.\n\n| T"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c2dd14be-c726-4f61-a5c4-b805e7dbde26"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ool | Platforms |"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0a2be3c2-e197-40c4-b096-bf733621a0de"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Notes |\n|---|---"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "23060951-8391-4903-abef-e1027dd5553e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "|---|\n| **Pod"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "08625557-b2cf-49c0-a1ca-9a620fcb9a52"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "man** | Linux nat"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "fbd5e966-d6d0-40e6-8a3a-657d8b6154a4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ively; macOS and Wind"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ade2d997-bcd2-42d1-8602-f25d7f89fa90"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ows via `podman machine`"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0cd69a39-4a42-46aa-a0f6-51d46dc6ba02"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " | Doc"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2df46a78-c7ed-4ace-b80c-a23316d6064e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ker-compatible, with"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d0e5e691-15a5-47b8-9915-6a58fe485624"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " no daemon and no licence"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "cf5b7180-2c9b-42af-9def-c4ef457ac643"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " iss"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "5002bfe2-e45c-4d98-bc98-790d3e9d82da"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ue. On mac"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "64ed629c-a44f-4ea7-b1e7-cc3f02a277c0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "OS and Windows it's"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ff7c2286-f212-4ac6-9c91-2db880cffb8e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " still"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1118a702-4001-468f-8e70-444986ab48af"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a VM under"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "aef86e69-9732-432e-b014-7b11d6104d4b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "neath. |\n| **"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "355a2eb8-b21a-4bd2-ad36-686e1b2c4a26"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Colima / Lima** |"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a2d1c72f-5d68-44a8-8703-99a670a44d58"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " macOS, Linux |"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "8f0469b3-64d3-4d48-9286-ad2b6fb8e93d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " A"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0a949999-4ded-4106-baf0-959172a5e997"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " small VM that exposes a"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "41468601-0f59-4ca6-a348-f4177ff62020"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Docker-compatible eng"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0634fff3-3470-473a-af32-6aa4d20fd8e7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ine, free."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "bfd51507-3a84-42c9-b13c-c35778d78ff5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " |\n| **OrbSt"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "8468b829-e5c3-4f64-90cb-457415374f4c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ack** | macOS only |"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "fdee0b6c-60c6-47cf-8df7-0f70184ea558"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " The fastest and lightest"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "fd56f116-e97e-4736-ab8a-e9d6990f9f91"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " on"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "538962ab-a2cf-4152-83e9-890727ea3b04"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Mac. Paid for comm"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0eb80085-33a4-44a3-91bc-1cb9536da0de"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ercial use. |\n| **"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4629dea7-da5f-4495-8ed1-fcd5547f70ea"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Apple `"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "58636099-b139-41a9-926c-a75b114222e4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "container`** | macOS "
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "05e0df98-c7c2-401b-a78e-f4884c059f0b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "26+ only"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "dfab6331-97e4-41f6-80bc-0fb67a4d10ac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " | Ap"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "667d03bf-265c-4dd6-835d-98173018037e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ple's open"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4386cd36-ee53-48f9-9b7d-4a35a1de88a7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "-source tool: one t"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ec51830c-11b0-49bc-8552-f793e80d8084"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "iny VM per container. |"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0c797a7f-1638-485f-95f6-007e8df84434"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n| **WSL2**"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "58a0e966-c768-4bce-a03d-5c5d89521e10"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " | Windows ("
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "82e2351c-ba4e-4538-a030-1eda095f5c35"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "built in,"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "42742405-08e0-4729-a3ee-b38eadb658cf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `wsl --install`)"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "307acc1f-fe5b-45a6-bdf2-21d001a2fd6b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " | Already a l"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "10c324b9-b1b2-4595-ad00-251b76759187"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ightweight Linux VM"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "8614e723-e060-4439-b82f-a6bf0698f21c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d51b50a4-8b31-42eb-a6d7-7df210a00f86"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " In"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b29f9909-6be9-4b77-96dc-c74f2c63e795"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "side it, bwrap or"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "221a439c-acc6-432a-8711-6774048cfa0c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `srt` works"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "9d6be39f-0387-46e2-8b01-a3c2db515a16"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " just as"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ef645786-93e0-4258-b118-3e59c5553c73"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " on Linux,"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "de3fb62c-045c-49d5-a898-ed6da8d7b6f7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " with no Docker at"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0b05d8e5-f14d-443a-9970-945e56bc57b7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " all. |\n| **Fir"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d747363a-ef8d-4554-a5ae-0e0a158bcb4a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ecracker / libkrun"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2e877aea-96fa-4f4f-ab1c-b5eb03f76f32"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "** | Linux (lib"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "31c3fa34-9266-4d5e-b6ff-4c628c6e2497"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "krun also mac"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e88c8ca5-15aa-472d-8880-8a19d6ff7850"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "OS) | M"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3bf97719-8b6d-4061-b746-b8173d20ae4c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "icroVMs. Very"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7141b6ce-4c50-4155-8077-55c5b1696a43"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " light"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a732a3d8-3f1d-4ef7-81b9-eb0ff03a30b9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", but more"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "acb605ad-14cc-4db0-a8a0-bb4e4c17d96e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " pl"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b77ebc5a-2352-4088-bf37-6d1ff5f9dd9a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "umbing than you"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "12fd147d-14c3-4f88-afef-77da92528e2a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " want. |\n\n**The light"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b2f91594-ff29-454e-a504-d56774846107"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "est set"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "996df3b7-47df-48f4-9ef9-b9c381684e5d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "up that covers all three platfor"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1caaa40e-3158-4596-83d5-ae17b96965e1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ms, with no"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "99533af3-6de4-4cf8-a877-7820556f796e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Docker:**\n\n- **"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d7f3687c-af42-4f16-b239-9e22f489e1ce"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Linux:** `srt`"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "51505dd5-eaf3-4bf3-aea6-af9892e3af82"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " (Anthropic's s"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "134c944b-80fb-4a8a-be70-4292f16e2a91"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "andbox-runtime,"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f83f9e85-cbda-4c4f-beb5-20b9cf2dcd03"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " which uses bubblewr"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b56b7619-9b06-4194-8edc-1ce6b461c181"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ap)"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "708ab608-3369-4b83-8a10-08528aae5510"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n- **macOS:**"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4d86aa55-7ea4-404a-b9fc-26e924a73c39"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `srt` (which"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "fe59b737-2c8d-4308-9657-4831123d2665"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " uses Seatbelt"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "099e4476-550f-4217-9be5-e522f2070e36"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ")\n- **Windows:"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "53477316-1657-4f32-9dd5-3f8041d4aed5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "** `"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0ad513e0-0e87-48e1-96d6-c6476de40510"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "srt` inside **"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "12ebffe7-ff9a-4f6a-b7c6-2a74d8a6fb02"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "WSL2**\n\nThat's"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "819e23ab-4141-461a-9723-61768b80ba13"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " one sandbox config ever"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "68c8c60f-e0de-4be4-a34d-e86076a22c3d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ywhere "
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "fca467aa-1076-4f6e-922c-4da2238db44b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "(\"read only the spec,"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3a63026a-ee4c-4b24-91e6-15a6d6462f05"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ab4ecbc9-b278-4caa-9b00-bdccb0cc5f40"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " reference and"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "aa34c88d-339b-41a1-895b-6bbac6f58e5a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the fluency; write"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "57418c9b-cbba-43a9-a41d-da36c1c4ddd0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " only the spec and"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e8240cde-1f8a-47b0-91c4-a5fce0eab92f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the reference\"), with no images"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a6ed1997-0aa8-4daa-b54f-235c724d77e2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", no daemon and"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1d5a7377-a4bb-45fb-83d3-90ea21ffbf2f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " no ext"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "9317254b-c637-48ef-8040-2ecd3da0d5e1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ra start-"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "483c7726-8184-4b49-b35a-b0e09b70696f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "up time on"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "9b2e59ca-bc2d-47b9-807e-974c762f3b21"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Linux and"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0f4e45c2-f17b-436f-9df5-3ba79ecb156c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " macOS. The"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "5d6d5347-5850-4d53-a4ca-542b9dc17b52"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Windows cost"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "375dba86-18b1-48af-a371-9a5a0e2d9426"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "s:"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1a351b0e-3e65-4602-bf09-0fcd6208e118"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\n- W"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "64546048-b618-49fb-8ad0-81b23ec31214"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "SL has"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f7152410-150d-47a1-bf2a-8dd6653cce29"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " to be install"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f8a4d8ed-82c2-422d-bad3-67d9cd34fa12"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ed, along"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1568485b-a38b-4dd7-a1c8-1c199b03670b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " with Claude Code and `"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7a3b6655-fa2d-4a1a-8218-a2f78ceeb43b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "piton` inside it."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "204a1ba4-0143-4914-b309-c8cce311f728"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n- The project is"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "27027f90-3534-4718-9f2c-8587c43d86b0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " reached through `/mnt"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0046cd6c-1271-4591-a914-432449d3bcd3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "/c/...`, which is"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "deca87ab-5c47-43dc-bf45-e55335bd563d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " slow but f"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "59eac5a1-0cf5-431f-af10-d6bb96b824e2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ine for a sp"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "972cb95a-3a46-431b-82c8-9e6803ffcd1d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec-"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "efc9aa4b-d237-484e-ae21-83a4874a2a5f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "s"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "73aae1cd-e7ea-4191-bfc6-bf7da0e06dff"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ized tree.\n-"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e5aaad24-37cd-4c9d-bd29-f47b6e716812"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Login"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "cdfa6fe0-83e0-4301-b34e-e03527f15153"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is per"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d29ec594-57a9-4bc3-b34f-86856f7b2828"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " WSL install"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "5c9c21a0-ad13-4f95-9c96-6a9e5c3b66a0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n\nIf you'"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "16edcfa7-6ede-4672-8aaf-639a0e5de8e7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "d rather have"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "667c6c16-ca22-412d-8272-1e006f7dc69d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " one m"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0fdfbca1-98c2-4267-9775-515acb47a293"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "echanism everywhere and"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1c43c7e1-6de9-46c8-9441-3c151a45660b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " accept a VM, **"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "02397fee-03fb-4531-9105-4e4d1cf3661b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Podman** is"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7af17e24-b8af-41f7-8b7d-24e791c91425"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the Docker subst"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "94eee0b8-3b70-4b36-a463-addb67425c2d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "itute: free"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2cc6dd59-5ada-4a5a-bcd9-78b6cdbb877d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ","
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "edc8f7e6-7da6-4e23-a5e2-b9b8cc4585c0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Docker-compatible, and"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1c778b92-922c-44c9-8a62-4b56262c40d7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " rootless on Linux."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7860a90e-cf9e-45be-acb0-154013d36d64"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " The set"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "81a9ebf3-5e69-4e91-9750-b4e343fc3b51"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "up from the Docker answer"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "cf6d5328-f04b-4c19-a64d-30c17211eddf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " ("
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "cb83cf51-28ef-4d0b-9270-e591acc29e2f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "mounting"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "30da9938-2cc4-49ca-930f-a4e39f0eb4f2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " only the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "89ac5ac8-9ce8-4ca6-a315-c85ec73fd8a6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " spec, the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "dedfc8fd-0394-4a12-8839-ba03ddf55e39"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " login token, sessions, path"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "8d8a0a71-9e7b-417e-819e-efc3021d1e31"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " mapping) car"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d6be5fa5-5b9b-4584-8c19-6bc363a4f6f8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ries over unchanged."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "afacbba0-6da0-4a5b-b8cb-c2b122c7375b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\nMy"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c0cff668-9a89-488b-8868-69faf70bdfba"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " order"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "6c2328d8-97cc-425a-bcfd-52e8a3576adc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " of"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "280f63c8-0d0e-4080-906b-6c4256d2d2bb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " preference:"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2e21c843-5858-4b63-b1b7-bd32073e0b43"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\n1. **The"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a90dbea9-041d-45b4-bf7d-8aa434df7de7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " tool l"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4b977576-909f-41de-a70e-dc51b9081176"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ock"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ac82b504-e86c-4453-a6a2-f0316d31c812"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "down from my"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1dcd042f-f512-476c-8cda-8da20ab9d072"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " last answer."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ce1cb106-2fad-4f66-a4bd-b9025575a4db"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "**"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "dffe926a-bd60-4dc0-ae6d-5a28b65208b1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Nothing to install and ident"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e990716c-8b55-4895-9cdb-a146aee00ea3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ical on every"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "83d535a4-a03f-4bf3-92ac-8e3431f396af"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " platform.\n2. **`"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e63fd864-f138-4b98-9c8a-866900a232cf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "srt`"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7a01c74d-95c5-4e07-b784-68758e28aee3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", with WSL2 on"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2a15f00c-41b0-4d48-802f-c4457c585b2e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Windows,** if you need"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4bba613d-4a1f-46df-b6db-ca19ce46ad5f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the agent to have a shell"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "9d8b2983-cc71-4d16-b834-c523f28d2e41"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n3. **Podman"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "55086366-c8f5-4594-9056-3a697ddc868a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ",** if you want a real"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "41079d6a-c820-4cda-9c63-8e6e2c13f2f0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " container."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "18311264-768d-4644-a7e4-a8eb031878e7"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011Cff6Hz8yuU7DVVc3gArk8",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Containers need a Linux kernel, so on macOS and Windows every \"Docker-like\" tool runs inside a small VM. The lighter ones just make that VM cheaper.\n\n| Tool | Platforms | Notes |\n|---|---|---|\n| **Podman** | Linux natively; macOS and Windows via `podman machine` | Docker-compatible, with no daemon and no licence issue. On macOS and Windows it's still a VM underneath. |\n| **Colima / Lima** | macOS, Linux | A small VM that exposes a Docker-compatible engine, free. |\n| **OrbStack** | macOS only | The fastest and lightest on Mac. Paid for commercial use. |\n| **Apple `container`** | macOS 26+ only | Apple's open-source tool: one tiny VM per container. |\n| **WSL2** | Windows (built in, `wsl --install`) | Already a lightweight Linux VM. Inside it, bwrap or `srt` works just as on Linux, with no Docker at all. |\n| **Firecracker / libkrun** | Linux (libkrun also macOS) | MicroVMs. Very light, but more plumbing than you want. |\n\n**The lightest setup that covers all three platforms, with no Docker:**\n\n- **Linux:** `srt` (Anthropic's sandbox-runtime, which uses bubblewrap)\n- **macOS:** `srt` (which uses Seatbelt)\n- **Windows:** `srt` inside **WSL2**\n\nThat's one sandbox config everywhere (\"read only the spec, the reference and the fluency; write only the spec and the reference\"), with no images, no daemon and no extra start-up time on Linux and macOS. The Windows costs:\n\n- WSL has to be installed, along with Claude Code and `piton` inside it.\n- The project is reached through `/mnt/c/...`, which is slow but fine for a spec-sized tree.\n- Login is per WSL install.\n\nIf you'd rather have one mechanism everywhere and accept a VM, **Podman** is the Docker substitute: free, Docker-compatible, and rootless on Linux. The setup from the Docker answer (mounting only the spec, the login token, sessions, path mapping) carries over unchanged.\n\nMy order of preference:\n\n1. **The tool lockdown from my last answer.** Nothing to install and identical on every platform.\n2. **`srt`, with WSL2 on Windows,** if you need the agent to have a shell.\n3. **Podman,** if you want a real container."
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2539,
+          "cache_read_input_tokens": 82950,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 2539
+          },
+          "output_tokens": 2,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [
+          {
+            "type": "thinking_dropped",
+            "path": "messages.2.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.11.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.14.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.17.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.20.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.23.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.26.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.29.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.32.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.35.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.38.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.41.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.44.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.47.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.50.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.53.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.56.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.59.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.62.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.65.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.71.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.74.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.77.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.80.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.89.content.0",
+            "reason": "prefix_binding_mismatch"
+          }
+        ],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "281d1e94-9a1f-4a19-a2c7-9b910741a265",
+      "timestamp": "2026-10-03T09:47:39.745Z",
+      "request_id": "req_011Cff6HyaVyUskvbRJ478Qg"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "8a143407-0386-4643-9036-bdf6b056fcbb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {}
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2539,
+          "cache_read_input_tokens": 82950,
+          "output_tokens": 1388,
+          "output_tokens_details": {
+            "thinking_tokens": 562
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 1388,
+              "cache_read_input_tokens": 82950,
+              "cache_creation_input_tokens": 2539,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 2539
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f1d032a9-4887-4259-a9eb-5545ec7caab8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7fe5cea8-dc78-44f4-82e1-55bbd941cdb9"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1791028800,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.04,
+            "resetsAt": 1791028800
+          },
+          "seven_day": {
+            "utilization": 0.42,
+            "resetsAt": 1791313200
+          }
+        }
+      },
+      "uuid": "9989a5e2-7cb6-41e4-be3a-eac337b1400d",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8"
+    },
+    {
+      "duration_api_ms": 409613,
+      "stop_reason": "end_turn",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "total_cost_usd": 3.2455464,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 2539,
+        "cache_read_input_tokens": 82950,
+        "output_tokens": 1388,
+        "output_tokens_details": {
+          "thinking_tokens": 562
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2539,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 1388,
+            "cache_read_input_tokens": 82950,
+            "cache_creation_input_tokens": 2539,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 2539
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "modelUsage": {
+        "claude-opus-5-5[1m]": {
+          "inputTokens": 80,
+          "outputTokens": 35453,
+          "thinkingTokens": 11400,
+          "cacheReadInputTokens": 2667392,
+          "cacheCreationInputTokens": 250336,
+          "webSearchRequests": 0,
+          "costUSD": 3.2455464,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "is_error": false,
+      "num_turns": 1,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "Containers need a Linux kernel, so on macOS and Windows every \"Docker-like\" tool runs inside a small VM. The lighter ones just make that VM cheaper.\n\n| Tool | Platforms | Notes |\n|---|---|---|\n| **Podman** | Linux natively; macOS and Windows via `podman machine` | Docker-compatible, with no daemon and no licence issue. On macOS and Windows it's still a VM underneath. |\n| **Colima / Lima** | macOS, Linux | A small VM that exposes a Docker-compatible engine, free. |\n| **OrbStack** | macOS only | The fastest and lightest on Mac. Paid for commercial use. |\n| **Apple `container`** | macOS 26+ only | Apple's open-source tool: one tiny VM per container. |\n| **WSL2** | Windows (built in, `wsl --install`) | Already a lightweight Linux VM. Inside it, bwrap or `srt` works just as on Linux, with no Docker at all. |\n| **Firecracker / libkrun** | Linux (libkrun also macOS) | MicroVMs. Very light, but more plumbing than you want. |\n\n**The lightest setup that covers all three platforms, with no Docker:**\n\n- **Linux:** `srt` (Anthropic's sandbox-runtime, which uses bubblewrap)\n- **macOS:** `srt` (which uses Seatbelt)\n- **Windows:** `srt` inside **WSL2**\n\nThat's one sandbox config everywhere (\"read only the spec, the reference and the fluency; write only the spec and the reference\"), with no images, no daemon and no extra start-up time on Linux and macOS. The Windows costs:\n\n- WSL has to be installed, along with Claude Code and `piton` inside it.\n- The project is reached through `/mnt/c/...`, which is slow but fine for a spec-sized tree.\n- Login is per WSL install.\n\nIf you'd rather have one mechanism everywhere and accept a VM, **Podman** is the Docker substitute: free, Docker-compatible, and rootless on Linux. The setup from the Docker answer (mounting only the spec, the login token, sessions, path mapping) carries over unchanged.\n\nMy order of preference:\n\n1. **The tool lockdown from my last answer.** Nothing to install and identical on every platform.\n2. **`srt`, with WSL2 on Windows,** if you need the agent to have a shell.\n3. **Podman,** if you want a real container.",
+      "ttft_ms": 8172,
+      "type": "result",
+      "duration_ms": 16142,
+      "uuid": "5baecd01-68d4-4058-84fd-3d1321562053",
+      "ttft_stream_ms": 1530,
+      "time_to_request_ms": 428,
+      "first_content_frame_ms": 1531,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  ]
+}

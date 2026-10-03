@@ -1,0 +1,69 @@
+
+export anchor HarnessErrorOnEveryAsk2:
+    userPrompt:
+        \\\
+        So it seems that each time I run an ask, "the harness has reported an error"
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src.
+
+        Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            So it seems that each time I run an ask, "the harness has reported an error"
+            \\\
+        result:
+            \\\
+            I've changed the spec, but again I couldn't run `piton build` here. It fails with the same `GLIBC_2.39 not found` error, because this container has glibc 2.36. So the reference under `.claude/reference` doesn't show these edits yet, and nothing has checked them. Please run `piton build` on the host before the code step.
+
+            **Likely cause (a guess: I can't see the code or a failing run).** Questions now always run in a container. When a project opens, they carry on the latest question conversation saved with it, and that session was most likely recorded when questions still ran on the host. The questions' container volume doesn't have that session, so `claude -p --resume <id>` (or `--fork-session`) fails at once. A failed run never records a new session, so every later ask retries the same dead session ID and fails again. The app then shows only a generic "the harness reported an error", which hides Claude Code's real message ("No conversation found…").
+
+            The coding agent should first confirm this from the actual error output before relying on it.
+
+            **What I changed in `spec/scope/harness-integration/index.pi`**
+            - **`HarnessIntegrationShape.context`**, rewritten where it said "if one can't be carried on, the next request starts a new one":
+              - Questions only carry on a conversation started in the questions' volume. They never resume one saved from host-run questions, or one whose session the volume no longer has.
+              - A request whose conversation can't be carried on is never failed for that reason, and never retried on the same conversation. This covers the harness saying there's no such session (Claude Code's "No conversation found") and a conversation started elsewhere.
+              - Instead, the same prompt is sent again at once as a new conversation with no context. The dead conversation is never tried again by any later request, including through the project's history.
+              - A question re-sent this way is recorded and shown as starting a new conversation, with the "New conversation" divider in `AskConversationScope`.
+            - **New `HarnessIntegrationShape.failures`**:
+              - A failed run always says what went wrong in the harness's own words: its result error or streamed error events, otherwise its stderr and exit status, quoted as written.
+              - A task shows this in its output; a question shows it at the end of its answer.
+              - "The harness reported an error" may only appear as a heading above what the harness said, never on its own.
+              - A run that couldn't be started says why, and one Podman couldn't run defers to `ContainerEnvironmentScope.podmanAccess` from the last step.
+            - I added an import of `AskConversationScope` to that file.
+            - I wrote the understanding file at `.suspense/history/1791040980-HarnessErrorOnEveryAsk.understanding.md`.
+
+            **Anchors the code should follow**
+            - `HarnessIntegrationShape.context`: questions resume only sessions from their own volume, and a failed resume is re-sent once as a new conversation, after which that session is never used again.
+            - `HarnessIntegrationShape.failures`: show the harness's actual error.
+            - `AskConversationScope` (the New Conversation and Answers sections): mark the re-sent question as a new conversation, and end a failed answer with the error.
+            - `ContainerEnvironmentScope.podmanAccess` (from the previous step): name Podman, not the harness, when Podman can't run the container.
+            \\\
+
+    sentFrom: HarnessErrorOnEveryAsk

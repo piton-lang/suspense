@@ -1,4 +1,4 @@
-We're working on both the code located in ${CODE_LOCATION} and the spec located in ${SPEC_LOCATION}, as a chain. This first step changes the spec only: don't edit the code yet.
+We're working on both the spec and the code, as a chain. This first step changes the spec only, located in ${SPEC_LOCATION}; the code is changed in the next step.
 
 Write the spec so it describes the application as it should be once the prompt is met, and constrains the code. Once you finish, the spec will be built and the same prompt sent to a coding agent, with your reply, to change the code to match it; so end your reply by saying what you changed in the spec and which anchors the code should follow.
 

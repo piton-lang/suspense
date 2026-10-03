@@ -1,0 +1,219 @@
+use /lib
+from /scope/harness-integration import HarnessIntegrationScope
+from /scope/project-data import ProjectDataScope
+from /scope/project-locations import ProjectLocationsScope
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
+from /scope/prompt-mode/sending import PromptSendingScope
+from /scope/settings-window import SettingsWindowScope
+from /scope/spec-build import SpecBuildScope
+
+export scope ContainerEnvironmentScope:
+    concept: {ContainerEnvironmentConcept}
+
+concept ContainerEnvironmentConcept:
+    pitch:
+        A container the application owns, that a run of the harness works
+        in, so each mode sees only what it may use. What a run can read or
+        change comes from what is mounted into its container, never from its
+        prompt, a deny rule, or a guard: a container with no code in it can't
+        read the code or change it, whatever the harness is and whatever it
+        tries.
+
+    shape: {ContainerEnvironmentShape}
+
+shape ContainerEnvironmentShape:
+    description:
+        Spec tasks, a Chain prompt's spec steps, and questions from the Ask
+        tab always run in a container. Code tasks and a Chain prompt's code
+        step run in one only while the project's "Run code tasks in a
+        container" option is on, as the @{ProjectDataScope} says; while it is
+        off, they run on the host as ever, as the @{HarnessIntegrationScope}
+        says, with its protected locations. Freeform tasks always run on the
+        host, and so do the application's own runs, the one-off runs, the
+        palette's file search, and the notes, commit messages, and prompt
+        titles, which change nothing.
+
+        Whatever runs in a container, the application itself still works on
+        the host: it builds the spec before a task, takes the task's
+        snapshots and lists the files it changed, shows diffs, and makes
+        commits there, as ever.
+
+    runtime:
+        The container runtime is Podman, run through the `podman` command,
+        and no other. Each run is one `podman run --rm` of the harness's
+        command, run as a child of the application, given its prompt on its
+        standard input and streaming back what it does on its output, just as
+        a run on the host does, so stopping or cancelling a run stops its
+        container with it, and nothing is left behind once it is over.
+
+        On Linux, Podman runs rootless, and the container runs as the user,
+        with `--userns=keep-id`, so every file a run writes belongs to the
+        user, as it would on the host. On macOS and Windows, Podman runs its
+        containers in a Podman machine, a virtual machine it manages.
+
+    missingPodman:
+        Where `podman` isn't installed, a prompt that has to run in a
+        container isn't sent, and never runs on the host instead: a Spec task,
+        a Chain prompt's steps, a question, and, while the project's option is
+        on, a Code task. It fails as a run whose harness isn't installed
+        does, as the @{HarnessIntegrationScope} says, or as one whose spec
+        build can't run piton does, its output saying that Podman is needed to
+        run it, with a link, opened in the browser when clicked, to Podman's
+        installation instructions for the platform it is running on:
+
+        - on macOS, https://podman.io/docs/installation#macos
+        - on Windows, https://podman.io/docs/installation#windows
+        - on Linux, https://podman.io/docs/installation#installing-on-linux
+
+        While the project's option is off, a Code task never needs Podman,
+        and runs whether it is installed or not.
+
+    podmanMachine:
+        On macOS and Windows, a run also needs a Podman machine that is
+        running. Where there is none, the task or question says so, and
+        offers to set one up, a button reading "Set up Podman" that runs
+        `podman machine init` and then `podman machine start`. Where there is
+        one that isn't running, it says that, and offers to start it, a
+        button reading "Start Podman" that runs `podman machine start`.
+        Either shows what the command prints in the task's raw output as it
+        runs, and once it succeeds, the prompt is sent again, as resending
+        it would; one that fails says why, as a failed run does. On Linux
+        there is no machine, and nothing about one is shown.
+
+    podmanAccess:
+        Where `podman` is installed, and on macOS and Windows its machine is
+        running, but the application can't get Podman to run a container
+        for it, as where the user may not use it, its rootless setup is
+        missing, as the user's subordinate IDs, or it can't reach its
+        service or machine, the run fails because of Podman, never because
+        of the harness: it never reads "the harness reported an error", or
+        any message that blames the harness or leaves the cause unnamed.
+        The application tells this apart from a harness that ran and
+        failed by what Podman itself reports, its exit status and what it
+        prints before the harness starts in the container. The task's or
+        question's output says plainly that the harness couldn't be run
+        because Podman couldn't be accessed, and then gives, as written,
+        what Podman printed about why. It is never run on the host instead.
+        The same holds for a `podman build` of its image that fails for
+        that reason: it says Podman couldn't be accessed, not only that
+        the build failed.
+
+    image:
+        Runs use an image the application builds itself, with `podman build`,
+        and keeps up to date: the default image, holding the harness
+        commands, Claude Code, Codex, and OpenCode, and piton, each at the
+        version installed on the host where it can be found there, and at its
+        latest otherwise. It is built again when any of those versions
+        changes.
+
+        A project can add to it with a Containerfile of its own,
+        `.suspense/Containerfile`, built FROM the default image, to add the
+        toolchains its code needs, as the @{ProjectDataScope} says. The
+        project's image is built from it, and kept, and built again only when
+        the Containerfile or the default image changes. Without one, the
+        project's runs use the default image.
+
+        While an image is being built for a run, the task or question shows
+        "Preparing environment" as its status, and what the build prints goes
+        to its raw output. A build that fails fails the run, saying why.
+
+    mounts:
+        What each run sees is what is mounted into its container, and nothing
+        else from the host. Each is mounted at the same absolute path it has
+        on the host, where the platform allows it, so the paths the harness
+        reports in what it does need no mapping, and the run works in the
+        project directory's path, as a run on the host does. What each kind of
+        run is given, as the @{ProjectLocationsScope} names the locations:
+
+        spec:
+            A Spec task, or a Chain prompt's spec step or spec follow-up: the
+            spec location, read and write; the compiled reference, the
+            harness directory's reference folder, read and write, so it can
+            run `piton build` itself; the fluency file, read only;
+            piton.config.pi, read only; and the task's understanding file,
+            read and write. Never the code location.
+
+        question:
+            A question from the Ask tab: the code location, the compiled
+            reference, and piton.config.pi, each read only. Never the spec
+            location. Nothing is writable but the harness's own volumes.
+
+        code:
+            A Code task, or a Chain prompt's code step, while the project's
+            option is on: the code location, read and write; the compiled
+            reference and piton.config.pi, read only; the task's
+            understanding file, read and write; and the project's caches.
+            Never the spec location.
+
+        Nothing else is ever mounted: not the user's home directory, the
+        user's own skills, MCP servers, or user-level CLAUDE.md, and not the
+        project's git directory. A location that holds another, as a code
+        location holding the spec or the project data, is mounted without
+        the one it holds, so the one held is never seen through it.
+
+        A task's understanding file is mounted on its own, never the history
+        folder it is in, so a run sees no other task's record. Since a file
+        has to be there to be mounted, the application writes it empty just
+        before the run, and an empty understanding file is shown as one not
+        written yet is.
+
+    paths:
+        Where a mount can't be at the host's path, as on macOS and Windows,
+        where the container sees the project at a path of its own, every path
+        a run reports from its container is mapped back to its host path
+        before it is shown or opened anywhere: the referenced spec in the
+        right sidebar, file links in the task's output, its understanding
+        file, the files it changed, and what its tool calls touched. A path
+        that maps to nothing on the host is shown as the run gave it, and
+        opens nothing.
+
+    volumes:
+        What a harness keeps between runs is kept in Podman volumes the
+        application owns and names, never in the project:
+
+        - one per harness, for its login and settings, ~/.claude, ~/.codex,
+            or OpenCode's data directory as the harness keeps it, shared by
+            every project, so each harness is logged in once for all of them
+        - one per project and conversation, the spec lane's, the code lane's,
+            and the questions', for the harness's sessions, so each carries on
+            its own conversation, as the @{HarnessIntegrationScope} says
+        - the project's caches, such as the cargo registry and target
+            directory, for its Code tasks run in a container
+
+        Losing a volume costs only a login or a cache, never anything of the
+        project's.
+
+    loggingIn:
+        When the harness isn't logged in, in its volume, the application runs
+        its login command in a container, under a pseudo-terminal, and shows
+        a login view in an inset panel, titled for the harness, with what the
+        command prints. Any login URL the command prints opens in the host's
+        browser. Where the command asks for a code to be pasted, the view has
+        a field for it, and what is entered there goes to the command. Where
+        the command waits for a callback on a known localhost port, that port
+        is published for the login run. Where it offers to log in with a
+        device code, that is how it logs in. The run waiting on the login is
+        sent once the login succeeds, and fails, saying so, if it is
+        cancelled or fails.
+
+        The credentials stay in the harness's volume, and are refreshed
+        there, so a harness is logged in once on a machine, not for every
+        run. The @{SettingsWindowScope} shows whether each harness is logged
+        in in its container, and can log it in again.
+
+    guards:
+        A run in a container has no protected locations, as the
+        @{HarnessIntegrationScope} names them: it isn't guarded, and its
+        harness is given no rule against reading or editing any location,
+        since nothing it mustn't touch is there. Its prompts, as the
+        @{ModeSystemPromptsScope} says, name only what it can see. Runs on
+        the host keep their protected locations as ever.
+
+    specBuild:
+        A Spec run can run `piton build` in its container, to check its work
+        in the refreshed reference; with no code location there, what that
+        build writes into the code location, the shape's guidance, goes
+        nowhere. Once a Spec task or a Chain prompt's spec step is over,
+        however it ended, the application runs `piton build` on the host, as
+        the @{SpecBuildScope} says, so the host's reference and shape guidance
+        are those of the spec as the run left it.

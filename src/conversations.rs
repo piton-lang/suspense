@@ -1,4 +1,4 @@
-//! Which conversation of the tasks, and of the questions, was last left for a
+//! Which conversation of each lane's tasks, and of the questions, was last left for a
 //! new one, kept in `.suspense/conversations.json` so a project reopened after
 //! a reset starts fresh rather than carrying on the latest conversation in its
 //! history. It names the conversation left, so once a run after the reset has
@@ -19,8 +19,11 @@ const FILE: &str = "conversations.json";
 /// The conversations a project keeps apart.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
-    /// Those of Code, Chain, and Spec.
+    /// Those of the code lane: Code, a Chain prompt's code step, and
+    /// Freeform.
     Tasks,
+    /// Those of the spec lane: Spec, and a Chain prompt's spec steps.
+    SpecTasks,
     /// Those of Ask.
     Questions,
 }
@@ -31,6 +34,8 @@ struct Left {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     left_tasks: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    left_spec_tasks: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     left_questions: Option<String>,
 }
 
@@ -38,6 +43,7 @@ impl Left {
     fn of(&mut self, kind: Kind) -> &mut Option<String> {
         match kind {
             Kind::Tasks => &mut self.left_tasks,
+            Kind::SpecTasks => &mut self.left_spec_tasks,
             Kind::Questions => &mut self.left_questions,
         }
     }
@@ -87,7 +93,9 @@ mod tests {
         leave(&dir, Kind::Tasks, "a").unwrap();
         leave(&dir, Kind::Questions, "q").unwrap();
         leave(&dir, Kind::Tasks, "b").unwrap();
+        leave(&dir, Kind::SpecTasks, "s").unwrap();
         assert_eq!(left(&dir, Kind::Tasks).as_deref(), Some("b"));
+        assert_eq!(left(&dir, Kind::SpecTasks).as_deref(), Some("s"));
         assert_eq!(left(&dir, Kind::Questions).as_deref(), Some("q"));
     }
 }

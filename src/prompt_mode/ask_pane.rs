@@ -333,6 +333,19 @@ impl PromptMode {
         }
     }
 
+    /// The task or question `key` names, to change.
+    pub(super) fn question_mut(&mut self, key: QuestionKey) -> Option<&mut PromptTask> {
+        match key {
+            QuestionKey::Answer(ix) => self.answers.get_mut(ix),
+            QuestionKey::Ask(id) => self
+                .asks
+                .iter_mut()
+                .find(|ask| ask.id == id)
+                .map(|ask| &mut ask.task),
+            QuestionKey::Task(ix) => self.tasks.get_mut(ix),
+        }
+    }
+
     fn question(&self, key: QuestionKey) -> Option<&PromptTask> {
         match key {
             QuestionKey::Answer(ix) => self.answers.get(ix),
@@ -392,7 +405,12 @@ impl PromptMode {
 
     /// Asks the question `key` again, as it was asked; it comes in at the
     /// bottom.
-    fn resend_question(&mut self, key: QuestionKey, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn resend_question(
+        &mut self,
+        key: QuestionKey,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         // A Freeform task is resent as any task is.
         if let QuestionKey::Task(ix) = key {
             self.resend(|this| &this.tasks, ix, window, cx);
@@ -897,7 +915,23 @@ impl PromptMode {
                         .map(|error| error.to_string().into())
                         .collect()
                 };
-                end.pt_2().text_color(theme.danger).children(errors)
+                // With what has to be done before it can go, to do it.
+                let action = task.reply.action().map(|action| {
+                    let table = match key {
+                        QuestionKey::Ask(id) => super::ASK_ACTION_BASE + id,
+                        QuestionKey::Task(ix) => ix,
+                        QuestionKey::Answer(ix) => super::ANSWER_ACTION_BASE + ix,
+                    };
+                    div().pt_1().child(task_table::action_button(
+                        ("question-action", key.id()),
+                        action,
+                        table,
+                    ))
+                });
+                end.pt_2()
+                    .text_color(theme.danger)
+                    .children(errors)
+                    .children(action)
             }
             TaskStatus::Cancelled => {
                 end.pt_2()

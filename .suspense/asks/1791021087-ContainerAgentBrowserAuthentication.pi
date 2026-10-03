@@ -1,0 +1,15 @@
+
+export anchor ContainerAgentBrowserAuthentication:
+    userPrompt:
+        \\\
+        Well, what if we authenticated the agent in the container?  We could intercept the login link, open it on the actual browser, then pass the token back into the container.
+        \\\
+
+    mode: ask
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're only asking a question about the code located in ./src and the spec located in ./spec. Don't edit either of them.
+        \\\

@@ -1,0 +1,4087 @@
+{
+  "userPrompt": "I know there are options for sandboxing agents... What about those ?",
+  "harness": "claude",
+  "systemPrompt": "We're working in a project whose code is located in ./src and whose spec is compiled to .claude/reference, which is where to read it; its Piton source in ./spec is only where edits to the spec go. Each prompt starts with a <task-instructions> block saying what that prompt is for and what it may change. Follow the block at the top of the prompt you are answering; an earlier prompt's block no longer applies.\n\nRead the spec from its compiled reference under .claude/reference, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with this harness's adapter. Never read the .pi source under ./spec to learn what the spec says; that is only where edits to the spec go.\n\nBefore executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.",
+  "instructions": "We're only asking a question about the code located in ./src and the spec located in ./spec. Don't edit either of them.",
+  "resumed": true,
+  "output": [
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "b60ce44f-e8d8-4143-aafc-b0eca299e49d",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "d0d77c09-68b5-4312-8e47-955af1f7b2e5",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_started",
+      "hook_id": "41261421-135d-4986-b257-3ce84d380d92",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "uuid": "771e5c7b-cf0e-461c-a5e6-ad3a2e10a6d2",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "41261421-135d-4986-b257-3ce84d380d92",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "",
+      "stdout": "",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "9d9c6ef8-94d7-4d78-87c0-25b6fbe7a131",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response",
+      "hook_id": "b60ce44f-e8d8-4143-aafc-b0eca299e49d",
+      "hook_name": "SessionStart:resume",
+      "hook_event": "SessionStart",
+      "output": "",
+      "stdout": "",
+      "stderr": "",
+      "exit_code": 0,
+      "outcome": "success",
+      "uuid": "6b24b93f-9a8e-4e99-8cc3-4e85e39c3bdc",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8"
+    },
+    {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "/home/hyphyphyph/piton/repl",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "tools": [
+        "Task",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "ListAgents",
+        "Monitor",
+        "NotebookEdit",
+        "PushNotification",
+        "Read",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write",
+        "mcp__claude_ai_Claude_Docs__batch",
+        "mcp__claude_ai_Claude_Docs__create",
+        "mcp__claude_ai_Claude_Docs__delete",
+        "mcp__claude_ai_Claude_Docs__export",
+        "mcp__claude_ai_Claude_Docs__guide",
+        "mcp__claude_ai_Claude_Docs__query",
+        "mcp__claude_ai_Claude_Docs__read",
+        "mcp__claude_ai_Claude_Docs__update"
+      ],
+      "mcp_servers": [
+        {
+          "name": "backlog",
+          "status": "failed",
+          "source": "user"
+        },
+        {
+          "name": "claude.ai Claude Docs",
+          "status": "connected",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Drive",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Gmail",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Calendar",
+          "status": "needs-auth",
+          "source": "claudeai"
+        }
+      ],
+      "model": "claude-opus-5-5[1m]",
+      "permissionMode": "auto",
+      "slash_commands": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "deep-research",
+        "typesafe:typesafe-ai",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "output-style",
+        "context",
+        "effort",
+        "fast",
+        "focus",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "skill-doctor",
+        "goal",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "terminal_slash_commands": [
+        "doctor",
+        "color",
+        "focus",
+        "reload-plugins"
+      ],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.281",
+      "output_style": "default",
+      "agents": [
+        "claude",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
+      "skills": [
+        "gepeto",
+        "pinokio",
+        "plannotator-annotate",
+        "plannotator-last",
+        "plannotator-review",
+        "build-application",
+        "deep-research",
+        "typesafe:typesafe-ai",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "plugins": [
+        {
+          "name": "gitkraken-hooks",
+          "path": "/home/hyphyphyph/.claude/plugins/marketplaces/gitkraken/plugins/gitkraken-hooks",
+          "source": "gitkraken-hooks@gitkraken",
+          "version": "3.1.73"
+        },
+        {
+          "name": "warp",
+          "path": "/home/hyphyphyph/.claude/plugins/cache/claude-code-warp/warp/2.2.0",
+          "source": "warp@claude-code-warp",
+          "version": "2.2.0"
+        },
+        {
+          "name": "typesafe",
+          "path": "/home/hyphyphyph/.claude/plugins/cache/typesafe-ai/typesafe/0.5.7",
+          "source": "typesafe@typesafe-ai",
+          "version": "0.5.7"
+        },
+        {
+          "name": "agents-md",
+          "path": "builtin",
+          "source": "agents-md@builtin"
+        },
+        {
+          "name": "telemetry",
+          "path": "builtin",
+          "source": "telemetry@builtin"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "msg_lifecycle_v1",
+        "mcp_read_resource_v1",
+        "mcp_tool_ui_meta_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "94001cb8-a12a-4358-b0ca-ecc34f1f63cf",
+      "memory_paths": {
+        "auto": "/home/hyphyphyph/.claude/projects/-home-hyphyphyph-piton-repl/memory/"
+      },
+      "messaging_socket_path": "/run/user/1000/cc-socks/3691386.sock",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "per_turn_effort_active": true,
+      "view_mode": "default"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "87ab84ad-3377-4cd5-bffe-0f7d731c7122"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011CfeyAboJKowSu4m34mJ9a",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 1579,
+            "cache_read_input_tokens": 79729,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1579
+            },
+            "output_tokens": 3,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [
+            {
+              "type": "thinking_dropped",
+              "path": "messages.2.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.11.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.14.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.17.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.20.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.23.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.26.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.29.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.32.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.35.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.38.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.41.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.44.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.47.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.50.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.53.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.56.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.59.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.62.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.65.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.71.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.74.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.77.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.80.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.89.content.0",
+              "reason": "prefix_binding_mismatch"
+            }
+          ],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "5ef5c024-1a8d-43b8-bd0a-62d827b98719",
+      "ttft_ms": 961
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e3987ed8-6c22-4b55-97da-4a5f482ad50f"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "15299d41-903e-4b99-bf46-864a29c9ad32"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a1261632-4203-49e9-ab5d-34eb6ef8defb"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 200,
+      "estimated_tokens_delta": 150,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "fc55a828-5271-427a-ba7a-917cbfd49ba2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 150
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "962094fb-ade4-453a-b03c-9b0501ae3679"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 350,
+      "estimated_tokens_delta": 150,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "c83ddae0-76f7-40a3-aae7-36019ce9f210"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 150
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2b934c36-cecb-490f-bb5e-e9bb60b3d286"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 450,
+      "estimated_tokens_delta": 100,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "a85d8ee4-a93d-4885-889d-498be3fd3b22"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 100
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0ce15b22-fe81-4ad7-b26a-5b68f327ad19"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "8d639da5-b7ba-4b28-9a06-57c69f6d9af1"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 520,
+      "estimated_tokens_delta": 70,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "ab26e8d1-2a76-457c-8662-f720b915f537"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "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"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b040d222-ccc6-47d7-89a3-1f2d5493541d"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CfeyAboJKowSu4m34mJ9a",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "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"
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1579,
+          "cache_read_input_tokens": 79729,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1579
+          },
+          "output_tokens": 3,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [
+          {
+            "type": "thinking_dropped",
+            "path": "messages.2.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.11.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.14.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.17.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.20.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.23.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.26.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.29.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.32.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.35.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.38.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.41.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.44.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.47.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.50.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.53.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.56.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.59.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.62.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.65.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.71.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.74.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.77.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.80.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.89.content.0",
+            "reason": "prefix_binding_mismatch"
+          }
+        ],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "9645d944-90db-4dca-9d30-cb30ba45508f",
+      "timestamp": "2026-10-03T08:14:02.167Z",
+      "request_id": "req_011CfeyAbJHuRW9DuGtwFtR1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1dd0e956-6249-462f-a103-ff71250ba278"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "89ac7b12-b6cd-4ac7-91f5-20a8b46dfc20"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Yes, there are several"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2f6489df-aa0e-4681-8b82-d428419f2659"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", but"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "efb30f62-755c-47cd-81e4-48e02a76b77e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " most of"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1e980eb3-f697-4bc3-9f98-341bb8506285"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " them sol"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0094ca82-ab78-4d6c-9f88-dc22592995fa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ve a"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c683e5ed-084a-41b0-ad45-658c0913e3ad"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " different problem."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2119e465-3955-4880-855f-2ad8837bb35f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " They're"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e88e85fe-9363-42f8-934e-988386eb11fc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " built to stop an"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b3178b5a-c0e5-4ced-b57b-116dd16ebf27"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " agent **writing** out"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "56a901ec-af7c-42f6-85e0-de678b491cf0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "side the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "6e8365dd-3129-49ac-8639-2002cb9f30a5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project or re"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a043ee76-7580-43cb-85f9-b4731dc59667"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "aching the network."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b0be2c9d-d441-4e78-8324-c2efceeb37d4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " You need to"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "9fc5790a-fc58-4e31-aa94-69adf861adec"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " st"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ecddf544-6ee5-4c88-aa0e-3f9521ac43e3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "op it **reading** part"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0b16489e-a487-41ae-90db-036de058cecb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " of the project. This"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "5b162552-bd12-4ad4-91b3-227ce0e64aeb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is from memory, so check"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2067ae5a-976a-46bf-9f6c-f7d905741836"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " each setting against"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e1fa54d7-a4b0-4849-8e31-81b3556a24cd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " current"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "cee10e72-f5a1-4f5b-93d7-38b5ff741726"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " docs before building"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "cc63f082-0002-417f-afec-0df60400e52a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " on it:\n\n| Option"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "dd928fe8-8e82-439c-8185-63fe261d8a90"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " | Plat"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "60b6a8cb-7f18-42de-ab27-9d01c4028f07"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "forms |"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "58366dc1-1e47-420b-9d3f-6685cfcbea58"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Can it hide `"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ddadaa4b-1786-4c49-873a-52e50d27d123"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "src/`"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a54e2405-5b9c-40e9-a56f-897c609e54e7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " from reads? |\n|---"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ef711a64-08ed-49d1-a3f4-81ceb39395f2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "|---|---|\n| **"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "599ee0e7-d6d4-4b3b-8479-f21a75c9c1af"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Claude Code's built-"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a816a6a0-28dd-4fff-a52e-a30fb90b8bb0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "in sandbox** (`"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "227ace3d-a6ff-4e4e-bb11-e388dbd67d38"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "sandbox`"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1c0bb012-ad63-4cdf-b074-7b5cef710011"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "46d3df40-55b6-44d4-86a3-4447ca820396"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " settings, `/sandb"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a5acb0f9-23a4-44a2-887a-4f2a4491883d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ox`) | mac"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e8388812-0c05-4a0b-81ff-e1f88256eb14"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "OS (Seatbel"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a68108fd-edbe-42d8-8843-401d82d30229"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "t), Linux and"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "988c1a48-05d9-4823-9872-f24abfebec04"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " WSL2"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0557021b-3467-4707-b50f-97c34d2b9cab"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " (bubblewrap"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "357959ef-f240-4f9d-bc4c-766e90f0342a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "). Not native Windows,"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "da703ce7-3165-4dd7-9f3a-831c63dfc996"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " as far as I know. |"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "21be8c73-09b7-4df9-8b5a-3ea4153e2fe0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Partly. It s"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "38be4dd6-667a-4842-899d-1b6318b16337"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "andboxes **"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ebed19d3-dd2f-4df6-b90b-9314242dc581"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Bash**:"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "6cdbd960-1580-4dcb-bdeb-d81b32602fea"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " writ"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d22a0b0c-232b-41df-9709-eeff1b80041d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "es are lim"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "59f6844f-9a4f-4890-a608-c91040ca0cbc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ited to all"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f3378810-6f25-4daf-b03e-984bc74840bc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "owed paths, and"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4de0f484-4fa3-4cad-a48d-1bfebeb29f15"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Read deny rules are applied"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ae0415ca-66f2-4f95-af2b-8a9bc53f8542"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " to sh"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b6ff7499-ccb7-4847-b929-6bac8427e43e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ell commands too."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a58d5799-ac03-414b-b291-9bf69297e386"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Combined with `"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3d2d0c09-a294-4842-aeb7-2cd18a951064"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Read`"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "df4ff267-2da6-47ea-b6ec-91e23a2a224d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "/`Gl"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "8c584016-7c3c-4d7c-b129-6393b8723167"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ob`/`Grep`"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "9ca621ef-b5f7-4626-9222-1d4778a66bf4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " deny rules for the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "49bdf246-0b4d-434f-9bf2-be9d9448b93f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " built-in tools, that should"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7f2ce976-4a41-451b-82cb-35101fe96d55"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " close the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7386bdc2-5386-41bf-ae8c-74d3ffc1f492"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Bash lo"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "44203c48-f5ba-4e4f-8be9-8bb5b6e0e4e7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ophole. |\n| **"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "856b0233-ebd1-4ae1-9716-9dabe60e65b3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Anthropic's `"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "266ec8ba-4bdd-456a-9dfa-fad105a34c3c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "sandbox-runtime"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f52fe526-30f7-407a-a306-7bb673cfe797"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "`"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3ac16a89-c9b2-4f1c-a932-846f4f3de158"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " (`srt`)** |"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "9779ea35-283f-4860-9fbd-8778e59e3b27"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " macOS, Linux |"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "71ba4cf7-0f4c-494c-861b-0bcd41f53237"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Y"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "73791957-3572-4ca9-b0b4-b6bfacec4ecc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "es. It wraps any"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "5967d5f0-6272-4424-8a6e-50d08dd1b618"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " command (`"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7a63d6e7-d0ce-4974-8134-d1bb08e59d7a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "sr"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b1be4369-7aca-479e-982a-2dc2150f6461"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "t claude -"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "965d1709-a601-499c-9f49-97bbb632d511"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "p …`) with a config"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d59f7cc8-43b7-44b6-b5af-8b4c9923a5ab"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " that has an"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "abd2da61-212b-4efd-aeb4-149adbfa02bf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " explicit read deny list"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ae6ae39b-5067-4c5b-a640-55ac822f50d2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", plus write"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3c657f90-7392-4028-879b-bc9827c75024"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and network rules. It works for"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4b5d8363-7338-44a2-8bf7-0790a502ca89"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Codex and OpenC"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b7287a1b-e315-4561-8c32-6c18846a50c6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ode too. |\n| **"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2d7858ec-10bc-4e34-bf05-da55872f8fde"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Codex's sandbox**"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "6fd453ea-29b5-4718-ac29-b6ece9d5af5e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " (`--"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1e8f808c-302d-4541-8731-a98a3b04e410"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "sandbox read-only`"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "33683c87-0c10-45c0-83c8-222df132150b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " / `workspace-write`"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7a29ffa8-46f5-4b88-ba79-608648d97e37"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ") | macOS (Se"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "821d424c-0c41-40f2-a444-c214e499fa5e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "atbelt), Linux"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3b023faa-792e-48ca-a999-404f2c73031a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " (Landlock),"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "57007787-c042-4ab6-a99a-313383c90296"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Windows (new"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0c351f27-765c-40e7-9dab-4da57243ca1b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "er,"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "04782750-8441-464a-9e99-dcbc4b6cff50"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " experimental) | No"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "665910b3-01a0-4a72-ac42-6e7096b77520"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". It lim"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4450e0f4-a9ce-45e1-a1ad-219bd5c1e4c5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "its writes and network;"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c3280e2c-7fca-4ddc-b4c5-79970ff55fc4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " reads are allowed everyw"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "9033925e-2d5a-49d2-b23b-825bab65ddc9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "here. |\n| **O"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4b9c773a-e064-4bce-85c0-ed7b49cf7358"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "penCode** | All"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a49a47f7-b02d-4627-badf-4059fb92c3e4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " | No OS sandbox"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "424b64f2-fd23-47bf-81fa-7a5435da204a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ","
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2349da7b-a3c9-44fe-bb8b-f94aece3c77b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " only permission rules ("
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a131dacb-60c9-470d-9776-5534e7e8973e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "a nudge). |\n|"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "86a2e15b-5a7f-4fcd-b9ba-031d67a99e18"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " **Cloud sandbo"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "5c6bab43-5310-40c6-b0ff-d913512f55c6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "xes** (E2B,"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "65d32ddd-fff4-44a2-9f7d-8c02286da8ae"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Daytona, Modal"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a799cfc7-2766-47df-9a4e-94b1761857ac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", Claude Code on the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d37d2083-819a-4d5b-aad6-46294a631ad9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " web) |"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "03fd7940-cef3-4ba2-8e6d-e264e906830c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Any ("
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7d4239f9-ee2c-410c-ae77-c9f07e5eec54"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "remote) | Yes,"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f223c459-6cba-4a0c-9e05-b608245a749e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " by u"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7619cf89-f0bb-490b-9246-5a4899260a6a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ploading only the sp"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4ba5b075-57eb-4594-b2b0-5ee3d62290ed"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec. Heavy"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3a29110d-b66e-4f3c-a622-edb64135b775"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", needs a network round"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "841b6848-e20c-4342-8d90-1b8ef8fdce3a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " trip and an account, and edit"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "37bceac6-7232-4a65-846c-63d410830bb3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ing the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "a1011d0d-c712-409b-aca3-917592b1713d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " spec live"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4b3aa118-7d08-43a8-86e3-488cbabb8818"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " becomes a s"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2e69f0b4-e338-44d0-9ca8-7bcc389d9332"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ync probl"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "6fcee0c9-431f-4c88-861d-f8e02030a070"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "em. |\n| **D"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c1cd8db8-7273-42be-becc-d1bc942a4152"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ev containers /"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2f19ad91-176d-47bb-aae5-8bc34e9e3b53"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Docker** | All"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e8af33f0-e0f4-4aff-9c75-672fe7a91c7d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " | Yes (the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ff862db3-f326-4a60-879b-ff66fd9a0478"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " previous answer). |\n\n**"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d92cc364-6ed4-4c7f-ba69-8b8fadee056e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Where that"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ec1e30d1-8a08-42b5-af9c-91ca379ab31d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " leaves you:**\n\n-"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f5acc91b-c7d3-4ffe-9e68-0a1d129b2be3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " **On mac"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "cfd1cb42-9542-47ed-a4cb-9d553081ee49"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "OS and Linux**,"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4112e640-fac3-4d91-a5ca-c9d73d8b88e0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Claude Code's sand"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "5c4264aa-dd3a-45c3-87f3-499eca6230ef"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "box plus de"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "95899f6e-3e41-483f-a3b1-1c79a9a252c0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ny rules,"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "47249288-b588-41e0-a8f7-b2884fa18d33"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " or `srt`"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "fd4c3d6d-be20-4d07-9430-ae6c17f0a0e0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " wrapping any"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d2255e00-b745-4192-b52d-7e84263f947d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " harness, does what b"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f98f4d95-607c-446b-9d8b-2f4147312603"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "wrap would"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "804936a6-c62a-40e0-9c60-2b2b4dc878e1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "5007849d-81c1-4526-bc2d-4d4b75528706"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " There"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "679fecc3-af09-4945-bd94-b7094a5a22e7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'s n"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "681cf416-0868-45ff-b9d9-5727dae8264e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "othing to install be"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "554ecc03-ab0e-4654-a04e-c8325da0fc5b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "yond what those"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "bdff82fa-ea12-4874-bf04-a6f5ce1cb295"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " tools p"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b50086f3-2a23-4d2b-9f09-a916ba4e7261"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ull in ("
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "fa3c737d-07b6-4028-8523-f744c59eb8a8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "bubblewrap on"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7aac6aea-db79-44d8-899e-8c744fb32b3c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Linux), and nothing to"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "51867e56-0d36-43c9-a9a8-50fe5ca4e65e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " copy or mount.\n-"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2357a44d-d051-41c1-bce4-8526e71ec1be"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " **"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "11bcb190-6b66-43ff-9c81-b999af0aca5e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Native Windows is"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7fb97bd7-406b-48f5-ba40-9c7e18c51c2e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the gap in"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "037f09b0-e5af-423d-97eb-1fcf06295733"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " every l"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f1b61809-a0b9-4874-8c76-c1957ac74e4e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ightweight option.** On"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "25c05e6c-46a5-43c3-95d6-eed3ef67c268"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Windows you're"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "cdd3ef78-1bf8-4a12-8ddc-c8af6dc6c996"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " cho"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "616bc72e-de01-40f5-ab32-2cb68bf1fc8a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "osing between WSL2 "
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d751e0e3-cdc6-413a-9ddb-ca5dc5412034"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "(where"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "cac69db6-d112-4734-be72-3f29058ce5c6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Claude Code's sand"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "8ac4bda6-b3ca-4418-acf9-8be1d4690614"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "box works), Docker,"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "47a665fc-1576-4dad-b435-fa78a56c877b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " or the code-free workspace"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f785e414-7e83-4fca-b759-df866b9b385a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "dd7cc376-7f25-4833-975d-9a39412c5d77"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\n**"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "dc48b01b-1912-488c-9000-f460342464a0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Pract"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3f95d3c5-0602-422d-95ce-634adf7a1593"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ical lay"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "32cdde69-aa6c-45b5-b9b3-393603f15560"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ering"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "fb55d033-2cc3-433a-8c74-371bd80ff771"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ":**\n\n1. Sp"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4f17e41c-f95a-4065-a92f-da91a042001e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec tasks and chain step"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "77642c55-b59f-425f-a4a3-457791b944f4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " 1 always get de"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e3c77b34-441a-46ed-992c-89b25e4608dd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ny rules for the code"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "28d8185f-7400-4d22-8781-3edc29c32d36"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " location, and their pr"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "fded9023-05b1-4ee4-8fd7-197051951596"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ompts never name"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "43141682-d7f4-4de3-8a47-62edf907b7b0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "4e6ba0cf-ab89-4df8-a542-37c4bcdb9d65"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n2. On"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "287f019e-e80d-4740-a062-8716c7faa276"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " macOS and Linux,"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "32f7fdc2-aee8-4780-8f48-110b41167c42"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " also"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "389c6397-c323-4958-8331-5be801db5d49"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " run them"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "296cff52-391a-4a10-8a17-5e9470c53600"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " under the sandbox ("
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d5496ae7-4cbd-43f8-8de9-abbf1097dba4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Claude Code's own"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "473bdd1a-040a-4bba-a564-0f9a61219e0f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " for"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d7824488-9a82-49f1-9b9b-4ec61e24cf96"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Claude,"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3a0cc70a-972c-46d9-8128-0cef7ed3f5ac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `srt` for the others),"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2a571756-1921-4cd6-8b77-ab0a8f47dded"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " den"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "118026ef-08fd-4307-b6f9-3677b7e5a1c8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ying reads of"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d9f69794-93e1-4f99-9c38-675b32466b15"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7f1a118b-d343-4f3e-81e5-5ee106a3098e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "codeRoot`."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "28914e79-46e8-4de4-bb1b-90eda9b12578"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n3. On Windows, use"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0f5d1796-4e30-4d8e-873c-c8a951fbfc45"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Docker if it's present"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0b80f876-7a1d-44ef-b93c-27431de4b192"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", otherwise the code-"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "e5603bc8-ee79-4054-95c2-d9de9748e1bd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "free workspace.\n4."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "2fd49cac-c965-4c74-b9e8-bd49a3f92d40"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Either"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f4e7705e-c17c-4165-a4ae-b6b42fb74369"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " way, the spec lane ke"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "53943d03-1629-4d30-a679-5f5eff536f03"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "eps its own conversation,"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c4de7ea2-5dda-46a2-8f58-90e4bee6ac72"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " so code"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "9d74cd98-f2d5-4297-ac30-3b2025d87524"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " read"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "895d674a-a00d-4922-8d25-98591516c9bd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in the code"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "44d9db58-57ac-4c9a-ae0b-c178f2e69299"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " lane never"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "8ca1c98c-9ca5-4e8f-94bd-ea3b1c275e87"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " reaches it."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "d86ba40e-0509-4b75-9f3f-b9e15349ddeb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\nBefore committ"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "1edb3d12-4057-4658-adff-46e1f95216a9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ing to step"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "bcb75f1f-a056-4804-a068-13c2162cd257"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " 2, test the"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0b5a1d60-cbda-4794-a73a-bd262aa71fe5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " one cla"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "bb4fc62c-53dd-4ba7-a690-19331a1445ef"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "im it"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "82cf1e70-e108-4032-bf9a-da36e02cb67d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " depends on."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "7aadaa05-ec70-4663-ad46-7c0aa7ae5b33"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " En"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0d3fe13e-7691-4f2e-8a53-fa1cf39d168c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "able"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0febb784-080b-42e1-b7ca-8a2d216336ad"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Claude Code's sandb"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "b0870ab9-9316-4553-8bf9-924c73beb37f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ox with a `"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "46dc59e7-a65b-4a70-aab8-0745c7a02ead"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Read(/"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3edaa68b-9710-4049-85c6-12ade63a1838"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "…"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c91e6893-b320-469f-993f-66edc92573b2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "/src/**)` deny"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "c5742022-50a6-491b-b9b5-9f4761baca21"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " r"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "69b18288-8380-4512-a5a4-9c265bac3af5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ule, then ask it to `"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "788f612c-7e66-4c64-8139-cbaf42fccbd5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "cat src/main.rs"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "ce85dcc0-cbcd-4ca2-bdfb-1c267c9b7ad6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "` in `-p` mode"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3b78b05f-02fe-492c-88e9-6a5d0c6c3ad6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". If that"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "735f45ba-fe93-4d5c-9433-9348f9fc452b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'s"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "12a5890e-fd55-4aea-993c-767ad5a9fa02"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " blocked, lay"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "62b4aa16-fcc7-449f-a325-42f7cc1add5e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ers 1 and 2 "
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0fdd9dd1-a953-4400-af72-583fbb0e2816"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "are enough on"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "0ae638e2-a900-4cd9-88ba-4e098745a2d2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " two"
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "740e0413-86ae-4b39-a497-18f9ace303ea"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " of the three platforms."
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "35164b91-1adb-477f-9055-c3e266543373"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CfeyAboJKowSu4m34mJ9a",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Yes, there are several, but most of them solve a different problem. They're built to stop an agent **writing** outside the project or reaching the network. You need to stop it **reading** part of the project. This is from memory, so check each setting against current docs before building on it:\n\n| Option | Platforms | Can it hide `src/` from reads? |\n|---|---|---|\n| **Claude Code's built-in sandbox** (`sandbox` in settings, `/sandbox`) | macOS (Seatbelt), Linux and WSL2 (bubblewrap). Not native Windows, as far as I know. | Partly. It sandboxes **Bash**: writes are limited to allowed paths, and Read deny rules are applied to shell commands too. Combined with `Read`/`Glob`/`Grep` deny rules for the built-in tools, that should close the Bash loophole. |\n| **Anthropic's `sandbox-runtime` (`srt`)** | macOS, Linux | Yes. It wraps any command (`srt claude -p …`) with a config that has an explicit read deny list, plus write and network rules. It works for Codex and OpenCode too. |\n| **Codex's sandbox** (`--sandbox read-only` / `workspace-write`) | macOS (Seatbelt), Linux (Landlock), Windows (newer, experimental) | No. It limits writes and network; reads are allowed everywhere. |\n| **OpenCode** | All | No OS sandbox, only permission rules (a nudge). |\n| **Cloud sandboxes** (E2B, Daytona, Modal, Claude Code on the web) | Any (remote) | Yes, by uploading only the spec. Heavy, needs a network round trip and an account, and editing the spec live becomes a sync problem. |\n| **Dev containers / Docker** | All | Yes (the previous answer). |\n\n**Where that leaves you:**\n\n- **On macOS and Linux**, Claude Code's sandbox plus deny rules, or `srt` wrapping any harness, does what bwrap would. There's nothing to install beyond what those tools pull in (bubblewrap on Linux), and nothing to copy or mount.\n- **Native Windows is the gap in every lightweight option.** On Windows you're choosing between WSL2 (where Claude Code's sandbox works), Docker, or the code-free workspace.\n\n**Practical layering:**\n\n1. Spec tasks and chain step 1 always get deny rules for the code location, and their prompts never name it.\n2. On macOS and Linux, also run them under the sandbox (Claude Code's own for Claude, `srt` for the others), denying reads of `codeRoot`.\n3. On Windows, use Docker if it's present, otherwise the code-free workspace.\n4. Either way, the spec lane keeps its own conversation, so code read in the code lane never reaches it.\n\nBefore committing to step 2, test the one claim it depends on. Enable Claude Code's sandbox with a `Read(/…/src/**)` deny rule, then ask it to `cat src/main.rs` in `-p` mode. If that's blocked, layers 1 and 2 are enough on two of the three platforms."
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1579,
+          "cache_read_input_tokens": 79729,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1579
+          },
+          "output_tokens": 3,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [
+          {
+            "type": "thinking_dropped",
+            "path": "messages.2.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.11.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.14.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.17.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.20.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.23.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.26.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.29.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.32.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.35.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.38.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.41.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.44.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.47.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.50.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.53.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.56.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.59.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.62.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.65.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.71.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.74.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.77.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.80.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.89.content.0",
+            "reason": "prefix_binding_mismatch"
+          }
+        ],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "uuid": "85d0d804-461f-46a8-ab30-8a5f5eea0b85",
+      "timestamp": "2026-10-03T08:14:12.690Z",
+      "request_id": "req_011CfeyAbJHuRW9DuGtwFtR1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "16ccb468-e97a-4137-8ae4-7974b1d5f584"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {}
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1579,
+          "cache_read_input_tokens": 79729,
+          "output_tokens": 1556,
+          "output_tokens_details": {
+            "thinking_tokens": 515
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 1556,
+              "cache_read_input_tokens": 79729,
+              "cache_creation_input_tokens": 1579,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 1579
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "f53de409-70de-4bd9-b46a-6dc5e3aed371"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "parent_tool_use_id": null,
+      "uuid": "3b6eab81-887c-410a-8872-d963ea7992ea"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1791028800,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.04,
+            "resetsAt": 1791028800
+          },
+          "seven_day": {
+            "utilization": 0.42,
+            "resetsAt": 1791313200
+          }
+        }
+      },
+      "uuid": "2da43f98-6049-46fa-ad38-f3fb4fd4110a",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8"
+    },
+    {
+      "duration_api_ms": 366040,
+      "stop_reason": "end_turn",
+      "session_id": "b0b1d74a-5e8b-432c-96eb-86c20dabaee8",
+      "total_cost_usd": 2.5474902,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 1579,
+        "cache_read_input_tokens": 79729,
+        "output_tokens": 1556,
+        "output_tokens_details": {
+          "thinking_tokens": 515
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1579,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 1556,
+            "cache_read_input_tokens": 79729,
+            "cache_creation_input_tokens": 1579,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1579
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "modelUsage": {
+        "claude-opus-5-5[1m]": {
+          "inputTokens": 76,
+          "outputTokens": 31625,
+          "thinkingTokens": 9377,
+          "cacheReadInputTokens": 2574311,
+          "cacheCreationInputTokens": 174978,
+          "webSearchRequests": 0,
+          "costUSD": 2.5474902,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "is_error": false,
+      "num_turns": 1,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "Yes, there are several, but most of them solve a different problem. They're built to stop an agent **writing** outside the project or reaching the network. You need to stop it **reading** part of the project. This is from memory, so check each setting against current docs before building on it:\n\n| Option | Platforms | Can it hide `src/` from reads? |\n|---|---|---|\n| **Claude Code's built-in sandbox** (`sandbox` in settings, `/sandbox`) | macOS (Seatbelt), Linux and WSL2 (bubblewrap). Not native Windows, as far as I know. | Partly. It sandboxes **Bash**: writes are limited to allowed paths, and Read deny rules are applied to shell commands too. Combined with `Read`/`Glob`/`Grep` deny rules for the built-in tools, that should close the Bash loophole. |\n| **Anthropic's `sandbox-runtime` (`srt`)** | macOS, Linux | Yes. It wraps any command (`srt claude -p …`) with a config that has an explicit read deny list, plus write and network rules. It works for Codex and OpenCode too. |\n| **Codex's sandbox** (`--sandbox read-only` / `workspace-write`) | macOS (Seatbelt), Linux (Landlock), Windows (newer, experimental) | No. It limits writes and network; reads are allowed everywhere. |\n| **OpenCode** | All | No OS sandbox, only permission rules (a nudge). |\n| **Cloud sandboxes** (E2B, Daytona, Modal, Claude Code on the web) | Any (remote) | Yes, by uploading only the spec. Heavy, needs a network round trip and an account, and editing the spec live becomes a sync problem. |\n| **Dev containers / Docker** | All | Yes (the previous answer). |\n\n**Where that leaves you:**\n\n- **On macOS and Linux**, Claude Code's sandbox plus deny rules, or `srt` wrapping any harness, does what bwrap would. There's nothing to install beyond what those tools pull in (bubblewrap on Linux), and nothing to copy or mount.\n- **Native Windows is the gap in every lightweight option.** On Windows you're choosing between WSL2 (where Claude Code's sandbox works), Docker, or the code-free workspace.\n\n**Practical layering:**\n\n1. Spec tasks and chain step 1 always get deny rules for the code location, and their prompts never name it.\n2. On macOS and Linux, also run them under the sandbox (Claude Code's own for Claude, `srt` for the others), denying reads of `codeRoot`.\n3. On Windows, use Docker if it's present, otherwise the code-free workspace.\n4. Either way, the spec lane keeps its own conversation, so code read in the code lane never reaches it.\n\nBefore committing to step 2, test the one claim it depends on. Enable Claude Code's sandbox with a `Read(/…/src/**)` deny rule, then ask it to `cat src/main.rs` in `-p` mode. If that's blocked, layers 1 and 2 are enough on two of the three platforms.",
+      "ttft_ms": 6395,
+      "type": "result",
+      "duration_ms": 16988,
+      "uuid": "9d847480-69ba-4c10-bd3a-1ca15fba432e",
+      "ttft_stream_ms": 1372,
+      "time_to_request_ms": 412,
+      "first_content_frame_ms": 1372,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  ]
+}

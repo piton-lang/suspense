@@ -1,0 +1,161 @@
+
+export anchor Prompt_07a49fb8724d58bf:
+    userPrompt:
+        \\\
+        Run the agent in a container that Suspense owns, so each mode sees only what
+        it may use. The isolation comes from what is mounted, not from prompts, deny
+        rules or guards. Spec tasks, a chain's spec step and questions always run
+        this way. Code tasks and a chain's code step run this way only when the
+        project's "Run code tasks in a container" option is on (off by default); when
+        it is off they run on the host as today, with the mode guard and read-deny
+        rule.
+
+        Why: Spec work keeps reading and even changing code, which wastes time and
+        tokens, and the chain's code step then finds nothing to do. Deny rules and
+        prompt wording are only nudges, because a shell can read anything. A
+        container that has no code in it can't read the code or change it, whatever
+        the harness is and whatever it tries.
+
+        What should be true afterwards:
+
+        1. Container runtime: Podman only, run through the `podman` CLI. Each run is
+           one `podman run --rm` of the agent's command, a child of the app, so
+           stopping a task stops its container. On Linux it runs rootless with the
+           user's id (--userns=keep-id), so files it writes belong to the user. On
+           macOS and Windows, Podman runs in a `podman machine`.
+           - If `podman` isn't installed, a Spec, Chain or Ask prompt isn't sent, and
+             there is no unisolated fallback. The task or question says Podman is
+             needed and links to Podman's installation instructions for the platform
+             it's running on: https://podman.io/docs/installation#macos on macOS,
+             https://podman.io/docs/installation#windows on Windows, and
+             https://podman.io/docs/installation#installing-on-linux on Linux. It's
+             reported the way a missing harness or missing piton is today.
+           - On macOS and Windows, if no Podman machine exists or it isn't running,
+             the task says so and offers to set it up (`podman machine init`) or
+             start it (`podman machine start`), showing the output in its raw stream.
+           - Code tasks with the project option on need Podman in the same way. With
+             the option off, they never need it.
+
+        2. Image. Suspense builds a default image and keeps it up to date: the
+           harness CLIs (Claude Code, Codex, OpenCode) and piton, the same versions
+           as on the host where it can find them. A project can provide its own
+           Containerfile (.suspense/Containerfile) built FROM the default to add
+           toolchains, and Suspense builds and caches it when it changes, with
+           `podman build`. While an image is building, the task shows "Preparing
+           environment" and the output goes to its raw stream.
+
+        3. What each run sees. Mounts are made at the same absolute paths as on the
+           host where the platform allows, so paths in tool events need no mapping.
+           Where they can't be (macOS, Windows), container paths are mapped back to
+           host paths everywhere they are shown or opened (referenced-spec sidebar,
+           file links, understanding file, files changed).
+           - Spec task, chain spec step: the spec location rw, the compiled
+             reference rw, the fluency file ro, piton.config.pi ro, and the task's
+             understanding file rw. No code location.
+           - Question (Ask): the code location ro, the compiled reference ro, and
+             piton.config.pi ro. No spec source. Nothing writable but the harness's
+             own volumes.
+           - Code task, chain code step, with the option on: the code location rw,
+             the compiled reference ro, piton.config.pi ro, and the understanding
+             file rw. No spec source.
+           Nothing else from the host is mounted: no home directory, no user-level
+           skills, MCP servers or ~/.claude/CLAUDE.md, no git directory. Snapshots,
+           diffs, files changed and commits are still done by Suspense on the host.
+
+        4. Persistent Podman volumes, owned and named by Suspense:
+           - one per harness for its login and settings (~/.claude, ~/.codex,
+             OpenCode's data directory), shared by every project, so a harness is
+             logged in once for all of them;
+           - one per project and conversation lane (spec lane, code lane,
+             questions) for the harness's sessions, so each lane can resume its own
+             conversation;
+           - caches per project (e.g. cargo registry and target directory) for
+             containerised Code runs.
+           Losing a volume costs only a login or a cache, never project data.
+
+        5. Logging in. When a harness in its volume isn't logged in, Suspense runs
+           its login command in the container under a pseudo-terminal and shows a
+           login view. It opens any login URL the CLI prints in the host's browser.
+           Where the CLI asks for a pasted code, the view has a field for it, which
+           goes to the PTY. Where it waits for a localhost callback on a known port,
+           that port is published for the login run. Where it offers device-code
+           login, that is used. Credentials stay in the harness's volume and are
+           refreshed there, so login happens once per machine, not per run. The
+           Settings window shows each harness's container login state and has a
+           "Log in again" action.
+
+        6. Conversations by lane. Spec lane tasks (Spec tasks and chain spec steps)
+           carry on a conversation of their own, separate from the code lane's, so
+           nothing a code task read reaches a spec task. Questions keep their own
+           conversation as today. The chain handoff stays as text (the prompt and
+           the spec step's reply), so it crosses lanes unchanged. New conversation
+           resets the lane it is used from.
+
+        7. The spec build. A Spec run's agent can run `piton build` inside its
+           container (the code location isn't there, so shape outputs written into
+           it are discarded). After every Spec or chain spec step, Suspense runs the
+           real `piton build` on the host as it does before sending, so the host's
+           reference and shape outputs are current.
+
+        8. Prompts describe only what the run can see. For containerised runs, the
+           system template, the spec-reading prompt and the mode instructions no
+           longer name a location the run can't see, or tell it not to read or edit
+           one: Spec and chain-spec-step instructions don't name the code location,
+           and Ask and containerised Code instructions say the spec is read from
+           the compiled reference without naming the spec source. The shared system
+           prompt stays identical within a lane's conversation, so the prompt cache
+           holds.
+
+        9. Guards. A containerised run has no mode guard, no read-deny rule and no
+           edit-deny rule: nothing to protect is mounted. Host runs (Code with the
+           option off, Freeform) keep them as today.
+
+        10. Project option. "Run code tasks in a container" is a per-project
+            setting, saved with the project as the ProjectDataScope says, shown in
+            the Settings window, off by default. Turning it on applies from the next
+            Code or chain code step.
+
+        Spec: harness-integration (how a run is started, conversations and
+        resuming, Claude Code's flags), prompt-mode/index and prompt-mode/sending
+        (lanes, chains, the pre-send build, the mode guard), prompt-mode/
+        mode-system-prompts (what each mode's prompts say), project-data (the new
+        option, Containerfile, and which data is the project's vs. Suspense's),
+        settings-window (the option and the harness login state), and spec-build
+        (the build after a spec step). Update those anchors rather than adding
+        parallel ones. Add one new scope for the container environment (Podman,
+        the missing-Podman and machine states with their platform install links,
+        image, mounts per mode, volumes, login), and link to it from the others.
+
+        Code: put the container environment in its own module (Podman detection and
+        machine state, platform install links, image build and cache, mounts per
+        mode, volume names, path mapping, the login PTY flow), used by
+        src/harness.rs where the agent's Command is built, for send, one-off runs
+        and ask_quickly alike when their mode is containerised. Update
+        src/mode_guard.rs so containerised runs aren't guarded, src/system_prompts.rs
+        and .suspense/system-prompts/*.md for the prompt wording, the conversation
+        bookkeeping in src/prompt_mode.rs and src/conversations.rs for the separate
+        spec-lane conversation, src/settings_window.rs for the option and login
+        state, and src/referenced_spec.rs and src/shell_paths.rs for path mapping.
+        Tests: mounts per mode (Spec has no code mount, Ask has no spec mount and
+        nothing rw, Code only with the option on), the missing-Podman error linking
+        to the right install page per platform, the machine-not-running state on
+        macOS and Windows, the spec lane resuming its own conversation, no guard or
+        deny rule for containerised runs, and container-to-host path mapping. Use a
+        fake `podman` binary, as the existing tests use a fake harness.
+
+        \\\
+
+    mode: spec
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the spec located in ./spec. Don't edit the code located in ./src.
+
+        Before creating or editing any .pi file, read .suspense/fluency.md once in this conversation, unless you already have: it is how Piton is written.
+
+        Open a .pi file only to change it. Once you have changed the spec, run `piton build` and check the result in the refreshed reference under .claude/reference, not by reading the source again.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+        \\\

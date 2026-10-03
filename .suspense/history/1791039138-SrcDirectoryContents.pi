@@ -1,0 +1,21 @@
+
+export anchor SrcDirectoryContents:
+    userPrompt:
+        \\\
+        What does the directory listing of src look like ?
+        \\\
+
+    mode: spec
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the spec located in ./spec.
+
+        Before creating or editing any .pi file, read .suspense/fluency.md once in this conversation, unless you already have: it is how Piton is written.
+
+        Open a .pi file only to change it. Once you have changed the spec, run `piton build` and check the result in the refreshed reference under .claude/reference, not by reading the source again.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+        \\\

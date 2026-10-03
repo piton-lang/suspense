@@ -70,6 +70,9 @@ similar = { version = "2.7", features = ["inline"] }
 tree-sitter = "0.26"
 tree-sitter-language = "0.1"
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 gpui-kit = { version = "0.6.1", features = [
     "tree-sitter",

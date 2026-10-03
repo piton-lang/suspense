@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from ../container-environment import ContainerEnvironmentScope
 from ../harness-integration import HarnessIntegrationScope
 from ../no-project import NoProjectStateScope
 from ../project-data import ProjectDataScope
@@ -19,7 +20,8 @@ concept SettingsWindowConcept:
     pitch:
         The application's settings, in sections picked from a sidebar: the
         system prompts each tab of the @{ChatInputScope} sends, the prompts
-        injected into them, and the harness runs go to.
+        injected into them, the harness runs go to, and the containers they
+        run in.
 
     shape: {SettingsWindowShape}
 
@@ -32,8 +34,8 @@ shape SettingsWindowShape:
 
     sidebar:
         Beneath the heading, down its left, a sidebar of vertical tabs, one
-        per section, in order: "System prompts", "Injected prompts", and
-        "Agent". Each
+        per section, in order: "System prompts", "Injected prompts", "Agent",
+        and "Containers". Each
         tab is a row across the sidebar's width reading the section's name,
         and the one picked is marked with the theme's accent. Clicking a tab
         picks its section, and the page beside the sidebar shows only that
@@ -113,6 +115,37 @@ shape SettingsWindowShape:
         says, not saved with a project, so the section is the same with or
         without a project open. One that isn't installed can still be picked,
         and its runs fail saying why.
+
+    containers:
+        The "Containers" section is headed "Containers", with a muted line
+        beneath saying that Spec tasks, a Chain prompt's spec steps, and
+        questions always run in a container holding only what their mode may
+        use, as the @{ContainerEnvironmentScope} says.
+
+        First, whether Podman can run them: "Podman" and its version, or
+        "Not installed" with the link to its installation instructions for
+        the platform, and on macOS and Windows, whether its machine is
+        running, with the button that sets it up or starts it, as the
+        @{ContainerEnvironmentScope} says.
+
+        Then a row for each harness, in the order of the Agent section: its
+        name, and muted beside it whether it is logged in in its container,
+        "Logged in" or "Not logged in", read from its volume each time the
+        settings open, and a "Log in again" button, which runs its login in a
+        container and shows the login view, as the
+        @{ContainerEnvironmentScope} says, whether it is logged in or not.
+        These are the user's, not the project's, so they are the same with or
+        without a project open.
+
+        Last, the project's option, a checkbox reading "Run code tasks in a
+        container", with a muted line beneath saying that Code tasks and a
+        Chain prompt's code step then run in a container holding the code and
+        no spec source, and otherwise on the host. It is off until it is
+        turned on, and saved with the project's settings straight away, as
+        the @{ProjectDataScope} says, applying from the next Code task or code
+        step to start; one already running finishes where it started. Without
+        a project open, in place of the checkbox it reads "Open a project to
+        set its options."
 
     saving:
         The prompts, the system prompts and the injected ones, belong to the

@@ -144,7 +144,10 @@ impl PlanLimit {
 /// Which conversation a run carried on: the tasks', or the questions'.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Conversation {
+    /// The code lane's tasks'.
     Tasks,
+    /// The spec lane's tasks', as the HarnessIntegrationScope keeps apart.
+    SpecTasks,
     Questions,
 }
 
@@ -503,7 +506,8 @@ pub fn details(report: &UsageReport, now: u64, cx: &App) -> Div {
     );
     let conversation_title = match report.conversation {
         Some(Conversation::Questions) => "Conversation (questions)",
-        Some(Conversation::Tasks) => "Conversation (tasks)",
+        Some(Conversation::Tasks) => "Conversation (code tasks)",
+        Some(Conversation::SpecTasks) => "Conversation (spec tasks)",
         None => "Conversation",
     };
     let conversation = group(

@@ -1,4 +1,5 @@
 use /lib
+from /scope/container-environment import ContainerEnvironmentScope
 from /scope/no-project import NoProjectStateScope
 from /scope/open-projects import OpenProjectsScope
 from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
@@ -61,3 +62,17 @@ shape SpecBuildShape:
         since that work may be what fixes the spec, or can go on with the
         compiled spec as it was. The work says the build failed, so the compiled
         spec may be out of date, with what the build reported.
+
+    afterSpecWork:
+        A Spec task, or a Chain prompt's spec step or spec follow-up, runs in a
+        container with no code location, as the @{ContainerEnvironmentScope}
+        says, so any build it runs there writes only the reference it can see.
+        Once its run is over, however it ended, done, failed, or cancelled, a
+        build runs on the host, as one ahead of work does, so the host's
+        compiled reference, and the shape guidance written into the code
+        location, are those of the spec as the run left it. It runs before the
+        task shows as finished, the task showing "Building" meanwhile, and
+        then the task finishes in the state its run ended in. A build that
+        fails, or can't be run, never changes that state: the task's output
+        ends with a passive notice saying the build failed, with what it
+        reported. The chain's next step is sent only once it is over.

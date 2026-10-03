@@ -1,0 +1,51 @@
+{
+  "userPrompt": "What does the directory listing of src look like ?",
+  "harness": "claude",
+  "systemPrompt": "We're working in a project whose spec is compiled to .claude/reference, which is where to read it. Each prompt starts with a <task-instructions> block saying what that prompt is for and what it may change. Follow the block at the top of the prompt you are answering; an earlier prompt's block no longer applies.\n\nIts spec's Piton source, in ./spec, is only where edits to the spec go.\n\nRead the spec from its compiled reference under .claude/reference, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with this harness's adapter.\n\nNever read the .pi source under ./spec to learn what the spec says; that is only where edits to the spec go.\n\nBefore executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.",
+  "instructions": "We're working on the spec located in ./spec.\n\nBefore creating or editing any .pi file, read .suspense/fluency.md once in this conversation, unless you already have: it is how Piton is written.\n\nOpen a .pi file only to change it. Once you have changed the spec, run `piton build` and check the result in the refreshed reference under .claude/reference, not by reading the source again.\n\nBefore changing anything, write the constraints this task must meet to .suspense/history/1791039138-SrcDirectoryContents.understanding.md, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.",
+  "resumed": true,
+  "output": [
+    "No conversation found with session ID: 7f0bb2e8-ca7a-48ba-b3be-a9aa99eaf404",
+    {
+      "type": "result",
+      "subtype": "error_during_execution",
+      "duration_ms": 0,
+      "duration_api_ms": 0,
+      "is_error": true,
+      "num_turns": 0,
+      "stop_reason": null,
+      "session_id": "7f0bb2e8-ca7a-48ba-b3be-a9aa99eaf404",
+      "total_cost_usd": 0,
+      "usage": {
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "output_tokens": 0,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "",
+        "iterations": [],
+        "speed": "standard"
+      },
+      "modelUsage": {},
+      "permission_denials": [],
+      "uuid": "06f7edae-71ab-403f-9906-ac2297ec4b06",
+      "errors": [
+        "No conversation found with session ID: 7f0bb2e8-ca7a-48ba-b3be-a9aa99eaf404"
+      ],
+      "result_index": 0
+    }
+  ],
+  "snapshotBefore": "8b64ae59a368584bbd945d1e91ec13fe2eab817a",
+  "snapshotAfter": "8b64ae59a368584bbd945d1e91ec13fe2eab817a"
+}

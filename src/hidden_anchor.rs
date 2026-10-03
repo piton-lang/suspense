@@ -836,7 +836,36 @@ pub fn instructions(mode: SendMode, project_dir: &Path) -> Result<Option<String>
     if matches!(mode, SendMode::Spec | SendMode::Both) {
         crate::piton_fluency::ensure(project_dir);
     }
-    filled_instructions(mode.into(), project_dir)
+    filled_instructions(mode.into(), Some(mode), project_dir)
+}
+
+/// Which of the project's locations a run in `mode` can see, the code and
+/// the spec: in a container, only what is mounted, as the
+/// ContainerEnvironmentScope says; on the host, both.
+pub fn seen_locations(mode: Option<SendMode>, project_dir: &Path) -> (bool, bool) {
+    use crate::container::RunKind;
+    match RunKind::of(mode, crate::container::code_in_container(project_dir)) {
+        Some(RunKind::Spec) => (false, true),
+        Some(RunKind::Question | RunKind::Code) => (true, false),
+        None => (true, true),
+    }
+}
+
+/// The code and spec locations from the project's config, as a run in
+/// `mode` fills them in: each it can't see, as nothing.
+fn locations_for(mode: Option<SendMode>, project_dir: &Path) -> Result<(String, String)> {
+    let (sees_code, sees_spec) = seen_locations(mode, project_dir);
+    let code = if sees_code {
+        config_value(project_dir, "codeRoot")?
+    } else {
+        String::new()
+    };
+    let spec = if sees_spec {
+        config_value(project_dir, "root")?
+    } else {
+        String::new()
+    };
+    Ok((code, spec))
 }
 
 /// The instructions a Code task sent to Spec is given: Spec's, as
@@ -849,7 +878,11 @@ pub fn instructions(mode: SendMode, project_dir: &Path) -> Result<Option<String>
 pub fn code_to_spec_instructions(project_dir: &Path) -> Result<Option<String>> {
     joined(
         instructions(SendMode::Spec, project_dir)?,
-        filled_instructions(system_prompts::Prompt::CodeToSpec, project_dir)?,
+        filled_instructions(
+            system_prompts::Prompt::CodeToSpec,
+            Some(SendMode::Spec),
+            project_dir,
+        )?,
     )
 }
 
@@ -861,7 +894,11 @@ pub fn code_to_spec_instructions(project_dir: &Path) -> Result<Option<String>> {
 pub fn spec_to_code_instructions(project_dir: &Path) -> Result<Option<String>> {
     joined(
         instructions(SendMode::Code, project_dir)?,
-        filled_instructions(system_prompts::Prompt::SpecToCode, project_dir)?,
+        filled_instructions(
+            system_prompts::Prompt::SpecToCode,
+            Some(SendMode::Code),
+            project_dir,
+        )?,
     )
 }
 
@@ -892,14 +929,15 @@ fn joined(first: Option<String>, second: Option<String>) -> Result<Option<String
 /// in.
 fn filled_instructions(
     prompt: system_prompts::Prompt,
+    mode: Option<SendMode>,
     project_dir: &Path,
 ) -> Result<Option<String>> {
     let template = system_prompts::load(prompt, project_dir)?;
     if template.trim().is_empty() {
         return Ok(None);
     }
-    let code = config_value(project_dir, "codeRoot")?;
-    let spec = config_value(project_dir, "root")?;
+    // Only what the run sees in its container is named.
+    let (code, spec) = locations_for(mode, project_dir)?;
     // The fluency file, where it has been written.
     let fluency_file = crate::piton_fluency::file(project_dir)
         .exists()
@@ -913,11 +951,22 @@ fn filled_instructions(
 /// conversation in it, whatever the mode: its system template with the code
 /// and spec locations and its spec-reading prompt filled in. It holds no
 /// fluency.
+#[cfg(test)]
 pub fn project_system_prompt(project_dir: &Path) -> Result<Option<String>> {
+    project_system_prompt_for(None, project_dir)
+}
+
+/// The project's system prompt as a conversation of runs in `mode` is sent
+/// it: filled in only with the locations those runs can see, as the
+/// ModeSystemPromptsScope says, so it is the same for every prompt of one
+/// lane's conversation.
+pub fn project_system_prompt_for(
+    mode: Option<SendMode>,
+    project_dir: &Path,
+) -> Result<Option<String>> {
     let template = system_prompts::load(system_prompts::Prompt::System, project_dir)?;
     let reading = system_prompts::load(system_prompts::Prompt::SpecReading, project_dir)?;
-    let code = config_value(project_dir, "codeRoot")?;
-    let spec = config_value(project_dir, "root")?;
+    let (code, spec) = locations_for(mode, project_dir)?;
     Ok(system_prompts::project_system_prompt(
         &code, &spec, &template, &reading,
     ))
@@ -965,6 +1014,20 @@ pub fn preview(anchor: &HiddenAnchor, prompt: &str, project_dir: &Path) -> Resul
     // Gone too once nothing else is being previewed.
     fs::remove_dir(&dir).ok();
     compiled
+}
+
+/// Records in the saved prompt at `file` that it started a new
+/// conversation, as one sent again afresh, when the conversation it was to
+/// carry on couldn't be, did.
+pub fn mark_new_conversation(file: &Path) -> Result<()> {
+    let source =
+        fs::read_to_string(file).with_context(|| format!("could not read {}", file.display()))?;
+    let Some((mut anchor, text)) = HiddenAnchor::parse(&source) else {
+        anyhow::bail!("could not read the prompt saved in {}", file.display());
+    };
+    anchor.new_conversation = Some(true);
+    fs::write(file, anchor.source(&text))
+        .with_context(|| format!("could not save {}", file.display()))
 }
 
 /// Where the project's questions are saved, apart from the history.
@@ -1487,15 +1550,31 @@ mod tests {
             .filter(|mode| *mode != SendMode::Freeform)
         {
             let given = instructions(mode, &project_dir).unwrap().unwrap();
+            // Only the locations its run can see in its container are named:
+            // a Spec or Chain run sees no code, a question no spec source.
+            let (code, spec) = match mode {
+                SendMode::Spec | SendMode::Both => ("", "./spec"),
+                SendMode::Ask => ("./src", ""),
+                _ => ("./src", "./spec"),
+            };
             assert_eq!(
                 given,
                 system_prompts::fill_instructions(
                     system_prompts::default_prompt(mode),
-                    "./src",
-                    "./spec",
+                    code,
+                    spec,
                     Some(&fluency_file),
                 )
             );
+            if code.is_empty() {
+                assert!(!given.contains("./src"), "{mode:?} names the code: {given}");
+            }
+            if spec.is_empty() {
+                assert!(
+                    !given.contains("./spec"),
+                    "{mode:?} names the spec: {given}"
+                );
+            }
             assert!(
                 !given.contains(&reading[..40]),
                 "{mode:?} repeats the spec reading"
@@ -1628,14 +1707,16 @@ mod tests {
         .unwrap();
 
         let spec = instructions(SendMode::Spec, &project_dir).unwrap().unwrap();
+        // Given to a spec run, which can't see the code in its container.
         let handoff = system_prompts::fill_instructions(
             system_prompts::default_prompt(system_prompts::Prompt::CodeToSpec),
-            "./src",
+            "",
             "./spec",
             None,
         );
+        assert!(!handoff.contains("./src"), "{handoff}");
         assert!(handoff.starts_with("This prompt was first sent to change the code"));
-        assert!(handoff.contains("change the spec at ./spec so it describes"));
+        assert!(handoff.contains("Change the spec at ./spec so it describes"));
         assert!(handoff.ends_with(&format!(
             "sent:\n\n{}\n\nWhat the code task said it built, its final output:\n\n{}",
             system_prompts::CODE_PROMPT,

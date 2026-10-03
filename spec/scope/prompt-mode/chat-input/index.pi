@@ -232,10 +232,11 @@ shape ChatInputShape:
         session:
             At the far right of the bar, at the right end of the help text,
             sits how much context the selected tab's conversation holds, then a
-            New conversation button. The questions of the Ask tab have a
-            conversation of their own, and the other tabs share the tasks', as
-            the @{HarnessIntegrationScope} says, so the figure is the Ask tab's
-            conversation while it is selected, and the tasks' on any other tab.
+            New conversation button. Each lane's tasks, and the questions of the
+            Ask tab, have a conversation of their own, as the
+            @{HarnessIntegrationScope} says, so the figure is the spec lane's on
+            the Spec and Chain tabs, a Chain prompt starting in the spec lane,
+            the code lane's on Code and Freeform, and the questions' on Ask.
 
             The figure reads "Context", then the number of tokens, short and
             extra small, muted: "850", "42.1k", "123k", or "1.2M", to a decimal
@@ -248,9 +249,10 @@ shape ChatInputShape:
 
             New conversation is a small ghost button with a sparkles icon,
             reading "New conversation". Pressing it starts a new conversation
-            for the selected tab: the tasks' on Code, Chain, Spec, and Freeform, the
-            questions' on Ask. The next run in that tab, or in any tab sharing
-            its conversation, starts a new one with no context instead of
+            for the selected tab: the spec lane's on Spec, the code lane's on
+            Code and Freeform, both lanes' on Chain, whose steps run in both,
+            and the questions' on Ask. The next run of that conversation, from
+            any tab sharing it, starts a new one with no context instead of
             carrying on, and the figure reads "Context 0". A run of the
             conversation left that is still going finishes as it would, but
             neither it nor the project's history brings that conversation back,
@@ -260,17 +262,17 @@ shape ChatInputShape:
             It can be pressed while a run in that conversation is under way, a
             task on Code, Chain, Spec, or Freeform, or any question on Ask, without
             waiting for it to finish. Pressed while a task runs, the prompts
-            sent meanwhile queue or run as ever, and the next task to start,
-            whichever lane it runs in, whether sent straight away or from the
-            queue, starts a new conversation with no context, the ones after it
+            sent meanwhile queue or run as ever, and the next task of the lane
+            reset to start, whether sent straight away or from the queue,
+            starts a new conversation with no context, the ones after it
             carrying that one on. That holds even when the
             running task is the first of its conversation and the harness
             hasn't yet said which conversation it is: once it does, it isn't
             carried on either.
 
             Whether a task starts a new conversation is part of its prompt,
-            recorded in its hidden anchor. Pressed for the tasks with prompts
-            queued, New conversation marks the first in the queue, saving it
+            recorded in its hidden anchor. Pressed for a lane with prompts
+            queued, New conversation marks the first in that lane's queue, saving it
             again with the project, so it still starts the new conversation
             once the project is closed and opened again. With nothing queued,
             the next task sent or queued takes the mark. Cancelling the marked
@@ -284,7 +286,9 @@ shape ChatInputShape:
             button is disabled. It is <Ctrl> on macOS too, not <Cmd>.
 
             Its tooltip says which conversation it resets, with its shortcut:
-            "Start a new conversation for tasks (Ctrl+N)" or
+            "Start a new conversation for spec tasks (Ctrl+N)",
+            "Start a new conversation for code tasks (Ctrl+N)",
+            "Start a new conversation for spec and code tasks (Ctrl+N)", or
             "Start a new conversation for questions (Ctrl+N)", adding, while a run in
             it is under way, that the run finishes in the conversation left.
             It is disabled only while that conversation has nothing to carry
@@ -640,8 +644,8 @@ shape ChatInputShape:
         newConversation:
             The hidden anchor has a newConversation property, true or false,
             after the one recording whether it was sliced: for a queued task,
-            whether it will start a new conversation rather than carry on the
-            tasks'; for the copy saved to the history, a task's or a
+            whether it will start a new conversation rather than carry on its
+            lane's; for the copy saved to the history, a task's or a
             question's, whether it did start one. A task starts a new
             conversation when it was marked to, as the session controls say,
             and also when there was none to carry on. Editing a queued prompt

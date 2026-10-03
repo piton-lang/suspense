@@ -109,6 +109,13 @@ impl RunRecord {
                 "sent": { "text": text, "compiled": compiled },
             })),
             HarnessEvent::Failed(error) => self.error = Some(error.clone()),
+            // The conversation it was to carry on was none the harness had,
+            // so it began afresh: what that attempt printed never was, and it
+            // carried nothing on.
+            HarnessEvent::NewConversation(_) => {
+                self.output.retain(|line| line.get("sent").is_some());
+                self.resumed = false;
+            }
             _ => {}
         }
     }

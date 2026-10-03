@@ -1,10 +1,12 @@
 use /lib
 
+from /scope/container-environment import ContainerEnvironmentScope
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/project-locations import ProjectLocationsScope
 from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from /scope/run-targets import RunTargetsScope
+from /scope/settings-window import SettingsWindowScope
 
 export scope ProjectDataScope:
     concept: {ProjectDataConcept}
@@ -34,7 +36,9 @@ shape ProjectDataShape:
         - `run.json`: the project's run targets, as the @{RunTargetsScope} says
         - `harness.json`: the last report the harness gave of the skills and agents it has
         - `fluency.md`: the project's Piton fluency, as `piton agent --print-fluency` printed it at the last spec build, generated rather than edited, for the Spec and Chain prompts to point at, as the @{ModeSystemPromptsScope} says
-        - `conversations.json`: which conversation of the tasks, and of the questions, was last left for a new one, as the @{HarnessIntegrationScope} says, so it isn't carried on again once the project is reopened
+        - `conversations.json`: which conversation of each lane's tasks, the spec lane's and the code lane's, and of the questions, was last left for a new one, as the @{HarnessIntegrationScope} says, so it isn't carried on again once the project is reopened
+        - `settings.json`: the project's own settings, edited in the @{SettingsWindowScope}: for now only whether to run code tasks in a container, `runCodeTasksInContainer`, true or false, false when it isn't there, as the @{ContainerEnvironmentScope} says
+        - `Containerfile`: written by hand, when the project has one, built FROM the application's default image to add what the project's runs need, such as its toolchains, as the @{ContainerEnvironmentScope} says
 
         The draft, `.suspense-draft.pi`, isn't in `.suspense`: it is the prompt
         being written, as `piton lsp` is shown it, a document named as if it
@@ -52,8 +56,15 @@ shape ProjectDataShape:
         draft
         `.suspense-draft.pi` wherever it is, should it ever be written. Git
         ignores these, so they are never committed. Everything else, the prompt
-        history, the questions, the divergence reports, and the system prompts,
-        is kept with the project.
+        history, the questions, the divergence reports, the system prompts,
+        the project's settings, and its Containerfile, is kept with the
+        project.
+
+        The containers' images and volumes, the harnesses' logins, their
+        sessions, and the project's caches, belong to this machine and to the
+        application, never to the project, and aren't in `.suspense` at all:
+        Podman keeps them, as the @{ContainerEnvironmentScope} says. Losing
+        them costs a login or a cache, never anything of the project's.
 
     taskSnapshots:
         In a project that is a git repository, every task the harness runs

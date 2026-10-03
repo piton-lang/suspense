@@ -2127,13 +2127,16 @@ impl Render for ChatInput {
                 .child(div().min_w_0().truncate().child(TABS[selected].help())),
         );
         // At the far right, how much context the selected tab's conversation
-        // holds, and a button to start a new one: the questions' on Ask, the
-        // tasks' on any other tab.
+        // holds, and a button to start a new one: the questions' on Ask, and
+        // the tab's lane's tasks' on any other.
         let context = self.context;
-        let (runs, run) = if self.mode() == SendMode::Ask {
-            ("questions", "question")
-        } else {
-            ("tasks", "task")
+        // Each lane's tasks carry on a conversation of their own, and Chain
+        // runs in both.
+        let (runs, run) = match self.mode() {
+            SendMode::Ask => ("questions", "question"),
+            SendMode::Spec => ("spec tasks", "spec task"),
+            SendMode::Both => ("spec and code tasks", "task"),
+            SendMode::Code | SendMode::Freeform => ("code tasks", "code task"),
         };
         // It can be pressed while a run is under way, which finishes in the
         // conversation left.

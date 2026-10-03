@@ -240,7 +240,21 @@ fn fill_with(
     reading: &str,
     fluency_file: Option<&str>,
 ) -> String {
-    let template = fill_paragraph(template, SPEC_READING, reading)
+    let template = fill_paragraph(template, SPEC_READING, reading);
+    // A location the run can't see is filled in with nothing, and the
+    // paragraphs naming it go with it, so nothing names, or tells the
+    // harness to keep off, what isn't there.
+    let template = if code.is_empty() {
+        without_paragraphs(&template, CODE_LOCATION)
+    } else {
+        template
+    };
+    let template = if spec.is_empty() {
+        without_paragraphs(&template, SPEC_LOCATION)
+    } else {
+        template
+    };
+    let template = template
         .replace(CODE_LOCATION, code)
         .replace(SPEC_LOCATION, spec)
         .replace(HARNESS_DIRECTORY, crate::harness::directory());
@@ -511,7 +525,7 @@ mod tests {
         let saved = fs::read_to_string(file(Prompt::CodeToSpec, manifest)).unwrap();
         assert_eq!(default, saved.trim_end());
         assert!(default.starts_with("This prompt was first sent to change the code"));
-        assert!(default.contains("change the spec at ${SPEC_LOCATION}"));
+        assert!(default.contains("Change the spec at ${SPEC_LOCATION}"));
         assert!(default.ends_with(
             "The prompt the code task was sent:\n\n${CODE_PROMPT}\n\n\
              What the code task said it built, its final output:\n\n${CODE_RESULT}"

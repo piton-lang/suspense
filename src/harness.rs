@@ -16,6 +16,7 @@ use serde_json::{Value, json};
 
 use crate::agent::{self, Agent};
 use crate::attached_image;
+use crate::container;
 use crate::harness_mentions;
 use crate::usage::{PlanLimit, Spend, Tally};
 
@@ -116,6 +117,21 @@ pub enum HarnessEvent {
     Limits(Vec<PlanLimit>),
     /// The model the run uses.
     Model(String),
+    /// The conversation it was to carry on, by its id, couldn't be: the
+    /// harness has no such session. The same prompt goes again at once as a
+    /// new conversation, and that one is never to be carried on again.
+    NewConversation(String),
+    /// The run's container is being prepared: its image built, what the
+    /// build prints following as output.
+    Preparing,
+    /// Its container is ready, and the harness about to start in it.
+    Prepared,
+    /// Podman can't run its container, and what can be done about it, as
+    /// the ContainerEnvironmentScope says; the run then fails saying why.
+    PodmanUnavailable(Option<container::MachineAction>),
+    /// The harness isn't logged in in its container, and must be before the
+    /// run can go; the run then fails saying so.
+    LoginNeeded,
 }
 
 /// How a subagent ended.
@@ -154,10 +170,16 @@ pub fn send(
 /// not read, so it reads the compiled reference instead. That is only a
 /// nudge: a shell command can still read it, and nothing stops the run when
 /// one does.
+///
+/// A run in a container, as `container` says, is kept off nothing this way:
+/// it sees only what is mounted into it.
 #[derive(Clone, Debug, Default)]
 pub struct Protected {
     pub root: Option<PathBuf>,
     pub unread: Option<PathBuf>,
+    /// The container the run goes in, if it runs in one rather than on the
+    /// host.
+    pub container: Option<container::Plan>,
 }
 
 /// Runs the harness once as [`send`] does, giving it `images` alongside the
@@ -248,23 +270,47 @@ fn start(
     let (tx, rx) = mpsc::unbounded();
     let feed = (fed && agent.can_be_fed()).then(|| Feed::new(tx.clone()));
     let stop = Stop::new(feed.clone());
+    // A test's own `podman` goes with the run to its thread.
+    #[cfg(test)]
+    let podman = container::podman_for_test();
     std::thread::spawn({
         let feed = feed.clone();
         let stop = stop.clone();
         move || {
-            let result = run(
-                agent,
-                &program,
-                &prompt,
-                system_prompt.as_deref(),
-                &images,
-                resume.as_ref(),
-                &project_dir,
-                &protected,
-                &tx,
-                feed.as_ref(),
-                &stop,
-            );
+            #[cfg(test)]
+            container::use_podman_for_test(podman);
+            let mut resume = resume;
+            let result = loop {
+                let ended = run(
+                    agent,
+                    &program,
+                    &prompt,
+                    system_prompt.as_deref(),
+                    &images,
+                    resume.as_ref(),
+                    &project_dir,
+                    &protected,
+                    &tx,
+                    feed.as_ref(),
+                    &stop,
+                );
+                // A conversation the harness has none of is never failed
+                // for, nor tried again: the prompt goes again at once as a
+                // new one, as the HarnessIntegrationScope says.
+                match ended {
+                    Ok(Ended::NoConversation) if !stop.is_stopped() => {
+                        let Some(left) = resume.take() else {
+                            break Ok(());
+                        };
+                        tx.unbounded_send(HarnessEvent::NewConversation(left.session))
+                            .ok();
+                        if let Some(feed) = &feed {
+                            feed.lock().messages = Messages::default();
+                        }
+                    }
+                    ended => break ended.map(|_| ()),
+                }
+            };
             // Nothing more can be sent once the run is over, however it ended.
             if let Some(feed) = &feed {
                 feed.end();
@@ -710,6 +756,32 @@ impl Messages {
     }
 }
 
+/// How a run ended, short of failing.
+enum Ended {
+    Done,
+    /// The conversation it was to carry on the harness has none of.
+    NoConversation,
+}
+
+/// Whether the harness said it has no conversation to carry on, as Claude
+/// Code's "No conversation found with session ID".
+fn no_conversation(said: &str) -> bool {
+    let said = said.to_lowercase();
+    said.contains("no conversation found")
+        || (said.contains("session") && said.contains("not found"))
+}
+
+/// What a harness that failed said, in its own words: what it printed on
+/// its error output, and how it exited.
+fn in_its_own_words(stderr: &str, name: &str, status: std::process::ExitStatus) -> String {
+    let stderr = stderr.trim();
+    if stderr.is_empty() {
+        format!("`{name}` exited with {status}, saying nothing about why")
+    } else {
+        format!("{stderr}\n(`{name}` exited with {status})")
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run(
     agent: Agent,
@@ -723,7 +795,7 @@ fn run(
     tx: &mpsc::UnboundedSender<HarnessEvent>,
     feed: Option<&Feed>,
     stop: &Stop,
-) -> Result<()> {
+) -> Result<Ended> {
     // A conversation is only carried on by the agent it began with, and only
     // Claude Code can carry on a copy of one; otherwise a new one starts.
     let resume = resume.and_then(|resume| {
@@ -738,6 +810,22 @@ fn run(
             bail!("the attached image {} is missing", image.display());
         }
     }
+    // A run in a container needs Podman, its image, and the harness logged
+    // in there, before anything is run.
+    // What it mounts as the host now stands.
+    let contained = protected
+        .container
+        .as_ref()
+        .filter(|_| container::active())
+        .map(container::Plan::as_on_host);
+    let contained = contained.as_ref();
+    let image = match contained {
+        Some(plan) => match prepare(plan, tx, stop)? {
+            Some(image) => Some(image),
+            None => return Ok(Ended::Done),
+        },
+        None => None,
+    };
     let mut command = Command::new(program);
     let mut input = prompt_as_given(agent, prompt, system_prompt, resume.is_some());
     match agent {
@@ -767,7 +855,7 @@ fn run(
             if let Some(system_prompt) = system_prompt {
                 command.args(["--append-system-prompt", system_prompt]);
             }
-            if let Some(rules) = denied_rules(protected) {
+            if let Some(rules) = denied_rules(protected).filter(|_| contained.is_none()) {
                 // Joined in one argument, as the flag takes any number of
                 // rules and would otherwise take what follows as more.
                 command.arg(format!("--disallowedTools={rules}"));
@@ -811,7 +899,13 @@ fn run(
     }
     let name = invocation(agent);
     if stop.is_stopped() {
-        return Ok(());
+        return Ok(Ended::Done);
+    }
+    // In a container, `podman run` runs the harness with the same arguments.
+    if let (Some(plan), Some(image)) = (contained, &image) {
+        let args: Vec<std::ffi::OsString> = command.get_args().map(ToOwned::to_owned).collect();
+        command = container::podman_command();
+        command.args(plan.run_args(image, agent.command(), &args, false));
     }
     command
         .current_dir(project_dir)
@@ -836,7 +930,7 @@ fn run(
     // run is fed, when it stays open for more.
     let written = stdin.write_all(input.as_bytes());
     if stop.is_stopped() {
-        return Ok(());
+        return Ok(Ended::Done);
     }
     written?;
     if let Some(feed) = feed {
@@ -865,6 +959,8 @@ fn run(
         }
     });
 
+    // Whether the harness printed anything of its own.
+    let mut harness_spoke = false;
     let mut replying = Replying::default();
     // The run's last result, held back until its process has exited, so the
     // task isn't shown finished while the harness is still at work.
@@ -875,17 +971,25 @@ fn run(
             break;
         }
         let line = line?;
+        // Paths the harness saw in its container are the host's to whatever
+        // reads them.
+        let line = match contained {
+            Some(plan) => plan.map_line(&line),
+            None => line,
+        };
         if line.trim().is_empty() {
             // Nothing to parse, but the raw stream shows lines as they arrived.
             // Once no one is listening, the run is stopped.
             if tx.unbounded_send(HarnessEvent::Output(line)).is_err() {
                 stop.stop();
-                return Ok(());
+                return Ok(Ended::Done);
             }
             continue;
         }
         let events = match serde_json::from_str::<Value>(&line) {
             Ok(event) => {
+                // The harness itself is running, past anything Podman says.
+                harness_spoke = true;
                 // The skills and agents this run has are offered as mentions.
                 harness_mentions::remember(&event, project_dir);
                 let events = parse(&event);
@@ -904,7 +1008,7 @@ fn run(
             }
             if tx.unbounded_send(event).is_err() {
                 stop.stop();
-                return Ok(());
+                return Ok(Ended::Done);
             }
         }
     }
@@ -913,28 +1017,120 @@ fn run(
     // Stopped, it ended as it was asked to; what it left writing to its error
     // output is not waited on.
     if stop.is_stopped() {
-        return Ok(());
-    }
-    // Its process over, it finishes in the state of its last result.
-    if let Some(last) = last {
-        tx.unbounded_send(last).ok();
+        return Ok(Ended::Done);
     }
     let stderr = stderr.join().unwrap_or_default();
+    // In a container, Podman failing before the harness started is Podman's
+    // failure, said plainly, never the harness's.
+    if contained.is_some()
+        && !harness_spoke
+        && let Some(why) = container::run_failure(status.code(), &stderr)
+    {
+        bail!("{why}");
+    }
+    // Carrying on a conversation the harness has none of, it never began:
+    // the prompt goes again as a new one.
+    let failed_with = match &last {
+        Some(HarnessEvent::Finished {
+            is_error: true,
+            result,
+        }) => Some(result.clone()),
+        _ => None,
+    };
+    if resume.is_some()
+        && (failed_with.as_deref().is_some_and(no_conversation) || no_conversation(&stderr))
+    {
+        return Ok(Ended::NoConversation);
+    }
+    // Its process over, it finishes in the state of its last result; one
+    // failed without saying why says what it printed, in its own words.
+    if let Some(mut last) = last {
+        if let HarnessEvent::Finished {
+            is_error: true,
+            result,
+        } = &mut last
+            && result.trim().is_empty()
+        {
+            *result = in_its_own_words(&stderr, &name, status);
+        }
+        tx.unbounded_send(last).ok();
+    }
     if !replying.finished() {
         // A harness that ends without saying it finished, as OpenCode may,
         // finished with what it last wrote once it exits cleanly.
         if status.success() && agent != Agent::Claude {
             tx.unbounded_send(replying.finish()).ok();
-            return Ok(());
+            return Ok(Ended::Done);
         }
-        let stderr = stderr.trim();
-        if stderr.is_empty() {
-            bail!("`{name}` exited with {status}");
-        }
-        bail!("{stderr}");
+        bail!("{}", in_its_own_words(&stderr, &name, status));
     }
-    Ok(())
+    Ok(Ended::Done)
 }
+
+/// Gets a run's container ready, as the ContainerEnvironmentScope says:
+/// Podman able to run it, its image built, and the harness logged in there.
+/// Gives the image to run; none when the run was stopped meanwhile. Fails,
+/// having said what can be done about it, when it can't be got ready.
+fn prepare(
+    plan: &container::Plan,
+    tx: &mpsc::UnboundedSender<HarnessEvent>,
+    stop: &Stop,
+) -> Result<Option<String>> {
+    let state = container::podman_state(plan.platform);
+    if let Some(why) = container::unavailable(&state, plan.platform) {
+        tx.unbounded_send(HarnessEvent::PodmanUnavailable(why.action))
+            .ok();
+        bail!("{}", why.message);
+    }
+    // Installed, but unusable: Podman couldn't be accessed, and says why.
+    if let Err(why) = container::check_access() {
+        bail!("{}", container::access_message(&why));
+    }
+    let image = container::ensure_image(
+        &plan.project_dir,
+        &mut || {
+            tx.unbounded_send(HarnessEvent::Preparing).ok();
+        },
+        &mut |line| {
+            tx.unbounded_send(HarnessEvent::Output(line)).ok();
+        },
+    )
+    .context("could not prepare the container's image")?;
+    if stop.is_stopped() {
+        return Ok(None);
+    }
+    if !logged_in(plan.agent, &image, plan.platform)? {
+        tx.unbounded_send(HarnessEvent::LoginNeeded).ok();
+        bail!(
+            "{} isn't logged in in its container. Log in to run this.",
+            plan.agent.label()
+        );
+    }
+    tx.unbounded_send(HarnessEvent::Prepared).ok();
+    Ok(Some(image))
+}
+
+/// Whether `agent` is logged in in its container, asked of Podman once and
+/// remembered once it is, as its credentials stay in its volume.
+fn logged_in(agent: Agent, image: &str, platform: container::Platform) -> Result<bool> {
+    if KNOWN.lock().unwrap().contains(&agent) {
+        return Ok(true);
+    }
+    let logged_in = container::logged_in(agent, image, platform)?;
+    if logged_in {
+        KNOWN.lock().unwrap().push(agent);
+    }
+    Ok(logged_in)
+}
+
+/// Forgets that `agent` was logged in in its container, as when it is
+/// logged in again, so the next run asks.
+pub fn forget_login(agent: Agent) {
+    KNOWN.lock().unwrap().retain(|known| *known != agent);
+}
+
+/// The harnesses known to be logged in in their containers.
+static KNOWN: Mutex<Vec<Agent>> = Mutex::new(Vec::new());
 
 /// How `agent` is run, as an error names it.
 fn invocation(agent: Agent) -> &'static str {
@@ -1530,7 +1726,19 @@ fn parse_claude(event: &Value) -> Vec<HarnessEvent> {
                     .get("is_error")
                     .and_then(Value::as_bool)
                     .unwrap_or(false),
-                result: str_at(event, "/result").unwrap_or_default(),
+                // A failure without a result says why in its errors.
+                result: str_at(event, "/result")
+                    .filter(|result| !result.is_empty())
+                    .or_else(|| {
+                        let errors: Vec<&str> = event
+                            .get("errors")?
+                            .as_array()?
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .collect();
+                        (!errors.is_empty()).then(|| errors.join("\n"))
+                    })
+                    .unwrap_or_default(),
             }])
             .collect(),
         _ => Vec::new(),
@@ -1750,6 +1958,7 @@ pub(crate) mod tests {
             super::denied_rules(&super::Protected {
                 root: root.map(PathBuf::from),
                 unread: unread.map(PathBuf::from),
+                container: None,
             })
         };
         assert_eq!(
@@ -2916,5 +3125,261 @@ done
                 },
             ]
         );
+    }
+
+    /// A run in a container is a `podman run` of the harness, with what its
+    /// plan mounts, and no rule against reading or editing anything, since
+    /// nothing it mustn't touch is there; the harness's output reads as ever.
+    #[cfg(unix)]
+    #[test]
+    fn a_containerised_run_goes_through_podman_unguarded() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = std::env::temp_dir().join(format!("suspense-podman-run-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(dir.join("spec")).unwrap();
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        let log = dir.join("podman.log");
+        let script = dir.join("podman");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\n\
+                 echo \"$*\" >> {log}\n\
+                 case \"$1\" in\n\
+                 --version) echo 'podman version 5.0.0' ;;\n\
+                 image) exit 0 ;;\n\
+                 run)\n\
+                   case \"$*\" in\n\
+                   *'auth status'*) echo '{{\"loggedIn\": true}}' ;;\n\
+                   *) read first\n\
+                      echo '{{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"s1\"}}'\n\
+                      echo '{{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Done.\"}}' ;;\n\
+                   esac ;;\n\
+                 esac\n",
+                log = log.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::container::use_podman_for_test(Some(script));
+        let locations = crate::project_tree::Locations {
+            spec: Some(dir.join("spec")),
+            code: Some(dir.join("src")),
+        };
+        let plan = crate::container::Plan::new(
+            crate::container::RunKind::Spec,
+            crate::agent::Agent::Claude,
+            &dir,
+            &locations,
+            None,
+            crate::container::Platform::Linux,
+        );
+        let protected = super::Protected {
+            root: Some(dir.join("src")),
+            unread: Some(dir.join("src")),
+            container: Some(plan),
+        };
+        let super::Run { mut events, .. } = super::send_task(
+            "Go.".into(),
+            Some("System.".into()),
+            Vec::new(),
+            None,
+            dir.clone(),
+            protected,
+        );
+        crate::container::use_podman_for_test(None);
+        let start = std::time::Instant::now();
+        loop {
+            assert!(
+                start.elapsed() < std::time::Duration::from_secs(20),
+                "never finished"
+            );
+            match events.try_next() {
+                Ok(Some(HarnessEvent::Finished { result, .. })) => {
+                    assert_eq!(result, "Done.");
+                    break;
+                }
+                Ok(Some(HarnessEvent::Failed(error))) => panic!("failed: {error}"),
+                Ok(Some(_)) => {}
+                Ok(None) => panic!("the run ended without finishing"),
+                Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
+            }
+        }
+        let calls = std::fs::read_to_string(&log).unwrap();
+        let run = calls
+            .lines()
+            .find(|line| line.starts_with("run") && line.contains("claude -p"))
+            .expect("the harness never ran in a container");
+        assert!(
+            run.contains("--rm") && run.contains("--userns=keep-id"),
+            "{run}"
+        );
+        assert!(
+            run.contains(&format!("src={}/spec", dir.display())),
+            "{run}"
+        );
+        assert!(
+            !run.contains(&format!("src={}/src", dir.display())),
+            "the code was mounted: {run}"
+        );
+        assert!(
+            !run.contains("--disallowedTools"),
+            "a deny rule was given: {run}"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Podman failing to run a container, before the harness starts, fails
+    /// the run saying Podman couldn't be accessed, with what Podman said,
+    /// never that the harness reported an error.
+    #[cfg(unix)]
+    #[test]
+    fn podman_failing_is_said_plainly() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir =
+            std::env::temp_dir().join(format!("suspense-podman-fails-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(dir.join("spec")).unwrap();
+        let script = dir.join("podman");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\n\
+             case \"$1\" in\n\
+             --version) echo 'podman version 5.0.0' ;;\n\
+             info|image) exit 0 ;;\n\
+             run)\n\
+               case \"$*\" in\n\
+               *'auth status'*) echo '{\"loggedIn\": true}' ;;\n\
+               *) echo 'Error: crun: setrlimit RLIMIT_NOFILE: Operation not permitted: OCI permission denied' >&2; exit 125 ;;\n\
+               esac ;;\n\
+             esac\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::container::use_podman_for_test(Some(script));
+        let plan = crate::container::Plan::new(
+            crate::container::RunKind::Spec,
+            crate::agent::Agent::Claude,
+            &dir,
+            &crate::project_tree::Locations {
+                spec: Some(dir.join("spec")),
+                code: Some(dir.join("src")),
+            },
+            None,
+            crate::container::Platform::Linux,
+        );
+        let super::Run { mut events, .. } = super::send_task(
+            "Go.".into(),
+            None,
+            Vec::new(),
+            None,
+            dir.clone(),
+            super::Protected {
+                container: Some(plan),
+                ..Default::default()
+            },
+        );
+        crate::container::use_podman_for_test(None);
+        let start = std::time::Instant::now();
+        let failed = loop {
+            assert!(
+                start.elapsed() < std::time::Duration::from_secs(20),
+                "never failed"
+            );
+            match events.try_next() {
+                Ok(Some(HarnessEvent::Failed(error))) => break error,
+                Ok(Some(HarnessEvent::Finished { .. })) => panic!("it finished"),
+                Ok(Some(_)) => {}
+                Ok(None) => panic!("ended without failing"),
+                Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
+            }
+        };
+        assert!(
+            failed.starts_with("The harness couldn't be run because Podman couldn't be accessed."),
+            "{failed}"
+        );
+        assert!(failed.contains("OCI permission denied"), "{failed}");
+        assert!(!failed.contains("harness reported"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Carrying on a conversation the harness has none of, as Claude Code's
+    /// "No conversation found", the run never fails for it: the prompt goes
+    /// again at once as a new conversation, and the run says which it lost.
+    #[cfg(unix)]
+    #[test]
+    fn a_conversation_the_harness_lost_starts_anew() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir =
+            std::env::temp_dir().join(format!("suspense-lost-session-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("harness.sh");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\n\
+             cat >/dev/null\n\
+             case \"$*\" in\n\
+             *--resume*)\n\
+               echo 'No conversation found with session ID: gone' >&2\n\
+               echo '{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"is_error\":true,\"session_id\":\"gone\",\"errors\":[\"No conversation found with session ID: gone\"]}'\n\
+               exit 1 ;;\n\
+             *)\n\
+               echo '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"fresh\"}'\n\
+               echo '{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Answered.\"}' ;;\n\
+             esac\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        super::use_program_for_test(Some(script));
+        let mut events = super::send(
+            "Why?".into(),
+            None,
+            Some(super::Resume {
+                session: "gone".into(),
+                fork: false,
+            }),
+            dir.clone(),
+        );
+        super::use_program_for_test(None);
+        let start = std::time::Instant::now();
+        let mut seen = Vec::new();
+        loop {
+            assert!(
+                start.elapsed() < std::time::Duration::from_secs(10),
+                "never finished: {seen:?}"
+            );
+            match events.try_next() {
+                Ok(Some(HarnessEvent::Finished { is_error, result })) => {
+                    assert!(!is_error, "{result}");
+                    assert_eq!(result, "Answered.");
+                    break;
+                }
+                Ok(Some(HarnessEvent::Failed(error))) => panic!("failed: {error}"),
+                Ok(Some(event)) => seen.push(event),
+                Ok(None) => panic!("ended: {seen:?}"),
+                Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
+            }
+        }
+        assert!(
+            seen.contains(&HarnessEvent::NewConversation("gone".into())),
+            "{seen:?}"
+        );
+        assert!(seen.contains(&HarnessEvent::Session("fresh".into())));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A failed result that carries no text says why in the harness's own
+    /// words: Claude Code's errors.
+    #[test]
+    fn a_failure_says_why_in_the_harnesss_words() {
+        let events = super::parse(&serde_json::json!({
+            "type": "result", "subtype": "error_during_execution", "is_error": true,
+            "errors": ["Something broke"],
+        }));
+        assert!(events.contains(&HarnessEvent::Finished {
+            is_error: true,
+            result: "Something broke".into(),
+        }));
     }
 }

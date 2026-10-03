@@ -1,4 +1,5 @@
 use /lib
+from /scope/container-environment import ContainerEnvironmentScope
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/project-data import ProjectDataScope
 from /scope/prompt-mode import PromptEditor
@@ -36,6 +37,16 @@ shape PromptSendingShape:
         as the @{ProjectDataScope} says. A prompt that fails to compile or run
         fails its task, and doesn't stop its queue.
 
+        A task whose mode runs in a container, a Spec task, a Chain prompt's
+        steps, and a Code task while the project's "Run code tasks in a
+        container" option is on, is run in one, as the
+        @{ContainerEnvironmentScope} says, showing "Preparing environment"
+        while its image is built; one that can't be, as where Podman isn't
+        installed, fails as a task that can't be run does, and is never run on
+        the host instead. Once a Spec task or a Chain prompt's spec step is
+        over, however it ended, the spec is built again on the host, as the
+        @{SpecBuildScope} says.
+
     lanes:
         Tasks run in two lanes, the code lane and the spec lane, each with a
         queue of its own, so work on the spec never waits on work on the code,
@@ -61,7 +72,10 @@ shape PromptSendingShape:
         A question, a prompt in Ask, never queues: it runs straight away, even
         while the harness is working on a task or other questions, joins the
         questions stacked above the @{ChatInputScope}'s tabs, and is saved
-        among the questions asked.
+        among the questions asked. Every question runs in a container that
+        holds the code and the compiled reference, read only, and no spec
+        source, as the @{ContainerEnvironmentScope} says, and fails, never
+        running on the host, where that can't be done.
 
     sendingToATask:
         While a task is running, more can be sent to it, as to a terminal

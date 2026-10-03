@@ -2,17 +2,22 @@
 //! from a sidebar of vertical tabs: the system prompt each tab gives a prompt,
 //! the spec-reading prompt injected into them, and the code-to-spec prompt
 //! added to a Code task sent to Spec, for the open project, and
-//! the harness every run goes to, for the user (see [`crate::agent`]). Every
+//! the harness every run goes to, for the user (see [`crate::agent`]), and
+//! the containers runs go in: whether Podman can run them, whether each
+//! harness is logged in in its container, and the project's option to run
+//! its Code tasks in one (see [`crate::container`]). Every
 //! edit is saved straight away to the project's `.suspense/system-prompts`
 //! (see [`crate::system_prompts`]), and the prompts are read from there each
 //! time the settings open, so an edit made by hand shows up.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Editor, EditorState, InputEvent};
 use gpui_kit::component::radio::Radio;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, h_flex, v_flex,
+    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
+    v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -41,13 +46,15 @@ enum Section {
     SystemPrompts,
     InjectedPrompts,
     Agent,
+    Containers,
 }
 
 impl Section {
-    const ALL: [Section; 3] = [
+    const ALL: [Section; 4] = [
         Section::SystemPrompts,
         Section::InjectedPrompts,
         Section::Agent,
+        Section::Containers,
     ];
 
     fn label(self) -> &'static str {
@@ -55,6 +62,7 @@ impl Section {
             Section::SystemPrompts => "System prompts",
             Section::InjectedPrompts => "Injected prompts",
             Section::Agent => "Agent",
+            Section::Containers => "Containers",
         }
     }
 
@@ -63,6 +71,7 @@ impl Section {
             Section::SystemPrompts => "system-prompts",
             Section::InjectedPrompts => "injected-prompts",
             Section::Agent => "agent",
+            Section::Containers => "containers",
         }
     }
 
@@ -106,8 +115,23 @@ struct PromptEditor {
     error: Option<SharedString>,
 }
 
+/// Where the containers runs go in stand, as the Containers section shows
+/// them.
+#[derive(Clone, Debug, PartialEq)]
+struct Containers {
+    podman: crate::container::PodmanState,
+    /// Whether each harness is logged in in its container, where that can
+    /// be asked: Podman running and the image built.
+    logins: Vec<(Agent, Option<bool>)>,
+}
+
 pub struct SettingsWindow {
     prompts: Vec<PromptEditor>,
+    /// Where the containers stand, once read.
+    containers: Option<Containers>,
+    /// The open project's settings.
+    project: crate::project_settings::ProjectSettings,
+    _containers_read: Task<()>,
     /// Set while the editors are filled from disk, so doing so saves nothing.
     loading: bool,
     scroll: ScrollHandle,
@@ -163,6 +187,9 @@ impl SettingsWindow {
 
         let mut this = Self {
             prompts,
+            containers: None,
+            project: Default::default(),
+            _containers_read: Task::ready(()),
             loading: false,
             scroll: ScrollHandle::new(),
             focus_handle: cx.focus_handle(),
@@ -211,7 +238,211 @@ impl SettingsWindow {
             }
         }
         self.loading = false;
+        self.project = project_dir
+            .as_deref()
+            .map(crate::project_settings::read)
+            .unwrap_or_default();
+        self.read_containers(project_dir, cx);
         cx.notify();
+    }
+
+    /// Reads, in the background, whether Podman can run containers and
+    /// whether each harness is logged in in its container.
+    fn read_containers(&mut self, project_dir: Option<std::path::PathBuf>, cx: &mut Context<Self>) {
+        let read = cx.background_spawn(async move {
+            let platform = crate::container::Platform::current();
+            let podman = crate::container::podman_state(platform);
+            let image = matches!(podman, crate::container::PodmanState::Ready(_))
+                .then(|| crate::container::built_image(project_dir.as_deref()?))
+                .flatten();
+            let logins = Agent::RUNNABLE
+                .into_iter()
+                .map(|agent| {
+                    let logged_in = image
+                        .as_deref()
+                        .and_then(|image| crate::container::logged_in(agent, image, platform).ok());
+                    (agent, logged_in)
+                })
+                .collect();
+            Containers { podman, logins }
+        });
+        self._containers_read = cx.spawn(async move |this, cx| {
+            let containers = read.await;
+            this.update(cx, |this, cx| {
+                this.containers = Some(containers);
+                cx.notify();
+            })
+            .ok();
+        });
+    }
+
+    /// Turns the project's option to run its Code tasks in a container on
+    /// or off, saving it with the project straight away.
+    fn set_code_in_container(&mut self, on: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(project_dir) = ProjectDirectory::get(cx) else {
+            return;
+        };
+        self.project.run_code_tasks_in_container = on;
+        if let Err(err) = crate::project_settings::write(&project_dir, &self.project) {
+            window.push_notification(
+                gpui_kit::component::notification::Notification::error(format!("{err:#}"))
+                    .title("Could not save the project's settings"),
+                cx,
+            );
+        }
+        cx.notify();
+    }
+
+    /// Logs `agent` in again in its container, in the login view.
+    fn log_in_again(&mut self, agent: Agent, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(project_dir) = ProjectDirectory::get(cx) else {
+            return;
+        };
+        crate::harness::forget_login(agent);
+        let this = cx.entity().downgrade();
+        crate::login_view::LoginView::open(
+            agent,
+            project_dir.clone(),
+            window,
+            cx,
+            move |window, cx| {
+                window.close_dialog(cx);
+                this.update(cx, |this, cx| {
+                    this.read_containers(Some(project_dir.clone()), cx)
+                })
+                .ok();
+            },
+        );
+    }
+
+    /// Whether Podman can run the containers, each harness's login in its
+    /// container, and the project's option to run Code tasks in one.
+    fn render_containers(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        use crate::container::{MachineAction, Platform, PodmanState};
+        let muted = cx.theme().muted_foreground;
+        let platform = Platform::current();
+        let podman = match self.containers.as_ref().map(|containers| &containers.podman) {
+            None => div().text_color(muted).child("Checking Podman…").into_any_element(),
+            Some(PodmanState::Ready(version)) => div()
+                .child(format!("Podman {version}, ready to run containers."))
+                .into_any_element(),
+            Some(PodmanState::Missing) => v_flex()
+                .gap_1()
+                .child("Podman isn't installed, so Spec tasks, a Chain prompt's spec steps, and questions can't run.")
+                .child(
+                    Button::new("settings-install-podman")
+                        .small()
+                        .label("Install Podman")
+                        .on_click(move |_, _, cx| cx.open_url(platform.install_url())),
+                )
+                .into_any_element(),
+            Some(state) => {
+                let action = if *state == PodmanState::NoMachine {
+                    MachineAction::SetUp
+                } else {
+                    MachineAction::Start
+                };
+                v_flex()
+                    .gap_1()
+                    .child(if action == MachineAction::SetUp {
+                        "Podman has no machine to run containers in."
+                    } else {
+                        "Podman's machine isn't running."
+                    })
+                    .child(
+                        Button::new("settings-podman-machine")
+                            .small()
+                            .label(action.label())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                let project_dir = ProjectDirectory::get(cx);
+                                let run = cx.background_spawn(async move {
+                                    crate::container::run_machine_action(action, &mut |_| {}).ok();
+                                });
+                                this._containers_read = cx.spawn(async move |this, cx| {
+                                    run.await;
+                                    this.update(cx, |this, cx| this.read_containers(project_dir, cx))
+                                        .ok();
+                                });
+                            })),
+                    )
+                    .into_any_element()
+            }
+        };
+        let logins = v_flex()
+            .gap_2()
+            .children(Agent::RUNNABLE.into_iter().map(|agent| {
+                let state = self
+                    .containers
+                    .as_ref()
+                    .and_then(|containers| {
+                        containers
+                            .logins
+                            .iter()
+                            .find(|(known, _)| *known == agent)
+                            .map(|(_, logged_in)| *logged_in)
+                    })
+                    .flatten();
+                h_flex()
+                    .gap_2()
+                    .child(div().w(px(120.)).child(agent.label()))
+                    .child(
+                        div()
+                            .w(px(120.))
+                            .text_sm()
+                            .text_color(muted)
+                            .child(match state {
+                                Some(true) => "Logged in",
+                                Some(false) => "Not logged in",
+                                None => "Unknown",
+                            }),
+                    )
+                    .child(
+                        Button::new(SharedString::from(format!(
+                            "settings-log-in-{}",
+                            agent.command()
+                        )))
+                        .small()
+                        .label("Log in again")
+                        .disabled(ProjectDirectory::get(cx).is_none())
+                        .on_click(cx.listener(
+                            move |this, _, window, cx| this.log_in_again(agent, window, cx),
+                        )),
+                    )
+            }));
+        let option: AnyElement = if ProjectDirectory::get(cx).is_some() {
+            v_flex()
+                .gap_1()
+                .child(
+                    Checkbox::new("settings-code-in-container")
+                        .label("Run code tasks in a container")
+                        .checked(self.project.run_code_tasks_in_container)
+                        .on_click(cx.listener(|this, checked: &bool, window, cx| {
+                            this.set_code_in_container(*checked, window, cx)
+                        })),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(muted)
+                        .child("Code tasks and a Chain prompt's code step then run in a container holding the code and no spec source, and otherwise on the host. It applies from the next one to start."),
+                )
+                .into_any_element()
+        } else {
+            div()
+                .text_color(muted)
+                .child("Open a project to set its options.")
+                .into_any_element()
+        };
+        v_flex()
+            .gap_5()
+            .child(podman)
+            .child(
+                v_flex()
+                    .gap_2()
+                    .child(div().font_semibold().child("Logins"))
+                    .child(logins),
+            )
+            .child(option)
     }
 
     /// Saves `which` as edited.
@@ -448,6 +679,14 @@ impl Render for SettingsWindow {
                 ),
                 "Open a project to edit its injected prompts.",
             ),
+            Section::Containers => (
+                "Containers",
+                "Spec tasks, a Chain prompt's spec steps, and questions always \
+                 run in a container holding only what their mode may use, so \
+                 a spec run can't read or change the code."
+                    .to_string(),
+                "",
+            ),
             Section::Agent => (
                 "Agent",
                 "Every run goes to the harness picked here: the tasks, the \
@@ -459,6 +698,8 @@ impl Render for SettingsWindow {
         };
         let body: AnyElement = if section == Section::Agent {
             self.render_agents(cx).into_any_element()
+        } else if section == Section::Containers {
+            self.render_containers(cx).into_any_element()
         } else if ProjectDirectory::get(cx).is_some() {
             let prompts: Vec<AnyElement> = self
                 .prompts

@@ -1,0 +1,7 @@
+- [When Podman is installed but can't run the container, the run fails because of Podman, never the harness](.claude/reference/scope/container-environment/index.md#podman-access)
+- [It never reads "the harness reported an error" or any message blaming the harness or leaving the cause unnamed](.claude/reference/scope/container-environment/index.md#podman-access)
+- [Podman's failure is told apart from the harness's by Podman's exit status and what it prints before the harness starts](.claude/reference/scope/container-environment/index.md#podman-access)
+- [The output says the harness couldn't be run because Podman couldn't be accessed, then Podman's message as written](.claude/reference/scope/container-environment/index.md#podman-access)
+- [Such a run is never moved to the host](.claude/reference/scope/container-environment/index.md#podman-access)
+- [A podman build failing for that reason says Podman couldn't be accessed, not only that the build failed](.claude/reference/scope/container-environment/index.md#podman-access)
+- [Podman not installed, and a missing or stopped machine, keep their own messages and buttons](.claude/reference/scope/container-environment/index.md#missing-podman)

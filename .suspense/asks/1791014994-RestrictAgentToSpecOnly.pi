@@ -1,0 +1,15 @@
+
+export anchor RestrictAgentToSpecOnly:
+    userPrompt:
+        \\\
+        Well, I'd rather not waste time and tokens on spec mode changing code at all.  So how could be absolutely prevent the agent from seeing anything but the spec?
+        \\\
+
+    mode: ask
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're only asking a question about the code located in ./src and the spec located in ./spec. Don't edit either of them.
+        \\\

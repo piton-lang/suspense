@@ -3,6 +3,7 @@ use /ui
 from ./chat-input import ChatInputScope
 from ./message-list import MessageList
 from ./queue-list import QueueListScope
+from /scope/container-environment import ContainerEnvironmentScope
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/no-project import NoProjectStateScope
 from /scope/open-projects import OpenProjectsScope
@@ -151,6 +152,16 @@ shape PromptEditorShape:
         there, ending the chain. A step whose chain step before it failed or
         was cancelled is never sent.
 
+        Each step also runs where the work of its lane runs, as the
+        @{ContainerEnvironmentScope} says: the spec steps in a container
+        holding the spec and no code, the code step in one holding the code
+        and no spec source while the project's "Run code tasks in a container"
+        option is on, and on the host otherwise. Each carries on its own
+        lane's conversation, as the @{HarnessIntegrationScope} says, so a step
+        is told what the step before it did only through its prompt: the
+        Chain prompt as typed and that step's final output, as the
+        @{ModeSystemPromptsScope} says.
+
         In the previous tasks list, a chain's steps are grouped under one
         parent item, so they read as parts of a single chain. The parent is a
         heading row in the list, tinted the Chain colour, as the
@@ -287,7 +298,10 @@ shape PromptEditorShape:
     buildingTheSpec:
         A task builds the spec before it is sent, as the @{PromptModesScope}
         says, since the task may be the one to fix the spec, its output
-        starting with an error saying the build failed when it does.
+        starting with an error saying the build failed when it does. A Spec
+        task, or a Chain prompt's spec step, builds it again on the host once
+        it is over, as the @{PromptSendingScope} says, so the next step, and
+        every task after it, reads the spec as that run left it.
 
     history:
         Every task sent is saved in the prompt history with the project's data,

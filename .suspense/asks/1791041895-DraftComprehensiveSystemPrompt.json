@@ -1,0 +1,4252 @@
+{
+  "userPrompt": "Draft a prompt for all this.",
+  "harness": "claude",
+  "systemPrompt": "We're working in a project whose spec is compiled to .claude/reference, which is where to read it. Each prompt starts with a <task-instructions> block saying what that prompt is for and what it may change. Follow the block at the top of the prompt you are answering; an earlier prompt's block no longer applies.\n\nIts code is located in ./src.\n\nRead the spec from its compiled reference under .claude/reference, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with this harness's adapter.\n\nBefore executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.",
+  "instructions": "We're only asking a question about the project. Answer it without changing anything.\n\nThe code is located in ./src.",
+  "resumed": true,
+  "output": [
+    {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "/home/hyphyphyph/piton/repl",
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "tools": [
+        "Task",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "ListAgents",
+        "Monitor",
+        "NotebookEdit",
+        "PushNotification",
+        "Read",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write",
+        "mcp__claude_ai_Claude_Docs__batch",
+        "mcp__claude_ai_Claude_Docs__create",
+        "mcp__claude_ai_Claude_Docs__delete",
+        "mcp__claude_ai_Claude_Docs__export",
+        "mcp__claude_ai_Claude_Docs__guide",
+        "mcp__claude_ai_Claude_Docs__query",
+        "mcp__claude_ai_Claude_Docs__read",
+        "mcp__claude_ai_Claude_Docs__update"
+      ],
+      "mcp_servers": [
+        {
+          "name": "claude.ai Claude Docs",
+          "status": "connected",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Drive",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Gmail",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Calendar",
+          "status": "needs-auth",
+          "source": "claudeai"
+        }
+      ],
+      "model": "claude-opus-5-5[1m]",
+      "permissionMode": "auto",
+      "slash_commands": [
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "output-style",
+        "context",
+        "effort",
+        "fast",
+        "focus",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "skill-doctor",
+        "goal",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "terminal_slash_commands": [
+        "doctor",
+        "color",
+        "focus",
+        "reload-plugins"
+      ],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.281",
+      "output_style": "default",
+      "agents": [
+        "claude",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
+      "skills": [
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "plugins": [
+        {
+          "name": "agents-md",
+          "path": "builtin",
+          "source": "agents-md@builtin"
+        },
+        {
+          "name": "telemetry",
+          "path": "builtin",
+          "source": "telemetry@builtin"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "msg_lifecycle_v1",
+        "mcp_read_resource_v1",
+        "mcp_tool_ui_meta_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "5e93ffce-050d-45a8-956a-d8ac1195e292",
+      "memory_paths": {
+        "auto": "/home/suspense/.claude/projects/-home-hyphyphyph-piton-repl/memory/"
+      },
+      "messaging_socket_path": "/tmp/cc-socks/1.sock",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "per_turn_effort_active": true,
+      "view_mode": "default"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "uuid": "807e0a89-ba60-4624-a356-e50f3e512d7c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011CffZ3yx5BJW2FPEoEbvoW",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 2315,
+            "cache_read_input_tokens": 38703,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 2315
+            },
+            "output_tokens": 8,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "880bd340-7487-4e02-a767-b52bfa94ec8f",
+      "ttft_ms": 1042
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0109ce84-7e57-4189-895b-08d5d413cf18"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "uuid": "abe00605-378f-4116-92c3-ca3e36e713e7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4313d8e2-c115-42c3-a1a4-e35b136b37f1"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 100,
+      "estimated_tokens_delta": 50,
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "uuid": "864648cc-c613-4e38-8411-54dd223d433e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c30b9bc1-cb37-4caf-9e85-a0bab096fdf5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "39016bad-b101-497f-a321-a39778ad4487"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 303,
+      "estimated_tokens_delta": 203,
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "uuid": "c8d9e45c-6bcb-46c6-92cb-10d4c72ca523"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "CAQStAkKEAgSGAI4AUIIdGhpbmtpbmcSDNFO63UOS0nBk3HjqxoMF0JEBZlCf8wFkhb0IjDH3jj6ppk4+kvGtjwwUrf3vdDDsubH8OkGfGxNJO2AKfze2HgBY32D2/OEXBSBLM8q0QiDaddFAWwvcSwOGJG77kZLpLBXcUgVu7vwe1CwQmLY7SE9ruSAlJtcKKapH1LN/VhWfPrCeAHDdqIS3Lh7ydGOdqOGUoOw8BTV+RtOXh2gXn0PJU7nLBzciGvKKvhEZv0YfNGwToLukdrZQelEopst4GCRZEyUPy8ybqyby33dRdNCyaPI9USdoxSxMontwA9zOr+Ecx6WDvVOKC60JcfZXUnTkTduCSmT+hXO+O0ROSp9rBWuidD5o4hHfoqm1aLlWTOYmN1Y+/Ew0gTfX7W5mKKYscr/tkWpUzRjkDFMIaUNgU9ooPoHXkQL93EagxfaquUdSfGINdP5ieWF8qMXvrLQTP9wBGwl6W8M/qXxmvNJqAP8A5+gIXzjG2G+svB0U8PXvoWmi5t28xHY5OCOkXzG1Y1L4WB5BJSs502zH+007nfvClLe4+MelT7o0fiHKU9p7zzPKzxXk6alkiSFdFEQN+LZVLlkonKNJvu4Pu4Sa0jMQJpDd0n6nChSI9r9bo641CuihT2JBEkG8Y3sAk3nL2sSZp744tDUYmkbBDtATtOGb+nTUUbs0Y1KKLlMENojQCZTbyAukq/k1T/LS5SetBucbYgC9TgXesoPajnZokjMQfbAn5zzzdNpJ8RDLc7iSBGIT9FK5sbSQSkJUqmIWxnXBuzeSLd8YMmXYFciDjuAHm2rgA0dPIHZtbBM4esGrMIEkaWisEfm+amBZuoDE6xFvYrIVRSAH877MakUQC0mjBqC95DH0U1qyC5euaYlot4vrx6F2Ukf0dJLXux2VlYQdUXn3npeGcidJZAX0lgxHs2s8HKEpk32haDliSJBSWknGZZgUqIqoEhWqyyS0Qjayw3sdh8XofRplsdEAK1hnz/DGHgkZIDZq2ej+Ha92WTQ1paRJzbaq7Zg9J3JJNTOpFbv9e3SrV4ssfZxNoF8jRKpRoT4v53Q6YF2BvVk4k4sAkHq/Ea3HfMnRG49BYSMYxsFTf5+UJnjs9rtR6PhkxQxckepXiorRfeKXyRFeyhqg3bZkLMKY628vGgJnK996+YYUdTAAb9tlYNAK7o8APZVNJwD3YzSli3INgb70QlcW1u0XiuN71SIcDx2laryJpV5G1Di27NmdzhT/VInXUZuKWOBmnZzDXczDTsZy7JjrvRi1v0G7U2jKAqtBOD/us3qdBhH4/wwY9BteAB15Z6BuuT1GAgV9iVAs7/mgu9rcGoR4ZfvAgZMsyd47TeMFuUTukeHU9qicHpM/avD1bHu1I2UyBY18mV0et9SXJRyH5dEWevcEwA4PM7jEwI7oIMp0LZAbh65DQ8XGSIoIcSOiJ/jLs1wYWzGEYb4CqRLXxxQ8fc8qghP5DoeHcyqe7TCMwQ6uSnjy0JXrhLmNq7L3sGJ1ssFK0fdjRexSXJsKqNJsF0Rk9zN7Wgi0kuka6h1Ct2eiUtF5Z25f+KzYQeqEo1LHICzEZxiGAE="
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "35d51067-8d7d-45d1-a5a1-67f94bd57141"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CffZ3yx5BJW2FPEoEbvoW",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAQStAkKEAgSGAI4AUIIdGhpbmtpbmcSDNFO63UOS0nBk3HjqxoMF0JEBZlCf8wFkhb0IjDH3jj6ppk4+kvGtjwwUrf3vdDDsubH8OkGfGxNJO2AKfze2HgBY32D2/OEXBSBLM8q0QiDaddFAWwvcSwOGJG77kZLpLBXcUgVu7vwe1CwQmLY7SE9ruSAlJtcKKapH1LN/VhWfPrCeAHDdqIS3Lh7ydGOdqOGUoOw8BTV+RtOXh2gXn0PJU7nLBzciGvKKvhEZv0YfNGwToLukdrZQelEopst4GCRZEyUPy8ybqyby33dRdNCyaPI9USdoxSxMontwA9zOr+Ecx6WDvVOKC60JcfZXUnTkTduCSmT+hXO+O0ROSp9rBWuidD5o4hHfoqm1aLlWTOYmN1Y+/Ew0gTfX7W5mKKYscr/tkWpUzRjkDFMIaUNgU9ooPoHXkQL93EagxfaquUdSfGINdP5ieWF8qMXvrLQTP9wBGwl6W8M/qXxmvNJqAP8A5+gIXzjG2G+svB0U8PXvoWmi5t28xHY5OCOkXzG1Y1L4WB5BJSs502zH+007nfvClLe4+MelT7o0fiHKU9p7zzPKzxXk6alkiSFdFEQN+LZVLlkonKNJvu4Pu4Sa0jMQJpDd0n6nChSI9r9bo641CuihT2JBEkG8Y3sAk3nL2sSZp744tDUYmkbBDtATtOGb+nTUUbs0Y1KKLlMENojQCZTbyAukq/k1T/LS5SetBucbYgC9TgXesoPajnZokjMQfbAn5zzzdNpJ8RDLc7iSBGIT9FK5sbSQSkJUqmIWxnXBuzeSLd8YMmXYFciDjuAHm2rgA0dPIHZtbBM4esGrMIEkaWisEfm+amBZuoDE6xFvYrIVRSAH877MakUQC0mjBqC95DH0U1qyC5euaYlot4vrx6F2Ukf0dJLXux2VlYQdUXn3npeGcidJZAX0lgxHs2s8HKEpk32haDliSJBSWknGZZgUqIqoEhWqyyS0Qjayw3sdh8XofRplsdEAK1hnz/DGHgkZIDZq2ej+Ha92WTQ1paRJzbaq7Zg9J3JJNTOpFbv9e3SrV4ssfZxNoF8jRKpRoT4v53Q6YF2BvVk4k4sAkHq/Ea3HfMnRG49BYSMYxsFTf5+UJnjs9rtR6PhkxQxckepXiorRfeKXyRFeyhqg3bZkLMKY628vGgJnK996+YYUdTAAb9tlYNAK7o8APZVNJwD3YzSli3INgb70QlcW1u0XiuN71SIcDx2laryJpV5G1Di27NmdzhT/VInXUZuKWOBmnZzDXczDTsZy7JjrvRi1v0G7U2jKAqtBOD/us3qdBhH4/wwY9BteAB15Z6BuuT1GAgV9iVAs7/mgu9rcGoR4ZfvAgZMsyd47TeMFuUTukeHU9qicHpM/avD1bHu1I2UyBY18mV0et9SXJRyH5dEWevcEwA4PM7jEwI7oIMp0LZAbh65DQ8XGSIoIcSOiJ/jLs1wYWzGEYb4CqRLXxxQ8fc8qghP5DoeHcyqe7TCMwQ6uSnjy0JXrhLmNq7L3sGJ1ssFK0fdjRexSXJsKqNJsF0Rk9zN7Wgi0kuka6h1Ct2eiUtF5Z25f+KzYQeqEo1LHICzEZxiGAE="
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2315,
+          "cache_read_input_tokens": 38703,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 2315
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "uuid": "37d657d8-159b-462e-b2b5-0b87ee1c3879",
+      "timestamp": "2026-10-03T15:38:21.253Z",
+      "request_id": "req_011CffZ3ybjyFN62mGYJCHct"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1f28a46d-e45c-4d77-a92d-fa07ecf4548e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3521469d-07a9-4925-ba41-e8eb05cb4589"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "I"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d48595cb-fe67-40e5-9e59-f40fd5252a57"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " w"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a052885c-c7d7-4055-9c6a-705c31c231f5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "rote this as a sp"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "72cd3d50-d8b8-4047-9ac1-4e891ccb9ad0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec pr"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8fbae7b1-053f-42a6-ab1b-bb9871831fae"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ompt (or a Chain"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e0151564-5b33-4ad5-b980-a6d6b1b3dec5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " prompt), because it"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "626c0534-cd35-417d-b951-527aeb30da27"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " changes what"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "eae22c91-bd7a-4af3-bd6a-55e236de656b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the ContainerEnv"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6904a3e7-74cd-44bf-b0fa-1569ea30ae60"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ironmentScope,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f9028248-790f-45b0-8b1f-9639024b15da"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " ProjectDataScope"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "60cc4a1d-364f-4e3d-8139-7d67d1dd0a08"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and HarnessInteg"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b8d93025-2254-4c3a-b895-24083d3bbfb4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "rationScope say,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ad195753-52f0-41ab-9033-23b83fc83d44"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " not only the code.\n\n---"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3e8b8ccb-3887-44fa-b316-b2da92e834a2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\n**Pr"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e8387ddf-cc0a-46bf-8296-7e8f9efab8fd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ompt:**\n\n>"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "11fa18c8-3ca9-4cab-b729-42936eb2b1ae"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Make"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "20dd1be0-2016-4532-953a-377e0f10ea94"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " contain"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5b518696-2a3c-4515-94f3-4f52bc8e360f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "erized sessions survive across"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "09f904b0-75f3-4141-a22d-10c229ab068f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " run"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6830ed0c-3453-41bb-ad0b-1ebb05fb570e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "s, rest"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9cd0c146-e102-432f-bc4c-682422040e84"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "arts, and project"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "167a37b5-4d2b-4b6f-a86d-49e43adfaaf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " moves, by"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5fd44fce-7447-488c-857c-d055d7e122e0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " keeping each project"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7e9f2f37-56a2-4de8-880c-52522331a116"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'s har"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b9a21dfa-f0ef-4607-ad68-33b11d90eee4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ness sessions in its"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f03e3129-9a25-42ce-abfe-6fcc396603c1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " own `.suspense` fol"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3b0c2d94-a32c-4b1b-a217-dce7f301fb06"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "der instead of in Podman"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a94de3b6-68ea-447c-913c-6cba468d1765"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " volumes.\n>\n>"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f30e735c-dee1-4192-bd52-b3d98c3b4202"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " **ContainerEnv"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d4d71293-9b41-466a-8d61-947c9bb9a938"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ironmentScope,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c66e20c5-d582-452d-8b79-c111ff8e0f60"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Volumes:**"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a97d9224-a317-4386-b260-13e923072e47"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1c9c2a50-486c-41c2-9bd0-e80229c4d937"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " harness's sessions for each"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "004eaafa-cce2-47d8-b418-fee1dcfb5774"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project and conversation ("
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "58b7a8b4-4a2e-4a37-8abe-5569b2b2b599"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "the spec lane's, the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a7af649e-16e0-4807-896a-e7f80f054866"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " code lane's, and the quest"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "cdbf542e-bf7f-4cbb-b627-b530f3c8f804"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ions') are no longer kept"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "43dfd8f5-398c-4fe0-8a59-84296b72acd0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in Podman volumes."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "45d15eed-2aec-4d50-a80c-2535623c284f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " They are kept in the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6501711e-0c1e-40e8-9099-061501a5d80a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ae1fb0b9-ae80-4edf-936c-d4127a901c0e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in `.suspense/s"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "fa229b9a-064e-4e7a-b9f6-4106af13be63"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions/`"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "92a714c3-dcfe-49e3-ae15-481646c8f108"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", one folder per conversation"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4cbde734-c18c-4c4f-8f91-20e1b0376811"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ": `spec`, `code"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "44d3f041-78e2-4cb2-a1e4-8b0aed1d1f99"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "`, and `questions`."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "eb440b7b-0842-4914-a4fe-60014eda7c7a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Each run mounts its"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ebc40637-615a-4b0d-8d85-def3926697cd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " lane's folder, read and"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5ade8d3a-eef8-4ce6-a97c-a4490fc28bb2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " write, where"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "33174643-cf3c-4d41-a7ca-829dda4a6f3a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the harness keeps its s"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9d44c0ab-3c3a-4cb7-b37a-3b81ed5c473d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions under"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2b261286-3157-4942-9717-56db9c47706c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " its home. Only that l"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "32eaf4b4-f73e-442a-936f-d79c17aaa6b9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ane's folder is mounted"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d2993346-c295-4290-a1c3-ee79a0787358"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", never `"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "85c8b474-2d08-4b68-824c-c8848ce05d15"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".suspense/sessions"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f81c1e40-e641-4e38-9a3a-75d5ee830d28"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "/` as a whole, so"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8757f313-275e-4175-bcdd-74f8e00b044d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a run sees no other l"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "24ebe864-60f7-417d-9462-f6e3228c78b2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ane's sessions. The application"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "031edd6e-59b6-46ec-a632-20e631540a31"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " cre"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "973ade4c-5e53-4ac5-893a-c32135ca9fcd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ates the folder before"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "277a8de9-1b69-43a3-ada4-bd4c44407760"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the run if it is"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6cb777c1-c36c-4b94-85f1-1c72644ccd88"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "n't there."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "00b674f3-d0d0-4fe2-85ba-7a84a4a8a6c2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " The harness's login and sett"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "cc1bb947-ea23-42b7-8249-5f8e62c03b8f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ings st"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e440848e-c93c-4165-a5df-c14b8704afb6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ay in one volume per harness"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5f3d80ef-569d-4b0c-a545-99ef84d22eb1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", shared by every project, as"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f30fe77d-91de-4e36-8cb7-8cd2cbe12f85"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " now"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ce8aa9da-4017-436a-8635-19b40545de7d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". The project's caches,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "88f30d3c-e1e5-4471-be69-7bf4d03a2c3a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " such as"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d08d636c-4b23-485a-876d-3a1d430cca80"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Cargo's registry and target"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4e7980f4-6117-4876-82ae-5d7364d666e0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " directory, stay in a"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5e2c1660-2616-4222-a801-7927b15c7772"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " volume too"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "539932c2-0423-407c-b19f-3c52ce203082"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "bf5df49a-82d3-4167-9964-c61921cfa581"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Losing a vol"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a3dabfbc-babe-4e7c-9fa0-c205fa056fe7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ume still"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "cfe6dbb3-4694-4fd8-ab6c-879ae1d3b089"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " costs only a login or a c"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7b3688f9-b44d-462e-bd35-f5f3438c5f03"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ache. Los"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e781b969-6db2-415c-bb3b-a0313c8b50df"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ing the project"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "cbc63cd4-d59a-4865-a1ee-d44096283c4d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'s sessions fol"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9ba96645-3842-4d62-a950-c9a5f607d87b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "der costs only the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7f76bcad-a27f-470a-ae63-01e26be8794f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " conversations'"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1105a626-6dd0-45ce-803e-ac486f584ea7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " context:"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e2811337-b517-451b-8867-163472c644ad"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the next run starts a"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3464a7d5-a29a-41a9-b282-a61d2e6d647d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " new conversation, as when"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "dacfa425-1ddf-4361-a753-15f22b1025cf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a session can't be res"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c8eb253a-02e2-4916-ba2e-a3954e88127b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "umed.\n>\n> **"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "fbaed10b-029e-4c1f-bcf9-d1d995eb5eca"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Project identity:** a project"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4a8e9a06-c2c2-450a-a1e9-a88dbbbca1ab"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'s volumes are named after an"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5c1eb210-f3ca-4766-8a9d-1f678a2a5f4b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " ID the project ke"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "61e43eb7-f900-45bb-add9-ed4b44e31c65"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "eps, not"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5b425fdf-5eb4-49fa-925b-2a993aa03b96"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " after its path. The ID is"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0edaef56-8044-4899-bb5f-efc56264584e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " generated once, the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d9f63961-7c22-4c63-9f59-b1f7422c4f35"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " first time the project need"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c1760a14-39cd-4a65-b0bb-1fd5e80b3313"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "s one, and kept in `"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "50d8a093-979f-4832-b800-d36f35784aec"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".suspense/project-id"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c6baac1e-07b9-4b71-9885-2c0a2db02f97"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "`. Renaming or mo"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "23a33d3f-4326-42ec-bb8d-541d4d18f21e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ving the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "129cb1e6-34b7-4c56-b304-050bf7272d25"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project direct"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d5756643-cad9-485a-b6d5-0e53e6a36faf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ory keeps its volumes"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "943d4666-85b6-4ff7-8d40-0591d1380aa5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and its s"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a0c852a5-6b25-4c70-bd7b-228351d309ac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions. The name must be the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "571ee3de-78de-4f9d-9f81-a5987fbe24f9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " same on every machine and"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0cb52108-8a4c-455e-87fc-50717f7f5f8d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " every version of the application, so it"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ddf8033a-4f30-4caf-831a-0ba18cff4e9c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " never depends on a hash wh"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a689179c-639c-4d54-aada-8e2a9d0f912e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ose algorithm may change."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c4ff3003-aeab-4051-9e30-8fe25e59e193"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n>\n> **Container"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "737241f3-04ec-4a7b-b07b-d9c690c429ab"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " paths:** the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a9f6bcba-4740-4f42-9f08-01f63993fac9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project is mounted at the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "db417163-6255-4921-a1b6-55dfadb80235"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " same fixed path in"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f0cc2299-ae50-4929-90dd-dcf085f606c6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the container on every platform ("
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f287823b-9979-4908-afa3-9ab75672e4ae"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "`/workspace`), as"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4907e9da-c714-4e49-9ff7-dd75a1f49f0a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it already"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a86150e5-ebe6-4436-b312-c6cf0c55b3e9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is on macOS and Wind"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1bbb515e-6aee-4392-a1f8-1250020ccd51"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ows. Every path a run re"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c4ac5aa3-468f-4d82-879d-e956c4051b2b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ports is mapped back to the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f791b806-04e7-40b8-a449-be76caeb4db7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " host,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "63067626-8ebf-4b10-8d52-567675976376"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " as the Paths section says."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e3898934-50f7-4f5f-94dc-e1cc13da4844"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " That"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f2f69028-3668-4407-9c46-46124b34e09a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " way a har"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4a23b21a-5df6-4084-a95e-68b0bd495ae0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ness that keys"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "eeabb5fc-69a0-411a-ad5f-9bd9c38e92a9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " its sessions on"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2b1ec5f3-8a28-4cab-8a09-bcc374df12de"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the working directory, as Cla"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1cc33c36-9919-4b45-afb1-f858d3b3070f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ude Code does, finds them"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "43a394c8-40e1-4d65-8763-ba8e562e03f8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " again after the project moves."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ede48af7-6d28-4c9b-a426-36e53284906c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Change"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5fb8b2ea-c4c7-49ec-b871-8fc0db2fd5fe"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " \""
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0beb06a0-aa5e-4c0c-af74-ec0ce77c3053"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Mounts\" so"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b58f583f-a018-4d7d-88a3-d2f0092883a4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it no longer says each location"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ecd38033-0a4d-46f2-bce3-db71c14ee42d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is mounted at its"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6c4e0a8f-e926-456e-b73b-8b0545e93b2b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " host path where the platform allows"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "13fd2e35-63a9-443b-a69e-1159d3fa9c16"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n>\n> **Pro"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9f0a4c3a-5305-46cd-b481-8c61afdf3be8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "jectDataScope:**"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a937f44d-cc2c-4001-8668-933ffba74b74"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " add `.suspense/s"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c3a2c130-4540-4ec4-860a-a2cf69a3713a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions/` and `.su"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d9bcadab-0de5-497e-b5d2-666693f5e6d2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "spense/project-id` to"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "de500fa9-9fa9-4aba-b92f-cb1ac440e37c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the project"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1bad72aa-13fb-49de-a128-b29a15b6b57c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " data."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "086ca2f5-3574-4a5e-9cbe-8c03dc975889"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Both bel"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2614cbe1-b517-4777-9086-dd02abba041b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ong to this machine:"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0f36bf00-a259-4134-a056-cf7b4b8a71fe"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " git"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "77dc1988-6312-4c65-83b0-ed49f2d9d54c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " ignores them and they"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "90b7d45b-8bda-4f1a-b405-d2f9afca29ee"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " are never committed, because the s"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1f6445f8-c084-4fb2-9976-77b1f3f5dbc1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions hold the harness's"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ec556eac-209b-45a6-9515-a1d303dede71"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " transcripts, which can be"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0616b15d-b1f5-4054-a570-cbd928b1bf89"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " large and can"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "37ed1239-dced-44ac-9282-79b1c8bf8007"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " cont"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "17f8e834-7cd0-4e43-8308-6f3080bc2b6f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ain sec"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "287a67f6-bece-4651-adb5-168fdac85b0e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "rets from tool output."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d7232deb-a755-4c3d-b560-4b4bf5706726"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Change the pa"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "cf344392-75e2-4480-8d3f-089b81a5e21c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ragraph that says the har"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d144d1d9-9a66-4df3-a279-01870872a2dd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "nesses' sessions are"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "df6918ea-4e8d-4e1b-9aa6-7eb4581a7c92"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " never in `.suspense`"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2e495ca9-1ada-4f9c-9390-b0e490f4004a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ": log"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6c574d5d-abe2-4363-8169-60edbf618a38"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ins, images"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "bfaf2d00-2994-4983-832b-e89bb2f8f91f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3e11d3bc-78c5-47bb-9bec-f59cc8ce546f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " caches still a"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "fc01a24c-ac97-4096-9ac2-0539d57ab32b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ren't, but s"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0bb256f4-be90-4a5f-992b-ad57ee3f2bc3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions now"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "dda53070-d6b8-45f2-9c1f-92bc15e3e116"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " are.\n>\n> **H"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "abfb4cb1-7fe4-428e-b6d6-73beac3623b9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "arnessIntegration"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8fce76c4-718f-4d9f-a085-c5915d07de14"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Scope:** a"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ca800539-cf45-42f7-a119-c6221de892ae"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " conversation is only carried on"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a926b288-58e1-4ebd-b67e-ff444a517275"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " where it began, in"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "26bc8988-cce4-4efa-a112-21d958db9f80"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a container or on the host."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "559d234a-84b6-4986-b6de-913775ae7896"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Which of"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c2f58745-7fc0-4664-8c57-5fceba9e1869"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the two it began in"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "87cfe942-8919-4929-a654-b8ea4dbdc671"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is kept with the project"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5ccfc4d5-3c54-4a96-97a7-9496e69fc608"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ","
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d81ab831-1199-4ae9-98ec-5e53cf541828"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " be"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "58b54bec-445e-494e-8e17-d300fa512a98"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "side the conversation it"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a8658bec-9ccb-48a7-bb3b-275833dac972"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " names"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "96f92ec0-b811-4dfb-8b0f-3079eafee036"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in `.suspense/con"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "07ccbb0a-466b-4a99-8c9c-bc0089b85ea4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "versations.json`, so a"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3a40b039-f647-4a45-92db-894c69709017"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project reopened after a restart"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c1c87176-ec5b-4970-9a0f-bdd1f0b0d3a9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " doesn't try to res"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f8040e65-7d93-43f0-9ed5-ba11f7fffc07"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ume a host"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0e1ad3d5-3544-42a6-b40c-9d4956036bfa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " con"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "948522d4-9124-44fa-87a9-b85c9586ab87"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "versation in a container, or"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "49ed84b7-47dd-4a9a-b1b4-8d8da50e910e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the other way round"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6ea27652-9654-45d5-8ea8-4aa9806ae942"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". A conversation wh"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1b8aebf1-26b1-4bec-9d71-3683def13092"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ose place is"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4b43e11b-cb05-4059-a3b2-3e060929b107"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "n't known,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c458c069-83ba-468a-ad9f-308a508dfa1a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " as one"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ae3273e8-5371-42a4-b6c1-961df69cdd8c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " from older history, is t"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3f557202-8393-4b82-a3cf-368da5b6a7d1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ried and"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d695e734-e84e-49eb-a397-f58ea23332a2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ","
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1cc44de4-110f-45b2-a6b2-f720628a46a3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " if the harness has"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "bd8f5dcc-8cae-4449-b4af-3784157ffda5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " no such session, sent again at"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9f46a371-bae4-4bf1-b38b-6297a0c39bb1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " once as a new conversation,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4621f67b-ef43-4954-a02b-81adb6d75f01"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " as now.\n>\n> **"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "92f61653-70ba-4298-94f3-db7c19fa6e08"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Migration:** when"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1f11b309-0b1d-4e73-b785-e85fd2b23c7a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a project is opened that"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4a969741-2875-4fd5-ad56-ae82e2ee47d7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " still has s"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1cb953ca-9e49-4d05-a8d4-35452403eac0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions in its"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "aed313ba-c003-4e99-a9cf-39d01d4418d7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " old `suspense-sess"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2da92e34-9cb0-41c2-85cf-c0fdc14e912f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ions-*` volumes,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f05435b2-9aa5-496f-b513-f8f649e487e3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and no `.suspense/"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "131a7c89-daed-4952-9e8e-334fc9463915"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "sessions/` y"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1da8ea35-8047-4fde-be83-192b440d4876"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "et, the application copies each l"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2ec54a49-15da-4574-a8e9-5d14f2ede8cf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ane's sessions from"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5274018b-65b8-41e7-bd00-6f9884d1fd7b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " its"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4c30fbba-e6f7-4789-b16d-d79fc9b2470b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " volume into the l"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a3202c03-433c-4fd4-a45c-8633efbc6834"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ane's folder once"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "79f837fe-bffa-4c4b-9a58-d45a6b62891c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", then"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6f0e44b2-e5ca-47e4-bc1b-9a5eec862d6f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " removes the old volume. A"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "30e0cfe2-4ed8-484d-8951-0d80278e28e3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " copy that fails le"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "30888543-5ddb-45f8-8e15-5af3652ee5ed"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "aves the vol"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c5682c9f-8504-424a-9882-5b629bb74439"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ume as"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e5cda446-8b3e-4af1-ad0d-794ef5371b46"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it was and is"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c74386c2-24cc-48c8-ae2c-36afce65215c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " t"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8f831be8-bf21-4d99-821c-d0fccf0e98cf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ried again the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "92891951-cab8-4c02-bd8d-f3ef9e55e282"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " next time the project is opened,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "aba926ff-f35f-4d29-81cb-f8307c78067c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " never los"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5fadc0cd-130d-4d5e-a379-1d5fcbc65dcb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ing the s"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7b07f90c-1d44-42a1-8b33-21e31f61ef2b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions.\n\n---\n\n**"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5c0eab0f-b72f-4850-87fd-78d2f3726d93"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Before"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e4f34178-d7b0-4010-b0af-628c33b6b330"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " you send it:**\n- **"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "83f926e9-6166-48d0-a804-1fd0afedaacf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Fixed path on"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "81579eea-27eb-486d-9e62-6185facfa8b9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Linux:** this"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "52a0b4a6-3b8d-4f14-a553-3d7a7f918b69"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " goes against the spec's current"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "30e8673a-9d95-417b-9392-b44a72024339"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " \"same absolute path\" r"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "791cfd8c-c206-4e35-ad21-9ec9766e5419"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ule. One"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "16f6f7b9-bc1f-4da5-a2a6-c6ba319f65af"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " benefit of that"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "27b7427f-5833-4cd0-b03b-9f7ff6ded23a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " rule today"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a425cdcf-57f7-43a8-8058-abd2eeba8400"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is that file"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f7ec59de-de1d-4971-b136-289a8a3959e2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " pa"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c2496484-cbb0-4f9b-8329-450f0e277b55"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ths in the harness's output on"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f85f9589-eae2-4c3b-b74a-7990284c86ad"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Linux need no mapping"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c4eace58-dd4d-4870-ae7d-9deb42b6672e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". If you'd rather ke"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6bb2f257-b317-429f-9130-324e349f62fd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ep it, drop that"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a99ed5e6-e082-4970-ad1c-e4dd54811b49"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " section"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "72a01d0f-2bc0-4f69-be64-a1861ebb76c2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and accept that moving a"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6aa9d898-10df-41df-88c0-d4dbc7241873"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project starts"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "69f8de86-99d2-4534-ac61-a11c54d958b5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Claude on"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d3765a3f-4f6f-4970-bb11-06b6ac5507c1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a new conversation.\n-"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a420145d-404f-419a-93ad-34522a71c1a8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " **Migration:** if"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a4e5b907-0482-4329-8790-fb4aa2f23353"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " star"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8aa6c104-acef-48c8-af04-0772311d7168"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ting f"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "97b0915e-5c24-432f-aec8-0cf1ab9800ab"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "resh after"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e8a30a7a-ec1f-4e35-84d2-17bc58ed41c9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the switch is f"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6ac8c15f-4569-4436-8d2d-f96c85e9ea55"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ine, dr"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "aff53353-f5f4-4961-862d-8d7f1988e59a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "op that section."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "28e5017c-7693-4a45-8ea3-fa33c3b30103"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " It's the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "aa47beb7-2394-4fad-a2d0-68bba14e009a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " most code for"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "169c4696-6084-4252-b2e4-6e25456eb8fa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the least l"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "fda4aa86-db72-4357-bf18-3077191cb6a3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "asting value"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a4df69c4-4c5c-4406-9ada-f975c5dbc334"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n- **Ca"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4e10907c-a484-4d2b-8e05-edde734bcec3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ches:** I"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2d760fe1-20b0-418c-b6b8-b8a1b0f32803"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " kept them in volumes."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b074ee6c-fd53-4bcb-993b-100f10eef76c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " If you want them in `.su"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1c85476e-1207-4b6c-a8e7-2668722c2f33"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "spense/cache/` too"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ba0c414b-62dc-4da2-ab9b-4b0b89a575a9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", add it"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "fe01fac5-027b-4405-a5f4-31f2a06329f9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", but"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e1950deb-22fb-46f7-9f11-a2bcd96d5574"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Cargo's target"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "cb506349-3f54-46d9-ac1c-c535534641ec"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " directory can gr"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c6d11af5-4dbe-4a08-8517-3be45efe7988"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ow to gigabytes in"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "fcdea2a4-5db1-4185-af0b-cb0eeb938c41"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "side the project fol"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f14dbd0e-ceb7-42cf-b25e-a52014cbc7ed"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "der."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c505de85-4a6f-401f-a914-bb7d58c38284"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CffZ3yx5BJW2FPEoEbvoW",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "I wrote this as a spec prompt (or a Chain prompt), because it changes what the ContainerEnvironmentScope, ProjectDataScope and HarnessIntegrationScope say, not only the code.\n\n---\n\n**Prompt:**\n\n> Make containerized sessions survive across runs, restarts, and project moves, by keeping each project's harness sessions in its own `.suspense` folder instead of in Podman volumes.\n>\n> **ContainerEnvironmentScope, Volumes:** the harness's sessions for each project and conversation (the spec lane's, the code lane's, and the questions') are no longer kept in Podman volumes. They are kept in the project, in `.suspense/sessions/`, one folder per conversation: `spec`, `code`, and `questions`. Each run mounts its lane's folder, read and write, where the harness keeps its sessions under its home. Only that lane's folder is mounted, never `.suspense/sessions/` as a whole, so a run sees no other lane's sessions. The application creates the folder before the run if it isn't there. The harness's login and settings stay in one volume per harness, shared by every project, as now. The project's caches, such as Cargo's registry and target directory, stay in a volume too. Losing a volume still costs only a login or a cache. Losing the project's sessions folder costs only the conversations' context: the next run starts a new conversation, as when a session can't be resumed.\n>\n> **Project identity:** a project's volumes are named after an ID the project keeps, not after its path. The ID is generated once, the first time the project needs one, and kept in `.suspense/project-id`. Renaming or moving the project directory keeps its volumes and its sessions. The name must be the same on every machine and every version of the application, so it never depends on a hash whose algorithm may change.\n>\n> **Container paths:** the project is mounted at the same fixed path in the container on every platform (`/workspace`), as it already is on macOS and Windows. Every path a run reports is mapped back to the host, as the Paths section says. That way a harness that keys its sessions on the working directory, as Claude Code does, finds them again after the project moves. Change \"Mounts\" so it no longer says each location is mounted at its host path where the platform allows.\n>\n> **ProjectDataScope:** add `.suspense/sessions/` and `.suspense/project-id` to the project data. Both belong to this machine: git ignores them and they are never committed, because the sessions hold the harness's transcripts, which can be large and can contain secrets from tool output. Change the paragraph that says the harnesses' sessions are never in `.suspense`: logins, images and caches still aren't, but sessions now are.\n>\n> **HarnessIntegrationScope:** a conversation is only carried on where it began, in a container or on the host. Which of the two it began in is kept with the project, beside the conversation it names in `.suspense/conversations.json`, so a project reopened after a restart doesn't try to resume a host conversation in a container, or the other way round. A conversation whose place isn't known, as one from older history, is tried and, if the harness has no such session, sent again at once as a new conversation, as now.\n>\n> **Migration:** when a project is opened that still has sessions in its old `suspense-sessions-*` volumes, and no `.suspense/sessions/` yet, the application copies each lane's sessions from its volume into the lane's folder once, then removes the old volume. A copy that fails leaves the volume as it was and is tried again the next time the project is opened, never losing the sessions.\n\n---\n\n**Before you send it:**\n- **Fixed path on Linux:** this goes against the spec's current \"same absolute path\" rule. One benefit of that rule today is that file paths in the harness's output on Linux need no mapping. If you'd rather keep it, drop that section and accept that moving a project starts Claude on a new conversation.\n- **Migration:** if starting fresh after the switch is fine, drop that section. It's the most code for the least lasting value.\n- **Caches:** I kept them in volumes. If you want them in `.suspense/cache/` too, add it, but Cargo's target directory can grow to gigabytes inside the project folder."
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2315,
+          "cache_read_input_tokens": 38703,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 2315
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "uuid": "23ea6fe0-15e7-4d7b-b156-54d458905284",
+      "timestamp": "2026-10-03T15:38:34.051Z",
+      "request_id": "req_011CffZ3ybjyFN62mGYJCHct"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "734a4dd4-0062-4395-83d5-e7a8b5f34535"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {}
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2315,
+          "cache_read_input_tokens": 38703,
+          "output_tokens": 1516,
+          "output_tokens_details": {
+            "thinking_tokens": 152
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 1516,
+              "cache_read_input_tokens": 38703,
+              "cache_creation_input_tokens": 2315,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 2315
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b3daa694-3d00-4671-962c-20f98f1f3521"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9b9e7413-daab-41d4-a4cd-4613c8cb7a59"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1791056400,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.03,
+            "resetsAt": 1791056400
+          },
+          "seven_day": {
+            "utilization": 0.43,
+            "resetsAt": 1791313200
+          }
+        }
+      },
+      "uuid": "a2c64c04-411a-484a-8223-9e4aaca40635",
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2"
+    },
+    {
+      "duration_api_ms": 74345,
+      "stop_reason": "end_turn",
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "total_cost_usd": 0.4247754,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 2315,
+        "cache_read_input_tokens": 38703,
+        "output_tokens": 1516,
+        "output_tokens_details": {
+          "thinking_tokens": 152
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2315,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 1516,
+            "cache_read_input_tokens": 38703,
+            "cache_creation_input_tokens": 2315,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 2315
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "modelUsage": {
+        "claude-opus-5-5[1m]": {
+          "inputTokens": 18,
+          "outputTokens": 6301,
+          "thinkingTokens": 1754,
+          "cacheReadInputTokens": 257937,
+          "cacheCreationInputTokens": 30887,
+          "webSearchRequests": 0,
+          "costUSD": 0.4247754,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "is_error": false,
+      "num_turns": 1,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "I wrote this as a spec prompt (or a Chain prompt), because it changes what the ContainerEnvironmentScope, ProjectDataScope and HarnessIntegrationScope say, not only the code.\n\n---\n\n**Prompt:**\n\n> Make containerized sessions survive across runs, restarts, and project moves, by keeping each project's harness sessions in its own `.suspense` folder instead of in Podman volumes.\n>\n> **ContainerEnvironmentScope, Volumes:** the harness's sessions for each project and conversation (the spec lane's, the code lane's, and the questions') are no longer kept in Podman volumes. They are kept in the project, in `.suspense/sessions/`, one folder per conversation: `spec`, `code`, and `questions`. Each run mounts its lane's folder, read and write, where the harness keeps its sessions under its home. Only that lane's folder is mounted, never `.suspense/sessions/` as a whole, so a run sees no other lane's sessions. The application creates the folder before the run if it isn't there. The harness's login and settings stay in one volume per harness, shared by every project, as now. The project's caches, such as Cargo's registry and target directory, stay in a volume too. Losing a volume still costs only a login or a cache. Losing the project's sessions folder costs only the conversations' context: the next run starts a new conversation, as when a session can't be resumed.\n>\n> **Project identity:** a project's volumes are named after an ID the project keeps, not after its path. The ID is generated once, the first time the project needs one, and kept in `.suspense/project-id`. Renaming or moving the project directory keeps its volumes and its sessions. The name must be the same on every machine and every version of the application, so it never depends on a hash whose algorithm may change.\n>\n> **Container paths:** the project is mounted at the same fixed path in the container on every platform (`/workspace`), as it already is on macOS and Windows. Every path a run reports is mapped back to the host, as the Paths section says. That way a harness that keys its sessions on the working directory, as Claude Code does, finds them again after the project moves. Change \"Mounts\" so it no longer says each location is mounted at its host path where the platform allows.\n>\n> **ProjectDataScope:** add `.suspense/sessions/` and `.suspense/project-id` to the project data. Both belong to this machine: git ignores them and they are never committed, because the sessions hold the harness's transcripts, which can be large and can contain secrets from tool output. Change the paragraph that says the harnesses' sessions are never in `.suspense`: logins, images and caches still aren't, but sessions now are.\n>\n> **HarnessIntegrationScope:** a conversation is only carried on where it began, in a container or on the host. Which of the two it began in is kept with the project, beside the conversation it names in `.suspense/conversations.json`, so a project reopened after a restart doesn't try to resume a host conversation in a container, or the other way round. A conversation whose place isn't known, as one from older history, is tried and, if the harness has no such session, sent again at once as a new conversation, as now.\n>\n> **Migration:** when a project is opened that still has sessions in its old `suspense-sessions-*` volumes, and no `.suspense/sessions/` yet, the application copies each lane's sessions from its volume into the lane's folder once, then removes the old volume. A copy that fails leaves the volume as it was and is tried again the next time the project is opened, never losing the sessions.\n\n---\n\n**Before you send it:**\n- **Fixed path on Linux:** this goes against the spec's current \"same absolute path\" rule. One benefit of that rule today is that file paths in the harness's output on Linux need no mapping. If you'd rather keep it, drop that section and accept that moving a project starts Claude on a new conversation.\n- **Migration:** if starting fresh after the switch is fine, drop that section. It's the most code for the least lasting value.\n- **Caches:** I kept them in volumes. If you want them in `.suspense/cache/` too, add it, but Cargo's target directory can grow to gigabytes inside the project folder.",
+      "ttft_ms": 3021,
+      "type": "result",
+      "duration_ms": 15883,
+      "uuid": "d9fe96e5-8a30-4bb0-81a3-27f9d5f8a203",
+      "ttft_stream_ms": 1128,
+      "time_to_request_ms": 87,
+      "first_content_frame_ms": 1129,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  ]
+}

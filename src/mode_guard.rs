@@ -13,6 +13,11 @@
 //! while a Spec task changes it. While another run whose mode may change a
 //! file is [`Writing`], or the spec is being built, a change there is taken
 //! as the location's new contents too, rather than put back.
+//!
+//! Only runs on the host are guarded. A run in a container, as the
+//! ContainerEnvironmentScope says, sees only what is mounted into it, so
+//! there is nothing it mustn't touch to guard, nor to tell it off reading
+//! (see [`guarded`]).
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
@@ -110,6 +115,12 @@ impl Drop for Writing {
 
 /// The location a task sent in `mode` may not change, and what it is called:
 /// the spec for Code, the code for Spec, and none for the rest.
+/// The mode a run sent in `mode` is guarded for: its own on the host, and
+/// none in a container, where nothing it may not change is mounted.
+pub fn guarded(mode: Option<SendMode>, in_container: bool) -> Option<SendMode> {
+    mode.filter(|_| !in_container)
+}
+
 pub fn protected(mode: SendMode, locations: &Locations) -> Option<(PathBuf, &'static str)> {
     match mode {
         SendMode::Code => locations.spec.clone().map(|spec| (spec, "spec")),
@@ -504,5 +515,21 @@ mod tests {
         assert!(guard.finish().is_empty());
         assert_eq!(std::fs::read_to_string(&file).unwrap(), "saved\n");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A run in a container is guarded for nothing, and told off reading
+    /// nothing; on the host it keeps its guard.
+    #[test]
+    fn containerised_runs_are_not_guarded() {
+        assert_eq!(super::guarded(Some(SendMode::Code), true), None);
+        assert_eq!(super::guarded(Some(SendMode::Spec), true), None);
+        assert_eq!(
+            super::guarded(Some(SendMode::Code), false),
+            Some(SendMode::Code)
+        );
+        assert_eq!(
+            super::guarded(Some(SendMode::Freeform), false),
+            Some(SendMode::Freeform)
+        );
     }
 }

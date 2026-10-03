@@ -1,1 +1,5 @@
-We're only asking a question about the code located in ${CODE_LOCATION} and the spec located in ${SPEC_LOCATION}. Don't edit either of them.
+We're only asking a question about the project. Answer it without changing anything.
+
+The code is located in ${CODE_LOCATION}.
+
+The spec's Piton source is in ${SPEC_LOCATION}.

@@ -1,0 +1,18 @@
+
+export anchor SpecRebuildTimingInChainMode:
+    userPrompt:
+        \\\
+        Why do I keep getting messages like this?
+        The code in ./src already matched the updated spec, so I made no further changes. The first step of the chain had changed the code along with the spec, and I checked it against the rebuilt reference.
+
+        Does the IDE explicitly rebuild the spec before a code run in chain mode ?
+        \\\
+
+    mode: ask
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're only asking a question about the code located in ./src and the spec located in ./spec. Don't edit either of them.
+        \\\

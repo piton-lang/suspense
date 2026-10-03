@@ -16,6 +16,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::highlighter::{HighlightTheme, SyntaxHighlighter};
 use gpui_kit::component::input::Rope;
 use gpui_kit::component::skeleton::Skeleton;
@@ -236,6 +237,11 @@ pub(crate) struct Reply {
     /// it was worked out for, beside the line.
     raw_styles: RefCell<VecDeque<Option<(usize, Arc<JsonStyles>)>>>,
     pub(crate) done: bool,
+    /// While its container's image is being built.
+    pub(crate) preparing: bool,
+    /// What has to be done before the run can go, shown after the error it
+    /// fails with, so it is the last thing the run says.
+    pending_action: Option<RunAction>,
     /// Once the run is over, what it did, heading its final summary.
     outcome: Vec<OutcomeTag>,
     /// Unique among replies, so a table drawn for one knows when it is given
@@ -266,7 +272,52 @@ pub(crate) enum ReplyPart {
     Notice(Notice),
     /// A message sent to the run while it works, as typed.
     Sent(String),
+    /// Something that has to be done before the run can go, as Podman's
+    /// machine started or the harness logged in in its container, with a
+    /// button that does it.
+    Action(RunAction),
 }
+
+/// An error the harness's result carries, as it is shown: its own words,
+/// and only where it gave none, a line saying it gave none, so the cause is
+/// never left unnamed as a bare "the harness reported an error".
+fn harness_error(result: &str) -> String {
+    if result.trim().is_empty() {
+        "The harness reported an error, and gave no reason for it.".into()
+    } else {
+        result.to_string()
+    }
+}
+
+/// What has to be done before a run in a container can go, which its row
+/// offers to do, as the ContainerEnvironmentScope says.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RunAction {
+    /// Podman installed, from its installation instructions for the
+    /// platform, opened in the browser.
+    InstallPodman,
+    /// Podman's machine set up or started.
+    Machine(crate::container::MachineAction),
+    /// The harness in use logged in in its container.
+    LogIn,
+}
+
+impl RunAction {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            RunAction::InstallPodman => "Install Podman",
+            RunAction::Machine(action) => action.label(),
+            RunAction::LogIn => "Log in",
+        }
+    }
+}
+
+/// What does a run's action, once its button is pressed: set by whatever
+/// owns the runs, given the action and the table it was pressed in.
+#[derive(Clone)]
+pub(crate) struct RunActions(pub std::rc::Rc<dyn Fn(RunAction, usize, &mut Window, &mut App)>);
+
+impl Global for RunActions {}
 
 /// A notice about a run: its one-line summary, and the details it opens
 /// onto.
@@ -501,6 +552,8 @@ pub(crate) enum OutputRow<'a> {
     Notice(&'a Notice),
     /// A message sent to the run while it works, as typed.
     Sent(&'a str),
+    /// What has to be done before the run can go, with a button that does it.
+    Action(RunAction),
     /// The harness is still at work, and nothing is known of what comes next.
     Pending,
 }
@@ -519,6 +572,7 @@ impl OutputRow<'_> {
             // Muted, as it marks nothing wrong.
             Self::Notice(_) => (Tag::secondary(), IconName::Info, "Notice"),
             Self::Sent(_) => (Tag::primary(), IconName::Send, "Sent"),
+            Self::Action(_) => (Tag::warning(), IconName::Settings, "Action"),
             Self::Pending => {
                 return Skeleton::new()
                     .w(px(84.))
@@ -536,7 +590,7 @@ impl OutputRow<'_> {
         match self {
             Self::Text(text) => text.trim().is_empty(),
             Self::Tool(call) => call.summary.is_none() && call.state == ToolState::Running,
-            Self::Error(_) | Self::Notice(_) | Self::Sent(_) => false,
+            Self::Error(_) | Self::Notice(_) | Self::Sent(_) | Self::Action(_) => false,
             Self::Pending => true,
         }
     }
@@ -554,6 +608,8 @@ impl Default for Reply {
             raw_tail: VecDeque::new(),
             raw_styles: RefCell::default(),
             done: false,
+            preparing: false,
+            pending_action: None,
             outcome: Vec::new(),
             uid: NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             edit: 0,
@@ -578,6 +634,7 @@ impl Reply {
                 ReplyPart::Error(error) => OutputRow::Error(error),
                 ReplyPart::Notice(notice) => OutputRow::Notice(notice),
                 ReplyPart::Sent(text) => OutputRow::Sent(text),
+                ReplyPart::Action(action) => OutputRow::Action(*action),
             },
         })
     }
@@ -739,7 +796,7 @@ impl Reply {
                     self.last_tool_row = Some(self.rows.len());
                     true
                 }
-                ReplyPart::Error(_) | ReplyPart::Notice(_) => true,
+                ReplyPart::Error(_) | ReplyPart::Notice(_) | ReplyPart::Action(_) => true,
                 ReplyPart::Sent(_) => {
                     self.last_sent_row = Some(self.rows.len());
                     true
@@ -776,6 +833,18 @@ impl Reply {
                 self.raw_tail.push_back(line);
                 styles.push_back(None);
                 return None;
+            }
+            HarnessEvent::Preparing => self.preparing = true,
+            HarnessEvent::Prepared => self.preparing = false,
+            HarnessEvent::PodmanUnavailable(action) => {
+                self.preparing = false;
+                // Without a machine to see to, Podman isn't installed.
+                self.pending_action =
+                    Some(action.map_or(RunAction::InstallPodman, RunAction::Machine));
+            }
+            HarnessEvent::LoginNeeded => {
+                self.preparing = false;
+                self.pending_action = Some(RunAction::LogIn);
             }
             HarnessEvent::TextStarted => self
                 .parts
@@ -828,11 +897,7 @@ impl Reply {
                 });
                 if is_error {
                     self.refresh();
-                    return Some(if result.is_empty() {
-                        "The harness reported an error.".into()
-                    } else {
-                        result
-                    });
+                    return Some(harness_error(&result));
                 }
                 // Nothing streamed (e.g. an older harness): show the result.
                 if !self.has_text() && !result.is_empty() {
@@ -848,11 +913,7 @@ impl Reply {
                     ToolState::Done
                 });
                 if is_error {
-                    self.parts.push(ReplyPart::Error(if result.is_empty() {
-                        "The harness reported an error.".into()
-                    } else {
-                        result
-                    }));
+                    self.parts.push(ReplyPart::Error(harness_error(&result)));
                 }
             }
             HarnessEvent::Sent { text, .. } => self.parts.push(ReplyPart::Sent(text)),
@@ -863,6 +924,7 @@ impl Reply {
                 return Some(error);
             }
             HarnessEvent::Session(_)
+            | HarnessEvent::NewConversation(_)
             | HarnessEvent::Usage { .. }
             | HarnessEvent::Spent { .. }
             | HarnessEvent::Limits(_)
@@ -923,9 +985,21 @@ impl Reply {
         self.done
     }
 
+    /// What has to be done before the run can go, once it failed for want
+    /// of it.
+    pub(crate) fn action(&self) -> Option<RunAction> {
+        match self.parts.last() {
+            Some(ReplyPart::Action(action)) => Some(*action),
+            _ => None,
+        }
+    }
+
     /// Adds an error row to the end of the output.
     pub(crate) fn push_error(&mut self, error: String) {
         self.parts.push(ReplyPart::Error(error));
+        if let Some(action) = self.pending_action.take() {
+            self.parts.push(ReplyPart::Action(action));
+        }
         self.refresh();
     }
 
@@ -1985,6 +2059,7 @@ fn output_row(
             None => div().into_any_element(),
         },
         OutputRow::Sent(text) => sent_message(("output-sent", row_ix), text, cx),
+        OutputRow::Action(action) => action_button(("output-action", row_ix), *action, task_ix),
     };
     // Once the run is over, its final summary is headed by what it did.
     let outcome = (reply.done && !reply.outcome.is_empty() && reply.outcome_row() == Some(row_ix))
@@ -2083,6 +2158,29 @@ pub(crate) fn notice_view(
 
 /// A message sent to a run while it works: its first line, the whole message
 /// as it was typed shown on hover.
+/// The button that does `action` for the run of the table `table`, through
+/// whatever owns the runs.
+pub(crate) fn action_button(
+    id: impl Into<ElementId>,
+    action: RunAction,
+    table: usize,
+) -> AnyElement {
+    gpui_kit::TestSupportExt::test_support(
+        div().id(id).child(
+            Button::new("run-action")
+                .small()
+                .primary()
+                .label(action.label())
+                .on_click(move |_, window, cx| {
+                    if let Some(actions) = cx.try_global::<RunActions>().cloned() {
+                        (actions.0)(action, table, window, cx);
+                    }
+                }),
+        ),
+    )
+    .into_any_element()
+}
+
 pub(crate) fn sent_message(id: impl Into<ElementId>, text: &str, cx: &App) -> AnyElement {
     let whole = SharedString::from(text.to_string());
     let line = text
