@@ -1,0 +1,9 @@
+{
+  "userPrompt": "I keep getting \"The harness couldn't be started in its container. Podman said: Error: workdir \"/workspace does not exist on container ID\"",
+  "harness": "claude",
+  "systemPrompt": "We're working in a project whose spec is compiled to .claude/reference, which is where to read it. Each prompt starts with a <task-instructions> block saying what that prompt is for and what it may change. Follow the block at the top of the prompt you are answering; an earlier prompt's block no longer applies.\n\nIts code is located in ./src.\n\nRead the spec from its compiled reference under .claude/reference, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with this harness's adapter.\n\nBefore executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.",
+  "instructions": "We're only asking a question about the project. Answer it without changing anything.\n\nThe code is located in ./src.",
+  "resumed": true,
+  "output": [],
+  "error": "The harness couldn't be started in its container. Podman said:\nError: workdir \"/workspace\" does not exist on container 362ceff044a3a0d86c8c2c29d2b84729d0c58da8f3a3ca971f718fce39dafd2b"
+}

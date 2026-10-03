@@ -44,13 +44,12 @@ shape HarnessIntegrationShape:
         Its directory, which a system prompt's HARNESS_DIRECTORY stands for,
         is that of the harness in use: .claude, .codex, or .opencode.
 
-        Spec tasks, a Chain prompt's spec steps, and questions run the harness
-        in a container the application owns, as the
-        @{ContainerEnvironmentScope} says, which holds only what their mode
-        may use; Code tasks and a Chain prompt's code step do too while the
-        project's "Run code tasks in a container" option is on. Every other
-        run, Code while the option is off, Freeform, and the application's
-        own, runs the harness on the host, in the project directory. Either
+        Spec tasks, a Chain prompt's spec steps and spec follow-up, and
+        questions always run the harness in a container the application owns,
+        as the @{ContainerEnvironmentScope} says, which holds only what their
+        mode may use. Every other run, Code tasks and a Chain prompt's code
+        step, always, with their protected locations, Freeform, and the
+        application's own, runs the harness on the host, in the project directory. Either
         way the harness is run, prompted, and read just as this says.
 
     harnesses:
@@ -185,12 +184,14 @@ shape HarnessIntegrationShape:
         among its own tasks in the history, a Chain task by the lane of the
         step it was.
 
-        A run in a container keeps its lane's sessions in that lane's volume,
-        and a run on the host where the harness keeps them on the host, as the
-        @{ContainerEnvironmentScope} says, so a conversation is only carried on
-        where it began: turning the project's "Run code tasks in a container"
-        option on or off starts the code lane on a new conversation at its
-        next task.
+        The spec lane and the questions always run in a container, and the
+        code lane always on the host, so each conversation is only ever
+        carried on where it began. A run in a container keeps its
+        conversation's sessions in the project, in its own folder of
+        `.suspense/sessions/`, as the @{ContainerEnvironmentScope} says, so
+        it carries on across runs, restarts of the application, and moves of
+        the project; a run on the host keeps them where the harness keeps
+        them on the host.
 
         Questions from the Ask tab share a separate
         conversation of their own, and when the project is opened they carry on
@@ -199,10 +200,11 @@ shape HarnessIntegrationShape:
         so questions running at the same time never write over each other. A
         conversation is only carried on in the project it began in, each open
         project keeping its own tasks' and questions' conversations while it is
-        in the background. Questions run in a container, so a question
-        carries on only a conversation begun in the questions' volume, never
-        one saved from a question asked on the host before questions ran in
-        containers, nor one whose session that volume no longer holds.
+        in the background. A spec lane or questions conversation from before
+        its sessions were kept in the project, whose session the project's
+        sessions folder doesn't hold, is still tried, and when the harness
+        has no such session, the request is sent again at once as a new
+        conversation, as below.
 
         A request whose conversation can't be carried on, because the
         harness says it has no such session, as Claude Code's "No

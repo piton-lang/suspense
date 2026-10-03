@@ -1,0 +1,3739 @@
+{
+  "userPrompt": "Yeah no, we don't run Code mode in containers at all.",
+  "harness": "claude",
+  "systemPrompt": "We're working in a project whose spec is compiled to .claude/reference, which is where to read it. Each prompt starts with a <task-instructions> block saying what that prompt is for and what it may change. Follow the block at the top of the prompt you are answering; an earlier prompt's block no longer applies.\n\nIts code is located in ./src.\n\nRead the spec from its compiled reference under .claude/reference, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with this harness's adapter.\n\nBefore executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.",
+  "instructions": "We're only asking a question about the project. Answer it without changing anything.\n\nThe code is located in ./src.",
+  "resumed": true,
+  "output": [
+    {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "/home/hyphyphyph/piton/repl",
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "tools": [
+        "Task",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "ListAgents",
+        "Monitor",
+        "NotebookEdit",
+        "PushNotification",
+        "Read",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write",
+        "mcp__claude_ai_Claude_Docs__batch",
+        "mcp__claude_ai_Claude_Docs__create",
+        "mcp__claude_ai_Claude_Docs__delete",
+        "mcp__claude_ai_Claude_Docs__export",
+        "mcp__claude_ai_Claude_Docs__guide",
+        "mcp__claude_ai_Claude_Docs__query",
+        "mcp__claude_ai_Claude_Docs__read",
+        "mcp__claude_ai_Claude_Docs__update"
+      ],
+      "mcp_servers": [
+        {
+          "name": "claude.ai Claude Docs",
+          "status": "connected",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Drive",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Gmail",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Calendar",
+          "status": "needs-auth",
+          "source": "claudeai"
+        }
+      ],
+      "model": "claude-opus-5-5[1m]",
+      "permissionMode": "auto",
+      "slash_commands": [
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "output-style",
+        "context",
+        "effort",
+        "fast",
+        "focus",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "skill-doctor",
+        "goal",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "terminal_slash_commands": [
+        "doctor",
+        "color",
+        "focus",
+        "reload-plugins"
+      ],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.281",
+      "output_style": "default",
+      "agents": [
+        "claude",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
+      "skills": [
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "plugins": [
+        {
+          "name": "agents-md",
+          "path": "builtin",
+          "source": "agents-md@builtin"
+        },
+        {
+          "name": "telemetry",
+          "path": "builtin",
+          "source": "telemetry@builtin"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "msg_lifecycle_v1",
+        "mcp_read_resource_v1",
+        "mcp_tool_ui_meta_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "6da42d79-f028-4631-bdb9-486034ab98a0",
+      "memory_paths": {
+        "auto": "/home/suspense/.claude/projects/-home-hyphyphyph-piton-repl/memory/"
+      },
+      "messaging_socket_path": "/tmp/cc-socks/1.sock",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "per_turn_effort_active": true,
+      "view_mode": "default"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "uuid": "1d5151eb-ada3-40b3-bb88-e8368b3c8e96"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011CffZwTRUpihMfxMPufWm7",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 1341,
+            "cache_read_input_tokens": 52636,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1341
+            },
+            "output_tokens": 3,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c8445676-0c91-4698-9210-102d95172e14",
+      "ttft_ms": 1125
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8a44dc7f-9bf2-4f95-81f1-286382d067ee"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "uuid": "5351b13f-1bbd-4624-aee0-df9396cf17b4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0115f422-e008-48ce-a5ca-529f6ee40f9d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "40be2941-0634-49d1-adfe-c33654e140b8"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 310,
+      "estimated_tokens_delta": 260,
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "uuid": "7d456f9d-5d61-4670-8316-9c0170da4fae"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "CAQSzgkKEAgSGAI4AUIIdGhpbmtpbmcSDDsCR7a/Zj/+ypOB7RoM7w7pBER05k9sPaSIIjABAd6SYK0yeqLC1ygGuyTy9bH3bmhSTY/8x2PC8VPkae9E991acU6/OP8o5GEXWuMq6wjXWhJOBrHbhSoNp20KZRTxFyOPn1SlFkBbPRqy5WzBULSezAfaPijBkRejEdJo+mnEpph5m64fHho6SsJQV5ESIfpllhUsCVO26spqvStGL+beZQYv2jKJxRi4U2hAEuDK1+5Rri78e6UJ+hYBt+GigirtgCjQlk36pTpcAApLkewDqRJYZZ1sFfy4wzSK5sxOZokjzSkDiIkSeFRFSZxtAMAKdnzd1R1frRtmFEgQCqxHRRGbk9G+8Z3QIy0m3m2rhS6uNEyc5qB1Blcy5J51yT/3BiAfeSSbwzgQdfGWrqgV7bPDr/I8oc+LWLWieIrxOFLmppTXbFH2FimuW6yaH8friV2TGI80cx7vjeUjp28daEWvGMpG9rafFRTd2mpq2nGY2kibQyqW4fAeNREEtOh9MBARk4+c52x34k4jHM8IfzWhHv/ih9RXE1CSzzk5GkKBnXiGL+Q0bOSy1ilmMmB2T4mKf+B/T+EAyD5MYdC+z3BZM9fqX9zSgVOwx6KaY1CtTal6PGbjb5xTHzaaBTMr85JXf2XI11C+s+t/brlUJ2UmSLh4xSxvCJpfGbd1ORsPoG6ZIjnE9aNd/IocHkWMS/6fg6IvP0uVr8M3Bxf1ktV8q0dezLZVzzDDXnX5ikXbrrC4VV14IRsFnqdZyxG3QYShBaZD5xewPOG4Vsnd9W1gOLsFYraTiWB94WcaSlvzTpO+0g1U0tRF2ehZ1MTnO7chCNDi71ShEmEf6iqt/dLLHoG+l/Zu2skMXXRnuXTkdtQEHVwupcVSOdUmcIaMCgN3/9ePNYSucHW+oVuUx+oHemCccyKvaixWiSWFRf2RNBZw/7RlmUUp85FzD8bdt/82vtwDdXVC2tabcc3do/Nj3rp9gXrxJCdx34u+6DDeAhm+TKke7QRMPHbspPS4v6hUXhI7gbfuZNDzwo6rXznmf51/5jXA7uSwIoXJ3ypAuUN6qrZP3ZpZ2woLHvKB2Nw/I7UrmK7OcAxNMwzJDJVCUAgVmI1Itj53jcvGFQ1T5W+wIaa9JaH7xeoosRfe4e5jGXS+08AR3gQAE5YLDSKTXNayJrYHdLThMs7qK+CZI5+QftZOHXUghgHIrpwVB8VVDl/tZaiyHyswuTluvoL0zo2c9ncyhTqvU/BLrrF6tTqFRMcD9hSYJLLnSdapkYGQgAvIMbyDJ0ONJ7QtFIXunQClqJcAeNm6si4iR1DJPpZqo5JPkKs3y9fx34rkpte4jk64u9l0mkJfX6NAw2VkUwXaS+9R+z3Tx+fAQB8MG63CCeyTz+M+0v16d9ybM7D8UEfUFzJrKDRWgAQBX1cthZX6ROljA343LxT5er2z2gAQBZ0sqnkrsl/bdiPP9gatCQ7q//c1BciPGh+UEufj9HR8QSuJyo9z1/o2BBJXIxRiza/jAcc8EYflYvdM3upKNsBCoPNUzffkJnwUBTbrva7VW9DpAeqRfcJk1tK4XIsB0yBJBnBcKAVANxQQHV5gESEmoCQYAQ=="
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c8780b16-da74-47d6-addd-511c1c545f20"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CffZwTRUpihMfxMPufWm7",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAQSzgkKEAgSGAI4AUIIdGhpbmtpbmcSDDsCR7a/Zj/+ypOB7RoM7w7pBER05k9sPaSIIjABAd6SYK0yeqLC1ygGuyTy9bH3bmhSTY/8x2PC8VPkae9E991acU6/OP8o5GEXWuMq6wjXWhJOBrHbhSoNp20KZRTxFyOPn1SlFkBbPRqy5WzBULSezAfaPijBkRejEdJo+mnEpph5m64fHho6SsJQV5ESIfpllhUsCVO26spqvStGL+beZQYv2jKJxRi4U2hAEuDK1+5Rri78e6UJ+hYBt+GigirtgCjQlk36pTpcAApLkewDqRJYZZ1sFfy4wzSK5sxOZokjzSkDiIkSeFRFSZxtAMAKdnzd1R1frRtmFEgQCqxHRRGbk9G+8Z3QIy0m3m2rhS6uNEyc5qB1Blcy5J51yT/3BiAfeSSbwzgQdfGWrqgV7bPDr/I8oc+LWLWieIrxOFLmppTXbFH2FimuW6yaH8friV2TGI80cx7vjeUjp28daEWvGMpG9rafFRTd2mpq2nGY2kibQyqW4fAeNREEtOh9MBARk4+c52x34k4jHM8IfzWhHv/ih9RXE1CSzzk5GkKBnXiGL+Q0bOSy1ilmMmB2T4mKf+B/T+EAyD5MYdC+z3BZM9fqX9zSgVOwx6KaY1CtTal6PGbjb5xTHzaaBTMr85JXf2XI11C+s+t/brlUJ2UmSLh4xSxvCJpfGbd1ORsPoG6ZIjnE9aNd/IocHkWMS/6fg6IvP0uVr8M3Bxf1ktV8q0dezLZVzzDDXnX5ikXbrrC4VV14IRsFnqdZyxG3QYShBaZD5xewPOG4Vsnd9W1gOLsFYraTiWB94WcaSlvzTpO+0g1U0tRF2ehZ1MTnO7chCNDi71ShEmEf6iqt/dLLHoG+l/Zu2skMXXRnuXTkdtQEHVwupcVSOdUmcIaMCgN3/9ePNYSucHW+oVuUx+oHemCccyKvaixWiSWFRf2RNBZw/7RlmUUp85FzD8bdt/82vtwDdXVC2tabcc3do/Nj3rp9gXrxJCdx34u+6DDeAhm+TKke7QRMPHbspPS4v6hUXhI7gbfuZNDzwo6rXznmf51/5jXA7uSwIoXJ3ypAuUN6qrZP3ZpZ2woLHvKB2Nw/I7UrmK7OcAxNMwzJDJVCUAgVmI1Itj53jcvGFQ1T5W+wIaa9JaH7xeoosRfe4e5jGXS+08AR3gQAE5YLDSKTXNayJrYHdLThMs7qK+CZI5+QftZOHXUghgHIrpwVB8VVDl/tZaiyHyswuTluvoL0zo2c9ncyhTqvU/BLrrF6tTqFRMcD9hSYJLLnSdapkYGQgAvIMbyDJ0ONJ7QtFIXunQClqJcAeNm6si4iR1DJPpZqo5JPkKs3y9fx34rkpte4jk64u9l0mkJfX6NAw2VkUwXaS+9R+z3Tx+fAQB8MG63CCeyTz+M+0v16d9ybM7D8UEfUFzJrKDRWgAQBX1cthZX6ROljA343LxT5er2z2gAQBZ0sqnkrsl/bdiPP9gatCQ7q//c1BciPGh+UEufj9HR8QSuJyo9z1/o2BBJXIxRiza/jAcc8EYflYvdM3upKNsBCoPNUzffkJnwUBTbrva7VW9DpAeqRfcJk1tK4XIsB0yBJBnBcKAVANxQQHV5gESEmoCQYAQ=="
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1341,
+          "cache_read_input_tokens": 52636,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1341
+          },
+          "output_tokens": 3,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "uuid": "cd822274-ce54-4703-815f-3e36ec380738",
+      "timestamp": "2026-10-03T15:49:59.290Z",
+      "request_id": "req_011CffZwT6PxWqQNXZ9T8VTz"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "53f08cbd-3760-41c2-bafb-ca8928890ece"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4f1c9e5a-5fe4-4b8d-a0ca-d3943e19a3df"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "The"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3438ede7-6963-46b5-bec9-20a577c1ae61"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " spec and code still"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e722c3f1-49da-4de1-aee9-38a582e95c0c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " support"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "aa8f0a30-29dd-44cd-a1e6-c408a84ae783"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it, though. The Contain"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "cd476acc-2b6e-4974-80a0-2e7dd5dcef62"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "erEnvironmentSc"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ca085c60-38df-4f03-b398-707a4dd0187b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ope,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4c7b31a4-7713-47e6-9a75-ba51201a108c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " ProjectDataScope"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5a7f05b9-846c-47d2-b072-4cba66c0bd77"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " (`run"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3bb2d18f-f77b-422b-9ba0-f1d3bc325f28"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "CodeTasksInCont"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3a268a9c-97ec-4880-81bb-c32fa15ecbee"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ainer`"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1036c83a-cba5-47c2-b39b-c2f665d92ab6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "), HarnessInteg"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "78ec3d46-5e8d-41f4-b60b-b2983d6822b2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "rationScope and"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "02d12eaa-590b-4ac3-8c3a-ac54bb2970d6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Sending all describ"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5f5fe0fb-c32c-4a5b-9541-71d4081def30"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "e the \"Run code tas"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1fe5e64a-f69b-40a2-b91a-28ae6785ee65"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ks in a container\" option."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7b15b660-3ea0-47f0-ac16-aea09d9fc49f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `src/container"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ced35f13-bd29-4b01-a209-2ab3b2a28b91"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".rs` has a"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "867870e3-5eaa-4d76-be63-19cb2dc7c2f1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `RunKind::Code"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9bca803b-bd6a-40bd-9f04-158dad6bba0e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "` plan with the cache vol"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3399f070-6ff6-4831-a403-f882a9ff8fef"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ume, and the Settings window"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "80409617-b196-4c68-83dd-36c652868719"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " has the toggle. It"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7cc13534-d63c-4f9b-aaf2-837c389af618"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'s off by default, so"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "955cd856-0d2c-4b01-aa80-f007d8458ed4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it's eas"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "30013454-36df-49ad-b294-ce85239ca687"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "y to never"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "313dd1e4-ab7e-4f98-9ced-9015a27459a1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " not"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ddecaeda-f753-4659-b316-bfb246b0fed5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ice."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "39739cd0-b14d-4c9f-9e83-d354f39053d5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\nHere's the pr"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ab0471bf-b619-42c2-9bd3-d1b4337f4fe2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ompt with that removed as"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "11e00554-b78c-46e1-86ec-900e3f03e12d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " well"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3ea2f5e1-6d3c-4055-81b2-f3ca09a4654d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ":\n\n---\n\n> Code"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a5b26aac-90fd-41c3-88a9-de642eb37d9f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " tasks never"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ec9fe479-31a0-47c2-909e-cc4edb5ba8e7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " run in a container,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "279bb5da-3d47-46c3-91b4-25b67a9d23f2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and a"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "107b686f-5bc0-4631-a684-60ff2fb03284"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project's"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "bbe08c8a-42a8-48b7-a6a4-f01c2f2b30a4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " harness s"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c966ca30-0876-42e1-ab04-e3033d471f82"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions from"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d18048f3-92d1-49b9-a046-190e89018547"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " container"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c16a671f-a9a1-45dd-8430-50339787e9ba"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ized runs are kept in the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ebd39ae8-c466-4824-b4c2-a0b6021d5736"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7ffd84d0-2146-4e2f-abf6-653cce1e58e4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " so a conversation carries on"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1e060c66-183d-4563-be84-5ec3a575d7e1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " across runs, restarts,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0cad39ce-103f-43b4-ad5d-7262c18b6d0c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and moves of the project."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "86782a05-a48e-4390-8db6-65b468938818"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n>\n> **Remove code"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7cdce0b0-5f1b-4e56-bdce-e774b00714b1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " containerization:** Spec"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "99a425ac-774d-4221-bace-041870483a80"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " tasks, a Chain"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1d35e041-5041-4583-ae6a-c65a83cdcb49"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " prompt's spec steps"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3919363d-6646-4012-8cab-035dfc0b75e4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d6598e62-2c1b-4c5d-85ce-da94a54f1ce6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " spec follow-up"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ad0c1428-cfe4-4a06-b2fb-564f575eb447"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", and questions from the "
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c1e2941e-f3b2-40b7-b63a-8c527e834240"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Ask tab are the only runs"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "bd3013e3-5d45-4712-90f7-63b983dbc323"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in a container. Code tas"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "75d4d473-78d9-47bf-a6d3-1444913c2d81"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ks and"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6fb89368-6d47-4103-a927-94a607b7ad43"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a Chain prompt's"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ddaebf1f-2bc1-4741-b30e-883d90d871db"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " code step always run on the host,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "dbbcb344-ca13-4ec8-83fa-629a04792355"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " with their protected locations, as"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "97ad556c-8637-4c7f-9665-40bd868cc484"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2efa3db7-a8b6-4511-aa6a-cba2477a95e6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " HarnessIntegr"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "759e2ed6-ebf3-4f96-9165-887a066d63fc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ationScope says. Remove"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d6f13a9e-0dd5-4afe-977d-aaf4b62b9714"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the project's \"Run code t"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5af9b376-420e-4efe-ae7d-58d35d0aa404"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "asks in a container\" option ever"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5f9b9057-b180-4859-8d4c-6ee6cfc1d909"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ywhere:"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4f19903f-491a-4243-a937-ee4230d79c38"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c1baf489-d782-4cdf-ad74-ca329a282e57"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `runCodeTasks"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b9dd9454-efae-4a4c-8d12-d29169dbfeaf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "InContainer` setting from"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "fed35a7e-8ced-4e00-8f9e-71f8b9b6fee0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "cb747790-e805-408b-8636-347c2e4d332f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".suspense/settings."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8ad5cb02-6a10-471c-8ce2-6a0e70602382"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "json` in"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c1a2e308-3b73-4064-a675-887b6ed6a2a3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the ProjectDataSc"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "138d885b-9549-4109-8730-401ca6906a43"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ope, its toggle from"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "72ced016-798c-45a2-86be-47e15f5cf7fa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the SettingsWindow"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8c7d9b92-91ba-48ea-92b7-42df72a5d624"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Scope, the Code section of"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "17f09d3e-f410-4d11-a609-e1d923128f8e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the ContainerEnv"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4d0d020c-2525-4bf1-bc23-f7d9c21d204f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ironmentScope's M"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "80631673-7159-4463-82d0-561fb14a1aa4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ounts, the project's caches"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "296eb77e-8694-4e9a-954c-4b823ea54e97"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and their volume, and every"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d2353496-4540-4c18-b328-6026e2be6ff6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " \""
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "cb6af5fd-1a17-4e09-805a-aa2f1ebb1199"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "while the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e8f9a0ce-095b-4489-9737-9b730f55560c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project's option is on\" in"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0065c257-8cac-4050-bea9-71f0934c23e1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the ContainerEnv"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "71588f0b-c51c-4d58-b541-0569fa35b361"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ironmentScope, the H"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8a0dce49-032f-4f66-92d0-af96d5f75c11"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "arnessIntegration"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b116b08a-b2bf-4125-82af-7eb7e5f10280"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Scope, the PromptMod"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e915ac56-fe94-4ccc-9c24-109d3b65a264"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "eScope,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a77016cf-fa42-4bba-8eca-88029b8e99cb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "11770241-4082-4cd7-952c-a645a629cf96"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Sending,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "42caa970-0a5d-4c62-86bf-0c6854d606ae"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " including the rule that tur"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "24309aa0-4553-49d7-8719-a85dff708527"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ning the option on or off starts"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9481331b-01d2-427b-a34d-9bb977c21570"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the code lane on a new con"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b480b444-6e54-44b8-bafd-8efee8e9a92e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "versation. Where"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "49c621bf-e47c-4feb-9a4a-e32c8f5d6646"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `.suspense/settings"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c4ba6a0f-646d-4185-8f8d-81d569f7d86d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".json` then"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a61094ba-c323-4743-9813-ba55df2f72b9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " holds nothing, the "
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a5bc2321-6e4a-4998-b190-29f463be99a4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ProjectDataScope says"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c139eb34-ebca-4e1d-a713-758e0eb9a1b0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " so, or"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "06ae5466-9b76-4151-941a-78eb88c93f43"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " drops it if"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "09324df7-573d-4730-97e2-7e634277637c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " n"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b712650f-b0bb-4679-a82f-a43e83abf17d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "othing else uses it. A"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "527ab618-2c1a-4a3f-a77b-9c66ba4f1396"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Code task never needs Pod"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ccab9f8a-caf6-466f-9d22-cee321273a0b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "man.\n>\n> **"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8787696b-a082-44aa-8116-949f1de94d2c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ContainerEnvironm"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a41194bd-3922-42f7-9c7f-ced466c0ef5d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "entScope, Volumes"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1153c7d8-eaba-4c2b-a741-67bbe748502c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ":** the harness's sess"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c4595e1c-2e8c-41f6-91c4-38b717065b92"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ions are no longer kept in"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b8947d11-bb2c-4730-88b2-47ec7824a335"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Podman volumes. They"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8512933a-d645-4ab0-be66-82ed2347c627"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " are kept in the project, in"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0b915826-9981-418b-898e-00d11442afb2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `.suspense/sess"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "980b0e38-bbf6-4bfa-8ad9-ef8ff838f988"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ions/`, one folder per"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "eb5541d9-6915-45bd-9c3e-e288107a9e7c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " conversation: `spec`"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9a81e227-363b-4db6-825b-55add871c3a5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " for the spec lane and `"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0ccff8a6-ea2a-490c-a355-a68bc153044d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "questions` for the Ask"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b8ac7ae8-ac86-44a7-9f96-1a54822e3510"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " tab's questions. Each"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "505a342d-7254-4f32-9a14-cb7ca6a66300"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " run mounts only its own con"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "db02a124-d710-4e09-9850-c6c4617c3cd0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "versation's folder, read and"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "05df534c-b0cd-4d50-a3b9-f2c323a07dff"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " write, where the harness kee"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "75f7f7d9-4193-4311-8b1a-0cd7290622f6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ps its sessions under its home"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d3cc6b74-8e16-4bda-91b4-93a016d9fcb3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", never `.suspense/"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "bc057b27-39a9-46e1-9e0b-a7d1b124ddd8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "sessions/` as a wh"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "cf1d7e5a-e8dc-4cca-a373-3d9b7116168a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ole, so no run sees another"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a3bf773a-4cfa-4928-88db-b86ae595716f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " conversation's sessions."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9d11df23-7b0d-4ff7-8e47-69947fcb1f2d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " The application creates the folder before"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "60ea4176-bb23-46f8-8da0-d08e30641505"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the run if it isn't there"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4a7af310-257b-4dd1-9474-ab0c92f7e60f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". The only vol"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e17f5b02-6eb2-460a-b0e0-21f728c413a9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "umes left"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e4d0d50a-770f-44bc-b8fc-c0275cc443eb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " are one per harness, for its"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0c3182bb-fa24-4e8b-bfdd-82cb1ea864cc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " login and settings, shared by"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7db58389-bea2-4e58-bddc-dfd7a12bfe54"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " every project, as now. Los"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "33be35c5-c0e7-466a-9ad2-58cfd631a9cb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ing the project's sessions fol"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "09741609-4ae8-4058-9835-9fdb6d081ce4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "der costs only the conversations"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2bc3425d-be29-42c5-867b-b3a126936245"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "' context: the next run starts"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e75a51e0-0d36-4d47-b145-cf3192c0a9a5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a new conversation, as when"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c31e89ee-6579-4b6e-a142-286395456211"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a session can't be resumed"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b20beac3-1e9d-44c3-b804-75a871ee8d65"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". Sessions kept in"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "bf4614f9-8946-4e02-8b76-214601bfa890"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " volumes before this aren't"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c9914647-7f75-4f9a-8b87-c15084a6846c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " carried over; each conversation"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b792bcf4-069c-4a3f-b918-db22333f11ec"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " starts fresh.\n>"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "dbfeba85-8587-406c-a7a8-7408819a3b31"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n> **ContainerE"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "709a702b-79a5-4769-af54-45713ede666f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "nvironmentScope,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8ac33f9e-22da-4984-bd60-a7655efac208"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Mounts and Paths"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9a0292ac-da15-4762-982c-66719f46cdde"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ":** the project is mounted"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6f355089-9d77-4efc-8dbc-db0966a3ca8f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " at the same fixed path in"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "00cfb0be-e83f-4bb8-be5d-67ce13a193f7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the container, `/workspace"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1a5dcb90-c88e-4ee4-a843-2cda64410b73"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "`, on every platform, and"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4e16d49f-ee0a-4fda-87e2-bb26ddc56671"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the run works there, so a har"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "eb14e1d4-9410-4f3b-b8b4-ede519040e2d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ness that keys its sessions"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6abaa421-4201-40c1-a3e1-a2649c6cfdd6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " on its working directory, as"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "bb28b293-8620-4679-b544-770288c57f54"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Claude Code does, finds"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "aead6a9a-a731-4100-8eeb-60ebd851b16a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " them again after the project moves."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b48b98d7-6ce2-421a-99e9-2874bc3ee508"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Change Mounts so it"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4aa9b005-c7c8-4ab2-a8e5-b9dbd5a4a157"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " no longer says each location is m"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "87501c10-533b-49b4-b74b-35530a9b1846"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ounted at its host path where the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7542deed-e866-415a-aa03-d336948caa47"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " platform allows."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "58603ac2-8039-4c11-9ec0-d541865ae441"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Paths now applies on every"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7d69d1c5-c760-4e73-ae4f-dee62054d65f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " platform: every path a run re"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4f73f2b0-be10-455c-b50c-5d35c09e0a47"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ports is mapped back to its"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5cfd142c-5cc9-4e59-bc63-d49e13b5f7a7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " host path before it is shown or"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7d9413e5-ac76-4b47-bf44-3e7cc4cad9dc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " opened. Only a path that"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "fb279a65-76c9-46ca-b901-1668d395a845"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is `/workspace` or"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "fa231b21-a286-4a61-b40a-a39232ada3f6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " begins with `/workspace"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7c10a134-baad-495c-8c69-cd2aed56ea07"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "/` is mapped, never"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9b41e6aa-86ea-4098-9bc7-da00122f2df4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " text that merely contains it,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ca7c5952-c8c4-41cc-b948-c925f49a59f4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " as `/workspace-old"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e0175747-e360-4a5e-8bdc-c8913ac392e2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "`. A path that maps to"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0e7abd9b-216f-4ced-89ab-b7b24f1bad9e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " nothing on the host is sh"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3f1e6aa5-5bb2-408b-8f36-00aa86514398"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "own as the run gave it,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "51f2cc7f-ceeb-4811-ae3c-32ae16425e87"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and opens nothing, as"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "12f35c22-ff37-46ba-b2d0-45fbb3111c5a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " now.\n>\n> **"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3fa0a038-858c-492a-b999-6d42cf201e89"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ProjectDataScope:"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "744a8cb9-95ac-4a90-a5c8-26aa3e6f2409"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "** add `.suspense/"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "133261db-f1b2-4e5d-802a-c642f91adf0a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "sessions/` to the project"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7374f1bc-6202-4f61-bdf7-b55a9796b716"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " data. It belongs to this"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2cee36e4-fa28-4e53-9596-62278819fe08"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " machine: git ignores it"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "748611fd-0f20-4b3e-afc9-8379d94b5b8c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and it is never committed, since"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "913699d0-a9ee-4fd1-a088-f05a79e2341d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d78bfe7d-8fd9-4ca6-9643-518bf6fd5a5d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " holds the harness's transc"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b5d3268e-ee15-4ed2-80d1-331517773290"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ripts. Change the parag"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1c69c025-3cef-4f3c-b02c-fecc8af19f52"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "raph that says the harnes"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "fac0285a-fb19-406d-aaed-cf467d2a9a22"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ses' sessions aren't"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "cdfc1990-776f-4d3f-ac07-1f36af235fdc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in `.suspense`:"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a3b925c3-e8d0-43fa-a8a0-4dab0f2e36ae"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the images and logins still aren"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "236917c1-eb91-4244-8f38-d88babd3ee6c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'t, but the sessions now"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5355cfe2-0b06-4cae-a6f2-f2fc396a77f2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " are.\n>\n> **H"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f4051b2a-04e9-4fc5-b42d-1e05212edcfa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "arnessIntegration"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "977dc83b-3893-4f86-9c74-ebeadafec43d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Scope:** the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c6032a7c-b7b1-42df-8f25-c9844037f420"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " spec lane and"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "18901bb4-6925-4f32-9d20-8bda3da08d7c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the questions always run in a container"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "139a3c8b-c2b8-4cd4-836c-b44a4aa92eb3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e7e3fc4e-6e8e-482e-81de-f5fb55010154"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " code lane always on"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1c5217ff-e7e0-4ce5-85ed-5601d0709398"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the host, so each conversation"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "48f6aef0-3450-4ca6-909d-e7696c67d664"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is only "
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f2cada4c-52d9-4e09-a171-2540d1847c13"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ever carried on where"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9295b117-d0f5-47d0-8ad7-e6aa88dfbb0f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it began. A"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "54f9fda8-df06-4244-8aa6-6e2040aa9c96"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " sp"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a52bb922-9e4d-4690-a90f-6026a1b09b9a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec lane or quest"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8a74c2dc-0c60-4588-b468-f2182b7a9e0a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ions conversation from"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8968e4a5-ce9f-4030-bdbc-206f03fc4e85"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " before"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9eb22572-ece6-4ddf-8cb2-9101f7982816"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " this, wh"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ef636f00-d8fc-4abe-acaf-d28ca30bc9d9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ose session the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "74b3d72d-f6a0-4a53-b128-dcdb2dd3bb52"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project's sessions folder do"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c9fd2b20-fad5-42a8-a29a-b972414ab272"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "esn't hold, is t"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3e38b03a-6100-489d-b161-b85215aae74f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ried, and if the harness has"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2fdb05fa-66c0-4f60-a6cd-45b5f01b9399"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " no such session, it is sent"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "86f3a05b-c768-4f3d-aa1f-4340571de32b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " again at once as a new convers"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "87970d5c-97e8-45b1-8ec4-9d8475aa4892"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ation, as now.\n\n---"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3338a996-e03c-423c-bde2-2d906700b21c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\nThe changes from the last"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "fa6aefbc-f1e7-4bd1-8b82-e9a6aee5a26f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " dra"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f95a7a3d-3b91-4d2e-b359-a90075766e90"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ft:\n- **Project "
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "304edd2e-2d1d-440a-b30a-eea6781a000f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ID d"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d5db2a52-c465-4697-bbf9-fa0b819a525b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ropped."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2290f0f7-b624-4b5d-b8c8-973b6fe52968"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "** Its"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0493829a-8699-4a9b-b27d-e26c1829b06b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " only job"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "bfb086f3-27d7-4cb7-97e2-fcc235dd4a68"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " was na"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "42e6bc45-e4bf-4051-ad1c-2c8bdca6d0c3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ming the cache volume."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4931def6-a776-40c2-9302-d44c039d9c35"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n- **The"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1100ef9e-55cd-40e9-8abd-8bc326ddac41"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " sa"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a03d61c4-9953-47c4-988c-835155191ce3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ved container"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4cfe50aa-8e33-4d42-9cdd-379624f21192"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "/host flag dropped."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ed511dc5-203f-41b8-a63e-119b91ec01f1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "** Each lane now"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a7343f07-7e54-49d7-bcad-89c0d2accd53"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " always runs in the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ead1c31b-d468-42a5-a25a-d2b35ca7af0a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " same place, so a"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "12748e7b-3ad0-4def-bcee-f50ac8610add"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " conversation can only "
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e4d75cf2-61eb-4fd0-aa55-103144bc679e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ever be resumed where it began"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c7fd9211-c60c-4b2d-848d-ba5dd6ea1643"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9410d99a-19c5-4ba7-9715-323adf0990a6"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CffZwTRUpihMfxMPufWm7",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "The spec and code still support it, though. The ContainerEnvironmentScope, ProjectDataScope (`runCodeTasksInContainer`), HarnessIntegrationScope and Sending all describe the \"Run code tasks in a container\" option. `src/container.rs` has a `RunKind::Code` plan with the cache volume, and the Settings window has the toggle. It's off by default, so it's easy to never notice.\n\nHere's the prompt with that removed as well:\n\n---\n\n> Code tasks never run in a container, and a project's harness sessions from containerized runs are kept in the project, so a conversation carries on across runs, restarts, and moves of the project.\n>\n> **Remove code containerization:** Spec tasks, a Chain prompt's spec steps and spec follow-up, and questions from the Ask tab are the only runs in a container. Code tasks and a Chain prompt's code step always run on the host, with their protected locations, as the HarnessIntegrationScope says. Remove the project's \"Run code tasks in a container\" option everywhere: the `runCodeTasksInContainer` setting from `.suspense/settings.json` in the ProjectDataScope, its toggle from the SettingsWindowScope, the Code section of the ContainerEnvironmentScope's Mounts, the project's caches and their volume, and every \"while the project's option is on\" in the ContainerEnvironmentScope, the HarnessIntegrationScope, the PromptModeScope, and Sending, including the rule that turning the option on or off starts the code lane on a new conversation. Where `.suspense/settings.json` then holds nothing, the ProjectDataScope says so, or drops it if nothing else uses it. A Code task never needs Podman.\n>\n> **ContainerEnvironmentScope, Volumes:** the harness's sessions are no longer kept in Podman volumes. They are kept in the project, in `.suspense/sessions/`, one folder per conversation: `spec` for the spec lane and `questions` for the Ask tab's questions. Each run mounts only its own conversation's folder, read and write, where the harness keeps its sessions under its home, never `.suspense/sessions/` as a whole, so no run sees another conversation's sessions. The application creates the folder before the run if it isn't there. The only volumes left are one per harness, for its login and settings, shared by every project, as now. Losing the project's sessions folder costs only the conversations' context: the next run starts a new conversation, as when a session can't be resumed. Sessions kept in volumes before this aren't carried over; each conversation starts fresh.\n>\n> **ContainerEnvironmentScope, Mounts and Paths:** the project is mounted at the same fixed path in the container, `/workspace`, on every platform, and the run works there, so a harness that keys its sessions on its working directory, as Claude Code does, finds them again after the project moves. Change Mounts so it no longer says each location is mounted at its host path where the platform allows. Paths now applies on every platform: every path a run reports is mapped back to its host path before it is shown or opened. Only a path that is `/workspace` or begins with `/workspace/` is mapped, never text that merely contains it, as `/workspace-old`. A path that maps to nothing on the host is shown as the run gave it, and opens nothing, as now.\n>\n> **ProjectDataScope:** add `.suspense/sessions/` to the project data. It belongs to this machine: git ignores it and it is never committed, since it holds the harness's transcripts. Change the paragraph that says the harnesses' sessions aren't in `.suspense`: the images and logins still aren't, but the sessions now are.\n>\n> **HarnessIntegrationScope:** the spec lane and the questions always run in a container and the code lane always on the host, so each conversation is only ever carried on where it began. A spec lane or questions conversation from before this, whose session the project's sessions folder doesn't hold, is tried, and if the harness has no such session, it is sent again at once as a new conversation, as now.\n\n---\n\nThe changes from the last draft:\n- **Project ID dropped.** Its only job was naming the cache volume.\n- **The saved container/host flag dropped.** Each lane now always runs in the same place, so a conversation can only ever be resumed where it began."
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1341,
+          "cache_read_input_tokens": 52636,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1341
+          },
+          "output_tokens": 3,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "uuid": "e8b2ddf0-6db3-43e3-98ed-621c7a4faf65",
+      "timestamp": "2026-10-03T15:50:10.337Z",
+      "request_id": "req_011CffZwT6PxWqQNXZ9T8VTz"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7f5a2409-b66d-4fcd-aa81-a88c2b7ba047"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {}
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1341,
+          "cache_read_input_tokens": 52636,
+          "output_tokens": 1540,
+          "output_tokens_details": {
+            "thinking_tokens": 135
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 1540,
+              "cache_read_input_tokens": 52636,
+              "cache_creation_input_tokens": 1341,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 1341
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b34089af-5ad2-4ce1-ac74-c404725838cb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4e18431a-26b7-4037-bc90-ed9c08e4672e"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1791056400,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.03,
+            "resetsAt": 1791056400
+          },
+          "seven_day": {
+            "utilization": 0.43,
+            "resetsAt": 1791313200
+          }
+        }
+      },
+      "uuid": "a362cd14-99e2-494e-9951-18ec1f4ed715",
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2"
+    },
+    {
+      "duration_api_ms": 169614,
+      "stop_reason": "end_turn",
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "total_cost_usd": 0.7936708,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 1341,
+        "cache_read_input_tokens": 52636,
+        "output_tokens": 1540,
+        "output_tokens_details": {
+          "thinking_tokens": 135
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1341,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 1540,
+            "cache_read_input_tokens": 52636,
+            "cache_creation_input_tokens": 1341,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1341
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "modelUsage": {
+        "claude-opus-5-5[1m]": {
+          "inputTokens": 38,
+          "outputTokens": 14866,
+          "thinkingTokens": 4338,
+          "cacheReadInputTokens": 727154,
+          "cacheCreationInputTokens": 43846,
+          "webSearchRequests": 0,
+          "costUSD": 0.7936708,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "is_error": false,
+      "num_turns": 1,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "The spec and code still support it, though. The ContainerEnvironmentScope, ProjectDataScope (`runCodeTasksInContainer`), HarnessIntegrationScope and Sending all describe the \"Run code tasks in a container\" option. `src/container.rs` has a `RunKind::Code` plan with the cache volume, and the Settings window has the toggle. It's off by default, so it's easy to never notice.\n\nHere's the prompt with that removed as well:\n\n---\n\n> Code tasks never run in a container, and a project's harness sessions from containerized runs are kept in the project, so a conversation carries on across runs, restarts, and moves of the project.\n>\n> **Remove code containerization:** Spec tasks, a Chain prompt's spec steps and spec follow-up, and questions from the Ask tab are the only runs in a container. Code tasks and a Chain prompt's code step always run on the host, with their protected locations, as the HarnessIntegrationScope says. Remove the project's \"Run code tasks in a container\" option everywhere: the `runCodeTasksInContainer` setting from `.suspense/settings.json` in the ProjectDataScope, its toggle from the SettingsWindowScope, the Code section of the ContainerEnvironmentScope's Mounts, the project's caches and their volume, and every \"while the project's option is on\" in the ContainerEnvironmentScope, the HarnessIntegrationScope, the PromptModeScope, and Sending, including the rule that turning the option on or off starts the code lane on a new conversation. Where `.suspense/settings.json` then holds nothing, the ProjectDataScope says so, or drops it if nothing else uses it. A Code task never needs Podman.\n>\n> **ContainerEnvironmentScope, Volumes:** the harness's sessions are no longer kept in Podman volumes. They are kept in the project, in `.suspense/sessions/`, one folder per conversation: `spec` for the spec lane and `questions` for the Ask tab's questions. Each run mounts only its own conversation's folder, read and write, where the harness keeps its sessions under its home, never `.suspense/sessions/` as a whole, so no run sees another conversation's sessions. The application creates the folder before the run if it isn't there. The only volumes left are one per harness, for its login and settings, shared by every project, as now. Losing the project's sessions folder costs only the conversations' context: the next run starts a new conversation, as when a session can't be resumed. Sessions kept in volumes before this aren't carried over; each conversation starts fresh.\n>\n> **ContainerEnvironmentScope, Mounts and Paths:** the project is mounted at the same fixed path in the container, `/workspace`, on every platform, and the run works there, so a harness that keys its sessions on its working directory, as Claude Code does, finds them again after the project moves. Change Mounts so it no longer says each location is mounted at its host path where the platform allows. Paths now applies on every platform: every path a run reports is mapped back to its host path before it is shown or opened. Only a path that is `/workspace` or begins with `/workspace/` is mapped, never text that merely contains it, as `/workspace-old`. A path that maps to nothing on the host is shown as the run gave it, and opens nothing, as now.\n>\n> **ProjectDataScope:** add `.suspense/sessions/` to the project data. It belongs to this machine: git ignores it and it is never committed, since it holds the harness's transcripts. Change the paragraph that says the harnesses' sessions aren't in `.suspense`: the images and logins still aren't, but the sessions now are.\n>\n> **HarnessIntegrationScope:** the spec lane and the questions always run in a container and the code lane always on the host, so each conversation is only ever carried on where it began. A spec lane or questions conversation from before this, whose session the project's sessions folder doesn't hold, is tried, and if the harness has no such session, it is sent again at once as a new conversation, as now.\n\n---\n\nThe changes from the last draft:\n- **Project ID dropped.** Its only job was naming the cache volume.\n- **The saved container/host flag dropped.** Each lane now always runs in the same place, so a conversation can only ever be resumed where it began.",
+      "ttft_ms": 2746,
+      "type": "result",
+      "duration_ms": 13828,
+      "uuid": "d15b484b-5aec-4602-9a3c-46ba82203fa4",
+      "ttft_stream_ms": 1182,
+      "time_to_request_ms": 57,
+      "first_content_frame_ms": 1182,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  ]
+}

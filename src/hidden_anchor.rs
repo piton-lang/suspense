@@ -844,9 +844,10 @@ pub fn instructions(mode: SendMode, project_dir: &Path) -> Result<Option<String>
 /// ContainerEnvironmentScope says; on the host, both.
 pub fn seen_locations(mode: Option<SendMode>, project_dir: &Path) -> (bool, bool) {
     use crate::container::RunKind;
-    match RunKind::of(mode, crate::container::code_in_container(project_dir)) {
+    let _ = project_dir;
+    match RunKind::of(mode) {
         Some(RunKind::Spec) => (false, true),
-        Some(RunKind::Question | RunKind::Code) => (true, false),
+        Some(RunKind::Question) => (true, false),
         None => (true, true),
     }
 }

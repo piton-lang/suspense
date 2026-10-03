@@ -154,9 +154,8 @@ shape PromptEditorShape:
 
         Each step also runs where the work of its lane runs, as the
         @{ContainerEnvironmentScope} says: the spec steps in a container
-        holding the spec and no code, the code step in one holding the code
-        and no spec source while the project's "Run code tasks in a container"
-        option is on, and on the host otherwise. Each carries on its own
+        holding the spec and no code, the code step always on the host, with
+        its protected locations. Each carries on its own
         lane's conversation, as the @{HarnessIntegrationScope} says, so a step
         is told what the step before it did only through its prompt: the
         Chain prompt as typed and that step's final output, as the

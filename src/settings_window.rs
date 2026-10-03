@@ -3,16 +3,14 @@
 //! the spec-reading prompt injected into them, and the code-to-spec prompt
 //! added to a Code task sent to Spec, for the open project, and
 //! the harness every run goes to, for the user (see [`crate::agent`]), and
-//! the containers runs go in: whether Podman can run them, whether each
-//! harness is logged in in its container, and the project's option to run
-//! its Code tasks in one (see [`crate::container`]). Every
+//! the containers runs go in: whether Podman can run them, and whether each
+//! harness is logged in in its container (see [`crate::container`]). Every
 //! edit is saved straight away to the project's `.suspense/system-prompts`
 //! (see [`crate::system_prompts`]), and the prompts are read from there each
 //! time the settings open, so an edit made by hand shows up.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Editor, EditorState, InputEvent};
 use gpui_kit::component::radio::Radio;
 use gpui_kit::component::{
@@ -129,8 +127,6 @@ pub struct SettingsWindow {
     prompts: Vec<PromptEditor>,
     /// Where the containers stand, once read.
     containers: Option<Containers>,
-    /// The open project's settings.
-    project: crate::project_settings::ProjectSettings,
     _containers_read: Task<()>,
     /// Set while the editors are filled from disk, so doing so saves nothing.
     loading: bool,
@@ -188,7 +184,6 @@ impl SettingsWindow {
         let mut this = Self {
             prompts,
             containers: None,
-            project: Default::default(),
             _containers_read: Task::ready(()),
             loading: false,
             scroll: ScrollHandle::new(),
@@ -238,10 +233,6 @@ impl SettingsWindow {
             }
         }
         self.loading = false;
-        self.project = project_dir
-            .as_deref()
-            .map(crate::project_settings::read)
-            .unwrap_or_default();
         self.read_containers(project_dir, cx);
         cx.notify();
     }
@@ -276,23 +267,6 @@ impl SettingsWindow {
         });
     }
 
-    /// Turns the project's option to run its Code tasks in a container on
-    /// or off, saving it with the project straight away.
-    fn set_code_in_container(&mut self, on: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(project_dir) = ProjectDirectory::get(cx) else {
-            return;
-        };
-        self.project.run_code_tasks_in_container = on;
-        if let Err(err) = crate::project_settings::write(&project_dir, &self.project) {
-            window.push_notification(
-                gpui_kit::component::notification::Notification::error(format!("{err:#}"))
-                    .title("Could not save the project's settings"),
-                cx,
-            );
-        }
-        cx.notify();
-    }
-
     /// Logs `agent` in again in its container, in the login view.
     fn log_in_again(&mut self, agent: Agent, window: &mut Window, cx: &mut Context<Self>) {
         let Some(project_dir) = ProjectDirectory::get(cx) else {
@@ -315,8 +289,8 @@ impl SettingsWindow {
         );
     }
 
-    /// Whether Podman can run the containers, each harness's login in its
-    /// container, and the project's option to run Code tasks in one.
+    /// Whether Podman can run the containers, and each harness's login in
+    /// its container.
     fn render_containers(&self, cx: &mut Context<Self>) -> impl IntoElement {
         use crate::container::{MachineAction, Platform, PodmanState};
         let muted = cx.theme().muted_foreground;
@@ -409,40 +383,12 @@ impl SettingsWindow {
                         )),
                     )
             }));
-        let option: AnyElement = if ProjectDirectory::get(cx).is_some() {
+        v_flex().gap_5().child(podman).child(
             v_flex()
-                .gap_1()
-                .child(
-                    Checkbox::new("settings-code-in-container")
-                        .label("Run code tasks in a container")
-                        .checked(self.project.run_code_tasks_in_container)
-                        .on_click(cx.listener(|this, checked: &bool, window, cx| {
-                            this.set_code_in_container(*checked, window, cx)
-                        })),
-                )
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(muted)
-                        .child("Code tasks and a Chain prompt's code step then run in a container holding the code and no spec source, and otherwise on the host. It applies from the next one to start."),
-                )
-                .into_any_element()
-        } else {
-            div()
-                .text_color(muted)
-                .child("Open a project to set its options.")
-                .into_any_element()
-        };
-        v_flex()
-            .gap_5()
-            .child(podman)
-            .child(
-                v_flex()
-                    .gap_2()
-                    .child(div().font_semibold().child("Logins"))
-                    .child(logins),
-            )
-            .child(option)
+                .gap_2()
+                .child(div().font_semibold().child("Logins"))
+                .child(logins),
+        )
     }
 
     /// Saves `which` as edited.
@@ -683,7 +629,8 @@ impl Render for SettingsWindow {
                 "Containers",
                 "Spec tasks, a Chain prompt's spec steps, and questions always \
                  run in a container holding only what their mode may use, so \
-                 a spec run can't read or change the code."
+                 a spec run can't read or change the code. Code tasks always \
+                 run on the host."
                     .to_string(),
                 "",
             ),

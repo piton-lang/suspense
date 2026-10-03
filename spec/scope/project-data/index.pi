@@ -6,7 +6,6 @@ from /scope/project-directory import ProjectDirectoryScope
 from /scope/project-locations import ProjectLocationsScope
 from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from /scope/run-targets import RunTargetsScope
-from /scope/settings-window import SettingsWindowScope
 
 export scope ProjectDataScope:
     concept: {ProjectDataConcept}
@@ -37,7 +36,7 @@ shape ProjectDataShape:
         - `harness.json`: the last report the harness gave of the skills and agents it has
         - `fluency.md`: the project's Piton fluency, as `piton agent --print-fluency` printed it at the last spec build, generated rather than edited, for the Spec and Chain prompts to point at, as the @{ModeSystemPromptsScope} says
         - `conversations.json`: which conversation of each lane's tasks, the spec lane's and the code lane's, and of the questions, was last left for a new one, as the @{HarnessIntegrationScope} says, so it isn't carried on again once the project is reopened
-        - `settings.json`: the project's own settings, edited in the @{SettingsWindowScope}: for now only whether to run code tasks in a container, `runCodeTasksInContainer`, true or false, false when it isn't there, as the @{ContainerEnvironmentScope} says
+        - `sessions/`: the harness's sessions for each conversation run in a container, a folder per conversation, `spec` for the spec lane's and `questions` for the questions', each mounted into that conversation's runs only, as the @{ContainerEnvironmentScope} says, so a conversation carries on across runs, restarts, and moves of the project
         - `Containerfile`: written by hand, when the project has one, built FROM the application's default image to add what the project's runs need, such as its toolchains, as the @{ContainerEnvironmentScope} says
 
         The draft, `.suspense-draft.pi`, isn't in `.suspense`: it is the prompt
@@ -52,19 +51,20 @@ shape ProjectDataShape:
         `.suspense/queue/`,
         the commit notes `.suspense/commit-notes.json`, the conversations left
         `.suspense/conversations.json`, whose conversations only this machine's
-        harness knows, the snapshot index `.suspense/snapshot-index`, and the
-        draft
+        harness knows, the harness's sessions `.suspense/sessions/`, which
+        hold its transcripts, the snapshot index `.suspense/snapshot-index`,
+        and the draft
         `.suspense-draft.pi` wherever it is, should it ever be written. Git
         ignores these, so they are never committed. Everything else, the prompt
         history, the questions, the divergence reports, the system prompts,
-        the project's settings, and its Containerfile, is kept with the
-        project.
+        and the project's Containerfile, is kept with the project.
 
-        The containers' images and volumes, the harnesses' logins, their
-        sessions, and the project's caches, belong to this machine and to the
-        application, never to the project, and aren't in `.suspense` at all:
-        Podman keeps them, as the @{ContainerEnvironmentScope} says. Losing
-        them costs a login or a cache, never anything of the project's.
+        The containers' images and volumes and the harnesses' logins belong
+        to this machine and to the application, never to the project, and
+        aren't in `.suspense` at all: Podman keeps them, as the
+        @{ContainerEnvironmentScope} says. Losing them costs a login, never
+        anything of the project's. The harnesses' sessions are in
+        `.suspense`, in `.suspense/sessions/`, kept on this machine only.
 
     taskSnapshots:
         In a project that is a git repository, every task the harness runs

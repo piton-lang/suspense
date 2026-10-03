@@ -37,15 +37,15 @@ shape PromptSendingShape:
         as the @{ProjectDataScope} says. A prompt that fails to compile or run
         fails its task, and doesn't stop its queue.
 
-        A task whose mode runs in a container, a Spec task, a Chain prompt's
-        steps, and a Code task while the project's "Run code tasks in a
-        container" option is on, is run in one, as the
+        A task whose mode runs in a container, a Spec task or a Chain
+        prompt's spec step or spec follow-up, is run in one, as the
         @{ContainerEnvironmentScope} says, showing "Preparing environment"
         while its image is built; one that can't be, as where Podman isn't
         installed, fails as a task that can't be run does, and is never run on
-        the host instead. Once a Spec task or a Chain prompt's spec step is
-        over, however it ended, the spec is built again on the host, as the
-        @{SpecBuildScope} says.
+        the host instead. A Code task and a Chain prompt's code step always
+        run on the host, and never need Podman. Once a Spec task or a Chain
+        prompt's spec step is over, however it ended, the spec is built
+        again on the host, as the @{SpecBuildScope} says.
 
     lanes:
         Tasks run in two lanes, the code lane and the spec lane, each with a

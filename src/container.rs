@@ -57,48 +57,35 @@ impl Platform {
     pub fn has_machine(self) -> bool {
         self != Platform::Linux
     }
-
-    /// Whether a host path can be mounted at the same path in a container:
-    /// on Linux, and on macOS, whose Podman machine shares the user's files
-    /// at their own paths; not on Windows, whose paths a Linux container
-    /// can't hold.
-    pub fn same_paths(self) -> bool {
-        self != Platform::Windows
-    }
 }
 
 /// The kinds of run that go in a container, each seeing what its mode may
-/// use, as the mounts say.
+/// use, as the mounts say. Code tasks, and a Chain prompt's code step, always
+/// run on the host.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RunKind {
     /// A Spec task, or a Chain prompt's spec step or spec follow-up.
     Spec,
     /// A question from the Ask tab.
     Question,
-    /// A Code task, or a Chain prompt's code step, with the project's option
-    /// on.
-    Code,
 }
 
 impl RunKind {
     /// Where a prompt sent in `mode` runs: in a container of this kind, or
-    /// on the host for none. `code_in_container` is the project's "Run code
-    /// tasks in a container" option. A Chain prompt's own task is its spec
-    /// step; its code step is sent in Code. Freeform always runs on the host.
-    pub fn of(mode: Option<SendMode>, code_in_container: bool) -> Option<Self> {
+    /// on the host for none. A Chain prompt's own task is its spec step; its
+    /// code step is sent in Code, which, like Freeform, runs on the host.
+    pub fn of(mode: Option<SendMode>) -> Option<Self> {
         match mode? {
             SendMode::Spec | SendMode::Both => Some(RunKind::Spec),
             SendMode::Ask => Some(RunKind::Question),
-            SendMode::Code => code_in_container.then_some(RunKind::Code),
-            SendMode::Freeform => None,
+            SendMode::Code | SendMode::Freeform => None,
         }
     }
 
-    /// Which conversation its sessions are kept in.
+    /// Which conversation its sessions are kept for, by its folder's name.
     fn conversation(self) -> &'static str {
         match self {
             RunKind::Spec => "spec",
-            RunKind::Code => "code",
             RunKind::Question => "questions",
         }
     }
@@ -111,18 +98,29 @@ pub struct Mount {
     pub writable: bool,
 }
 
-/// Where the user's files live in a container on Windows, where they can't
-/// be mounted at their own paths.
-const WORKSPACE: &str = "/workspace";
+/// Where the project is in a container, on every platform, so a harness that
+/// keys its sessions on where it works finds them again after the project
+/// moves.
+pub const WORKSPACE: &str = "/workspace";
 
 /// The home directory of the harness in a container.
 pub const HOME: &str = "/home/suspense";
 
-/// Where a Code run's caches live in its container.
-const CACHE: &str = "/cache";
+/// The folder of the project's data the harness's sessions are kept in, one
+/// folder per conversation.
+const SESSIONS_DIR: &str = "sessions";
+
+/// The folder the harness's sessions for `kind`'s conversation in the project
+/// at `project_dir` are kept in.
+pub fn sessions_folder(project_dir: &Path, kind: RunKind) -> PathBuf {
+    project_dir
+        .join(APP_DIR)
+        .join(SESSIONS_DIR)
+        .join(kind.conversation())
+}
 
 /// How one run is put in a container: what it mounts, what it hides, and
-/// the volumes it keeps its login, sessions, and caches in.
+/// where it keeps its login and sessions.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Plan {
     pub kind: RunKind,
@@ -134,6 +132,9 @@ pub struct Plan {
     /// Folders inside a mount that the run must not see, hidden behind an
     /// empty, read-only folder.
     pub hidden: Vec<PathBuf>,
+    /// The folder its conversation's sessions are kept in, mounted where the
+    /// harness keeps them under its home; none for a run of no conversation.
+    pub sessions: Option<PathBuf>,
 }
 
 impl Plan {
@@ -181,19 +182,13 @@ impl Plan {
                 mounts.push(ro(reference));
                 mounts.push(ro(config));
             }
-            RunKind::Code => {
-                mounts.push(rw(code.clone()));
-                mounts.push(ro(reference));
-                mounts.push(ro(config));
-                mounts.extend(understanding.map(|file| rw(file.to_path_buf())));
-            }
         }
         // What a mount holds that the run must not see: the other location,
         // the project's data, and its git directory.
         let mut unseen = vec![data, project_dir.join(".git")];
         match kind {
             RunKind::Spec => unseen.push(code),
-            RunKind::Question | RunKind::Code => unseen.extend(spec),
+            RunKind::Question => unseen.extend(spec),
         }
         let hidden = unseen
             .into_iter()
@@ -212,13 +207,15 @@ impl Plan {
             platform,
             mounts,
             hidden,
+            sessions: Some(sessions_folder(project_dir, kind)),
         }
     }
 
     /// This plan as the host stands: a folder it writes to that isn't there
-    /// yet made, as the compiled reference before the first build, and
-    /// anything else that isn't there left out, as the fluency file before
-    /// it is written, since only what is there can be mounted.
+    /// yet made, as the compiled reference before the first build or its
+    /// conversation's sessions folder, and anything else that isn't there
+    /// left out, as the fluency file before it is written, since only what
+    /// is there can be mounted.
     pub fn as_on_host(&self) -> Self {
         let mut plan = self.clone();
         plan.mounts.retain(|mount| {
@@ -228,50 +225,66 @@ impl Plan {
             mount.host.exists()
         });
         plan.hidden.retain(|hidden| hidden.exists());
+        if let Some(sessions) = &plan.sessions {
+            if !sessions.exists() {
+                std::fs::create_dir_all(sessions).ok();
+            }
+            // The harness's transcripts belong to this machine: git never
+            // sees them, whatever the project's own ignores say.
+            if let Some(all) = sessions.parent() {
+                let ignore = all.join(".gitignore");
+                if !ignore.exists() {
+                    std::fs::write(ignore, "*\n").ok();
+                }
+            }
+        }
         plan
     }
 
-    /// Where the host path `host` is in the container: the same path where
-    /// the platform allows, and otherwise under the workspace, from the
-    /// project directory.
+    /// Where the host path `host` is in the container: under the workspace,
+    /// at its place from the project directory, on every platform.
     pub fn container_path(&self, host: &Path) -> PathBuf {
-        if self.platform.same_paths() {
-            return host.to_path_buf();
-        }
         let within = host.strip_prefix(&self.project_dir).unwrap_or(host);
         let mut path = PathBuf::from(WORKSPACE);
         for part in within.components() {
-            path.push(part.as_os_str());
+            if let std::path::Component::Normal(part) = part {
+                path.push(part);
+            }
         }
         path
     }
 
     /// The host path of `path`, a path the run reported from its container;
-    /// none when it is nowhere on the host.
+    /// none when it is nowhere on the host, as one outside the workspace.
     #[cfg(test)]
     pub fn to_host(&self, path: &Path) -> Option<PathBuf> {
-        if self.platform.same_paths() {
-            return Some(path.to_path_buf());
-        }
         let within = path.strip_prefix(WORKSPACE).ok()?;
         Some(self.project_dir.join(within))
     }
 
     /// A line the run printed, every path in it from its container mapped
-    /// back to the host, so whatever reads it sees host paths.
+    /// back to the host, so whatever reads it sees host paths: only a path
+    /// that is the workspace, or is in it, never text that merely holds its
+    /// name, as `/workspace-old`.
     pub fn map_line(&self, line: &str) -> String {
-        if self.platform.same_paths() {
-            return line.to_string();
-        }
         // JSON escapes a Windows path's separators.
         let host = self.project_dir.to_string_lossy().replace('\\', "\\\\");
-        line.replace(WORKSPACE, &host)
-    }
-
-    /// The volume holding the harness's sessions for this run's
-    /// conversation in its project.
-    pub fn session_volume(&self) -> String {
-        session_volume(&self.project_dir, self.kind)
+        let path_char = |c: char| c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | '~' | '+');
+        let mut out = String::with_capacity(line.len());
+        let mut rest = line;
+        while let Some(at) = rest.find(WORKSPACE) {
+            let before = rest[..at].chars().next_back();
+            let after = rest[at + WORKSPACE.len()..].chars().next();
+            // A path of its own: nothing of another path before it, and
+            // nothing after it but its end or a separator.
+            let starts = before.is_none_or(|c| !path_char(c) && c != '/');
+            let ends = after.is_none_or(|c| !path_char(c));
+            out.push_str(&rest[..at]);
+            out.push_str(if starts && ends { &host } else { WORKSPACE });
+            rest = &rest[at + WORKSPACE.len()..];
+        }
+        out.push_str(rest);
+        out
     }
 
     /// The arguments to `podman` that run `command` with `args` in a
@@ -294,31 +307,18 @@ impl Plan {
         }
         out.extend(["--label".into(), "suspense=run".into()]);
         out.extend(["-e".into(), format!("HOME={HOME}").into()]);
-        // The harness's login and settings, shared by every project, and the
-        // sessions of this conversation in this project over them.
+        // The harness's login and settings, shared by every project.
         out.extend([
             "-v".into(),
             format!("{}:{HOME}:U", home_volume(self.agent)).into(),
         ]);
-        out.extend([
-            "-v".into(),
-            format!(
-                "{}:{HOME}/{}:U",
-                self.session_volume(),
-                session_dir(self.agent)
-            )
-            .into(),
-        ]);
-        if self.kind == RunKind::Code {
-            out.extend([
-                "-v".into(),
-                format!("{}:{CACHE}:U", cache_volume(&self.project_dir)).into(),
-            ]);
-            out.extend(["-e".into(), format!("CARGO_HOME={CACHE}/cargo").into()]);
-            out.extend([
-                "-e".into(),
-                format!("CARGO_TARGET_DIR={CACHE}/target").into(),
-            ]);
+        // Its conversation's sessions, from the project, where the harness
+        // keeps them; no other conversation's.
+        if let Some(sessions) = &self.sessions {
+            let mut spec: OsString = "type=bind,src=".into();
+            spec.push(sessions.as_os_str());
+            spec.push(format!(",dst={HOME}/{}", session_dir(self.agent)));
+            out.extend(["--mount".into(), spec]);
         }
         for mount in &self.mounts {
             let mut spec: OsString = "type=bind,src=".into();
@@ -337,7 +337,7 @@ impl Plan {
             out.extend(["--mount".into(), spec]);
         }
         out.push("-w".into());
-        out.push(self.container_path(&self.project_dir).into_os_string());
+        out.push(WORKSPACE.into());
         out.push(image.into());
         out.push(command.into());
         out.extend(args.iter().cloned());
@@ -346,23 +346,9 @@ impl Plan {
 }
 
 /// The volume a harness keeps its login and settings in, shared by every
-/// project.
+/// project: the only volume the application keeps.
 pub fn home_volume(agent: Agent) -> String {
     format!("suspense-home-{}", agent.command())
-}
-
-/// The volume a harness keeps the sessions of a project's conversation in.
-pub fn session_volume(project_dir: &Path, kind: RunKind) -> String {
-    format!(
-        "suspense-sessions-{}-{}",
-        project_key(project_dir),
-        kind.conversation()
-    )
-}
-
-/// The volume a project's Code runs keep their caches in.
-pub fn cache_volume(project_dir: &Path) -> String {
-    format!("suspense-cache-{}", project_key(project_dir))
 }
 
 /// Where, under its home, a harness keeps its sessions.
@@ -745,7 +731,8 @@ pub fn default_containerfile(versions: &[(Agent, Option<String>)], with_piton: b
         "FROM docker.io/library/node:22-bookworm-slim\n\
          RUN apt-get update \\\n \
          && apt-get install -y --no-install-recommends git ca-certificates ripgrep \\\n \
-         && rm -rf /var/lib/apt/lists/*\n",
+         && rm -rf /var/lib/apt/lists/*\n\
+         RUN mkdir -p /workspace\n",
     );
     file.push_str(&format!("RUN npm install -g {packages}\n"));
     if with_piton {
@@ -929,6 +916,7 @@ fn bare(agent: Agent, kind: RunKind, platform: Platform) -> Plan {
         platform,
         mounts: Vec::new(),
         hidden: Vec::new(),
+        sessions: None,
     }
 }
 
@@ -986,12 +974,6 @@ pub fn asks_for_code(line: &str) -> bool {
     line.contains("paste") && line.contains("code")
 }
 
-/// The project's "Run code tasks in a container" option, from its
-/// settings, as the ProjectDataScope says; off when they don't say.
-pub fn code_in_container(project_dir: &Path) -> bool {
-    crate::project_settings::read(project_dir).run_code_tasks_in_container
-}
-
 #[cfg(test)]
 mod tests {
     use std::ffi::OsString;
@@ -1022,8 +1004,8 @@ mod tests {
 
     /// A Spec run sees the spec, the reference, the fluency, the config, and
     /// its understanding file, and never the code; a question the code, the
-    /// reference, and the config, all read only, and never the spec; a Code
-    /// run the code, read and write, and never the spec.
+    /// reference, and the config, all read only, and never the spec. Each
+    /// is at its place under /workspace, never at its host path.
     #[test]
     fn each_kind_of_run_mounts_only_what_it_may_use() {
         let project = Path::new("/home/me/proj");
@@ -1050,7 +1032,6 @@ mod tests {
             Some(false)
         );
         assert_eq!(mounted(&spec, &understanding), Some(true));
-        assert_eq!(mounted(&spec, &project.join("src")), None);
         assert!(
             !spec
                 .mounts
@@ -1059,7 +1040,12 @@ mod tests {
         );
         let spec_args = args(&spec).join(" ");
         assert!(!spec_args.contains("/home/me/proj/src"), "{spec_args}");
+        assert!(
+            spec_args.contains("src=/home/me/proj/spec,dst=/workspace/spec"),
+            "{spec_args}"
+        );
         assert!(spec_args.contains("--userns=keep-id"));
+        assert!(spec_args.contains("-w /workspace"));
 
         let question = Plan::new(
             RunKind::Question,
@@ -1078,28 +1064,8 @@ mod tests {
                 .any(|mount| mount.host.starts_with(project.join("spec")))
         );
 
-        let code = Plan::new(
-            RunKind::Code,
-            Agent::Claude,
-            project,
-            &locations(project),
-            Some(&understanding),
-            Platform::Linux,
-        );
-        assert_eq!(mounted(&code, &project.join("src")), Some(true));
-        assert_eq!(
-            mounted(&code, &project.join(".claude/reference")),
-            Some(false)
-        );
-        assert!(
-            !code
-                .mounts
-                .iter()
-                .any(|mount| mount.host.starts_with(project.join("spec")))
-        );
-
         // Nothing else from the host: no home, no git directory.
-        for plan in [&spec, &question, &code] {
+        for plan in [&spec, &question] {
             for mount in &plan.mounts {
                 assert!(mount.host.starts_with(project), "{mount:?}");
                 assert!(!mount.host.starts_with(project.join(".git")));
@@ -1107,25 +1073,14 @@ mod tests {
         }
     }
 
-    /// Code runs go in a container only with the project's option on; Spec,
-    /// Chain, and questions always; Freeform never.
+    /// Spec, Chain, and questions run in a container; Code and Freeform never.
     #[test]
     fn which_runs_go_in_a_container() {
-        assert_eq!(
-            RunKind::of(Some(SendMode::Spec), false),
-            Some(RunKind::Spec)
-        );
-        assert_eq!(
-            RunKind::of(Some(SendMode::Both), false),
-            Some(RunKind::Spec)
-        );
-        assert_eq!(
-            RunKind::of(Some(SendMode::Ask), false),
-            Some(RunKind::Question)
-        );
-        assert_eq!(RunKind::of(Some(SendMode::Code), false), None);
-        assert_eq!(RunKind::of(Some(SendMode::Code), true), Some(RunKind::Code));
-        assert_eq!(RunKind::of(Some(SendMode::Freeform), true), None);
+        assert_eq!(RunKind::of(Some(SendMode::Spec)), Some(RunKind::Spec));
+        assert_eq!(RunKind::of(Some(SendMode::Both)), Some(RunKind::Spec));
+        assert_eq!(RunKind::of(Some(SendMode::Ask)), Some(RunKind::Question));
+        assert_eq!(RunKind::of(Some(SendMode::Code)), None);
+        assert_eq!(RunKind::of(Some(SendMode::Freeform)), None);
     }
 
     /// A code location holding the spec and the project's data hides them
@@ -1155,84 +1110,127 @@ mod tests {
         }
         let joined = args(&question).join(" ");
         assert!(
-            joined.contains("type=tmpfs,dst=/p/spec,ro=true"),
+            joined.contains("type=tmpfs,dst=/workspace/spec,ro=true"),
             "{joined}"
         );
     }
 
     /// Each harness keeps its login in a volume of its own, shared by every
-    /// project, and each conversation of a project its sessions.
+    /// project, the only volume; each conversation keeps its sessions in its
+    /// own folder of the project, which only its runs mount.
     #[test]
-    fn volumes_are_named_for_what_they_keep() {
+    fn sessions_are_kept_in_the_project_by_conversation() {
         let a = Path::new("/home/me/alpha");
         assert_eq!(home_volume(Agent::Claude), "suspense-home-claude");
-        assert_ne!(
-            session_volume(a, RunKind::Spec),
-            session_volume(a, RunKind::Code)
-        );
-        assert_ne!(
-            session_volume(a, RunKind::Spec),
-            session_volume(Path::new("/home/me/beta"), RunKind::Spec)
-        );
-        assert!(session_volume(a, RunKind::Question).starts_with("suspense-sessions-alpha-"));
-        let plan = Plan::new(
-            RunKind::Code,
+        let spec = Plan::new(
+            RunKind::Spec,
             Agent::Claude,
             a,
             &locations(a),
             None,
             Platform::Linux,
         );
-        let joined = args(&plan).join(" ");
-        assert!(joined.contains(&format!("{}:/home/suspense:U", home_volume(Agent::Claude))));
-        assert!(joined.contains(&format!("{}:/cache:U", cache_volume(a))));
-    }
-
-    /// Where mounts can't be at their host paths, as on Windows, what a run
-    /// reports from its container is mapped back to the host.
-    #[test]
-    fn container_paths_map_back_to_the_host() {
-        let project = Path::new("/home/me/proj");
-        let linux = Plan::new(
-            RunKind::Spec,
+        let question = Plan::new(
+            RunKind::Question,
             Agent::Claude,
-            project,
-            &locations(project),
+            a,
+            &locations(a),
             None,
             Platform::Linux,
         );
+        assert_eq!(spec.sessions, Some(a.join(".suspense/sessions/spec")));
         assert_eq!(
-            linux.container_path(&project.join("spec")),
-            project.join("spec")
+            question.sessions,
+            Some(a.join(".suspense/sessions/questions"))
         );
-        assert_eq!(
-            linux.map_line("/home/me/proj/spec/a.pi"),
-            "/home/me/proj/spec/a.pi"
+        let joined = args(&spec).join(" ");
+        assert!(
+            joined.contains("suspense-home-claude:/home/suspense:U"),
+            "{joined}"
         );
+        assert!(
+            joined.contains(
+                "src=/home/me/alpha/.suspense/sessions/spec,dst=/home/suspense/.claude/projects"
+            ),
+            "{joined}"
+        );
+        assert!(!joined.contains("sessions/questions"), "{joined}");
+        assert!(
+            !joined.contains("src=/home/me/alpha/.suspense/sessions,"),
+            "{joined}"
+        );
+        assert!(
+            !joined.contains("suspense-sessions-") && !joined.contains("/cache"),
+            "{joined}"
+        );
+    }
 
-        let windows = Plan::new(
-            RunKind::Spec,
+    /// A run's sessions folder is made before it runs, and kept from git.
+    #[test]
+    fn the_sessions_folder_is_made_and_ignored() {
+        let project =
+            std::env::temp_dir().join(format!("suspense-sessions-{}", std::process::id()));
+        std::fs::remove_dir_all(&project).ok();
+        std::fs::create_dir_all(&project).unwrap();
+        Plan::new(
+            RunKind::Question,
             Agent::Claude,
-            project,
-            &locations(project),
+            &project,
+            &locations(&project),
             None,
-            Platform::Windows,
-        );
+            Platform::Linux,
+        )
+        .as_on_host();
+        assert!(project.join(".suspense/sessions/questions").is_dir());
         assert_eq!(
-            windows.container_path(&project.join("spec/a.pi")),
-            PathBuf::from("/workspace/spec/a.pi")
+            std::fs::read_to_string(project.join(".suspense/sessions/.gitignore")).unwrap(),
+            "*\n"
         );
-        assert_eq!(
-            windows.to_host(Path::new("/workspace/spec/a.pi")),
-            Some(project.join("spec/a.pi"))
-        );
-        assert_eq!(windows.to_host(Path::new("/etc/passwd")), None);
-        assert_eq!(
-            windows.map_line(r#"{"file_path":"/workspace/spec/a.pi"}"#),
-            r#"{"file_path":"/home/me/proj/spec/a.pi"}"#
-        );
-        assert!(args(&windows).join(" ").contains("-w /workspace"));
-        assert!(!args(&windows).join(" ").contains("keep-id"));
+        std::fs::remove_dir_all(&project).ok();
+    }
+
+    /// On every platform, what a run reports from /workspace is mapped back
+    /// to the host: only a path that is /workspace or in it.
+    #[test]
+    fn container_paths_map_back_to_the_host() {
+        let project = Path::new("/home/me/proj");
+        for platform in [Platform::Linux, Platform::MacOs, Platform::Windows] {
+            let plan = Plan::new(
+                RunKind::Spec,
+                Agent::Claude,
+                project,
+                &locations(project),
+                None,
+                platform,
+            );
+            assert_eq!(
+                plan.container_path(&project.join("spec/a.pi")),
+                PathBuf::from("/workspace/spec/a.pi")
+            );
+            assert_eq!(
+                plan.to_host(Path::new("/workspace/spec/a.pi")),
+                Some(project.join("spec/a.pi"))
+            );
+            assert_eq!(plan.to_host(Path::new("/etc/passwd")), None);
+            assert_eq!(
+                plan.map_line(r#"{"file_path":"/workspace/spec/a.pi","cwd":"/workspace"}"#),
+                r#"{"file_path":"/home/me/proj/spec/a.pi","cwd":"/home/me/proj"}"#
+            );
+            // Text that merely holds the name stays as it was.
+            for kept in [
+                "/workspace-old/a",
+                "/home/workspace/a",
+                "my/workspace/a",
+                "/workspaces",
+            ] {
+                assert_eq!(plan.map_line(kept), kept, "{kept} was mapped");
+            }
+            assert_eq!(
+                plan.map_line("cd /workspace && ls"),
+                "cd /home/me/proj && ls"
+            );
+            assert!(args(&plan).join(" ").contains("-w /workspace"));
+        }
     }
 
     /// Without Podman, a run says it is needed, linking its installation

@@ -59,11 +59,10 @@ shape ModeSystemPromptsShape:
         see, as the @{ContainerEnvironmentScope} says. A run of the spec
         lane, a Spec task or a Chain prompt's spec step, can't see the code
         location, and fills CODE_LOCATION in with nothing, its instructions and
-        system template alike. A question, and a run of the code lane while
-        the project's "Run code tasks in a container" option is on, a Code
-        task, a Chain prompt's code step, or a Freeform task, can't see the
-        spec location, and fill SPEC_LOCATION in with nothing. A run of the
-        code lane while the option is off fills both in, as ever.
+        system template alike. A question can't see the spec location, and
+        fills SPEC_LOCATION in with nothing. A run of the code lane, a Code
+        task, a Chain prompt's code step, or a Freeform task, runs on the
+        host and fills both in, as ever.
 
         A paragraph that held nothing but a placeholder filled in with
         nothing goes with it. A paragraph holding CODE_LOCATION or

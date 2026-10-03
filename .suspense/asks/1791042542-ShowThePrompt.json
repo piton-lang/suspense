@@ -1,0 +1,3221 @@
+{
+  "userPrompt": "Ok so give me the prompt.",
+  "harness": "claude",
+  "systemPrompt": "We're working in a project whose spec is compiled to .claude/reference, which is where to read it. Each prompt starts with a <task-instructions> block saying what that prompt is for and what it may change. Follow the block at the top of the prompt you are answering; an earlier prompt's block no longer applies.\n\nIts code is located in ./src.\n\nRead the spec from its compiled reference under .claude/reference, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with this harness's adapter.\n\nBefore executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.",
+  "instructions": "We're only asking a question about the project. Answer it without changing anything.\n\nThe code is located in ./src.",
+  "resumed": true,
+  "output": [
+    {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "/home/hyphyphyph/piton/repl",
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "tools": [
+        "Task",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "ListAgents",
+        "Monitor",
+        "NotebookEdit",
+        "PushNotification",
+        "Read",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write",
+        "mcp__claude_ai_Claude_Docs__batch",
+        "mcp__claude_ai_Claude_Docs__create",
+        "mcp__claude_ai_Claude_Docs__delete",
+        "mcp__claude_ai_Claude_Docs__export",
+        "mcp__claude_ai_Claude_Docs__guide",
+        "mcp__claude_ai_Claude_Docs__query",
+        "mcp__claude_ai_Claude_Docs__read",
+        "mcp__claude_ai_Claude_Docs__update"
+      ],
+      "mcp_servers": [
+        {
+          "name": "claude.ai Claude Docs",
+          "status": "connected",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Drive",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Gmail",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Calendar",
+          "status": "needs-auth",
+          "source": "claudeai"
+        }
+      ],
+      "model": "claude-opus-5-5[1m]",
+      "permissionMode": "auto",
+      "slash_commands": [
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "output-style",
+        "context",
+        "effort",
+        "fast",
+        "focus",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "skill-doctor",
+        "goal",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "terminal_slash_commands": [
+        "doctor",
+        "color",
+        "focus",
+        "reload-plugins"
+      ],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.281",
+      "output_style": "default",
+      "agents": [
+        "claude",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
+      "skills": [
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "plugins": [
+        {
+          "name": "agents-md",
+          "path": "builtin",
+          "source": "agents-md@builtin"
+        },
+        {
+          "name": "telemetry",
+          "path": "builtin",
+          "source": "telemetry@builtin"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "msg_lifecycle_v1",
+        "mcp_read_resource_v1",
+        "mcp_tool_ui_meta_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "84a86b92-c91a-4aff-b084-a6eedf0a503d",
+      "memory_paths": {
+        "auto": "/home/suspense/.claude/projects/-home-hyphyphyph-piton-repl/memory/"
+      },
+      "messaging_socket_path": "/tmp/cc-socks/1.sock",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "per_turn_effort_active": true,
+      "view_mode": "default"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "uuid": "d201d074-129a-4594-b0df-2cca9fad3d76"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011CffZsffKz2CwSR3a9h8ux",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 1191,
+            "cache_read_input_tokens": 51445,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1191
+            },
+            "output_tokens": 8,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "bc9a5438-d2dd-4384-bdd5-61709fb884c0",
+      "ttft_ms": 1054
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "244b5917-6d9b-4356-89a3-a19f61af6136"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "uuid": "f7cbc7fd-4a72-4cd2-8216-7ece714edb27"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "76d00765-68eb-4c45-acdc-af732ff78ca1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "bad4df75-171f-43fe-ad65-1262d2d2c665"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 294,
+      "estimated_tokens_delta": 244,
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "uuid": "516d18b5-6711-448d-975b-7565ace64b09"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "CAQSkAkKEAgSGAI4AUIIdGhpbmtpbmcSDGF+mLXtFwtO8WqXEBoM6heF4qbPuV4Y3bflIjAuHYjbCwPrCysTUtxUc/xvMV88V8dbQheh65TlK0XpTzwA1n+A/T1FLpFiDrQPQKwqrQih03rp50MgdHlTuNKf+ZZFUaJRvX+2Y7kAwB9CxHJAmxZgDykCKD0ySe2RfCy8VcDU8+LtefGxSDpNSXWOzsZGnkt1YIfypNSTmcrg4v+92h4BQKV7Qdj2AHUDR1Cz3vdwE88+BZcL+Az2UQR1CevtLK+0s5URdgQi7+zMOVrjUnDIBLnPwPf7zs5+62kvx230w3o9lr0b+PfgYVErXYbHHWOKSFvfWs5i+GGO89kOHcFNN8wMIuyHfM4HThaw4Kp42w+M9Ox51bnefU0AbXKx7qjGRezGHXfvOVjKt//WQQoitS6Hz16b8QDLRsAHHcfk+kx9IdG8R/+RdAaBVRmjeulRjepWHi4Os8ZLqmpj9K/3WIwPjorEq19gPMEklhvQXisOimfcX/9d4Ak6GEviPPoMScbT2s9vdDaGMChkehFnrcVyhU4rxyDvbGlUI6EDvWzoiHRb24AbY5cItuh8hZ9zMMRSEKQUMLZbLj5Mjol7RLwk+n7sVAxZm0OaXoA9jJjdrXFbP55DsU1whezFDNoq2MYaCJ8eGE1ZSzx+ZVzpFRPqZqRS5rLNyLPz9nItL9mYyPYSsqCWKUOMhANXCaceSXPxYO/V24kLjRpbPnGFBiKnD2Lr6dhF1TY2EphbIQ8vbUSsQuCIkO1G8kNPmKdMmS8CSHhkLMSJA+xmLm09ySxi41dyo/Yb9ac28cE0LnZdXQo2xFrfU2N0svt9BOYtoJHa4ObXKSS4mfMGPJsKaSeSqAnSvUb86Y2Sn5PRADm8eTs1NzN9oiIejFeiL48D1+V00YAYuhhIdSSppkPewQsfW9bto0aWqgCuwJVbux3lHPAydk0Ob0n0ZREJmlZq5zYCITYBGhvWh+3nx5YtDjeRHghqQV8Hmw43XraxNYNzXxulqIhow9L9Kk4Zbxw7EjNWydF1SfLYCGCR9OLVSj20KzKTiMcS972up4Yl34qrA1u4cvf9ECVP7Q2BzIBxxxgaO0Pkim8PPNOQ8IGMIj06hoV3epmETyNbvBRvKvP+ZikjybbrlOsaSeWgdx0a8sbaMCkcJLCPA0ZW+bI5e+p6xrpsFHHKA6QZ0TfpdLPdRIIJeW33AyaPJs9X58tht2krNlpTHifWHdsFHUIe7dPoanly1RMW8/cucXSNl6RmDB34vUHyvGIHaoctArX7hLBPqksHEIv9g52M5bcIIv5DEfgUZxYJU4UvtutnctoYa0/J9ukQVxhVu+QUgomevzJNeZ1Y1mECj9eGR9307/i1dljvCBJIUdM+Mbykqrn/+9IoJAcN4PR89anLL9TAmMY8bxa6Vdj0ucA2nt8Pkh8D1jaNg+8hJmiKeW3dcQ96pIWr+XboqvRUn1lUOWF2B9TLnnguxoYxu85Y/6R4pYuhzrTmOpAOOggT5YVm1BiEMGG6onQAW7jmGAE="
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f2c50e2a-6f4a-40be-9488-113d7b3d5ca1"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CffZsffKz2CwSR3a9h8ux",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAQSkAkKEAgSGAI4AUIIdGhpbmtpbmcSDGF+mLXtFwtO8WqXEBoM6heF4qbPuV4Y3bflIjAuHYjbCwPrCysTUtxUc/xvMV88V8dbQheh65TlK0XpTzwA1n+A/T1FLpFiDrQPQKwqrQih03rp50MgdHlTuNKf+ZZFUaJRvX+2Y7kAwB9CxHJAmxZgDykCKD0ySe2RfCy8VcDU8+LtefGxSDpNSXWOzsZGnkt1YIfypNSTmcrg4v+92h4BQKV7Qdj2AHUDR1Cz3vdwE88+BZcL+Az2UQR1CevtLK+0s5URdgQi7+zMOVrjUnDIBLnPwPf7zs5+62kvx230w3o9lr0b+PfgYVErXYbHHWOKSFvfWs5i+GGO89kOHcFNN8wMIuyHfM4HThaw4Kp42w+M9Ox51bnefU0AbXKx7qjGRezGHXfvOVjKt//WQQoitS6Hz16b8QDLRsAHHcfk+kx9IdG8R/+RdAaBVRmjeulRjepWHi4Os8ZLqmpj9K/3WIwPjorEq19gPMEklhvQXisOimfcX/9d4Ak6GEviPPoMScbT2s9vdDaGMChkehFnrcVyhU4rxyDvbGlUI6EDvWzoiHRb24AbY5cItuh8hZ9zMMRSEKQUMLZbLj5Mjol7RLwk+n7sVAxZm0OaXoA9jJjdrXFbP55DsU1whezFDNoq2MYaCJ8eGE1ZSzx+ZVzpFRPqZqRS5rLNyLPz9nItL9mYyPYSsqCWKUOMhANXCaceSXPxYO/V24kLjRpbPnGFBiKnD2Lr6dhF1TY2EphbIQ8vbUSsQuCIkO1G8kNPmKdMmS8CSHhkLMSJA+xmLm09ySxi41dyo/Yb9ac28cE0LnZdXQo2xFrfU2N0svt9BOYtoJHa4ObXKSS4mfMGPJsKaSeSqAnSvUb86Y2Sn5PRADm8eTs1NzN9oiIejFeiL48D1+V00YAYuhhIdSSppkPewQsfW9bto0aWqgCuwJVbux3lHPAydk0Ob0n0ZREJmlZq5zYCITYBGhvWh+3nx5YtDjeRHghqQV8Hmw43XraxNYNzXxulqIhow9L9Kk4Zbxw7EjNWydF1SfLYCGCR9OLVSj20KzKTiMcS972up4Yl34qrA1u4cvf9ECVP7Q2BzIBxxxgaO0Pkim8PPNOQ8IGMIj06hoV3epmETyNbvBRvKvP+ZikjybbrlOsaSeWgdx0a8sbaMCkcJLCPA0ZW+bI5e+p6xrpsFHHKA6QZ0TfpdLPdRIIJeW33AyaPJs9X58tht2krNlpTHifWHdsFHUIe7dPoanly1RMW8/cucXSNl6RmDB34vUHyvGIHaoctArX7hLBPqksHEIv9g52M5bcIIv5DEfgUZxYJU4UvtutnctoYa0/J9ukQVxhVu+QUgomevzJNeZ1Y1mECj9eGR9307/i1dljvCBJIUdM+Mbykqrn/+9IoJAcN4PR89anLL9TAmMY8bxa6Vdj0ucA2nt8Pkh8D1jaNg+8hJmiKeW3dcQ96pIWr+XboqvRUn1lUOWF2B9TLnnguxoYxu85Y/6R4pYuhzrTmOpAOOggT5YVm1BiEMGG6onQAW7jmGAE="
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1191,
+          "cache_read_input_tokens": 51445,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1191
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "uuid": "a6a74698-df5c-4f23-a2b7-9321192ad26e",
+      "timestamp": "2026-10-03T15:49:07.492Z",
+      "request_id": "req_011CffZsfNDD47yiRk4e4jkT"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e7583e44-a5a9-48ef-839f-7f3a88744335"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "79742732-b373-4c85-9aee-6b3cffb24769"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "This"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e5b756e5-00aa-414b-8941-3acdad99da23"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " version"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4b465e2a-35aa-4fb5-a486-e109b167ac56"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " le"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "88fa08cb-8802-43f4-9df0-f05fdd2f8b83"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "aves the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ea4447a7-465a-494b-b76b-05786bd6871d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " \"Run code tasks in"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "17e8cb18-0adb-4332-83c3-35c6a4e29bb5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a container\" option as"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a5b0df3a-34fd-435f-b262-ccdc6434f420"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it is, since you didn't"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "228c3677-5034-48ef-801b-355091ac16ae"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " say to drop it. The code"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c0e1182c-e766-4eb1-a6ca-0ee4d505cb95"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " lane gets a s"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1df84495-8be1-4a70-8aef-c61cfcc3a235"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions folder only for"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "078c32d8-3775-428b-b92f-ac7c738ea97d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the case"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2e454cdc-af8a-4fcd-abd3-557e983f99e1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " where that option is on.\n\n---"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b1d9101c-4a7c-48c3-a93a-d76ad5d88d8f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\n> Ke"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d53ded3b-9a9c-49bd-95d9-17471aee6b18"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ep each project's contain"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4bc9f250-a253-4d72-86a1-fd52834aa77a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "erized harness sessions in"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "57595410-2729-4d9d-8c9a-fda14f7d8e1b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the project it"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "88f5d1d8-9149-4be5-a5b2-99610803281a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "self, so a"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e4d99afe-664d-4250-8227-307f128cc0d5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " conversation carries on across"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7b3fa3a2-dda5-48ed-afa6-d66a6922d7ba"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " runs, restarts, and"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6d58c958-06b2-4cc3-be67-a9b1393ede79"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " mo"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d5694b14-cee9-4265-9034-25e304a1b9c5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ves of the project.\n>"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e806a688-6f55-4b74-8b3e-2e7e695b8584"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n> **ContainerEn"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1c882242-892e-4a79-b138-b7d713560b1b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "vironmentScope,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "553f9119-dfaa-4a98-a55a-d5448760967d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Volumes:** the harness"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7d3347eb-1743-4d5d-941e-085802a6e99c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'s sessions for each"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b6c4bbc4-4178-487e-9895-21eb71ca30d5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " con"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0b7a725c-3a26-4f74-b0e8-6275fac29bc8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "versation are no longer kept"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "093dd887-d822-436f-9183-6c6403129b58"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in Podman volumes."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8674e53b-f1b7-4ea6-86ca-157f1275a61c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " They are kept in the project,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "96fe085f-595f-4482-ab07-26a52174570d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in `.suspense/s"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f072a881-13b8-46ad-be63-91df33cbaae4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions/`, one folder"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "130f5b09-a3d9-4d49-a84f-8204a747bae2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " per conversation: `spec"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0f2de385-c24a-4495-9f3e-138d8e149abd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "` for the spec lane,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "becad1b0-0b70-4014-96d5-e03d2eef33b8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `quest"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "47972ce7-031b-40f7-8289-4b4003e8fade"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ions` for the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "166f725b-a146-423a-a91d-5b7c44656c7e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Ask tab's"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "bbbcd297-1816-4c45-9e0b-e312832c1825"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " questions, and `code` for"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f02a72a0-9f38-4f81-b4a0-b7a19382b365"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the code lane while"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f92449c7-2b20-4450-b308-2d263fe69bed"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e3aa0b25-4049-428b-8eb2-183eb4876428"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project's \"Run code tas"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5893808b-b2b6-4708-8120-21a21866d55e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ks in a container\" option is on"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "07ca0124-57ca-4d55-859e-99661225c236"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". Each run mounts only"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "090aa7da-9a9b-489e-b596-f7c646f2396a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " its own"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "768fb9a7-51ff-4954-9415-5e7e23cae1a2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " con"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9893c20c-1f48-4e34-b037-8781a04e3a0a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "versation's folder, read and"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8d21d3b5-5914-4e35-8d75-7f1015ee4071"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " write, where the harness kee"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6daf460d-eae5-458f-9c07-cd77b21119cc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ps its sessions under its home"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "fca14384-345d-4145-a0d8-32dde7968ad0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ","
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2d4a4722-fc3d-41da-92c5-e7b322673ce3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " never `.suspense/s"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9e9e1dc5-ccb7-4bee-b58f-a259d99c6636"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions/` as a whole"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7ca8781c-cb32-4463-964e-fabc8066b134"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ","
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "02004b75-0ef3-4cb4-b4c0-dfa8196790ea"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " so no"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1323053c-d997-42b4-a68b-d4a729c9ee46"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " run sees another conversation's"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "280da88e-a566-477a-9e90-275ae20ec124"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " sessions. The application creates"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ac060369-3096-4a63-a905-f0823a61fb8d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the folder before"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "54ca6fb1-22fb-4eac-ba94-fe28bbadad5f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1bca199c-c13c-40ca-9dea-0d3933936cc0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " run if it isn't there."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d5cca3f9-a003-4317-ba3d-85fc766db13a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " The harness's login and settings"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "46ce983a-cfbf-4a60-813c-a3db0eb8f723"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " stay in one volume per har"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b4bfe6d9-d929-4580-8440-1fc3959918a0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ness, shared by every project,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9c9cefb4-e783-4d5b-b16e-d6eeb92a4768"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "226ba894-9ee5-49a1-aa20-484e8cd970ff"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the project's caches stay in"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "fb47be65-369c-4862-89ea-04222dab3afd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " their"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "260eae93-8de1-454d-b93e-295149863c76"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " volume, as now. Los"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "83709ec5-0c41-423f-bb78-3d33fec14f53"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ing the project's sessions fol"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "42401f7b-dba9-438a-bc71-84eb59602caa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "der costs only the conversations"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2a28c487-cf9c-4b03-8cdd-62d9342b5db4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "' context:"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c4bc05b2-56f2-4cda-82e7-030cd7bb2a40"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the next run starts a new con"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "59173c3f-3c68-41f0-8864-b0673e3fb436"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "versation, as when a session can"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d19977d4-9572-4f79-9282-b05224fb1038"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'t be resumed. S"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "eef72b67-a893-4767-9ae4-b84951a9fd5d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions k"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e0faa5e2-4aed-407a-b8bc-bd37cbcb6998"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ept in vol"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b9353ae8-dbf4-4f9b-a94e-cb79d23b37c2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "umes before this a"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b98c8df0-d671-4b9c-a624-36578cb40cff"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ren't carried over"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "20a048e9-cec8-477b-9a3c-c7256f2087d3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "; each"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "516f228f-1e8a-44b2-b583-1b5059185e6c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " con"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6af00414-fd49-402d-ad8e-8ff9d3203e73"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "versation starts f"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8b00ab84-3961-4680-8ec2-1c5e661c9d24"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "resh."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5835670b-29b7-4442-a7d1-dc4644d652ba"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n>\n> **Vol"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6018f45c-cc36-47e8-b7c5-da9895c1c231"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ume names:** the project's c"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "51ecd2b4-4833-4d81-89f8-6095126d1b3c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ache volume is named after an"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "071e3fdb-0c60-4ec6-b9f0-6c6de753e283"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " ID the project keeps,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a2e8f75a-a7bf-4300-8b7d-f91ea9fb3f40"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " not after its path. The ID"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "cf6a6f8f-6cf6-4fda-9f37-1fa066116fca"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is generated once, the first time"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0f0c39d6-931f-4d50-92ce-ccefb212b42c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the project needs one, and k"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b1ddb937-eea0-4300-9ac0-ebd5ab7e986c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ept in `.suspense/"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1d476e9e-5421-4b75-88b5-f3fb81044331"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "project-id`,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "145c8a8f-dc05-4693-a949-a5485b4a6168"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " so renaming or moving the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2a0f26e2-9347-4dcb-8239-2957f04e918c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project keeps its volume."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a30260b9-8a1c-4bcd-b08d-5f9a5bebc5d5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " A name"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b81262b7-851a-4f1a-86ac-875c95043675"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " never depends on a hash wh"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5da087d0-ed74-4677-8641-0c56cd1553ef"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ose algorithm may change between"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "cdfa4a81-c97a-493f-881b-3c226be03c25"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " versions of the application.\n>"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "79ca5d4b-a940-4996-b0c4-8119794ef6ab"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n> **"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "edca3d42-1949-4d85-8842-e0cc7f438bbb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ContainerEnvironm"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "feed904c-4df4-4d79-9fae-c0da14d48762"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "entScope, Mounts"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "effd7d42-9e04-4d36-9373-56d6550e60aa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and Paths:** the project"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f9fcaf50-abe8-4fd6-8b61-1a737c03753c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is mounted at the same f"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9b66dee6-f1ff-4ab1-9002-93f7a6b8af50"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ixed path in the container, `"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d04e494b-50d6-4dee-975d-68e82add9045"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "/workspace`, on every"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4e72b7a0-ff0e-4740-a7e0-e4a14886a63e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " platform, and the run works there"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "45cdbc3d-a91f-4565-aadc-47f69fad8b2b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", so"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a8a32111-3afd-4b0b-b227-9a1c260e7fc3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a harness that keys its s"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3e950e3e-6617-413f-9a86-3690fcd050c7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions on its"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "eb45bf49-9b08-42db-8508-a2130cd6be4a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " working directory, as Claude"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "35c7e52f-37d1-44df-8cf4-36815a2c27f8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Code does, finds them again"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d6279fad-37c2-4b1b-bafd-c7864d24ac4c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " after the project moves. Change"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5bc982ab-332d-446e-9d34-f4f944d12c39"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Mounts so"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "972c883a-44ca-4e22-909a-a5c541001618"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it no longer says each location is"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7fec9676-470f-40e6-871c-9b51fa792bd8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " mounted at its host path where"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "bc91b3dd-6345-4431-9cc8-2fc79ef3f28c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the platform allows."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8f7162f9-d769-4d7d-bf17-8dbeaf3d85ac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Pa"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "78c9e08a-3ed7-4faf-b84b-3532bf649ae9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ths now appl"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3c60e254-2e45-44c9-abc3-3c0c6947dd54"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ies on every platform: every path"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "bf942661-daf5-4c75-b097-0397d6303f31"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a run reports is"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2e43914b-7a41-42fd-a141-4f4a2d6a7956"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " mapped back to its"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "93e9ca16-7a66-4a9b-b21f-bc8203a56c63"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " host path before it is shown or"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2bcd774b-4077-485d-ad10-7e703e1521c0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " opened. Only"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e54ca8ab-e4df-49dd-8741-0234c7284252"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a path that is `"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "cb1a32a0-a206-499e-a62a-00cd530002f5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "/workspace` or begins"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b37aab8e-22c6-4d3d-a890-8c788dae8b93"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " with `/workspace/`"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "6e288201-a380-4d22-915a-8a6e9cf4b4ad"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is mapped, never text that"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "bedfe834-bab8-4897-a3a4-d84b7306e18e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " merely contains it,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "fd4a03e2-65d8-4b37-a792-1b63eb032aee"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " as `/workspace-old"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "626cfb7d-7b81-4b4b-b36e-8b1a94532648"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "`"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7c645518-bd8a-4a62-b116-dbe3fdc74795"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". A path that maps to n"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e7b4e2a4-3d39-458d-b659-5318c61fa02f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "othing on the host is shown"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "efcbcfbd-f465-4586-8437-f23cb100af1d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " as the run gave it, and"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "64c8d8ca-2846-4f87-be1b-6e02f829fe18"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " opens nothing, as now"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f6ce3085-d347-44e5-ab34-aa2717961c2d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n>\n> **Pro"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c21ebd3a-cfc6-4cbe-82f6-a7a53441bea2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "jectDataScope:**"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d320cf21-3906-4233-b595-1f2106aa2480"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " add `.suspense/s"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "30a69eee-ea9f-4022-9551-afd8f809ea5f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions/` and `.su"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8871a99e-5794-4d2b-b332-2862e867ff71"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "spense/project-id` to"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b2c11205-6bca-4c01-a8d9-3996282ed9a4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the project data. Both belong"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e5d93156-93a4-4ca3-9f0e-0bc1b486942e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " to this machine: git ign"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0d4a6365-6bcd-4442-9d53-a4a868faa126"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ores them and they are never committed"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e9240547-812d-4d08-bcda-65c9d431a048"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", since"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4d43d337-d0b2-4cda-839e-bb538378e900"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the sessions hold the har"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2a3f237e-0f17-4e50-9664-48580fbf59b2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ness's transcripts."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "76438256-ee63-40af-94c6-538baacb32a3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Change the paragraph that"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e1741439-76b5-4969-8b5a-3c2a098301ef"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " says the harnesses' s"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8a0b5cdf-c8eb-423f-a46d-f24a7c9f74a6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions a"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "58f99755-71c1-49a3-8dd4-12b376540a14"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ren't in `.suspense"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b66e9314-40a0-4aac-86db-269b838de9af"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "`"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0389fde3-d34a-488a-929c-4a2b4c7d5a72"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ": the images, logins, and"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "de85011b-251d-48ce-89e4-a7645ab2a77c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " caches still a"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a69f5216-782a-4783-86b5-28a0607759c9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ren't, but the"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "356a7fca-4c7a-464a-a844-c86879fd0bad"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " sessions now"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "3dc526ea-35ef-4b28-951d-6c9a6caaa341"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " are.\n>\n> **H"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d68ff4e8-f3e1-402b-a780-4e35f0301168"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "arnessIntegration"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "d317c514-d7de-413f-a4d7-3a2e33d87668"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Scope:** a conversation"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f3db1822-1ca9-44e3-a11b-2e7aadd382a9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is only carried on where it began"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a1bf9ffd-ab5d-4d33-a245-87e027a8d0fb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", in a container or on the host"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5c28aa97-95c2-48aa-8b07-44327d01ca8c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". Which of the two it began"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4fa84d8c-719c-4cb8-8afb-153d09453fe7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in is kept be"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4f202633-39f7-43ef-8fd2-48ad0fac6650"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "side it"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ec686a29-f24a-4d5a-b765-f2df4e65d948"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in `.suspense/con"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5f25e729-8cb0-48c2-b325-736013084270"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "versations.json`, so a"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "183d4b61-0982-4fe0-814d-489e83b4b43a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project reopened after a restart"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "1f5f057b-aa72-4699-8e4d-063c8373dda2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " never"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "b5cb2101-f0e3-4f2e-90b2-f8c3f6f7655d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " tries to resume a convers"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "52408b50-0835-45e2-ae16-ec3ae2c57db6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ation in"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e5fe753b-562a-46c3-9008-05228883c746"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the other place. A conversation"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "58ff4798-c050-457b-8aac-cec2f891d9aa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " whose place isn't known,"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ecd1086d-0f02-40ec-8967-47dac9ec0a32"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " as one from older history, is t"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "7f633b11-5a51-4638-a127-7c36ba6e81c6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ried, and if the harness has"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "5758c625-d8cc-4889-bcb6-f32125de12af"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " no such session, it is sent"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8e04888d-211c-47bb-a6a3-08e28c2cc6ff"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " again at once as a new convers"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "8ef5fb66-608c-4638-91e0-2c8b5a4d6132"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ation, as now.\n\n---"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "0e991fcf-431d-402f-9c38-0873664d452f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\nIf you'd rather dr"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4b695767-ac4c-4f65-8f84-74ee5ba720af"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "op code containerization alt"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "4fae8d5a-ab73-4dd4-9c4e-f23885fb3643"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ogether, rem"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "a6444775-3bcf-41c8-8204-819152e978ee"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ove the `code` fol"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "cf68cc72-2f4e-40e0-9b8c-007d254bf99b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "der cl"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9f4ef8a7-45fc-4ef2-811c-c67569524cd8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ause and the \"Vol"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "2da90d5e-10fd-49fd-b958-c3043ad612b9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ume names\" section"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e2121e27-ec2a-4bd6-b7f0-4f8c5b094886"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". Without"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "61579161-50fc-4bf4-849d-01da8ca6a164"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Code run"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "e6d5afbd-5a85-467d-ba3c-8472bbb75215"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "s in contain"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "c7cc6f6e-ef32-4149-86b6-459a3d4744e2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ers there"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "96f44153-cdca-4167-bf32-3c068e62e6c5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'s no cache volume, so"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ea6d20d1-7557-4ee0-998d-06b56d2c7107"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " no project vol"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f3968a11-a392-48ec-a1a4-f096219bea63"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ume is"
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "f804829a-0f4d-41c3-a836-e20bf36cdcbd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " left to name."
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ea2ef016-6244-4a57-b009-8ea62f445885"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CffZsffKz2CwSR3a9h8ux",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "This version leaves the \"Run code tasks in a container\" option as it is, since you didn't say to drop it. The code lane gets a sessions folder only for the case where that option is on.\n\n---\n\n> Keep each project's containerized harness sessions in the project itself, so a conversation carries on across runs, restarts, and moves of the project.\n>\n> **ContainerEnvironmentScope, Volumes:** the harness's sessions for each conversation are no longer kept in Podman volumes. They are kept in the project, in `.suspense/sessions/`, one folder per conversation: `spec` for the spec lane, `questions` for the Ask tab's questions, and `code` for the code lane while the project's \"Run code tasks in a container\" option is on. Each run mounts only its own conversation's folder, read and write, where the harness keeps its sessions under its home, never `.suspense/sessions/` as a whole, so no run sees another conversation's sessions. The application creates the folder before the run if it isn't there. The harness's login and settings stay in one volume per harness, shared by every project, and the project's caches stay in their volume, as now. Losing the project's sessions folder costs only the conversations' context: the next run starts a new conversation, as when a session can't be resumed. Sessions kept in volumes before this aren't carried over; each conversation starts fresh.\n>\n> **Volume names:** the project's cache volume is named after an ID the project keeps, not after its path. The ID is generated once, the first time the project needs one, and kept in `.suspense/project-id`, so renaming or moving the project keeps its volume. A name never depends on a hash whose algorithm may change between versions of the application.\n>\n> **ContainerEnvironmentScope, Mounts and Paths:** the project is mounted at the same fixed path in the container, `/workspace`, on every platform, and the run works there, so a harness that keys its sessions on its working directory, as Claude Code does, finds them again after the project moves. Change Mounts so it no longer says each location is mounted at its host path where the platform allows. Paths now applies on every platform: every path a run reports is mapped back to its host path before it is shown or opened. Only a path that is `/workspace` or begins with `/workspace/` is mapped, never text that merely contains it, as `/workspace-old`. A path that maps to nothing on the host is shown as the run gave it, and opens nothing, as now.\n>\n> **ProjectDataScope:** add `.suspense/sessions/` and `.suspense/project-id` to the project data. Both belong to this machine: git ignores them and they are never committed, since the sessions hold the harness's transcripts. Change the paragraph that says the harnesses' sessions aren't in `.suspense`: the images, logins, and caches still aren't, but the sessions now are.\n>\n> **HarnessIntegrationScope:** a conversation is only carried on where it began, in a container or on the host. Which of the two it began in is kept beside it in `.suspense/conversations.json`, so a project reopened after a restart never tries to resume a conversation in the other place. A conversation whose place isn't known, as one from older history, is tried, and if the harness has no such session, it is sent again at once as a new conversation, as now.\n\n---\n\nIf you'd rather drop code containerization altogether, remove the `code` folder clause and the \"Volume names\" section. Without Code runs in containers there's no cache volume, so no project volume is left to name."
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1191,
+          "cache_read_input_tokens": 51445,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1191
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "uuid": "7b0ef028-6d25-4d10-9c67-15a9ea9c1b70",
+      "timestamp": "2026-10-03T15:49:16.791Z",
+      "request_id": "req_011CffZsfNDD47yiRk4e4jkT"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "9b38e8af-65ac-419a-ab22-b2937493389e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {}
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1191,
+          "cache_read_input_tokens": 51445,
+          "output_tokens": 1246,
+          "output_tokens_details": {
+            "thinking_tokens": 128
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 1246,
+              "cache_read_input_tokens": 51445,
+              "cache_creation_input_tokens": 1191,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 1191
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "905042c8-5d1e-4088-abdd-0f78515a451c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "parent_tool_use_id": null,
+      "uuid": "ff570591-1568-436d-bde0-b31f37ffbc80"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1791056400,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.03,
+            "resetsAt": 1791056400
+          },
+          "seven_day": {
+            "utilization": 0.43,
+            "resetsAt": 1791313200
+          }
+        }
+      },
+      "uuid": "07e938f3-c0a3-4b59-b91f-cf7760922659",
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2"
+    },
+    {
+      "duration_api_ms": 155845,
+      "stop_reason": "end_turn",
+      "session_id": "c1727729-c906-46da-8d74-9598ecec98c2",
+      "total_cost_usd": 0.7416076,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 1191,
+        "cache_read_input_tokens": 51445,
+        "output_tokens": 1246,
+        "output_tokens_details": {
+          "thinking_tokens": 128
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1191,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 1246,
+            "cache_read_input_tokens": 51445,
+            "cache_creation_input_tokens": 1191,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1191
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "modelUsage": {
+        "claude-opus-5-5[1m]": {
+          "inputTokens": 36,
+          "outputTokens": 13326,
+          "thinkingTokens": 4203,
+          "cacheReadInputTokens": 674518,
+          "cacheCreationInputTokens": 42505,
+          "webSearchRequests": 0,
+          "costUSD": 0.7416076,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "is_error": false,
+      "num_turns": 1,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "This version leaves the \"Run code tasks in a container\" option as it is, since you didn't say to drop it. The code lane gets a sessions folder only for the case where that option is on.\n\n---\n\n> Keep each project's containerized harness sessions in the project itself, so a conversation carries on across runs, restarts, and moves of the project.\n>\n> **ContainerEnvironmentScope, Volumes:** the harness's sessions for each conversation are no longer kept in Podman volumes. They are kept in the project, in `.suspense/sessions/`, one folder per conversation: `spec` for the spec lane, `questions` for the Ask tab's questions, and `code` for the code lane while the project's \"Run code tasks in a container\" option is on. Each run mounts only its own conversation's folder, read and write, where the harness keeps its sessions under its home, never `.suspense/sessions/` as a whole, so no run sees another conversation's sessions. The application creates the folder before the run if it isn't there. The harness's login and settings stay in one volume per harness, shared by every project, and the project's caches stay in their volume, as now. Losing the project's sessions folder costs only the conversations' context: the next run starts a new conversation, as when a session can't be resumed. Sessions kept in volumes before this aren't carried over; each conversation starts fresh.\n>\n> **Volume names:** the project's cache volume is named after an ID the project keeps, not after its path. The ID is generated once, the first time the project needs one, and kept in `.suspense/project-id`, so renaming or moving the project keeps its volume. A name never depends on a hash whose algorithm may change between versions of the application.\n>\n> **ContainerEnvironmentScope, Mounts and Paths:** the project is mounted at the same fixed path in the container, `/workspace`, on every platform, and the run works there, so a harness that keys its sessions on its working directory, as Claude Code does, finds them again after the project moves. Change Mounts so it no longer says each location is mounted at its host path where the platform allows. Paths now applies on every platform: every path a run reports is mapped back to its host path before it is shown or opened. Only a path that is `/workspace` or begins with `/workspace/` is mapped, never text that merely contains it, as `/workspace-old`. A path that maps to nothing on the host is shown as the run gave it, and opens nothing, as now.\n>\n> **ProjectDataScope:** add `.suspense/sessions/` and `.suspense/project-id` to the project data. Both belong to this machine: git ignores them and they are never committed, since the sessions hold the harness's transcripts. Change the paragraph that says the harnesses' sessions aren't in `.suspense`: the images, logins, and caches still aren't, but the sessions now are.\n>\n> **HarnessIntegrationScope:** a conversation is only carried on where it began, in a container or on the host. Which of the two it began in is kept beside it in `.suspense/conversations.json`, so a project reopened after a restart never tries to resume a conversation in the other place. A conversation whose place isn't known, as one from older history, is tried, and if the harness has no such session, it is sent again at once as a new conversation, as now.\n\n---\n\nIf you'd rather drop code containerization altogether, remove the `code` folder clause and the \"Volume names\" section. Without Code runs in containers there's no cache volume, so no project volume is left to name.",
+      "ttft_ms": 2385,
+      "type": "result",
+      "duration_ms": 11708,
+      "uuid": "28287c09-de8d-4ec5-95c4-49204ad9a36d",
+      "ttft_stream_ms": 1125,
+      "time_to_request_ms": 71,
+      "first_content_frame_ms": 1125,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  ]
+}

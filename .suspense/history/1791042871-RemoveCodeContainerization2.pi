@@ -1,0 +1,93 @@
+
+export anchor RemoveCodeContainerization2:
+    userPrompt:
+        \\\
+        Code tasks never run in a container, and a project's harness sessions from containerized runs are kept in the project, so a conversation carries on across runs, restarts, and moves of the project.
+        Remove code containerization: Spec tasks, a Chain prompt's spec steps and spec follow-up, and questions from the Ask tab are the only runs in a container. Code tasks and a Chain prompt's code step always run on the host, with their protected locations, as the HarnessIntegrationScope says. Remove the project's "Run code tasks in a container" option everywhere: the runCodeTasksInContainer setting from .suspense/settings.json in the ProjectDataScope, its toggle from the SettingsWindowScope, the Code section of the ContainerEnvironmentScope's Mounts, the project's caches and their volume, and every "while the project's option is on" in the ContainerEnvironmentScope, the HarnessIntegrationScope, the PromptModeScope, and Sending, including the rule that turning the option on or off starts the code lane on a new conversation. Where .suspense/settings.json then holds nothing, the ProjectDataScope says so, or drops it if nothing else uses it. A Code task never needs Podman.
+        ContainerEnvironmentScope, Volumes: the harness's sessions are no longer kept in Podman volumes. They are kept in the project, in .suspense/sessions/, one folder per conversation: spec for the spec lane and questions for the Ask tab's questions. Each run mounts only its own conversation's folder, read and write, where the harness keeps its sessions under its home, never .suspense/sessions/ as a whole, so no run sees another conversation's sessions. The application creates the folder before the run if it isn't there. The only volumes left are one per harness, for its login and settings, shared by every project, as now. Losing the project's sessions folder costs only the conversations' context: the next run starts a new conversation, as when a session can't be resumed. Sessions kept in volumes before this aren't carried over; each conversation starts fresh.
+        ContainerEnvironmentScope, Mounts and Paths: the project is mounted at the same fixed path in the container, /workspace, on every platform, and the run works there, so a harness that keys its sessions on its working directory, as Claude Code does, finds them again after the project moves. Change Mounts so it no longer says each location is mounted at its host path where the platform allows. Paths now applies on every platform: every path a run reports is mapped back to its host path before it is shown or opened. Only a path that is /workspace or begins with /workspace/ is mapped, never text that merely contains it, as /workspace-old. A path that maps to nothing on the host is shown as the run gave it, and opens nothing, as now.
+        ProjectDataScope: add .suspense/sessions/ to the project data. It belongs to this machine: git ignores it and it is never committed, since it holds the harness's transcripts. Change the paragraph that says the harnesses' sessions aren't in .suspense: the images and logins still aren't, but the sessions now are.
+        HarnessIntegrationScope: the spec lane and the questions always run in a container and the code lane always on the host, so each conversation is only ever carried on where it began. A spec lane or questions conversation from before this, whose session the project's sessions folder doesn't hold, is tried, and if the harness has no such session, it is sent again at once as a new conversation, as now.
+
+
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src.
+
+        Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Code tasks never run in a container, and a project's harness sessions from containerized runs are kept in the project, so a conversation carries on across runs, restarts, and moves of the project.
+            Remove code containerization: Spec tasks, a Chain prompt's spec steps and spec follow-up, and questions from the Ask tab are the only runs in a container. Code tasks and a Chain prompt's code step always run on the host, with their protected locations, as the HarnessIntegrationScope says. Remove the project's "Run code tasks in a container" option everywhere: the runCodeTasksInContainer setting from .suspense/settings.json in the ProjectDataScope, its toggle from the SettingsWindowScope, the Code section of the ContainerEnvironmentScope's Mounts, the project's caches and their volume, and every "while the project's option is on" in the ContainerEnvironmentScope, the HarnessIntegrationScope, the PromptModeScope, and Sending, including the rule that turning the option on or off starts the code lane on a new conversation. Where .suspense/settings.json then holds nothing, the ProjectDataScope says so, or drops it if nothing else uses it. A Code task never needs Podman.
+            ContainerEnvironmentScope, Volumes: the harness's sessions are no longer kept in Podman volumes. They are kept in the project, in .suspense/sessions/, one folder per conversation: spec for the spec lane and questions for the Ask tab's questions. Each run mounts only its own conversation's folder, read and write, where the harness keeps its sessions under its home, never .suspense/sessions/ as a whole, so no run sees another conversation's sessions. The application creates the folder before the run if it isn't there. The only volumes left are one per harness, for its login and settings, shared by every project, as now. Losing the project's sessions folder costs only the conversations' context: the next run starts a new conversation, as when a session can't be resumed. Sessions kept in volumes before this aren't carried over; each conversation starts fresh.
+            ContainerEnvironmentScope, Mounts and Paths: the project is mounted at the same fixed path in the container, /workspace, on every platform, and the run works there, so a harness that keys its sessions on its working directory, as Claude Code does, finds them again after the project moves. Change Mounts so it no longer says each location is mounted at its host path where the platform allows. Paths now applies on every platform: every path a run reports is mapped back to its host path before it is shown or opened. Only a path that is /workspace or begins with /workspace/ is mapped, never text that merely contains it, as /workspace-old. A path that maps to nothing on the host is shown as the run gave it, and opens nothing, as now.
+            ProjectDataScope: add .suspense/sessions/ to the project data. It belongs to this machine: git ignores it and it is never committed, since it holds the harness's transcripts. Change the paragraph that says the harnesses' sessions aren't in .suspense: the images and logins still aren't, but the sessions now are.
+            HarnessIntegrationScope: the spec lane and the questions always run in a container and the code lane always on the host, so each conversation is only ever carried on where it began. A spec lane or questions conversation from before this, whose session the project's sessions folder doesn't hold, is tried, and if the harness has no such session, it is sent again at once as a new conversation, as now.
+
+
+            \\\
+        result:
+            \\\
+            I've made the spec changes, but I couldn't run `piton build` or `piton check`. Both still fail here with `GLIBC_2.39 not found`, so `.claude/reference` doesn't show these edits yet and nothing has checked their syntax. Please build on the host before the code step.
+
+            I also couldn't run `piton format` or Python, so I made the edits by hand and with `perl`. One thing to look at when you build: the new paragraph in Mounts sits after the `spec:` and `question:` keys, alongside the prose that was already there.
+
+            **What changed in the spec**
+            - **`ContainerEnvironmentScope`** (`spec/scope/container-environment/index.pi`):
+              - **Description:** only Spec tasks, a Chain prompt's spec steps and spec follow-up, and questions run in a container. Code tasks and a Chain prompt's code step always run on the host, with their protected locations, and never need Podman.
+              - **Missing Podman:** no longer mentions Code tasks or the option. A Code task never needs Podman.
+              - **Image:** the Containerfile adds "what its runs in a container need", no longer "the toolchains its code needs".
+              - **Mounts:** the project is mounted at `/workspace` on every platform, each location at its place relative to the project directory, and the run works in `/workspace`. It explains this lets Claude Code find its sessions again after the project moves. The Code mount set is gone. Each run also gets its own conversation's sessions folder, read and write. A question can write only to the harness's volume and the questions' sessions folder.
+              - **Paths:** applies on every platform. Only a path that is `/workspace` or starts with `/workspace/` is mapped back, never text like `/workspace-old`. A path that maps to nothing is shown as given and opens nothing.
+              - **Volumes:** the only volumes left are one per harness, for its login and settings, shared by every project.
+              - **Sessions:** kept in `.suspense/sessions/spec` and `.suspense/sessions/questions`. Each run mounts only its own folder, where the harness keeps its sessions under its home (for Claude Code, `~/.claude/projects`), never the whole `sessions/` folder. The app creates the folder before the run if it's missing. Losing it only loses context. Sessions from the old volumes aren't carried over.
+            - **`ProjectDataScope`**:
+              - I removed `settings.json`, since nothing else used it, along with the now-unused `SettingsWindowScope` import.
+              - I added `sessions/` to the contents and to Machine Only: git ignores it because it holds the harness's transcripts.
+              - The paragraph about what isn't in `.suspense` now covers only images, volumes and logins, and says the sessions are in `.suspense/sessions/`.
+            - **`SettingsWindowScope`, Containers:** the "Run code tasks in a container" checkbox and its "Open a project…" placeholder are gone. The muted line now also says Code tasks always run on the host.
+            - **`HarnessIntegrationScope`:**
+              - **Description:** says who runs in a container and who runs on the host.
+              - **Context:** the spec lane and questions always run in a container and the code lane always on the host, so a conversation is only carried on where it began. Container sessions live in their folder of `.suspense/sessions/` and survive runs, restarts and project moves. I removed the old "turning the option on or off starts a new conversation" rule. An old spec-lane or questions session that the folder doesn't have is still tried, and if the harness has no such session, the request is sent again at once as a new conversation.
+            - **`PromptSendingScope`**, Tasks: only Spec tasks and a Chain prompt's spec steps run in a container. Code tasks and code steps always run on the host and never need Podman.
+            - **`ModeSystemPromptsScope`:** a question fills `SPEC_LOCATION` with nothing. Code-lane runs are on the host and fill in both locations.
+            - **`PromptModeScope`**, Chained Tasks: the code step always runs on the host, with its protected locations.
+
+            The understanding file is at `.suspense/history/1791042723-RemoveCodeContainerization.understanding.md`.
+
+            **Anchors the code should follow**
+            - `ContainerEnvironmentShape`: `description`, `missingPodman`, `image`, `mounts` (`spec`, `question`, the sessions folder), `paths` and `volumes`.
+            - `ProjectDataScope`: contents (`sessions/` added, `settings.json` and `runCodeTasksInContainer` removed) and `machineOnly`.
+            - `SettingsWindowScope`: `containers`.
+            - `HarnessIntegrationShape`: `description` and `context`.
+            - `PromptSendingScope`: Tasks.
+            - `ModeSystemPromptsScope`: how `CODE_LOCATION` and `SPEC_LOCATION` are filled in.
+            - `PromptModeScope`: Chained Tasks.
+            \\\
+
+    sentFrom: RemoveCodeContainerization

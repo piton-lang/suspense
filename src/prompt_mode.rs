@@ -6120,18 +6120,12 @@ impl PromptMode {
             Sending::Queued(queued) => queued.anchor.new_conversation == Some(true),
             Sending::Now(..) => std::mem::take(self.new_conversation_pending.of_mut(lane)),
         };
-        // A task whose mode runs in a container sees only what it may use,
-        // as the ContainerEnvironmentScope says; Freeform runs on the host.
-        let container_kind = (self.tasks[task_ix].mode != Some(SendMode::Freeform))
-            .then(|| {
-                crate::container::RunKind::of(
-                    self.tasks[task_ix].mode,
-                    crate::container::code_in_container(&project_dir),
-                )
-            })
-            .flatten();
+        // A task of the spec lane runs in a container, seeing only what it
+        // may use, as the ContainerEnvironmentScope says; Code, a chain's code
+        // step, and Freeform run on the host.
+        let container_kind = crate::container::RunKind::of(self.tasks[task_ix].mode);
         // A conversation is only carried on where its sessions are kept: in
-        // the lane's volume in a container, or on the host.
+        // the project's sessions folder in a container, or on the host.
         let contained = container_kind.is_some();
         let resume = Session::resume(self.session.of(lane), &project_dir)
             .filter(|_| !new_conversation)
