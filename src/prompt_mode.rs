@@ -6380,12 +6380,11 @@ impl PromptMode {
                         .as_deref()
                         .filter(|_| builds)
                         .map(understanding::path);
-                    let shown_path = understanding_file.as_deref().map(|file| {
-                        file.strip_prefix(&project_dir)
-                            .unwrap_or(file)
-                            .display()
-                            .to_string()
-                    });
+                    // Relative to the project, so it points where the run
+                    // finds it, on the host or in a container.
+                    let shown_path = understanding_file
+                        .as_deref()
+                        .map(|file| system_prompts::relative_path(file, &project_dir));
                     // Its instructions head its message, its understanding
                     // file filled in, then, for one sent from Code, what the
                     // code task did; the system prompt is the project's.
@@ -17221,7 +17220,7 @@ mod tests {
             assert_eq!(this.tasks[5].sent.code_task, None);
         });
         let code = run(2);
-        assert!(code.starts_with("We're working on the code "), "{code}");
+        assert!(code.starts_with("We're working on the code"), "{code}");
         assert!(!code.contains("first sent to change the code"), "{code}");
         assert!(!from_code(5, cx));
 
@@ -17331,7 +17330,7 @@ mod tests {
         let project = hidden_anchor::project_system_prompt(&dir).unwrap().unwrap();
         // Each lane's conversation, and the questions', is sent one system
         // prompt, filled in for what its runs see: the spec lane's names no
-        // code, and the questions' no spec source.
+        // code.
         let lane_prompt = |mode: SendMode| {
             hidden_anchor::project_system_prompt_for(Some(mode), &dir)
                 .unwrap()
@@ -17344,7 +17343,8 @@ mod tests {
         );
         assert_eq!(code_lane, project);
         assert!(!spec_lane.contains("./src"), "{spec_lane}");
-        assert!(!questions.contains("./spec"), "{questions}");
+        // A question sees both locations, read only, as the code lane does.
+        assert_eq!(questions, code_lane);
         let runs_seen: Vec<(String, Option<String>)> =
             (0..6).map(|n| recorded_run(&runs, n)).collect();
         for (n, (_, system)) in runs_seen.iter().enumerate() {
@@ -17362,7 +17362,7 @@ mod tests {
             );
         }
         assert!(!project.contains(".understanding.md"), "{project}");
-        assert!(!project.contains("We're working on the code "), "{project}");
+        assert!(!project.contains("We're working on the code"), "{project}");
         assert!(
             !project.contains("fluency"),
             "the system prompt holds the fluency"
@@ -17380,7 +17380,7 @@ mod tests {
             instructions.to_string()
         };
         let (code, _) = &runs_seen[0];
-        assert!(understanding(code).starts_with("We're working on the code "));
+        assert!(understanding(code).starts_with("We're working on the code"));
         assert!(code.ends_with("\n\nChange the code."), "{code}");
         let (spec, _) = &runs_seen[1];
         assert!(understanding(spec).starts_with("We're working on the spec "));
@@ -17388,7 +17388,7 @@ mod tests {
         assert!(understanding(chain).contains("first step changes the spec only"));
         let (step, _) = &runs_seen[3];
         let handed = understanding(step);
-        assert!(handed.starts_with("We're working on the code "), "{handed}");
+        assert!(handed.starts_with("We're working on the code"), "{handed}");
         assert!(handed.contains("second step of a chain"), "{handed}");
         assert!(handed.ends_with("Said run 2."), "{handed}");
         // Each has its own understanding file.
@@ -17481,7 +17481,7 @@ mod tests {
         let spec = run(0);
         assert!(spec.contains("first step changes the spec only"), "{spec}");
         let code = run(1);
-        assert!(code.starts_with("We're working on the code "), "{code}");
+        assert!(code.starts_with("We're working on the code"), "{code}");
         assert!(code.contains("second step of a chain"), "{code}");
         assert!(
             code.ends_with(

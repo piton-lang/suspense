@@ -104,6 +104,14 @@ shape ContainerEnvironmentShape:
         latest otherwise. It is built again when any of those versions
         changes.
 
+        Each command the image holds has to run in it, not only be there. The
+        build ends by running each one's version command in the image, as
+        `piton --version`, and a build where one fails, as a piton built
+        against a newer C library than the image has, fails, saying which
+        command couldn't run and what it printed. An image whose piton can't
+        run is never used, so a Spec run is never sent where it can't run
+        `piton build` to check its work.
+
         A project can add to it with a Containerfile of its own,
         `.suspense/Containerfile`, built FROM the default image, to add what
         its runs in a container need, as the @{ProjectDataScope} says. The
@@ -123,22 +131,30 @@ shape ContainerEnvironmentShape:
         and the run works in `/workspace`. So a harness that keys its
         sessions on its working directory, as Claude Code does, finds them
         again after the project moves, whatever its path on the host. What
-        each kind of run is given, as the @{ProjectLocationsScope} names the
-        locations:
+        each kind of run is given, as the @{ProjectLocationsScope} names
+        the locations, follows.
 
         spec:
             A Spec task, or a Chain prompt's spec step or spec follow-up: the
             spec location, read and write; the compiled reference, the
             harness directory's reference folder, read and write, so it can
-            run `piton build` itself; the fluency file, read only;
+            run `piton build` itself; the project's `.piton` directory, which
+            holds the build's manifest of the files it owns, read and write,
+            for the same reason; the fluency file, read only;
             piton.config.pi, read only; and the task's understanding file,
-            read and write. Never the code location.
+            read and write. Never the code location: in its place, an empty
+            scratch directory, writable, that nothing else sees and that goes
+            with the container, so `piton build` finds the code location it
+            places the shape's guidance in.
 
         question:
-            A question from the Ask tab: the code location, the compiled
-            reference, and piton.config.pi, each read only. Never the spec
-            location. Nothing is writable but the harness's own volume and
-            the questions' sessions folder.
+            A question from the Ask tab: the code location, the spec
+            location, the compiled reference, and piton.config.pi, each read
+            only, so it can run `piton slice` in its container. Nothing is
+            writable but the harness's own volume and the questions' sessions
+            folder. Where one of the code location and the spec location
+            holds the other, both are still mounted, read only, and neither
+            is hidden from the question by the other.
 
         Each run is also given its own conversation's sessions folder, read
         and write, as Volumes says, and nothing of any other conversation's.
@@ -147,7 +163,9 @@ shape ContainerEnvironmentShape:
         user's own skills, MCP servers, or user-level CLAUDE.md, and not the
         project's git directory. A location that holds another, as a code
         location holding the spec or the project data, is mounted without
-        the one it holds, so the one held is never seen through it.
+        the one it holds, so the one held is never seen through it, unless
+        the run is given the one held as well, as a question is given both
+        the code location and the spec location.
 
         A task's understanding file is mounted on its own, never the history
         folder it is in, so a run sees no other task's record. Since a file
@@ -219,9 +237,13 @@ shape ContainerEnvironmentShape:
 
     specBuild:
         A Spec run can run `piton build` in its container, to check its work
-        in the refreshed reference; with no code location there, what that
-        build writes into the code location, the shape's guidance, goes
-        nowhere. Once a Spec task or a Chain prompt's spec step is over,
+        in the refreshed reference, and that build succeeds whenever the spec
+        is sound: it owns the reference files it finds, through the
+        manifest in the mounted `.piton` directory, and places the shape's
+        guidance in the scratch directory standing in for the code location,
+        where it goes nowhere. A build there that fails fails only because of
+        the spec, never because of what the container leaves out, so its
+        errors are the run's own to fix. Once a Spec task or a Chain prompt's spec step is over,
         however it ended, the application runs `piton build` on the host, as
         the @{SpecBuildScope} says, so the host's reference and shape guidance
         are those of the spec as the run left it.

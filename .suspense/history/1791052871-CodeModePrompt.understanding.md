@@ -1,0 +1,7 @@
+- [Mode instructions head the prompt's message in a <task-instructions> block](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#description)
+- [The Code default is saved as code.md in the app's .suspense/system-prompts](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#saving)
+- [The Code default names the spec location only on a paragraph of its own](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#defaults)
+- [The Code default ends with the understanding-file paragraph, as written](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#defaults)
+- [Code instructions never mention the fluency file](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#piton-fluency)
+- [Every mode learns the spec from the compiled reference or piton slice, never the .pi source](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#reading-the-spec)
+- [A host Code task may not edit, and is told not to read, the spec location](.claude/reference/scope/harness-integration/index.md#protected-locations)

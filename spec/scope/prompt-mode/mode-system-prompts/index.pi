@@ -55,14 +55,28 @@ shape ModeSystemPromptsShape:
         and UNDERSTANDING_FILE is filled in with nothing. Each can be moved or
         removed, like any other text of a template.
 
+        Every path a placeholder is filled in with points where the run that
+        is sent it finds that file, whether it runs on the host or in a
+        container, as the @{ContainerEnvironmentScope} says. So each is
+        written relative to the project directory, the directory every run
+        works in, the project directory itself on the host and `/workspace`
+        in a container: CODE_LOCATION and SPEC_LOCATION as `./` and the
+        location's path, as `./spec`, HARNESS_DIRECTORY as the harness's
+        directory, as `.claude`, and PITON_FLUENCY_FILE and
+        UNDERSTANDING_FILE as their paths, as
+        `.suspense/fluency.md`. None is ever filled in with an absolute path:
+        not the project's path on the host, which a run in a container can't
+        reach, and not `/workspace`, which a run on the host has no such
+        directory for.
+
         A run fills CODE_LOCATION and SPEC_LOCATION in only with what it can
         see, as the @{ContainerEnvironmentScope} says. A run of the spec
         lane, a Spec task or a Chain prompt's spec step, can't see the code
         location, and fills CODE_LOCATION in with nothing, its instructions and
-        system template alike. A question can't see the spec location, and
-        fills SPEC_LOCATION in with nothing. A run of the code lane, a Code
-        task, a Chain prompt's code step, or a Freeform task, runs on the
-        host and fills both in, as ever.
+        system template alike. A question can see the code location and the
+        spec location, both read only, and fills both in. A run of the code
+        lane, a Code task, a Chain prompt's code step, or a Freeform task,
+        runs on the host and fills both in, as ever.
 
         A paragraph that held nothing but a placeholder filled in with
         nothing goes with it. A paragraph holding CODE_LOCATION or
@@ -89,10 +103,16 @@ shape ModeSystemPromptsShape:
         It never reads the Piton source under the spec location to learn what
         the spec says. To a run that can see the spec location, the system
         template and the spec-reading prompt say so, and name the spec
-        location only as where edits to the spec go. A run that can't see it,
-        a question or a Code run in a container, is told only that the spec
-        is read from the compiled reference, with nothing about the spec
-        source.
+        location only as where edits to the spec go. A question sees the spec
+        location too, read only, so it can run `piton slice` there, and is
+        told the same: that the spec is read from the compiled reference or
+        from what `piton slice` prints, never from the Piton source. A
+        question makes no edits, so the Ask instructions name the spec
+        location for what it is, the spec's Piton source, that `piton slice`
+        reads, which a question never changes, and nothing told to a question
+        says or suggests that it may edit the spec. A run that can't see the
+        spec location is told only that the spec is read from the compiled
+        reference, with nothing about the spec source.
 
     writingTheSpec:
         Only Spec, and a Chain prompt's first step, which writes the spec,
@@ -113,7 +133,11 @@ shape ModeSystemPromptsShape:
         says, so it keeps in step with the project's piton and its
         FLUENCY_PROMPT.md. A Spec or Chain prompt sent before the file has
         ever been written has it written before the prompt is compiled. What
-        it prints is written as text, never read as Piton.
+        it prints is written as text, never read as Piton, but for the
+        project directory's absolute path on the host wherever it appears in
+        it, which is written as `.` instead, a path within it as relative to
+        it, as `./spec`, so the file holds no path a run in a container
+        can't reach.
 
         PITON_FLUENCY_FILE stands for the file's path. The Spec instructions
         and the Chain instructions, for a Chain prompt's first step, say, on a
@@ -219,10 +243,15 @@ shape ModeSystemPromptsShape:
         Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](${HARNESS_DIRECTORY}/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
         \\
 
-        The Ask default says only what a question is for, and that it changes
-        nothing. The Spec and Chain defaults never name the code location, and
-        the Code and Ask defaults name the spec location only on a paragraph of
-        their own, which goes where the run can't see it.
+        The Ask default says what a question is for, and that it changes
+        nothing, and, on a paragraph of its own, that SPEC_LOCATION is the
+        spec's Piton source, there for `piton slice`, which the question reads
+        the spec through, read only and never edited, and never read directly
+        to learn what the spec says. Since a question can see the spec
+        location, that paragraph is always sent with it. The Spec and Chain
+        defaults never name the code location, and the Code default names the
+        spec location only on a paragraph of its own, which goes where the run
+        can't see it.
 
         The defaults are only where a project starts, and what resetting a
         prompt puts back. A project whose prompts were saved before a default

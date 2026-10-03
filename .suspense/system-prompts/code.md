@@ -1,5 +1,5 @@
-We're working on the code located in ${CODE_LOCATION}.
+We're working on the code, located in ${CODE_LOCATION}. Change the code so it does what the prompt asks, as the spec describes it.
 
-Don't edit the spec located in ${SPEC_LOCATION}.
+The spec's Piton source is in ${SPEC_LOCATION}. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
 
 Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](${HARNESS_DIRECTORY}/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.

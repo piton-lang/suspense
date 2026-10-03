@@ -1,0 +1,3153 @@
+{
+  "userPrompt": "Give me a prompt",
+  "harness": "claude",
+  "systemPrompt": "We're working in a project whose spec is compiled to .claude/reference, which is where to read it. Each prompt starts with a <task-instructions> block saying what that prompt is for and what it may change. Follow the block at the top of the prompt you are answering; an earlier prompt's block no longer applies.\n\nIts code is located in ./src.\n\nRead the spec from its compiled reference under .claude/reference, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with this harness's adapter.\n\nBefore executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.",
+  "instructions": "We're only asking a question about the project. Answer it without changing anything.\n\nThe code is located in ./src.",
+  "resumed": true,
+  "output": [
+    {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "/home/hyphyphyph/piton/repl",
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "tools": [
+        "Task",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "ListAgents",
+        "Monitor",
+        "NotebookEdit",
+        "PushNotification",
+        "Read",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write",
+        "mcp__claude_ai_Claude_Docs__batch",
+        "mcp__claude_ai_Claude_Docs__create",
+        "mcp__claude_ai_Claude_Docs__delete",
+        "mcp__claude_ai_Claude_Docs__export",
+        "mcp__claude_ai_Claude_Docs__guide",
+        "mcp__claude_ai_Claude_Docs__query",
+        "mcp__claude_ai_Claude_Docs__read",
+        "mcp__claude_ai_Claude_Docs__update"
+      ],
+      "mcp_servers": [
+        {
+          "name": "claude.ai Claude Docs",
+          "status": "connected",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Drive",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Gmail",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Calendar",
+          "status": "needs-auth",
+          "source": "claudeai"
+        }
+      ],
+      "model": "claude-opus-5-5[1m]",
+      "permissionMode": "auto",
+      "slash_commands": [
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "output-style",
+        "context",
+        "effort",
+        "fast",
+        "focus",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "skill-doctor",
+        "goal",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "terminal_slash_commands": [
+        "doctor",
+        "color",
+        "focus",
+        "reload-plugins"
+      ],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.281",
+      "output_style": "default",
+      "agents": [
+        "claude",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
+      "skills": [
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "plugins": [
+        {
+          "name": "agents-md",
+          "path": "builtin",
+          "source": "agents-md@builtin"
+        },
+        {
+          "name": "telemetry",
+          "path": "builtin",
+          "source": "telemetry@builtin"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "msg_lifecycle_v1",
+        "mcp_read_resource_v1",
+        "mcp_tool_ui_meta_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "3330b240-20e6-47f9-84ab-04b2c99c6460",
+      "memory_paths": {
+        "auto": "/home/suspense/.claude/projects/-workspace/memory/"
+      },
+      "messaging_socket_path": "/tmp/cc-socks/1.sock",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "per_turn_effort_active": true,
+      "view_mode": "default"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "c810541e-3b98-4433-85a5-b922d2d5c196"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011CffizSRb9tWV76K2tsTWn",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 1785,
+            "cache_read_input_tokens": 38066,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1785
+            },
+            "output_tokens": 8,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d0984c18-e395-41be-a22d-c40606e00843",
+      "ttft_ms": 995
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "752f5d63-cb3b-4fad-a810-96cf8fc8154c"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "01f25b2e-e888-4eb1-8973-84207569b441"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "1aa3c760-4fc0-4ed5-a914-80742ad13fd0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e37bafc0-b311-4185-b749-36265e845cb1"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 225,
+      "estimated_tokens_delta": 175,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "35c9d396-bcaf-4dee-8e15-894d454a8452"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "CAQS+wYKEAgSGAI4AUIIdGhpbmtpbmcSDGET0rL1nX8a7GLONxoMozvhQQinFodR6y5PIjBcI2G+7OpgnFyPI4LgueW5+MhHFPTGheyXmXcosYwigYog1Eae90V9GfWCLf1kRewqmAa2iJfiNdmWqsyz2jDh9sWn3RtYfHRQmBLVgIubpjfcSHO2OUJnRXiQMCbT02ZIc7GUmhU6GED/wX7x/+7g8qpaW92juvfwhLDH/ZbcatJ2HnvertK+MrpZol6JtqUTug0tjeE9/S2Kqk8an6d5NePn4xO7Wy3iMM815XR2ELn3/xiwG4CtOU/HgxzPKDY5P+lhWv5FOu6AgRsW6rRmWYdkCubD6stLxDCn0zV5AyLDNFFxfkOIQZkUm1yyyrcEHxgFUS9G0/iHSlclxYY7w0UJ1Ig0vvHXMTrhc3xFe6Vbcmsdd36sYNxl3tbKGB+kL8lvCTvwvyUr4W63Mu0eihRgyKwH42OVufCwYWaPb8aeZNaTE47RwisrVdiwaO5Ms3F0J/KQSt7BEOQMjdgQf4gxPunjzW4cYO4ch7lFfJQIAs71gpUTJuJs/fX/3H+vqF2xEXL4Ffz1SKMdjYKp3jeXmVF6H+fDskf3UFGYCaypPk2vMkjE1jHuqGOfkUlF64YEZC5tUzN69iHGdivLmzFLyPvCS6blf5RTIAbiBE8lHfU8eD9JPY7HhrpKK0wuHeEJKz9KfScguK3qfknMZe5rMwLFItKLvNVL6spnAJhAQxk0+Nq9b4scoj0dFXYYVwwvwNVDn3j8LHV+9rlPGB1ewMXEWVzKovGa8B8+a7lMY47N5060MkktxERWrsPSaUWU6UcOXafv7NcI9GzgCMp4nc+8qWVaIZXulU2abuf/6UJQnM0JaXTNyjnfiuYxJP2VF0WiZPN+Vz4Ot81f3FUmSz8nSmSCBDOjFP/+dn0QGsgmaqFHgd7foAfogvS4w/YSYHvF87hH/i95PXhmjUyfRku39EK/yg+8GuTGlUMa3I6PSVnINGdkZDN6kpj2JfT8oK1ekpczVeRRH/pmOsYG4jh3+0YRqeyi4461zbkyvDEWRaprl3/0/vYPHM+GrSX0wodtDfTc6ew271nSw0LMcgkIBHYhZ6rO4hVLL82SD8gDTbtZ98MTp0mct9b2dtVkXIk0RFeVzFhpPjr4snlGE8B4Fbjb+joYAQ=="
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "21b4ed0c-8e4b-4dca-a391-88070235cfd9"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CffizSRb9tWV76K2tsTWn",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAQS+wYKEAgSGAI4AUIIdGhpbmtpbmcSDGET0rL1nX8a7GLONxoMozvhQQinFodR6y5PIjBcI2G+7OpgnFyPI4LgueW5+MhHFPTGheyXmXcosYwigYog1Eae90V9GfWCLf1kRewqmAa2iJfiNdmWqsyz2jDh9sWn3RtYfHRQmBLVgIubpjfcSHO2OUJnRXiQMCbT02ZIc7GUmhU6GED/wX7x/+7g8qpaW92juvfwhLDH/ZbcatJ2HnvertK+MrpZol6JtqUTug0tjeE9/S2Kqk8an6d5NePn4xO7Wy3iMM815XR2ELn3/xiwG4CtOU/HgxzPKDY5P+lhWv5FOu6AgRsW6rRmWYdkCubD6stLxDCn0zV5AyLDNFFxfkOIQZkUm1yyyrcEHxgFUS9G0/iHSlclxYY7w0UJ1Ig0vvHXMTrhc3xFe6Vbcmsdd36sYNxl3tbKGB+kL8lvCTvwvyUr4W63Mu0eihRgyKwH42OVufCwYWaPb8aeZNaTE47RwisrVdiwaO5Ms3F0J/KQSt7BEOQMjdgQf4gxPunjzW4cYO4ch7lFfJQIAs71gpUTJuJs/fX/3H+vqF2xEXL4Ffz1SKMdjYKp3jeXmVF6H+fDskf3UFGYCaypPk2vMkjE1jHuqGOfkUlF64YEZC5tUzN69iHGdivLmzFLyPvCS6blf5RTIAbiBE8lHfU8eD9JPY7HhrpKK0wuHeEJKz9KfScguK3qfknMZe5rMwLFItKLvNVL6spnAJhAQxk0+Nq9b4scoj0dFXYYVwwvwNVDn3j8LHV+9rlPGB1ewMXEWVzKovGa8B8+a7lMY47N5060MkktxERWrsPSaUWU6UcOXafv7NcI9GzgCMp4nc+8qWVaIZXulU2abuf/6UJQnM0JaXTNyjnfiuYxJP2VF0WiZPN+Vz4Ot81f3FUmSz8nSmSCBDOjFP/+dn0QGsgmaqFHgd7foAfogvS4w/YSYHvF87hH/i95PXhmjUyfRku39EK/yg+8GuTGlUMa3I6PSVnINGdkZDN6kpj2JfT8oK1ekpczVeRRH/pmOsYG4jh3+0YRqeyi4461zbkyvDEWRaprl3/0/vYPHM+GrSX0wodtDfTc6ew271nSw0LMcgkIBHYhZ6rO4hVLL82SD8gDTbtZ98MTp0mct9b2dtVkXIk0RFeVzFhpPjr4snlGE8B4Fbjb+joYAQ=="
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1785,
+          "cache_read_input_tokens": 38066,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1785
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "85661802-6ba0-444e-974c-9210b9845aba",
+      "timestamp": "2026-10-03T17:48:40.241Z",
+      "request_id": "req_011CffizS6W52jaEX4FxQon5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "56b4bf7a-e7bc-49a5-9e1d-d72a6e1cd4e5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "tool_use",
+          "id": "toolu_01K4AnMuEHEgnH3fMedTEoh9",
+          "name": "Bash",
+          "input": {},
+          "caller": {
+            "type": "direct"
+          }
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "592284cc-5991-43b7-a61f-ade1ae4869a6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ""
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b6411c1d-a7d4-4827-b632-96a50190886c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "{\"command\": \"cd /home/hyphyphyph/piton/repl/."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2db5de74-260c-4ec7-82ec-a4e91484bc68"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "claude/reference/scope"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "02b0dc3a-f5a5-4f0e-8a87-ee4a1beeffe4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "; grep -n"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "6d4dff6c-bc37-460c-b50a-07c628ddb292"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " -i -E 'spec"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "c73c5158-1159-4105-91c1-8f656542eb5c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " location|compiled reference|"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "25703595-1d74-44ce-be39-91867a8edb41"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "piton slice' prompt"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "ca43dac0-d69f-4f77-a563-29878b6b9dc5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "-mode/mode-system"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d54b19b9-13f3-47d5-ac51-7558238b4289"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "-prompts/index.md"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "6904fef1-c6f4-449e-847b-9ad0d003c62a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " | head -20"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "016aeac2-924e-4466-a82b-a4281a5d3495"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\", \"description\": \"Check Ask system promp"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "874c8d22-849b-4943-b564-3580645220e4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "t wording on spec access"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "75379011-daf9-4032-b480-83a5d499bd1b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\"}"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "8b57335a-ffcb-413c-9a28-aab5ce4b9f22"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CffizSRb9tWV76K2tsTWn",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "toolu_01K4AnMuEHEgnH3fMedTEoh9",
+            "name": "Bash",
+            "input": {
+              "command": "cd /home/hyphyphyph/piton/repl/.claude/reference/scope; grep -n -i -E 'spec location|compiled reference|piton slice' prompt-mode/mode-system-prompts/index.md | head -20",
+              "description": "Check Ask system prompt wording on spec access"
+            },
+            "caller": {
+              "type": "direct"
+            }
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1785,
+          "cache_read_input_tokens": 38066,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1785
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "cdc7bbae-42f8-4fe0-a2bc-9e16903a8e36",
+      "timestamp": "2026-10-03T17:48:41.093Z",
+      "request_id": "req_011CffizS6W52jaEX4FxQon5",
+      "wire_tool_inputs": {
+        "toolu_01K4AnMuEHEgnH3fMedTEoh9": {
+          "command": "cd /home/hyphyphyph/piton/repl/.claude/reference/scope; grep -n -i -E 'spec location|compiled reference|piton slice' prompt-mode/mode-system-prompts/index.md | head -20",
+          "description": "Check Ask system prompt wording on spec access"
+        }
+      }
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "df41ffee-9b6c-4716-b0f8-770c2b7f7b61"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {
+                  "toolu_01K4AnMuEHEgnH3fMedTEoh9": {
+                    "type": "evaluated",
+                    "outcome": "not_flagged"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1785,
+          "cache_read_input_tokens": 38066,
+          "output_tokens": 198,
+          "output_tokens_details": {
+            "thinking_tokens": 51
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 198,
+              "cache_read_input_tokens": 38066,
+              "cache_creation_input_tokens": 1785,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 1785
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e409a48b-70e8-4931-8f85-896559e1ec42"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "c678ce6e-a476-4f8a-a0ff-7375775710a5"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1791056400,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.08,
+            "resetsAt": 1791056400
+          },
+          "seven_day": {
+            "utilization": 0.44,
+            "resetsAt": 1791313200
+          }
+        }
+      },
+      "uuid": "62c5d4b3-6201-493d-92f7-59a04c6d5f69",
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419"
+    },
+    {
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "tool_use_id": "toolu_01K4AnMuEHEgnH3fMedTEoh9",
+            "type": "tool_result",
+            "content": "19:- CODE_LOCATION and SPEC_LOCATION, the code location and the spec location, as the [ProjectLocationsScope](../../project-locations/index.md#project-locations-scope) says\n26:A run fills CODE_LOCATION and SPEC_LOCATION in only with what it can see, as the [ContainerEnvironmentScope](../../container-environment/index.md#container-environment-scope) says. A run of the spec lane, a Spec task or a Chain prompt's spec step, can't see the code location, and fills CODE_LOCATION in with nothing, its instructions and system template alike. A question, and a run of the code lane while the project's \"Run code tasks in a container\" option is on, a Code task, a Chain prompt's code step, or a Freeform task, can't see the spec location, and fill SPEC_LOCATION in with nothing. A run of the code lane while the option is off fills both in, as ever.\n32:In every mode, the harness learns what the spec says from its compiled reference, the Markdown the spec build writes under HARNESS_DIRECTORY's reference folder, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with the adapter of the harness in use. It never reads the Piton source under the spec location to learn what the spec says. To a run that can see the spec location, the system template and the spec-reading prompt say so, and name the spec location only as where edits to the spec go. A run that can't see it, a question or a Code run in a container, is told only that the spec is read from the compiled reference, with nothing about the spec source.\n47:The spec-reading prompt explains how to read the spec before executing anything, as the readingTheSpec above says: from the compiled reference, reference links in the prompt being the spec for what they name, each read before anything it covers is changed. It is injected into the system template wherever SPEC_READING is written, and may itself use every placeholder but SPEC_READING, which in it is left as written. One left with nothing but blank space leaves SPEC_READING filled in with nothing. Like the templates, each project has its own, saved with its data, as the [ProjectDataScope](../../project-data/index.md#project-data-scope) says, in spec-reading.md beside them, and edited in the [SettingsWindowScope](../../settings-window/index.md#settings-window-scope); with no file yet the project uses its default.\n60:Each Code, Chain, or Spec task has an understanding file: the short list of constraints the harness has taken from the spec for it, which the [RightSidebarScope](../../../ui/components/right-sidebar/index.md#right-sidebar-scope) shows as it changes. It is saved beside the task's history record, with the same name and the extension `.understanding.md`, written by the harness itself. Nothing else writes it, and nothing is there until the harness writes it. Each constraint links to the compiled reference file it comes from, never to the spec's source.\n67:Read the spec from its compiled reference under ${HARNESS_DIRECTORY}/reference, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with this harness's adapter.\n77:Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](${HARNESS_DIRECTORY}/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.\n78:The Ask default says only what a question is for, and that it changes nothing. The Spec and Chain defaults never name the code location, and the Code and Ask defaults name the spec location only on a paragraph of their own, which goes where the run can't see it.",
+            "is_error": false
+          }
+        ]
+      },
+      "parent_tool_use_id": null,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "2a0950a2-b44b-4f56-a21d-e5f0e06d8026",
+      "timestamp": "2026-10-03T17:48:41.415Z",
+      "tool_use_result": {
+        "stdout": "19:- CODE_LOCATION and SPEC_LOCATION, the code location and the spec location, as the [ProjectLocationsScope](../../project-locations/index.md#project-locations-scope) says\n26:A run fills CODE_LOCATION and SPEC_LOCATION in only with what it can see, as the [ContainerEnvironmentScope](../../container-environment/index.md#container-environment-scope) says. A run of the spec lane, a Spec task or a Chain prompt's spec step, can't see the code location, and fills CODE_LOCATION in with nothing, its instructions and system template alike. A question, and a run of the code lane while the project's \"Run code tasks in a container\" option is on, a Code task, a Chain prompt's code step, or a Freeform task, can't see the spec location, and fill SPEC_LOCATION in with nothing. A run of the code lane while the option is off fills both in, as ever.\n32:In every mode, the harness learns what the spec says from its compiled reference, the Markdown the spec build writes under HARNESS_DIRECTORY's reference folder, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with the adapter of the harness in use. It never reads the Piton source under the spec location to learn what the spec says. To a run that can see the spec location, the system template and the spec-reading prompt say so, and name the spec location only as where edits to the spec go. A run that can't see it, a question or a Code run in a container, is told only that the spec is read from the compiled reference, with nothing about the spec source.\n47:The spec-reading prompt explains how to read the spec before executing anything, as the readingTheSpec above says: from the compiled reference, reference links in the prompt being the spec for what they name, each read before anything it covers is changed. It is injected into the system template wherever SPEC_READING is written, and may itself use every placeholder but SPEC_READING, which in it is left as written. One left with nothing but blank space leaves SPEC_READING filled in with nothing. Like the templates, each project has its own, saved with its data, as the [ProjectDataScope](../../project-data/index.md#project-data-scope) says, in spec-reading.md beside them, and edited in the [SettingsWindowScope](../../settings-window/index.md#settings-window-scope); with no file yet the project uses its default.\n60:Each Code, Chain, or Spec task has an understanding file: the short list of constraints the harness has taken from the spec for it, which the [RightSidebarScope](../../../ui/components/right-sidebar/index.md#right-sidebar-scope) shows as it changes. It is saved beside the task's history record, with the same name and the extension `.understanding.md`, written by the harness itself. Nothing else writes it, and nothing is there until the harness writes it. Each constraint links to the compiled reference file it comes from, never to the spec's source.\n67:Read the spec from its compiled reference under ${HARNESS_DIRECTORY}/reference, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with this harness's adapter.\n77:Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](${HARNESS_DIRECTORY}/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.\n78:The Ask default says only what a question is for, and that it changes nothing. The Spec and Chain defaults never name the code location, and the Code and Ask defaults name the spec location only on a paragraph of their own, which goes where the run can't see it.",
+        "stderr": "",
+        "interrupted": false,
+        "isImage": false,
+        "noOutputExpected": false
+      }
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "b418745b-d78e-4f63-96fe-2a1194bbcab2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011CffizeEk8cXtNs9d9DC1o",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 1608,
+            "cache_read_input_tokens": 39851,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1608
+            },
+            "output_tokens": 8,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "42ec6102-f409-4d6c-9af6-6e9772df241a",
+      "ttft_ms": 930
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "067fe74c-cf9d-4f06-bb75-b188c25defd4"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "cbe846f0-0f5b-4408-9e41-a976caccb178"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "324bf1db-d0c0-4da0-b239-5363f89d3051"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7c42e2fb-3bf6-413a-b3a2-f9d4e96a4d38"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 240,
+      "estimated_tokens_delta": 190,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "1bacce74-b339-41a3-806e-5aee2d7a3351"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "CAQSuQcKEAgSGAI4AUIIdGhpbmtpbmcSDJUsYFe7GvK0E+QzNRoMB0S+bnDDtKKYV9u3IjA8pXaEKDNaPgPd9Tun1G4qf8dQ0Gfu7r8QEDIuHhe6uwGn/zB4jclXAFho7dhOJ2oq1gZoyBVpokAtHq+cS4bcmjn0sdfHnSdujIeJWGu/CU6ErLpvJjeNGTxSLyD6Ez6yGwzw4GmqbIK5XI5vYe8KJdTzQWSGzV9bp4b/JRkuVa38PSuVuANjslGgK5zrdfnd7VVD92oswZT04ciVg9ScsfC6awB4VJnswI6zZ165rJDpAlvOrT7Mgc6RORO/Yd5DEOkrpieSFVHKmYVzU3J/Wle0ehj7GJ7LUQGrp1Y5WlJMVDc33idvRtMTOZTEZ/13KE4tAYP9nYzmvVgSLjiNHq8fJFqnmA4/b5388wBDdabuvstYKggtcXf+Uh+pDevll8YTKGxY88YmQfI2/qy867XXEfHVneh8ZLCC/KvZUvst40hpX1+bQykYj7qOXO4dhJEWiH7eHgEVvL6pBUBwA3r1HABwBnhqLBs9yqnCY3Uhc455jZU9rgp/3m/+1mVc7ioBhz8kyh+pZZxj4MQWk5C+btJBdGRjFRXw7CIWyLTQPfKo0VUnNuneKp508rHWrIjUdiU6h8SUMSRM9OSO3EksiM1e7TzLgGRvsNzFG8DS+/H71mLIdAOCKA7I8hGF0z3UQZlLCzQcHGI05gyezw5diogmB7j6KHuhJU7tVkF72xUxGoHvr/AN9aM/TyIjhU5exJ3A1WmCwp5/3b7NmXGLJxm5n1dLVwFsFgo4wfJyA4NB1y7bpVTs81N5lVtz0/u5bg0j/oDXVGE59FtJIgIkURG6QxK7L+pcLqk3c+9dNdh10QG5aIEPavMfW+6waRy97FIy7c+6QbjEniTHimRtnmMvflacVzaEE1Pr+Zqe2XZ8xidv3BtfbXWlmVDBTVLO9SkWxrdM1LTF851GZTdw12JsrYpve8SS0/Nx1rmyMtQG9/6lSQoR7AghP1zVTXTvMvB8F8V9vH55zsDSGmGcejuypPFqBrhNyrqZa8aeeDil3aI1AqfNxglzPudSF7P3JK+6KLA/16apIMJh4yMBg+LuIZ6l8l2/IVU14UPk3D599/00LniySExJ6NfbqNTs0IEwoWBCREJ9DvG7KxoYgJmccP3LxhzUhTVODd4j//QPT3xN8lGu1oCG2whRZtaJDilKMi9JkPhabfbebFK9jn15ZlZ5BVVbmB7p7oM6msHof6UFERgB"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "ca51a51d-af87-494f-bd4f-ac3f1aecb769"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CffizeEk8cXtNs9d9DC1o",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAQSuQcKEAgSGAI4AUIIdGhpbmtpbmcSDJUsYFe7GvK0E+QzNRoMB0S+bnDDtKKYV9u3IjA8pXaEKDNaPgPd9Tun1G4qf8dQ0Gfu7r8QEDIuHhe6uwGn/zB4jclXAFho7dhOJ2oq1gZoyBVpokAtHq+cS4bcmjn0sdfHnSdujIeJWGu/CU6ErLpvJjeNGTxSLyD6Ez6yGwzw4GmqbIK5XI5vYe8KJdTzQWSGzV9bp4b/JRkuVa38PSuVuANjslGgK5zrdfnd7VVD92oswZT04ciVg9ScsfC6awB4VJnswI6zZ165rJDpAlvOrT7Mgc6RORO/Yd5DEOkrpieSFVHKmYVzU3J/Wle0ehj7GJ7LUQGrp1Y5WlJMVDc33idvRtMTOZTEZ/13KE4tAYP9nYzmvVgSLjiNHq8fJFqnmA4/b5388wBDdabuvstYKggtcXf+Uh+pDevll8YTKGxY88YmQfI2/qy867XXEfHVneh8ZLCC/KvZUvst40hpX1+bQykYj7qOXO4dhJEWiH7eHgEVvL6pBUBwA3r1HABwBnhqLBs9yqnCY3Uhc455jZU9rgp/3m/+1mVc7ioBhz8kyh+pZZxj4MQWk5C+btJBdGRjFRXw7CIWyLTQPfKo0VUnNuneKp508rHWrIjUdiU6h8SUMSRM9OSO3EksiM1e7TzLgGRvsNzFG8DS+/H71mLIdAOCKA7I8hGF0z3UQZlLCzQcHGI05gyezw5diogmB7j6KHuhJU7tVkF72xUxGoHvr/AN9aM/TyIjhU5exJ3A1WmCwp5/3b7NmXGLJxm5n1dLVwFsFgo4wfJyA4NB1y7bpVTs81N5lVtz0/u5bg0j/oDXVGE59FtJIgIkURG6QxK7L+pcLqk3c+9dNdh10QG5aIEPavMfW+6waRy97FIy7c+6QbjEniTHimRtnmMvflacVzaEE1Pr+Zqe2XZ8xidv3BtfbXWlmVDBTVLO9SkWxrdM1LTF851GZTdw12JsrYpve8SS0/Nx1rmyMtQG9/6lSQoR7AghP1zVTXTvMvB8F8V9vH55zsDSGmGcejuypPFqBrhNyrqZa8aeeDil3aI1AqfNxglzPudSF7P3JK+6KLA/16apIMJh4yMBg+LuIZ6l8l2/IVU14UPk3D599/00LniySExJ6NfbqNTs0IEwoWBCREJ9DvG7KxoYgJmccP3LxhzUhTVODd4j//QPT3xN8lGu1oCG2whRZtaJDilKMi9JkPhabfbebFK9jn15ZlZ5BVVbmB7p7oM6msHof6UFERgB"
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1608,
+          "cache_read_input_tokens": 39851,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1608
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "aff14b26-c81f-4a4a-a2f9-b27b18111b10",
+      "timestamp": "2026-10-03T17:48:49.081Z",
+      "request_id": "req_011Cffizdwe1kmQK2PSKSkpw"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "5459d782-598f-4267-87c8-f5f5033a4a08"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "79283308-4639-412b-b4f4-cf31794a786b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Here's a prompt"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "9dc85650-3636-4818-a7f8-d2468cd7a2aa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " for a Spec task."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "6a405dd1-1cca-4ce7-95cd-5bd9ed24ede5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Pa"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b8919ada-16ad-4f43-93a8-53759d7d9a58"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ste it as"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2e0fd597-6843-4dda-9416-6c79b5ca600a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is.\n\n---"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "998c98e0-7149-4e15-8dd5-262915943ea9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\n**"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "49c323c9-629b-4592-8852-2c67fa01fc46"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Quest"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "4b34b582-985b-4f2a-b3ed-efef46ea1dab"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ions from"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "36ed6cf4-c88e-4dcc-a80a-3cafc872eb06"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the Ask tab mount"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "0d17d011-075f-455d-9ac1-de142c8a2b85"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the spec location"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "ce509d02-ce33-4065-8186-edb8fb3133be"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", read-only."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "04b16f4c-3522-48f4-8f0c-ce4efbc84150"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "**\n\nAdd the"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "ed28218c-7392-4282-b710-ccfaee8c58d9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " spec location, read-only,"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "500ba1b2-d8f2-44ff-a57c-7b292efee806"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " to what"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "3a04f9c8-92f9-453a-aaf9-f262d70ee60a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a question run can see. A"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "c72f7735-02c5-4315-bca1-5fe3333bd7af"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " question should be able to run `pi"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "3aa2fac6-b5eb-48b9-90ae-d31cf4b7c571"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ton slice` in its container."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "21c8d78c-1e4c-4aac-8195-6c25b147e017"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Today"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "1fb09a9a-1e34-4a0d-866d-a2bbd287a81b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it can't:"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "5efad03c-bead-4448-aad2-c5ca543723fe"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the spec source isn't m"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "4d292718-15d0-4cd8-8ee8-a6cac5037606"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ounted, so pi"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "c968e736-0755-4381-97e1-68bb9479bc7a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ton has nothing to sl"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b1df43ce-0e35-4ec0-843d-13680b9de0fe"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ice. It should still lear"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "49e92f58-27e7-4012-b025-3f9567e7f603"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "n what"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "29ba1d6b-3533-4f34-a8c8-5989b061dbdb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the spec says from the compi"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7b23ebd4-0103-472d-9338-8370818d094b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "led reference or"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a3d34a5f-94fc-4da4-b686-d5527f2793c0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `piton slice`, never"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "ad7987f9-3618-406e-bd60-29d781bacd5b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " by reading the Piton source"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "1e24c0b6-67e4-4005-8006-d09c945696e3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " directly. Nothing in"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "4adb1077-d3e5-4fd1-98ce-46697c32a11e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a question run"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "4da54512-7267-4f86-a690-e055f1db1e9c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " bec"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "614644cf-e1d6-4fce-b448-ff4ab2fce662"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "omes writable ap"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "adc4b2fe-515b-4f67-a074-1ce083bc389f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "art from the harness's own vol"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "190711f6-6a95-45f5-aa63-dd23e4a5e3f5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "umes.\n\nUpdate"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2339b444-3b69-41ac-b5ab-3c85f8bdd4dc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " every"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "11e0927a-ca72-4591-b528-ef378231870b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " place that says ot"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d711d77a-63a6-4f40-9008-d9b895ae8bdc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "herwise:\n\n- **"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d7409102-2e4a-4bbf-8a85-ff5a06504102"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ContainerEnvironm"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "32140ecc-3153-4e82-9dd6-253965b14d68"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "entScope, Question entry"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "bfb03ce2-78e3-4d91-ace0-6ae018913ecc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "16875d7c-fc29-4b10-ba69-9f96b751a905"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "** It"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d07a4d09-03b2-425e-946c-b4d00042c132"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " currently says \"the"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "78995a75-27c2-4d91-8065-847728992b46"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " code location, the compiled re"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "c5171907-8275-46b0-971f-7aa694dbc0b0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ference, and piton.config."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b3a1894d-dc27-464b-ac78-c08e85af3033"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "pi, each read only."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "9a235e1d-e8a5-4d95-bf7f-778e8e2716f1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Never the spec location.\""
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "15aadeb1-a3b3-4b79-8319-e51d09dbe880"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Change it to: the code"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "63848b1d-f4d1-459b-8ab0-d437eedef605"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " location, the spec location, the"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "604b8fa3-5494-4207-b25d-799880d4340a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " compiled reference, and pi"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "46df9a08-e64e-4987-879b-e577c7371b96"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ton.config.pi, each"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2ba412fc-83f3-40fb-9e53-3a78f59a32d1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " read-"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "0e6e2139-84f8-446b-983b-f7dd7ce102d8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "only. If one"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a42ad172-ce32-4c41-82f3-196fb0162d7a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " location s"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "bafd1e20-c35e-4f19-955c-5b8263a7b622"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "its inside the other, the \""
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "61c7c7ec-1f25-4309-af4c-0f192d2cc6d1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "other location\" h"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "403ddd7b-8689-4889-a896-b9c041a1dc04"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "iding must"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "05e63a77-cec4-407b-bbc1-985aad713759"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " not hide either"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "f07ed5f0-a291-49fa-88f1-6ee2ff6bccac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " of them from a question.\n-"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "fe6383b3-a25f-4254-ac25-7463d01554b4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " **ModeSystemP"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "5a321e63-ff1d-4314-afc3-f5b1af42ec2d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "romptsScope.**"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7e312189-9d4a-4c17-aa13-876cbc2b2dd7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n  - A question can"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e349a8bf-4c44-4d1b-824a-3e74735b286f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " now"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2b5d9edc-be9b-4593-80b2-0f1a02b7b7ad"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " see the spec location, so it"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "05c1700c-eb00-4725-8d66-85e7ec8bed21"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " fills SPEC_L"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "cf1b9911-15b3-4286-bb46-49d87d5f563c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "OCATION in. Rem"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "96c24564-4838-4019-a4ee-ca7f5e677581"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ove quest"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e42668be-123c-46f3-ac16-42af6d072b85"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ions from the list of run"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "80b4f454-6ab7-43be-8eea-cd3de8e24e99"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "s that \"can't see the sp"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "1f6e8d46-5a5c-4627-9393-86ec703bcb01"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec location\"."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "41d6bd37-a3df-4b30-9087-dbc97096c84c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " That"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e81982b2-3190-4276-91e5-b715ce320ea2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " list stays as is"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "104225a9-12d9-4fb1-89cb-d9e759b1725b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " for Code runs in a container"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "da061df0-9714-4b03-8ab9-8006d49e448d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n  - Quest"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "392d5d40-cb9a-416f-9998-821c6600adc0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ions move"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "098deae8-2e12-4c7d-acf1-4d3983afb42d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " to"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b773d353-fa52-4ac7-ad83-8ab74647bb47"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the group of runs that can see"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "c146b2d3-ece1-494f-a449-561e7d517011"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the spec location. They're told"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "9f152803-76e4-4651-8d08-02ee2c4a39f7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the spec is read from the comp"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "fed35f92-d001-4ebe-a03e-32468ab7f8c6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "iled reference or `piton"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "3303c4c1-a7f8-4685-a128-98b296ddb6d2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " slice`, and the spec"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7cb2df30-91f5-49ea-9586-e089a93f542e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " location is named for"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a9e5d377-a1f2-4444-b721-e9a196a9b296"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " what"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d430360e-a617-426c-a024-b732c8f53798"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b0b4100f-bdd0-4657-a72b-76a7a0ca7691"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is, not as som"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "c491bf77-eccb-4c1f-b42b-e64221f461f0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ewhere to"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "008d9792-b29b-4233-8077-d0909c24eda3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " read"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "c4b6208c-2a36-4d68-b7b2-60178ce9be23"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a343ba77-ac42-4caf-b537-022bcc7ac0aa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " spec from. Un"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "3f00d9be-da0a-41c7-a48b-a2c72294724b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "like the other runs in"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "681db035-df01-421f-b955-7d4222948820"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " that group, a question doesn"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2a8061df-0024-4b1d-a8de-2b8a2b9dd3b0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'t make"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a540d6a6-02d5-459e-bde3-23b1bab46182"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " ed"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a2286e02-863c-4344-b37e-cb64fb9fa0bd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "its, so the w"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "48b4eb56-bcda-4696-85ac-111eda6742c7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ording m"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "ff3fb9f6-0fb0-472e-b46d-64809bd1e2a6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ustn't su"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "632b77a9-d445-42d3-8322-92a2376a5ea9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ggest it"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "c42b08a7-81da-4e3c-bb50-58fce383ec14"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " can edit the spec."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b8287989-b8c6-472a-8078-4f92bde9b654"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n  - Change the Ask"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "96364e2c-ee52-476b-95a4-8abbb6760249"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " default's rule about the spec"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7a5d5e90-0e8d-489e-ba9d-0ccec7811584"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " location to match: the spec location"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e850f0de-5fb3-4b35-a2d3-e7544d2f38c0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " pa"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "af99bd7a-3e86-4206-afc5-aa735d3c98cd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ragraph now appl"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2c73b5b1-4ec6-4fb4-8cbd-5cce9ac33d33"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ies to questions.\n- **"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "3fac177f-88b1-40b7-a189-f490674bc5db"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "HarnessIntegr"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "4461b422-0d58-4888-b31f-cb256cd7ad9a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ationScope.** The r"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "90400a4c-5288-403a-a3c6-d009ee7b8552"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ule tel"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b0f5d746-1705-4eb9-864a-8a77303cbf07"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ling a question from the Ask"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "69ea98bd-bfe9-407e-8d83-68f4668e9ab7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " tab not to read the spec"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "68f9ba74-f33a-4d9f-add9-f5dc09a4512c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " location applies only"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "1be60002-84fe-4dc3-aa35-ce730bcdfe05"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " to host runs,"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "0e53a5a0-1896-4081-8fc1-d8620abc772e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and questions always"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "cc95af18-a070-4a5e-860a-f90c358917a7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " run in a container. Make"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "9844bf10-ec44-44a2-b4f6-3d19eb1c9345"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " sure nothing there, or"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "36c1703f-fbd0-4c18-9b85-684e15441a1c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " an"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2ada3783-0ebd-4534-b0ec-834041c2864b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ywhere else, tells a"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "9f0d06ac-f0b8-46e6-8647-95af2a55e5a0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " question to st"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "031fed3c-4419-4ecc-96f7-930c8a3bc736"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ay off the spec location"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "54347758-1f87-48fa-b16a-eccae0c6b0bd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n\nLeave Sp"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b3071a9f-cc50-4803-b9ad-d028ba056542"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec tasks, Code t"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "cbc66afe-7b50-47c6-ad19-f013f0765dbe"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "asks, and Ch"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "0c895e4b-f12c-4c64-8ee1-4db6ed9fe24f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ain ste"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "eba470ce-c0c5-4b15-9d34-c6c343781863"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ps unchanged,"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b4a6d4b6-f909-420f-8681-d4d20995d127"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " whether they run in a container or"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "eeee19c9-0feb-408e-9bb1-c93a78573c38"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " on"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "ecf5a3a4-020c-455c-ad9c-f193ebb093fb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the host.\n\n---\n\nThe code"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "5b5bda64-dd88-488a-b04a-2db20f748f24"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " change is small"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "45f9efc7-9bfc-406a-9abf-c85da6ae9852"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " once"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "1b61f8f0-c5ed-48f3-80f0-83e359d67e46"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the re"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b965556c-2e50-4723-81ea-165f13308d52"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ference is rebuilt:"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "3f52c9ed-2b6f-4d8d-a90c-297ebd027733"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "bedded5a-fc82-4c59-a52e-d26176a9fba6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Question branch at `src/"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d3868668-a5f1-4b4f-9af4-7c5cdb880a89"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "container.rs:179-183"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e8459651-cbe7-4880-bc5f-5d61b165b405"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "`"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "301a81dc-1c08-4a4a-985e-643c9116ea8e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", plus the code"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "396e06b2-451c-4cee-b8a4-69d8bb7a7e28"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " that fills SPEC_"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "96106fd4-4069-40e0-b09a-5521f4621965"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "LOCATION in for quest"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "91e7d96f-4f1d-40cf-aa62-037c25420957"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ions."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "6a831d16-ff79-4519-b19b-87c467c1036b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " You can send"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "3f63d4b5-c700-49af-be75-ddcdb46cff4e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it as a Code task after"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "0dd625a8-8910-459b-9392-745dda9c630d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "wards,"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "1509f82f-9501-44e2-9c15-2bde8d1492c7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " or use a Chain promp"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "3eedc4f8-45a8-47e4-8793-1e7ec978f977"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "t so the code step follows on"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "465cf712-479e-4ac2-9c2d-0524006de0e7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " its own."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "f0613630-a452-4915-8aa6-2993a842f136"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CffizeEk8cXtNs9d9DC1o",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Here's a prompt for a Spec task. Paste it as is.\n\n---\n\n**Questions from the Ask tab mount the spec location, read-only.**\n\nAdd the spec location, read-only, to what a question run can see. A question should be able to run `piton slice` in its container. Today it can't: the spec source isn't mounted, so piton has nothing to slice. It should still learn what the spec says from the compiled reference or `piton slice`, never by reading the Piton source directly. Nothing in a question run becomes writable apart from the harness's own volumes.\n\nUpdate every place that says otherwise:\n\n- **ContainerEnvironmentScope, Question entry.** It currently says \"the code location, the compiled reference, and piton.config.pi, each read only. Never the spec location.\" Change it to: the code location, the spec location, the compiled reference, and piton.config.pi, each read-only. If one location sits inside the other, the \"other location\" hiding must not hide either of them from a question.\n- **ModeSystemPromptsScope.**\n  - A question can now see the spec location, so it fills SPEC_LOCATION in. Remove questions from the list of runs that \"can't see the spec location\". That list stays as is for Code runs in a container.\n  - Questions move to the group of runs that can see the spec location. They're told the spec is read from the compiled reference or `piton slice`, and the spec location is named for what it is, not as somewhere to read the spec from. Unlike the other runs in that group, a question doesn't make edits, so the wording mustn't suggest it can edit the spec.\n  - Change the Ask default's rule about the spec location to match: the spec location paragraph now applies to questions.\n- **HarnessIntegrationScope.** The rule telling a question from the Ask tab not to read the spec location applies only to host runs, and questions always run in a container. Make sure nothing there, or anywhere else, tells a question to stay off the spec location.\n\nLeave Spec tasks, Code tasks, and Chain steps unchanged, whether they run in a container or on the host.\n\n---\n\nThe code change is small once the reference is rebuilt: the Question branch at `src/container.rs:179-183`, plus the code that fills SPEC_LOCATION in for questions. You can send it as a Code task afterwards, or use a Chain prompt so the code step follows on its own."
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1608,
+          "cache_read_input_tokens": 39851,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1608
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "cfe58943-42a5-455c-bd78-0f8e38145e26",
+      "timestamp": "2026-10-03T17:48:50.155Z",
+      "request_id": "req_011Cffizdwe1kmQK2PSKSkpw"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "495f2e7d-1042-4624-b11f-d72088b71756"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {}
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1608,
+          "cache_read_input_tokens": 39851,
+          "output_tokens": 819,
+          "output_tokens_details": {
+            "thinking_tokens": 65
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 819,
+              "cache_read_input_tokens": 39851,
+              "cache_creation_input_tokens": 1608,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 1608
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "0fb92af2-423f-4ebd-aacc-040d3c3f9c52"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "1f8d0f84-c535-4285-b216-3421783a57de"
+    },
+    {
+      "duration_api_ms": 68718,
+      "stop_reason": "end_turn",
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "total_cost_usd": 0.4444626,
+      "usage": {
+        "input_tokens": 4,
+        "cache_creation_input_tokens": 3393,
+        "cache_read_input_tokens": 77917,
+        "output_tokens": 1017,
+        "output_tokens_details": {
+          "thinking_tokens": 116
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 3393,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 819,
+            "cache_read_input_tokens": 39851,
+            "cache_creation_input_tokens": 1608,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1608
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "modelUsage": {
+        "claude-opus-5-5[1m]": {
+          "inputTokens": 30,
+          "outputTokens": 5439,
+          "thinkingTokens": 1238,
+          "cacheReadInputTokens": 424693,
+          "cacheCreationInputTokens": 31328,
+          "webSearchRequests": 0,
+          "costUSD": 0.4444626,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "is_error": false,
+      "num_turns": 2,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "Here's a prompt for a Spec task. Paste it as is.\n\n---\n\n**Questions from the Ask tab mount the spec location, read-only.**\n\nAdd the spec location, read-only, to what a question run can see. A question should be able to run `piton slice` in its container. Today it can't: the spec source isn't mounted, so piton has nothing to slice. It should still learn what the spec says from the compiled reference or `piton slice`, never by reading the Piton source directly. Nothing in a question run becomes writable apart from the harness's own volumes.\n\nUpdate every place that says otherwise:\n\n- **ContainerEnvironmentScope, Question entry.** It currently says \"the code location, the compiled reference, and piton.config.pi, each read only. Never the spec location.\" Change it to: the code location, the spec location, the compiled reference, and piton.config.pi, each read-only. If one location sits inside the other, the \"other location\" hiding must not hide either of them from a question.\n- **ModeSystemPromptsScope.**\n  - A question can now see the spec location, so it fills SPEC_LOCATION in. Remove questions from the list of runs that \"can't see the spec location\". That list stays as is for Code runs in a container.\n  - Questions move to the group of runs that can see the spec location. They're told the spec is read from the compiled reference or `piton slice`, and the spec location is named for what it is, not as somewhere to read the spec from. Unlike the other runs in that group, a question doesn't make edits, so the wording mustn't suggest it can edit the spec.\n  - Change the Ask default's rule about the spec location to match: the spec location paragraph now applies to questions.\n- **HarnessIntegrationScope.** The rule telling a question from the Ask tab not to read the spec location applies only to host runs, and questions always run in a container. Make sure nothing there, or anywhere else, tells a question to stay off the spec location.\n\nLeave Spec tasks, Code tasks, and Chain steps unchanged, whether they run in a container or on the host.\n\n---\n\nThe code change is small once the reference is rebuilt: the Question branch at `src/container.rs:179-183`, plus the code that fills SPEC_LOCATION in for questions. You can send it as a Code task afterwards, or use a Chain prompt so the code step follows on its own.",
+      "ttft_ms": 1771,
+      "type": "result",
+      "duration_ms": 11707,
+      "uuid": "32721fb8-ad60-4a06-ab9e-095faf5811b9",
+      "ttft_stream_ms": 1075,
+      "time_to_request_ms": 80,
+      "first_content_frame_ms": 1076,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  ]
+}

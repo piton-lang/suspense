@@ -1,0 +1,4529 @@
+{
+  "userPrompt": "Give me the prompt for code mode",
+  "harness": "claude",
+  "systemPrompt": "We're working in a project whose spec is compiled to .claude/reference, which is where to read it. Each prompt starts with a <task-instructions> block saying what that prompt is for and what it may change. Follow the block at the top of the prompt you are answering; an earlier prompt's block no longer applies.\n\nIts spec's Piton source, in ./spec, is only where edits to the spec go.\n\nRead the spec from its compiled reference under .claude/reference, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with this harness's adapter.\n\nNever read the .pi source under ./spec to learn what the spec says; that is only where edits to the spec go.\n\nBefore executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.",
+  "instructions": "We're working on the spec located in ./spec.\n\nBefore creating or editing any .pi file, read .suspense/fluency.md once in this conversation, unless you already have: it is how Piton is written.\n\nOpen a .pi file only to change it. Once you have changed the spec, run `piton build` and check the result in the refreshed reference under .claude/reference, not by reading the source again.\n\nBefore changing anything, write the constraints this task must meet to .suspense/history/1791052871-CodeModePrompt.understanding.md, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.",
+  "resumed": true,
+  "output": [
+    {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "/home/hyphyphyph/piton/repl",
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "tools": [
+        "Task",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "ListAgents",
+        "Monitor",
+        "NotebookEdit",
+        "PushNotification",
+        "Read",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write"
+      ],
+      "mcp_servers": [
+        {
+          "name": "claude.ai Claude Docs",
+          "status": "pending",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Drive",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Gmail",
+          "status": "needs-auth",
+          "source": "claudeai"
+        },
+        {
+          "name": "claude.ai Google Calendar",
+          "status": "needs-auth",
+          "source": "claudeai"
+        }
+      ],
+      "model": "claude-opus-5-5[1m]",
+      "permissionMode": "auto",
+      "slash_commands": [
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "output-style",
+        "context",
+        "effort",
+        "fast",
+        "focus",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "skill-doctor",
+        "goal",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "terminal_slash_commands": [
+        "doctor",
+        "color",
+        "focus",
+        "reload-plugins"
+      ],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.281",
+      "output_style": "default",
+      "agents": [
+        "claude",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
+      "skills": [
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "plugins": [
+        {
+          "name": "agents-md",
+          "path": "builtin",
+          "source": "agents-md@builtin"
+        },
+        {
+          "name": "telemetry",
+          "path": "builtin",
+          "source": "telemetry@builtin"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "msg_lifecycle_v1",
+        "mcp_read_resource_v1",
+        "mcp_tool_ui_meta_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "cf623692-3c94-49a9-ba9a-24ca6505c8b1",
+      "memory_paths": {
+        "auto": "/home/suspense/.claude/projects/-workspace/memory/"
+      },
+      "messaging_socket_path": "/tmp/cc-socks/1.sock",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "per_turn_effort_active": true,
+      "view_mode": "default"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "f76ff539-0659-4a79-af37-ba41ad412c2c"
+    },
+    {
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<task-instructions>\nWe're working on the spec located in ./spec.\n\nBefore creating or editing any .pi file, read .suspense/fluency.md once in this conversation, unless you already have: it is how Piton is written.\n\nOpen a .pi file only to change it. Once you have changed the spec, run `piton build` and check the result in the refreshed reference under .claude/reference, not by reading the source again.\n\nBefore changing anything, write the constraints this task must meet to .suspense/history/1791052871-CodeModePrompt.understanding.md, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.\n</task-instructions>\n\nGive me the prompt for code mode"
+          }
+        ]
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "ddf679a8-9142-425f-b61d-026b839fd311",
+      "timestamp": "2026-10-03T18:41:14.071Z",
+      "isReplay": true
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011Cffo14XTbz4JBBDfLt9kq",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 2981,
+            "cache_read_input_tokens": 124195,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 2981
+            },
+            "output_tokens": 8,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "2d8e7c7c-5a23-4b93-abcd-691daeecf61a",
+      "ttft_ms": 2473
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "62152a37-af8f-49d8-bae2-371aeff59f29"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "b9ff1fff-f526-4735-a3c0-f7750ee7768e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "c4126598-35cf-45c4-9f2a-33eb94aa02d1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "54bba384-6980-4821-8b7e-4d1543d5bd6c"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 276,
+      "estimated_tokens_delta": 226,
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "71402218-ee18-4c9b-bff8-0e7a75695e55"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "CAQSyQgKEAgSGAI4AUIIdGhpbmtpbmcSDGjqPVMZU099alfgIRoMWJncfnEnoK0pjBpZIjAWZ4+QfgBXN9ToIcNkMnKDw3MixzpCier076WDAl5Nhn+IZAZNuKyfwrLyM9aBXYsq5gevR+3FGrlMfv5bhA5vcTzIE7tEXc9pUd2sMX5iCHE7K/g3ko6sigi0ou2AlXxN5a9QyTxpP4aBufaXCPxEXrJJT4VhIQ60JwJWRzFWZ+Rfoeg8zySfFahVqhS3sz4Q5NRN7RvrRFLqj8nZgPZAk7wtQ46JkHVD71JlYc8GoislpdvMJi0xBPakaQfYJzUPJdcVBte+N9AgEwypalxGEutnk2kGPiqtN1jLLkITzt1OJQ32xAO2GpDPxTYIcLzc/zKp/rV1B+71n/Ymj/k6POB+7sl4tsXXVpI6W1+isaH8TvhNqZMtsXVgnffoiEUA0Kd9NjQKH695IclCfdoxsrflyBc5bnc8Pfk6VZPpgNzXRA8DtSKFxMGmktzT+sHOOoDLepJdyGLvwaWs9+df2/UGo1fMGlZTXAsoFhgor/WPITHDD8KDH5YD2KDW1GT2WQZH5oIbiIzLA7/IHNA3FCw7jBkv673iLZ+s+yfZbbJfDJ8Hq9a7gmwTxWbQadFPFiMqY0lAgD7hit4Kc/UZdBH9pCRG1eaIRO8Tf1zdC3L/Svxt/f/pMOZ8y8Pk3RwTYbesGN++6yCtZJTZ4eUNiY+1nnuzlWtMkwhHD47abfGFgpSpZ7F9ROqXygdyO7SW5Dgm+NuWB9JuwPdKbdRwrKb5Gtv+0oZbHNdmHpyz9wF3tpRovm9fGShkPA91nFAa3drhZrx01kdp72rH2JbOUJid0xZaK1+f8n74oy8sp+kDAv6Q/29Ju6ndxViC+0KqNcM/UEszu1LlBkPJfOdVZRJ4sua1QSFNEC5p7ybjpI+mFzoKiVP5+H3TxMLKYZQpxd+270ptX3oJ0WsBorFpk7cKEL4tGivOhjxvFn8DIGEfNjzvs+7JFWhVRy/bXeyW+qQBlC0EpQ7Q1CfUXa2ON9XWsvv2pcLM5ell9G883oHZTKXu0PnPpSMv7Jf9gescK21BaRrxchSu+64K/ea3lkAn3iZVOeW9JZHdaOtCgJQuiRGwPg1K0GOP258IDxiKp121cQJY2O06jq0edpOSy5rpXJyhIKiwTOtEDEOGpNgXMsmtfPk9cfQ4iw2ocHealABb33EWHhpvm9uOR12TD/6R9LgaQ2faUwHv/vCE7Q1ov0u0mgl2mSvypmJxe9vwg4xRUw/VZTaDO1dFuK5huJlvVEmooQAof+Bzyot+4TVXiBEqoxtVyc6OS1xv3K13sXU3rrKwkad2yBvlMHbLLh8Pg0mPhhMkiFxi1IOFICACbaX2Ba6jgSe2FGp9U2hCRcWarWdMMLNMeLaI+Kp18DYD/bwHQx87Y6GTPvtiRz1wff7T9H0AyxgB"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "be410ae7-cbbf-4d33-8cb5-0cfa44b77a53"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011Cffo14XTbz4JBBDfLt9kq",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAQSyQgKEAgSGAI4AUIIdGhpbmtpbmcSDGjqPVMZU099alfgIRoMWJncfnEnoK0pjBpZIjAWZ4+QfgBXN9ToIcNkMnKDw3MixzpCier076WDAl5Nhn+IZAZNuKyfwrLyM9aBXYsq5gevR+3FGrlMfv5bhA5vcTzIE7tEXc9pUd2sMX5iCHE7K/g3ko6sigi0ou2AlXxN5a9QyTxpP4aBufaXCPxEXrJJT4VhIQ60JwJWRzFWZ+Rfoeg8zySfFahVqhS3sz4Q5NRN7RvrRFLqj8nZgPZAk7wtQ46JkHVD71JlYc8GoislpdvMJi0xBPakaQfYJzUPJdcVBte+N9AgEwypalxGEutnk2kGPiqtN1jLLkITzt1OJQ32xAO2GpDPxTYIcLzc/zKp/rV1B+71n/Ymj/k6POB+7sl4tsXXVpI6W1+isaH8TvhNqZMtsXVgnffoiEUA0Kd9NjQKH695IclCfdoxsrflyBc5bnc8Pfk6VZPpgNzXRA8DtSKFxMGmktzT+sHOOoDLepJdyGLvwaWs9+df2/UGo1fMGlZTXAsoFhgor/WPITHDD8KDH5YD2KDW1GT2WQZH5oIbiIzLA7/IHNA3FCw7jBkv673iLZ+s+yfZbbJfDJ8Hq9a7gmwTxWbQadFPFiMqY0lAgD7hit4Kc/UZdBH9pCRG1eaIRO8Tf1zdC3L/Svxt/f/pMOZ8y8Pk3RwTYbesGN++6yCtZJTZ4eUNiY+1nnuzlWtMkwhHD47abfGFgpSpZ7F9ROqXygdyO7SW5Dgm+NuWB9JuwPdKbdRwrKb5Gtv+0oZbHNdmHpyz9wF3tpRovm9fGShkPA91nFAa3drhZrx01kdp72rH2JbOUJid0xZaK1+f8n74oy8sp+kDAv6Q/29Ju6ndxViC+0KqNcM/UEszu1LlBkPJfOdVZRJ4sua1QSFNEC5p7ybjpI+mFzoKiVP5+H3TxMLKYZQpxd+270ptX3oJ0WsBorFpk7cKEL4tGivOhjxvFn8DIGEfNjzvs+7JFWhVRy/bXeyW+qQBlC0EpQ7Q1CfUXa2ON9XWsvv2pcLM5ell9G883oHZTKXu0PnPpSMv7Jf9gescK21BaRrxchSu+64K/ea3lkAn3iZVOeW9JZHdaOtCgJQuiRGwPg1K0GOP258IDxiKp121cQJY2O06jq0edpOSy5rpXJyhIKiwTOtEDEOGpNgXMsmtfPk9cfQ4iw2ocHealABb33EWHhpvm9uOR12TD/6R9LgaQ2faUwHv/vCE7Q1ov0u0mgl2mSvypmJxe9vwg4xRUw/VZTaDO1dFuK5huJlvVEmooQAof+Bzyot+4TVXiBEqoxtVyc6OS1xv3K13sXU3rrKwkad2yBvlMHbLLh8Pg0mPhhMkiFxi1IOFICACbaX2Ba6jgSe2FGp9U2hCRcWarWdMMLNMeLaI+Kp18DYD/bwHQx87Y6GTPvtiRz1wff7T9H0AyxgB"
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2981,
+          "cache_read_input_tokens": 124195,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 2981
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "63abe0f2-217e-49ab-b6d9-9196b455c73e",
+      "timestamp": "2026-10-03T18:41:17.825Z",
+      "request_id": "req_011Cffo13vEmqdMZJE1fUtfS"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "168924e5-0dcd-41a1-af2e-55e10bc22ac6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "tool_use",
+          "id": "toolu_011oJmjxx3BS69t2vgp1hQfh",
+          "name": "Bash",
+          "input": {},
+          "caller": {
+            "type": "direct"
+          }
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "7b335fca-f1f0-4378-980a-3bc2e7bf2445"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ""
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "7554c7a0-ac64-4f58-bc6c-5f169ad513e5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "{\"command\": \"c"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "fd867f4c-127c-4a4a-a152-0cd997274cca"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "d /home/hyphyphyph/piton/repl && sed"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "a9feb38a-0600-45e8-870f-26f223155335"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " -n '/^####"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "f282bb94-1255-4d1c-9643-76f1744121a0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " Defaults/,$p'"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "bf0dc5a5-f3c7-4b4c-a98d-3ff3b0b9e178"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " .claude/reference/sc"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "ece1c44f-e20a-473b-84e6-ac59c568e215"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ope/prompt-mode"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "0fc7c31f-3ee0-4a91-b208-8f3f7c3517ec"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/mode-system-promp"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "dd7ad049-3989-42c5-abb8-f0b3ffc25c25"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ts/index.md; ls"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "f6a70fec-7bb1-4a0c-ab54-bb0610097dd2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " .suspense/system-pr"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "7fdaa6b7-a42f-484c-90e5-65b7132b483e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ompts 2>&1"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "24329af3-ea78-49e5-a36f-f3e50fe7e2fd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\"}"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "8608db62-7dc1-40d7-8710-6a12f8813e3a"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011Cffo14XTbz4JBBDfLt9kq",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "toolu_011oJmjxx3BS69t2vgp1hQfh",
+            "name": "Bash",
+            "input": {
+              "command": "sed -n '/^#### Defaults/,$p' .claude/reference/scope/prompt-mode/mode-system-prompts/index.md; ls .suspense/system-prompts 2>&1"
+            },
+            "caller": {
+              "type": "direct"
+            }
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2981,
+          "cache_read_input_tokens": 124195,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 2981
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "56bd3628-bd56-4b1e-a702-5fe3be156bba",
+      "timestamp": "2026-10-03T18:41:18.231Z",
+      "request_id": "req_011Cffo13vEmqdMZJE1fUtfS",
+      "wire_tool_inputs": {
+        "toolu_011oJmjxx3BS69t2vgp1hQfh": {
+          "command": "cd /home/hyphyphyph/piton/repl && sed -n '/^#### Defaults/,$p' .claude/reference/scope/prompt-mode/mode-system-prompts/index.md; ls .suspense/system-prompts 2>&1"
+        }
+      },
+      "wire_ingest_context": {
+        "toolu_011oJmjxx3BS69t2vgp1hQfh": {
+          "cwd": "/home/hyphyphyph/piton/repl"
+        }
+      }
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "7337586b-997d-4df1-bd46-91be82c5bc0c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {
+                  "toolu_011oJmjxx3BS69t2vgp1hQfh": {
+                    "type": "evaluated",
+                    "outcome": "not_flagged"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2981,
+          "cache_read_input_tokens": 124195,
+          "output_tokens": 222,
+          "output_tokens_details": {
+            "thinking_tokens": 103
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 222,
+              "cache_read_input_tokens": 124195,
+              "cache_creation_input_tokens": 2981,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 2981
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "91b0a013-de53-4a74-9cc3-fb17613305d8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "a3363433-da1f-42aa-93d4-e7fd21ed0827"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1791056400,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.09,
+            "resetsAt": 1791056400
+          },
+          "seven_day": {
+            "utilization": 0.44,
+            "resetsAt": 1791313200
+          }
+        }
+      },
+      "uuid": "2a28c27d-100c-44f4-a73a-b091d4648570",
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d"
+    },
+    {
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "content": "Exit code 2\n#### Defaults\n\nThe defaults are the prompts saved in this application's own repository, in its `.suspense/system-prompts` directory, named as a project's are. They are the source of truth for the defaults, and are baked into the application when it is built, so a build always ships with whatever those files say, and changing them changes the defaults the next build has. A build can't be made without them.\nThe system template's default says what the project is, where its code is and where its spec is, each on a paragraph of its own, so the one a run can't see goes, that each prompt starts with a <task-instructions> block saying what that prompt is for and what it may change, and then SPEC_READING on a paragraph of its own. It holds no fluency.\nThe spec-reading prompt's default says:\nRead the spec from its compiled reference under ${HARNESS_DIRECTORY}/reference, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with this harness's adapter.\n\nNever read the .pi source under ${SPEC_LOCATION} to learn what the spec says; that is only where edits to the spec go.\n\nBefore executing anything, read the spec it touches. Links to ${HARNESS_DIRECTORY}/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.\nThe Spec and Chain defaults have, after what the mode is for, on a paragraph of its own:\nBefore creating or editing any .pi file, read ${PITON_FLUENCY_FILE} once in this conversation, unless you already have: it is how Piton is written.\nand then, on another:\nOpen a .pi file only to change it. Once you have changed the spec, run `piton build` and check the result in the refreshed reference under ${HARNESS_DIRECTORY}/reference, not by reading the source again.\nThe Code, Chain, and Spec defaults then end with, on a paragraph of its own:\nBefore changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](${HARNESS_DIRECTORY}/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.\nThe Ask default says what a question is for, and that it changes nothing, and, on a paragraph of its own, that SPEC_LOCATION is the spec's Piton source, there for `piton slice`, which the question reads the spec through, read only and never edited, and never read directly to learn what the spec says. Since a question can see the spec location, that paragraph is always sent with it. The Spec and Chain defaults never name the code location, and the Code default names the spec location only on a paragraph of its own, which goes where the run can't see it.\nThe defaults are only where a project starts, and what resetting a prompt puts back. A project whose prompts were saved before a default changed keeps them as they are.\nls: cannot access '.suspense/system-prompts': No such file or directory",
+            "is_error": true,
+            "tool_use_id": "toolu_011oJmjxx3BS69t2vgp1hQfh"
+          }
+        ]
+      },
+      "parent_tool_use_id": null,
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "39df7f7d-364b-4bf7-9288-47ab5db9e9c8",
+      "timestamp": "2026-10-03T18:41:18.600Z",
+      "tool_use_result": "Error: Exit code 2\n#### Defaults\n\nThe defaults are the prompts saved in this application's own repository, in its `.suspense/system-prompts` directory, named as a project's are. They are the source of truth for the defaults, and are baked into the application when it is built, so a build always ships with whatever those files say, and changing them changes the defaults the next build has. A build can't be made without them.\nThe system template's default says what the project is, where its code is and where its spec is, each on a paragraph of its own, so the one a run can't see goes, that each prompt starts with a <task-instructions> block saying what that prompt is for and what it may change, and then SPEC_READING on a paragraph of its own. It holds no fluency.\nThe spec-reading prompt's default says:\nRead the spec from its compiled reference under ${HARNESS_DIRECTORY}/reference, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with this harness's adapter.\n\nNever read the .pi source under ${SPEC_LOCATION} to learn what the spec says; that is only where edits to the spec go.\n\nBefore executing anything, read the spec it touches. Links to ${HARNESS_DIRECTORY}/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.\nThe Spec and Chain defaults have, after what the mode is for, on a paragraph of its own:\nBefore creating or editing any .pi file, read ${PITON_FLUENCY_FILE} once in this conversation, unless you already have: it is how Piton is written.\nand then, on another:\nOpen a .pi file only to change it. Once you have changed the spec, run `piton build` and check the result in the refreshed reference under ${HARNESS_DIRECTORY}/reference, not by reading the source again.\nThe Code, Chain, and Spec defaults then end with, on a paragraph of its own:\nBefore changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](${HARNESS_DIRECTORY}/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.\nThe Ask default says what a question is for, and that it changes nothing, and, on a paragraph of its own, that SPEC_LOCATION is the spec's Piton source, there for `piton slice`, which the question reads the spec through, read only and never edited, and never read directly to learn what the spec says. Since a question can see the spec location, that paragraph is always sent with it. The Spec and Chain defaults never name the code location, and the Code default names the spec location only on a paragraph of its own, which goes where the run can't see it.\nThe defaults are only where a project starts, and what resetting a prompt puts back. A project whose prompts were saved before a default changed keeps them as they are.\nls: cannot access '.suspense/system-prompts': No such file or directory"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "45a06d43-a4ab-47dd-b41b-24f70e406d35"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011Cffo1P3RqWwSpWtndSHyz",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 2350,
+            "cache_read_input_tokens": 127176,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 2350
+            },
+            "output_tokens": 3,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "5477c7bd-6f71-4329-813a-a0ef187746fb",
+      "ttft_ms": 2419
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "e1a5ba78-8e96-4138-93b8-f5c636aa9aa3"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "9800980d-bdc5-4eb0-9a94-1c80b361bc70"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "9d429245-ebdf-4abd-b9c0-8681485b8da0"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 100,
+      "estimated_tokens_delta": 50,
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "d60ca4f9-9734-41b3-b1bf-389589d3609b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "0650437b-91df-4c74-81d5-7131c4580957"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "77c5f253-ec8b-4986-abc4-0ca76f2f9a27"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 325,
+      "estimated_tokens_delta": 225,
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "143b6a1f-86c8-4b83-a7ff-fa868ff72013"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "CAQSjAoKEAgSGAI4AUIIdGhpbmtpbmcSDMSDVCCjEVnx/gCVghoMaQTmATFCWFJXsk64IjAVpnLmMlC9H1MAuQaXL6AuR8dYV9e3c2zKgDDtiEALjc9+gkWBZi7SScTK+Tn57ZwqqQnErDz5a87MumTHJq5XoeW+snDs0C6xcS6mIhJBrWSdntnAWd8FZJbi3aXwE93shMwGMzPpu8W6sxDI2wjbOPwkGvbejvogDBFfHtHcnOllldumNe3dUQ5cns8XURUOLOMPTGjHc+lMAZsiFyIbeuQMSMFmE2FjvkFxvyiMwBELa1CY97SPNU/tfXlmVQeGMXT672TlAAQMie1ZvYBe1snf5H4GIxWUpv4VtS8yhSL/oxtThWDWuBaZX2cMmqosEVkCRydojLCxGAEsst3Zte9t/thwyVrUMHmka1iJma8NqdDJ9MIm0aN+HYPRh+DVz/qkU3Hw6OQqlCTPOYd6Z5KIvu3rIQPnOFgWg2t6PALqinEwWFrbfsGt9y2SCS1YwuRVlr9sTgYbSiVnSwjUeMvOoM/Qg7zfVT4Q14fyaDttM5zXEJguQDDQd1sHlv/F4z17OD28lEGTJ4c4k/p5g/Z75qOsOD5+bFhbkoHvtvGOZ9ENST+WVRVqH02eFUV8/JvS+zGJNroeUE97ImqPkFpa82Rsk69DUoJlPF+IM/IC8J7uJhd6+MBUXUi1HBZrcPFBFj4TDruio8ia/AzQYK3muqRGjPQC1mXm+ed7+xthlwz4ysRF7nFDSCY+Vx5+o2gxkuXHarppcRr/EygnQhCPhV88bj08cYHDKQNYXj58VnJtnKtVFol58/q0S9xRS5mI+SV+vjkg376AU2dHBrTSaXqTqdUBihAXueo1+9XZ+o5brMp+zjmsenuRd0RsG0vVDQ2ZU4aoT9I62RfJfeMuIauerTqtptGKaMVI8trscNisAwSxw38aRgQ6bZy25jQOJMJ8KvgDNhqelm/5pjwFb7zp7VKjMrCjXN+wbvl/Dt6mWCQxDhGFlgya+5g+OMYXo9DstKZKsf8GwKGCxr5xkEkMU2pp07eOHYnagRu4A/4J5hMbln3VIFY8pd6BnwOCEPjaaUlJ6EDZW84cftVga8zgZID4JxqIfAfAWbJo50xSNcIKgwpInKnzDU9le4M5huH0lHMklniF/p0Wt8CEFm7QKEbhmE65M9DLRZ/3lmgaBsCqHdyZFuGnez6OuzNBRKQZi2pWaXPQ1GXFvNzc4QABLjzDbRKpRKWK7E/VROPy/Oj1we4WWjqKDZdxjl7ewcT9fszCdQSIiMOrgDDJ382mQhL5tv6dhKwU+hhLKPfXSa4dSlZTEuu2Qcnkc8o+54FAH4fSj72gVZ/LaieNUgLjl47gK2Mn087DsZAm4x/D+9yYF8kn7EfU0/b25+fPP9ZZQxC8T4LJ4PohaTvixkMrn91nZsAF924yQIv4t+R9X2RCa5iKM2erYkisPWJ80+Cnc1lH1ZxWOcHF7y1+COMCMzF3FS8v9BMC38S2hVOokWwyuUOKFq8fFUIhPrQsAH1z6ktx9ASoGNJqjw04j173e833heHjEfIHIjJkMuaEsTG9MHNeptIxqQTLIqbBl/vbKO2ccJuitafMS96p3eDfUdQDw3Zlh2LkR3GAEm6vIpJV6uYM7kzf5aVjoYOAhThX1RbG52480sZMXeUZeFplowzmIOJPxLhdnYbIF90A4OibHXloEhgB"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "11fdc6f0-3a9b-4aef-b5b6-bb610fef355f"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011Cffo1P3RqWwSpWtndSHyz",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAQSjAoKEAgSGAI4AUIIdGhpbmtpbmcSDMSDVCCjEVnx/gCVghoMaQTmATFCWFJXsk64IjAVpnLmMlC9H1MAuQaXL6AuR8dYV9e3c2zKgDDtiEALjc9+gkWBZi7SScTK+Tn57ZwqqQnErDz5a87MumTHJq5XoeW+snDs0C6xcS6mIhJBrWSdntnAWd8FZJbi3aXwE93shMwGMzPpu8W6sxDI2wjbOPwkGvbejvogDBFfHtHcnOllldumNe3dUQ5cns8XURUOLOMPTGjHc+lMAZsiFyIbeuQMSMFmE2FjvkFxvyiMwBELa1CY97SPNU/tfXlmVQeGMXT672TlAAQMie1ZvYBe1snf5H4GIxWUpv4VtS8yhSL/oxtThWDWuBaZX2cMmqosEVkCRydojLCxGAEsst3Zte9t/thwyVrUMHmka1iJma8NqdDJ9MIm0aN+HYPRh+DVz/qkU3Hw6OQqlCTPOYd6Z5KIvu3rIQPnOFgWg2t6PALqinEwWFrbfsGt9y2SCS1YwuRVlr9sTgYbSiVnSwjUeMvOoM/Qg7zfVT4Q14fyaDttM5zXEJguQDDQd1sHlv/F4z17OD28lEGTJ4c4k/p5g/Z75qOsOD5+bFhbkoHvtvGOZ9ENST+WVRVqH02eFUV8/JvS+zGJNroeUE97ImqPkFpa82Rsk69DUoJlPF+IM/IC8J7uJhd6+MBUXUi1HBZrcPFBFj4TDruio8ia/AzQYK3muqRGjPQC1mXm+ed7+xthlwz4ysRF7nFDSCY+Vx5+o2gxkuXHarppcRr/EygnQhCPhV88bj08cYHDKQNYXj58VnJtnKtVFol58/q0S9xRS5mI+SV+vjkg376AU2dHBrTSaXqTqdUBihAXueo1+9XZ+o5brMp+zjmsenuRd0RsG0vVDQ2ZU4aoT9I62RfJfeMuIauerTqtptGKaMVI8trscNisAwSxw38aRgQ6bZy25jQOJMJ8KvgDNhqelm/5pjwFb7zp7VKjMrCjXN+wbvl/Dt6mWCQxDhGFlgya+5g+OMYXo9DstKZKsf8GwKGCxr5xkEkMU2pp07eOHYnagRu4A/4J5hMbln3VIFY8pd6BnwOCEPjaaUlJ6EDZW84cftVga8zgZID4JxqIfAfAWbJo50xSNcIKgwpInKnzDU9le4M5huH0lHMklniF/p0Wt8CEFm7QKEbhmE65M9DLRZ/3lmgaBsCqHdyZFuGnez6OuzNBRKQZi2pWaXPQ1GXFvNzc4QABLjzDbRKpRKWK7E/VROPy/Oj1we4WWjqKDZdxjl7ewcT9fszCdQSIiMOrgDDJ382mQhL5tv6dhKwU+hhLKPfXSa4dSlZTEuu2Qcnkc8o+54FAH4fSj72gVZ/LaieNUgLjl47gK2Mn087DsZAm4x/D+9yYF8kn7EfU0/b25+fPP9ZZQxC8T4LJ4PohaTvixkMrn91nZsAF924yQIv4t+R9X2RCa5iKM2erYkisPWJ80+Cnc1lH1ZxWOcHF7y1+COMCMzF3FS8v9BMC38S2hVOokWwyuUOKFq8fFUIhPrQsAH1z6ktx9ASoGNJqjw04j173e833heHjEfIHIjJkMuaEsTG9MHNeptIxqQTLIqbBl/vbKO2ccJuitafMS96p3eDfUdQDw3Zlh2LkR3GAEm6vIpJV6uYM7kzf5aVjoYOAhThX1RbG52480sZMXeUZeFplowzmIOJPxLhdnYbIF90A4OibHXloEhgB"
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2350,
+          "cache_read_input_tokens": 127176,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 2350
+          },
+          "output_tokens": 3,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "4d6f3399-75ea-4d9f-80a9-eee9cd00b919",
+      "timestamp": "2026-10-03T18:41:23.161Z",
+      "request_id": "req_011Cffo1NWw9C2gitB6mFkak"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "d31007f6-ae73-4a02-866d-057d87c30b94"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "tool_use",
+          "id": "toolu_014NCjModQb2fTyfc1JXhsGp",
+          "name": "Write",
+          "input": {},
+          "caller": {
+            "type": "direct"
+          }
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "3d608855-24ad-40a6-bf11-899f4bb9c0d9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ""
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "3b92812d-fed0-4354-8724-feab51df4048"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "{\"file_path\": \"/home/hyphyphyph/piton/repl/."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "df0aa8f5-1a31-4482-a338-e711f65b1ba7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "suspense/history/1791"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "8a16609d-bbd0-4dce-a0a4-6f9a5a2b30a1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "052871-CodeModeP"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "5092de99-263e-416c-a8ee-8594e2416c50"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "rompt.understanding."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "9240e234-9cdd-4c51-aa70-de9e3e305429"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "md"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "27d2807b-04b8-4916-8901-81ef2605d2c4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\", \"content\": \"- ["
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "1bd0a04b-f51c-4dd4-a7e8-a94824092693"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "Mode instructions head"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "2cf0219e-62c8-4677-a6b2-2767daf13c86"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " the"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "935ef50e-1e8b-4f83-aa9f-b06c1453d5a8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " prompt's message in a "
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "7f97783d-9b2a-404a-8c10-e6eb039fe9d3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "<task-instructions> block]("
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "4c9b98ab-db74-4b4f-8575-de814f85f284"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ".claude/re"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "b617050d-6cf0-412c-a6b9-0134fdd2564d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ference/scope/prompt"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "ced8ea49-45ea-4fd2-9365-ebf5849af266"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "-mode/mode-system"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "8cfd9501-6161-46b4-9ab7-4091c8712f68"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "-prompts/index.md"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "ba889aa9-9a76-4c60-b2a4-5a402a2ed11b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "#description)\\n- [The"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "da1510b6-bc70-486f-9e7e-741b2f6c62a7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " Code default is saved as"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "ce1f824b-fc00-4d91-ac99-ba49c239feae"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " code.md in the app's ."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "8cc4dc6c-efe1-4621-b552-f77b04b12e9f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "suspense/system-promp"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "0bf9a95c-9070-47db-8e93-2c6ef95e903b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ts](.claude/reference"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "66a63427-79ed-43e2-a651-8624aa40537e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/scope/prompt-"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "92a94ba9-e6fd-480c-bb9d-3f9e9e90a1d2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "mode/mode-system-"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "229cbffb-c8cb-4251-95f1-3c40cc88abe5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "prompts/index.md#"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "d21a4aec-56de-48d3-be1b-a3d87f9103d1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "saving)\\n- [The"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "91ec635f-0612-43f7-ae13-c00df13b6914"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " Code default names the spec location only"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "14e5ca17-4755-4a1a-b724-fee6137a3f95"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " on a paragraph of its"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "61bfd926-3f9f-4f50-a1e1-f2586f76b283"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " own](.claude/reference"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "96639e98-5b78-4331-915c-bff5f46902f5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/scope/prompt-"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "290569e6-44ec-4fcf-8ff5-d30fe823b48f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "mode/mode-system-"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "e8a06037-2df6-4a5e-a3a1-28a6630afb6f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "prompts/index.md#"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "f109cf40-cad5-43f8-88df-2dbc6f794465"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "defaults)\\n- [The"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "69296e72-0abb-4a04-a844-371c07b7b923"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " Code default ends with the underst"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "2372223c-358f-4267-a330-46d903d84e46"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "anding-file paragraph"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "627bc3e3-0310-4f22-a986-1dd42a718a19"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ", as written](.claude/"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "aa284365-96a3-48bb-b512-8eba2981d24c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "reference/scope/promp"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "3cf37cd4-fc9f-4043-a302-5e197031d226"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "t-mode/mode-"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "d10f4e41-8a0a-4ce3-8a2c-6cbc9714b6b2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "system-prompts/index."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "a17a623b-5c92-4a8d-979e-ff1d35ea9a81"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "md#defaults)\\n-"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "6f31ecfc-3cea-4700-aaea-8cf095367c2a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " ["
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "a39a59ff-7372-4e08-b07a-96d2905fafa2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "Code instructions never mention the"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "d9f93b58-5aed-426c-900e-8dc7139c6c6e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " f"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "11a0a870-189d-40fa-ba46-b007603a0bf2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "luency file](.claude/"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "8cb42017-d598-4e9d-b72c-34d737bca991"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "reference/scope/promp"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "1192e16f-452b-4d62-9ff9-bf04568918ad"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "t-mode/mode-"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "5613535d-88c4-4246-9a5f-c2763ed4faca"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "system-prompts/index."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "6347125f-d080-446c-a178-9fdaa97ded0c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "md#piton-fluency"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "a55070dd-d340-4718-afc6-9ae15a678ac2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ")\\n- [Every m"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "7edf79e6-6a4e-41db-8424-87fd95f5ee11"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ode lear"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "254506ea-68aa-410a-911d-1b2e0e89d5b0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ns the spec from the compi"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "3d000dbe-e6b4-4551-b26a-6feb2cb04ade"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "led reference or piton slice"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "9d9320e7-cc6c-4e31-9a4d-12d4fbdfe480"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ", never the .pi source]("
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "a838a661-fcc6-48e3-9efd-fffc54ce43d3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ".claude/reference/sc"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "45704cc5-2f77-48dc-8267-0a10ab53709a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ope/prompt-mode"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "dfadff2a-d864-4986-b901-69f3671da59e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/mode-system-promp"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "9d5f78ef-79a8-40fc-bb58-057541c8c8d3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ts/index.md#reading"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "01242cea-781d-446d-882d-66fbd959d878"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "-the-spec)\\n-"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "2745e66c-1560-4059-adae-8684f2c55c09"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " [A host Code task may"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "59ba88cd-c26f-48f7-bf63-013a67850cad"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " not edit,"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "e330cb2f-58d5-4ace-9860-0e055426c8bc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " and is told not to read, the"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "763df10d-0fbd-47cb-b0dc-301d2085d502"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " spec location](.claude/"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "7ca9769d-f2d8-4c86-8200-69c9f07920ed"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "reference/scope/harness"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "0d940a9d-13a1-4e7a-addf-f1883fdaadc1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "-integration/index.md#"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "9aa2a8ed-e1ca-42c7-a25e-d0efbeadd32e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "protected-locations)\\n"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "7c308f14-e1f2-4028-92b1-a5b13719a5c7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\"}"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "084633eb-9e6c-46c7-8978-54e71c0837e0"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011Cffo1P3RqWwSpWtndSHyz",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "toolu_014NCjModQb2fTyfc1JXhsGp",
+            "name": "Write",
+            "input": {
+              "file_path": "/home/hyphyphyph/piton/repl/.suspense/history/1791052871-CodeModePrompt.understanding.md",
+              "content": "- [Mode instructions head the prompt's message in a <task-instructions> block](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#description)\n- [The Code default is saved as code.md in the app's .suspense/system-prompts](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#saving)\n- [The Code default names the spec location only on a paragraph of its own](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#defaults)\n- [The Code default ends with the understanding-file paragraph, as written](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#defaults)\n- [Code instructions never mention the fluency file](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#piton-fluency)\n- [Every mode learns the spec from the compiled reference or piton slice, never the .pi source](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#reading-the-spec)\n- [A host Code task may not edit, and is told not to read, the spec location](.claude/reference/scope/harness-integration/index.md#protected-locations)\n"
+            },
+            "caller": {
+              "type": "direct"
+            }
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2350,
+          "cache_read_input_tokens": 127176,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 2350
+          },
+          "output_tokens": 3,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "8cd550ae-7683-454c-baca-5663887f0c74",
+      "timestamp": "2026-10-03T18:41:26.231Z",
+      "request_id": "req_011Cffo1NWw9C2gitB6mFkak",
+      "wire_tool_inputs": {
+        "toolu_014NCjModQb2fTyfc1JXhsGp": {
+          "file_path": "/home/hyphyphyph/piton/repl/.suspense/history/1791052871-CodeModePrompt.understanding.md",
+          "content": "- [Mode instructions head the prompt's message in a <task-instructions> block](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#description)\n- [The Code default is saved as code.md in the app's .suspense/system-prompts](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#saving)\n- [The Code default names the spec location only on a paragraph of its own](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#defaults)\n- [The Code default ends with the understanding-file paragraph, as written](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#defaults)\n- [Code instructions never mention the fluency file](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#piton-fluency)\n- [Every mode learns the spec from the compiled reference or piton slice, never the .pi source](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#reading-the-spec)\n- [A host Code task may not edit, and is told not to read, the spec location](.claude/reference/scope/harness-integration/index.md#protected-locations)\n"
+        }
+      }
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "81e31d44-231f-4f18-8c6c-bc2122024be2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {
+                  "toolu_014NCjModQb2fTyfc1JXhsGp": {
+                    "type": "skipped"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2350,
+          "cache_read_input_tokens": 127176,
+          "output_tokens": 684,
+          "output_tokens_details": {
+            "thinking_tokens": 174
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 684,
+              "cache_read_input_tokens": 127176,
+              "cache_creation_input_tokens": 2350,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 2350
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "d7c61c6d-d476-498b-8efe-c22565f75f54"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "48574bd0-1aae-4214-b659-87b7e60373cc"
+    },
+    {
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "tool_use_id": "toolu_014NCjModQb2fTyfc1JXhsGp",
+            "type": "tool_result",
+            "content": "File created successfully at: /home/hyphyphyph/piton/repl/.suspense/history/1791052871-CodeModePrompt.understanding.md (file state is current in your context — no need to Read it back)"
+          }
+        ]
+      },
+      "parent_tool_use_id": null,
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "34f4e76b-eaff-41f0-af42-21ec21418c03",
+      "timestamp": "2026-10-03T18:41:26.327Z",
+      "tool_use_result": {
+        "type": "create",
+        "filePath": "/home/hyphyphyph/piton/repl/.suspense/history/1791052871-CodeModePrompt.understanding.md",
+        "content": "- [Mode instructions head the prompt's message in a <task-instructions> block](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#description)\n- [The Code default is saved as code.md in the app's .suspense/system-prompts](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#saving)\n- [The Code default names the spec location only on a paragraph of its own](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#defaults)\n- [The Code default ends with the understanding-file paragraph, as written](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#defaults)\n- [Code instructions never mention the fluency file](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#piton-fluency)\n- [Every mode learns the spec from the compiled reference or piton slice, never the .pi source](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#reading-the-spec)\n- [A host Code task may not edit, and is told not to read, the spec location](.claude/reference/scope/harness-integration/index.md#protected-locations)\n",
+        "structuredPatch": [],
+        "originalFile": null,
+        "userModified": false
+      }
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "320ace41-309e-4164-adc2-1cb36d98ae61"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011Cffo1x3JL1H49m7BmB7nW",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 768,
+            "cache_read_input_tokens": 129526,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 768
+            },
+            "output_tokens": 3,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "2495225c-e58a-4d03-b02a-51276bf7b440",
+      "ttft_ms": 3148
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "0be221fa-81d5-48a0-9f07-139ccea4b6d6"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "7ea3fb5a-d44b-42a7-9f43-2d503242e178"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "298d0f56-3c44-4b52-ae18-e7922f7f2b12"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "bd52e02d-dfd5-4156-a4aa-584a6234de42"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 285,
+      "estimated_tokens_delta": 235,
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "ce51cbc7-2860-45b5-b1a6-3633ac428e0c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "CAQS7QgKEAgSGAI4AUIIdGhpbmtpbmcSDEXgBuptbmUD1z6FmxoMd9KE25KOx8Tj/00NIjDOrjcTkK/RHH2qn1oh3CpXckZttgsPynOcVQqywd8//oKnBoEP0MZP31jJ5WIZk2Iqighaz1Kk4K0vCawMDvsWei6YVb++nhc2oJlw88pYKRWa36Q3ggX/7hsHRiyldoQtlpV2uH7Jq+D33xRX/kN6cIYHbNb7wg8TNnGasW70WfAqCdaZifBUIoTOye/EFvYQBfbM+jO4DvEv8BImr/Z1C/FK7yAeHtA9j4c1DBCd+ZtDeVde/GjvjuOmdfETFN2G+iMROOcRn1uHHO4Vs2u/fNV8IHHP8w7tgeXyHRylnUJz+uxPLT48DBvX5ue40J4JOMpaehhDZ7orv6trzJFdkpn6mzNM7FAPbCdCMf9t0x78SxiKed1j1fROzhHQBJukR0vgFEcM7g3jjbQ//QPNaPOBZSYlkZuIBjZk21sn6ramkjU/SpdUf0kY1zi8qvI5QsowFWIS1QpFfwmwYGcE4Nnugj3FXAmZmYUvQDUlEck7RkaT/9HJJiVh1+NUltBz56Ge2pvCtxh8w/fgEmIQOqNQ6QDBvd3NIDaX1oT+dAnmrN4F6Zsevxd6SzF7C/IFwzzD3dJsEdysbKqAC8dJtTUtNMvvH+U0wRNVLFKlVqDXZaUxtgoeIXNxHRWMV3yzNHBug66b8BlU3Wdezs88DY5wLxltQ/GUKGktLAylHBoEhF9M+ZUENZsauA/A7JZG0hHqToo/1odRLEefnMSXXYN60usFWFKIQrO6a9SXoIEPkXNEDdF5Mg1V69wa1QHxq5dnPZgvkekVSSvcl+BZwpIl+4VHmMjiSnClcvbEVEpues6FVBITjpAUAiqf5tvrxThrjBEGJKFSyUAlHXlFZTxrU4L9v96rKXe8X/CSYq5cFHhVJbb7d7LQxSGPmBgrdkyUAjcd52YPk6MRAZj1DX1vEnVaMiWijvUJ1FhL9FC8fU15Ri6uGouZNXTYHtGRz+5MjbYG0AvDZKYM5cbJxFKawt/MYC9f3IdMtf+Mh6+ENCw+Uk8FrpgTzgke42u9J0W1hXNESpib1PC+kRzzTToIMwwcG596HRoOSo8fJ9lNG3mVVXsDzRXGJzjm3+VJe44RklGaFnTd+kOGF1W43N2a6KFgIdaTn3VJsorPuXWMwNXCZ6A46WVhxTx2ChaWSDaPxmy3tpy934qhYcv7hgcNy7Xi8uz8WMywJDwnK7Nal/hFgTxNFje/MhF4z5DrlAJzm5YJpMHku4ugHKLq2AjYUI8vdAdbLJVhQ1Wo5Dk3M0EgWqak22Uy5r/ZZfJtNydyJuJDXcruStX+tu053KtWcJNs2X/TeQST+YD1tJC8yMpKHxD48U8BwEc7U0CjrlGIY9b/Wd2XcQ+Ff77OgnmpV5FKPex5err1qVzHt9kb9Gppvv18p7yFo9K3GEtI+1rxDXt5eSGsdlqFHCDm/A/TtLZ45bRP2xoywxgB"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "97f0ee47-84d6-4d40-a4eb-10a5d156362e"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011Cffo1x3JL1H49m7BmB7nW",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAQS7QgKEAgSGAI4AUIIdGhpbmtpbmcSDEXgBuptbmUD1z6FmxoMd9KE25KOx8Tj/00NIjDOrjcTkK/RHH2qn1oh3CpXckZttgsPynOcVQqywd8//oKnBoEP0MZP31jJ5WIZk2Iqighaz1Kk4K0vCawMDvsWei6YVb++nhc2oJlw88pYKRWa36Q3ggX/7hsHRiyldoQtlpV2uH7Jq+D33xRX/kN6cIYHbNb7wg8TNnGasW70WfAqCdaZifBUIoTOye/EFvYQBfbM+jO4DvEv8BImr/Z1C/FK7yAeHtA9j4c1DBCd+ZtDeVde/GjvjuOmdfETFN2G+iMROOcRn1uHHO4Vs2u/fNV8IHHP8w7tgeXyHRylnUJz+uxPLT48DBvX5ue40J4JOMpaehhDZ7orv6trzJFdkpn6mzNM7FAPbCdCMf9t0x78SxiKed1j1fROzhHQBJukR0vgFEcM7g3jjbQ//QPNaPOBZSYlkZuIBjZk21sn6ramkjU/SpdUf0kY1zi8qvI5QsowFWIS1QpFfwmwYGcE4Nnugj3FXAmZmYUvQDUlEck7RkaT/9HJJiVh1+NUltBz56Ge2pvCtxh8w/fgEmIQOqNQ6QDBvd3NIDaX1oT+dAnmrN4F6Zsevxd6SzF7C/IFwzzD3dJsEdysbKqAC8dJtTUtNMvvH+U0wRNVLFKlVqDXZaUxtgoeIXNxHRWMV3yzNHBug66b8BlU3Wdezs88DY5wLxltQ/GUKGktLAylHBoEhF9M+ZUENZsauA/A7JZG0hHqToo/1odRLEefnMSXXYN60usFWFKIQrO6a9SXoIEPkXNEDdF5Mg1V69wa1QHxq5dnPZgvkekVSSvcl+BZwpIl+4VHmMjiSnClcvbEVEpues6FVBITjpAUAiqf5tvrxThrjBEGJKFSyUAlHXlFZTxrU4L9v96rKXe8X/CSYq5cFHhVJbb7d7LQxSGPmBgrdkyUAjcd52YPk6MRAZj1DX1vEnVaMiWijvUJ1FhL9FC8fU15Ri6uGouZNXTYHtGRz+5MjbYG0AvDZKYM5cbJxFKawt/MYC9f3IdMtf+Mh6+ENCw+Uk8FrpgTzgke42u9J0W1hXNESpib1PC+kRzzTToIMwwcG596HRoOSo8fJ9lNG3mVVXsDzRXGJzjm3+VJe44RklGaFnTd+kOGF1W43N2a6KFgIdaTn3VJsorPuXWMwNXCZ6A46WVhxTx2ChaWSDaPxmy3tpy934qhYcv7hgcNy7Xi8uz8WMywJDwnK7Nal/hFgTxNFje/MhF4z5DrlAJzm5YJpMHku4ugHKLq2AjYUI8vdAdbLJVhQ1Wo5Dk3M0EgWqak22Uy5r/ZZfJtNydyJuJDXcruStX+tu053KtWcJNs2X/TeQST+YD1tJC8yMpKHxD48U8BwEc7U0CjrlGIY9b/Wd2XcQ+Ff77OgnmpV5FKPex5err1qVzHt9kb9Gppvv18p7yFo9K3GEtI+1rxDXt5eSGsdlqFHCDm/A/TtLZ45bRP2xoywxgB"
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 768,
+          "cache_read_input_tokens": 129526,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 768
+          },
+          "output_tokens": 3,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "7540a071-3286-41fc-a5c0-57db2317f0df",
+      "timestamp": "2026-10-03T18:41:36.667Z",
+      "request_id": "req_011Cffo1wWZdYxjoJKLZJffh"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "28856e35-d8ef-4448-a5a9-06f0f43b47cd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "ff8d60b8-5286-48dd-b4d7-68b48f38679c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "The"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "9dda255d-1524-4462-a87a-3b8a31f01799"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " real `"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "e0dbc8e6-3a01-4e55-a346-9fdc558a0224"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "code.md` isn't vis"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "fe80579d-a32f-4c17-9d4c-322e8404b644"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ible from"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "7b152a14-c3d6-4221-ae31-ebc6d94864d6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " here"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "0aa1379a-1efb-461c-ae9e-93dc0708f92a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". It lives in the app's"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "d6808afc-f2c1-4dae-bc8c-4471d11c9f30"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `.suspense/system-"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "8979c81c-a33b-4953-b1d9-cb8b874862ef"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "prompts/"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "64fd63a6-e5d6-46e3-9ab2-1cf614da29ae"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "`, and this run"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "579bebda-a800-4882-abdd-515935dccf10"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " can"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "76564947-d8b6-4c4d-b09c-273308b5963d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'t see that folder. So below"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "e6a45a2c-7348-4b27-abd3-128f56d68757"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is the Code pr"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "0ddffc86-32de-4570-aca6-63a8936beafa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ompt as the spec def"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "1751eb3a-0a10-4d3f-8aef-84df5db14bb2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ines it, with two"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "859b33d6-ce50-400b-aea7-8ed465e28060"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " gaps filled in."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "e711a664-493a-4e74-9f8b-66f02ef6e2ed"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Only the last"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "1f384683-7393-404e-9aaa-fe1f8409e468"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " paragraph is fixed"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "1971e096-c0ed-42c1-95f6-e02f5602c295"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " word"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "22f825cb-7dbf-4450-b82d-7ccc54e0f79a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " for word by the spec,"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "786171ad-f120-4475-bbd7-34ec00cea4f5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in "
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "61f51e8d-4a85-48ac-83d4-541a736102ea"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ModeSystemPrompt"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "ed34a2e3-92c6-4853-97c8-9583d32a72bc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "sScope ›"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "fa5c1eab-c80b-46ba-853d-5ca2bc4d4516"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Defaults. For"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "3d78e503-f01c-4ca0-a116-73501324d19b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the r"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "2dabaac2-1633-4aa1-8b20-d5b8051d13e1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "est, the spec says what"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "c512e2a4-3648-4047-b395-6bf96a0b5d42"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " each"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "d5d02927-b088-4fa9-a44b-539778388109"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " part"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "557c9413-60b1-4dd7-bdb1-dd9261507e9d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " must do"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "dbdc2aff-5a19-44ad-919f-b61513201aae"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " but"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "3d975cf2-7e97-4cd2-af08-a9e8257f93e5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " not its"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "d74461df-d597-423d-a768-4e91899fb0ac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " words."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "3e14b072-e444-4de6-92c9-d51fbc35a59a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " I mat"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "b6836abf-d561-4623-af75-e512d6665baf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ched the wording of the"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "cc573a84-9caa-4e52-b25b-0ef1df423629"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Spec and Chain bl"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "33c0e162-eba6-4a8b-a02f-d79d45107b59"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ocks you've been s"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "a9716f3f-b6b7-4402-9c9a-7279ff23446a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ending me. I didn't change"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "645f93d5-3b1c-485a-84f0-30b6bbb86909"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the spec.\n\n```\nWe"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "6af7ddfb-65c4-4ecc-ba9f-22a36b17e0c9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'re working on the code, located in"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "360c2a20-4aa5-455a-916e-7187ef93345e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " ${CODE_LO"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "fb55c4e5-3a84-4929-b97d-d50d6c59db52"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "CATION}."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "621a8bfd-32e8-4ed4-b0ab-c56aae9c1367"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Change the"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "e61f392a-ee10-4930-87bf-53f7723e0a67"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " code so"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "d13419ce-9020-4770-9135-eb5b04fa9260"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it does"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "cc55e6ae-6f23-4f67-850e-a7ea5daa58ad"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " what the prompt asks,"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "dbbb1d4b-4bcb-4232-9605-0be69047b283"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " as the spec describes it."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "0ff8cc81-e795-40cb-9b8a-652fde1629d0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\nThe spec's"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "394bc97d-c5cf-423d-8c39-bea09e1ca294"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Piton source is in ${"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "c079014d-26ab-4174-af55-7c9381bd2fc3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "SPEC_LOC"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "cf09cd85-fc68-4821-ac20-eb6ba2185c31"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ATION}."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "88595864-0671-4375-a77d-7ccc4b0e8dbd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Don't change it, and don"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "7880ec7e-3e97-41f3-8c87-c10909019f71"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'t read it to learn what the"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "b0f37ada-26eb-4d74-8225-724b8c84295f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " spec says: read the comp"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "8d71e635-c3cf-453f-ad2e-4755f5fa4a71"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "iled reference instead, as"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "fc7cb69b-eecd-48a1-a357-13d3f61bb7aa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " above"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "3292e497-cb0e-4d7b-91e9-99db1945c2e9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". If the pr"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "c16b6759-6355-45de-8a9d-57afe44f3b2c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ompt asks for something the sp"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "a42e579c-fb04-43d4-8fac-c8069a12c5d1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec doesn't describ"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "52edf6f2-49b4-436e-9809-f723a8ebcca8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "e, or"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "cea0c74e-84e7-4529-bf36-3d68059d2603"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " describ"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "7be8a817-f2a9-4c5c-b76b-d815a602f6db"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "es differ"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "03120c2a-4580-4960-92ed-b2192e5cdbe2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ently, say so in"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "796de82f-7cc7-4b85-ad0b-20f454522ce7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " your reply rather than working"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "bab765e2-c3a0-4238-b8d4-22172891f0a0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " around it.\n\nBefore changing"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "cf74d3c1-0a6f-45eb-95fe-825a887cbc65"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " anything, write the constraints"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "09c982d8-72c0-4146-8de6-bdab3d9b5fe5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " this task must meet to ${"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "5d62ec59-94e6-4d72-8eb1-8037c36af2dc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "UNDERSTAND"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "61cb1d55-d550-4f1a-8e63-12fe37ff3d3f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ING_FILE}, and"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "13e2e6c6-e10f-4279-b993-6d7a02396fad"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " keep it current as you read more"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "2a86d403-24ab-4a36-8bb0-4d176781e132"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " of the spec. It is a"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "08bcd3f1-e3f8-4e56-b4b3-c01ce1e994d9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Markdown list and noth"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "ebf3cfab-0e9e-4637-b134-5960ecbb429a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ing else: one line per constra"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "2df63cb3-854c-4b21-bdcb-e72ea08bcbf3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "int, at most twelve,"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "e8231568-55f8-40be-9b8d-faac9bdb6e20"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " each a single short, specific stat"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "53a01ac7-8271-4f39-b02a-ab8917f7f3d6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ement of"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "4e8991a1-b4c4-438c-90a6-591590927cbd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " what must be true, written as a"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "0a8bafbc-28b2-48fe-a937-06eb4dce0b12"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " link to the compiled reference"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "15299777-9436-4a16-8724-62a843931e58"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " file it comes from, such as"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "dd1b085c-3137-4bdd-ab68-45998e75f206"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `- [The chain tab"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "a89e1def-c03b-482b-955c-c13243a644a2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " has no bottom border in comb"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "5d4bd283-62ac-4ce8-b7e7-0742ddd5e358"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ined mode](${HARN"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "c6da3701-7e18-47e8-adb8-e3dd3dc63b82"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ESS_DIRECT"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "c94c07ad-4449-4063-8976-8812f8c1c1f0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ORY}/reference/sc"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "ce81f751-cd69-438f-ab36-1bff486e334c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ope/prompt-mode"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "1455da87-11a9-4bf5-b269-9cc4ca94946c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "/chat-input/index."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "76c79fe1-22f8-47a2-88f4-84e05efc1afd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "md#chain)`."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "cf304ac6-faab-4d55-b60c-cf33c4005608"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Only list what the spec says;"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "a0d68757-4acb-4c31-b005-d604e5393f39"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " leave out anything you are de"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "d32da7fd-7668-4c0d-990d-20e68f74f53d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ciding yourself. Repl"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "55cd591a-8295-4e46-b0f5-cbca7da0c8ae"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ace a constraint when you lear"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "38da349f-39cf-4bc1-b643-1017b848ecef"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "n it"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "f7a048e5-af31-4ddb-af2e-e13831d7e157"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " was wrong rather than ad"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "6a8e6708-4a5f-485e-a8dc-0b6dd81146a4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ding another."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "644ba1e1-3d18-42b0-98f6-0cb5eb59a1f9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n```\n\nHow"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "b9a90c87-7049-4527-98d9-8509bd9f3312"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "e93355a2-6b41-457c-8dc3-1f256b06bd9d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " l"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "99005fc1-0270-4692-8b21-7d99a8bd65c0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ines up with the spec:"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "d9b4025b-5ffb-4f6b-8f3b-5f0898383a95"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n- **First paragraph:"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "9a8ecafd-089c-4fb4-ad7e-e0b65e489449"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "** says what the mode is for"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "c86c3124-ab27-4d8c-89d2-25357fc8cb54"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ". That part"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "31aad20a-24f6-44e2-ace8-2b89be053903"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is required"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "a8547632-809a-475f-987e-6da5f0c00e0f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ","
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "3bfc30d3-0c29-42ce-894f-1169dc754fc7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " but its wording is up to us"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "235c6169-3797-48ac-bd72-c40b61972a33"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "42b660ee-9a6b-446b-886f-65f39e6f0b03"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n- **Second paragra"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "1db2cf6d-66c2-4218-b9ed-513db31142b8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ph:** the"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "9c7509ad-2fe6-41b0-9b20-f39f6ba4c43e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " spec location"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "0825a2f6-5b34-4291-82ed-811f38b545cd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is named only in a"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "8c7666c1-d481-4aba-8d29-53639ce2b01e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " paragraph of its own."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "ca00bf1e-4e75-4dfd-ac5d-0a2c4dc66f91"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " That paragraph is drop"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "2973e7cf-5e7d-4918-ac77-1c73e9ef0f63"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ped whenever a run can't"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "15734db2-0792-4af6-a42e-c706c1b957b6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " see the spec location, and k"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "950da53e-a76b-4716-827a-e96baec45f04"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ept for a"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "d7a40d37-bd46-4061-8b43-3e71dec5f987"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Code task on the host."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "2b360b34-45ed-4e83-85c4-721acf81b537"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " It agrees with the host"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "29afebe5-42ba-49f2-87f4-a976e4d00aeb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " rules: a Code task may"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "33ac3680-2b31-4777-8d35-2c2cc00e13f5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " not edit the spec location and"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "1b6aa81b-e92b-4085-8ee8-8a6f1a67393a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is told not to read it. The"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "be9fe5d1-80a6-4303-ac8c-71c708d9de98"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " last"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "bffb0979-6508-4cd7-adf9-a757a66f700d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " sentence, about"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "12552dc2-db1a-4e2f-927b-3cfa4fb9e1e3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " saying so when the spec and"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "1c97a949-a7b7-4e9d-9a6e-8625a811ecb9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the prompt disagree,"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "d60f94bb-4e5d-4098-99d2-02db6eb619d4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is my addition.\n- **"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "9b085870-7672-4b5a-a423-3c7b2ae925f0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Third paragraph:** the"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "481d2bfa-4013-4945-8264-f569917bbe30"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " understanding-file paragra"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "93abbd32-9301-49bd-9172-886513c65693"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ph, word"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "1358bf74-49f0-411c-bdad-e4ab8a80c4cb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " for word as the spec requires"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "3f2bb705-615d-49e6-b0d6-0334f4bc6b1f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n- **Nothing"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "e6ea3697-a19b-4a91-b332-a12baf9f35c9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " else:** there's no flu"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "e7fb3e6e-6e27-463d-a8e3-5779cf5dd041"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ency p"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "36890b71-1923-40c3-a0ec-c7e834945d97"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ointer, since Code instruct"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "57ade5a3-8391-4de3-88de-dcb08d9db5b7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ions must never mention it. \""
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "daa9d8d9-cfda-48b7-8599-3f003f2b6817"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Read the compiled reference\""
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "67aa925f-4ced-4304-97fd-f617ea72bb45"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is covered by `"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "a9482f37-942a-4b75-a58e-8be1d5aaa7cd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "SPEC_READING`"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "f2b16d95-fe30-4489-8e8f-01643c0f4575"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", which the system template already s"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "01cfd816-badd-4d73-948a-32fd4100b6b2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ends. The"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "db93fae9-63da-42ca-a0e3-8994b268cdd0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " wh"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "71d2fbe0-2015-4b0b-8df1-e090e0e409c1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ole th"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "b13ce639-d240-48e7-a9cc-9fabdb651114"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ing go"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "bfdd7d3b-e8fc-4427-b686-011c9370ca91"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "es at"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "dcc4b435-a874-4c22-a86d-68586bfba499"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the top"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "c43ee8d8-4f39-4625-9cf2-e46ef9cd1f9d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " of the message in a `<task"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "0e4a252a-3e08-47fd-ae70-e1791ccb7686"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "-instructions>` block."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "26e8e7ec-5c96-48ba-b6a3-ab45a795410e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\nI can"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "9c31ae7a-83d7-45b4-912b-fe90d4d37326"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " write"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "965a22d5-c694-4491-b137-7df896132bd3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " this into the spec as the ex"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "2805c6cf-e0f8-4f03-a3e0-8db89cb86564"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "act Code default,"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "63d74441-a74b-4a66-b8c5-5aa7a41e84b1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " or you"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "54d2f80a-e46f-4003-a507-495e5fc6a58c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " can paste it into Settings"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "7508302d-5593-49a2-b83a-c7a061bba563"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " → System prompts →"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "0e7ec38d-29bc-447b-bc6e-906fe061c001"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Code for"
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "73ddce56-c684-42f3-84a0-d2fe44482e2b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " this project."
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "f6ae174a-9846-4318-9346-4ff1dcafb53a"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011Cffo1x3JL1H49m7BmB7nW",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "The real `code.md` isn't visible from here. It lives in the app's `.suspense/system-prompts/`, and this run can't see that folder. So below is the Code prompt as the spec defines it, with two gaps filled in. Only the last paragraph is fixed word for word by the spec, in ModeSystemPromptsScope › Defaults. For the rest, the spec says what each part must do but not its words. I matched the wording of the Spec and Chain blocks you've been sending me. I didn't change the spec.\n\n```\nWe're working on the code, located in ${CODE_LOCATION}. Change the code so it does what the prompt asks, as the spec describes it.\n\nThe spec's Piton source is in ${SPEC_LOCATION}. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.\n\nBefore changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](${HARNESS_DIRECTORY}/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.\n```\n\nHow it lines up with the spec:\n- **First paragraph:** says what the mode is for. That part is required, but its wording is up to us.\n- **Second paragraph:** the spec location is named only in a paragraph of its own. That paragraph is dropped whenever a run can't see the spec location, and kept for a Code task on the host. It agrees with the host rules: a Code task may not edit the spec location and is told not to read it. The last sentence, about saying so when the spec and the prompt disagree, is my addition.\n- **Third paragraph:** the understanding-file paragraph, word for word as the spec requires.\n- **Nothing else:** there's no fluency pointer, since Code instructions must never mention it. \"Read the compiled reference\" is covered by `SPEC_READING`, which the system template already sends. The whole thing goes at the top of the message in a `<task-instructions>` block.\n\nI can write this into the spec as the exact Code default, or you can paste it into Settings → System prompts → Code for this project."
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 768,
+          "cache_read_input_tokens": 129526,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 768
+          },
+          "output_tokens": 3,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "uuid": "8e8be97e-fc2e-4da2-8a66-b571793096d8",
+      "timestamp": "2026-10-03T18:41:38.370Z",
+      "request_id": "req_011Cffo1wWZdYxjoJKLZJffh"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "ec830ff8-5bde-4b06-a2da-f58d0267794e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {}
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 768,
+          "cache_read_input_tokens": 129526,
+          "output_tokens": 992,
+          "output_tokens_details": {
+            "thinking_tokens": 136
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 992,
+              "cache_read_input_tokens": 129526,
+              "cache_creation_input_tokens": 768,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 768
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "54ff705c-0bbd-40d1-9592-d8e3ac6c5ddd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "parent_tool_use_id": null,
+      "uuid": "ec2b795e-b4c3-4812-a144-09aeb313eeb4"
+    },
+    {
+      "duration_api_ms": 429712,
+      "stop_reason": "end_turn",
+      "session_id": "c6b473ed-6319-49a7-b5b0-4a091e07380d",
+      "total_cost_usd": 2.4805196,
+      "usage": {
+        "input_tokens": 6,
+        "cache_creation_input_tokens": 6099,
+        "cache_read_input_tokens": 380897,
+        "output_tokens": 1898,
+        "output_tokens_details": {
+          "thinking_tokens": 413
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 6099,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 992,
+            "cache_read_input_tokens": 129526,
+            "cache_creation_input_tokens": 768,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 768
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "modelUsage": {
+        "claude-opus-5-5[1m]": {
+          "inputTokens": 108,
+          "outputTokens": 28325,
+          "thinkingTokens": 8974,
+          "cacheReadInputTokens": 4761418,
+          "cacheCreationInputTokens": 120163,
+          "webSearchRequests": 0,
+          "costUSD": 2.4805196,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "is_error": false,
+      "num_turns": 3,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "The real `code.md` isn't visible from here. It lives in the app's `.suspense/system-prompts/`, and this run can't see that folder. So below is the Code prompt as the spec defines it, with two gaps filled in. Only the last paragraph is fixed word for word by the spec, in ModeSystemPromptsScope › Defaults. For the rest, the spec says what each part must do but not its words. I matched the wording of the Spec and Chain blocks you've been sending me. I didn't change the spec.\n\n```\nWe're working on the code, located in ${CODE_LOCATION}. Change the code so it does what the prompt asks, as the spec describes it.\n\nThe spec's Piton source is in ${SPEC_LOCATION}. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.\n\nBefore changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](${HARNESS_DIRECTORY}/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.\n```\n\nHow it lines up with the spec:\n- **First paragraph:** says what the mode is for. That part is required, but its wording is up to us.\n- **Second paragraph:** the spec location is named only in a paragraph of its own. That paragraph is dropped whenever a run can't see the spec location, and kept for a Code task on the host. It agrees with the host rules: a Code task may not edit the spec location and is told not to read it. The last sentence, about saying so when the spec and the prompt disagree, is my addition.\n- **Third paragraph:** the understanding-file paragraph, word for word as the spec requires.\n- **Nothing else:** there's no fluency pointer, since Code instructions must never mention it. \"Read the compiled reference\" is covered by `SPEC_READING`, which the system template already sends. The whole thing goes at the top of the message in a `<task-instructions>` block.\n\nI can write this into the spec as the exact Code default, or you can paste it into Settings → System prompts → Code for this project.",
+      "ttft_ms": 3808,
+      "type": "result",
+      "duration_ms": 24384,
+      "uuid": "e7faf40a-96de-4f2a-9727-1e6ec353a60b",
+      "ttft_stream_ms": 2603,
+      "time_to_request_ms": 132,
+      "first_content_frame_ms": 2604,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  ],
+  "snapshotBefore": "0cbf54652ae83b3a517856a418e01dd943b89848",
+  "snapshotAfter": "d6f29dc0bee1e500d701c7f15676216bd0b07a91"
+}

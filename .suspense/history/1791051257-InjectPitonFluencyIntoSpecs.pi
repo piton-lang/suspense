@@ -1,0 +1,76 @@
+
+export anchor InjectPitonFluencyIntoSpecs:
+    userPrompt:
+        \\\
+        Alright, it seems like the spec is breaking regularly when the new containerized dealio is working on it.  I have a feeling you're not injecting piton fluency, is that correct ?
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src.
+
+        Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Alright, it seems like the spec is breaking regularly when the new containerized dealio is working on it.  I have a feeling you're not injecting piton fluency, is that correct ?
+            \\\
+        result:
+            \\\
+            You're right that the fluency isn't injected, but that's by design and it isn't what's breaking the spec. The spec says the fluency is never part of the system prompt. Instead, the Spec and Chain instructions point at `.suspense/fluency.md`, which is mounted into the container. That worked in this session: I got the pointer and read the file.
+
+            **Why the spec keeps breaking:** a containerized run has no working way to check its own edits.
+
+            1. **`piton` couldn't run at all.** On my earlier steps today the image had glibc 2.36 and the `piton` binary needs 2.39, so every `piton` command failed. The runs edited blind. That's how a run left `locations:` alone on a prose line, which made `piton check` report `empty-value` at `container-environment/index.pi:127`. The image is now on Debian 13, and `piton` runs.
+            2. **`piton build` still can't succeed in the container, however sound the spec is.** It reports 75 errors that have nothing to do with the spec:
+               - 73 are `unowned-output`. The `.piton/manifest.json` that records which reference files Belay owns isn't mounted, so piton refuses to overwrite them.
+               - 2 are `unplaceable-instruction`. There's no code location for the shape guidance to go in.
+
+               A run can't tell its own mistakes from that noise, so it gives up on checking.
+
+            **Fixes I made to the spec:**
+            - **Image:** after building, the image runs each command's version command, such as `piton --version`. If one fails, the image build fails, says which command couldn't run, and the image is never used.
+            - **Spec mounts:** a Spec run now also gets the project's `.piton` directory, read-write. In place of the code location it gets an empty scratch directory that's thrown away with the container. It still never sees the code.
+            - **Spec build:** a `piton build` inside the container now fails only because of the spec, so its errors are the run's own to fix.
+            - **Two broken lines:** I fixed the `locations:` line above. I also fixed the "harness's own words:" line in HarnessIntegrationScope's Failures section, which had turned into a stray `##### Words` heading.
+
+            **Checks:** `piton check` reports no problems, and `piton compile` shows the new text where it belongs. I couldn't refresh `.claude/reference`, because `piton build` here fails on exactly the missing mounts described above. Until the host build runs, the reference also doesn't show last turn's question-mount changes.
+
+            One smaller thing I didn't change: the header at the top of `fluency.md` names `/home/hyphyphyph/piton/repl/spec` as the source of truth. That looks like a host path, which doesn't exist inside the container.
+
+            The Gmail, Google Calendar and Google Drive connectors still need authorizing in your claude.ai connector settings, though nothing here uses them.
+
+            ## What changed in the spec, and the anchors the code should follow
+
+            - **`ContainerEnvironmentShape.image`:** after `podman build`, run each held command's version command in the new image (`piton --version` and each harness's). If one fails, fail the build, name the command and show what it printed, and don't use that image.
+            - **`ContainerEnvironmentShape.mounts.spec`:**
+              - Mount `<project>/.piton` read-write. Create it before the run if it's missing, since a mount has to exist first.
+              - Mount an empty, writable, throwaway scratch directory at the code location's path under `/home/hyphyphyph/piton/repl`.
+              - Never mount the real code location.
+            - **`ContainerEnvironmentShape.specBuild`:** describes the expected result, that a `piton build` in the container fails only because of the spec. No code beyond the two items above.
+            - **`HarnessIntegrationShape.failures`:** wording fix only, no code change.
+            \\\
+
+    sentFrom: Prompt_4b5fedea8597a342

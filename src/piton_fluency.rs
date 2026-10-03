@@ -50,7 +50,11 @@ pub fn ensure(project_dir: &Path) -> bool {
 /// Writes the fluency as [`write`] does, printed by `program` rather than
 /// `piton`.
 pub(crate) fn write_with(program: &str, project_dir: &Path) -> bool {
-    let fluency = print_prompt(program, project_dir);
+    // With no path a run in a container can't reach.
+    let fluency = crate::system_prompts::without_project_path(
+        &print_prompt(program, project_dir),
+        project_dir,
+    );
     let _writing = WRITING.lock();
     let file = file(project_dir);
     if !fluency.trim().is_empty() {

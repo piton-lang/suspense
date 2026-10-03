@@ -1,0 +1,59 @@
+
+export anchor EnvironmentAwareLocationConfiguration2:
+    userPrompt:
+        \\\
+        Let's keep in mind too, CODE_LOCATION and SPEC_LOCATION and all that stuff needs to point according to the environment it's running in.  Is it local, is it dockerized ?
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Let's keep in mind too, CODE_LOCATION and SPEC_LOCATION and all that stuff needs to point according to the environment it's running in.  Is it local, is it dockerized ?
+            \\\
+        result:
+            \\\
+            I've written this into the spec. Every placeholder path is now relative to the project directory, so the same text points to the right place locally and in Podman. `piton check` and `piton compile` pass. I couldn't refresh the reference: `piton build` in this container still fails on the 75 errors from the missing `.piton` and code-location mounts, which wait on the code step from two prompts ago.
+
+            **Why relative paths and not a different absolute path per environment:** every run already works in the project directory. On the host that's the project's real path, and in a container it's `/workspace`. A relative path resolves correctly in both with no branching. It also keeps the system template identical within each conversation, so the prompt cache holds. Absolute paths would break either way: the host path doesn't exist in a container, and `/workspace` doesn't exist on the host. It also matches what you've been sending me, like `./spec` and `.claude/reference`.
+
+            **One real leak:** `fluency.md` is printed on the host, and its header has the host's absolute path in it (`/home/hyphyphyph/piton/repl/spec`). The only runs that read it work in containers, where that path doesn't exist.
+
+            ## What changed in the spec, and the anchors the code should follow
+
+            - **`ModeSystemPromptsShape.templates`:** a new paragraph says every path a placeholder is filled with must point where the run finds the file, on the host or in a container. So each is written relative to the project directory, never as an absolute path:
+              - `CODE_LOCATION` and `SPEC_LOCATION` as `./<location>`, such as `./spec`
+              - `HARNESS_DIRECTORY` as `.claude`, `.codex` or `.opencode`
+              - `PITON_FLUENCY_FILE` and `UNDERSTANDING_FILE` as project-relative paths, such as `.suspense/fluency.md`
+
+              The code should build every filled-in path from the project-relative location. Check that `UNDERSTANDING_FILE` in particular isn't currently filled with an absolute host path. Every run's working directory must stay the project directory, or `/home/hyphyphyph/piton/repl` in a container.
+            - **`ModeSystemPromptsShape.pitonFluency`:** when writing `fluency.md`, replace the project directory's absolute host path wherever it appears with `.`. A path inside the project becomes relative, such as `./spec`. Nothing else in the printed text changes.
+            \\\
+
+    sentFrom: EnvironmentAwareLocationConfiguration

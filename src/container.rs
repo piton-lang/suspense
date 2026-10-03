@@ -132,6 +132,10 @@ pub struct Plan {
     /// Folders inside a mount that the run must not see, hidden behind an
     /// empty, read-only folder.
     pub hidden: Vec<PathBuf>,
+    /// Empty, writable folders that go with the container, standing in for
+    /// a location the run mustn't see but whose place a build writes to, as
+    /// the code location a Spec run's `piton build` places guidance in.
+    pub scratch: Vec<PathBuf>,
     /// The folder its conversation's sessions are kept in, mounted where the
     /// harness keeps them under its home; none for a run of no conversation.
     pub sessions: Option<PathBuf>,
@@ -173,23 +177,36 @@ impl Plan {
             RunKind::Spec => {
                 mounts.extend(spec.clone().map(rw));
                 mounts.push(rw(reference));
+                // The build's manifest of the files it owns, so a build in
+                // the container can write the reference: a copy, made fresh
+                // for each run, since what a build there places, with no code
+                // to place guidance in, isn't what the host's build owns.
+                mounts.push(rw(piton_copy(project_dir)));
                 mounts.push(ro(fluency));
                 mounts.push(ro(config));
                 mounts.extend(understanding.map(|file| rw(file.to_path_buf())));
             }
+            // Both locations, read only: the spec's source so `piton slice`
+            // can read it, nothing changed.
             RunKind::Question => {
                 mounts.push(ro(code.clone()));
+                mounts.extend(spec.clone().map(ro));
                 mounts.push(ro(reference));
                 mounts.push(ro(config));
             }
         }
-        // What a mount holds that the run must not see: the other location,
-        // the project's data, and its git directory.
-        let mut unseen = vec![data, project_dir.join(".git")];
-        match kind {
-            RunKind::Spec => unseen.push(code),
-            RunKind::Question => unseen.extend(spec),
-        }
+        // What a mount holds that the run must not see: the project's data
+        // and its git directory. A question sees both locations, whichever
+        // holds the other.
+        let unseen = vec![data, project_dir.join(".git")];
+        // A Spec run never sees the code: an empty scratch folder stands in
+        // its place, for the build to place the shape's guidance in.
+        // The harness directory is scratch too, the reference mounted in it,
+        // so the build can write what else it writes there, as skills.
+        let scratch = match kind {
+            RunKind::Spec => vec![code, project_dir.join(agent.directory())],
+            RunKind::Question => Vec::new(),
+        };
         let hidden = unseen
             .into_iter()
             .filter(|unseen| {
@@ -207,6 +224,7 @@ impl Plan {
             platform,
             mounts,
             hidden,
+            scratch,
             sessions: Some(sessions_folder(project_dir, kind)),
         }
     }
@@ -225,6 +243,19 @@ impl Plan {
             mount.host.exists()
         });
         plan.hidden.retain(|hidden| hidden.exists());
+        // The copy of `.piton` a Spec run is given, fresh from the project's.
+        let copy = piton_copy(&plan.project_dir);
+        if plan.mounts.iter().any(|mount| mount.host == copy) {
+            std::fs::remove_dir_all(&copy).ok();
+            std::fs::create_dir_all(&copy).ok();
+            if let Ok(entries) = std::fs::read_dir(plan.project_dir.join(".piton")) {
+                for entry in entries.flatten() {
+                    if entry.path().is_file() {
+                        std::fs::copy(entry.path(), copy.join(entry.file_name())).ok();
+                    }
+                }
+            }
+        }
         if let Some(sessions) = &plan.sessions {
             if !sessions.exists() {
                 std::fs::create_dir_all(sessions).ok();
@@ -324,7 +355,13 @@ impl Plan {
             let mut spec: OsString = "type=bind,src=".into();
             spec.push(mount.host.as_os_str());
             spec.push(",dst=");
-            spec.push(self.container_path(&mount.host).as_os_str());
+            // A copy of the project's `.piton` is mounted where it would be.
+            let at = if mount.host == piton_copy(&self.project_dir) {
+                self.container_path(&self.project_dir.join(".piton"))
+            } else {
+                self.container_path(&mount.host)
+            };
+            spec.push(at.as_os_str());
             if !mount.writable {
                 spec.push(",ro=true");
             }
@@ -336,6 +373,12 @@ impl Plan {
             spec.push(",ro=true");
             out.extend(["--mount".into(), spec]);
         }
+        // Writable, and gone with the container.
+        for scratch in &self.scratch {
+            let mut spec: OsString = "type=tmpfs,dst=".into();
+            spec.push(self.container_path(scratch).as_os_str());
+            out.extend(["--mount".into(), spec]);
+        }
         out.push("-w".into());
         out.push(WORKSPACE.into());
         out.push(image.into());
@@ -343,6 +386,14 @@ impl Plan {
         out.extend(args.iter().cloned());
         out
     }
+}
+
+/// Where the copy of the project's `.piton` a Spec run's build writes to is
+/// kept on the host, outside the project, made afresh for each run.
+fn piton_copy(project_dir: &Path) -> PathBuf {
+    std::env::temp_dir()
+        .join("suspense-piton")
+        .join(project_key(project_dir))
 }
 
 /// The volume a harness keeps its login and settings in, shared by every
@@ -728,7 +779,9 @@ pub fn default_containerfile(versions: &[(Agent, Option<String>)], with_piton: b
         .collect::<Vec<_>>()
         .join(" ");
     let mut file = String::from(
-        "FROM docker.io/library/node:22-bookworm-slim\n\
+        // A recent Debian, whose C library is new enough for the host's own
+        // piton, copied in, to run.
+        "FROM docker.io/library/node:22-trixie-slim\n\
          RUN apt-get update \\\n \
          && apt-get install -y --no-install-recommends git ca-certificates ripgrep \\\n \
          && rm -rf /var/lib/apt/lists/*\n\
@@ -736,6 +789,8 @@ pub fn default_containerfile(versions: &[(Agent, Option<String>)], with_piton: b
     );
     file.push_str(&format!("RUN npm install -g {packages}\n"));
     if with_piton {
+        // The host's piton; once built, the image is checked that it runs
+        // (see `check_commands`).
         file.push_str("COPY piton /usr/local/bin/piton\n");
     }
     file
@@ -768,6 +823,18 @@ struct Images {
 }
 
 impl Images {
+    /// The commands the image holds, each of which has to run in it.
+    fn commands(&self) -> Vec<&'static str> {
+        let mut commands: Vec<&'static str> = Agent::RUNNABLE
+            .iter()
+            .map(|agent| agent.command())
+            .collect();
+        if self.piton.is_some() {
+            commands.push("piton");
+        }
+        commands
+    }
+
     fn of(project_dir: &Path) -> Self {
         // The harnesses and piton as the host has them, where it can say.
         let versions: Vec<(Agent, Option<String>)> = Agent::RUNNABLE
@@ -839,6 +906,17 @@ pub fn ensure_image(
         );
         std::fs::remove_dir_all(&context).ok();
         built?;
+        // Each command it holds has to run in it, or it is never used.
+        if let Err(err) = check_commands(&images.default, &images.commands(), on_line) {
+            podman_command()
+                .args(["rmi", "-f", &images.default, DEFAULT_IMAGE])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .ok();
+            return Err(err);
+        }
     }
     // A project's own Containerfile, built FROM the default.
     if let Some((image, file)) = &images.own
@@ -854,8 +932,47 @@ pub fn ensure_image(
                 .arg(project_dir.join(APP_DIR)),
             on_line,
         )?;
+        if let Err(err) = check_commands(image, &images.commands(), on_line) {
+            podman_command()
+                .args(["rmi", "-f", image])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .ok();
+            return Err(err);
+        }
     }
     Ok(images.used().to_string())
+}
+
+/// Runs each of `commands`' version command in `image`, as `piton --version`,
+/// each line printed given to `on_line`, failing on the first that can't run,
+/// naming it and saying what it printed. Blocking.
+fn check_commands(image: &str, commands: &[&str], on_line: &mut dyn FnMut(String)) -> Result<()> {
+    for command in commands {
+        on_line(format!("$ {command} --version"));
+        let output = podman_command()
+            .args(["run", "--rm", image, command, "--version"])
+            .stdin(Stdio::null())
+            .output()
+            .context("could not run podman")?;
+        let printed = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        for line in printed.lines() {
+            on_line(line.to_string());
+        }
+        if !output.status.success() {
+            bail!(
+                "`{command}` can't run in the container's image, so the image isn't used. It printed:\n{}",
+                podman_said(output.status.code(), &printed)
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Where `command` is on the `PATH`.
@@ -916,6 +1033,7 @@ fn bare(agent: Agent, kind: RunKind, platform: Platform) -> Plan {
         platform,
         mounts: Vec::new(),
         hidden: Vec::new(),
+        scratch: Vec::new(),
         sessions: None,
     }
 }
@@ -1004,7 +1122,7 @@ mod tests {
 
     /// A Spec run sees the spec, the reference, the fluency, the config, and
     /// its understanding file, and never the code; a question the code, the
-    /// reference, and the config, all read only, and never the spec. Each
+    /// spec, the reference, and the config, all read only. Each
     /// is at its place under /workspace, never at its host path.
     #[test]
     fn each_kind_of_run_mounts_only_what_it_may_use() {
@@ -1046,6 +1164,24 @@ mod tests {
         );
         assert!(spec_args.contains("--userns=keep-id"));
         assert!(spec_args.contains("-w /workspace"));
+        // The build's manifest, and an empty scratch folder in the code's
+        // place, writable, never the code itself.
+        // A copy of the project's `.piton`, where it would be.
+        assert_eq!(mounted(&spec, &piton_copy(project)), Some(true));
+        assert!(spec_args.contains(",dst=/workspace/.piton "), "{spec_args}");
+        assert!(
+            !spec_args.contains("src=/home/me/proj/.piton"),
+            "{spec_args}"
+        );
+        assert!(
+            spec_args.contains("--mount type=tmpfs,dst=/workspace/src "),
+            "{spec_args}"
+        );
+        assert!(
+            spec_args.contains("--mount type=tmpfs,dst=/workspace/.claude "),
+            "{spec_args}"
+        );
+        assert!(!spec_args.contains("dst=/workspace/src,ro"), "{spec_args}");
 
         let question = Plan::new(
             RunKind::Question,
@@ -1057,17 +1193,18 @@ mod tests {
         );
         assert!(question.mounts.iter().all(|mount| !mount.writable));
         assert_eq!(mounted(&question, &project.join("src")), Some(false));
-        assert!(
-            !question
-                .mounts
-                .iter()
-                .any(|mount| mount.host.starts_with(project.join("spec")))
-        );
+        // The spec's source too, read only, for `piton slice`.
+        assert_eq!(mounted(&question, &project.join("spec")), Some(false));
+        assert!(question.hidden.is_empty() || !question.hidden.contains(&project.join("spec")));
 
-        // Nothing else from the host: no home, no git directory.
+        // Nothing else from the host: no home, no git directory; only the
+        // copy of `.piton` the application makes.
         for plan in [&spec, &question] {
             for mount in &plan.mounts {
-                assert!(mount.host.starts_with(project), "{mount:?}");
+                assert!(
+                    mount.host.starts_with(project) || mount.host == piton_copy(project),
+                    "{mount:?}"
+                );
                 assert!(!mount.host.starts_with(project.join(".git")));
             }
         }
@@ -1083,8 +1220,9 @@ mod tests {
         assert_eq!(RunKind::of(Some(SendMode::Freeform)), None);
     }
 
-    /// A code location holding the spec and the project's data hides them
-    /// from a question run over it.
+    /// A code location holding the spec and the project's data hides the
+    /// data from a question run over it, never the spec, which a question
+    /// sees, read only, wherever it is.
     #[test]
     fn what_a_mount_holds_that_the_run_mustnt_see_is_hidden() {
         let project = Path::new("/p");
@@ -1101,18 +1239,33 @@ mod tests {
             Platform::Linux,
         );
         assert_eq!(mounted(&question, project), Some(false));
-        for hidden in [
-            project.join("spec"),
-            project.join(".suspense"),
-            project.join(".git"),
-        ] {
+        assert_eq!(mounted(&question, &project.join("spec")), Some(false));
+        assert!(
+            !question.hidden.contains(&project.join("spec")),
+            "the spec is hidden"
+        );
+        for hidden in [project.join(".suspense"), project.join(".git")] {
             assert!(question.hidden.contains(&hidden), "{hidden:?} isn't hidden");
         }
         let joined = args(&question).join(" ");
         assert!(
-            joined.contains("type=tmpfs,dst=/workspace/spec,ro=true"),
+            !joined.contains("type=tmpfs,dst=/workspace/spec"),
             "{joined}"
         );
+        assert!(
+            joined.contains("src=/p/spec,dst=/workspace/spec,ro=true"),
+            "{joined}"
+        );
+        // A Spec run over the same project still never sees the code.
+        let spec_run = Plan::new(
+            RunKind::Spec,
+            Agent::Claude,
+            project,
+            &whole,
+            None,
+            Platform::Linux,
+        );
+        assert!(!spec_run.mounts.iter().any(|mount| mount.host == project));
     }
 
     /// Each harness keeps its login in a volume of its own, shared by every
@@ -1357,6 +1510,8 @@ mod tests {
         assert!(file.contains("@anthropic-ai/claude-code@2.1.0"));
         assert!(file.contains("@openai/codex\n") || file.contains("@openai/codex "));
         assert!(file.contains("COPY piton"));
+        assert!(file.starts_with("FROM docker.io/library/node:22-trixie-slim\n"));
+        assert!(!file.contains("rm -f /usr/local/bin/piton"), "{file}");
     }
 
     /// Only what is there on the host is mounted: a folder the run writes to
@@ -1435,6 +1590,36 @@ mod tests {
             Err("Error: cannot setup namespace using newuidmap: exit status 1".into())
         );
         use_podman_for_test(None);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A command that can't run in the image fails the check, naming it and
+    /// saying what it printed.
+    #[cfg(unix)]
+    #[test]
+    fn a_command_that_cant_run_in_the_image_fails_its_build() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = std::env::temp_dir().join(format!("suspense-check-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("podman");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\ncase \"$*\" in\n*piton*) echo \"piton: version 'GLIBC_2.39' not found\" >&2; exit 1 ;;\n*) echo 1.0 ;;\nesac\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        use_podman_for_test(Some(script));
+        let mut lines = Vec::new();
+        let err = check_commands("img", &["claude", "piton"], &mut |line| lines.push(line))
+            .unwrap_err()
+            .to_string();
+        use_podman_for_test(None);
+        assert!(
+            err.starts_with("`piton` can't run in the container's image"),
+            "{err}"
+        );
+        assert!(err.contains("GLIBC_2.39"), "{err}");
+        assert!(lines.contains(&"$ claude --version".to_string()));
         std::fs::remove_dir_all(&dir).ok();
     }
 }

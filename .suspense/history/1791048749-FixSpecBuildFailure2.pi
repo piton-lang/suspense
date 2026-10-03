@@ -1,0 +1,61 @@
+
+export anchor FixSpecBuildFailure2:
+    userPrompt:
+        \\\
+        Looks like a code task fails -- it can't build the spec.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src.
+
+        Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Looks like a code task fails -- it can't build the spec.
+            \\\
+        result:
+            \\\
+            I didn't change the spec, because nothing in it is causing this. `piton build` stops before it ever reads `./spec`. The `piton` program itself won't start:
+
+            ```
+            piton: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.39' not found (required by piton)
+            ```
+
+            `/usr/local/bin/piton` was installed today at 16:32 and needs glibc 2.39. This container runs Debian 12, which has glibc 2.36, so the program can't load. Editing the spec can't get past that, and I couldn't run `piton build` to check anything, which is why `.claude/reference` hasn't been rebuilt. The understanding file at `.suspense/history/1791048719-FixSpecBuildFailure.understanding.md` is still empty: I didn't read any spec because no constraint applies.
+
+            To fix it, do one of these:
+            - **Reinstall `piton` with a build that runs on this system:** one built against glibc 2.36 or older, or a fully static or musl build. The installer probably just picked up a newer build today.
+            - **Upgrade the container base image** to one with glibc 2.39 or newer, such as Debian 13 (trixie) or Ubuntu 24.04.
+
+            Once `piton --version` runs, `piton build` should work again. If it then reports real errors in the spec, send this prompt again and I'll fix those.
+
+            **For the coding step:** the spec hasn't changed, so there are no anchors to follow and no code changes to make. The coding step's spec build will keep failing the same way until `piton` is reinstalled or the image is upgraded.
+
+            Separately, the Gmail, Google Calendar and Google Drive connectors need to be authorized in your claude.ai connector settings before they can be used. Nothing in this task needed them.
+            \\\
+
+    sentFrom: FixSpecBuildFailure

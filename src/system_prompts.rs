@@ -305,6 +305,85 @@ pub fn project_system_prompt(
     (!filled.trim().is_empty()).then_some(filled)
 }
 
+/// The project directory `project_dir`, as given and as the file system
+/// knows it, with its separators as written.
+fn project_paths(project_dir: &Path) -> Vec<String> {
+    let mut paths = vec![project_dir.to_string_lossy().into_owned()];
+    if let Ok(canonical) = std::fs::canonicalize(project_dir) {
+        paths.push(canonical.to_string_lossy().into_owned());
+    }
+    paths.retain(|path| !path.is_empty() && path != "/");
+    paths.sort_by_key(|path| std::cmp::Reverse(path.len()));
+    paths.dedup();
+    paths
+}
+
+/// `path` within the project at `project_dir`, as a run finds it wherever it
+/// runs, on the host or in a container: relative to the project directory,
+/// the directory every run works in. One outside the project is left as it
+/// is, as nothing relative to the project reaches it.
+pub fn relative_path(path: &Path, project_dir: &Path) -> String {
+    for root in project_paths(project_dir) {
+        if let Ok(within) = path.strip_prefix(&root) {
+            return within.to_string_lossy().into_owned();
+        }
+    }
+    path.to_string_lossy().into_owned()
+}
+
+/// A location `value` from the project's config, as CODE_LOCATION or
+/// SPEC_LOCATION is filled in with it: `./` and its path from the project
+/// directory, as `./spec`, so it points where the run finds it on the host
+/// or in a container; the project itself is `.`.
+pub fn relative_location(value: &str, project_dir: &Path) -> String {
+    let value = value.trim();
+    let within = if Path::new(value).is_absolute() {
+        relative_path(Path::new(value), project_dir)
+    } else {
+        value.to_string()
+    };
+    if Path::new(&within).is_absolute() {
+        return within;
+    }
+    let within = within.trim_start_matches("./").trim_end_matches('/');
+    if within.is_empty() || within == "." {
+        ".".to_string()
+    } else {
+        format!("./{within}")
+    }
+}
+
+/// `text` with the project directory's absolute path on the host, wherever
+/// it stands as a path of its own, written as `.`, so a path within it is
+/// relative to it, as `./spec`: as the fluency file is written, holding no
+/// path a run in a container can't reach.
+pub fn without_project_path(text: &str, project_dir: &Path) -> String {
+    let mut text = text.to_string();
+    for root in project_paths(project_dir) {
+        let path_char = |c: char| c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | '~' | '+');
+        let mut out = String::with_capacity(text.len());
+        let mut rest = text.as_str();
+        while let Some(at) = rest.find(&root) {
+            let before = rest[..at].chars().next_back();
+            let mut after = rest[at + root.len()..].chars();
+            let (next, then) = (after.next(), after.next());
+            // A full stop ending a sentence ends the path too.
+            let ends = match next {
+                None => true,
+                Some('.') => then.is_none_or(|c| !path_char(c) && c != '/'),
+                Some(c) => !path_char(c),
+            };
+            let whole = before.is_none_or(|c| !path_char(c) && c != '/') && ends;
+            out.push_str(&rest[..at]);
+            out.push_str(if whole { "." } else { &root });
+            rest = &rest[at + root.len()..];
+        }
+        out.push_str(rest);
+        text = out;
+    }
+    text
+}
+
 /// Where a prompt's instructions start and end in its message.
 pub const INSTRUCTIONS_OPEN: &str = "<task-instructions>";
 pub const INSTRUCTIONS_CLOSE: &str = "</task-instructions>";
@@ -674,6 +753,31 @@ mod tests {
         assert_eq!(
             load(SendMode::Ask, &project_dir).unwrap(),
             default_prompt(SendMode::Ask)
+        );
+    }
+
+    /// Every path a placeholder is filled in with is relative to the project
+    /// directory, so it points the same on the host and in a container.
+    #[test]
+    fn placeholder_paths_are_relative_to_the_project() {
+        use super::{relative_location, relative_path, without_project_path};
+        use std::path::Path;
+        let project = Path::new("/home/me/proj");
+        assert_eq!(relative_location("./spec", project), "./spec");
+        assert_eq!(relative_location("spec/", project), "./spec");
+        assert_eq!(relative_location("/home/me/proj/src", project), "./src");
+        assert_eq!(relative_location(".", project), ".");
+        assert_eq!(relative_location("./", project), ".");
+        assert_eq!(
+            relative_path(Path::new("/home/me/proj/.suspense/history/a.md"), project),
+            ".suspense/history/a.md"
+        );
+        assert_eq!(
+            without_project_path(
+                "the `.pi` files under `/home/me/proj/spec`, run in /home/me/proj. Not /home/me/proj-old.",
+                project
+            ),
+            "the `.pi` files under `./spec`, run in .. Not /home/me/proj-old."
         );
     }
 }

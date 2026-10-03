@@ -134,8 +134,10 @@ pub fn protected(mode: SendMode, locations: &Locations) -> Option<(PathBuf, &'st
 /// question.
 pub fn unread(mode: SendMode, locations: &Locations) -> Option<PathBuf> {
     match mode {
-        SendMode::Code | SendMode::Ask => locations.spec.clone(),
-        SendMode::Both | SendMode::Spec | SendMode::Freeform => None,
+        // A question runs in a container that holds the spec's source read
+        // only, for `piton slice`, and is told nothing of keeping off it.
+        SendMode::Code => locations.spec.clone(),
+        SendMode::Ask | SendMode::Both | SendMode::Spec | SendMode::Freeform => None,
     }
 }
 

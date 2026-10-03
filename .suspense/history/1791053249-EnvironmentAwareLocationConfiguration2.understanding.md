@@ -1,0 +1,7 @@
+- [Every placeholder path points where the run finds the file, on the host or in a container](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#templates)
+- [CODE_LOCATION and SPEC_LOCATION are filled as ./ and the location's path, as ./spec](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#templates)
+- [HARNESS_DIRECTORY is the harness's directory, as .claude](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#templates)
+- [PITON_FLUENCY_FILE and UNDERSTANDING_FILE are paths relative to the project directory, as .suspense/fluency.md](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#templates)
+- [No placeholder is ever filled with an absolute path: neither the host's project path nor /workspace](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#templates)
+- [Every run works in the project directory: its own path on the host, /workspace in a container](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#templates)
+- [The fluency file is written with the project's absolute host path replaced by ., paths within it made relative](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#piton-fluency)

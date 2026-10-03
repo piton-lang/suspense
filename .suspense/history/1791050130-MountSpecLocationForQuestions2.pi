@@ -1,0 +1,91 @@
+
+export anchor MountSpecLocationForQuestions2:
+    userPrompt:
+        \\\
+        Questions from the Ask tab mount the spec location, read-only.
+        Add the spec location, read-only, to what a question run can see. A question should be able to run piton slice in its container. Today it can't: the spec source isn't mounted, so piton has nothing to slice. It should still learn what the spec says from the compiled reference or piton slice, never by reading the Piton source directly. Nothing in a question run becomes writable apart from the harness's own volumes.
+        Update every place that says otherwise:
+        ContainerEnvironmentScope, Question entry. It currently says "the code location, the compiled reference, and piton.config.pi, each read only. Never the spec location." Change it to: the code location, the spec location, the compiled reference, and piton.config.pi, each read-only. If one location sits inside the other, the "other location" hiding must not hide either of them from a question.
+        ModeSystemPromptsScope.
+        A question can now see the spec location, so it fills SPEC_LOCATION in. Remove questions from the list of runs that "can't see the spec location". That list stays as is for Code runs in a container.
+        Questions move to the group of runs that can see the spec location. They're told the spec is read from the compiled reference or piton slice, and the spec location is named for what it is, not as somewhere to read the spec from. Unlike the other runs in that group, a question doesn't make edits, so the wording mustn't suggest it can edit the spec.
+        Change the Ask default's rule about the spec location to match: the spec location paragraph now applies to questions.
+        HarnessIntegrationScope. The rule telling a question from the Ask tab not to read the spec location applies only to host runs, and questions always run in a container. Make sure nothing there, or anywhere else, tells a question to stay off the spec location.
+        Leave Spec tasks, Code tasks, and Chain steps unchanged, whether they run in a container or on the host.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code located in ./src.
+
+        Don't edit the spec located in ./spec.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Questions from the Ask tab mount the spec location, read-only.
+            Add the spec location, read-only, to what a question run can see. A question should be able to run piton slice in its container. Today it can't: the spec source isn't mounted, so piton has nothing to slice. It should still learn what the spec says from the compiled reference or piton slice, never by reading the Piton source directly. Nothing in a question run becomes writable apart from the harness's own volumes.
+            Update every place that says otherwise:
+            ContainerEnvironmentScope, Question entry. It currently says "the code location, the compiled reference, and piton.config.pi, each read only. Never the spec location." Change it to: the code location, the spec location, the compiled reference, and piton.config.pi, each read-only. If one location sits inside the other, the "other location" hiding must not hide either of them from a question.
+            ModeSystemPromptsScope.
+            A question can now see the spec location, so it fills SPEC_LOCATION in. Remove questions from the list of runs that "can't see the spec location". That list stays as is for Code runs in a container.
+            Questions move to the group of runs that can see the spec location. They're told the spec is read from the compiled reference or piton slice, and the spec location is named for what it is, not as somewhere to read the spec from. Unlike the other runs in that group, a question doesn't make edits, so the wording mustn't suggest it can edit the spec.
+            Change the Ask default's rule about the spec location to match: the spec location paragraph now applies to questions.
+            HarnessIntegrationScope. The rule telling a question from the Ask tab not to read the spec location applies only to host runs, and questions always run in a container. Make sure nothing there, or anywhere else, tells a question to stay off the spec location.
+            Leave Spec tasks, Code tasks, and Chain steps unchanged, whether they run in a container or on the host.
+            \\\
+        result:
+            \\\
+            I've edited the spec, but I couldn't build or check it. `piton` still fails with the same GLIBC 2.39 error, so the reference under `.claude/reference` is still old and nothing I wrote has been through `piton check`. Run `piton build` once `piton` is reinstalled before the coding step relies on the new anchors.
+
+            **Your request and the source disagree.** You wrote it against the compiled reference, but the `.pi` files were changed at 15:53–15:54, after the last build. In the source, Code tasks always run on the host. There is no "Run code tasks in a container" option and no Code mount. So there was no "Code runs in a container" entry to keep. I followed the source and didn't bring that option back. After this change, no run fills `SPEC_LOCATION` with nothing.
+
+            **One wording compromise.** The shared spec-reading default still says the spec location "is only where edits to the spec go". Rewording it would also change what Spec, Code and Chain runs are told, which you asked me to leave alone. Instead, the Ask default now names the spec location for what it is, and the ModeSystemPromptsScope says nothing told to a question may suggest it can edit the spec. If you'd rather reword the shared line for every mode, that's a quick follow-up.
+
+            ## What changed in the spec
+
+            - **ContainerEnvironmentScope**
+              - **Question mount:** a question now gets the code location, the spec location, the compiled reference and `piton.config.pi`, each read-only, so it can run `piton slice`. The only writable mounts are still the harness's own volume and the questions' sessions folder. If one of the two locations sits inside the other, both are still mounted and neither hides the other.
+              - **"A location that holds another" rule:** it still hides the inner location, unless the run is also given that location, as a question is.
+            - **ModeSystemPromptsScope**
+              - **Placeholders:** a question now fills in both `CODE_LOCATION` and `SPEC_LOCATION`.
+              - **Reading the spec:** a question sees the spec location read-only and is told the spec comes from the compiled reference or `piton slice`, never the Piton source. It is told the spec location is the spec's Piton source, which `piton slice` reads and a question never changes. Nothing told to a question may suggest it can edit the spec.
+              - **Defaults:** the Ask default now has its own paragraph saying the spec location is the spec's Piton source, read through `piton slice`, never edited, and never read directly to learn the spec. That paragraph is always sent with a question. The Code default's rule is unchanged.
+            - **HarnessIntegrationScope, protected locations:** only a host Code task is told not to read the spec location. Questions always run in a container, so they get no rule keeping them off it.
+            - **PromptSendingScope, questions:** a question's container now holds the code, the spec source and the compiled reference, each read-only. It previously said "no spec source".
+
+            Spec tasks, Code tasks and Chain steps are unchanged. The constraints are in `.suspense/history/1791049968-MountSpecLocationForQuestions.understanding.md`.
+
+            ## Anchors the code should follow
+
+            - `ContainerEnvironmentShape.mounts` (`question`, and the "location that holds another" paragraph): mount the spec location read-only for questions, including when one location sits inside the other.
+            - `ModeSystemPromptsShape.templates`: fill in `SPEC_LOCATION` for questions.
+            - `ModeSystemPromptsShape.readingTheSpec` and `.defaults`: add the spec-location paragraph to the Ask default in the app's `.suspense/system-prompts/ask.md`.
+            - `HarnessIntegrationShape.protectedLocations`: never give a question a rule against reading the spec location.
+            - `PromptSendingShape.questions`: the question container's contents.
+
+            **Possibly the breakage you asked about earlier:** the old reference for HarnessIntegrationScope's Failures section shows a stray `##### Words` heading in the middle of a sentence ("in the harness's own / Words / the error its result carries"). That usually means a wrapped prose line starting `words: …` was parsed as a key. I didn't touch it because it's outside this task, and I haven't checked whether it's still in the current source.
+            \\\
+
+    sentFrom: MountSpecLocationForQuestions

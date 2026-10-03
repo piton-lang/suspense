@@ -1,0 +1,4 @@
+- [Every task builds the spec on the host before it is sent; a failed build never stops the task](.claude/reference/scope/spec-build/index.md#ahead-of-work)
+- [The default image holds the harnesses and piton, at the host's versions where it can find them](.claude/reference/scope/container-environment/index.md#image)
+- [A Spec run can run piton build in its container to check its work](.claude/reference/scope/container-environment/index.md#spec-build)
+- [After a Spec task or chain spec step, piton build runs on the host](.claude/reference/scope/spec-build/index.md#after-spec-work)

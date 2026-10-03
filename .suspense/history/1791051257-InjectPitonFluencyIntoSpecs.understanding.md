@@ -1,0 +1,8 @@
+- [Each command the image holds has to run in it: the build ends by running each one's version command, as piton --version](.claude/reference/scope/container-environment/index.md#image)
+- [A build where a command can't run fails, saying which command and what it printed](.claude/reference/scope/container-environment/index.md#image)
+- [An image whose piton can't run is never used](.claude/reference/scope/container-environment/index.md#image)
+- [A Spec run mounts the project's .piton directory, read and write](.claude/reference/scope/container-environment/index.md#spec)
+- [In place of the code location a Spec run gets an empty, writable scratch directory that goes with the container](.claude/reference/scope/container-environment/index.md#spec)
+- [A Spec run never sees the code location](.claude/reference/scope/container-environment/index.md#spec)
+- [The fluency file is mounted read only for a Spec run](.claude/reference/scope/container-environment/index.md#spec)
+- [A piton build in a Spec run's container fails only because of the spec](.claude/reference/scope/container-environment/index.md#spec-build)

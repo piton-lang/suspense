@@ -847,7 +847,8 @@ pub fn seen_locations(mode: Option<SendMode>, project_dir: &Path) -> (bool, bool
     let _ = project_dir;
     match RunKind::of(mode) {
         Some(RunKind::Spec) => (false, true),
-        Some(RunKind::Question) => (true, false),
+        // A question sees both, read only.
+        Some(RunKind::Question) => (true, true),
         None => (true, true),
     }
 }
@@ -856,13 +857,15 @@ pub fn seen_locations(mode: Option<SendMode>, project_dir: &Path) -> (bool, bool
 /// `mode` fills them in: each it can't see, as nothing.
 fn locations_for(mode: Option<SendMode>, project_dir: &Path) -> Result<(String, String)> {
     let (sees_code, sees_spec) = seen_locations(mode, project_dir);
+    // Relative to the project directory, so they point where the run finds
+    // them, on the host or in a container.
     let code = if sees_code {
-        config_value(project_dir, "codeRoot")?
+        system_prompts::relative_location(&config_value(project_dir, "codeRoot")?, project_dir)
     } else {
         String::new()
     };
     let spec = if sees_spec {
-        config_value(project_dir, "root")?
+        system_prompts::relative_location(&config_value(project_dir, "root")?, project_dir)
     } else {
         String::new()
     };
@@ -979,6 +982,7 @@ pub fn project_system_prompt_for(
 pub fn mode_of(system_prompt: &str) -> Option<SendMode> {
     [
         ("We're working on the code ", SendMode::Code),
+        ("We're working on the code,", SendMode::Code),
         ("We're working on both ", SendMode::Both),
         ("We're working on the spec ", SendMode::Spec),
         ("We're only asking a question ", SendMode::Ask),
@@ -1552,10 +1556,9 @@ mod tests {
         {
             let given = instructions(mode, &project_dir).unwrap().unwrap();
             // Only the locations its run can see in its container are named:
-            // a Spec or Chain run sees no code, a question no spec source.
+            // a Spec or Chain run sees no code; a question sees both.
             let (code, spec) = match mode {
                 SendMode::Spec | SendMode::Both => ("", "./spec"),
-                SendMode::Ask => ("./src", ""),
                 _ => ("./src", "./spec"),
             };
             assert_eq!(

@@ -1,0 +1,6 @@
+- [Fluency is never part of the system prompt; only work that writes Piton is pointed at it](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#piton-fluency)
+- [Spec and Chain instructions say to read the fluency file once before editing any .pi file](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#piton-fluency)
+- [The fluency file is rewritten on every host spec build from `piton agent --print-fluency`](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#piton-fluency)
+- [Every command in the image must run there, or the image build fails and is never used](.claude/reference/scope/container-environment/index.md#image)
+- [A Spec run mounts the .piton directory read-write and a scratch dir in place of the code location](.claude/reference/scope/container-environment/index.md#spec)
+- [piton build in a Spec container fails only because of the spec](.claude/reference/scope/container-environment/index.md#spec-build)
