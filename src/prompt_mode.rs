@@ -281,6 +281,8 @@ struct PromptTask {
     /// it had been sent there, and the batch actions leave it out. Kept in
     /// its history record.
     marked_done: bool,
+    /// The answer picked on each card its answer asked back, by the card.
+    picked: std::collections::BTreeMap<String, String>,
     /// The conversation its run was in, once the harness has said.
     session: Option<SharedString>,
     /// In a git repository, the files that changed while it ran, once its
@@ -570,6 +572,7 @@ impl PromptTask {
             cancel: None,
             given: None,
             marked_done: false,
+            picked: Default::default(),
             session: None,
             changed: None,
             changed_open: false,
@@ -619,6 +622,11 @@ impl PromptTask {
             .record
             .as_ref()
             .is_some_and(|record| record.marked_done);
+        task.picked = saved
+            .record
+            .as_ref()
+            .map(|record| record.picked.clone())
+            .unwrap_or_default();
         let Some(record) = saved.record.filter(|record| !record.holds_only_the_mark()) else {
             task.reply.stop();
             task.status = TaskStatus::Unrecorded;
@@ -1934,6 +1942,11 @@ impl Drop for AskLog {
         };
         let mut record = std::mem::take(&mut self.record);
         record.cancelled |= self.stopped.load(Ordering::SeqCst);
+        // Picked on its cards meanwhile, those are kept too.
+        let picked = prompt_history::picked_in(&file);
+        for (card, answer) in picked {
+            record.picked.entry(card).or_insert(answer);
+        }
         // Off the UI thread: a long run's output can be large.
         std::thread::spawn(move || prompt_history::save_record(&file, &record).ok());
     }
@@ -2889,6 +2902,9 @@ pub struct PromptMode {
     ask_split_share: f32,
     /// The chat input's Ask tab is selected.
     on_ask_tab: bool,
+    /// When each prompt card's Send to prompt was last pressed, by the card,
+    /// so it reads "Sent to prompt" a while after.
+    sent_to_prompt: HashMap<String, Instant>,
     /// The mode of the chat input's selected tab, whose conversations its
     /// context figure and New conversation are for.
     selected_mode: SendMode,
@@ -3064,6 +3080,7 @@ impl PromptMode {
             ask_new_pending: false,
             ask_split_share: ASK_SPLIT_SHARE,
             on_ask_tab: false,
+            sent_to_prompt: HashMap::new(),
             selected_mode: SendMode::Both,
             ask_session: None,
             ask_session_epoch: 0,
@@ -13924,6 +13941,44 @@ mod tests {
     /// first question of each conversation. New conversation puts one in at
     /// the bottom at once, only one however often it is pressed, and the next
     /// question asked begins that conversation.
+    /// What an answer hands back is shown as cards in the Ask conversation,
+    /// never as code blocks: a prompt card with Copy and Send to prompt, and
+    /// a question card with a button per answer.
+    #[gpui_kit::test]
+    async fn an_answers_blocks_show_as_cards(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-ask-cards-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        frames(handle, cx);
+        prompt_mode.update(cx, |this, cx| {
+            this.on_ask_tab = true;
+            let id = this.push_ask("What next?".into(), cx);
+            answer(
+                this,
+                id,
+                "Send this:\n\n```suspense-prompt code\nAdd a Save button.\n```\n\n```suspense-question\nWhich colour?\n- Red\n- Blue\n```\n",
+                cx,
+            );
+        });
+        frames(handle, cx);
+        for id in [
+            "prompt-card-0:1",
+            "prompt-card-copy-0:1",
+            "prompt-card-send-0:1",
+            "question-card-0:2",
+            "question-card-answer-0:2-0",
+            "question-card-answer-0:2-1",
+        ] {
+            assert!(
+                bounds_of(handle, gpui_kit::SharedString::from(id), cx).is_some(),
+                "{id} isn't shown"
+            );
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     #[gpui_kit::test]
     async fn the_ask_conversation_reads_as_a_chat_marking_each_new_conversation(
         cx: &mut TestAppContext,
@@ -17959,6 +18014,94 @@ mod tests {
         finish(b, cx);
         finish(a, cx);
         assert_eq!(latest(cx), Some(a));
+    }
+
+    /// An answer's question card, once picked, asks the question quoted and
+    /// the answer picked as the next question, and keeps the pick, so the
+    /// card is answered once; a prompt card's Send to prompt fills the chat
+    /// input in its mode's tab, sending nothing.
+    #[gpui_kit::test]
+    async fn an_answers_cards_ask_back_and_hand_on_prompts(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        let dir = std::env::temp_dir().join(format!("suspense-cards-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // Nothing is ever really run.
+        crate::harness::use_program_for_test(Some(PathBuf::from("/bin/true")));
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        let id = prompt_mode.update(cx, |this, cx| {
+            let id = this.start_test_question("Which?", cx);
+            this.update_ask(
+                id,
+                |ask| {
+                    ask.apply(HarnessEvent::TextDelta(
+                        "```suspense-question\nWhich colour?\n- Red\n- Blue\n```\n".into(),
+                    ))
+                },
+                cx,
+            );
+            id
+        });
+        let key = super::ask_pane::QuestionKey::Ask(id);
+        let asked = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| {
+                this.asks
+                    .iter()
+                    .map(|ask| ask.task.text.to_string())
+                    .collect::<Vec<_>>()
+            })
+        };
+        let before = asked(cx).len();
+        for answer in ["Blue", "Red"] {
+            cx.update_window(handle, |_, window, cx| {
+                prompt_mode.update(cx, |this, cx| {
+                    this.pick_answer(
+                        key,
+                        "0:0".into(),
+                        "Which colour?",
+                        answer.into(),
+                        window,
+                        cx,
+                    )
+                })
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+        let asked = asked(cx);
+        assert_eq!(asked.len(), before + 1, "asked once: {asked:?}");
+        assert!(
+            asked.contains(&"> Which colour?\n\nBlue".to_string()),
+            "{asked:?}"
+        );
+        prompt_mode.read_with(cx, |this, _| {
+            let task = this.question(key).unwrap();
+            assert_eq!(task.picked.get("0:0").map(String::as_str), Some("Blue"));
+        });
+
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.send_card_prompt(
+                    "1:0".into(),
+                    "Fix it.".into(),
+                    Some(SendMode::Spec),
+                    window,
+                    cx,
+                )
+            })
+        })
+        .unwrap();
+        cx.run_until_parked();
+        prompt_mode.read_with(cx, |this, cx| {
+            let input = this.chat_input.read(cx);
+            assert_eq!(input.value(cx).as_ref(), "Fix it.");
+            assert_eq!(input.mode(), SendMode::Spec);
+            assert!(this.sent_to_prompt("1:0"));
+        });
+        crate::harness::use_program_for_test(None);
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// The latest task's header offers Cancel only while the task is under

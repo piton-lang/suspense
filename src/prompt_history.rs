@@ -63,6 +63,11 @@ pub struct RunRecord {
     /// this was kept load as not marked.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub marked_done: bool,
+    /// The answer picked on each question card its answer asked back, by the
+    /// card's place in the answer, as the AskConversationScope says, so a
+    /// card answered stays answered.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub picked: std::collections::BTreeMap<String, String>,
     /// In a git repository, the tree the working tree was snapshotted as
     /// when the harness started the task, pinned under
     /// `refs/suspense/<task>/before`.
@@ -189,11 +194,46 @@ pub fn save_marked_done(prompt_file: &Path, marked_done: bool) -> Result<()> {
     save_record(prompt_file, &record)
 }
 
+/// Keeps, in the record beside the question saved as `prompt_file`, that
+/// `answer` was picked on its card at `card`, the rest kept as it is.
+pub fn save_picked(prompt_file: &Path, card: &str, answer: &str) -> Result<()> {
+    let file = record_path(prompt_file);
+    let mut record: RunRecord = match fs::read_to_string(&file) {
+        Ok(json) => serde_json::from_str(&json)
+            .with_context(|| format!("could not read {}", file.display()))?,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => RunRecord::default(),
+        Err(err) => {
+            return Err(err).with_context(|| format!("could not read {}", file.display()));
+        }
+    };
+    record.picked.insert(card.to_string(), answer.to_string());
+    save_record(prompt_file, &record)
+}
+
+/// The answers picked on the question saved as `prompt_file`, as its record
+/// keeps them now.
+pub fn picked_in(prompt_file: &Path) -> std::collections::BTreeMap<String, String> {
+    fs::read_to_string(record_path(prompt_file))
+        .ok()
+        .and_then(|json| serde_json::from_str::<RunRecord>(&json).ok())
+        .map(|record| record.picked)
+        .unwrap_or_default()
+}
+
+/// The saved question whose hidden anchor is `name`, if it was saved.
+pub fn ask_file(project_dir: &Path, name: &str) -> Option<PathBuf> {
+    saved_file(&hidden_anchor::asks_dir(project_dir), name)
+}
+
 /// The history file of the task whose hidden anchor is `name`, if it was
 /// saved: named by the second it was sent and the anchor's name.
 pub fn history_file(project_dir: &Path, name: &str) -> Option<PathBuf> {
+    saved_file(&hidden_anchor::history_dir(project_dir), name)
+}
+
+fn saved_file(dir: &Path, name: &str) -> Option<PathBuf> {
     let suffix = format!("-{name}.pi");
-    fs::read_dir(hidden_anchor::history_dir(project_dir))
+    fs::read_dir(dir)
         .ok()?
         .filter_map(|entry| Some(entry.ok()?.path()))
         .find(|path| {

@@ -699,6 +699,9 @@ pub struct ChatInput {
     preview_scroll: ScrollHandle,
     /// The queued prompt being edited, while one is.
     editing: Option<Editing>,
+    /// What was being written when a prompt from an answer's card was put
+    /// in its place, to come back once that prompt is sent or cleared.
+    set_aside_text: Option<String>,
     /// Whether the Slice toggle is on: prompts are sent with the `piton
     /// slice` of each spec they reference rather than links to them.
     slice: bool,
@@ -780,6 +783,14 @@ impl ChatInput {
                 window,
                 |this, editor, event: &InputEvent, window, cx| {
                     if matches!(event, InputEvent::Change) {
+                        // A prompt from an answer's card cleared away, what was
+                        // set aside for it comes back.
+                        if editor.read(cx).value().is_empty()
+                            && let Some(text) = this.set_aside_text.take()
+                        {
+                            let tab = this.selected_tab;
+                            this.put_back(text, tab, window, cx);
+                        }
                         // An edit may be an accepted completion, whose import the
                         // hidden anchor then takes on.
                         if let Some(lsp) = &this.lsp {
@@ -816,6 +827,7 @@ impl ChatInput {
             preview_slices_open: false,
             preview_scroll: ScrollHandle::new(),
             editing: None,
+            set_aside_text: None,
             slice: false,
             post_build_update: false,
             usage: UsageReport::default(),
@@ -1823,6 +1835,43 @@ impl ChatInput {
             queue: how == Sent::Queued,
             to_task: how == Sent::ToTask,
         });
+        // A prompt from an answer's card sent, what was set aside for it
+        // comes back.
+        if let Some(text) = self.set_aside_text.take() {
+            let tab = self.selected_tab;
+            self.put_back(text, tab, window, cx);
+        }
+    }
+
+    /// Puts `text`, a prompt an answer suggested, in the input, in `mode`'s
+    /// tab, focused with the cursor at its end, sending nothing. What was
+    /// being written is set aside, to come back once this prompt is sent or
+    /// cleared; what is attached stays attached.
+    pub(crate) fn put_prompt(
+        &mut self,
+        text: String,
+        mode: SendMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.cancel_editing(window, cx);
+        self.close_preview(window, cx);
+        let current = self.editor.read(cx).value().to_string();
+        if !current.is_empty() && self.set_aside_text.is_none() {
+            self.set_aside_text = Some(current);
+        }
+        let tab = TABS
+            .iter()
+            .position(|tab| *tab == mode)
+            .unwrap_or(self.selected_tab);
+        self.put_back(text, tab, window, cx);
+        cx.notify();
+    }
+
+    /// What was set aside for a prompt from an answer's card, while it is.
+    #[cfg(test)]
+    pub fn set_aside_text(&self) -> Option<&str> {
+        self.set_aside_text.as_deref()
     }
 
     /// Selects a clicked tab and puts focus back in the input.
@@ -2921,6 +2970,64 @@ mod tests {
     /// To the right of the tabs, filling the bar up to the context and New
     /// conversation at its far right, a line of help says what the selected tab is
     /// for, and changes with it.
+    /// A prompt from an answer's card is put in the input, in its mode's tab,
+    /// sending nothing; what was being written is set aside, and comes back
+    /// once that prompt is sent.
+    #[gpui_kit::test]
+    async fn a_cards_prompt_sets_aside_what_was_written(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            super::bind_keys(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut chat_input = None;
+        let window = cx.add_window(|window, cx| {
+            let input = cx.new(|cx| ChatInput::new(window, cx));
+            chat_input = Some(input.clone());
+            Root::new(input, window, cx)
+        });
+        let chat_input = chat_input.unwrap();
+        let handle: gpui_kit::AnyWindowHandle = window.into();
+        let submitted = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        cx.update(|cx| {
+            let submitted = submitted.clone();
+            cx.subscribe(&chat_input, move |_, submit: &super::Submit, _| {
+                submitted
+                    .borrow_mut()
+                    .push((submit.text.clone(), submit.mode))
+            })
+            .detach();
+        });
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| {
+                input.set_text_for_test("my draft", window, cx);
+                input.put_prompt("Add a Save button.".into(), SendMode::Code, window, cx);
+            })
+        })
+        .unwrap();
+        cx.run_until_parked();
+        chat_input.read_with(cx, |input, cx| {
+            assert_eq!(input.value(cx).as_ref(), "Add a Save button.");
+            assert_eq!(input.mode(), SendMode::Code);
+            assert_eq!(input.set_aside_text(), Some("my draft"));
+        });
+        assert!(submitted.borrow().is_empty(), "the card's prompt was sent");
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| input.send(super::Sent::AsEver, window, cx))
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(
+            submitted.borrow().as_slice(),
+            [("Add a Save button.".to_string(), SendMode::Code)]
+        );
+        chat_input.read_with(cx, |input, cx| {
+            assert_eq!(input.value(cx).as_ref(), "my draft");
+            assert_eq!(input.set_aside_text(), None);
+        });
+    }
+
     #[gpui_kit::test]
     async fn help_beside_the_tabs_says_what_the_tab_is_for(cx: &mut TestAppContext) {
         cx.update(|cx| {
@@ -3540,7 +3647,7 @@ mod tests {
                         .borrow_mut()
                         .push((preview.id, preview.text.clone(), preview.mode))
                 }),
-                cx.subscribe(&chat_input, move |_, submit: &Submit, _| {
+                cx.subscribe(&chat_input, move |_, submit: &super::Submit, _| {
                     submitted.borrow_mut().push(submit.text.clone())
                 }),
             )
@@ -3682,7 +3789,7 @@ mod tests {
         let _subscriptions = cx.update(|cx| {
             let (submitted, edits) = (submitted.clone(), edits.clone());
             (
-                cx.subscribe(&chat_input, move |_, submit: &Submit, _| {
+                cx.subscribe(&chat_input, move |_, submit: &super::Submit, _| {
                     submitted
                         .borrow_mut()
                         .push((submit.text.clone(), submit.mode, submit.queue))
@@ -3831,7 +3938,7 @@ mod tests {
         let submitted = Rc::new(std::cell::RefCell::new(Vec::new()));
         let _subscription = cx.update(|cx| {
             let submitted = submitted.clone();
-            cx.subscribe(&chat_input, move |_, submit: &Submit, _| {
+            cx.subscribe(&chat_input, move |_, submit: &super::Submit, _| {
                 submitted.borrow_mut().push((
                     submit.text.clone(),
                     submit.attached_text.clone(),

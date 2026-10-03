@@ -286,7 +286,88 @@ pub(super) fn now_secs() -> u64 {
         .map_or(0, |since| since.as_secs())
 }
 
+/// How long Send to prompt reads "Sent to prompt" after it is pressed.
+const SENT_TO_PROMPT_FOR: Duration = Duration::from_secs(2);
+
 impl PromptMode {
+    /// Whether the prompt card `card`'s Send to prompt was pressed just now.
+    pub(super) fn sent_to_prompt(&self, card: &str) -> bool {
+        self.sent_to_prompt
+            .get(card)
+            .is_some_and(|at| at.elapsed() < SENT_TO_PROMPT_FOR)
+    }
+
+    /// Puts the prompt a card holds in the chat input, in `mode`'s tab, or
+    /// Chain's for a card of no known mode, sending nothing, as the
+    /// AskConversationScope's suggested prompts say.
+    pub(super) fn send_card_prompt(
+        &mut self,
+        card: String,
+        text: String,
+        mode: Option<SendMode>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let mode = mode.unwrap_or(SendMode::Both);
+        self.chat_input
+            .update(cx, |input, cx| input.put_prompt(text, mode, window, cx));
+        self.sent_to_prompt.insert(card, Instant::now());
+        // It reads as sent for a while, then as before.
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(SENT_TO_PROMPT_FOR).await;
+            this.update(cx, |_, cx| cx.notify()).ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Asks `answer`, picked on the card `card` asking `question` in the
+    /// answer of the question `key`, as the next question, carrying on its
+    /// conversation; the pick is kept with that question, so the card is
+    /// answered once.
+    pub(super) fn pick_answer(
+        &mut self,
+        key: QuestionKey,
+        card: String,
+        question: &str,
+        answer: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(task) = self.question_mut(key) else {
+            return;
+        };
+        if task.picked.contains_key(&card) {
+            return;
+        }
+        task.picked.insert(card.clone(), answer.clone());
+        let name = task.name.to_string();
+        if let Some(project_dir) = self.project_dir.clone() {
+            let picked = answer.clone();
+            cx.background_spawn(async move {
+                if let Some(file) = prompt_history::ask_file(&project_dir, &name)
+                    && let Err(err) = prompt_history::save_picked(&file, &card, &picked)
+                {
+                    eprintln!("could not keep the answer picked: {err:#}");
+                }
+            })
+            .detach();
+        }
+        let text = crate::answer_blocks::picked_question(question, &answer);
+        self.send_as(
+            text,
+            SendMode::Ask,
+            Attached::default(),
+            false,
+            None,
+            None,
+            false,
+            None,
+            window,
+            cx,
+        );
+        cx.notify();
+    }
     /// Every question of the project, oldest first: those saved with it, then
     /// those asked since.
     fn question_keys(&self) -> Vec<QuestionKey> {
@@ -346,7 +427,7 @@ impl PromptMode {
         }
     }
 
-    fn question(&self, key: QuestionKey) -> Option<&PromptTask> {
+    pub(super) fn question(&self, key: QuestionKey) -> Option<&PromptTask> {
         match key {
             QuestionKey::Answer(ix) => self.answers.get(ix),
             QuestionKey::Ask(id) => self
@@ -855,22 +936,30 @@ impl PromptMode {
 
     /// A piece of a question's answer, row `ix` of its reply, as markdown in
     /// the body's text colour, a paragraph after the one before it.
+    /// With `cards`, the prompt mode whose Ask conversation it is, the
+    /// prompts and questions the answer hands back are shown as cards.
     fn answer_piece(
         key: QuestionKey,
         ix: usize,
         piece: Piece,
         first: bool,
         open: &OpenFile,
+        cards: Option<WeakEntity<PromptMode>>,
         cx: &mut App,
     ) -> AnyElement {
         let foreground = cx.theme().foreground;
         let text = match piece {
-            Piece::Text(markdown, shown) => Some(task_table::prepared_markdown(
-                markdown,
-                shown,
-                Some(open),
-                cx,
-            )),
+            Piece::Text(markdown, shown)
+                if cards.is_some() && crate::answer_blocks::has_blocks(&shown) =>
+            {
+                let cards = cards.unwrap();
+                Some(Self::answer_with_cards(
+                    key, ix, markdown, &shown, open, cards, cx,
+                ))
+            }
+            Piece::Text(markdown, shown) => Some(
+                task_table::prepared_markdown(markdown, shown, Some(open), cx).into_any_element(),
+            ),
             Piece::Tool(..) | Piece::Notice(..) => None,
         };
         let piece = div()
@@ -885,6 +974,82 @@ impl PromptMode {
             .px_4()
             .when(!first, |row| row.pt_2())
             .child(gpui_kit::TestSupportExt::test_support(piece))
+            .into_any_element()
+    }
+
+    /// Reply text holding blocks the answer hands back: its markdown as ever,
+    /// and each block, where it stands, as a card, as the
+    /// AskConversationScope's suggested prompts and asking back say.
+    fn answer_with_cards(
+        key: QuestionKey,
+        ix: usize,
+        markdown: MarkdownKey,
+        shown: &str,
+        open: &OpenFile,
+        this: WeakEntity<PromptMode>,
+        cx: &mut App,
+    ) -> AnyElement {
+        use crate::answer_blocks::{AnswerPart, split};
+        let (done, picked) = this
+            .upgrade()
+            .and_then(|this| {
+                let this = this.read(cx);
+                let task = this.question(key)?;
+                Some((task.reply.is_done(), task.picked.clone()))
+            })
+            .unwrap_or_default();
+        let parts = split(shown);
+        let mut children = Vec::new();
+        for (part_ix, part) in parts.into_iter().enumerate() {
+            // Each card is known by its row and place in it.
+            let card = format!("{ix}:{part_ix}");
+            let element = match part {
+                AnswerPart::Markdown(text) => {
+                    let key = MarkdownKey {
+                        kind: MarkdownKind::AnswerPart,
+                        table: markdown.table,
+                        row: markdown.row * CARD_PARTS + part_ix,
+                    };
+                    task_table::prepared_markdown(key, text.into(), Some(open), cx)
+                        .into_any_element()
+                }
+                AnswerPart::Prompt { mode, text, closed } => {
+                    // Usable once its block has closed, or the answer is over.
+                    let ready = closed || done;
+                    prompt_card(&this, &card, mode, text, ready, cx)
+                }
+                AnswerPart::Question {
+                    question,
+                    answers,
+                    closed,
+                } => {
+                    let ready = closed || done;
+                    let chosen = picked.get(&card).cloned();
+                    let question_key = MarkdownKey {
+                        kind: MarkdownKind::AnswerPart,
+                        table: markdown.table,
+                        row: markdown.row * CARD_PARTS + part_ix,
+                    };
+                    question_card(
+                        &this,
+                        key,
+                        &card,
+                        question_key,
+                        question,
+                        answers,
+                        ready,
+                        chosen,
+                        open,
+                        cx,
+                    )
+                }
+            };
+            children.push(element);
+        }
+        v_flex()
+            .w_full()
+            .gap_2()
+            .children(children)
             .into_any_element()
     }
 
@@ -1160,7 +1325,10 @@ impl PromptMode {
                     let first = layout.answers.get(q).is_some_and(|answer| {
                         (0..answer.segments.len()).any(|seg| answer.first_answer(seg) == Some(row))
                     });
-                    Self::answer_piece(key, row, piece, first, &open_file, cx)
+                    // In the Ask conversation, what the answer hands back is
+                    // shown as cards.
+                    let cards = Some(entity.downgrade());
+                    Self::answer_piece(key, row, piece, first, &open_file, cards, cx)
                 }
                 PaneRow::End(q) => {
                     let Some((key, _)) = question(q, cx) else {
@@ -1267,7 +1435,7 @@ impl PromptMode {
                     let first =
                         (0..answer.segments.len()).any(|seg| answer.first_answer(seg) == Some(row));
                     Self::piece_of(key, &task.reply, row, cx)
-                        .map(|piece| Self::answer_piece(key, row, piece, first, &open, cx))
+                        .map(|piece| Self::answer_piece(key, row, piece, first, &open, None, cx))
                 }
                 _ => None,
             };
@@ -1307,4 +1475,173 @@ impl PromptMode {
             .clamp(MIN_ASK_SPLIT_SHARE, MAX_ASK_SPLIT_SHARE);
         cx.notify();
     }
+}
+
+/// How many parts a row's text can be split into, each kept apart by its
+/// markdown's key.
+const CARD_PARTS: usize = 1024;
+
+/// How rounded a card's corners are.
+const CARD_RADIUS: Pixels = px(6.);
+
+/// How much of its mode's colour tints a card.
+const CARD_TINT: f32 = 0.08;
+
+/// The icon a mode's prompt card is headed by.
+fn mode_icon(mode: Option<SendMode>) -> IconName {
+    match mode {
+        Some(SendMode::Code) => IconName::Code,
+        Some(SendMode::Both) => IconName::Link,
+        Some(SendMode::Spec) => IconName::BookOpen,
+        Some(SendMode::Ask) => IconName::MessageCircleQuestionMark,
+        Some(SendMode::Freeform) => IconName::Sparkles,
+        None => IconName::MessageCircleQuestionMark,
+    }
+}
+
+/// A card's box: the theme's raised surface, faintly tinted `color`,
+/// rounded, across the answer's width.
+fn card_box(id: impl Into<ElementId>, color: Hsla, cx: &App) -> Stateful<Div> {
+    let raised = crate::theme::color(crate::theme::palette(cx).raised);
+    v_flex()
+        .id(id)
+        .w_full()
+        .p_3()
+        .gap_2()
+        .rounded(CARD_RADIUS)
+        .bg(raised.blend(Hsla {
+            a: CARD_TINT,
+            ..color
+        }))
+}
+
+/// A prompt an answer hands back, as a card: headed by its mode, its text as
+/// written, and Copy and Send to prompt, usable once `ready`.
+fn prompt_card(
+    this: &WeakEntity<PromptMode>,
+    card: &str,
+    mode: Option<SendMode>,
+    text: String,
+    ready: bool,
+    cx: &mut App,
+) -> AnyElement {
+    let color = chat_input::mode_color(mode.unwrap_or(SendMode::Ask), cx);
+    let title = match mode {
+        Some(SendMode::Both) => "Chain prompt".to_string(),
+        Some(mode) => format!("{} prompt", mode.label()),
+        None => "Prompt".to_string(),
+    };
+    let sent = this
+        .upgrade()
+        .is_some_and(|this| this.read(cx).sent_to_prompt(card));
+    let id = SharedString::from(format!("prompt-card-{card}"));
+    let copy = {
+        let text = text.clone();
+        Button::new(SharedString::from(format!("prompt-card-copy-{card}")))
+            .ghost()
+            .small()
+            .icon(IconName::Copy)
+            .label("Copy")
+            .disabled(!ready)
+            .on_click(move |_, _, cx| {
+                cx.write_to_clipboard(ClipboardItem::new_string(text.clone()))
+            })
+    };
+    let send = {
+        let (this, card, text) = (this.clone(), card.to_string(), text.clone());
+        Button::new(SharedString::from(format!("prompt-card-send-{card}")))
+            .small()
+            .icon(if sent {
+                IconName::Check
+            } else {
+                IconName::ArrowRight
+            })
+            .label(if sent {
+                "Sent to prompt"
+            } else {
+                "Send to prompt"
+            })
+            .text_color(color)
+            .disabled(!ready)
+            .on_click(move |_, window, cx| {
+                this.update(cx, |this, cx| {
+                    this.send_card_prompt(card.clone(), text.clone(), mode, window, cx)
+                })
+                .ok();
+            })
+    };
+    let card_box = card_box(id, color, cx)
+        .child(
+            h_flex()
+                .gap_1p5()
+                .text_xs()
+                .font_medium()
+                .text_color(color)
+                .child(Icon::new(mode_icon(mode)).xsmall())
+                .child(title),
+        )
+        .child(
+            div()
+                .w_full()
+                .min_w_0()
+                .text_color(cx.theme().foreground)
+                .whitespace_normal()
+                .child(text),
+        )
+        .child(
+            h_flex()
+                .w_full()
+                .justify_end()
+                .gap_1()
+                .child(copy)
+                .child(send),
+        );
+    gpui_kit::TestSupportExt::test_support(card_box).into_any_element()
+}
+
+/// A question an answer asks back, as a card: the question as markdown, and
+/// a button per answer offered, the one picked, if any, shown chosen.
+#[allow(clippy::too_many_arguments)]
+fn question_card(
+    this: &WeakEntity<PromptMode>,
+    key: QuestionKey,
+    card: &str,
+    markdown: MarkdownKey,
+    question: String,
+    answers: Vec<String>,
+    ready: bool,
+    chosen: Option<String>,
+    open: &OpenFile,
+    cx: &mut App,
+) -> AnyElement {
+    let color = chat_input::mode_color(SendMode::Ask, cx);
+    let muted = cx.theme().muted_foreground;
+    let id = SharedString::from(format!("question-card-{card}"));
+    let text = task_table::prepared_markdown(markdown, question.clone().into(), Some(open), cx);
+    let buttons = answers.into_iter().enumerate().map(|(ix, answer)| {
+        let picked = chosen.as_deref() == Some(answer.as_str());
+        let (this, card, question) = (this.clone(), card.to_string(), question.clone());
+        let label = answer.clone();
+        Button::new(SharedString::from(format!(
+            "question-card-answer-{card}-{ix}"
+        )))
+        .small()
+        .label(label)
+        .selected(picked)
+        .when(picked, |button| button.text_color(color))
+        .when(chosen.is_some() && !picked, |button| {
+            button.text_color(muted)
+        })
+        .disabled(!ready || chosen.is_some())
+        .on_click(move |_, window, cx| {
+            this.update(cx, |this, cx| {
+                this.pick_answer(key, card.clone(), &question, answer.clone(), window, cx)
+            })
+            .ok();
+        })
+    });
+    let card_box = card_box(id, color, cx)
+        .child(div().w_full().min_w_0().child(text))
+        .child(h_flex().flex_wrap().gap_1().children(buttons));
+    gpui_kit::TestSupportExt::test_support(card_box).into_any_element()
 }

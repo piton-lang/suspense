@@ -1,0 +1,77 @@
+
+export anchor AgentPromptResponseFormat2:
+    userPrompt:
+        \\\
+        So in particular in the ask mode, we need a way for the agent to send back questions and prompts in a format Suspense can interpret and present in the UI in an appropriate way.  For example, Ask sends a prompt, there's a send-to-prompt button.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            So in particular in the ask mode, we need a way for the agent to send back questions and prompts in a format Suspense can interpret and present in the UI in an appropriate way.  For example, Ask sends a prompt, there's a send-to-prompt button.
+            \\\
+        result:
+            \\\
+            I've specced a way for Ask answers to hand back prompts and questions that Suspense shows as cards. `piton check` reports no problems and `piton build` succeeds inside the container now. The `.piton` and code-location mounts from earlier are live, so I checked the result in the refreshed reference.
+
+            **The format:** the agent writes fenced code blocks with a special info string. Markdown already handles fences, so this streams well, and older answers still read sensibly.
+            - **Prompt:** ```` ```suspense-prompt chain ```` holding the prompt text. The mode can be `code`, `chain`, `spec`, `ask` or `freeform`.
+            - **Question back to you:** ```` ```suspense-question ```` with the question on its first lines, then optional answers, one per `- ` line.
+
+            **Prompt card:**
+            - It sits in the answer where the block was. It's a raised box tinted the mode's colour, headed with the mode's icon and a name such as "Code prompt", with the text shown as written.
+            - It has two buttons, **Copy** and **Send to prompt**.
+            - Send to prompt fills the chat input, selects the mode's tab and focuses the input with the cursor at the end. It never sends; you read, edit and send it yourself.
+            - Anything you'd already typed is set aside and comes back once that prompt is sent or cleared. Attachments stay. The button reads "Sent to prompt" with a check for 2 seconds.
+            - A missing or unknown mode gives a plain "Prompt" card in Ask's colour, and Send to prompt selects Chain.
+
+            **Question card:**
+            - It's tinted Ask's colour, with the question rendered as markdown and one button per offered answer.
+            - Clicking an answer asks it straight away as the next question, in the same conversation. The question is quoted, followed by your pick.
+            - A card can be answered only once. Your pick is highlighted, the other buttons are disabled, and the pick is saved with the question so it survives reopening the project.
+            - A card with no answers has no buttons; you just reply as normal.
+
+            **In both:** a block that's still streaming shows as a card with its buttons disabled. A block left unclosed when the answer finishes still becomes a card.
+
+            Things I decided that you may want to change:
+            - I limited this to Ask answers; task output doesn't get cards.
+            - Picking an answer sends it immediately rather than filling the input first.
+            - Send to prompt sets your existing text aside rather than appending the card's text to it.
+
+            `mode-system-prompts/index.pi` fails `piton format --check`. That's probably the long placeholder list lines, which were already there before this change. I didn't reformat the file.
+
+            ## What changed in the spec, and the anchors the code should follow
+
+            - **`AskConversationShape.suggestedPrompts` (new):** detect `suspense-prompt [mode]` fenced blocks in the answer's markdown and render them as prompt cards with Copy and Send to prompt, behaving as described above. Send to prompt goes through `ChatInputScope`: set the text, select the tab, focus the input, set aside existing text as when editing a queued prompt, and keep attachments.
+            - **`AskConversationShape.askingBack` (new):** detect `suspense-question` blocks and render them as question cards with one button per `- ` line. A click asks the question-quote plus the pick as the next question in the same conversation, the way `PromptSendingScope` sends any question. Save the pick with the question whose answer holds the card. A card can be answered once.
+            - **`ModeSystemPromptsShape.defaults`:** the Ask default gains the exact paragraph explaining both block formats. Add it to the app's `.suspense/system-prompts/ask.md`. Projects that already saved their own prompts keep theirs.
+            \\\
+
+    sentFrom: AgentPromptResponseFormat

@@ -277,6 +277,9 @@ pub enum MarkdownKind {
     /// A notice in a task's output, which changes height as it opens and
     /// closes; it holds no markdown, but is told apart the same way.
     Notice,
+    /// A part of an answer's text split around the cards it holds; `row` is
+    /// the reply's row and the part, apart.
+    AnswerPart,
 }
 
 /// The parsed state of every piece of markdown shown, kept by where it's

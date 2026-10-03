@@ -1,5 +1,6 @@
 use /lib
 from /scope/container-environment import ContainerEnvironmentScope
+from /scope/prompt-mode/ask-conversation import AskConversationScope
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/new-project import NewProjectScope
 from /scope/project-data import ProjectDataScope
@@ -248,7 +249,17 @@ shape ModeSystemPromptsShape:
         spec's Piton source, there for `piton slice`, which the question reads
         the spec through, read only and never edited, and never read directly
         to learn what the spec says. Since a question can see the spec
-        location, that paragraph is always sent with it. The Spec and Chain
+        location, that paragraph is always sent with it.
+
+        The Ask default then says, on a paragraph of its own, how an answer
+        hands back prompts and questions in the forms the
+        @{AskConversationScope} shows as cards:
+
+        \\
+        When your answer suggests a prompt for the user to send, write it as a fenced code block whose info string is `suspense-prompt` and the mode it is for, one of `code`, `chain`, `spec`, `ask`, or `freeform`, such as ```` ```suspense-prompt chain ````, holding only the prompt's text, ready to send. When you need the user to answer something before you can go on, write the question as a fenced code block whose info string is `suspense-question`, the question on its first lines and then, if there are answers to pick from, one per line, each starting with `- `. Use these blocks only for prompts and questions meant for the user, never for code or examples.
+        \\
+
+        The Spec and Chain
         defaults never name the code location, and the Code default names the
         spec location only on a paragraph of its own, which goes where the run
         can't see it.

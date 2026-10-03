@@ -4,6 +4,7 @@
 mod activity;
 mod agent;
 mod animations;
+mod answer_blocks;
 mod app;
 mod attached_image;
 mod baked_prompts;
