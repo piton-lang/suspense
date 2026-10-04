@@ -828,12 +828,18 @@ fn blank_for_lsp(line: &str) -> String {
 /// prompt, which the conversation's system prompt gives (see
 /// [`project_system_prompt`]). Spec and Chain, which write Piton, have the
 /// fluency file written first if it never has been (see
-/// [`crate::piton_fluency`]). `${UNDERSTANDING_FILE}` is left as written,
+/// [`crate::piton_fluency`]), and every mode with instructions has the
+/// Suspense fluency file written where it is missing or out of date (see
+/// [`crate::suspense_fluency`]). `${UNDERSTANDING_FILE}` is left as written,
 /// filled in as the prompt is sent. None for a mode with none, as Freeform,
 /// or a template left empty.
 pub fn instructions(mode: SendMode, project_dir: &Path) -> Result<Option<String>> {
     if matches!(mode, SendMode::Spec | SendMode::Both) {
         crate::piton_fluency::ensure(project_dir);
+    }
+    // Freeform sends no instructions, and is never pointed at it.
+    if mode != SendMode::Freeform {
+        crate::suspense_fluency::ensure(project_dir);
     }
     filled_instructions(mode.into(), Some(mode), project_dir)
 }
@@ -945,8 +951,18 @@ fn filled_instructions(
     let fluency_file = crate::piton_fluency::file(project_dir)
         .exists()
         .then(crate::piton_fluency::relative_file);
-    let filled =
-        system_prompts::fill_instructions(&template, &code, &spec, fluency_file.as_deref());
+    let suspense_file = crate::suspense_fluency::file(project_dir)
+        .exists()
+        .then(crate::suspense_fluency::relative_file);
+    let filled = system_prompts::fill_instructions(
+        &template,
+        &code,
+        &spec,
+        system_prompts::Fluency {
+            piton: fluency_file.as_deref(),
+            suspense: suspense_file.as_deref(),
+        },
+    );
     Ok((!filled.trim().is_empty()).then_some(filled))
 }
 
@@ -1548,6 +1564,7 @@ mod tests {
         fs::write(&fluency, "# Fluency\n").unwrap();
         let fluency_file = crate::piton_fluency::relative_file();
         let reading = system_prompts::default_prompt(system_prompts::Prompt::SpecReading);
+        let suspense_file = crate::suspense_fluency::relative_file();
         for mode in SendMode::ALL
             .into_iter()
             .filter(|mode| *mode != SendMode::Freeform)
@@ -1565,8 +1582,16 @@ mod tests {
                     system_prompts::default_prompt(mode),
                     code,
                     spec,
-                    Some(&fluency_file),
+                    system_prompts::Fluency {
+                        piton: Some(&fluency_file),
+                        suspense: Some(&suspense_file),
+                    },
                 )
+            );
+            // Every mode with instructions points at the Suspense fluency.
+            assert!(
+                given.contains(&format!("read {suspense_file} once")),
+                "{mode:?} isn't pointed at the Suspense fluency: {given}"
             );
             if code.is_empty() {
                 assert!(!given.contains("./src"), "{mode:?} names the code: {given}");
@@ -1714,7 +1739,7 @@ mod tests {
             system_prompts::default_prompt(system_prompts::Prompt::CodeToSpec),
             "",
             "./spec",
-            None,
+            system_prompts::Fluency::default(),
         );
         assert!(!handoff.contains("./src"), "{handoff}");
         assert!(handoff.starts_with("This prompt was first sent to change the code"));
@@ -1931,7 +1956,7 @@ mod tests {
             system_prompts::default_prompt(system_prompts::Prompt::CodeToSpec)
         );
         anchor.system_prompt = Some(system_prompts::fill_instructions(
-            &template, "./src", "./spec", None,
+            &template, "./src", "./spec", system_prompts::Fluency::default(),
         ));
         let prompt = format!("Change @{{ApplicationScope}}.\n{TRICKY}");
         let result = format!("Done.\n{TRICKY}");

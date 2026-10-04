@@ -1,0 +1,85 @@
+
+export anchor RequireSuspenseFluencyForPromptModes2:
+    userPrompt:
+        \\\
+        I'm realizing that all the prompt modes except freeform need some level of Suspense fluency, so like when I tell another project's ask to write a chain mode prompt, it should know what that is and how we're supposed to handle questions and prompts in the UI, etc.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            I'm realizing that all the prompt modes except freeform need some level of Suspense fluency, so like when I tell another project's ask to write a chain mode prompt, it should know what that is and how we're supposed to handle questions and prompts in the UI, etc.
+            \\\
+        result:
+            \\\
+            I added a "Suspense fluency" to the spec: a file explaining how Suspense works, which Code, Chain, Spec and Ask prompts are pointed at but Freeform never is. `piton check` reports no problems, `piton build` wrote 79 files, and the new sections appear in the refreshed reference.
+
+            **Existing projects won't get it on their own.** The spec already says a project keeps its saved mode prompts when a default changes. So the project you have in mind will only point its Ask at the fluency once you reset its Ask prompt in Settings, or add the paragraph by hand. New projects get it automatically. If you'd rather it reach existing projects without a reset, the spec could insert the pointer for every non-Freeform mode instead of relying on the saved prompt. Say if you want that.
+
+            ## What changed in the spec
+
+            **1. New `#suspense-fluency` section** in `.claude/reference/scope/prompt-mode/mode-system-prompts/index.md`
+            - **What it is:** a short, harness-facing description of Suspense, the same for every project.
+            - **Where it comes from:** the source is `suspense-fluency.md` in this repo's `.suspense/system-prompts/`, built into the app like the default prompts. A build can't be made without it, and projects can't edit it.
+            - **Where it's written:** to `.suspense/suspense-fluency.md` in each project, before any Code, Chain, Spec or Ask prompt is compiled, whenever the file is missing or out of date. It holds plain text with no placeholders or machine paths.
+            - **What it covers:**
+              - the five modes and what each may change;
+              - the two lanes and the queue, and that questions run straight away;
+              - a Chain prompt's spec step, then its code step;
+              - that Suspense adds the `<task-instructions>` block itself, so a prompt written for a mode is only the user's request;
+              - how to write a good prompt for each mode;
+              - the `suspense-prompt` and `suspense-question` blocks;
+              - the understanding file;
+              - that the user can cancel, resend, send to the other mode, and start a new conversation.
+            - **What it leaves out:** anything specific to one project, and anything a mode's own instructions already say.
+
+            **2. A new placeholder and default paragraph** in the same file
+            - **`SUSPENSE_FLUENCY_FILE`** is added to the placeholders (`#templates`). It is filled in with a relative path, and its paragraph is dropped when the file can't be written.
+            - **Defaults (`#defaults`):** the Code, Chain, Spec and Ask defaults gain a paragraph of their own. It tells the run to read that file once per conversation when the work is about Suspense, or when it is to write a prompt or question for the user. Freeform never mentions it, and the Piton fluency rules are unchanged.
+
+            **3. Supporting changes**
+            - **Containers** (`.claude/reference/scope/container-environment/index.md`, `#spec` and `#question`): Spec runs and questions mount the Suspense fluency file read only.
+            - **Project data** (`.claude/reference/scope/project-data/index.md`, `#contents` and `#machine-only`): `suspense-fluency.md` is listed, and counts as belonging to one machine.
+            - **Modes** (`.claude/reference/scope/prompt-mode/modes/index.md#system-prompts`): every mode but Freeform is pointed at the Suspense fluency.
+            - **Settings window** (`.claude/reference/scope/settings-window/index.md`): the placeholder help now explains `SUSPENSE_FLUENCY_FILE`.
+
+            The constraints are in `.suspense/history/1791125882-RequireSuspenseFluencyForPromptModes.understanding.md`.
+
+            ## Anchors the code should follow
+            - `ModeSystemPromptsScope`: `#suspense-fluency`, `#templates`, `#defaults`. Also write the new default file and update `code.md`, `combined.md`, `spec.md` and `ask.md` in `.suspense/system-prompts`.
+            - `ContainerEnvironmentScope`: `#spec`, `#question`
+            - `ProjectDataScope`: `#contents`, `#machine-only`
+            - `PromptModesScope`: `#system-prompts`
+            - `SettingsWindowScope`: the placeholder description
+
+            The Gmail, Google Calendar and Google Drive connectors still need authorizing in your claude.ai connector settings before they can be used. None of them were needed here.
+            \\\
+
+    sentFrom: RequireSuspenseFluencyForPromptModes

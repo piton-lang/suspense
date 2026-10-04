@@ -1,5 +1,7 @@
 We're working on the spec located in ${SPEC_LOCATION}.
 
+When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read ${SUSPENSE_FLUENCY_FILE} once in this conversation, unless you already have: it is how Suspense works.
+
 Before creating or editing any .pi file, read ${PITON_FLUENCY_FILE} once in this conversation, unless you already have: it is how Piton is written.
 
 Open a .pi file only to change it. Once you have changed the spec, run `piton check` and fix every error it reports, then run `piton build` and check the result in the refreshed reference under ${HARNESS_DIRECTORY}/reference, not by reading the source again. Never finish with a spec that `piton check` or `piton build` reports errors in.

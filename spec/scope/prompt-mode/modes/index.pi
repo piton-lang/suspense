@@ -80,5 +80,7 @@ shape PromptModesShape:
         Each mode but Freeform sends the project's system prompt, the same
         whatever the mode, and instructions of its own, from the
         @{ModeSystemPromptsScope}. Only Spec, and a Chain prompt's first step,
-        which write the spec, are pointed at the Piton fluency. A prompt keeps
+        which write the spec, are pointed at the Piton fluency; every mode but
+        Freeform is pointed at the Suspense fluency, for work about Suspense
+        itself or that writes a prompt or question for the user. A prompt keeps
         the mode it was sent in while it waits in the queue.

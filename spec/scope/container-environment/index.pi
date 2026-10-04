@@ -144,7 +144,8 @@ shape ContainerEnvironmentShape:
             empty, temporary, or copied one, so the manifest a build in the
             container starts from is the host's, and what it writes there is
             the host's next build's, the application creating the directory
-            in the project first where it isn't there; the fluency file, read
+            in the project first where it isn't there; the Suspense fluency file, read
+            only; the fluency file, read
             only;
             piton.config.pi, read only; and the task's understanding file,
             read and write. Never the code location: in its place, an empty
@@ -155,7 +156,8 @@ shape ContainerEnvironmentShape:
         question:
             A question from the Ask tab: the code location, the spec
             location, the compiled reference, and piton.config.pi, each read
-            only, so it can run `piton slice` in its container. Nothing is
+            only, so it can run `piton slice` in its container, and the
+            Suspense fluency file, read only. Nothing is
             writable but the harness's own volume and the questions' sessions
             folder. Where one of the code location and the spec location
             holds the other, both are still mounted, read only, and neither

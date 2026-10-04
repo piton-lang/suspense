@@ -17994,7 +17994,7 @@ mod tests {
                         system_prompts::default_prompt(system_prompts::Prompt::CodeToSpec),
                         "",
                         "./spec",
-                        None,
+                        system_prompts::Fluency::default(),
                     ),
                     asked,
                     Some(result),

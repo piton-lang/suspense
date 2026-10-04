@@ -35,6 +35,7 @@ shape ProjectDataShape:
         - `run.json`: the project's run targets, as the @{RunTargetsScope} says
         - `harness.json`: the last report the harness gave of the skills and agents it has
         - `fluency.md`: the project's Piton fluency, as `piton agent --print-fluency` printed it at the last spec build, generated rather than edited, for the Spec and Chain prompts to point at, as the @{ModeSystemPromptsScope} says
+        - `suspense-fluency.md`: the Suspense fluency, as this application ships it, generated rather than edited, for the Code, Chain, Spec, and Ask prompts to point at, as the @{ModeSystemPromptsScope} says
         - `conversations.json`: which conversation of each lane's tasks, the spec lane's and the code lane's, and of the questions, was last left for a new one, as the @{HarnessIntegrationScope} says, so it isn't carried on again once the project is reopened
         - `sessions/`: the harness's sessions for each conversation run in a container, a folder per conversation, `spec` for the spec lane's and `questions` for the questions', each mounted into that conversation's runs only, as the @{ContainerEnvironmentScope} says, so a conversation carries on across runs, restarts, and moves of the project
         - `Containerfile`: written by hand, when the project has one, built FROM the application's default image to add what the project's runs need, such as its toolchains, as the @{ContainerEnvironmentScope} says
@@ -47,7 +48,9 @@ shape ProjectDataShape:
     machineOnly:
         Some of it belongs to one machine rather than to the project: the
         harness report `.suspense/harness.json`, the fluency
-        `.suspense/fluency.md`, printed by this machine's piton, the queue
+        `.suspense/fluency.md`, printed by this machine's piton, the Suspense fluency
+        `.suspense/suspense-fluency.md`, written by this machine's Suspense,
+        the queue
         `.suspense/queue/`,
         the commit notes `.suspense/commit-notes.json`, the conversations left
         `.suspense/conversations.json`, whose conversations only this machine's

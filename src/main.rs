@@ -79,6 +79,7 @@ mod sidebar;
 mod spec_component_form;
 mod spec_components;
 mod subagents;
+mod suspense_fluency;
 mod system_prompts;
 mod task_snapshot;
 mod task_table;

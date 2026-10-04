@@ -46,6 +46,7 @@ shape ModeSystemPromptsShape:
         - HARNESS_DIRECTORY, the directory of the harness in use
         - SPEC_READING, the spec-reading prompt, injected where it is written
         - PITON_FLUENCY_FILE, the path of the fluency file, from the project directory, as the pitonFluency below says
+        - SUSPENSE_FLUENCY_FILE, the path of the Suspense fluency file, from the project directory, as the suspenseFluency below says
         - UNDERSTANDING_FILE, the path of the task's understanding file
 
         SPEC_READING is filled in first, so the placeholders it holds are
@@ -63,8 +64,8 @@ shape ModeSystemPromptsShape:
         works in, the project directory itself on the host and `/workspace`
         in a container: CODE_LOCATION and SPEC_LOCATION as `./` and the
         location's path, as `./spec`, HARNESS_DIRECTORY as the harness's
-        directory, as `.claude`, and PITON_FLUENCY_FILE and
-        UNDERSTANDING_FILE as their paths, as
+        directory, as `.claude`, and PITON_FLUENCY_FILE,
+        SUSPENSE_FLUENCY_FILE, and UNDERSTANDING_FILE as their paths, as
         `.suspense/fluency.md`. None is ever filled in with an absolute path:
         not the project's path on the host, which a run in a container can't
         reach, and not `/workspace`, which a run on the host has no such
@@ -83,8 +84,8 @@ shape ModeSystemPromptsShape:
         nothing goes with it. A paragraph holding CODE_LOCATION or
         SPEC_LOCATION filled in with nothing goes too, whatever else it says,
         so no prompt names, or tells the harness to keep off, a location its
-        run can't see. A paragraph holding PITON_FLUENCY_FILE, filled
-        in with nothing, goes too, whatever else it says, so a sentence
+        run can't see. A paragraph holding PITON_FLUENCY_FILE or
+        SUSPENSE_FLUENCY_FILE, filled in with nothing, goes too, whatever else it says, so a sentence
         pointing at a fluency file there is none of is never sent. A template
         left with nothing but blank space once filled in gives nothing at
         all.
@@ -151,6 +152,65 @@ shape ModeSystemPromptsShape:
         Where `piton` isn't installed, or printing the fluency fails, no file
         is written, and PITON_FLUENCY_FILE is filled in with nothing, so the
         paragraph pointing at it is left out.
+
+    suspenseFluency:
+        The Suspense fluency is how Suspense works, as a harness working in
+        any project needs to know it to talk about it or write for it: what
+        the modes are and what each may change, how a Chain prompt runs, how
+        prompts and questions are handed back to the user, and what the
+        application adds to a prompt of its own accord. Every mode but
+        Freeform is pointed at it, so a question asked to write a Chain
+        prompt, or a task asked about the queue, knows what that is, in a
+        project that says nothing of Suspense itself. Like the Piton fluency,
+        it is never part of the system prompt, so the prompt cache holds
+        whatever the mode.
+
+        It is the same for every project, and is the application's own, not
+        a project's to edit: its source is a Markdown file in this
+        application's own repository, `suspense-fluency.md` in its
+        `.suspense/system-prompts` directory beside the defaults, baked into
+        the application when it is built, as they are, so a build always
+        ships with whatever it says, and a build can't be made without it.
+        It is not among the prompts a project saves or the
+        @{SettingsWindowScope} edits.
+
+        It is written to the Suspense fluency file,
+        `.suspense/suspense-fluency.md` in the project's data, as the
+        @{ProjectDataScope} says, before any Code, Chain, Spec, or Ask prompt
+        is compiled, whenever the file isn't there or doesn't hold what the
+        application ships, so it keeps in step with the application rather
+        than the project. It is written as text, never read as Piton, holds
+        no placeholder and no path of the machine it was written on, and so
+        reads the same on the host and in a container.
+
+        It says, plainly and briefly, written for a harness rather than for
+        the user, each of these in a short paragraph of its own.
+
+        \\
+        - that Suspense is an application for working on a project whose spec, written in Piton, describes its code, and that a prompt is sent to the harness in one of five modes, in the order and with the meanings the PromptModesScope gives: Code changes the code and leaves the spec as it is, Chain changes the spec and then the code to match, Spec changes the spec and leaves the code as it is, Ask asks a question and changes nothing, and Freeform passes a prompt to the harness exactly as typed
+        - that Code, Chain, Spec, and Freeform prompts are tasks, run in a spec lane and a code lane, one task at a time in each, queueing behind tasks of their own lane, and that questions run at once and never queue
+        - that a Chain prompt runs as two steps: a spec step, which writes the prompt into the spec, then a code step, sent the prompt and what the spec step replied, which changes the code to match the spec as built, and that each step is its own run, in its own lane
+        - that Suspense adds each mode's instructions to a prompt itself, in a block marked <task-instructions> at its head, and the spec's references and the understanding file with them, so a prompt written for a mode is only what the user wants done, in the user's own terms, and never holds a <task-instructions> block, steps the mode already takes, or instructions about building, checking, or the understanding file
+        - how to write a good prompt for each mode: a Chain or Spec prompt says what should be true of the application once it is met, not how to edit the spec; a Code prompt says what the code should do, and may link to the compiled reference for the spec it follows; an Ask prompt is a question; and a prompt that names part of the spec links to its compiled reference under the harness's directory, as the user would
+        - that an answer hands a prompt back to the user, for them to read, edit, and send, as a fenced code block whose info string is `suspense-prompt` and the mode it is for, and asks the user something back as one whose info string is `suspense-question`, with any answers to pick from one per line, each starting with `- `, as the Ask instructions say, both shown as cards the user acts on, never sent by themselves
+        - what a task's understanding file is, the short list of constraints it takes from the spec, shown beside the task as it runs
+        - that the user can cancel, resend, or send a task to the other mode, send more to a running task, and start a new conversation, so a prompt never needs to say any of that is possible
+        \\
+
+        It names no project, location, harness, or file of any one project,
+        and says nothing a mode's own instructions already tell a run that
+        sees them, such as how the spec is read or written.
+
+        SUSPENSE_FLUENCY_FILE stands for the file's path. The Code, Chain,
+        Spec, and Ask instructions each say, on a paragraph of its own, to
+        read that file once in the conversation when the work is about
+        Suspense, its modes, its prompts, or its questions, or calls for
+        writing a prompt or a question for the user, before doing so. A
+        Chain prompt's code step is pointed at it through the Code
+        instructions, and a Code task sent to Spec through the Spec
+        instructions. Freeform sends no instructions, and is never pointed at
+        it. Where the file can't be written, SUSPENSE_FLUENCY_FILE is filled
+        in with nothing, so the paragraph pointing at it is left out.
 
     specReading:
         The spec-reading prompt explains how to read the spec before executing
@@ -242,6 +302,13 @@ shape ModeSystemPromptsShape:
 
         \\
         Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](${HARNESS_DIRECTORY}/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+        \\
+
+        The Code, Chain, Spec, and Ask defaults each have, after what the
+        mode is for, on a paragraph of its own:
+
+        \\
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read ${SUSPENSE_FLUENCY_FILE} once in this conversation, unless you already have: it is how Suspense works.
         \\
 
         The Ask default says what a question is for, and that it changes

@@ -157,6 +157,7 @@ impl Plan {
         let reference = project_dir.join(agent.directory()).join("reference");
         let config = project_dir.join(crate::project_directory::CONFIG_FILE_NAME);
         let fluency = crate::piton_fluency::file(project_dir);
+        let suspense_fluency = crate::suspense_fluency::file(project_dir);
         let spec = locations.spec.clone();
         // A code location the config leaves out, or gives as the project
         // itself, is the whole project.
@@ -182,6 +183,7 @@ impl Plan {
                 // so the host's next build starts from what it wrote.
                 mounts.push(rw(project_dir.join(".piton")));
                 mounts.push(ro(fluency));
+                mounts.push(ro(suspense_fluency.clone()));
                 mounts.push(ro(config));
                 mounts.extend(understanding.map(|file| rw(file.to_path_buf())));
             }
@@ -192,6 +194,7 @@ impl Plan {
                 mounts.extend(spec.clone().map(ro));
                 mounts.push(ro(reference));
                 mounts.push(ro(config));
+                mounts.push(ro(suspense_fluency));
             }
         }
         // What a mount holds that the run must not see: the project's data
@@ -1121,6 +1124,10 @@ mod tests {
             Some(false)
         );
         assert_eq!(
+            mounted(&spec, &project.join(".suspense/suspense-fluency.md")),
+            Some(false)
+        );
+        assert_eq!(
             mounted(&spec, &project.join("piton.config.pi")),
             Some(false)
         );
@@ -1172,6 +1179,11 @@ mod tests {
         // The spec's source too, read only, for `piton slice`.
         assert_eq!(mounted(&question, &project.join("spec")), Some(false));
         assert!(question.hidden.is_empty() || !question.hidden.contains(&project.join("spec")));
+        // How Suspense works, read only.
+        assert_eq!(
+            mounted(&question, &project.join(".suspense/suspense-fluency.md")),
+            Some(false)
+        );
 
         // Nothing else from the host: no home, no git directory.
         for plan in [&spec, &question] {

@@ -2,6 +2,8 @@ We're working on both the spec and the code, as a chain. This first step changes
 
 Write the spec so it describes the application as it should be once the prompt is met, and constrains the code. Once you finish, the spec will be built and the same prompt sent to a coding agent, with your reply, to change the code to match it; so end your reply by saying what you changed in the spec and which anchors the code should follow.
 
+When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read ${SUSPENSE_FLUENCY_FILE} once in this conversation, unless you already have: it is how Suspense works.
+
 Before creating or editing any .pi file, read ${PITON_FLUENCY_FILE} once in this conversation, unless you already have: it is how Piton is written.
 
 Open a .pi file only to change it. Once you have changed the spec, run `piton check` and fix every error it reports, then run `piton build` and check the result in the refreshed reference under ${HARNESS_DIRECTORY}/reference, not by reading the source again. Never finish with a spec that `piton check` or `piton build` reports errors in.

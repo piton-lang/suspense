@@ -26,6 +26,7 @@ use crate::piton_syntax;
 use crate::project_directory::ProjectDirectory;
 use crate::system_prompts::{
     self, CODE_LOCATION, CODE_PROMPT, CODE_RESULT, HARNESS_DIRECTORY, PITON_FLUENCY_FILE, Prompt,
+    SUSPENSE_FLUENCY_FILE,
     SPEC_LOCATION, SPEC_PROMPT, SPEC_READING, SPEC_RESULT,
 };
 
@@ -732,7 +733,10 @@ impl Render for SettingsWindow {
                      root in piton.config.pi, {SPEC_READING} for the injected \
                      spec reading, and {PITON_FLUENCY_FILE} for the file \
                      `piton agent --print-fluency` is written to at each spec \
-                     build, which only the Spec and Chain prompts point at."
+                     build, which only the Spec and Chain prompts point at, \
+                     and {SUSPENSE_FLUENCY_FILE} for the file how Suspense \
+                     works is written to, which every prompt but Freeform's \
+                     points at."
                 ),
                 "Open a project to edit its system prompts.",
             ),
