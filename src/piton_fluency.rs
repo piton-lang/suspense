@@ -110,7 +110,6 @@ mod tests {
     #[test]
     fn the_fluency_is_written_to_its_file() {
         use super::{file, write_with};
-        use std::os::unix::fs::PermissionsExt as _;
         let dir = std::env::temp_dir().join(format!("suspense-fluency-{}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
         std::fs::create_dir_all(&dir).unwrap();
@@ -119,7 +118,7 @@ mod tests {
 
         let piton = dir.join("piton");
         std::fs::write(&piton, "#!/bin/sh\nprintf '# Fluency\\n\\n${x} {y}\\n'\n").unwrap();
-        std::fs::set_permissions(&piton, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&piton);
         assert!(write_with(piton.to_str().unwrap(), &dir));
         let written = std::fs::read_to_string(file(&dir)).unwrap();
         assert_eq!(written, "# Fluency\n\n${x} {y}\n");

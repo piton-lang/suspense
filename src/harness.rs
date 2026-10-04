@@ -2058,7 +2058,6 @@ pub(crate) mod tests {
     /// touches `dir/ran`.
     #[cfg(unix)]
     pub(crate) fn slow_harness(dir: &std::path::Path) -> std::path::PathBuf {
-        use std::os::unix::fs::PermissionsExt as _;
         let script = dir.join("harness.sh");
         std::fs::write(
             &script,
@@ -2080,7 +2079,7 @@ wait
             ),
         )
         .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         script
     }
 
@@ -2735,7 +2734,6 @@ wait
     #[cfg(unix)]
     #[test]
     fn a_run_finishes_once_its_process_exits() {
-        use std::os::unix::fs::PermissionsExt as _;
         let dir = std::env::temp_dir().join(format!("suspense-exit-{}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
         std::fs::create_dir_all(&dir).unwrap();
@@ -2754,7 +2752,7 @@ wait
             ),
         )
         .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         super::use_program_for_test(Some(script));
         let super::Run { mut events, .. } = super::send_task(
             "Go.".into(),
@@ -2855,7 +2853,6 @@ wait
     /// each, and ends.
     #[cfg(unix)]
     pub(crate) fn recording_harness(dir: &std::path::Path, messages: usize) -> std::path::PathBuf {
-        use std::os::unix::fs::PermissionsExt as _;
         let script = dir.join("recording.sh");
         std::fs::write(
             &script,
@@ -2881,7 +2878,7 @@ done
             ),
         )
         .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         script
     }
 
@@ -3261,7 +3258,6 @@ done
     #[cfg(unix)]
     #[test]
     fn a_containerised_run_goes_through_podman_unguarded() {
-        use std::os::unix::fs::PermissionsExt as _;
         let dir = std::env::temp_dir().join(format!("suspense-podman-run-{}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
         std::fs::create_dir_all(dir.join("spec")).unwrap();
@@ -3288,7 +3284,7 @@ done
             ),
         )
         .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         crate::container::use_podman_for_test(Some(script));
         let locations = crate::project_tree::Locations {
             spec: Some(dir.join("spec")),
@@ -3367,7 +3363,6 @@ done
     #[cfg(unix)]
     #[test]
     fn podman_failing_is_said_plainly() {
-        use std::os::unix::fs::PermissionsExt as _;
         let dir =
             std::env::temp_dir().join(format!("suspense-podman-fails-{}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
@@ -3387,7 +3382,7 @@ done
              esac\n",
         )
         .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         crate::container::use_podman_for_test(Some(script));
         let plan = crate::container::Plan::new(
             crate::container::RunKind::Spec,
@@ -3445,7 +3440,6 @@ done
     #[cfg(unix)]
     #[test]
     fn a_conversation_the_harness_lost_starts_anew() {
-        use std::os::unix::fs::PermissionsExt as _;
         let dir =
             std::env::temp_dir().join(format!("suspense-lost-session-{}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
@@ -3466,7 +3460,7 @@ done
              esac\n",
         )
         .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         super::use_program_for_test(Some(script));
         let mut events = super::send(
             "Why?".into(),

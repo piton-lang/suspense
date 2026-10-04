@@ -12068,7 +12068,6 @@ mod tests {
     #[gpui_kit::test]
     async fn changes_put_back_are_a_notice(cx: &mut TestAppContext) {
         use crate::chat_input::SendMode;
-        use std::os::unix::fs::PermissionsExt as _;
         if crate::piton_build::piton_missing() {
             return;
         }
@@ -12087,7 +12086,7 @@ mod tests {
              echo '{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Done.\"}'\n",
         )
         .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         crate::harness::use_program_for_test(Some(script));
         cx.update_window(handle, |_, window, cx| {
             prompt_mode.update(cx, |this, cx| {
@@ -12231,7 +12230,6 @@ mod tests {
     #[gpui_kit::test]
     async fn a_run_is_snapshotted_in_a_git_repository(cx: &mut TestAppContext) {
         use crate::chat_input::SendMode;
-        use std::os::unix::fs::PermissionsExt as _;
         cx.executor().allow_parking();
         let (prompt_mode, handle) = open(cx);
         let dir = cancel_project("snapshot-run", &prompt_mode, cx);
@@ -12258,7 +12256,7 @@ mod tests {
              echo '{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Done.\"}'\n",
         )
         .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         crate::harness::use_program_for_test(Some(script));
         cx.update_window(handle, |_, window, cx| {
             prompt_mode.update(cx, |this, cx| {
@@ -16688,7 +16686,6 @@ mod tests {
     #[gpui_kit::test]
     async fn tasks_sent_to_the_other_mode_are_remembered_in_the_history(cx: &mut TestAppContext) {
         use crate::chat_input::SendMode;
-        use std::os::unix::fs::PermissionsExt as _;
         if crate::piton_build::piton_missing() {
             return;
         }
@@ -16707,7 +16704,7 @@ mod tests {
              echo '{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Done.\"}'\n",
         )
         .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         crate::harness::use_program_for_test(Some(script));
         let offered = |ix: usize, cx: &mut TestAppContext| {
             prompt_mode.read_with(cx, |this, _| {
@@ -17767,7 +17764,6 @@ mod tests {
     #[gpui_kit::test]
     async fn batch_sent_tasks_run_in_order_in_the_other_mode(cx: &mut TestAppContext) {
         use crate::chat_input::SendMode;
-        use std::os::unix::fs::PermissionsExt as _;
         if crate::piton_build::piton_missing() {
             return;
         }
@@ -17779,7 +17775,7 @@ mod tests {
         // A harness that is done at once.
         let script = dir.join("quick-harness.sh");
         std::fs::write(&script, "#!/bin/sh\nexit 0\n").unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         crate::harness::use_program_for_test(Some(script));
         let modes = [
             Some(SendMode::Spec),
@@ -18556,7 +18552,6 @@ mod tests {
     #[gpui_kit::test]
     async fn the_spec_lane_resumes_its_own_conversation(cx: &mut TestAppContext) {
         use crate::chat_input::SendMode;
-        use std::os::unix::fs::PermissionsExt as _;
         if crate::piton_build::piton_missing() {
             return;
         }
@@ -18586,7 +18581,7 @@ mod tests {
             ),
         )
         .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         crate::harness::use_program_for_test(Some(script));
         let send = |text: &str, mode: SendMode, n: usize, cx: &mut TestAppContext| {
             cx.update_window(handle, |_, window, cx| {
@@ -18626,7 +18621,6 @@ mod tests {
 
     #[cfg(unix)]
     fn recording_harness(dir: &std::path::Path, finishes: bool) -> (PathBuf, PathBuf) {
-        use std::os::unix::fs::PermissionsExt as _;
         let runs = dir.join("runs");
         std::fs::create_dir_all(&runs).unwrap();
         let script = dir.join("recording-harness.sh");
@@ -18658,7 +18652,7 @@ mod tests {
             ),
         )
         .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         (script, runs)
     }
 
@@ -19177,7 +19171,6 @@ mod tests {
         prompt_mode: &Entity<PromptMode>,
         cx: &mut TestAppContext,
     ) -> std::path::PathBuf {
-        use std::os::unix::fs::PermissionsExt as _;
         fn summarize(_: &std::path::Path, asked: &str, _: &str) -> anyhow::Result<Option<String>> {
             Ok(Some(format!("Did {asked}")))
         }
@@ -19200,7 +19193,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
             ),
         )
         .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         crate::harness::use_program_for_test(Some(script));
         cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
         cx.run_until_parked();
@@ -19785,6 +19778,11 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
             assert!(window.has_active_dialog(cx), "the raw prompt didn't open");
         })
         .unwrap();
+        // Once it has slid into place, which it does in real time, so a
+        // click doesn't land where it was a frame before.
+        std::thread::sleep(*gpui_kit::component::dialog::ANIMATION_DURATION);
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+            .unwrap();
         let view = crate::raw_prompt::last_opened().expect("no raw prompt was opened");
         view.read_with(cx, |view, _| view.prompt().clone())
     }
@@ -19933,7 +19931,6 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
     async fn raw_prompt_shows_the_system_prompt_as_sent(cx: &mut TestAppContext) {
         use crate::chat_input::SendMode;
         use crate::raw_prompt::NOT_RECORDED;
-        use std::os::unix::fs::PermissionsExt as _;
         if crate::piton_build::piton_missing() {
             return;
         }
@@ -19958,7 +19955,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
             ),
         )
         .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         crate::harness::use_program_for_test(Some(script));
         cx.update_window(handle, |_, window, cx| {
             prompt_mode.update(cx, |this, cx| {
@@ -20164,7 +20161,6 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
     async fn raw_prompt_for_codex_is_the_one_prompt_it_was_given(cx: &mut TestAppContext) {
         use crate::agent::{self, Agent};
         use crate::chat_input::SendMode;
-        use std::os::unix::fs::PermissionsExt as _;
         if crate::piton_build::piton_missing() {
             return;
         }
@@ -20179,7 +20175,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
             format!("#!/bin/sh\ncat > {}\nexit 0\n", given.display()),
         )
         .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         crate::harness::use_program_for_test(Some(script));
         agent::set(Agent::Codex).unwrap();
         cx.update_window(handle, |_, window, cx| {

@@ -82,6 +82,8 @@ mod subagents;
 mod system_prompts;
 mod task_snapshot;
 mod task_table;
+#[cfg(all(test, unix))]
+mod test_scripts;
 mod theme;
 mod theme_editor;
 mod theme_preference;

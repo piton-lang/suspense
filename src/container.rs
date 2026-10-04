@@ -1405,8 +1405,7 @@ mod tests {
         .unwrap();
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt as _;
-            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+            crate::test_scripts::make_executable(&script);
         }
         script
     }
@@ -1554,13 +1553,12 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn podman_info_failing_is_no_access() {
-        use std::os::unix::fs::PermissionsExt as _;
         let dir =
             std::env::temp_dir().join(format!("suspense-podman-noaccess-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let script = dir.join("podman");
         std::fs::write(&script, "#!/bin/sh\necho 'Error: cannot setup namespace using newuidmap: exit status 1' >&2\nexit 125\n").unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         use_podman_for_test(Some(script));
         assert_eq!(
             check_access(),
@@ -1575,7 +1573,6 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn a_command_that_cant_run_in_the_image_fails_its_build() {
-        use std::os::unix::fs::PermissionsExt as _;
         let dir = std::env::temp_dir().join(format!("suspense-check-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let script = dir.join("podman");
@@ -1584,7 +1581,7 @@ mod tests {
             "#!/bin/sh\ncase \"$*\" in\n*piton*) echo \"piton: version 'GLIBC_2.39' not found\" >&2; exit 1 ;;\n*) echo 1.0 ;;\nesac\n",
         )
         .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&script);
         use_podman_for_test(Some(script));
         let mut lines = Vec::new();
         let err = check_commands("img", &["claude", "piton"], &mut |line| lines.push(line))

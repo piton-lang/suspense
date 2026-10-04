@@ -226,7 +226,6 @@ pub fn piton_missing() -> bool {
 
 #[cfg(all(test, unix))]
 mod tests {
-    use std::os::unix::fs::PermissionsExt as _;
 
     /// A spec build writes the project's fluency to its file, whether the
     /// build succeeds or not.
@@ -244,7 +243,7 @@ mod tests {
              echo 'build failed' >&2; exit 1\n",
         )
         .unwrap();
-        std::fs::set_permissions(&piton, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&piton);
         let built = super::build_with(piton.to_str().unwrap(), &dir).unwrap();
         assert!(!built.success);
         assert_eq!(
@@ -278,7 +277,7 @@ mod tests {
              echo \"$PWD/.claude/reference/app/Application.md\"\n",
         )
         .unwrap();
-        std::fs::set_permissions(&piton, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_scripts::make_executable(&piton);
         let built = super::build_with(piton.to_str().unwrap(), &dir).unwrap();
         assert!(built.success, "{}", built.report);
         assert_eq!(built.replaced, 1);

@@ -2551,9 +2551,12 @@ mod tests {
 
     /// Like `wait_for`, but lets real time pass: the watcher reports from its
     /// own thread, which the test clock does not drive.
+    /// It fails saying `what` it waited for and how the view stood, so a
+    /// failure on another platform says where it stopped.
     async fn wait_for_disk(
         cx: &mut TestAppContext,
-        handle: AnyWindowHandle,
+        view: &Entity<FileView>,
+        what: &str,
         mut predicate: impl FnMut(&gpui_kit::App) -> bool,
     ) {
         for _ in 0..300 {
@@ -2564,8 +2567,18 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
             cx.executor().advance_clock(Duration::from_millis(50));
         }
-        cx.wait_for(handle, Duration::ZERO, |_, cx| predicate(cx))
-            .await;
+        let state = view.read_with(cx, |view, cx| {
+            format!(
+                "path {:?}, dirty {}, conflict {}, saving {}, text {:?}, on disk {:?}",
+                view.path(),
+                view.is_dirty(),
+                view.has_conflict(),
+                view.saving,
+                view.editor.read(cx).value(),
+                std::fs::read_to_string(view.path()),
+            )
+        });
+        panic!("never saw {what} on disk: {state}");
     }
 
     /// Edited on disk, the file reloads, the cursor beside the same
@@ -2601,7 +2614,10 @@ mod tests {
         })
         .unwrap();
         std::fs::write(&file, "zero\none\ntwo\nthree\n").unwrap();
-        wait_for_disk(cx, handle, |cx| text(cx) == "zero\none\ntwo\nthree\n").await;
+        wait_for_disk(cx, &view, "the edit reloaded", |cx| {
+            text(cx) == "zero\none\ntwo\nthree\n"
+        })
+        .await;
         cx.update(|cx| {
             assert!(!view.read(cx).is_dirty());
             assert_eq!(view.read(cx).editor.read(cx).selected_range(), 15..15);
@@ -2610,7 +2626,10 @@ mod tests {
         // Renamed on disk: followed, in the same editor.
         let renamed = dir.join("b.txt");
         std::fs::rename(&file, &renamed).unwrap();
-        wait_for_disk(cx, handle, |cx| view.read(cx).path() == renamed).await;
+        wait_for_disk(cx, &view, "the rename followed", |cx| {
+            view.read(cx).path() == renamed
+        })
+        .await;
         assert!(view.read_with(cx, |view, _| view.title().ends_with("b.txt")));
 
         // Unsaved changes, then an edit on disk: asked about, not reloaded.
@@ -2626,7 +2645,10 @@ mod tests {
         type_keys(cx, handle, "Hi ");
         assert!(view.read_with(cx, |view, _| view.is_dirty()));
         std::fs::write(&renamed, "zero\none\ntwo\nthree\nfour\n").unwrap();
-        wait_for_disk(cx, handle, |cx| view.read(cx).has_conflict()).await;
+        wait_for_disk(cx, &view, "a conflict over unsaved changes", |cx| {
+            view.read(cx).has_conflict()
+        })
+        .await;
         assert_eq!(cx.update(|cx| text(cx)), "Hi zero\none\ntwo\nthree\n");
 
         // Kept: still unsaved, against the file as it now is.
@@ -2635,7 +2657,10 @@ mod tests {
 
         // Changed again, it asks again; reloaded, the changes go.
         std::fs::write(&renamed, "five\n").unwrap();
-        wait_for_disk(cx, handle, |cx| view.read(cx).has_conflict()).await;
+        wait_for_disk(cx, &view, "a conflict after keeping mine", |cx| {
+            view.read(cx).has_conflict()
+        })
+        .await;
         cx.update_window(handle, |_, window, cx| {
             view.update(cx, |view, cx| view.reload_from_disk(window, cx))
         })
@@ -2652,7 +2677,10 @@ mod tests {
         });
         type_keys(cx, handle, "six ");
         std::fs::write(&renamed, "seven\n").unwrap();
-        wait_for_disk(cx, handle, |cx| view.read(cx).has_conflict()).await;
+        wait_for_disk(cx, &view, "a conflict before merging", |cx| {
+            view.read(cx).has_conflict()
+        })
+        .await;
         cx.update_window(handle, |_, window, cx| {
             view.update(cx, |view, cx| view.start_merge(window, cx))
         })
@@ -2682,7 +2710,7 @@ mod tests {
         type_keys(cx, handle, "eight ");
         cx.update_window(handle, |_, window, cx| window.press(SAVE, cx))
             .unwrap();
-        wait_for_disk(cx, handle, |cx| !view.read(cx).is_dirty()).await;
+        wait_for_disk(cx, &view, "its own save", |cx| !view.read(cx).is_dirty()).await;
         for _ in 0..30 {
             std::thread::sleep(Duration::from_millis(10));
             cx.executor().advance_clock(Duration::from_millis(50));
