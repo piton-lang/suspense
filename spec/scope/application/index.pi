@@ -1,5 +1,6 @@
 use /lib
 from ./MainWindow import MainWindowScope
+from /scope/container-environment import ContainerEnvironmentScope
 from /scope/project-data import ProjectDataScope
 from /scope/user-preferences import UserPreferencesScope
 from /ui/theme import ThemeScope
@@ -27,6 +28,22 @@ shape ApplicationShape:
         - windows
         - mac
         - linux
+
+    childProcesses:
+        On Windows, no program the application runs opens a window of its
+        own. A release build on Windows is a GUI application with no console,
+        so Windows gives every console program it starts a window of its own
+        unless told not to. So every child process the application starts on
+        the host, git, piton, for its builds, slicing, its language server,
+        and the fluency, podman, the harness and its one-off runs, a run
+        target's shell, and the commands that stop a process, is started
+        without a console window, so nothing flashes on screen while the
+        application works, in a release build as in a development one.
+
+        What these programs print is still read as ever, and the login
+        view's command, run under a pseudo-terminal, still works as the
+        @{ContainerEnvironmentScope} says. On macOS and Linux, nothing
+        changes in how a program is started.
 
     name:
         The application is called Suspense.

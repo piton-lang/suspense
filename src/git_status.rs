@@ -4,7 +4,6 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use gpui_kit::{App, Hsla};
 
@@ -53,7 +52,7 @@ impl GitStatus {
     pub fn read(project_dir: &Path) -> Option<Self> {
         // The repository's top, reached from the project directory as given
         // (`../..`), so paths match the tree's even through a symlink.
-        let up = Command::new("git")
+        let up = crate::process::command("git")
             .args(["rev-parse", "--show-cdup"])
             .current_dir(project_dir)
             .output()
@@ -67,7 +66,7 @@ impl GitStatus {
         {
             top.pop();
         }
-        let output = Command::new("git")
+        let output = crate::process::command("git")
             .args([
                 "status",
                 "--porcelain=v1",

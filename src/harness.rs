@@ -440,7 +440,7 @@ fn kill(child: &mut Child) {
     #[cfg(unix)]
     {
         let group = format!("-{}", child.id());
-        Command::new("kill")
+        crate::process::command("kill")
             .args(["-TERM", "--", &group])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -449,7 +449,7 @@ fn kill(child: &mut Child) {
     }
     #[cfg(windows)]
     {
-        Command::new("taskkill")
+        crate::process::command("taskkill")
             .args(["/T", "/F", "/PID", &child.id().to_string()])
             .status()
             .ok();
@@ -556,7 +556,7 @@ impl Feed {
     pub fn for_test() -> (Self, mpsc::UnboundedReceiver<HarnessEvent>) {
         let (tx, rx) = mpsc::unbounded();
         let feed = Self::new(tx);
-        let mut cat = Command::new("cat")
+        let mut cat = crate::process::command("cat")
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .spawn()
@@ -826,7 +826,7 @@ fn run(
         },
         None => None,
     };
-    let mut command = Command::new(program);
+    let mut command = crate::process::command(program);
     let mut input = prompt_as_given(agent, prompt, system_prompt, resume.is_some());
     match agent {
         Agent::Claude => {
@@ -1174,7 +1174,7 @@ fn with_system_prompt(prompt: &str, system_prompt: &str) -> String {
 /// streams its events as JSON, and reads its prompt from standard input.
 pub fn one_off_command(project_dir: &Path) -> Command {
     let agent = agent::current();
-    let mut command = Command::new(agent.command());
+    let mut command = crate::process::command(agent.command());
     match agent {
         Agent::Claude => command.args([
             "-p",
@@ -1208,7 +1208,7 @@ pub fn ask_quickly(project_dir: &Path, prompt: &str) -> Result<String> {
     let agent = agent::current();
     let mut command = match agent {
         Agent::Claude => {
-            let mut command = Command::new(agent.command());
+            let mut command = crate::process::command(agent.command());
             command.args([
                 "-p",
                 "--model",

@@ -1,0 +1,6 @@
+- [On Windows, no program the application runs opens a window of its own](.claude/reference/scope/application/index.md#child-processes)
+- [Every child process started on the host, git, piton, podman, the harness, a run target's shell, and the stop commands, runs without a console window](.claude/reference/scope/application/index.md#child-processes)
+- [It holds in a release build as in a development one](.claude/reference/scope/application/index.md#child-processes)
+- [What these programs print is still read as ever](.claude/reference/scope/application/index.md#child-processes)
+- [The login view's command under a pseudo-terminal still works](.claude/reference/scope/application/index.md#child-processes)
+- [On macOS and Linux nothing changes in how a program is started](.claude/reference/scope/application/index.md#child-processes)

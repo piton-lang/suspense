@@ -279,14 +279,14 @@ impl Running {
         #[cfg(unix)]
         {
             let group = format!("-{}", child.id());
-            Command::new("kill")
+            crate::process::command("kill")
                 .args(["-TERM", "--", &group])
                 .status()
                 .ok();
         }
         #[cfg(windows)]
         {
-            Command::new("taskkill")
+            crate::process::command("taskkill")
                 .args(["/T", "/F", "/PID", &child.id().to_string()])
                 .status()
                 .ok();
@@ -297,11 +297,11 @@ impl Running {
 
 fn shell(command: &str) -> Command {
     if cfg!(windows) {
-        let mut shell = Command::new("cmd");
+        let mut shell = crate::process::command("cmd");
         shell.args(["/C", command]);
         shell
     } else {
-        let mut shell = Command::new("sh");
+        let mut shell = crate::process::command("sh");
         shell.args(["-c", command]);
         shell
     }

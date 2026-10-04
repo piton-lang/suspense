@@ -444,7 +444,7 @@ pub fn podman() -> PathBuf {
 
 /// A `podman` command.
 pub fn podman_command() -> Command {
-    Command::new(podman())
+    crate::process::command(podman())
 }
 
 /// Whether Podman can run a container here.
@@ -717,7 +717,7 @@ fn package(agent: Agent) -> &'static str {
 
 /// The version of `command` installed on the host, if it can be found.
 fn host_version(command: &str) -> Option<String> {
-    let output = Command::new(command)
+    let output = crate::process::command(command)
         .arg("--version")
         .stdin(Stdio::null())
         .output()

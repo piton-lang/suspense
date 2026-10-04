@@ -1787,9 +1787,9 @@ fn list_continuation(line: &str, at: usize) -> Option<ListEnter> {
 /// `project_dir`; an error if it could not be formatted.
 pub(crate) fn format_piton(text: &str, project_dir: &Path) -> anyhow::Result<String> {
     use std::io::Write as _;
-    use std::process::{Command, Stdio};
+    use std::process::Stdio;
 
-    let mut child = Command::new("piton")
+    let mut child = crate::process::command("piton")
         .args(["format", "-"])
         .current_dir(project_dir)
         .stdin(Stdio::piped())

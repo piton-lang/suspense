@@ -6,7 +6,6 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail};
@@ -205,7 +204,7 @@ impl Summary {
 
 /// Runs git in `dir`, returning what it printed, or what went wrong.
 fn git(dir: &Path, args: &[&str]) -> Result<Vec<u8>> {
-    let output = Command::new("git")
+    let output = crate::process::command("git")
         .args(args)
         .current_dir(dir)
         .output()
@@ -229,7 +228,7 @@ pub fn commit(dir: &Path, message: &str) -> Result<()> {
     let mut add = vec!["add", "--all", "--", ":/"];
     // Where the project already ignores the file, it is left out anyway, and
     // naming an ignored file at all, even to exclude it, makes `git add` fail.
-    let ignored = Command::new("git")
+    let ignored = crate::process::command("git")
         .args(["check-ignore", "--quiet", "--"])
         .arg(&notes)
         .current_dir(dir)
@@ -291,7 +290,7 @@ pub fn pull(dir: &Path) -> Result<Pulled> {
 
     // Tried out first without touching the working tree or the index, so a
     // merge that would conflict is never started.
-    let trial = Command::new("git")
+    let trial = crate::process::command("git")
         .args([
             "merge-tree",
             "--write-tree",

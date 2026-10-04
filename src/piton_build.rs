@@ -1,7 +1,6 @@
 //! Runs `piton build` for a project directory.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use gpui_kit::*;
 
@@ -173,7 +172,7 @@ fn unowned_reference_files(report: &str) -> Option<Vec<PathBuf>> {
 /// Runs `piton build` once.
 fn build_once(program: &str, project_dir: &Path) -> Result<BuildOutcome> {
     {
-        let output = Command::new(program)
+        let output = crate::process::command(program)
             .arg("build")
             .current_dir(project_dir)
             .output()?;
@@ -216,7 +215,7 @@ fn relative_to(path: &Path, root: &Path) -> String {
 /// installed, such as CI's: tests that need it say they're skipped and pass.
 #[cfg(test)]
 pub fn piton_missing() -> bool {
-    let missing = std::process::Command::new("piton")
+    let missing = crate::process::command("piton")
         .arg("--version")
         .output()
         .is_err();

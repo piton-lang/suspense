@@ -5,7 +5,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::process::{Child, ChildStdin, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
@@ -59,7 +59,7 @@ impl LspClient {
     /// Starts `piton lsp` in `project_dir` and completes the initialize
     /// handshake. Blocks, so call it off the main thread.
     pub fn start(project_dir: &Path) -> Result<Self> {
-        let mut child = Command::new("piton")
+        let mut child = crate::process::command("piton")
             .arg("lsp")
             .current_dir(project_dir)
             .stdin(Stdio::piped())

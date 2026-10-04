@@ -10,7 +10,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Mutex;
 
 use crate::hidden_anchor::APP_DIR;
@@ -72,7 +71,7 @@ pub(crate) fn write_with(program: &str, project_dir: &Path) -> bool {
 /// What `program agent --print-fluency` prints in `project_dir`, or nothing
 /// when it can't be run or fails.
 fn print_prompt(program: &str, project_dir: &Path) -> String {
-    match Command::new(program)
+    match crate::process::command(program)
         .args(["agent", "--print-fluency"])
         .current_dir(project_dir)
         .output()

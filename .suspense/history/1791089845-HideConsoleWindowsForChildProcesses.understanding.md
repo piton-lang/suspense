@@ -1,0 +1,7 @@
+- [On Windows, every child process the application starts on the host opens no console window](.claude/reference/scope/application/index.md#child-processes)
+- [This covers git, piton, podman, the harness, one-off runs, run-target shells and process-stopping commands](.claude/reference/scope/application/index.md#child-processes)
+- [It holds in release and development builds alike](.claude/reference/scope/application/index.md#child-processes)
+- [What child processes print is still read as ever](.claude/reference/scope/application/index.md#child-processes)
+- [The login view's command still runs under a pseudo-terminal as before](.claude/reference/scope/container-environment/index.md#logging-in)
+- [On macOS and Linux nothing changes in how a program is started](.claude/reference/scope/application/index.md#child-processes)
+- [Suspense is a Rust gpui desktop application for Windows, macOS and Linux](.claude/reference/scope/application/index.md#stack)

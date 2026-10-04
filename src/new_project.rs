@@ -259,7 +259,7 @@ impl Settings {
 /// writes the .gitignore unless there is one. Nothing is committed.
 pub fn init_git(folder: &Path) -> Result<()> {
     if !folder.join(".git").exists() {
-        let output = std::process::Command::new("git")
+        let output = crate::process::command("git")
             .args(["init", "--quiet"])
             .current_dir(folder)
             .output()

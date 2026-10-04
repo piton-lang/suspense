@@ -19,7 +19,6 @@ use std::fmt::Write as _;
 use std::fs;
 use std::hash::{BuildHasher, RandomState};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context as _, Result, anyhow};
@@ -1066,7 +1065,7 @@ pub fn compile(anchor: &HiddenAnchor, file: &Path, project_dir: &Path) -> Result
         fs::read_to_string(file).with_context(|| format!("could not read {}", file.display()))?;
     let (saved, prompt) =
         HiddenAnchor::parse(&source).ok_or_else(|| anyhow!("{} is no prompt", file.display()))?;
-    let output = Command::new("piton")
+    let output = crate::process::command("piton")
         .arg("compile")
         .arg(file)
         .current_dir(project_dir)
@@ -1198,7 +1197,7 @@ fn slice(target: &str, file_dir: &Path, project_dir: &Path) -> String {
         .canonicalize()
         .unwrap_or_else(|_| project_dir.to_path_buf());
     let module = module.strip_prefix(&project).unwrap_or(&module);
-    let output = Command::new("piton")
+    let output = crate::process::command("piton")
         .arg("slice")
         .arg(format!("{}#{dotted}", module.display()))
         .current_dir(project_dir)

@@ -50,6 +50,7 @@ mod piton_build;
 mod piton_fluency;
 mod piton_lsp;
 mod piton_syntax;
+mod process;
 mod project;
 mod project_directory;
 mod project_indicator;

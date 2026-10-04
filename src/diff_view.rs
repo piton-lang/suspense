@@ -11,7 +11,6 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::Duration;
 
 use gpui_kit::assets::IconName;
@@ -1015,7 +1014,7 @@ fn read_merge(path: &Path, mine: String) -> Content {
 fn committed(path: &Path) -> Option<Vec<u8>> {
     let dir = path.parent()?;
     let name = path.file_name()?.to_str()?;
-    let output = Command::new("git")
+    let output = crate::process::command("git")
         .arg("show")
         .arg(format!("HEAD:./{name}"))
         .current_dir(dir)

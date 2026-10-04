@@ -22,7 +22,7 @@ const INDEX: &str = ".suspense/snapshot-index";
 /// The repository `project_dir` is in, by its top directory; none if it
 /// isn't in one, and then nothing is snapshotted.
 pub fn repo_top(project_dir: &Path) -> Option<PathBuf> {
-    let output = Command::new("git")
+    let output = crate::process::command("git")
         .args(["rev-parse", "--show-toplevel"])
         .current_dir(project_dir)
         .output()
@@ -36,7 +36,7 @@ pub fn repo_top(project_dir: &Path) -> Option<PathBuf> {
 
 /// Git, run in `top` against the private index of `project_dir`.
 fn git(top: &Path, project_dir: &Path) -> Command {
-    let mut command = Command::new("git");
+    let mut command = crate::process::command("git");
     command
         .current_dir(top)
         .env("GIT_INDEX_FILE", project_dir.join(INDEX));
@@ -66,7 +66,7 @@ pub fn take(project_dir: &Path, task: &str, which: &str) -> Result<String> {
     // project's .gitignore says so. Named when git already ignores it, git
     // would refuse, so it is excluded only when it isn't.
     let index = project_dir.join(INDEX);
-    let ignored = Command::new("git")
+    let ignored = crate::process::command("git")
         .current_dir(&top)
         .args(["check-ignore", "-q", "--no-index"])
         .arg(&index)
@@ -83,7 +83,7 @@ pub fn take(project_dir: &Path, task: &str, which: &str) -> Result<String> {
     let mut write = git(&top, project_dir);
     write.arg("write-tree");
     let tree = run(write, "write the snapshot's tree")?.trim().to_string();
-    let mut pin = Command::new("git");
+    let mut pin = crate::process::command("git");
     pin.current_dir(&top).args([
         "update-ref",
         &format!("refs/suspense/{task}/{which}"),
@@ -126,7 +126,7 @@ pub struct Change {
 /// The files that changed between the trees `before` and `after`, in path
 /// order, as `git diff --name-status` gives them.
 pub fn changes(top: &Path, before: &str, after: &str) -> Result<Vec<Change>> {
-    let mut diff = Command::new("git");
+    let mut diff = crate::process::command("git");
     diff.current_dir(top)
         .args(["diff", "--name-status", "-z", "-M", before, after]);
     let mut changes = parse(&run(diff, "list the changed files")?);
@@ -207,7 +207,7 @@ fn parse(output: &str) -> Vec<Change> {
 /// The contents of `path`, from the repository's top, in the tree `tree`;
 /// none where it isn't in it.
 pub fn contents(top: &Path, tree: &str, path: &Path) -> Option<Vec<u8>> {
-    let output = Command::new("git")
+    let output = crate::process::command("git")
         .current_dir(top)
         .arg("cat-file")
         .arg("blob")

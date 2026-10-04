@@ -1,0 +1,69 @@
+
+export anchor HideConsoleWindowsForChildProcesses2:
+    userPrompt:
+        \\\
+        On Windows, no program the application runs opens a window of its own. Every child process it starts on the host, git, piton (builds, slicing, its language server, fluency), podman, the harness and its one-off runs, a run target's shell, and the commands that stop a process, is started without a console window, so nothing flashes on screen while the application works, in a release build as in a development one. What these programs print is still read as ever. The login view's command, run under a pseudo-terminal, still works as the ContainerEnvironmentScope says.
+
+        Say this once, in the ApplicationScope, and give the reason: a release build on Windows is a GUI application with no console, so Windows gives every console program it starts a window of its own unless told not to.
+
+        In the code, start every child process through one shared helper that sets CREATE_NO_WINDOW on Windows (std::os::windows::process::CommandExt::creation_flags, 0x08000000) and does nothing elsewhere, and replace every direct std::process::Command::new in src with it, including container::podman_command and harness::one_off_command. Tests may keep using Command directly.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            On Windows, no program the application runs opens a window of its own. Every child process it starts on the host, git, piton (builds, slicing, its language server, fluency), podman, the harness and its one-off runs, a run target's shell, and the commands that stop a process, is started without a console window, so nothing flashes on screen while the application works, in a release build as in a development one. What these programs print is still read as ever. The login view's command, run under a pseudo-terminal, still works as the ContainerEnvironmentScope says.
+
+            Say this once, in the ApplicationScope, and give the reason: a release build on Windows is a GUI application with no console, so Windows gives every console program it starts a window of its own unless told not to.
+
+            In the code, start every child process through one shared helper that sets CREATE_NO_WINDOW on Windows (std::os::windows::process::CommandExt::creation_flags, 0x08000000) and does nothing elsewhere, and replace every direct std::process::Command::new in src with it, including container::podman_command and harness::one_off_command. Tests may keep using Command directly.
+            \\\
+        result:
+            \\\
+            I've added the rule to the ApplicationScope, stated once with the reason you gave. `piton check` reports no problems, the file is formatted, and `piton build` succeeds. I confirmed the new section in the refreshed reference.
+
+            ## What changed in the spec
+
+            - **`ApplicationShape.childProcesses` (new, `.claude/reference/scope/application/index.md#child-processes`):**
+              - **Rule:** on Windows, every child process the application starts on the host runs without a console window, so nothing flashes on screen. That's git, piton (builds, slicing, the language server, fluency), podman, the harness and its one-off runs, a run target's shell, and the commands that stop a process. It holds in release and development builds alike.
+              - **Reason:** a Windows release build is a GUI application with no console, so Windows opens a window for every console program it starts unless told not to.
+              - **Unchanged:** output is still read as before. The login view's command under a pseudo-terminal still works as the ContainerEnvironmentScope says. On macOS and Linux, nothing changes. I added that last sentence so the code step doesn't touch other platforms.
+            - **Import:** ApplicationScope now imports `ContainerEnvironmentScope` so it can link to it.
+
+            ## Anchors the code should follow
+
+            - **`ApplicationShape.childProcesses`:**
+              - Add one shared helper that builds a `std::process::Command`. On Windows it sets `CREATE_NO_WINDOW` (`0x08000000`) through `std::os::windows::process::CommandExt::creation_flags`. Elsewhere it does nothing.
+              - Replace every direct `std::process::Command::new` in `src` with the helper, including `container::podman_command` and `harness::one_off_command`. Tests may keep using `Command` directly.
+              - Keep stdout and stderr piped and read exactly as now.
+            - **`ContainerEnvironmentShape.loggingIn`:** the login command's pseudo-terminal launch must still work. If it starts its process through a PTY library rather than `Command`, check that it doesn't open a console window, and leave its terminal behaviour alone.
+            \\\
+
+    sentFrom: HideConsoleWindowsForChildProcesses
