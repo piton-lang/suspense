@@ -575,6 +575,15 @@ shape ChatInputShape:
         Its first row lines up with the send button, both at the top of the
         input row, and it grows downward from there.
 
+        The chat input grows with it, from its first wrapped line to its
+        twelfth row, in the frame each line is added, and shrinks the same
+        way: its tab body, its input row, and the button column beside the
+        text never fix or cap its height, the input row being as tall as the
+        taller of the text and the buttons, and the message list above gives
+        up the room it takes, in that frame too. Nothing in the chat input
+        jumps while it grows or scrolls: the tabs, the buttons, and the
+        session bar stay where they are relative to its edges.
+
     autoFocus:
         The chat input should be auto-focused.
 

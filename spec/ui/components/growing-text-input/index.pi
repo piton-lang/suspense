@@ -39,3 +39,40 @@ shape GrowingTextInputShape:
         It grows or shrinks in the very frame its text changes, and at any
         display scale its height is rounded up to a whole device pixel, so the
         text never flickers a row up and back as a line is added.
+
+        It never takes its height from a frame before. Its rows are counted
+        at the width it is drawn at in this frame, the width its text wraps
+        at, so the first line to wrap adds its row in the frame it wraps, at
+        its final height, with no frame drawn at the old height with the
+        text already wrapped, nor at a height between, nor at a width it
+        then wraps again at. Its height is set once a frame, from that count,
+        never adjusted after the frame is drawn, so it never settles over
+        two or more frames.
+
+        The width its text wraps at never depends on whether it scrolls. Its
+        scrollbar, once its text takes more than its most rows, overlays the
+        text's right padding rather than taking width from the text, so
+        reaching its most rows never rewraps the text, never changes its
+        count of rows, and never moves a line from one row to another.
+
+    scrolling:
+        Once its text takes more than its most rows, it scrolls only to keep
+        the cursor in view, and then by no more than it takes: typing,
+        pasting, or moving the cursor to a row beneath the last shown
+        scrolls just far enough to show it as the last row, and to a row
+        above the first shown, just far enough to show it as the first. A
+        change of text, its height, or its width that leaves the cursor in
+        view never scrolls it, and a frame never scrolls it to its top and
+        back, nor back and forth between two places. Typing at the end of a
+        long text keeps its last row the last row shown, steadily, keystroke
+        after keystroke. Scrolling it with the wheel or trackpad moves it as
+        far as was scrolled and leaves it there until the cursor moves out
+        of view. Its scroll position is kept in whole device pixels, so its
+        rows never shimmer between two positions.
+
+    nothingElseCapsIt:
+        It is as tall as its rows need, up to its most rows, wherever it is
+        used: what holds it never caps or fixes its height, nor stretches it,
+        but lays itself out around the height the input takes, growing and
+        shrinking with it in the same frame. Only its most rows stop it
+        growing.

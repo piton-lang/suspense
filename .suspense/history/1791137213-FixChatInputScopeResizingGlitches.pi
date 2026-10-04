@@ -1,0 +1,82 @@
+from /scope/prompt-mode/chat-input import ChatInputScope
+
+export anchor FixChatInputScopeResizingGlitches:
+    userPrompt:
+        \\\
+        We're still having some issues with the @{ChatInputScope} resizing. The first time it wraps, it jumps weirdly for a frame or two, and then when it gets really long it's jumping all over the place.  Oh and also it seems like it doesn't even auto-grow anymore.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            We're still having some issues with the @{ChatInputScope} resizing. The first time it wraps, it jumps weirdly for a frame or two, and then when it gets really long it's jumping all over the place.  Oh and also it seems like it doesn't even auto-grow anymore.
+            \\\
+        result:
+            \\\
+            The spec already required growing without jumps, so these are code bugs. I can't see the code from this step, so I tightened the spec around the three likely causes, so the coding step has exact rules to fix them against. `piton check` reports no problems and `piton build` wrote 81 files; the new sections are in the refreshed reference.
+
+            **Likely causes:**
+            - **Jump at the first wrap:** the height is probably worked out at the previous frame's width, then corrected a frame later.
+            - **Jumping when it gets long:** probably two things together. The scrollbar appears and narrows the text, so it rewraps and the row count changes. The scroll position is also probably reset or chased each frame.
+            - **Not growing at all:** something around the input, such as the input row, the button column or the tab body, is probably fixing its height.
+
+            ## What changed in the spec
+
+            **1. Growing text input** (`.claude/reference/ui/components/growing-text-input/index.md`)
+            - **`#steadiness`, two new rules:**
+              - Rows are counted at the width the text wraps at in this frame. The height is set once per frame from that count and never adjusted afterwards, so the first wrap lands at its final height with no in-between frame.
+              - The scrollbar sits over the right padding instead of taking width from the text. Reaching 12 rows never rewraps the text or changes the row count.
+            - **`#scrolling` (new):** past its row limit it only scrolls to keep the cursor in view, by the least needed.
+              - Typing at the end keeps the last line steadily at the bottom.
+              - A change that leaves the cursor visible never scrolls it.
+              - It never jumps to the top and back.
+              - A wheel or trackpad scroll stays where you put it until the cursor leaves view.
+              - The scroll position is kept in whole pixels.
+            - **`#nothing-else-caps-it` (new):** whatever holds the input never fixes, caps or stretches its height. Only its row limit stops it growing.
+
+            **2. Chat input** (`.claude/reference/scope/prompt-mode/chat-input/index.md#grow-to-fit`)
+            - The chat input grows from the first wrapped line up to 12 rows, and shrinks back, in the same frame as the text changes.
+            - The tab body, the input row and the button column never fix its height. The input row is as tall as the text or the buttons, whichever is taller.
+            - The message list above gives up the room in that same frame.
+            - The tabs, buttons and session bar never jump while it grows or scrolls.
+
+            The constraints are in `.suspense/history/1791137158-Prompt_7b61e528bf74c99f.understanding.md`.
+
+            ## Anchors the code should follow
+            - `GrowingTextInputScope`: `#grow-to-fit`, `#most-rows`, `#steadiness`, `#scrolling`, `#nothing-else-caps-it`.
+            - `ChatInputScope`: `#grow-to-fit` and `#description`, for the text box's height against the button column.
+            \\\
+
+    sentFrom: Prompt_7b61e528bf74c99f
+
+    references:
+        - @{ChatInputScope}

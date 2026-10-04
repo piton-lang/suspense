@@ -792,6 +792,13 @@ impl ChatInput {
                 // room for the editor to stay scrolled past the first line
                 // after Enter grows the input.
                 .scroll_beyond_last_line(Some(0))
+                // No rows kept between the cursor and the input's edges
+                // while its text fits: sized to its rows, the input would
+                // otherwise take a cursor on its last row for too near the
+                // edge and scroll its text a row up for a frame each time a
+                // line is added. It is set anew each frame (see
+                // `GrowToFit::keep_cursor_in_view`).
+                .cursor_surrounding_lines(Some(0))
                 .placeholder(format!(
                     "Write a prompt… (/ for skills and commands, @ for agents, {SEND_SHORTCUT} to send)"
                 ))
@@ -2111,6 +2118,9 @@ impl Render for ChatInput {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let text = self.editor.read(cx).value();
         let (height, one_row) = self.fit.heights(&self.editor, window, cx);
+        // Before the editor lays out this frame, so it scrolls only once its
+        // text takes more than its most rows.
+        self.fit.keep_cursor_in_view(&self.editor, window, cx);
         let empty = text.is_empty();
         // A task queues only behind one of its own lane; a question is asked
         // straight away, beside whatever the harness is working on, so it
@@ -5129,5 +5139,135 @@ mod tests {
             (cleared - one_row).abs() <= gpui_kit::px(1.),
             "cleared input did not shrink back: {cleared:?} vs {one_row:?}"
         );
+    }
+
+    /// Typing grows the input in the very frame a line wraps, at its final
+    /// height, its text never scrolled up a row and back; past its most rows,
+    /// each row added scrolls it by just that row, in that frame, keeping the
+    /// last row the last shown; and nothing settles over later frames.
+    #[gpui_kit::test]
+    async fn typing_grows_and_scrolls_without_jumping(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            super::bind_keys(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut chat_input = None;
+        let painted = Rc::new(Cell::new(gpui_kit::px(0.)));
+        let window = cx.add_window(|window, cx| {
+            let input = cx.new(|cx| ChatInput::new(window, cx));
+            chat_input = Some(input.clone());
+            let painted_scroll_y = painted.clone();
+            let view = cx.new(|_| Probed {
+                input,
+                painted_scroll_y,
+            });
+            Root::new(view, window, cx)
+        });
+        let chat_input = chat_input.unwrap();
+        let editor = chat_input.read_with(cx, |input, _| input.editor.clone());
+        let handle = window.into();
+        cx.wait_for(handle, TIMEOUT, |_, cx| editor.read(cx).line_height().is_some())
+            .await;
+        cx.update_window(handle, |_, window, cx| {
+            editor.read(cx).focus_handle(cx).focus(window, cx);
+            window.render_frame(cx);
+        })
+        .unwrap();
+        let line_height = editor.read_with(cx, |editor, _| editor.line_height().unwrap());
+
+        // Each frame after typing `text`, one character at a time: the
+        // input's top, bottom, and height, where its cursor was painted, and
+        // the offset its text was painted at.
+        let type_text = |text: &str, cx: &mut TestAppContext| {
+            let mut presses = Vec::new();
+            for ch in text.chars() {
+                let frames = cx
+                    .update_window(handle, |_, window, cx| {
+                        window.input(&ch.to_string(), cx);
+                        (0..3)
+                            .map(|_| {
+                                window.draw(cx).clear(cx);
+                                let bounds = window.find("prompt-editor").bounds();
+                                // Laid out before scrolling.
+                                let (cursor, _) = editor.read(cx).cursor_layout().unwrap();
+                                let scroll = painted.get();
+                                (
+                                    bounds.top(),
+                                    bounds.bottom(),
+                                    bounds.size.height,
+                                    cursor.top() + scroll,
+                                    cursor.bottom() + scroll,
+                                    scroll,
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap();
+                cx.run_until_parked();
+                presses.push(frames);
+            }
+            presses
+        };
+        type Frame = (
+            gpui_kit::Pixels,
+            gpui_kit::Pixels,
+            gpui_kit::Pixels,
+            gpui_kit::Pixels,
+            gpui_kit::Pixels,
+            gpui_kit::Pixels,
+        );
+        let check = |presses: &[Vec<Frame>]| {
+            let mut scroll_before = gpui_kit::px(0.);
+            for (ix, frames) in presses.iter().enumerate() {
+                let settled = frames.last().unwrap();
+                for frame in frames {
+                    assert!(
+                        (frame.2 - settled.2).abs() <= gpui_kit::px(0.5)
+                            && (frame.5 - settled.5).abs() <= gpui_kit::px(0.5),
+                        "keystroke {ix} settled over frames: {frames:?}"
+                    );
+                    assert!(
+                        frame.3 >= frame.0 - gpui_kit::px(0.5)
+                            && frame.4 <= frame.1 + gpui_kit::px(0.5),
+                        "keystroke {ix}: the cursor is out of view: {frames:?}"
+                    );
+                }
+                // Typing at the end only ever scrolls down, a row at a time.
+                let step = scroll_before - settled.5;
+                assert!(
+                    step.abs() <= gpui_kit::px(0.5)
+                        || (step - line_height).abs() <= gpui_kit::px(0.5),
+                    "keystroke {ix} scrolled by {step:?}: {frames:?}"
+                );
+                scroll_before = settled.5;
+            }
+        };
+        // Up to and past the first wrap.
+        let words = "lorem ipsum dolor sit amet ";
+        let presses = type_text(&words.repeat(10), cx);
+        let (first, last) = (presses[0][0].2, presses.last().unwrap()[0].2);
+        assert!(last >= first + line_height, "the text never wrapped");
+        check(&presses);
+        // A row short of the most, then typing on past it.
+        cx.update_window(handle, |_, window, cx| {
+            let lines = "line\n".repeat(MAX_ROWS - 1);
+            editor.update(cx, |editor, cx| editor.set_value(lines, window, cx));
+            editor.update(cx, |editor, cx| {
+                let end = editor.value().len();
+                editor.set_selected_range(end..end, cx)
+            });
+            window.render_frame(cx);
+            window.render_frame(cx);
+        })
+        .unwrap();
+        let presses = type_text(&words.repeat(25), cx);
+        assert!(
+            presses.last().unwrap()[0].5 <= -line_height,
+            "the text never went past the most rows: {:?}",
+            presses.last()
+        );
+        check(&presses);
     }
 }

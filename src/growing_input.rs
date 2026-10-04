@@ -29,6 +29,9 @@ pub struct GrowToFit {
     /// How many rows the editor laid a text out in, at a width, when that
     /// differed from the count made ahead of drawing it.
     laid_out: Option<LaidOut>,
+    /// The text and cursor as last painted, so a scroll back into view is
+    /// made only for a change of them, never against the wheel.
+    last_painted: Option<(SharedString, usize)>,
     /// Rows the count made ahead of drawing is off by, to stand in for a font
     /// that wraps differently from the editor's.
     #[cfg(test)]
@@ -51,6 +54,7 @@ impl GrowToFit {
             chrome: None,
             font: None,
             laid_out: None,
+            last_painted: None,
             #[cfg(test)]
             miscount: 0,
         }
@@ -81,6 +85,30 @@ impl GrowToFit {
             ceil_to_device_pixel(line_height * rows as f32 + chrome, window),
             ceil_to_device_pixel(line_height + chrome, window),
         )
+    }
+
+    /// Whether the editor's text takes more than its most rows, so it
+    /// scrolls.
+    pub fn overflows(&self, editor: &Entity<EditorState>, window: &Window, cx: &App) -> bool {
+        let text = editor.read(cx).value();
+        self.rows(&text, window, cx) > self.max_rows
+    }
+
+    /// The rows the editor keeps between its cursor and its edges, set
+    /// before it lays out each frame: none while its text fits, so a cursor
+    /// on its last row never scrolls it; one once it scrolls, so a row added
+    /// beneath the last shown scrolls it by that row, in that frame, keeping
+    /// the last row the last shown.
+    pub fn keep_cursor_in_view(
+        &self,
+        editor: &Entity<EditorState>,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let lines = Some(usize::from(self.overflows(editor, window, cx)));
+        editor.update(cx, |editor, cx| {
+            editor.set_cursor_surrounding_lines(lines, window, cx)
+        });
     }
 
     /// The rows `text` takes in the editor: as the editor laid it out, once
@@ -149,6 +177,8 @@ impl GrowToFit {
                 drawn_font.family = theme.mono_font_family.clone();
                 let laid_out = laid_out_rows(&editor, cx);
                 let text = editor.read(cx).value();
+                let cursor = editor.read(cx).cursor();
+
                 owner
                     .update(cx, |owner, cx| {
                         let fit = fit(owner);
@@ -169,12 +199,29 @@ impl GrowToFit {
                         // Where the rows counted ahead differ from those laid
                         // out, the laid out ones are taken for this text.
                         if let Some(rows) = laid_out {
-                            let shown = fit.rows(&text, window, cx).clamp(1, fit.max_rows);
-                            let within = rows.min(fit.max_rows);
-                            if within != shown {
-                                fit.laid_out = Some(LaidOut { text, width, rows });
+                            let counted = fit.rows(&text, window, cx).max(1);
+                            // Within its most rows, or whether it overflows.
+                            let differs = rows.min(fit.max_rows) != counted.min(fit.max_rows)
+                                || (rows > fit.max_rows) != (counted > fit.max_rows);
+                            if differs {
+                                fit.laid_out = Some(LaidOut { text: text.clone(), width, rows });
                                 changed = true;
                             }
+                        }
+                        // A change of text or cursor that left the cursor out
+                        // of view, as a paste of many rows, scrolls just far
+                        // enough to show it; a wheel scroll is left alone.
+                        let edited = fit.last_painted.as_ref()
+                            != Some(&(text.clone(), cursor));
+                        fit.last_painted = Some((text.clone(), cursor));
+                        if edited
+                            && fit.overflows(&editor, window, cx)
+                            && let Some(y) = cursor_scroll(&editor, fit.max_rows, cx)
+                        {
+                            editor.update(cx, |editor, cx| {
+                                let x = editor.scroll_offset().x;
+                                editor.set_scroll_offset(point(x, y), cx)
+                            });
                         }
                         if changed {
                             cx.notify();
@@ -207,6 +254,32 @@ fn laid_out_rows(editor: &Entity<EditorState>, cx: &App) -> Option<usize> {
             let shown = editor.visible_row_range()?;
             Some(shown.end + 1)
         }
+    }
+}
+
+/// Where the editor's text is to be scrolled to for its cursor to show,
+/// just far enough, as the first row shown or the last; `None` where it
+/// already shows, or before the editor has laid out. The cursor is laid out
+/// even where it is out of view, unscrolled, so its row is found from where
+/// it sits against the editor's text area.
+fn cursor_scroll(editor: &Entity<EditorState>, max_rows: usize, cx: &App) -> Option<Pixels> {
+    let editor = editor.read(cx);
+    let (cursor, line_height) = editor.cursor_layout()?;
+    let input = editor.input_bounds();
+    // The rows shown, centred in the input between its padding.
+    let viewport = line_height * max_rows as f32;
+    let text_top = input.top() + (input.size.height - viewport) / 2.;
+    let row = ((cursor.center().y - text_top) / line_height - 0.5)
+        .round()
+        .max(0.) as usize;
+    let scroll = editor.scroll_offset().y;
+    let top_row = (-scroll / line_height).round().max(0.) as usize;
+    if row < top_row {
+        Some(-(line_height * row as f32))
+    } else if row >= top_row + max_rows {
+        Some(-(line_height * (row + 1 - max_rows) as f32))
+    } else {
+        None
     }
 }
 
