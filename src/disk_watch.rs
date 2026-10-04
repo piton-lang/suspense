@@ -146,10 +146,20 @@ pub fn changes(path: &Path, events: &[Event]) -> FileChanges {
                     changes.appeared.push(to.clone());
                 }
             }
-            EventKind::Remove(_)
-            | EventKind::Modify(ModifyKind::Name(RenameMode::From | RenameMode::Any)) => {
+            EventKind::Remove(_) | EventKind::Modify(ModifyKind::Name(RenameMode::From)) => {
                 if event.paths.iter().any(|gone| path.starts_with(gone)) {
                     changes.vanished = true;
+                }
+            }
+            // Either side of a rename, as macOS reports each: the file going,
+            // or another arriving where it may have gone.
+            EventKind::Modify(ModifyKind::Name(RenameMode::Any)) => {
+                for renamed in &event.paths {
+                    if path.starts_with(renamed) {
+                        changes.vanished = true;
+                    } else {
+                        changes.appeared.push(renamed.clone());
+                    }
                 }
             }
             EventKind::Create(_) | EventKind::Modify(ModifyKind::Name(RenameMode::To)) => {
@@ -222,5 +232,17 @@ mod tests {
         );
         assert!(moved.vanished);
         assert_eq!(moved.appeared, vec![PathBuf::from("/p/docs/a.rs")]);
+
+        // Renamed as macOS reports it: each side alone, neither saying which.
+        let side = EventKind::Modify(ModifyKind::Name(RenameMode::Any));
+        let renamed = changes(
+            path,
+            &[
+                event(side, &["/p/src/a.rs"]),
+                event(side, &["/p/src/b.rs"]),
+            ],
+        );
+        assert!(renamed.vanished);
+        assert_eq!(renamed.appeared, vec![PathBuf::from("/p/src/b.rs")]);
     }
 }
