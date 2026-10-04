@@ -2,7 +2,8 @@
 //! the Brightness slider, which runs the interface from its darkest to its
 //! lightest, Reset Brightness beneath it, Theme, which opens the theme editor, Settings, which opens
 //! the settings window, Welcome, which opens the welcome page, and
-//! Walkthrough, which starts the walkthrough.
+//! Walkthrough, which starts the walkthrough, and Check for Updates, which
+//! checks for a newer Suspense.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::Button;
@@ -17,6 +18,7 @@ use gpui_kit::*;
 use super::{Command, CommandPlace, CommandSize, Ribbon};
 use crate::settings_window::OpenSettings;
 use crate::theme_editor::OpenThemeEditor;
+use crate::self_update::Updates;
 use crate::walkthrough::OpenWalkthrough;
 use crate::welcome::OpenWelcome;
 use crate::{theme, theme_preference};
@@ -58,6 +60,12 @@ pub(super) const COMMANDS: &[CommandPlace] = &[
     },
     CommandPlace {
         command: Command::Walkthrough,
+        group: "Help",
+        size: CommandSize::Full,
+        primary: false,
+    },
+    CommandPlace {
+        command: Command::CheckForUpdates,
         group: "Help",
         size: CommandSize::Full,
         primary: false,
@@ -319,6 +327,22 @@ pub(super) fn walkthrough(
     button("walkthrough", IconName::Signpost, "Walkthrough".into())
         .tooltip("Walk through creating a project and the prompt modes")
         .on_click(|_, window, cx| window.dispatch_action(Box::new(OpenWalkthrough), cx))
+        .into_any_element()
+}
+
+/// Check for Updates: checks for a newer Suspense straight away, saying how
+/// it went in a notification; a spinner and disabled while a check or
+/// download runs, and disabled, saying why, in a build that can't update.
+pub(super) fn check_for_updates(
+    button: impl Fn(&'static str, IconName, SharedString) -> Button,
+    cx: &App,
+) -> AnyElement {
+    let (enabled, tooltip) = Updates::ribbon_state(cx);
+    button("check-for-updates", IconName::RefreshCw, "Check for Updates".into())
+        .tooltip(tooltip)
+        .loading(Updates::busy(cx))
+        .disabled(!enabled)
+        .on_click(|_, _, cx| Updates::check_from_ribbon(cx))
         .into_any_element()
 }
 

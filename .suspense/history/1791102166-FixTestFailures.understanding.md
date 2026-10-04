@@ -1,0 +1,4 @@
+- [Rows out of view are measured a few at a time over the frames after they arrive; no one frame lays out every row](.claude/reference/ui/components/table/TableScope.md#measuring)
+- [Drawing the table costs no more than drawing the rows in view, however many rows it has](.claude/reference/ui/components/table/TableScope.md#drawing)
+- [When the table's width changes, only the rows in view are laid out at once; the rest are measured again the same way](.claude/reference/ui/components/table/TableScope.md#resizing)
+- [The Brightness slider's thumb follows the appearance showing; Reset Brightness keeps the mode](.claude/reference/ui/components/ribbon/application-tab/index.md#commands)

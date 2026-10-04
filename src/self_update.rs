@@ -79,7 +79,9 @@ impl Release {
 /// Why a build can't update itself, if it can't.
 pub fn cant_update() -> Option<&'static str> {
     if REPOSITORY.is_none() {
-        return Some("This build wasn't published as an edge release, so it doesn't update itself.");
+        return Some(
+            "This build wasn't published as an edge release, so it doesn't update itself.",
+        );
     }
     if sequence(crate::version::VERSION).is_none() {
         return Some("This build's version isn't an edge release's, so it doesn't update itself.");
@@ -92,13 +94,21 @@ pub fn cant_update() -> Option<&'static str> {
 
 /// The newest release among GitHub's `releases`, newer than `running`, with
 /// an asset `asset(n)` names; versions compared by their number.
-pub fn newest(releases: &Value, running: u64, asset: impl Fn(u64) -> Option<String>) -> Option<Release> {
+pub fn newest(
+    releases: &Value,
+    running: u64,
+    asset: impl Fn(u64) -> Option<String>,
+) -> Option<Release> {
     let mut best: Option<Release> = None;
     for release in releases.as_array()? {
         if release.get("draft").and_then(Value::as_bool) == Some(true) {
             continue;
         }
-        let Some(n) = release.get("tag_name").and_then(Value::as_str).and_then(sequence) else {
+        let Some(n) = release
+            .get("tag_name")
+            .and_then(Value::as_str)
+            .and_then(sequence)
+        else {
             continue;
         };
         if n <= running || best.as_ref().is_some_and(|best| best.n >= n) {
@@ -265,7 +275,11 @@ pub fn download(release: &Release, exe: &Path, got: &AtomicU64) -> Result<()> {
                 String::from_utf8_lossy(&untar.stderr).trim()
             );
         }
-        let name = if cfg!(windows) { "suspense.exe" } else { "suspense" };
+        let name = if cfg!(windows) {
+            "suspense.exe"
+        } else {
+            "suspense"
+        };
         let binary = unpacked.join(name);
         if !binary.is_file() {
             bail!("the update holds no {name}");
@@ -331,11 +345,20 @@ pub enum Status {
     Idle,
     Checking,
     UpToDate,
-    Downloading { version: String, got: u64, total: u64 },
-    Ready { version: String },
+    Downloading {
+        version: String,
+        got: u64,
+        total: u64,
+    },
+    Ready {
+        version: String,
+    },
     /// The running binary's directory can't be written: the release's page,
     /// to update by hand.
-    NotWritable { dir: PathBuf, page: String },
+    NotWritable {
+        dir: PathBuf,
+        page: String,
+    },
     Failed(String),
 }
 
@@ -349,6 +372,9 @@ pub struct Updates {
     /// An update a quit that never finished left staged, put in place at
     /// this launch: it takes effect once Suspense restarts.
     pub finished_at_launch: Option<String>,
+    /// The check under way was asked for from the ribbon's Check for
+    /// Updates, which says how it went in a notification.
+    notify_outcome: bool,
     got: Arc<AtomicU64>,
     _checks: Task<()>,
 }
@@ -393,6 +419,7 @@ impl Updates {
             last_checked: None,
             automatic: preference::load(),
             finished_at_launch,
+            notify_outcome: false,
             got: Arc::default(),
             _checks: checks,
         });
@@ -420,13 +447,76 @@ impl Updates {
     }
 
     fn set(status: Status, cx: &mut App) {
-        if let Some(updates) = cx.try_global::<Self>() {
-            if updates.status == status {
-                return;
-            }
+        let Some(updates) = cx.try_global::<Self>() else {
+            return;
+        };
+        if updates.status == status {
+            return;
+        }
+        if updates.notify_outcome {
+            let before = updates.status.clone();
+            Self::notify_outcome(&before, &status, cx);
         }
         cx.update_global::<Self, _>(|updates, _| updates.status = status);
         cx.refresh_windows();
+    }
+
+    /// Says how a check asked for from the ribbon went, as `status` follows
+    /// `before`; once it is over, nothing more.
+    fn notify_outcome(before: &Status, status: &Status, cx: &mut App) {
+        use gpui_kit::component::notification::Notification;
+        let (note, over) = outcome(before, status);
+        if over {
+            cx.update_global::<Self, _>(|updates, _| updates.notify_outcome = false);
+        }
+        if let Some(note) = note {
+            push_notification(
+                match note {
+                    Outcome::UpToDate(message) => {
+                        Notification::success(message).title("Suspense is up to date")
+                    }
+                    Outcome::Downloading(message) => Notification::info(message),
+                    Outcome::Failed(why) => {
+                        Notification::error(why).title("Could not check for updates")
+                    }
+                },
+                cx,
+            );
+        }
+    }
+
+    /// The ribbon's Check for Updates: checks straight away, saying how it
+    /// went in a notification; with an update already staged, says it is
+    /// ready again instead.
+    pub fn check_from_ribbon(cx: &mut App) {
+        let Some(updates) = Self::get(cx) else {
+            return;
+        };
+        if cant_update().is_some() || Self::busy(cx) {
+            return;
+        }
+        if let Status::Ready { version } = &updates.status {
+            let version = version.clone();
+            notify_ready(&version, cx);
+            return;
+        }
+        cx.update_global::<Self, _>(|updates, _| updates.notify_outcome = true);
+        Self::check(true, cx);
+    }
+
+    /// What the ribbon's Check for Updates says it would do, or is doing:
+    /// whether it can be clicked, and its tooltip.
+    pub fn ribbon_state(cx: &App) -> (bool, String) {
+        if let Some(why) = cant_update() {
+            return (false, why.to_string());
+        }
+        match Self::get(cx).map(|updates| &updates.status) {
+            Some(Status::Checking) => (false, "Checking for updates…".into()),
+            Some(Status::Downloading { version, .. }) => {
+                (false, format!("Downloading Suspense {version}…"))
+            }
+            _ => (true, "Check for a newer version of Suspense".into()),
+        }
     }
 
     /// Turns automatic checks on or off, remembering the choice.
@@ -439,22 +529,26 @@ impl Updates {
     /// Whether a check or download is under way.
     pub fn busy(cx: &App) -> bool {
         Self::get(cx).is_some_and(|updates| {
-            matches!(updates.status, Status::Checking | Status::Downloading { .. })
+            matches!(
+                updates.status,
+                Status::Checking | Status::Downloading { .. }
+            )
         })
     }
 
     /// Checks for an update now, and downloads one found; `asked` when the
     /// user asked, so a failure says why, and quiet otherwise.
     pub fn check(asked: bool, cx: &mut App) {
-        let (Some(repository), Some(running)) =
-            (REPOSITORY, sequence(crate::version::VERSION))
+        let (Some(repository), Some(running)) = (REPOSITORY, sequence(crate::version::VERSION))
         else {
             return;
         };
         if Self::busy(cx) || cx.try_global::<Self>().is_none() {
             return;
         }
-        let before = Self::get(cx).map(|updates| updates.status.clone()).unwrap_or(Status::Idle);
+        let before = Self::get(cx)
+            .map(|updates| updates.status.clone())
+            .unwrap_or(Status::Idle);
         Self::set(Status::Checking, cx);
         let found = cx.background_spawn(async move {
             let releases = fetch_releases(repository)?;
@@ -511,7 +605,9 @@ impl Updates {
                 cx,
             );
         }
-        let got = Self::get(cx).map(|updates| updates.got.clone()).unwrap_or_default();
+        let got = Self::get(cx)
+            .map(|updates| updates.got.clone())
+            .unwrap_or_default();
         got.store(0, Ordering::Relaxed);
         let version = release.version();
         Self::set(
@@ -538,14 +634,26 @@ impl Updates {
                         let now = got.load(Ordering::Relaxed);
                         let version = version.clone();
                         cx.update(|cx| {
-                            Self::set(Status::Downloading { version, got: now, total }, cx)
+                            Self::set(
+                                Status::Downloading {
+                                    version,
+                                    got: now,
+                                    total,
+                                },
+                                cx,
+                            )
                         });
                     }
                 }
             };
             cx.update(|cx| match result {
                 Ok(()) => {
-                    Self::set(Status::Ready { version: version.clone() }, cx);
+                    Self::set(
+                        Status::Ready {
+                            version: version.clone(),
+                        },
+                        cx,
+                    );
                     notify_ready(&version, cx);
                 }
                 Err(err) => Self::set(Status::Failed(format!("{err:#}")), cx),
@@ -564,6 +672,62 @@ impl Updates {
 /// Suspense is quitting to start again.
 pub fn restart_on_quit() {
     RESTART.store(true, Ordering::SeqCst);
+}
+
+/// What a check asked for from the ribbon says, as it goes.
+#[derive(Clone, Debug, PartialEq)]
+enum Outcome {
+    UpToDate(String),
+    Downloading(String),
+    Failed(String),
+}
+
+/// What a check asked for from the ribbon says as `status` follows
+/// `before`, if anything, and whether the check is then over: up to date,
+/// with the version running; downloading, once, as a download starts; or why
+/// it couldn't. A download staged says so in its own notification.
+fn outcome(before: &Status, status: &Status) -> (Option<Outcome>, bool) {
+    match status {
+        Status::Checking => (None, false),
+        Status::Downloading { version, .. } => match before {
+            Status::Downloading { .. } => (None, false),
+            _ => (
+                Some(Outcome::Downloading(format!(
+                    "Downloading Suspense {version}…"
+                ))),
+                false,
+            ),
+        },
+        Status::UpToDate => (
+            Some(Outcome::UpToDate(format!(
+                "Suspense {} is the newest version.",
+                crate::version::VERSION
+            ))),
+            true,
+        ),
+        Status::Failed(why) => (Some(Outcome::Failed(why.clone())), true),
+        Status::NotWritable { dir, .. } => (
+            Some(Outcome::Failed(format!(
+                "Suspense can't update itself in {}, as it can't write there. The release's page is linked in Settings, under Updates.",
+                dir.display()
+            ))),
+            true,
+        ),
+        Status::Ready { .. } | Status::Idle => (None, true),
+    }
+}
+
+/// Shows `note` in the active window.
+fn push_notification(note: gpui_kit::component::notification::Notification, cx: &mut App) {
+    use gpui_kit::component::WindowExt as _;
+    cx.defer(move |cx| {
+        let Some(handle) = cx.active_window().or_else(|| cx.windows().first().copied()) else {
+            return;
+        };
+        handle
+            .update(cx, |_, window, cx| window.push_notification(note, cx))
+            .ok();
+    });
 }
 
 /// Says, in the window, that `version` is ready, with Restart and Later.
@@ -613,7 +777,11 @@ fn notify_ready(version: &str, cx: &mut App) {
 pub mod preference {
     #[cfg(not(test))]
     fn file() -> Option<std::path::PathBuf> {
-        Some(dirs::config_dir()?.join("suspense").join("check-for-updates"))
+        Some(
+            dirs::config_dir()?
+                .join("suspense")
+                .join("check-for-updates"),
+        )
     }
 
     pub fn load() -> bool {
@@ -649,9 +817,11 @@ mod tests {
     #[cfg(unix)]
     use sha2::{Digest as _, Sha256};
 
+    use super::{
+        Outcome, Status, apply, newest, outcome, sequence, staged, staged_version, writable,
+    };
     #[cfg(unix)]
     use super::{Release, download};
-    use super::{apply, newest, sequence, staged, staged_version, writable};
 
     #[test]
     fn versions_are_compared_by_number() {
@@ -691,6 +861,46 @@ mod tests {
             assert!(super::cant_update().is_some());
             assert_eq!(super::at_launch(), Ok(None));
         }
+    }
+
+    /// A check asked for from the ribbon says it is up to date, that it is
+    /// downloading, once, or why it couldn't, and is over once it has said
+    /// so or staged the update.
+    #[test]
+    fn the_ribbons_check_says_how_it_went() {
+        let downloading = |got| Status::Downloading {
+            version: "0.1.9".into(),
+            got,
+            total: 10,
+        };
+        assert_eq!(outcome(&Status::Idle, &Status::Checking), (None, false));
+        let (note, over) = outcome(&Status::Checking, &Status::UpToDate);
+        assert!(
+            matches!(note, Some(Outcome::UpToDate(message)) if message.contains(crate::version::VERSION))
+        );
+        assert!(over);
+        assert_eq!(
+            outcome(&Status::Checking, &downloading(0)),
+            (
+                Some(Outcome::Downloading("Downloading Suspense 0.1.9…".into())),
+                false
+            )
+        );
+        // Once, not as each piece comes.
+        assert_eq!(outcome(&downloading(0), &downloading(5)), (None, false));
+        assert_eq!(
+            outcome(
+                &downloading(5),
+                &Status::Ready {
+                    version: "0.1.9".into()
+                }
+            ),
+            (None, true)
+        );
+        assert_eq!(
+            outcome(&Status::Checking, &Status::Failed("offline".into())),
+            (Some(Outcome::Failed("offline".into())), true)
+        );
     }
 
     /// An update staged is put in place over the binary, and a step that
@@ -734,7 +944,10 @@ mod tests {
                 .success()
         );
         let bytes = std::fs::read(&archive).unwrap();
-        let digest: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
+        let digest: String = Sha256::digest(&bytes)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
         let exe = dir.join("bin/suspense");
         std::fs::create_dir_all(dir.join("bin")).unwrap();
         std::fs::write(&exe, "old").unwrap();
@@ -751,7 +964,10 @@ mod tests {
         assert!(!staged(&exe).exists());
         release.sha256 = Some(digest);
         download(&release, &exe, &got).unwrap();
-        assert_eq!(std::fs::read_to_string(staged(&exe)).unwrap(), "the new binary");
+        assert_eq!(
+            std::fs::read_to_string(staged(&exe)).unwrap(),
+            "the new binary"
+        );
         assert_eq!(got.load(Ordering::Relaxed), bytes.len() as u64);
         std::fs::remove_dir_all(&dir).ok();
     }

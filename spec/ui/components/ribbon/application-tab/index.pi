@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /scope/self-update import SelfUpdateScope
 from /scope/settings-window import SettingsWindowScope
 from /scope/user-preferences import UserPreferencesScope
 from /scope/walkthrough import WalkthroughScope
@@ -36,7 +37,8 @@ shape RibbonApplicationTabShape:
 
         help:
             A "Help" group, the last, after Preferences, holds the Welcome
-            command, then the Walkthrough command.
+            command, then the Walkthrough command, then the Check for Updates
+            command.
 
     commands:
         brightness:
@@ -102,6 +104,30 @@ shape RibbonApplicationTabShape:
             A "Walkthrough" button with a signpost icon. Clicking it starts
             the @{WalkthroughScope} from its first step. Its tooltip says it
             walks through creating a project and the prompt modes.
+
+            It is a full button, and not primary, so the collapsed ribbon
+            leaves it out.
+
+        checkForUpdates:
+            A "Check for Updates" button with a refresh icon. Clicking it
+            checks for an update straight away, as the Updates section's
+            Check for updates does, as the @{SelfUpdateScope} says, whether
+            automatic checks are on or not, and says how it went in a
+            notification, which reads "Suspense is up to date", with the
+            version running;
+            "Downloading Suspense 0.1.N…" when a newer release is found,
+            followed by the "Suspense 0.1.N is ready" notification, with its
+            Restart and Later buttons, once it is staged; or, titled
+            "Could not check for updates", why the check or download failed.
+
+            While a check or download is under way, it shows a spinner in
+            place of its icon and is disabled, its tooltip saying what is
+            under way. While an update is already staged, clicking it shows
+            the "Suspense 0.1.N is ready" notification again, without checking.
+            In a build that can't update itself, as one made on a developer's
+            machine, it is disabled, its tooltip saying why, as the Updates
+            section does. Otherwise its tooltip says it checks for a newer
+            version of Suspense.
 
             It is a full button, and not primary, so the collapsed ribbon
             leaves it out.

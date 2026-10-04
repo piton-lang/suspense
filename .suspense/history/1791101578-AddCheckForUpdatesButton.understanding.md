@@ -1,0 +1,8 @@
+- [The Help group holds Welcome, Walkthrough, then Check for Updates](.claude/reference/ui/components/ribbon/application-tab/index.md#groups)
+- [Check for Updates is a full, non-primary button with a refresh icon](.claude/reference/ui/components/ribbon/application-tab/index.md#commands)
+- [Clicking it checks straight away, as the Updates section's button does, whatever the automatic setting](.claude/reference/ui/components/ribbon/application-tab/index.md#commands)
+- [It reports in a notification: up to date, downloading, then ready with Restart/Later, or "Could not check for updates"](.claude/reference/ui/components/ribbon/application-tab/index.md#commands)
+- [While a check or download runs it shows a spinner and is disabled](.claude/reference/ui/components/ribbon/application-tab/index.md#commands)
+- [With an update staged, it shows the ready notification again without checking](.claude/reference/ui/components/ribbon/application-tab/index.md#commands)
+- [In a build that can't update itself, it is disabled with a tooltip saying why](.claude/reference/ui/components/ribbon/application-tab/index.md#commands)
+- [Only a build with a baked-in repository updates itself](.claude/reference/scope/self-update/index.md#description)

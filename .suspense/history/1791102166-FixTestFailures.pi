@@ -1,0 +1,48 @@
+
+export anchor FixTestFailures:
+    userPrompt:
+        \\\
+        Failure during testing failures:
+
+        ---- main_window::tests::reset_brightness_sits_beneath_the_slider stdout ----
+
+        thread 'main_window::tests::reset_brightness_sits_beneath_the_slider' (16434) panicked at src/main_window.rs:2376:13:
+        resetting changed the mode
+        note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+        ---- main_window::tests::the_brightness_slider_brightens_the_interface stdout ----
+
+        thread 'main_window::tests::the_brightness_slider_brightens_the_interface' (16468) panicked at src/main_window.rs:2470:9:
+        assertion `left == right` failed: the thumb isn't on dark mode at 0
+          left: Some(157.0)
+         right: Some(17.0)
+
+        ---- prompt_mode::tests::long_output_is_measured_a_few_rows_a_frame stdout ----
+
+        thread 'prompt_mode::tests::long_output_is_measured_a_few_rows_a_frame' (17078) panicked at src/prompt_mode.rs:15610:9:
+        3965 of 1500 rows were drawn in the first frame
+
+
+        failures:
+            main_window::tests::reset_brightness_sits_beneath_the_slider
+            main_window::tests::the_brightness_slider_brightens_the_interface
+            prompt_mode::tests::long_output_is_measured_a_few_rows_a_frame
+
+        test result: FAILED. 495 passed; 3 failed; 1 ignored; 0 measured; 0 filtered out; finished in 52.67s
+
+        error: test failed, to rerun pass `--bin suspense`
+        Error: Process completed with exit code 101.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+        \\\

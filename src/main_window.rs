@@ -4914,13 +4914,15 @@ mod tests {
     async fn the_theme_editor_opens_in_the_inset_panel(cx: &mut TestAppContext) {
         use crate::chat_input::{SendMode, mode_color};
         use crate::ribbon::RibbonTab;
-        use gpui_kit::component::ActiveTheme as _;
+        use gpui_kit::component::{ActiveTheme as _, Theme, ThemeMode};
         cx.update(|cx| {
             gpui_kit::init(cx);
             crate::theme::init(cx);
             piton_syntax::init();
             ProjectDirectory::init(cx);
             super::bind_keys(cx);
+            // A test chooses its mode; it never follows the system's.
+            Theme::change(ThemeMode::Dark, None, cx);
         });
         let mut main = None;
         let window = cx.add_window(|window, cx| {

@@ -21,6 +21,8 @@ const FILE_NAME: &str = "theme";
 pub fn apply(window: &mut Window, cx: &mut App) {
     match file().ok().and_then(|file| load(&file)) {
         Some(mode) => Theme::change(mode, Some(window), cx),
+        // A test chooses the mode it runs in.
+        None if cfg!(test) => {}
         None => Theme::sync_system_appearance(Some(window), cx),
     }
 }
@@ -41,7 +43,12 @@ pub fn save_appearance(cx: &App) -> Result<()> {
     save(cx.theme().mode, &file()?)
 }
 
+/// The file the choice is kept in; none in tests, which neither read nor
+/// write it.
 fn file() -> Result<PathBuf> {
+    if cfg!(test) {
+        return Err(anyhow!("tests keep no theme choice"));
+    }
     let config_dir = dirs::config_dir().ok_or_else(|| anyhow!("no config directory"))?;
     Ok(config_dir.join(APP_DIR).join(FILE_NAME))
 }

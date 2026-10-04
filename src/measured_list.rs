@@ -27,6 +27,10 @@ pub type RenderRow = Rc<dyn Fn(usize, &mut Window, &mut App) -> AnyElement>;
 /// How long a frame may spend measuring rows out of view.
 const MEASURE_BUDGET: Duration = Duration::from_millis(4);
 
+/// The most rows out of view a frame measures, however quickly they
+/// measure, so no one frame lays out every row of a long list.
+const MEASURE_MAX_ROWS: usize = 32;
+
 /// How tall a row counts before any row has been measured.
 const FIRST_GUESS: Pixels = px(40.);
 
@@ -353,6 +357,7 @@ impl MeasuredList {
         // Then some of the rest, measured as the list would lay them out.
         let space = size(AvailableSpace::Definite(width), AvailableSpace::MinContent);
         let deadline = Instant::now() + MEASURE_BUDGET;
+        let mut measured = 0;
         loop {
             let next = heights.next;
             let Some(ix) = heights.rows[next.min(count)..]
@@ -369,7 +374,8 @@ impl MeasuredList {
             let height = element.layout_as_root(space, window, cx).height;
             heights = self.heights.borrow_mut();
             heights.record(ix, height);
-            if Instant::now() >= deadline {
+            measured += 1;
+            if measured >= MEASURE_MAX_ROWS || Instant::now() >= deadline {
                 break;
             }
         }

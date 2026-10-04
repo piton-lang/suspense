@@ -1,0 +1,7 @@
+- [The Help group holds Welcome, then Walkthrough, then Check for Updates](.claude/reference/ui/components/ribbon/application-tab/index.md#groups)
+- [Check for Updates is a full, non-primary button with a refresh icon](.claude/reference/ui/components/ribbon/application-tab/index.md#commands)
+- [Clicking checks straight away, as the Updates section's Check for updates does, automatic checks on or not](.claude/reference/ui/components/ribbon/application-tab/index.md#commands)
+- [A notification says "Suspense is up to date" with the running version, or "Downloading Suspense 0.1.N…" then the ready notification, or "Could not check for updates" with why](.claude/reference/ui/components/ribbon/application-tab/index.md#commands)
+- [While a check or download runs, it shows a spinner for its icon, is disabled, and its tooltip says what is under way](.claude/reference/ui/components/ribbon/application-tab/index.md#commands)
+- [With an update staged, clicking shows the "Suspense 0.1.N is ready" notification again without checking](.claude/reference/ui/components/ribbon/application-tab/index.md#commands)
+- [In a build that can't update itself it is disabled, its tooltip saying why; otherwise the tooltip says it checks for a newer version](.claude/reference/ui/components/ribbon/application-tab/index.md#commands)

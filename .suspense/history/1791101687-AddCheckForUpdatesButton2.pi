@@ -1,0 +1,66 @@
+
+export anchor AddCheckForUpdatesButton2:
+    userPrompt:
+        \\\
+        Let's have a check-for-updates button under the application tab
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Let's have a check-for-updates button under the application tab
+            \\\
+        result:
+            \\\
+            I've added a **Check for Updates** button to the Application tab's Help group, after Welcome and Walkthrough. `piton check` reports no problems, the file is formatted, and `piton build` succeeds. I confirmed the button and the group change in the refreshed reference.
+
+            **How it works:**
+            - **Click:** checks for an update straight away, exactly as the Settings → Updates button does, whether or not automatic checks are on. The result appears as a notification:
+              - "Suspense is up to date", with the running version.
+              - "Downloading Suspense 0.1.N…", followed by the existing "Suspense 0.1.N is ready" notification with **Restart** and **Later** once the update is staged.
+              - "Could not check for updates", with the reason.
+            - **While checking or downloading:** a spinner replaces the icon, the button is disabled, and the tooltip says what's happening.
+            - **Update already downloaded:** clicking shows the "ready" notification again instead of checking.
+            - **Builds that can't update themselves, such as a local dev build:** the button is disabled, with a tooltip explaining why.
+
+            It's a full, non-primary button with a refresh icon, so the collapsed ribbon leaves it out.
+
+            ## What changed in the spec, and the anchors the code should follow
+
+            - **`RibbonApplicationTabShape.groups.help`:** the Help group now holds Welcome, Walkthrough, then Check for Updates.
+            - **`RibbonApplicationTabShape.commands.checkForUpdates` (new):**
+              - Reuse the existing manual check from `SelfUpdateShape.checking`, `.downloading` and `.restarting`, the same code path as the Updates section's button.
+              - Show the result in the notifications listed above.
+              - Show a spinner and disable the button while a check or download runs.
+              - With an update already staged, re-show the ready notification without checking.
+              - In builds without a baked-in repository, disable the button and give the reason in its tooltip.
+            \\\
+
+    sentFrom: AddCheckForUpdatesButton

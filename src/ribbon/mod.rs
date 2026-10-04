@@ -172,6 +172,7 @@ enum Command {
     Settings,
     Welcome,
     Walkthrough,
+    CheckForUpdates,
 }
 
 /// Where a command sits in its tab, and whether it stays in the collapsed
@@ -563,6 +564,7 @@ impl Ribbon {
             Command::Settings => application_tab::settings(button),
             Command::Welcome => application_tab::welcome(button),
             Command::Walkthrough => application_tab::walkthrough(button),
+            Command::CheckForUpdates => application_tab::check_for_updates(button, cx),
         }
     }
 }
