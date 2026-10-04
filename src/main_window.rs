@@ -4976,6 +4976,7 @@ mod tests {
                 success: true,
                 files: Vec::new(),
                 report: String::new(),
+                replaced: 0,
             })
         }
         fn answered(_: &Path, _: &str, _: &Cancel, _: &dyn Fn(String)) -> anyhow::Result<String> {

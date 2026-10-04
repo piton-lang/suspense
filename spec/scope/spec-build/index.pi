@@ -29,6 +29,28 @@ shape SpecBuildShape:
         piton. Where the fluency can't be printed, the file is left as it
         was.
 
+    ownedReference:
+        The compiled reference, each reference folder the build writes for
+        the project's adapters, as `.claude/reference`, is the build's own
+        output, and nothing else's, so a file there the build's manifest
+        doesn't list never stops a build the application runs, as where a
+        project's manifest was lost, never made, or not kept with it, or a
+        build elsewhere wrote the file. Where a build fails, and every error
+        it reports is an `unowned-output` for a file inside a reference
+        folder, the application deletes those files, and only those, and
+        runs the build once more, straight away, as part of the same build:
+        what that second build reports is how the build went, and the first
+        one's errors are never shown as a failure. The work or notification
+        it belongs to notes, as a passive line, never an error, how many
+        reference files were replaced, as "Replaced 3 reference files the
+        build didn't own".
+
+        A file outside the reference folders, as an instruction file in the
+        code location, is never deleted, whatever the build says of it,
+        since it may be the user's own: a build whose errors include an
+        `unowned-output` for one fails as ever, with what it reported, and
+        is not run again.
+
     onItsOwn:
         The Build Spec command, and Build in the palette, run a build on their
         own. They are unavailable while no project is open, as the

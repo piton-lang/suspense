@@ -6316,6 +6316,11 @@ impl PromptMode {
             if let Some(built) = build {
                 // A failed build doesn't stop the prompt, which may well be the
                 // one to fix the spec; it says so in the task's output.
+                // Reference files it didn't own, replaced, it notes passively.
+                let replaced = built
+                    .as_ref()
+                    .ok()
+                    .and_then(piton_build::BuildOutcome::replaced_note);
                 let failure = match built {
                     Ok(outcome) if outcome.success => None,
                     Ok(outcome) => Some(outcome.report),
@@ -6326,6 +6331,9 @@ impl PromptMode {
                         if let Some(task) = this.tasks.get_mut(task_ix) {
                             if task.status == TaskStatus::Building {
                                 task.status = TaskStatus::Compiling;
+                            }
+                            if let Some(note) = replaced {
+                                task.reply.push_notice(note, String::new());
                             }
                             if let Some(report) = failure {
                                 task.reply.push_error(format!(
@@ -6481,6 +6489,9 @@ impl PromptMode {
                         .await
                     };
                     record.snapshot_before = snapshot_before.clone();
+                    // What the build owns outside the reference, before a
+                    // spec run's container builds with no code location.
+                    let owned_before = crate::piton_build::owned_outside_reference(&project_dir);
                     let harness::Run {
                         mut events,
                         feed,
@@ -6637,6 +6648,10 @@ impl PromptMode {
                     // the host's reference and shape guidance are current;
                     // the task shows Building until it is over.
                     if container_kind == Some(crate::container::RunKind::Spec) {
+                        // What the container's build left out of the
+                        // manifest outside the reference, still there, the
+                        // host's build owns as before.
+                        crate::piton_build::keep_owned(&project_dir, &owned_before);
                         let ended = this
                             .update(cx, |this, cx| {
                                 this.in_project(&project_dir, cx, |this, cx| {
@@ -6660,6 +6675,10 @@ impl PromptMode {
                             })
                             .await
                         };
+                        let replaced = built
+                            .as_ref()
+                            .ok()
+                            .and_then(piton_build::BuildOutcome::replaced_note);
                         let failure = match built {
                             Ok(outcome) if outcome.success => None,
                             Ok(outcome) => Some(outcome.report),
@@ -6670,6 +6689,9 @@ impl PromptMode {
                                 if let Some(task) = this.tasks.get_mut(task_ix) {
                                     if let Some(ended) = ended {
                                         task.status = ended;
+                                    }
+                                    if let Some(note) = replaced {
+                                        task.reply.push_notice(note, String::new());
                                     }
                                     if let Some(report) = failure {
                                         task.reply.push_notice(

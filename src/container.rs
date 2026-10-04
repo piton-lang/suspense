@@ -178,10 +178,9 @@ impl Plan {
                 mounts.extend(spec.clone().map(rw));
                 mounts.push(rw(reference));
                 // The build's manifest of the files it owns, so a build in
-                // the container can write the reference: a copy, made fresh
-                // for each run, since what a build there places, with no code
-                // to place guidance in, isn't what the host's build owns.
-                mounts.push(rw(piton_copy(project_dir)));
+                // the container can write the reference: the project's own,
+                // so the host's next build starts from what it wrote.
+                mounts.push(rw(project_dir.join(".piton")));
                 mounts.push(ro(fluency));
                 mounts.push(ro(config));
                 mounts.extend(understanding.map(|file| rw(file.to_path_buf())));
@@ -243,19 +242,6 @@ impl Plan {
             mount.host.exists()
         });
         plan.hidden.retain(|hidden| hidden.exists());
-        // The copy of `.piton` a Spec run is given, fresh from the project's.
-        let copy = piton_copy(&plan.project_dir);
-        if plan.mounts.iter().any(|mount| mount.host == copy) {
-            std::fs::remove_dir_all(&copy).ok();
-            std::fs::create_dir_all(&copy).ok();
-            if let Ok(entries) = std::fs::read_dir(plan.project_dir.join(".piton")) {
-                for entry in entries.flatten() {
-                    if entry.path().is_file() {
-                        std::fs::copy(entry.path(), copy.join(entry.file_name())).ok();
-                    }
-                }
-            }
-        }
         if let Some(sessions) = &plan.sessions {
             if !sessions.exists() {
                 std::fs::create_dir_all(sessions).ok();
@@ -355,13 +341,7 @@ impl Plan {
             let mut spec: OsString = "type=bind,src=".into();
             spec.push(mount.host.as_os_str());
             spec.push(",dst=");
-            // A copy of the project's `.piton` is mounted where it would be.
-            let at = if mount.host == piton_copy(&self.project_dir) {
-                self.container_path(&self.project_dir.join(".piton"))
-            } else {
-                self.container_path(&mount.host)
-            };
-            spec.push(at.as_os_str());
+            spec.push(self.container_path(&mount.host).as_os_str());
             if !mount.writable {
                 spec.push(",ro=true");
             }
@@ -386,14 +366,6 @@ impl Plan {
         out.extend(args.iter().cloned());
         out
     }
-}
-
-/// Where the copy of the project's `.piton` a Spec run's build writes to is
-/// kept on the host, outside the project, made afresh for each run.
-fn piton_copy(project_dir: &Path) -> PathBuf {
-    std::env::temp_dir()
-        .join("suspense-piton")
-        .join(project_key(project_dir))
 }
 
 /// The volume a harness keeps its login and settings in, shared by every
@@ -1166,11 +1138,10 @@ mod tests {
         assert!(spec_args.contains("-w /workspace"));
         // The build's manifest, and an empty scratch folder in the code's
         // place, writable, never the code itself.
-        // A copy of the project's `.piton`, where it would be.
-        assert_eq!(mounted(&spec, &piton_copy(project)), Some(true));
-        assert!(spec_args.contains(",dst=/workspace/.piton "), "{spec_args}");
+        // The project's own `.piton`, read and write.
+        assert_eq!(mounted(&spec, &project.join(".piton")), Some(true));
         assert!(
-            !spec_args.contains("src=/home/me/proj/.piton"),
+            spec_args.contains("src=/home/me/proj/.piton,dst=/workspace/.piton "),
             "{spec_args}"
         );
         assert!(
@@ -1197,14 +1168,10 @@ mod tests {
         assert_eq!(mounted(&question, &project.join("spec")), Some(false));
         assert!(question.hidden.is_empty() || !question.hidden.contains(&project.join("spec")));
 
-        // Nothing else from the host: no home, no git directory; only the
-        // copy of `.piton` the application makes.
+        // Nothing else from the host: no home, no git directory.
         for plan in [&spec, &question] {
             for mount in &plan.mounts {
-                assert!(
-                    mount.host.starts_with(project) || mount.host == piton_copy(project),
-                    "{mount:?}"
-                );
+                assert!(mount.host.starts_with(project), "{mount:?}");
                 assert!(!mount.host.starts_with(project.join(".git")));
             }
         }

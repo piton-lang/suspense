@@ -326,12 +326,20 @@ impl Ribbon {
                             1 => format!("Built 1 file{elsewhere}"),
                             count => format!("Built {count} files{elsewhere}"),
                         };
+                        // Reference files it didn't own, replaced, a passive
+                        // line above them says.
+                        let replaced = outcome.replaced_note();
                         let files = outcome.files;
                         Notification::success("")
                             .title(title)
                             .content(move |_, _, _| {
                                 // One line per written file, never wrapped.
                                 gpui_kit::component::v_flex()
+                                    .children(replaced.clone().map(|note| {
+                                        gpui_kit::component::label::Label::new(note)
+                                            .whitespace_nowrap()
+                                            .truncate()
+                                    }))
                                     .children(files.iter().map(|file| {
                                         gpui_kit::component::label::Label::new(file.clone())
                                             .whitespace_nowrap()

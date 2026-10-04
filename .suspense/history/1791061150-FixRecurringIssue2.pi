@@ -1,0 +1,64 @@
+
+export anchor FixRecurringIssue2:
+    userPrompt:
+        \\\
+        I keep seeing this and it needs to not be a problem anymore.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    attachedImages:
+        image1:
+            \\\
+            .suspense/images/1791061048-2de4eea48a08.png
+            \\\
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            I keep seeing this and it needs to not be a problem anymore.
+            \\\
+        result:
+            \\\
+            I've specced a fix so this error stops appearing. `piton check` reports no problems, both files are formatted, `piton build` succeeds, and I confirmed the new sections in the refreshed reference.
+
+            **Why it keeps happening:** `piton build` refuses to overwrite any reference file its manifest (`.piton/manifest.json`) doesn't list. There are two ways the manifest falls out of step with `.claude/reference`:
+
+            - **Spec runs don't get the real manifest.** In this run, `/workspace/.piton` is a temporary filesystem, not the project's own `.piton` folder. A build inside the container writes its manifest there, and it's thrown away with the container. If a Spec run creates a new reference file, the host's next build finds a file it never wrote and stops.
+            - **Projects with no manifest at all.** This covers a fresh clone where `.piton` isn't committed, a manifest that was lost, or a reference folder made by something else. Every reference file is then "unowned". That fits your screenshot, where core files like `Application.md` and `Builder.md` are refused.
+
+            ## What changed in the spec, and the anchors the code should follow
+
+            - **`ContainerEnvironmentShape.mounts.spec`:** `.piton` must be bind-mounted from the project itself, read-write, never as an empty, temporary or copied directory. The application creates `<project>/.piton` on the host first if it's missing. The code currently mounts a temporary filesystem there, which is the bug.
+            - **`SpecBuildShape.ownedReference` (new):** the reference folders, such as `.claude/reference`, belong to the build alone. This applies to every build the application runs: on its own, ahead of work, or after Spec work.
+              - **The retry:** if a build fails and every error is an `unowned-output` for a file inside a reference folder, delete only those files and immediately run the build once more as part of the same build.
+              - **What's shown:** the second build's result is the build's result. The first build's errors never show as a failure. The task or notification gets a passive line such as "Replaced 3 reference files the build didn't own".
+              - **The limit:** files outside the reference folders are never deleted, for example a generated `CLAUDE.md` in the code location, which might be the user's own file. If a build has an `unowned-output` for one of those, it fails as before and isn't retried.
+            \\\
+
+    sentFrom: FixRecurringIssue

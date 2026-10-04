@@ -1,0 +1,8 @@
+- [The reference folders, as .claude/reference, are the build's own output, and a file there the manifest doesn't list never stops a build](.claude/reference/scope/spec-build/index.md#owned-reference)
+- [Where every error is an unowned-output inside a reference folder, those files alone are deleted and the build run once more](.claude/reference/scope/spec-build/index.md#owned-reference)
+- [The second build's report is how the build went; the first one's errors are never shown as a failure](.claude/reference/scope/spec-build/index.md#owned-reference)
+- [A passive line, never an error, says how many reference files were replaced, as "Replaced 3 reference files the build didn't own"](.claude/reference/scope/spec-build/index.md#owned-reference)
+- [A file outside the reference folders is never deleted; a build with an unowned-output there fails as ever and isn't retried](.claude/reference/scope/spec-build/index.md#owned-reference)
+- [This holds for every build the application runs: on its own, ahead of work, and after spec work](.claude/reference/scope/spec-build/index.md#owned-reference)
+- [A Spec run's .piton is bound in from the project itself, read and write, never empty, temporary, or copied](.claude/reference/scope/container-environment/index.md#spec)
+- [The application creates the project's .piton first where it isn't there](.claude/reference/scope/container-environment/index.md#spec)

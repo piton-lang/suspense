@@ -1911,6 +1911,7 @@ mod tests {
             success: true,
             files: Vec::new(),
             report: String::new(),
+            replaced: 0,
         })
     }
 

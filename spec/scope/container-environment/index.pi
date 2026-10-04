@@ -140,7 +140,12 @@ shape ContainerEnvironmentShape:
             harness directory's reference folder, read and write, so it can
             run `piton build` itself; the project's `.piton` directory, which
             holds the build's manifest of the files it owns, read and write,
-            for the same reason; the fluency file, read only;
+            for the same reason, bound in from the project itself, never an
+            empty, temporary, or copied one, so the manifest a build in the
+            container starts from is the host's, and what it writes there is
+            the host's next build's, the application creating the directory
+            in the project first where it isn't there; the fluency file, read
+            only;
             piton.config.pi, read only; and the task's understanding file,
             read and write. Never the code location: in its place, an empty
             scratch directory, writable, that nothing else sees and that goes
