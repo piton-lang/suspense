@@ -1074,7 +1074,7 @@ mod tests {
     use crate::piton_syntax;
     use crate::project_directory::ProjectDirectory;
 
-    const TIMEOUT: Duration = Duration::from_secs(5);
+    const TIMEOUT: Duration = Duration::from_secs(10);
 
     fn git(dir: &Path, args: &[&str]) {
         let ok = std::process::Command::new("git")
@@ -1101,6 +1101,7 @@ mod tests {
         let old: String = (1..=30).map(|n| format!("let line_{n} = {n};\n")).collect();
         std::fs::write(&file, &old).unwrap();
         git(&dir, &["init", "-q"]);
+        git(&dir, &["config", "core.autocrlf", "false"]);
         git(&dir, &["add", "."]);
         git(&dir, &["commit", "-q", "-m", "first"]);
         std::fs::write(

@@ -212,6 +212,7 @@ mod tests {
             assert!(ok, "git {args:?} failed");
         };
         git(&["init", "-q"]);
+        git(&["config", "core.autocrlf", "false"]);
         std::fs::write(dir.join("src/main.rs"), "fn main() {}\n").unwrap();
         std::fs::write(dir.join(".gitignore"), "build/\n").unwrap();
         git(&["add", "."]);

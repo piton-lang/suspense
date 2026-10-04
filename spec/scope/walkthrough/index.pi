@@ -42,6 +42,24 @@ shape WalkthroughShape:
         milliseconds, and follows it as it moves, as when the window is
         resized or the ribbon collapses.
 
+        Each part is the element itself, as drawn, measured as it is painted
+        in that frame: a ribbon tab is its label with its 8 pixels either
+        side, the full 32 pixels of the tab row tall, as the ribbon draws it,
+        and a chat input tab the same in the chat input's tab bar, Chain the
+        width of its icon's tab; the chat input's tabs, together, run from
+        the left edge of Code to the right edge of Freeform, the help text
+        beside them left out. Never a parent, a row, a group, or the whole
+        bar holding it, and never a size guessed or kept from an earlier
+        frame. Where the 4 pixels of room would go past the window's edge,
+        as above a ribbon tab at the top of the window, the cut-out stops at
+        the edge on that side, still exactly 4 pixels from the part on every
+        other side. The accent outline, 2 pixels wide, is drawn just outside
+        the cut-out's edge, following its rounded corners, from the same
+        rectangle, so the ring and the cut-out never part. A step whose part
+        hasn't been painted yet, as a tab that has only just been selected,
+        shows nothing until it has, rather than a cut-out or callout placed
+        anywhere else.
+
         Beside it sits the callout, a card on the theme's raised surface with
         corners rounded 8 pixels, a border, and a shadow, 320 pixels wide, or
         the window's width less 32 pixels where that is narrower, as tall as
@@ -51,7 +69,14 @@ shape WalkthroughShape:
         above, it is centred on the cut-out horizontally; to a side, it is
         centred on it vertically. Where centring would put it closer than 16
         pixels to the window's edge, it is slid along that edge until it is
-        16 pixels in, and never off the window, nor over the cut-out. Its
+        16 pixels in, and never off the window, nor over the cut-out. Fitting
+        on a side means fitting whole between the cut-out, with its 12 pixels,
+        and the window's edge less 16 pixels, so for a part near the window's
+        bottom, as the chat input's tabs, the callout goes above it, its
+        pointer beneath it pointing down at the part, never beneath it,
+        covering it. Where it fits on no side whole, it goes on the side with
+        the most room, as tall as that room, its text scrolling, and still
+        never over the cut-out. Its
         pointer, a triangle 12 pixels wide and 6 deep in the card's colour,
         with its border, sits on the card's edge facing the cut-out, pointing
         at the cut-out's centre wherever the card was slid, but never nearer

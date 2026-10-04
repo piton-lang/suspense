@@ -273,8 +273,9 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("suspense-snapshot-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let dir = std::fs::canonicalize(&dir).unwrap();
+        let dir = dunce::canonicalize(&dir).unwrap();
         git_in(&dir, &["init", "-q"]);
+        git_in(&dir, &["config", "core.autocrlf", "false"]);
         git_in(&dir, &["config", "user.email", "t@t"]);
         git_in(&dir, &["config", "user.name", "t"]);
         std::fs::write(dir.join(".gitignore"), "ignored.txt\n").unwrap();

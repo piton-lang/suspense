@@ -357,7 +357,12 @@ mod tests {
     fn commands_stream_their_output_and_can_be_stopped() {
         let run = Running::start(Path::new("."), "echo one; echo two >&2; exit 3").unwrap();
         assert_eq!(run.wait().unwrap(), Some(3));
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        // Noted by its own thread: waited for, however slow the machine.
+        let start = std::time::Instant::now();
+        while run.exited().is_none() {
+            assert!(start.elapsed() < std::time::Duration::from_secs(20), "never noted its exit");
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         assert_eq!(run.exited(), Some(Some(3)));
         let mut seen = run.take_printed();
         seen.sort();

@@ -2385,7 +2385,6 @@ impl Render for ChatInput {
         let tabs = gpui_kit::TestSupportExt::test_support(
             div()
                 .id("chat-tabs")
-                .child(crate::walkthrough::mark(crate::walkthrough::Target::ChatTabs))
                 .relative()
                 .flex()
                 .h(TAB_STRIP_HEIGHT)
@@ -3765,7 +3764,7 @@ mod tests {
 
         // Nothing to send, nothing to open.
         cx.update_window(handle, |_, window, cx| {
-            window.press("ctrl-shift-enter", cx);
+            window.press("secondary-shift-enter", cx);
             assert!(!chat_input.read(cx).send_menu_open());
         })
         .unwrap();
@@ -3777,7 +3776,7 @@ mod tests {
                     .update(cx, |editor, cx| editor.set_value("Fix it", window, cx))
             });
             window.render_frame(cx);
-            window.press("ctrl-shift-enter", cx);
+            window.press("secondary-shift-enter", cx);
             window.render_frame(cx);
             assert!(chat_input.read(cx).send_menu_open());
             let menu = window.find("send-menu").bounds();
@@ -3799,7 +3798,7 @@ mod tests {
             );
             assert!(editor_focused(window, cx), "Esc took the input's focus");
 
-            window.press("ctrl-shift-enter", cx);
+            window.press("secondary-shift-enter", cx);
             window.press("enter", cx);
         })
         .unwrap();
@@ -3833,7 +3832,7 @@ mod tests {
             chat_input.update(cx, |input, cx| input.set_preview(id, Ok("late".into()), cx));
             assert!(chat_input.read(cx).preview().is_none());
 
-            window.press("ctrl-shift-enter", cx);
+            window.press("secondary-shift-enter", cx);
             window.press("enter", cx);
         })
         .unwrap();
@@ -3849,7 +3848,7 @@ mod tests {
                 Some(&Preview::Failed("could not compile".into()))
             );
             // Ctrl+Enter sends from the preview.
-            window.press("ctrl-enter", cx);
+            window.press("secondary-enter", cx);
             window.render_frame(cx);
             assert!(chat_input.read(cx).preview().is_none());
             assert_eq!(chat_input.read(cx).editor.read(cx).value().as_ref(), "");
@@ -3913,7 +3912,7 @@ mod tests {
 
         cx.update_window(handle, |_, window, cx| {
             chat_input.update(cx, |input, cx| input.set_text_for_test("Later", window, cx));
-            window.press("ctrl-shift-enter", cx);
+            window.press("secondary-shift-enter", cx);
             window.press("down", cx);
             window.render_frame(cx);
             window.find(("send-option", 1usize));
@@ -3932,7 +3931,7 @@ mod tests {
                 input.select_tab(super::ASK_TAB, window, cx);
                 input.set_text_for_test("Why?", window, cx);
             });
-            window.press("ctrl-shift-enter", cx);
+            window.press("secondary-shift-enter", cx);
             window.press("down", cx);
             assert_eq!(chat_input.read(cx).send_menu, Some(0));
             chat_input.update(cx, |input, cx| input.pick_send_option(1, window, cx));
@@ -3968,7 +3967,7 @@ mod tests {
                 chat_input.read(cx).attachments()[0].text().unwrap(),
                 "theirs"
             );
-            window.press("ctrl-shift-enter", cx);
+            window.press("secondary-shift-enter", cx);
             assert!(
                 !chat_input.read(cx).send_menu_open(),
                 "the menu opened while editing"
@@ -3998,7 +3997,7 @@ mod tests {
                 );
                 input.set_text_for_test("Queued, edited", window, cx);
             });
-            window.press("ctrl-enter", cx);
+            window.press("secondary-enter", cx);
             assert!(!chat_input.read(cx).is_editing());
             assert_eq!(text(cx), "Why?");
         })
@@ -4081,7 +4080,7 @@ mod tests {
             chat_input.update(cx, |input, cx| {
                 input.set_text_for_test("Also this", window, cx)
             });
-            window.press("ctrl-shift-enter", cx);
+            window.press("secondary-shift-enter", cx);
             window.press("up", cx);
             window.render_frame(cx);
             assert_eq!(chat_input.read(cx).send_menu, Some(2));
@@ -4105,7 +4104,7 @@ mod tests {
         // Ctrl+Enter still sends as ever: queued while the harness works.
         cx.update_window(handle, |_, window, cx| {
             chat_input.update(cx, |input, cx| input.set_text_for_test("Next", window, cx));
-            window.press("ctrl-enter", cx);
+            window.press("secondary-enter", cx);
         })
         .unwrap();
         cx.run_until_parked();
@@ -4118,7 +4117,7 @@ mod tests {
         // moves to an option still offered.
         cx.update_window(handle, |_, window, cx| {
             chat_input.update(cx, |input, cx| input.set_text_for_test("Late", window, cx));
-            window.press("ctrl-shift-enter", cx);
+            window.press("secondary-shift-enter", cx);
             window.press("up", cx);
             assert_eq!(chat_input.read(cx).send_menu, Some(2));
             chat_input.update(cx, |input, cx| input.set_can_send_to_task(false, cx));

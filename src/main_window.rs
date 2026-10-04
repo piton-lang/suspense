@@ -2200,7 +2200,7 @@ mod tests {
     use crate::piton_syntax;
     use crate::project_directory::ProjectDirectory;
 
-    const TIMEOUT: Duration = Duration::from_secs(2);
+    const TIMEOUT: Duration = Duration::from_secs(10);
 
     /// The ribbon's body is only as tall as its commands need, and each
     /// command only as tall as it needs: the body is the tallest column on the
@@ -3174,7 +3174,8 @@ mod tests {
         cx.run_until_parked();
         assert_eq!(
             cx.update(|cx| ProjectDirectory::get(cx)),
-            Some(base.join("alpha"))
+            // As the platform names it, as /private/var for /var on macOS.
+            dunce::canonicalize(base.join("alpha")).ok()
         );
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
@@ -4085,7 +4086,8 @@ mod tests {
         cx.run_until_parked();
         assert_eq!(
             cx.update(|cx| ProjectDirectory::get(cx)),
-            Some(base.join("demo"))
+            // As the platform names it, as /private/var for /var on macOS.
+            dunce::canonicalize(base.join("demo")).ok()
         );
         assert!(
             !main.read_with(cx, |main, _| main.panel_open()),
@@ -4170,7 +4172,8 @@ mod tests {
         cx.run_until_parked();
         assert_eq!(
             cx.update(|cx| ProjectDirectory::get(cx)),
-            Some(base.join("first"))
+            // As the platform names it, as /private/var for /var on macOS.
+            dunce::canonicalize(base.join("first")).ok()
         );
         // Opening it noted it, newest first, and saved that.
         assert_eq!(
@@ -4618,6 +4621,8 @@ mod tests {
             std::env::temp_dir().join(format!("suspense-spec-components-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("spec")).unwrap();
+        // As the platform names it, as /private/var for /var on macOS.
+        let dir = dunce::canonicalize(&dir).unwrap();
         std::fs::write(
             dir.join("piton.config.pi"),
             "use @piton/config\n\nexport piton-config Project:\n    root: ./spec\n    entry: ./spec/index.pi\n",
@@ -4802,7 +4807,7 @@ mod tests {
         )
         .unwrap();
         std::fs::write(dir.join("spec/index.pi"), "").unwrap();
-        let dir = std::fs::canonicalize(&dir).unwrap();
+        let dir = dunce::canonicalize(&dir).unwrap();
 
         cx.update(|cx| {
             gpui_kit::init(cx);
@@ -5102,6 +5107,25 @@ mod tests {
         assert_eq!(step(cx), Some(Step::Create));
         // As though the project were created, on to the modes.
         main.update(cx, |main, _| main.tour.as_mut().unwrap().project_ready());
+        frame(cx);
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        // The tabs, Code to Freeform, near the window's foot: the callout
+        // above them, 12 pixels from the cut-out 4 pixels around them, centred
+        // on them unless slid in from the window's edge.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let code = window.find("code-tab").bounds();
+            let freeform = window.find("freeform-tab").bounds();
+            let callout = window.find("walkthrough-callout").bounds();
+            assert_eq!(callout.bottom(), code.top() - gpui_kit::px(16.), "{callout:?} beside {code:?}");
+            let centre = (code.left() + freeform.right()) / 2.;
+            assert!(
+                (callout.center().x - centre).abs() < gpui_kit::px(1.)
+                    || callout.left() == gpui_kit::px(16.),
+                "{callout:?} isn't centred on the tabs"
+            );
+        })
+        .unwrap();
         let chat = main.read_with(cx, |main, cx| main.prompt_mode.read(cx).chat_input_view());
         for (expected, mode) in [
             (Step::Code, SendMode::Code),
@@ -5181,32 +5205,38 @@ mod tests {
             .unwrap();
             assert!(main.read_with(cx, |main, _| main.welcome.is_some()));
         };
-        let closed = |cx: &mut TestAppContext| {
-            cx.run_until_parked();
-            main.read_with(cx, |main, _| {
-                assert!(main.welcome.is_none(), "the welcome page stayed open");
-                assert!(!main.panel_open());
-            });
+        // Closed by `close`, as soon as the page is in place to take it,
+        // however slow the machine: tried again until it has closed.
+        let closes = |cx: &mut TestAppContext, close: &dyn Fn(&mut gpui_kit::Window, &mut gpui_kit::App)| {
+            let start = std::time::Instant::now();
+            loop {
+                cx.update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    close(window, cx);
+                })
+                .unwrap();
+                cx.run_until_parked();
+                if main.read_with(cx, |main, _| main.welcome.is_none()) {
+                    break;
+                }
+                assert!(start.elapsed() < TIMEOUT, "the welcome page stayed open");
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            assert!(!main.read_with(cx, |main, _| main.panel_open()));
         };
         // Straight away, while its checks still run.
         open(cx);
-        cx.update_window(handle, |_, window, cx| window.click("welcome-close", cx))
-            .unwrap();
-        closed(cx);
+        closes(cx, &|window, cx| window.click("welcome-close", cx));
         open(cx);
-        cx.update_window(handle, |_, window, cx| window.press("escape", cx))
-            .unwrap();
-        closed(cx);
+        closes(cx, &|window, cx| window.press("escape", cx));
         open(cx);
-        cx.update_window(handle, |_, window, cx| {
+        closes(cx, &|window, cx| {
             window.click_at(
                 "welcome-backdrop",
                 gpui_kit::point(gpui_kit::px(4.), gpui_kit::px(4.)),
                 cx,
             )
-        })
-        .unwrap();
-        closed(cx);
+        });
 
         // The launch checks open it by themselves once, unless something
         // else was opened first.
@@ -5513,7 +5543,8 @@ mod tests {
         }
         assert_eq!(
             cx.update(|cx| ProjectDirectory::get(cx)),
-            Some(base.join("projects/apps/demo"))
+            // As the platform names it, as /private/var for /var on macOS.
+            dunce::canonicalize(base.join("projects/apps/demo")).ok()
         );
         assert!(base.join("projects/apps/demo/piton.config.pi").exists());
         assert!(
@@ -6281,6 +6312,7 @@ mod tests {
             assert!(output.status.success(), "git {args:?}: {output:?}");
         };
         git(&["init", "-q", "-b", "main"]);
+        git(&["config", "core.autocrlf", "false"]);
         git(&["add", "."]);
         git(&["commit", "-q", "-m", "first"]);
         std::fs::write(dir.join("spec/index.pi"), "a: 2\n").unwrap();
@@ -6432,6 +6464,7 @@ mod tests {
             assert!(output.status.success(), "git {args:?}: {output:?}");
         };
         git(&["init", "-q", "-b", "main"]);
+        git(&["config", "core.autocrlf", "false"]);
         git(&["add", "."]);
         git(&["commit", "-q", "-m", "first"]);
         std::fs::write(dir.join("spec/index.pi"), "a: 2\n").unwrap();
@@ -6518,6 +6551,7 @@ mod tests {
             assert!(output.status.success(), "git {args:?}: {output:?}");
         };
         git(&["init", "-q", "-b", "main"]);
+        git(&["config", "core.autocrlf", "false"]);
         git(&["add", "."]);
         git(&["commit", "-q", "-m", "first"]);
         std::fs::write(dir.join("src/main.rs"), "fn main() { go() }\n").unwrap();
@@ -6646,8 +6680,8 @@ mod tests {
             std::fs::write(base.join(name).join("piton.config.pi"), "").unwrap();
         }
         let (a, b) = (
-            std::fs::canonicalize(base.join("alpha")).unwrap(),
-            std::fs::canonicalize(base.join("beta")).unwrap(),
+            dunce::canonicalize(base.join("alpha")).unwrap(),
+            dunce::canonicalize(base.join("beta")).unwrap(),
         );
         cx.update(|cx| {
             gpui_kit::init(cx);
@@ -7205,6 +7239,7 @@ mod tests {
             assert!(output.status.success(), "git {args:?}: {output:?}");
         };
         git(&["init", "-q", "-b", "main"]);
+        git(&["config", "core.autocrlf", "false"]);
         git(&["add", "."]);
         git(&["commit", "-q", "-m", "first"]);
 

@@ -25,7 +25,7 @@ impl ProjectDirectory {
     /// Puts the project at `dir` on screen. A folder is the same project
     /// however it was reached, so it is kept by its canonical path.
     pub fn set(dir: PathBuf, cx: &mut App) {
-        let dir = std::fs::canonicalize(&dir).unwrap_or(dir);
+        let dir = dunce::canonicalize(&dir).unwrap_or(dir);
         cx.set_global(Self(Some(dir)));
     }
 }

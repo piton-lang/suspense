@@ -96,7 +96,11 @@ pub fn name_problem(name: &str) -> Option<&'static str> {
 pub fn project_path(path: &str) -> Result<String, &'static str> {
     let path = path.trim();
     let parsed = Path::new(path);
-    if parsed.is_absolute() {
+    // Rooted, as `/abs`, or with a drive, as on Windows.
+    if parsed.is_absolute()
+        || parsed.has_root()
+        || matches!(parsed.components().next(), Some(Component::Prefix(_)))
+    {
         return Err("Use a path inside the project, not an absolute one");
     }
     if parsed

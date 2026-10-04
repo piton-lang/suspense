@@ -556,7 +556,15 @@ impl Feed {
     pub fn for_test() -> (Self, mpsc::UnboundedReceiver<HarnessEvent>) {
         let (tx, rx) = mpsc::unbounded();
         let feed = Self::new(tx);
-        let mut cat = crate::process::command("cat")
+        // Something that reads its input until it closes, on every
+        // platform: `cat`, or Windows' own `findstr`.
+        #[cfg(windows)]
+        let mut reader = crate::process::command("findstr");
+        #[cfg(windows)]
+        reader.arg("x");
+        #[cfg(not(windows))]
+        let mut reader = crate::process::command("cat");
+        let mut cat = reader
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .spawn()

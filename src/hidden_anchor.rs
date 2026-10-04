@@ -1089,7 +1089,7 @@ pub fn compile(anchor: &HiddenAnchor, file: &Path, project_dir: &Path) -> Result
         .unwrap_or_default();
     let file_dir = file
         .parent()
-        .map(|dir| dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf()))
+        .map(|dir| dunce::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf()))
         .unwrap_or_default();
     let references: Vec<(&str, &Value)> =
         saved.references(&prompt).into_iter().zip(values).collect();
@@ -1156,7 +1156,7 @@ pub fn compile(anchor: &HiddenAnchor, file: &Path, project_dir: &Path) -> Result
 fn link(target: &str, file_dir: &Path, project_dir: &Path) -> Option<String> {
     let (module, dotted) = target.rsplit_once(':')?;
     let module = normalize(&file_dir.join(module)).with_extension("pi");
-    let canonical = |dir: PathBuf| dir.canonicalize().unwrap_or(dir);
+    let canonical = |dir: PathBuf| dunce::canonicalize(&dir).unwrap_or(dir);
     let reference_root = PathBuf::from(reference_root(project_dir));
     let shape_root = config_value(project_dir, "shapeRoot")
         .ok()
@@ -1193,8 +1193,7 @@ fn slice(target: &str, file_dir: &Path, project_dir: &Path) -> String {
         return format!("Could not slice {target}: it names no spec.");
     };
     let module = normalize(&file_dir.join(module)).with_extension("pi");
-    let project = project_dir
-        .canonicalize()
+    let project = dunce::canonicalize(project_dir)
         .unwrap_or_else(|_| project_dir.to_path_buf());
     let module = module.strip_prefix(&project).unwrap_or(&module);
     let output = crate::process::command("piton")

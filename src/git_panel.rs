@@ -1054,6 +1054,7 @@ mod tests {
         std::fs::create_dir_all(&remote).unwrap();
         git(&remote, &["init", "--bare", "-q"]);
         git(&repo, &["init", "-q", "-b", "main"]);
+        git(&repo, &["config", "core.autocrlf", "false"]);
         git(&repo, &["config", "user.name", "Test"]);
         git(&repo, &["config", "user.email", "test@example.com"]);
         std::fs::write(repo.join("readme.md"), "hello\n").unwrap();
@@ -1265,6 +1266,7 @@ mod tests {
                 ],
             );
             git(clone, &["config", "user.name", "Test"]);
+            git(clone, &["config", "core.autocrlf", "false"]);
             git(clone, &["config", "user.email", "test@example.com"]);
         }
         std::fs::write(mine.join("shared.txt"), "one\ntwo\nthree\n").unwrap();
@@ -1351,6 +1353,7 @@ mod tests {
             std::fs::remove_dir_all(&dir).ok();
             std::fs::create_dir_all(&dir).unwrap();
             git(&dir, &["init", "-q", "-b", "main"]);
+            git(&dir, &["config", "core.autocrlf", "false"]);
             git(&dir, &["config", "user.name", "Test"]);
             git(&dir, &["config", "user.email", "test@example.com"]);
             if ignored {
@@ -1377,6 +1380,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
         std::fs::create_dir_all(&dir).unwrap();
         git(&dir, &["init", "-q", "-b", "main"]);
+        git(&dir, &["config", "core.autocrlf", "false"]);
         git(&dir, &["config", "user.name", "Test"]);
         git(&dir, &["config", "user.email", "test@example.com"]);
         std::fs::write(dir.join("readme.md"), "hello\n").unwrap();
@@ -1621,6 +1625,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
         std::fs::create_dir_all(&dir).unwrap();
         git(&dir, &["init", "-q", "-b", "main"]);
+        git(&dir, &["config", "core.autocrlf", "false"]);
         git(&dir, &["config", "user.name", "Test"]);
         git(&dir, &["config", "user.email", "test@example.com"]);
         std::fs::write(dir.join("readme.md"), "hello\n").unwrap();

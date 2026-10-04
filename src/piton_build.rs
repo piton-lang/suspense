@@ -180,8 +180,7 @@ fn build_once(program: &str, project_dir: &Path) -> Result<BuildOutcome> {
 
         // `piton build` prints each written file on stdout, as an absolute
         // path, and everything else on stderr.
-        let root = project_dir
-            .canonicalize()
+        let root = dunce::canonicalize(project_dir)
             .unwrap_or_else(|_| project_dir.to_path_buf());
         let files = String::from_utf8_lossy(&output.stdout)
             .lines()

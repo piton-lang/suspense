@@ -174,7 +174,7 @@ fn fetch_releases(repository: &str) -> Result<Value> {
 /// The binary running, as it will be relaunched.
 pub fn running_binary() -> Result<PathBuf> {
     let exe = std::env::current_exe().context("couldn't find the running binary")?;
-    Ok(std::fs::canonicalize(&exe).unwrap_or(exe))
+    Ok(dunce::canonicalize(&exe).unwrap_or(exe))
 }
 
 /// Where an update is staged beside `exe`, and its version kept.

@@ -2517,6 +2517,34 @@ struct ScrollSlide {
     pull: Pixels,
 }
 
+/// The time a scroll past an end goes by: the system's, or, in a test that
+/// has frozen it, a clock of the test's own that moves only as the test
+/// moves it, so a slow machine never turns one gesture into two.
+fn scroll_now() -> Instant {
+    #[cfg(test)]
+    if let Some(now) = TEST_CLOCK.get() {
+        return now;
+    }
+    Instant::now()
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_CLOCK: std::cell::Cell<Option<Instant>> = const { std::cell::Cell::new(None) };
+}
+
+/// Freezes the time scrolls go by, on this test's thread.
+#[cfg(test)]
+fn freeze_clock() {
+    TEST_CLOCK.set(Some(Instant::now()));
+}
+
+/// Moves the frozen time scrolls go by on by `by`.
+#[cfg(test)]
+fn advance_clock(by: Duration) {
+    TEST_CLOCK.set(TEST_CLOCK.get().map(|now| now + by));
+}
+
 /// A scroll pushing into the stretch at an end: which way, and how far past
 /// it, as of `at`, draining away once the scrolling pauses.
 #[derive(Clone, Copy)]
@@ -2531,7 +2559,7 @@ impl Default for ScrollPush {
         Self {
             up: false,
             amount: 0.,
-            at: Instant::now(),
+            at: scroll_now(),
         }
     }
 }
@@ -4069,7 +4097,7 @@ impl PromptMode {
         self.scroll_slide = Some(ScrollSlide {
             n,
             up,
-            started: Instant::now(),
+            started: scroll_now(),
             glow: 0.,
             pull: px(0.),
         });
@@ -4144,7 +4172,7 @@ impl PromptMode {
     fn scroll_sliding(&self) -> bool {
         self.scroll_slide
             .as_ref()
-            .is_some_and(|slide| slide.started.elapsed() < PANE_SLIDE_TIME)
+            .is_some_and(|slide| scroll_now().duration_since(slide.started) < PANE_SLIDE_TIME)
     }
 
     /// A soft radial glow in the middle of the space between the previous
@@ -4157,12 +4185,13 @@ impl PromptMode {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let building = self.scroll_push.get().held(Instant::now()) / SCROLL_BARRIER;
+        let building = self.scroll_push.get().held(scroll_now()) / SCROLL_BARRIER;
         let fading = self
             .scroll_slide
             .as_ref()
             .map(|slide| {
-                let faded = slide.started.elapsed().as_secs_f32() / GLOW_FADE.as_secs_f32();
+                let faded = scroll_now().duration_since(slide.started).as_secs_f32()
+                    / GLOW_FADE.as_secs_f32();
                 slide.glow * (1. - faded).max(0.)
             })
             .unwrap_or(0.);
@@ -4225,7 +4254,7 @@ impl PromptMode {
                     if phase != DispatchPhase::Capture || !hitbox.should_handle_scroll(window) {
                         return;
                     }
-                    let now = Instant::now();
+                    let now = scroll_now();
                     // While it slides, the wheel scrolls neither view, and a
                     // scroll then is carried on rather than new.
                     if this
@@ -8721,7 +8750,7 @@ impl Render for PromptMode {
             };
             // Pulled past its end by the stretch, the header and the view
             // together, leaving an empty band, clipped to the space.
-            let pull = self.scroll_push.get().pull(Instant::now());
+            let pull = self.scroll_push.get().pull(scroll_now());
             v_flex()
                 .relative()
                 .flex_1()
@@ -10507,7 +10536,7 @@ mod tests {
             "export piton-config Project:\n    root: ./spec\n\nbelay-config Belay:\n    codeRoot: ./src\n",
         )
         .unwrap();
-        let dir = std::fs::canonicalize(&dir).unwrap();
+        let dir = dunce::canonicalize(&dir).unwrap();
         for text in ["first", "second"] {
             prompt_queue::add(HiddenAnchor::random(), text.into(), &dir).unwrap();
         }
@@ -10603,7 +10632,7 @@ mod tests {
             "export piton-config Project:\n    root: ./spec\n\nbelay-config Belay:\n    codeRoot: ./src\n",
         )
         .unwrap();
-        let dir = std::fs::canonicalize(&dir).unwrap();
+        let dir = dunce::canonicalize(&dir).unwrap();
         for text in ["first", "second"] {
             prompt_queue::add(HiddenAnchor::random(), text.into(), &dir).unwrap();
         }
@@ -10641,7 +10670,7 @@ mod tests {
             chat.update(cx, |input, cx| {
                 input.set_text_for_test("second, edited", window, cx)
             });
-            window.press("ctrl-enter", cx);
+            window.press("secondary-enter", cx);
         })
         .unwrap();
         let start = std::time::Instant::now();
@@ -10758,7 +10787,7 @@ mod tests {
             std::fs::create_dir_all(dir).unwrap();
             std::fs::write(dir.join("piton.config.pi"), "").unwrap();
         }
-        let [a, b] = dirs.map(|dir| std::fs::canonicalize(dir).unwrap());
+        let [a, b] = dirs.map(|dir| dunce::canonicalize(dir).unwrap());
         (a, b)
     }
 
@@ -11140,6 +11169,9 @@ mod tests {
     /// slide, or a sideways one never crosses over.
     #[gpui_kit::test]
     async fn scrolling_past_an_end_crosses_over(cx: &mut TestAppContext) {
+        // The scrolls go by a clock of the test's own, so however slow the
+        // machine, a gesture is never broken up by the time between steps.
+        super::freeze_clock();
         use super::SCROLL_REST;
         use gpui_kit::{ScrollDelta, ScrollWheelEvent, point, px};
         let (prompt_mode, handle) = open(cx);
@@ -11178,7 +11210,7 @@ mod tests {
         };
         // Long enough for a slide to settle and the wheel to rest after it.
         let rest =
-            || std::thread::sleep(super::PANE_SLIDE_TIME + SCROLL_REST + Duration::from_millis(50));
+            || super::advance_clock(super::PANE_SLIDE_TIME + SCROLL_REST + Duration::from_millis(50));
         let sliding = |cx: &mut TestAppContext, n: usize| {
             cx.update_window(handle, |_, window, cx| {
                 window.render_frame(cx);
@@ -11224,7 +11256,7 @@ mod tests {
         );
         // Left there, it drains away and springs back, and a new scroll
         // starts again.
-        std::thread::sleep(super::SCROLL_DRAIN + Duration::from_millis(50));
+        super::advance_clock(super::SCROLL_DRAIN + Duration::from_millis(50));
         assert!(!glowing(cx), "the glow didn't drain away");
         assert_eq!(header_top(cx), resting, "the view didn't spring back");
         // A fling's momentum, once the fingers lift, stops at the end.
@@ -11232,7 +11264,7 @@ mod tests {
         wheel(cx, 0., 240.);
         assert!(!expanded(cx), "momentum crossed over");
         assert!(!glowing(cx), "momentum pulled into the stretch");
-        std::thread::sleep(SCROLL_REST + Duration::from_millis(20));
+        super::advance_clock(SCROLL_REST + Duration::from_millis(20));
         wheel(cx, 0., 120.);
         assert!(!expanded(cx), "what drained away still counted");
         // Scrolled back, it goes down; scrolled on, past the barrier, it
@@ -11270,7 +11302,7 @@ mod tests {
         let steady = |cx: &mut TestAppContext, y: f32| {
             for _ in 0..13 {
                 wheel(cx, 0., y);
-                std::thread::sleep(Duration::from_millis(150));
+                super::advance_clock(Duration::from_millis(150));
             }
         };
         steady(cx, 60.);
@@ -11310,6 +11342,9 @@ mod tests {
     /// been still a moment, moves it. So each way.
     #[gpui_kit::test]
     async fn a_scroll_that_crosses_over_stops_there(cx: &mut TestAppContext) {
+        // The scrolls go by a clock of the test's own, so however slow the
+        // machine, a gesture is never broken up by the time between steps.
+        super::freeze_clock();
         use gpui_kit::{ScrollDelta, ScrollWheelEvent, point, px};
         let (prompt_mode, handle) = open(cx);
         let long: String = (0..200).map(|n| format!("Line {n}\n\n")).collect();
@@ -11363,14 +11398,14 @@ mod tests {
         // Scrolling on, a step every 40 milliseconds, until the slide has
         // settled and a little after.
         let carry_on = |cx: &mut TestAppContext, y: f32| {
-            let until =
-                std::time::Instant::now() + super::PANE_SLIDE_TIME + Duration::from_millis(150);
-            while std::time::Instant::now() < until {
+            let mut left = super::PANE_SLIDE_TIME + Duration::from_millis(150);
+            while !left.is_zero() {
+                left = left.saturating_sub(Duration::from_millis(40));
                 wheel(cx, y);
-                std::thread::sleep(Duration::from_millis(40));
+                super::advance_clock(Duration::from_millis(40));
             }
         };
-        let pause = || std::thread::sleep(super::SCROLL_DRAIN + Duration::from_millis(50));
+        let pause = || super::advance_clock(super::SCROLL_DRAIN + Duration::from_millis(50));
 
         for up in [true, false] {
             let y = if up { 200. } else { -200. };
@@ -11392,7 +11427,7 @@ mod tests {
             );
             // A new scroll the same way moves it on, away from the end it
             // arrived at.
-            std::thread::sleep(super::SCROLL_REST + Duration::from_millis(20));
+            super::advance_clock(super::SCROLL_REST + Duration::from_millis(20));
             wheel(cx, y);
             assert!(from_end(cx) > 100., "a new scroll didn't move the view");
             // Back at its end, for the crossing back.
@@ -11408,6 +11443,9 @@ mod tests {
     /// task's long output scrolled to its top.
     #[gpui_kit::test]
     async fn a_scroll_begun_at_an_end_stretches_at_once(cx: &mut TestAppContext) {
+        // The scrolls go by a clock of the test's own, so however slow the
+        // machine, a gesture is never broken up by the time between steps.
+        super::freeze_clock();
         use gpui_kit::{ScrollDelta, ScrollWheelEvent, point, px};
         let (prompt_mode, handle) = open(cx);
         let long: String = (0..200).map(|n| format!("Line {n}\n\n")).collect();
@@ -11457,7 +11495,7 @@ mod tests {
             prompt_mode.read_with(cx, |this, _| this.scroll_push.get().amount)
         };
         // A new scroll, the wheel having been still a while.
-        let still = || std::thread::sleep(super::SCROLL_DRAIN + Duration::from_millis(50));
+        let still = || super::advance_clock(super::SCROLL_DRAIN + Duration::from_millis(50));
 
         // The latest task's output, resting at its top.
         prompt_mode.update(cx, |this, _| this.output_table.scroll_to_top());
@@ -11494,6 +11532,9 @@ mod tests {
     /// goes past the top toward the barrier.
     #[gpui_kit::test]
     async fn a_step_reaching_the_top_builds_up_what_goes_past(cx: &mut TestAppContext) {
+        // The scrolls go by a clock of the test's own, so however slow the
+        // machine, a gesture is never broken up by the time between steps.
+        super::freeze_clock();
         use gpui_kit::{ScrollDelta, ScrollWheelEvent, point, px};
         let (prompt_mode, handle) = open(cx);
         let long: String = (0..200).map(|n| format!("Line {n}\n\n")).collect();
@@ -11703,7 +11744,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("suspense-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let dir = std::fs::canonicalize(&dir).unwrap();
+        let dir = dunce::canonicalize(&dir).unwrap();
         let git = |args: &[&str]| {
             assert!(
                 std::process::Command::new("git")
@@ -11716,6 +11757,7 @@ mod tests {
             );
         };
         git(&["init", "-q"]);
+        git(&["config", "core.autocrlf", "false"]);
         std::fs::write(dir.join("kept.txt"), "one\n").unwrap();
         std::fs::write(dir.join("other.txt"), "a\n").unwrap();
         let before = task_snapshot::take(&dir, "Prompt_t", "before").unwrap();
@@ -11994,6 +12036,7 @@ mod tests {
             String::from_utf8(output.stdout).unwrap()
         };
         git(&["init", "-q"]);
+        git(&["config", "core.autocrlf", "false"]);
         std::fs::write(dir.join(".gitignore"), "/.suspense/\n").unwrap();
         // A harness that makes a file of its own accord, reporting no tool.
         let script = dir.join("making-harness.sh");
@@ -12412,7 +12455,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("suspense-queue-lines-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let dir = std::fs::canonicalize(&dir).unwrap();
+        let dir = dunce::canonicalize(&dir).unwrap();
         // The second wraps, so its row is taller than the others.
         for text in [
             "first",
@@ -12523,7 +12566,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("suspense-drag-gap-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let dir = std::fs::canonicalize(&dir).unwrap();
+        let dir = dunce::canonicalize(&dir).unwrap();
         for text in ["first", "second", "third"] {
             prompt_queue::add(HiddenAnchor::random(), text.into(), &dir).unwrap();
         }
@@ -13614,7 +13657,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("suspense-conflicts-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let dir = std::fs::canonicalize(&dir).unwrap();
+        let dir = dunce::canonicalize(&dir).unwrap();
         let (first, second) = (dir.join("first.md"), dir.join("second.md"));
         std::fs::write(&first, "first\n").unwrap();
         std::fs::write(&second, "second\n").unwrap();
@@ -13708,7 +13751,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("suspense-ctrl-n-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let dir = std::fs::canonicalize(&dir).unwrap();
+        let dir = dunce::canonicalize(&dir).unwrap();
         for text in ["first", "second"] {
             prompt_queue::add(HiddenAnchor::random(), text.into(), &dir).unwrap();
         }
@@ -13825,7 +13868,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("suspense-reorder-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let dir = std::fs::canonicalize(&dir).unwrap();
+        let dir = dunce::canonicalize(&dir).unwrap();
         for text in ["first", "second", "third"] {
             prompt_queue::add(HiddenAnchor::random(), text.into(), &dir).unwrap();
         }

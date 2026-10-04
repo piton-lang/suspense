@@ -309,7 +309,7 @@ pub fn project_system_prompt(
 /// knows it, with its separators as written.
 fn project_paths(project_dir: &Path) -> Vec<String> {
     let mut paths = vec![project_dir.to_string_lossy().into_owned()];
-    if let Ok(canonical) = std::fs::canonicalize(project_dir) {
+    if let Ok(canonical) = dunce::canonicalize(project_dir) {
         paths.push(canonical.to_string_lossy().into_owned());
     }
     paths.retain(|path| !path.is_empty() && path != "/");
@@ -325,7 +325,13 @@ fn project_paths(project_dir: &Path) -> Vec<String> {
 pub fn relative_path(path: &Path, project_dir: &Path) -> String {
     for root in project_paths(project_dir) {
         if let Ok(within) = path.strip_prefix(&root) {
-            return within.to_string_lossy().into_owned();
+            // Written with `/` on every platform, as a run in a container,
+            // and the harness on any host, reads it.
+            return within
+                .components()
+                .map(|part| part.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("/");
         }
     }
     path.to_string_lossy().into_owned()
@@ -337,12 +343,14 @@ pub fn relative_path(path: &Path, project_dir: &Path) -> String {
 /// or in a container; the project itself is `.`.
 pub fn relative_location(value: &str, project_dir: &Path) -> String {
     let value = value.trim();
-    let within = if Path::new(value).is_absolute() {
+    // Rooted, as `/home/me/proj/src`, or with a drive, as on Windows.
+    let rooted = |path: &str| Path::new(path).has_root() || Path::new(path).is_absolute();
+    let within = if rooted(value) {
         relative_path(Path::new(value), project_dir)
     } else {
         value.to_string()
     };
-    if Path::new(&within).is_absolute() {
+    if rooted(&within) {
         return within;
     }
     let within = within.trim_start_matches("./").trim_end_matches('/');

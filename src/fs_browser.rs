@@ -1177,7 +1177,7 @@ mod tests {
         // The folder selected, nothing can be chosen.
         press("down", cx);
         assert_eq!(browser.read_with(cx, |b, _| b.choice()), None);
-        press("ctrl-enter", cx);
+        press("secondary-enter", cx);
         assert!(chosen.borrow().is_empty());
         // The file selected, Enter chooses it.
         press("down", cx);

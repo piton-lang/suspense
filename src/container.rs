@@ -262,13 +262,16 @@ impl Plan {
     /// at its place from the project directory, on every platform.
     pub fn container_path(&self, host: &Path) -> PathBuf {
         let within = host.strip_prefix(&self.project_dir).unwrap_or(host);
-        let mut path = PathBuf::from(WORKSPACE);
+        // The container is Linux whatever the host: its paths are joined
+        // with `/`, never the host's separator.
+        let mut path = WORKSPACE.to_string();
         for part in within.components() {
             if let std::path::Component::Normal(part) = part {
-                path.push(part);
+                path.push('/');
+                path.push_str(&part.to_string_lossy());
             }
         }
-        path
+        PathBuf::from(path)
     }
 
     /// The host path of `path`, a path the run reported from its container;
@@ -1129,9 +1132,11 @@ mod tests {
                 .any(|mount| mount.host.starts_with(project.join("src")))
         );
         let spec_args = args(&spec).join(" ");
-        assert!(!spec_args.contains("/home/me/proj/src"), "{spec_args}");
+        // Host paths as the platform writes them; container paths always `/`.
+        let host = |path: PathBuf| path.display().to_string();
+        assert!(!spec_args.contains(&host(project.join("src"))), "{spec_args}");
         assert!(
-            spec_args.contains("src=/home/me/proj/spec,dst=/workspace/spec"),
+            spec_args.contains(&format!("src={},dst=/workspace/spec", host(project.join("spec")))),
             "{spec_args}"
         );
         assert!(spec_args.contains("--userns=keep-id"));
@@ -1141,7 +1146,7 @@ mod tests {
         // The project's own `.piton`, read and write.
         assert_eq!(mounted(&spec, &project.join(".piton")), Some(true));
         assert!(
-            spec_args.contains("src=/home/me/proj/.piton,dst=/workspace/.piton "),
+            spec_args.contains(&format!("src={},dst=/workspace/.piton ", host(project.join(".piton")))),
             "{spec_args}"
         );
         assert!(
@@ -1220,7 +1225,10 @@ mod tests {
             "{joined}"
         );
         assert!(
-            joined.contains("src=/p/spec,dst=/workspace/spec,ro=true"),
+            joined.contains(&format!(
+                "src={},dst=/workspace/spec,ro=true",
+                project.join("spec").display()
+            )),
             "{joined}"
         );
         // A Spec run over the same project still never sees the code.
@@ -1269,14 +1277,15 @@ mod tests {
             "{joined}"
         );
         assert!(
-            joined.contains(
-                "src=/home/me/alpha/.suspense/sessions/spec,dst=/home/suspense/.claude/projects"
-            ),
+            joined.contains(&format!(
+                "src={},dst=/home/suspense/.claude/projects",
+                a.join(".suspense").join("sessions").join("spec").display()
+            )),
             "{joined}"
         );
-        assert!(!joined.contains("sessions/questions"), "{joined}");
+        assert!(!joined.contains("questions"), "{joined}");
         assert!(
-            !joined.contains("src=/home/me/alpha/.suspense/sessions,"),
+            !joined.contains(&format!("src={},", a.join(".suspense").join("sessions").display())),
             "{joined}"
         );
         assert!(

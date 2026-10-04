@@ -335,7 +335,7 @@ pub fn uri_path(uri: &str) -> Option<PathBuf> {
 /// `path` with symlinks and `..` resolved where it exists, so paths from the
 /// server and from the project tree compare equal.
 pub fn canonical(path: &Path) -> PathBuf {
-    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+    dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// A `piton lsp` session for the chat input. The input's text is presented

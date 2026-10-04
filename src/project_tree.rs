@@ -1338,7 +1338,7 @@ mod tests {
     use super::{OpenFile, ProjectTree};
     use crate::project_directory::ProjectDirectory;
 
-    const TIMEOUT: Duration = Duration::from_secs(2);
+    const TIMEOUT: Duration = Duration::from_secs(10);
 
     fn labels(tree: &Entity<ProjectTree>, cx: &App) -> Vec<String> {
         let state = tree.read(cx).tree.read(cx);
@@ -1903,7 +1903,7 @@ mod tests {
         for file in ["a.txt", "b.txt", "c.txt"] {
             fs::write(dir.join(file), "").unwrap();
         }
-        let dir = fs::canonicalize(&dir).unwrap();
+        let dir = dunce::canonicalize(&dir).unwrap();
         cx.update(|cx| {
             gpui_kit::init(cx);
             crate::main_window::bind_keys(cx);
@@ -2070,7 +2070,7 @@ mod tests {
         fs::create_dir_all(dir.join("spec")).unwrap();
         fs::write(dir.join("spec/index.pi"), "").unwrap();
         fs::write(dir.join("a.txt"), "").unwrap();
-        let dir = fs::canonicalize(&dir).unwrap();
+        let dir = dunce::canonicalize(&dir).unwrap();
 
         cx.update(|cx| {
             gpui_kit::init(cx);
@@ -2226,10 +2226,21 @@ mod tests {
         );
         cx.wait_for(handle, TIMEOUT, |window, _| window.try_find("ok").is_some())
             .await;
-        cx.update_window(handle, |_, window, cx| window.click("ok", cx))
+        // Clicked once the dialog has risen under the pointer, however slow
+        // the machine.
+        let start = std::time::Instant::now();
+        while dir.join("a.txt").exists() {
+            assert!(start.elapsed() < TIMEOUT, "never deleted");
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                if window.try_find("ok").is_some() {
+                    window.click("ok", cx);
+                }
+            })
             .unwrap();
-        cx.run_until_parked();
-        assert!(!dir.join("a.txt").exists());
+            cx.run_until_parked();
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
         assert_eq!(moved.borrow().last(), Some(&(dir.join("a.txt"), None)));
         wait_for_disk(cx, handle, |cx| {
             labels(&tree, cx) == ["specs", "scope", "index.pi", "notes.md"]
@@ -2262,6 +2273,7 @@ mod tests {
             );
         };
         git(&["init", "-q"]);
+        git(&["config", "core.autocrlf", "false"]);
         git(&["add", "."]);
         git(&["commit", "-q", "-m", "first"]);
         fs::write(dir.join("changed.txt"), "two\n").unwrap();

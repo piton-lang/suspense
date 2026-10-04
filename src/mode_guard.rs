@@ -19,7 +19,7 @@
 //! there is nothing it mustn't touch to guard, nor to tell it off reading
 //! (see [`guarded`]).
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
@@ -51,7 +51,13 @@ impl Writer {
     /// code but not the spec for Code, and anywhere in its project for the
     /// chain, Freeform, or a build.
     fn covers(&self, path: &Path) -> bool {
-        let under = |dir: &Option<PathBuf>| dir.as_ref().is_some_and(|dir| path.starts_with(dir));
+        // Only ever within its own project: an empty path is a prefix of
+        // every path, so it covers nothing.
+        let within = |dir: &Path| !dir.as_os_str().is_empty() && path.starts_with(dir);
+        if !within(&self.project_dir) {
+            return false;
+        }
+        let under = |dir: &Option<PathBuf>| dir.as_deref().is_some_and(within);
         match self.mode {
             Some(SendMode::Spec) => under(&self.locations.spec),
             Some(SendMode::Code) => under(&self.locations.code) && !under(&self.locations.spec),
@@ -156,6 +162,9 @@ struct Snapshot {
     /// application's own data.
     exempt: Vec<PathBuf>,
     files: HashMap<PathBuf, Kept>,
+    /// The folders under the root as it was taken: one made since, left
+    /// empty, is removed again.
+    folders: HashSet<PathBuf>,
     /// Every file put back, relative to the root.
     put_back: BTreeSet<PathBuf>,
 }
@@ -166,8 +175,10 @@ impl Snapshot {
             root,
             exempt,
             files: HashMap::new(),
+            folders: HashSet::new(),
             put_back: BTreeSet::new(),
         };
+        snapshot.folders = snapshot.listed_folders().into_iter().collect();
         for path in snapshot.listed() {
             if let Ok(contents) = std::fs::read(&path) {
                 let stamp = stamp(&path);
@@ -194,6 +205,39 @@ impl Snapshot {
             .filter(|entry| entry.file_type().is_some_and(|kind| kind.is_file()))
             .map(|entry| entry.into_path())
             .collect()
+    }
+
+    /// Every folder under the root but the exempt ones and `.git`.
+    fn listed_folders(&self) -> Vec<PathBuf> {
+        if !self.root.is_dir() {
+            return Vec::new();
+        }
+        let exempt = self.exempt.clone();
+        ignore::WalkBuilder::new(&self.root)
+            .hidden(false)
+            .filter_entry(move |entry| {
+                entry.file_name() != ".git" && !exempt.iter().any(|dir| entry.path() == dir)
+            })
+            .build()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_type().is_some_and(|kind| kind.is_dir()))
+            .map(|entry| entry.into_path())
+            .collect()
+    }
+
+    /// Removes the folders made since the snapshot that are empty, deepest
+    /// first, as one left behind where a file in it couldn't be removed
+    /// with it, as on Windows while the file was still open.
+    fn remove_new_empty_folders(&self) {
+        let mut made: Vec<PathBuf> = self
+            .listed_folders()
+            .into_iter()
+            .filter(|dir| !self.folders.contains(dir) && !written_elsewhere(dir))
+            .collect();
+        made.sort_by_key(|dir| std::cmp::Reverse(dir.components().count()));
+        for dir in made {
+            std::fs::remove_dir(&dir).ok();
+        }
     }
 
     /// Puts back whatever has changed under the root since the snapshot.
@@ -280,6 +324,7 @@ fn remove_empty_parents(path: &Path, root: &Path) {
     }
 }
 
+
 /// A run's guard over the location its mode may not change. It stops
 /// guarding once it is finished or dropped.
 pub struct Guard {
@@ -352,6 +397,7 @@ impl Guard {
             return Vec::new();
         };
         snapshot.sweep();
+        snapshot.remove_new_empty_folders();
         snapshot.put_back.iter().cloned().collect()
     }
 }
@@ -441,7 +487,13 @@ mod tests {
             std::fs::read_to_string(dir.join("spec/ui/a.pi")).unwrap(),
             "a\n"
         );
-        assert!(!dir.join("spec/new").exists());
+        assert!(
+            !dir.join("spec/new").exists(),
+            "{:?}",
+            std::fs::read_dir(dir.join("spec/new")).map(|entries| entries
+                .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+                .collect::<Vec<_>>())
+        );
         // The code is Code's to change.
         assert_eq!(
             std::fs::read_to_string(dir.join("src/main.rs")).unwrap(),
@@ -493,11 +545,12 @@ mod tests {
         let dir = project("spec");
         let guard = Guard::start(SendMode::Spec, &dir).unwrap();
         std::fs::write(dir.join("src/main.rs"), "changed\n").unwrap();
-        std::thread::sleep(SWEEP_INTERVAL * 3);
-        assert_eq!(
-            std::fs::read_to_string(dir.join("src/main.rs")).unwrap(),
-            "fn main() {}\n"
-        );
+        // Put back by a sweep, waited for, however slow the machine.
+        let start = std::time::Instant::now();
+        while std::fs::read_to_string(dir.join("src/main.rs")).unwrap() != "fn main() {}\n" {
+            assert!(start.elapsed() < std::time::Duration::from_secs(20), "never put back");
+            std::thread::sleep(SWEEP_INTERVAL);
+        }
         std::fs::write(dir.join("spec/index.pi"), "changed\n").unwrap();
         assert_eq!(guard.finish(), [PathBuf::from("main.rs")]);
         assert_eq!(

@@ -681,7 +681,8 @@ fn resolve(cwd: &Option<PathBuf>, word: &Word) -> Option<PathBuf> {
         return None;
     }
     let path = Path::new(&word.text);
-    if path.is_absolute() {
+    // A shell's paths are POSIX: one from `/` is absolute on every host.
+    if path.is_absolute() || path.has_root() {
         return Some(normalize(path));
     }
     Some(normalize(&cwd.as_ref()?.join(path)))
@@ -699,7 +700,7 @@ fn pattern_dir(cwd: &Option<PathBuf>, word: &Word) -> Option<PathBuf> {
         .unwrap_or(word.text.len())];
     let dir = &literal[..literal.rfind('/').map_or(0, |n| n + 1)];
     let path = Path::new(dir);
-    if path.is_absolute() {
+    if path.is_absolute() || path.has_root() {
         return Some(normalize(path));
     }
     Some(normalize(&cwd.as_ref()?.join(path)))
@@ -729,11 +730,14 @@ mod tests {
             .files
             .into_iter()
             .map(|(path, edited)| {
+                // Compared as paths, whatever the platform's separator.
                 let shown = path
                     .strip_prefix(dir)
                     .unwrap_or(&path)
-                    .display()
-                    .to_string();
+                    .components()
+                    .map(|part| part.as_os_str().to_string_lossy().into_owned())
+                    .collect::<Vec<_>>()
+                    .join("/");
                 (shown, edited)
             })
             .collect()

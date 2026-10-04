@@ -449,7 +449,8 @@ pub fn fixture(name: &str) -> (std::path::PathBuf, Vec<String>) {
     )
     .unwrap();
     std::fs::create_dir_all(dir.join("src")).unwrap();
-    (dir, files)
+    // As the platform names it, as /private/var for /var on macOS.
+    (dunce::canonicalize(&dir).unwrap_or(dir), files)
 }
 
 #[cfg(test)]

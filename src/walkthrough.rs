@@ -23,6 +23,8 @@ actions!(suspense, [OpenWalkthrough]);
 
 /// How much room the cut-out leaves around the part it lights.
 const ROOM: Pixels = px(4.);
+/// How wide the accent ring around the cut-out is.
+const RING: Pixels = px(2.);
 /// How far the cut-out's corners are rounded.
 const CUT_OUT_RADIUS: Pixels = px(6.);
 /// How long the cut-out takes to move from one part to the next.
@@ -48,8 +50,6 @@ pub enum Target {
     NewProject,
     /// The New Project form's panel.
     NewProjectForm,
-    /// The chat input's tabs.
-    ChatTabs,
     /// A tab of the chat input.
     ChatTab(SendMode),
     /// The chat input's text box.
@@ -188,7 +188,15 @@ impl Step {
             Step::Projects => vec![Target::ProjectTab],
             Step::Create => vec![Target::NewProject],
             Step::FillIn => vec![Target::NewProjectForm],
-            Step::Modes => vec![Target::ChatTabs],
+            // Code's left edge to Freeform's right, without the help text
+            // beside them.
+            Step::Modes => vec![
+                Target::ChatTab(SendMode::Code),
+                Target::ChatTab(SendMode::Both),
+                Target::ChatTab(SendMode::Spec),
+                Target::ChatTab(SendMode::Ask),
+                Target::ChatTab(SendMode::Freeform),
+            ],
             Step::Code => vec![Target::ChatTab(SendMode::Code)],
             Step::Spec => vec![Target::ChatTab(SendMode::Spec)],
             // Code and Spec together, beneath the chain.
@@ -373,39 +381,98 @@ pub enum Side {
     Above,
     Right,
     Left,
-    /// No side has room, as for a panel filling the window: over it.
-    Over,
+}
+
+/// Where the callout goes: its origin, the side it sits on, and, where it
+/// fits on no side whole, the height it is held to there.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Placement {
+    pub origin: Point<Pixels>,
+    pub side: Side,
+    pub max_height: Option<Pixels>,
 }
 
 /// Where a callout `card` big goes beside `cut`, in a window `viewport`
-/// big: beneath, above, right, or left, the first side it fits on whole,
-/// 12 pixels from the cut-out, centred on it along that side, slid to stay
-/// 16 pixels inside the window.
-pub fn place(cut: Bounds<Pixels>, card: Size<Pixels>, viewport: Size<Pixels>) -> (Point<Pixels>, Side) {
+/// big: beneath, above, right, or left, the first side it fits on whole
+/// between the cut-out, 12 pixels from it, and the window's edge less 16
+/// pixels; centred on the cut-out along that side, slid to stay 16 pixels
+/// in. Fitting on no side whole, it goes on the side with the most room, as
+/// tall as that room. Never over the cut-out.
+pub fn place(cut: Bounds<Pixels>, card: Size<Pixels>, viewport: Size<Pixels>) -> Placement {
+    // The room on each side, across and along.
+    let below = viewport.height - MARGIN - (cut.bottom() + GAP);
+    let above = cut.top() - GAP - MARGIN;
+    let right = viewport.width - MARGIN - (cut.right() + GAP);
+    let left = cut.left() - GAP - MARGIN;
+    let wide = viewport.width - MARGIN * 2.;
+    let tall = viewport.height - MARGIN * 2.;
+    let sides = [
+        (Side::Below, below, wide),
+        (Side::Above, above, wide),
+        (Side::Right, right, tall),
+        (Side::Left, left, tall),
+    ];
+    let whole = |side: Side, room: Pixels, along: Pixels| match side {
+        Side::Below | Side::Above => card.height <= room && card.width <= along,
+        Side::Right | Side::Left => card.width <= room && card.height <= along,
+    };
+    let (side, max_height) = match sides
+        .iter()
+        .find(|(side, room, along)| whole(*side, *room, *along))
+    {
+        Some((side, _, _)) => (*side, None),
+        None => {
+            // The most height it can have, on a side it fits across.
+            let height_on = |side: Side, room: Pixels, along: Pixels| match side {
+                Side::Below | Side::Above => room,
+                Side::Right | Side::Left if card.width <= room => along,
+                _ => px(0.),
+            };
+            let (side, room, along) = sides
+                .iter()
+                .copied()
+                .max_by(|a, b| {
+                    height_on(a.0, a.1, a.2)
+                        .partial_cmp(&height_on(b.0, b.1, b.2))
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .unwrap_or(sides[0]);
+            (side, Some(height_on(side, room, along).max(px(0.))))
+        }
+    };
+    let height = max_height.map_or(card.height, |max| card.height.min(max));
     let slide_x = |x: Pixels| x.min(viewport.width - MARGIN - card.width).max(MARGIN);
-    let slide_y = |y: Pixels| y.min(viewport.height - MARGIN - card.height).max(MARGIN);
-    let centred_x = slide_x(cut.center().x - card.width / 2.);
-    let centred_y = slide_y(cut.center().y - card.height / 2.);
-    let fits_tall = card.height + MARGIN * 2. <= viewport.height;
-    let fits_wide = card.width + MARGIN * 2. <= viewport.width;
-    if fits_wide && cut.bottom() + GAP + card.height <= viewport.height - MARGIN {
-        (point(centred_x, cut.bottom() + GAP), Side::Below)
-    } else if fits_wide && cut.top() - GAP - card.height >= MARGIN {
-        (point(centred_x, cut.top() - GAP - card.height), Side::Above)
-    } else if fits_tall && cut.right() + GAP + card.width <= viewport.width - MARGIN {
-        (point(cut.right() + GAP, centred_y), Side::Right)
-    } else if fits_tall && cut.left() - GAP - card.width >= MARGIN {
-        (point(cut.left() - GAP - card.width, centred_y), Side::Left)
-    } else {
-        // Over it, near its foot, inside the window.
-        (
-            point(
-                slide_x(cut.right() - card.width - MARGIN * 2.),
-                slide_y(cut.bottom() - card.height - MARGIN * 2.),
-            ),
-            Side::Over,
-        )
+    let slide_y = |y: Pixels| y.min(viewport.height - MARGIN - height).max(MARGIN);
+    let origin = match side {
+        Side::Below => point(slide_x(cut.center().x - card.width / 2.), cut.bottom() + GAP),
+        Side::Above => point(
+            slide_x(cut.center().x - card.width / 2.),
+            cut.top() - GAP - height,
+        ),
+        Side::Right => point(cut.right() + GAP, slide_y(cut.center().y - height / 2.)),
+        Side::Left => point(
+            cut.left() - GAP - card.width,
+            slide_y(cut.center().y - height / 2.),
+        ),
+    };
+    Placement {
+        origin,
+        side,
+        max_height,
     }
+}
+
+/// The cut-out around `part`: 4 pixels of room on every side, stopping at
+/// the window's edge where the room would go past it.
+pub fn cut_out_around(part: Bounds<Pixels>, viewport: Size<Pixels>) -> Bounds<Pixels> {
+    let room = part.dilate(ROOM);
+    Bounds::from_corners(
+        point(room.left().max(px(0.)), room.top().max(px(0.))),
+        point(
+            room.right().min(viewport.width),
+            room.bottom().min(viewport.height),
+        ),
+    )
 }
 
 /// The pointer's three corners, on the edge of a callout at `card` facing
@@ -444,7 +511,6 @@ pub fn pointer(card: Bounds<Pixels>, cut: Bounds<Pixels>, side: Side) -> Option<
             point(card.right(), along_y + half),
             point(card.right() + POINTER_DEPTH, along_y),
         ],
-        Side::Over => return None,
     })
 }
 
@@ -515,54 +581,75 @@ impl Element for Spotlight {
         cx: &mut App,
     ) -> Self::PrepaintState {
         let viewport = window.viewport_size();
-        // Where the parts are laid out in this frame, before this.
-        let target = self
+        // Where the parts are painted in this frame, before this; a part not
+        // painted yet shows nothing until it has.
+        let part = self
             .targets
             .iter()
-            .filter_map(|target| bounds_of(*target, cx))
-            .reduce(|a, b| a.union(&b))
-            .map(|bounds| bounds.dilate(ROOM));
-        let (cut, moving) = self.motion.borrow_mut().cut_out(target);
+            .map(|target| bounds_of(*target, cx))
+            .try_fold(None::<Bounds<Pixels>>, |all, bounds| {
+                let bounds = bounds?;
+                Some(Some(all.map_or(bounds, |all| all.union(&bounds))))
+            })
+            .flatten();
+        let Some(part) = part else {
+            window.request_animation_frame();
+            return Placed {
+                cut: None,
+                card: Bounds::default(),
+                side: Side::Below,
+                shades: Vec::new(),
+            };
+        };
+        let (cut, moving) = self
+            .motion
+            .borrow_mut()
+            .cut_out(Some(cut_out_around(part, viewport)));
         if moving {
             window.request_animation_frame();
         }
-        let whole = Bounds::new(point(px(0.), px(0.)), viewport);
-        let shades = match cut {
-            Some(cut) => vec![
-                Bounds::from_corners(point(px(0.), px(0.)), point(viewport.width, cut.top())),
-                Bounds::from_corners(point(px(0.), cut.bottom()), point(viewport.width, viewport.height)),
-                Bounds::from_corners(point(px(0.), cut.top()), point(cut.left(), cut.bottom())),
-                Bounds::from_corners(point(cut.right(), cut.top()), point(viewport.width, cut.bottom())),
-            ],
-            None => vec![whole],
-        };
+        let cut = cut.unwrap_or(part);
+        let shades = vec![
+            Bounds::from_corners(point(px(0.), px(0.)), point(viewport.width, cut.top())),
+            Bounds::from_corners(point(px(0.), cut.bottom()), point(viewport.width, viewport.height)),
+            Bounds::from_corners(point(px(0.), cut.top()), point(cut.left(), cut.bottom())),
+            Bounds::from_corners(point(cut.right(), cut.top()), point(viewport.width, cut.bottom())),
+        ];
         // The dimmed window takes the mouse, and does nothing with it.
         for shade in &shades {
             window.insert_hitbox(*shade, HitboxBehavior::BlockMouse);
         }
-        let anchor = cut.unwrap_or(Bounds::new(
-            point(viewport.width / 2., viewport.height / 2.),
-            Size::default(),
-        ));
         let Some(callout) = self.callout.as_mut() else {
             return Placed {
-                cut,
+                cut: Some(cut),
                 card: Bounds::default(),
-                side: Side::Over,
+                side: Side::Below,
                 shades,
             };
         };
-        let measured = callout.layout_as_root(
+        let mut measured = callout.layout_as_root(
             size(AvailableSpace::MinContent, AvailableSpace::MinContent),
             window,
             cx,
         );
-        let (origin, side) = place(anchor, measured, viewport);
-        callout.prepaint_at(origin, window, cx);
+        let placement = place(cut, measured, viewport);
+        // Fitting no side whole, as tall as the room there, its text
+        // scrolling.
+        if let Some(max) = placement.max_height
+            && max < measured.height
+        {
+            measured = callout.layout_as_root(
+                size(AvailableSpace::MinContent, AvailableSpace::Definite(max)),
+                window,
+                cx,
+            );
+            measured.height = measured.height.min(max);
+        }
+        callout.prepaint_at(placement.origin, window, cx);
         Placed {
-            cut,
-            card: Bounds::new(origin, measured),
-            side,
+            cut: Some(cut),
+            card: Bounds::new(placement.origin, measured),
+            side: placement.side,
             shades,
         }
     }
@@ -580,16 +667,19 @@ impl Element for Spotlight {
         for shade in &placed.shades {
             window.paint_quad(fill(*shade, self.dim));
         }
-        if let Some(cut) = placed.cut {
-            window.paint_quad(quad(
-                cut,
-                CUT_OUT_RADIUS,
-                transparent_black(),
-                px(2.),
-                self.accent,
-                BorderStyle::default(),
-            ));
-        }
+        let Some(cut) = placed.cut else {
+            // Its part not painted yet: nothing.
+            return;
+        };
+        // The ring, just outside the cut-out, from the same rectangle.
+        window.paint_quad(quad(
+            cut.dilate(RING),
+            CUT_OUT_RADIUS + RING,
+            transparent_black(),
+            RING,
+            self.accent,
+            BorderStyle::default(),
+        ));
         if let Some(callout) = self.callout.as_mut() {
             callout.paint(window, cx);
         }
@@ -658,7 +748,19 @@ fn callout(
                 .text_color(title_color)
                 .child(step.title()),
         )
-        .child(div().mt_2().w_full().text_sm().child(step.text()))
+        // Where the card is held shorter than it would be, its text scrolls.
+        .max_h(relative(1.))
+        .child(
+            div()
+                .id("walkthrough-text")
+                .mt_2()
+                .w_full()
+                .min_h_0()
+                .flex_shrink(1.)
+                .overflow_y_scroll()
+                .text_sm()
+                .child(step.text()),
+        )
         .children(use_open_project.map(|use_open| {
             div().mt_3().child(
                 Button::new("walkthrough-use-open-project")
@@ -745,7 +847,7 @@ pub mod preference {
 mod tests {
     use gpui_kit::{Bounds, point, px, size};
 
-    use super::{Side, Step, Tour, place, pointer};
+    use super::{Side, Step, Tour, cut_out_around, place, pointer};
 
     #[test]
     fn steps_go_on_and_back_past_the_project_once_it_exists() {
@@ -771,29 +873,44 @@ mod tests {
         let window = size(px(1200.), px(800.));
         let card = size(px(320.), px(180.));
         let tab = Bounds::new(point(px(400.), px(10.)), size(px(60.), px(24.)));
-        let (at, side) = place(tab, card, window);
-        assert_eq!(side, Side::Below);
+        let placed = place(tab, card, window);
+        assert_eq!(placed.side, Side::Below);
         // 12 pixels beneath, centred on it.
-        assert_eq!(at.y, px(46.));
-        assert_eq!(at.x + px(160.), tab.center().x);
-        let bottom = Bounds::new(point(px(100.), px(700.)), size(px(400.), px(60.)));
-        let (at, side) = place(bottom, card, window);
-        assert_eq!(side, Side::Above);
-        assert_eq!(at.y + card.height, px(688.));
+        assert_eq!(placed.origin.y, px(46.));
+        assert_eq!(placed.origin.x + px(160.), tab.center().x);
+        assert_eq!(placed.max_height, None);
+        // Near the window's foot, as the chat input's tabs: above, never
+        // over them, the pointer beneath pointing down at them.
+        let tabs = Bounds::new(point(px(100.), px(700.)), size(px(226.), px(32.)));
+        let placed = place(tabs, card, window);
+        assert_eq!(placed.side, Side::Above);
+        assert_eq!(placed.origin.y + card.height, px(688.));
+        let [_, _, tip] = pointer(Bounds::new(placed.origin, card), tabs, placed.side).unwrap();
+        assert_eq!(tip.y, px(694.));
+        assert_eq!(tip.x, tabs.center().x);
         // Slid to stay 16 pixels in, the pointer still at the part's centre.
         let corner = Bounds::new(point(px(1180.), px(10.)), size(px(10.), px(10.)));
-        let (at, side) = place(corner, card, window);
-        assert_eq!(at.x + px(320.), px(1184.));
-        let tip = pointer(Bounds::new(at, card), corner, side).unwrap()[2];
-        assert_eq!(tip.y, at.y - px(6.));
+        let placed = place(corner, card, window);
+        assert_eq!(placed.origin.x + px(320.), px(1184.));
+        let tip = pointer(Bounds::new(placed.origin, card), corner, placed.side).unwrap()[2];
+        assert_eq!(tip.y, placed.origin.y - px(6.));
         assert!(tip.x <= px(1184.) - px(18.));
-        let centred = Bounds::new(point(px(400.), px(10.)), size(px(60.), px(24.)));
-        let (at, side) = place(centred, card, window);
-        let [a, b, tip] = pointer(Bounds::new(at, card), centred, side).unwrap();
-        assert_eq!(tip.x, centred.center().x);
-        assert_eq!(b.x - a.x, px(12.));
-        // A panel filling the window: over it.
-        let panel = Bounds::new(point(px(28.), px(28.)), size(px(1144.), px(744.)));
-        assert_eq!(place(panel, card, window).1, Side::Over);
+        // A panel filling the window fits nowhere whole: on the roomiest
+        // side, held to that room, never over it.
+        let panel = Bounds::new(point(px(28.), px(28.)), size(px(1144.), px(700.)));
+        let placed = place(panel, card, window);
+        assert_eq!(placed.side, Side::Below);
+        assert_eq!(placed.max_height, Some(px(800. - 16. - 728. - 12.)));
+        assert!(placed.origin.y >= panel.bottom());
+    }
+
+    /// The cut-out keeps 4 pixels of room, stopping at the window's edge.
+    #[test]
+    fn the_cut_out_stops_at_the_windows_edge() {
+        let window = size(px(1200.), px(800.));
+        let tab = Bounds::new(point(px(140.), px(0.)), size(px(75.), px(32.)));
+        let cut = cut_out_around(tab, window);
+        assert_eq!(cut.top(), px(0.));
+        assert_eq!((cut.left(), cut.right(), cut.bottom()), (px(136.), px(219.), px(36.)));
     }
 }

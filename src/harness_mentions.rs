@@ -189,8 +189,12 @@ pub fn complete(
     )
 }
 
-/// The harness's configuration directory.
+/// The harness's configuration directory; none in tests, which never read
+/// the user's.
 fn claude_dir() -> Option<PathBuf> {
+    if cfg!(test) {
+        return None;
+    }
     std::env::var_os("CLAUDE_CONFIG_DIR")
         .map(PathBuf::from)
         .or_else(|| dirs::home_dir().map(|home| home.join(".claude")))

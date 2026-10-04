@@ -63,6 +63,17 @@ shape EdgeReleasesShape:
         notes, as one saying where the default prompts were taken from, are
         not compiler warnings, and don't fail it.
 
+        Every test passes on each of the three platforms, on a fresh
+        GitHub-hosted runner, every time, run in parallel as `cargo test`
+        runs them, in any order. A test asks for what the platform it runs on
+        does, never what one platform does:
+
+        - A shortcut is pressed as the platform binds it, as the application binds it there, <Cmd> on macOS where <Ctrl> elsewhere, as <Cmd+Shift+Enter> opening the chat input's send menu on macOS, so a test that opens a menu, sends, or saves with a keystroke does so on every platform.
+        - A path is built with the platform's own separators and compared as the platform compares paths, never written as a literal with `/` and compared as text, and line endings are compared without regard to `\r\n` or `\n`.
+        - Nothing a test needs is taken from the machine: not piton, Podman, a harness, a network, the user's home or config directories, or a display's scale. What it needs, it makes or fakes in a temporary directory of its own, removed when it ends, so the runners, which have no piton or Podman, run it as a developer's machine does. Git, which every runner has, is the one exception, configured with a name and email for the test alone.
+        - A test that waits on something running in the background waits for it to happen, with a timeout generous enough for the slowest runner, never for a fixed time.
+        - A test finds what it clicks or reads by the element ids the interface gives it, kept in step with the interface: an id a test uses is one the interface has, under the scope it is looked for in, in the frame it is looked for, as a menu's options once the menu is open.
+
     publishing:
         Once every platform's job has succeeded, one GitHub release is
         published for the commit, tagged `v0.1.N` on that commit, titled

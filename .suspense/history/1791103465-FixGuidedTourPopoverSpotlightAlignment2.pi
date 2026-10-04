@@ -1,0 +1,63 @@
+
+export anchor FixGuidedTourPopoverSpotlightAlignment2:
+    userPrompt:
+        \\\
+        The positioning of the popover for the guided tour doesn't point at the mode tabs; it sits on top of them.  Similarly, the ring around the project tab in the ribbon doesn't fit precisely
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            The positioning of the popover for the guided tour doesn't point at the mode tabs; it sits on top of them.  Similarly, the ring around the project tab in the ribbon doesn't fit precisely
+            \\\
+        result:
+            \\\
+            I've made the tour's targeting precise enough that both problems are clearly code bugs to fix in the next step. The spec already said the callout must never cover its target, but it didn't define the target's exact bounds or what "fits on a side" means. `piton check` reports no problems, the file is formatted, and `piton build` succeeds. I confirmed the changes in the refreshed reference.
+
+            **The callout over the mode tabs:** the tabs sit near the bottom of the window, so there's no room for the callout below them. It must go **above** the tabs, 12 px away, with its pointer facing down at them. "Fits on a side" now means fitting completely between the highlighted area (plus the 12 px gap) and the window's edge (minus 16 px). If no side fits, the callout takes the side with the most room, limits its height to that room and scrolls its text. It still never covers the highlighted area.
+
+            **The ring around the Project tab:**
+            - **What's measured:** the element itself, as drawn in that frame. It's never its parent, row, group or bar, and never a size remembered from an earlier frame.
+              - A ribbon tab, or a chat input tab, is its label plus 8 px on each side, the full 32 px of its bar tall.
+              - "The chat input's tabs" together run from Code's left edge to Freeform's right edge, leaving out the help text beside them.
+            - **At the window's edge:** the highlighted area keeps 4 px of room. Where that would go past the window's edge, as above a ribbon tab at the top of the window, it stops at the edge on that side and keeps exactly 4 px everywhere else.
+            - **The ring:** 2 px in the accent colour, drawn just outside the highlighted area from the same rectangle, so the two can never drift apart.
+            - **Not drawn yet:** a step whose target hasn't been drawn yet, such as a tab that was only just selected, shows nothing until it has.
+
+            ## What changed in the spec, and the anchors the code should follow
+
+            - **`WalkthroughShape.spotlight`:**
+              - **Target bounds:** use each target element's painted bounds from the current frame: the tab's own bounds for ribbon and chat input tabs, and the union of Code through Freeform for the chat input's tabs as a whole. Never use a container's bounds or a cached size.
+              - **Highlighted area:** clip the 4 px of room at the window's edges. Draw the 2 px ring from the same rectangle.
+              - **Waiting:** don't show a step until its target has been drawn.
+              - **Callout placement:** test each side in order (below, above, right, left) for a complete fit within the window's 16 px margin, with the 12 px gap. Near the bottom, choose above with the pointer facing down. If nothing fits, take the roomiest side with a height limit and scrolling. Never overlap the highlighted area.
+            \\\
+
+    sentFrom: FixGuidedTourPopoverSpotlightAlignment
