@@ -23,7 +23,10 @@ export shape FsBrowserShape:
 
     navigation:
         The bar holds an up button, disabled at the top of the file system, and
-        a home button, each with a tooltip, then the current folder's path as a
+        a home button, each with a tooltip, then, on Windows with more than one
+        drive, a button for each drive, such as "C:" and "D:", that goes to
+        that drive's top folder, the current drive's shown selected. Then comes
+        the current folder's path as a
         breadcrumb, where clicking any folder along it goes straight there. At
         the right end, a "Show hidden" checkbox, off by default, shows the
         entries whose names start with a dot. Its label is shown in full, never

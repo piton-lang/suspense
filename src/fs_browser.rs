@@ -231,9 +231,31 @@ pub fn crumbs(dir: &Path) -> Vec<(String, PathBuf)> {
         .collect()
 }
 
+/// The roots of the drives that exist, such as `C:\`, for going from one drive
+/// to another. Empty off Windows, where everything is under one root.
+#[cfg(windows)]
+pub fn drives() -> Vec<PathBuf> {
+    (b'A'..=b'Z')
+        .map(|letter| PathBuf::from(format!("{}:\\", letter as char)))
+        .filter(|root| root.exists())
+        .collect()
+}
+
+#[cfg(not(windows))]
+pub fn drives() -> Vec<PathBuf> {
+    Vec::new()
+}
+
+/// How a drive's root shows on its button: `C:\` as `C:`.
+pub fn drive_label(root: &Path) -> String {
+    root.display().to_string().trim_end_matches(['\\', '/']).to_string()
+}
+
 pub struct FsBrowser {
     title: SharedString,
     browse: Browse,
+    /// The drives to switch between, when there is more than one.
+    drives: Vec<PathBuf>,
     dir: PathBuf,
     show_hidden: bool,
     /// The current folder's entries, or why they couldn't be read.
@@ -275,6 +297,7 @@ impl FsBrowser {
         let dir = if dir.is_dir() { dir } else { home() };
         let mut this = Self {
             browse,
+            drives: drives(),
             focus_handle: cx.focus_handle().tab_stop(true),
             typed: String::new(),
             typed_at: None,
@@ -592,6 +615,21 @@ impl FsBrowser {
                     .tooltip_with_action("Go to your home folder", &GoHome, Some(CONTEXT))
                     .on_click(cx.listener(|this, _, _, cx| this.go(home(), cx))),
             )
+            .children((self.drives.len() > 1).then(|| {
+                let current = self.dir.ancestors().last().map(Path::to_path_buf);
+                h_flex().flex_none().gap_0p5().children(self.drives.iter().enumerate().map(
+                    |(ix, root)| {
+                        let target = root.clone();
+                        Button::new(("folder-drive", ix))
+                            .ghost()
+                            .xsmall()
+                            .label(drive_label(root))
+                            .tooltip(format!("Go to drive {}", drive_label(root)))
+                            .selected(current.as_deref() == Some(root.as_path()))
+                            .on_click(cx.listener(move |this, _, _, cx| this.go(target.clone(), cx)))
+                    },
+                ))
+            }))
             .child(
                 Button::new("folder-new")
                     .ghost()
@@ -892,7 +930,7 @@ mod tests {
     use gpui_kit::{AppContext as _, Focusable as _, TestAppContext};
 
     use super::{
-        Browse, ChoosePath, FsBrowser, create_folder, crumbs, list_entries, list_folders,
+        Browse, ChoosePath, FsBrowser, create_folder, crumbs, drive_label, list_entries, list_folders,
         new_folder_problem, step_selection, type_ahead_match,
     };
 
@@ -1172,6 +1210,19 @@ mod tests {
             Some(&dir.join("project/piton.config.pi"))
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn drives_are_labelled_by_letter() {
+        assert_eq!(drive_label(Path::new("C:\\")), "C:");
+        assert_eq!(drive_label(Path::new("D:")), "D:");
+        #[cfg(windows)]
+        {
+            let root = std::env::current_dir().unwrap().ancestors().last().unwrap().to_path_buf();
+            assert!(super::drives().contains(&root), "{root:?} isn't a listed drive");
+        }
+        #[cfg(not(windows))]
+        assert!(super::drives().is_empty());
     }
 
     #[test]
