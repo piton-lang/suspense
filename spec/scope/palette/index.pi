@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /scope/about import AboutScope
 from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
 from /scope/harness-integration/catalog import HarnessCatalogScope
 from /scope/import-project import ImportProjectScope
@@ -102,7 +103,8 @@ shape PaletteShape:
             commands do, "Open Project…", which opens the
             @{OpenProjectScope}, "Build", "Dark mode" or
             "Light mode" (whichever is not the current one), "Settings…", which
-            opens the @{SettingsWindowScope}, and "Quit". Build builds the spec
+            opens the @{SettingsWindowScope}, "About Suspense", which opens the
+            @{AboutScope}, and "Quit". Build builds the spec
             on its own, as the @{SpecBuildScope} says.
 
         commands:

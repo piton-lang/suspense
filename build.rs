@@ -22,6 +22,57 @@ fn main() {
     compile_parser();
     compile_prompts();
     embed_templates();
+    bake_build_info();
+}
+
+/// Bakes in what About Suspense shows of the build (see `src/about.rs`): the
+/// commit it was built from, as `SUSPENSE_COMMIT`, where git can say, and the
+/// date it was built, as `SUSPENSE_BUILT`, from `SOURCE_DATE_EPOCH` where it
+/// is set and the clock otherwise. Built again as the commit changes.
+fn bake_build_info() {
+    for watched in [".git/HEAD", ".git/refs/heads", ".git/packed-refs"] {
+        if Path::new(watched).exists() {
+            println!("cargo:rerun-if-changed={watched}");
+        }
+    }
+    println!("cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH");
+    let commit = Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        .filter(|commit| !commit.is_empty());
+    if let Some(commit) = commit {
+        println!("cargo:rustc-env=SUSPENSE_COMMIT={commit}");
+    }
+    let seconds = std::env::var("SOURCE_DATE_EPOCH")
+        .ok()
+        .and_then(|epoch| epoch.parse::<u64>().ok())
+        .or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .ok()
+                .map(|since| since.as_secs())
+        });
+    if let Some(seconds) = seconds {
+        println!("cargo:rustc-env=SUSPENSE_BUILT={}", date(seconds));
+    }
+}
+
+/// The UTC date `seconds` after the Unix epoch, as "2026-10-05".
+fn date(seconds: u64) -> String {
+    // Days to a civil date, after Howard Hinnant's algorithm.
+    let days = (seconds / 86_400) as i64 + 719_468;
+    let era = days.div_euclid(146_097);
+    let day_of_era = days.rem_euclid(146_097);
+    let year_of_era = (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_index = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_index + 2) / 5 + 1;
+    let month = if month_index < 10 { month_index + 3 } else { month_index - 9 };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    format!("{year:04}-{month:02}-{day:02}")
 }
 
 /// Where the new project templates are.

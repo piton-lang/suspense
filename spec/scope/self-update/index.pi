@@ -1,6 +1,7 @@
 use /lib
 from /scope/application/MainWindow import MainWindowScope
 from /scope/edge-releases import EdgeReleasesScope
+from /scope/open-file import OpenFileScope
 from /scope/settings-window import SettingsWindowScope
 from /scope/user-preferences import UserPreferencesScope
 
@@ -96,3 +97,62 @@ shape SelfUpdateShape:
         "Checked 5 minutes ago", "Downloading 0.1.N…" with how much has
         come, "Suspense 0.1.N is ready" with a Restart button, or, in the
         theme's error colour, why the last check, download, or update failed.
+
+    requests:
+        Every request to GitHub sends a User-Agent naming Suspense and its
+        version, as "Suspense/0.1.42", since GitHub refuses requests without
+        one, and asks for its JSON with `Accept: application/vnd.github+json`.
+        A check asks for the repository's releases at
+        `https://api.github.com/repos/<owner>/<name>/releases`, 100 to a page,
+        so the newest edge release is never missed for being past the first
+        page, and takes the highest N among the releases whose tag is
+        `v0.1.N`, ignoring drafts and any release whose tag isn't of that
+        form. An asset is downloaded from its `browser_download_url`,
+        following GitHub's redirects to where it is stored, and its digest,
+        given as `sha256:<hex>`, is compared without regard to case.
+
+        GitHub's limit on requests made without signing in is respected: a
+        check refused for it, with a 403 or 429 and its rate-limit headers,
+        says so, "GitHub's rate limit was reached; try again after" and the
+        time it resets, and an automatic check isn't tried again before then.
+        Any other refusal says the status GitHub gave and its message, never
+        only that the check failed.
+
+    afterUpdate:
+        An update that has been put in place is confirmed at the next
+        launch: the version now running is compared with the one staged, and
+        where they match, a notification says "Updated to Suspense 0.1.N",
+        and the Updates section says so until the next check. Where they
+        don't, as when the binary put in place still reports the old
+        version, the Updates section says, in the theme's error colour, that
+        the update to 0.1.N didn't take effect, and the same release is never
+        downloaded and put in place again by itself, so an update can never
+        loop, one restart after another; a Check for updates asked for by
+        hand still tries it.
+
+        The binary set aside is deleted at the next launch, and where it
+        can't be yet, as on Windows while the process that ran it is still
+        exiting, it is tried again at each launch after, never stopping the
+        launch. A staged binary left beside the running one that is no newer
+        than it is deleted rather than put in place.
+
+    diagnostics:
+        Suspense keeps a log of what updating does, `updates.log` in its own
+        data directory, beside its preferences, as the
+        @{UserPreferencesScope} keeps them: one line per step, with the time,
+        each check with the repository and running version it checked for,
+        the releases it found and the one it took or why it took none, each
+        download with its asset, size, and digest check, each staging, each
+        putting in place with its paths and how it went, and each launch's
+        confirmation, every failure with its whole error. It keeps the last
+        1,000 lines.
+
+        The Updates section has a "Details" disclosure, collapsed to start
+        with, that shows what updating rests on: the running version, the
+        repository it updates from, or that it has none and so is not an edge
+        build, the running binary's path and whether its directory can be
+        written, the last check's time and the newest release it found, and
+        what is staged, if anything, with a "Show log" button that opens
+        `updates.log` as the @{OpenFileScope} opens a file, and a "Copy"
+        button that puts all of it, with the log's last 50 lines, on the
+        clipboard, for a bug report.

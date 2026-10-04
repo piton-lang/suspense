@@ -1,6 +1,7 @@
 // Hide the console window on Windows release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod about;
 mod activity;
 mod agent;
 mod animations;
@@ -100,7 +101,10 @@ fn main() {
     // `suspense --version` says which build it is, as an edge release's
     // `0.1.N`, and opens nothing.
     if std::env::args().skip(1).any(|arg| arg == "--version") {
-        println!("suspense {}", version::VERSION);
+        // Its version and the repository it updates from, or that it has
+        // none, as the EdgeReleasesScope says. A Windows release opens no
+        // console, but a pipe or a file it is redirected to still gets it.
+        println!("{}", version::describe());
         return;
     }
     // Run elevated all the same, what it and the programs it starts create

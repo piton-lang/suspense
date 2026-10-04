@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from ../about import AboutScope
 from ../divergence import DivergenceScope
 from ../editor import EditorScope
 from ../harness-integration/catalog import HarnessCatalogScope
@@ -152,6 +153,11 @@ shape MainWindowShape:
             The settings, opened with Ctrl+, (Cmd+, on macOS), the ribbon's
             Settings command, or the palette, show the @{SettingsWindowScope}
             in an @{InsetPanelScope}, in place of whatever else is open there.
+
+        about:
+            The ribbon's About command, or the palette's "About Suspense",
+            shows the @{AboutScope} in an @{InsetPanelScope}, in place of
+            whatever else is open there, as the settings are shown.
 
         promptMode:
             The @{PromptEditor} fills the rest of the window, to the right of

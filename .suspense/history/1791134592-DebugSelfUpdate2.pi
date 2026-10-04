@@ -1,0 +1,84 @@
+
+export anchor DebugSelfUpdate2:
+    userPrompt:
+        \\\
+        I'm not sure that self-update is working correctly Dig into it.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            I'm not sure that self-update is working correctly Dig into it.
+            \\\
+        result:
+            \\\
+            I couldn't find the actual bug from here. This step runs in a container that can't see the code, and Suspense has no update log yet. So I tightened the spec where self-update most often breaks silently, and added a log and diagnostics so the next failure is visible. `piton check` reports no problems, `piton build` wrote 81 files, and the new sections are in the refreshed reference.
+
+            **Likeliest causes, worth checking first in the code step:**
+            1. **Version or repository not baked into the edge build.** If the workflow doesn't pass them in, the build never updates, or thinks it's version 0.1.0 and updates again on every launch.
+            2. **No User-Agent on GitHub requests.** GitHub refuses requests without one.
+            3. **Downloading the asset without following GitHub's redirect.**
+            4. **Leaving the renamed-aside binary on Windows** while the old process is still exiting.
+
+            ## What changed in the spec
+
+            **Edge releases** (`.claude/reference/scope/edge-releases/index.md#version`)
+            - The workflow must pass the version and `owner/name` to every platform's build. A build never falls back to Cargo.toml's version or to no repository on the runner.
+            - `suspense --version` prints, for example, "Suspense 0.1.42 (owner/name)" or "Suspense 0.1.0 (development build)", and exits without opening a window. On Windows it writes to standard output even though the app has no console.
+            - Each job runs the binary it built with `--version` before archiving it, and fails if the output doesn't match what it was given. So no edge release can ship a binary that can't update itself or that keeps updating.
+
+            **Self-update** (`.claude/reference/scope/self-update/index.md`)
+            - **`#requests`:**
+              - Every request sends a `Suspense/0.1.N` User-Agent and `Accept: application/vnd.github+json`.
+              - The releases list is fetched 100 to a page, ignoring drafts and tags not of the form `v0.1.N`.
+              - Assets are downloaded from `browser_download_url`, following redirects, and the `sha256:` digest is compared ignoring case.
+              - When GitHub's rate limit is hit, the message names the reset time and automatic checks wait until then. Any other refusal shows GitHub's status and message.
+            - **`#after-update`:**
+              - The launch after an update confirms the running version matches what was staged, and shows "Updated to Suspense 0.1.N".
+              - If it doesn't match, the Updates section reports an error and that release is never put in place again automatically, so an update can't loop. Check for updates by hand still tries it.
+              - On Windows, the set-aside binary is deleted at a later launch if it can't be deleted yet.
+              - A staged binary that is no newer than the running one is deleted.
+            - **`#diagnostics`:**
+              - An `updates.log` (last 1,000 lines) in Suspense's data directory records every check, download, staging, swap and launch confirmation, with full errors.
+              - A "Details" disclosure in the Updates section shows the running version, the repository or that this isn't an edge build, the binary's path and whether it can be written, the last check and newest release found, and what's staged.
+              - Details has "Show log" and "Copy" buttons for bug reports.
+
+            The constraints are in `.suspense/history/1791134228-DebugSelfUpdate.understanding.md`.
+
+            ## Anchors the code should follow
+            - `EdgeReleasesScope`: `#version`, for `edge.yml` and the `--version` flag and its check.
+            - `SelfUpdateScope`: `#requests`, `#after-update`, `#diagnostics`, plus the existing `#checking`, `#downloading` and `#restarting`, read against the code to find what differs.
+            - `UserPreferencesScope`: where the log goes.
+            - `OpenFileScope`: how Show log opens it.
+            \\\
+
+    sentFrom: DebugSelfUpdate

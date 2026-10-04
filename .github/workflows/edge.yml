@@ -86,6 +86,22 @@ jobs:
       - name: Build
         run: cargo build --release --locked
 
+      # The binary built says the version and repository it was given, so no
+      # release can ship one that can't update itself, or that takes itself
+      # for an older version and updates again and again.
+      - name: Check the version it reports
+        shell: bash
+        run: |
+          binary=target/release/suspense
+          if [ "$RUNNER_OS" = "Windows" ]; then binary=target/release/suspense.exe; fi
+          reported=$("$binary" --version | tr -d '\r')
+          expected="Suspense $SUSPENSE_VERSION ($SUSPENSE_REPOSITORY)"
+          echo "reported: $reported"
+          if [ "$reported" != "$expected" ]; then
+            echo "::error::The binary reports '$reported', not '$expected'"
+            exit 1
+          fi
+
       - name: Package (Linux, macOS)
         if: runner.os != 'Windows'
         run: tar -czf "$ARCHIVE.tar.gz" -C target/release suspense

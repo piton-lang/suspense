@@ -35,6 +35,21 @@ shape EdgeReleasesShape:
         can update itself. A build made anywhere else, as on a developer's
         machine, has the version Cargo.toml gives it, and no repository.
 
+        The workflow gives both to the build of every platform, the version
+        from the count and the repository from the run's own, and a build
+        never falls back to Cargo.toml's version or to no repository on the
+        runner. The binary prints its version and repository, and nothing
+        else, when run with `--version`, as "Suspense 0.1.42 (owner/name)",
+        or "Suspense 0.1.0 (development build)" for a build with none,
+        exiting at once without opening a window, written to its standard
+        output even on Windows, where the binary opens no console of its own,
+        so a pipe or a file it is redirected to receives it. Each job runs the binary it
+        built with `--version` before it is archived, and fails, publishing
+        nothing, where what it prints isn't the version and repository it was
+        given, so no edge release can ship a binary that can't update
+        itself, or one that takes itself for an older version and updates
+        again and again.
+
     builds:
         The application is built in release mode, one job per platform, run
         side by side, each on a GitHub-hosted runner of that platform:

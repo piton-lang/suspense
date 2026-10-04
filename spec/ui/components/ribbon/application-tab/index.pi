@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /scope/about import AboutScope
 from /scope/self-update import SelfUpdateScope
 from /scope/settings-window import SettingsWindowScope
 from /scope/user-preferences import UserPreferencesScope
@@ -38,7 +39,7 @@ shape RibbonApplicationTabShape:
         help:
             A "Help" group, the last, after Preferences, holds the Welcome
             command, then the Walkthrough command, then the Check for Updates
-            command.
+            command, then the About command, the last of them.
 
     commands:
         brightness:
@@ -128,6 +129,14 @@ shape RibbonApplicationTabShape:
             machine, it is disabled, its tooltip saying why, as the Updates
             section does. Otherwise its tooltip says it checks for a newer
             version of Suspense.
+
+            It is a full button, and not primary, so the collapsed ribbon
+            leaves it out.
+
+        about:
+            An "About" button with an info icon. Clicking it opens the
+            @{AboutScope}, showing which version of Suspense is running. Its
+            tooltip says it shows the version and build of Suspense.
 
             It is a full button, and not primary, so the collapsed ribbon
             leaves it out.

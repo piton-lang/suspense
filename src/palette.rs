@@ -198,6 +198,7 @@ pub enum SystemCommand {
     Build,
     ToggleDarkMode,
     Settings,
+    About,
     Quit,
 }
 
@@ -218,6 +219,7 @@ impl SystemState {
             (SystemCommand::Build, "Build Spec", self.can_build),
             (SystemCommand::ToggleDarkMode, theme, true),
             (SystemCommand::Settings, "Settings…", true),
+            (SystemCommand::About, "About Suspense", true),
             (SystemCommand::Quit, "Quit", true),
         ]
         .into_iter()

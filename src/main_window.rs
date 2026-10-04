@@ -36,6 +36,7 @@ use crate::ribbon::RunCommand;
 use crate::ribbon::{self, Ribbon};
 use crate::run_targets::{self, ProjectTargets};
 use crate::run_view::{CloseRun, MinimizeRun, RunView, TargetsFound};
+use crate::about::{AboutView, CloseAbout, OpenAbout};
 use crate::settings_window::{CloseSettings, OpenSettings, SettingsWindow};
 use crate::chat_input::SendMode;
 use crate::walkthrough::{self, OpenWalkthrough, Step, Tour};
@@ -107,6 +108,8 @@ pub struct MainWindow {
     /// The panel writing a new instruction.
     new_instruction: Option<Entity<NewInstructionForm>>,
     settings: Option<Entity<SettingsWindow>>,
+    /// About Suspense, while it is open in the inset panel.
+    about: Option<Entity<AboutView>>,
     /// The welcome page, checking what Suspense needs.
     welcome: Option<Entity<WelcomeView>>,
     /// The checks run at launch, opening the welcome page once they are
@@ -362,6 +365,7 @@ impl MainWindow {
             spec_component: None,
             new_instruction: None,
             settings: None,
+            about: None,
             welcome: None,
             _launch_checks: None,
             tour: None,
@@ -427,6 +431,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.about = None;
         self.welcome = None;
         self.theme_editor = None;
         self.generate_skills = None;
@@ -482,6 +487,24 @@ impl MainWindow {
         )];
         settings.read(cx).focus_handle(cx).focus(window, cx);
         self.settings = Some(settings);
+        cx.notify();
+    }
+
+    /// Shows About Suspense in the inset panel, in place of anything else
+    /// there, as the settings are shown.
+    pub fn open_about(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.about.is_some() {
+            return;
+        }
+        let about = cx.new(AboutView::new);
+        self.clear_panel();
+        self._panel_subscriptions = vec![cx.subscribe_in(
+            &about,
+            window,
+            |this, _, _: &CloseAbout, window, cx| this.close_panel(window, cx),
+        )];
+        about.read(cx).focus_handle(cx).focus(window, cx);
+        self.about = Some(about);
         cx.notify();
     }
 
@@ -596,6 +619,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.about = None;
         self.welcome = None;
         self.theme_editor = None;
         self.generate_skills = None;
@@ -681,6 +705,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.about = None;
         self.welcome = None;
         self.theme_editor = None;
         self.generate_skills = None;
@@ -784,6 +809,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.about = None;
         self.welcome = None;
         self.theme_editor = None;
         self.generate_skills = None;
@@ -931,6 +957,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.about = None;
         self.welcome = None;
         self.theme_editor = None;
         self.generate_skills = None;
@@ -1277,6 +1304,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.about = None;
         self.welcome = None;
         self.theme_editor = None;
         self.generate_skills = None;
@@ -1322,6 +1350,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.about = None;
         self.welcome = None;
         self.theme_editor = None;
         self.generate_skills = None;
@@ -1496,6 +1525,8 @@ impl MainWindow {
             form.read(cx).focus_handle(cx)
         } else if let Some(settings) = &self.settings {
             settings.read(cx).focus_handle(cx)
+        } else if let Some(about) = &self.about {
+            about.read(cx).focus_handle(cx)
         } else if let Some(editor) = &self.theme_editor {
             editor.read(cx).focus_handle(cx)
         } else if let Some(view) = &self.generate_skills {
@@ -1532,6 +1563,7 @@ impl MainWindow {
             || self.spec_component.is_some()
             || self.new_instruction.is_some()
             || self.settings.is_some()
+            || self.about.is_some()
             || self.welcome.is_some()
             || self.theme_editor.is_some()
             || self.generate_skills.is_some()
@@ -1569,6 +1601,7 @@ impl MainWindow {
             && self.spec_component.is_none()
             && self.new_instruction.is_none()
             && self.settings.is_none()
+            && self.about.is_none()
             && self.welcome.is_none()
             && self.theme_editor.is_none()
             && self.generate_skills.is_none()
@@ -1595,6 +1628,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.about = None;
         self.welcome = None;
         self.theme_editor = None;
         self.generate_skills = None;
@@ -1807,6 +1841,9 @@ impl MainWindow {
         if let Some(settings) = &self.settings {
             return Some(("settings", settings.clone().into()));
         }
+        if let Some(about) = &self.about {
+            return Some(("about", about.clone().into()));
+        }
         if let Some(welcome) = &self.welcome {
             return Some(("welcome", welcome.clone().into()));
         }
@@ -1993,6 +2030,7 @@ impl MainWindow {
                     ribbon::set_dark_mode(!cx.theme().is_dark(), window, cx)
                 }
                 SystemCommand::Settings => self.open_settings(window, cx),
+                SystemCommand::About => self.open_about(window, cx),
                 SystemCommand::Quit => self.quit(window, cx),
             },
         }
@@ -2181,6 +2219,20 @@ impl Render for MainWindow {
             .on_action(
                 cx.listener(|this, _: &OpenSettings, window, cx| this.open_settings(window, cx)),
             )
+            .on_action(cx.listener(|this, _: &OpenAbout, window, cx| this.open_about(window, cx)))
+            // Show log, in the Updates section: updates.log opens as any file
+            // does, the settings making way for it.
+            .on_action(cx.listener(
+                |this, _: &crate::self_update::ShowUpdatesLog, window, cx| {
+                    if let Some(file) = crate::self_update::log::file().filter(|file| file.exists())
+                    {
+                        this.close_panel(window, cx);
+                        this.prompt_mode.update(cx, |prompt_mode, cx| {
+                            prompt_mode.open_file(file, window, cx)
+                        });
+                    }
+                },
+            ))
             .on_action(
                 cx.listener(|this, _: &OpenWelcome, window, cx| this.open_welcome(window, cx)),
             )
@@ -4998,6 +5050,59 @@ mod tests {
     /// Theme, on the Application tab, opens the theme editor in the inset
     /// panel; a colour chosen shows in the mode's colour at once, and its
     /// Reset puts the theme's own back; the close button closes it.
+    #[gpui_kit::test]
+    async fn about_opens_from_the_help_group_and_closes_with_escape(cx: &mut TestAppContext) {
+        use crate::ribbon::RibbonTab;
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        let ribbon = main.read_with(cx, |main, _| main.ribbon.clone());
+        ribbon.update(cx, |ribbon, cx| {
+            ribbon.select_tab(RibbonTab::Application, cx)
+        });
+        cx.run_until_parked();
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            // The last of the Help group, after Check for Updates.
+            let (updates, about) = (
+                window.find("check-for-updates").bounds(),
+                window.find("about").bounds(),
+            );
+            assert!(about.left() >= updates.right(), "{about:?} isn't after {updates:?}");
+            window.click("about", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(main.read_with(cx, |main, _| main.about.is_some()));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            for id in ["about-version", "about-platform", "about-piton", "about-copy", "about-close"] {
+                assert!(window.try_find(id).is_some(), "no {id}");
+            }
+            let (version, piton) = (
+                window.find("about-version").bounds(),
+                window.find("about-piton").bounds(),
+            );
+            assert!(piton.top() > version.top(), "piton isn't beneath the version");
+            window.press("escape", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(main.read_with(cx, |main, _| main.about.is_none()));
+    }
+
     #[gpui_kit::test]
     async fn the_theme_editor_opens_in_the_inset_panel(cx: &mut TestAppContext) {
         use crate::chat_input::{SendMode, mode_color};

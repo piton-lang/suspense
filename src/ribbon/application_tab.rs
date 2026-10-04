@@ -2,8 +2,9 @@
 //! the Brightness slider, which runs the interface from its darkest to its
 //! lightest, Reset Brightness beneath it, Theme, which opens the theme editor, Settings, which opens
 //! the settings window, Welcome, which opens the welcome page, and
-//! Walkthrough, which starts the walkthrough, and Check for Updates, which
-//! checks for a newer Suspense.
+//! Walkthrough, which starts the walkthrough, Check for Updates, which
+//! checks for a newer Suspense, and About, which shows which Suspense is
+//! running.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::Button;
@@ -16,6 +17,7 @@ use gpui_kit::component::{
 use gpui_kit::*;
 
 use super::{Command, CommandPlace, CommandSize, Ribbon};
+use crate::about::OpenAbout;
 use crate::settings_window::OpenSettings;
 use crate::theme_editor::OpenThemeEditor;
 use crate::self_update::Updates;
@@ -66,6 +68,12 @@ pub(super) const COMMANDS: &[CommandPlace] = &[
     },
     CommandPlace {
         command: Command::CheckForUpdates,
+        group: "Help",
+        size: CommandSize::Full,
+        primary: false,
+    },
+    CommandPlace {
+        command: Command::About,
         group: "Help",
         size: CommandSize::Full,
         primary: false,
@@ -343,6 +351,16 @@ pub(super) fn check_for_updates(
         .loading(Updates::busy(cx))
         .disabled(!enabled)
         .on_click(|_, _, cx| Updates::check_from_ribbon(cx))
+        .into_any_element()
+}
+
+/// About: shows which version of Suspense is running, and its build.
+pub(super) fn about(
+    button: impl Fn(&'static str, IconName, SharedString) -> Button,
+) -> AnyElement {
+    button("about", IconName::Info, "About".into())
+        .tooltip("Show the version and build of Suspense")
+        .on_click(|_, window, cx| window.dispatch_action(Box::new(OpenAbout), cx))
         .into_any_element()
 }
 

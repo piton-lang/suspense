@@ -1,0 +1,56 @@
+use /lib
+use /ui
+from /scope/edge-releases import EdgeReleasesScope
+from /scope/self-update import SelfUpdateScope
+
+export ui-component AboutScope:
+    concept: {AboutConcept}
+
+concept AboutConcept:
+    pitch:
+        What this copy of Suspense is: its name, its version, and the build it
+        came from, so it can be told which one is running, as when reporting
+        a bug.
+
+    shape: {AboutShape}
+
+shape AboutShape:
+    description:
+        A small panel titled "About Suspense", with a close button, its
+        contents centred: the application's icon, 64 pixels square, then
+        "Suspense" in large semibold text, then a line saying what it is, "A
+        desktop application for writing a Piton spec and the code it
+        describes with a coding agent", muted, wrapping.
+
+    details:
+        Beneath, a short list of labelled figures, a label at the left,
+        muted, and its value at the right, in tabular figures where it is a
+        number, in this order, the version as the @{EdgeReleasesScope} says it is
+        baked into the binary.
+
+        \\
+        - Version: the version running, as it is baked into the binary, "0.1.42", followed, muted, by "edge" for an edge build or "development build" for one made elsewhere, as on a developer's machine
+        - Commit: the commit it was built from, its short hash, where the build records one, left out otherwise
+        - Built: the date it was built, where the build records it, left out otherwise
+        - Platform: the operating system and architecture it was built for, as "Windows x86-64", "macOS arm64", or "Linux x86-64"
+        - Piton: the version of piton found on the machine, as `piton --version` prints it, or "Not installed"
+        \\
+
+        Each figure is found without anything being run but `piton --version`,
+        which is run once the panel opens, its row reading "Checking…" until
+        it answers, never holding the panel back from opening.
+
+    links:
+        Beneath the figures, for an edge build, a link to the repository it
+        is published from, on GitHub, reading its `owner/name`, and one to
+        this version's release, "Release notes", each opening in the browser.
+        A build with no repository shows neither.
+
+    actions:
+        Along the bottom, a "Copy details" button, with a copy icon, which
+        puts the figures on the clipboard as plain text, one "Label: value"
+        per line, "Suspense" first, for pasting into a bug report, and reads
+        "Copied", with a check, for 2 seconds after; and, where the build can
+        update itself, a "Check for Updates" button, doing what the ribbon's
+        does, as the @{SelfUpdateScope} says. A primary "Close" button, or
+        <Escape>, closes the panel.

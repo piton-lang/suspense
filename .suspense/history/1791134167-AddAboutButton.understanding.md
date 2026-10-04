@@ -1,0 +1,8 @@
+- [The Application tab's Help group, last, holds Welcome, Walkthrough, then Check for Updates](.claude/reference/ui/components/ribbon/application-tab/index.md#groups)
+- [Help's buttons are full buttons, not primary, so the collapsed ribbon leaves them out](.claude/reference/ui/components/ribbon/application-tab/index.md#commands)
+- [The running version is `0.1.N`, baked into the binary, with the repository it's published from for edge builds](.claude/reference/scope/edge-releases/index.md#version)
+- [A build made elsewhere has Cargo.toml's version and no repository, and can't update itself](.claude/reference/scope/edge-releases/index.md#version)
+- [Settings opens in an inset panel in place of whatever else is open there](.claude/reference/scope/application/MainWindow.md#settings)
+- [The palette's system commands mirror the toolbar's](.claude/reference/scope/palette/index.md#shape)
+- [The Help group ends with an About button that opens the About panel](.claude/reference/ui/components/ribbon/application-tab/index.md#groups)
+- [The About panel shows version, commit, build date, platform, and piton version, with Copy details](.claude/reference/scope/about/index.md#details)

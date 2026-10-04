@@ -100,12 +100,15 @@ fn render_updates(cx: &mut App) -> impl IntoElement {
     let version = div()
         .font_medium()
         .child(format!("Suspense {}", crate::version::VERSION));
+    let details = render_update_details(cx);
     let section = v_flex().gap_3().child(version);
     if let Some(why) = cant_update() {
-        return section.child(div().text_color(muted).child(why));
+        return section
+            .child(div().text_color(muted).child(why))
+            .child(details);
     }
     let Some(updates) = Updates::get(cx) else {
-        return section;
+        return section.child(details);
     };
     let busy = Updates::busy(cx);
     let restart = |id: &'static str| {
@@ -165,6 +168,9 @@ fn render_updates(cx: &mut App) -> impl IntoElement {
                 .into_any_element()
         }
         Status::Failed(why) => div().text_color(danger).child(why.clone()).into_any_element(),
+        Status::Updated { version } => div()
+            .child(format!("Updated to Suspense {version}."))
+            .into_any_element(),
     };
     section
         .child(
@@ -201,6 +207,69 @@ fn render_updates(cx: &mut App) -> impl IntoElement {
                 )
             },
         )
+        .child(details)
+}
+
+/// The Updates section's Details, collapsed to start with: what updating
+/// rests on, with Show log, which opens `updates.log`, and Copy, which puts
+/// it all, with the log's last lines, on the clipboard.
+fn render_update_details(cx: &mut App) -> AnyElement {
+    use crate::self_update::{ShowUpdatesLog, Updates};
+    let theme = cx.theme();
+    let muted = theme.muted_foreground;
+    let open = Updates::get(cx).is_some_and(|updates| updates.details_open);
+    let toggle = Button::new("settings-update-details")
+        .ghost()
+        .xsmall()
+        .icon(if open {
+            IconName::ChevronDown
+        } else {
+            IconName::ChevronRight
+        })
+        .label("Details")
+        .on_click(|_, _, cx| Updates::toggle_details(cx));
+    let section = v_flex().gap_2().child(div().child(toggle));
+    if !open {
+        return section.into_any_element();
+    }
+    let rows = crate::self_update::details(cx).into_iter().map(|(label, value)| {
+        h_flex()
+            .gap_4()
+            .items_start()
+            .text_sm()
+            .child(div().w(px(96.)).flex_none().text_color(muted).child(label))
+            .child(div().flex_1().min_w_0().whitespace_normal().child(value))
+    });
+    section
+        .child(
+            gpui_kit::TestSupportExt::test_support(
+                v_flex().id("settings-update-details-rows").gap_1().children(rows),
+            ),
+        )
+        .child(
+            h_flex()
+                .gap_2()
+                .child(
+                    Button::new("settings-update-show-log")
+                        .small()
+                        .label("Show log")
+                        .disabled(crate::self_update::log::file().is_none_or(|file| !file.exists()))
+                        .on_click(|_, window, cx| {
+                            window.dispatch_action(Box::new(ShowUpdatesLog), cx)
+                        }),
+                )
+                .child(
+                    Button::new("settings-update-copy")
+                        .small()
+                        .icon(IconName::Copy)
+                        .label("Copy")
+                        .on_click(|_, _, cx| {
+                            let text = crate::self_update::details_text(cx);
+                            cx.write_to_clipboard(ClipboardItem::new_string(text));
+                        }),
+                ),
+        )
+        .into_any_element()
 }
 
 /// The section picked, kept while the settings are closed and opened again.

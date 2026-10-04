@@ -20,6 +20,8 @@ use gpui_kit::*;
 use serde_json::Value;
 use sha2::{Digest as _, Sha256};
 
+actions!(suspense, [ShowUpdatesLog]);
+
 /// The repository the running build was published from, `owner/name`, baked
 /// in by the edge releases workflow; none for a build made anywhere else.
 pub const REPOSITORY: Option<&str> = option_env!("SUSPENSE_REPOSITORY");
@@ -32,6 +34,17 @@ const CHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
 
 /// How long a request to GitHub may take.
 const TIMEOUT_SECS: &str = "30";
+
+/// The User-Agent every request to GitHub sends, naming Suspense and its
+/// version, as GitHub refuses requests without one.
+fn user_agent() -> String {
+    format!("User-Agent: Suspense/{}", crate::version::VERSION)
+}
+
+/// The N of a release's tag, which must be `v0.1.N`; none for any other.
+pub fn tag_sequence(tag: &str) -> Option<u64> {
+    tag.strip_prefix('v').filter(|rest| rest.starts_with("0.1.")).and_then(sequence)
+}
 
 /// The N of a version or tag `0.1.N`, as `v0.1.42` or `0.1.42`.
 pub fn sequence(version: &str) -> Option<u64> {
@@ -107,7 +120,7 @@ pub fn newest(
         let Some(n) = release
             .get("tag_name")
             .and_then(Value::as_str)
-            .and_then(sequence)
+            .and_then(tag_sequence)
         else {
             continue;
         };
@@ -144,31 +157,144 @@ pub fn newest(
             sha256: found
                 .get("digest")
                 .and_then(Value::as_str)
-                .and_then(|digest| digest.strip_prefix("sha256:"))
+                .and_then(|digest| {
+                    let (kind, hex) = digest.split_once(':')?;
+                    kind.eq_ignore_ascii_case("sha256").then_some(hex)
+                })
                 .map(str::to_lowercase),
         });
     }
     best
 }
 
-/// Asks GitHub for the repository's releases. Blocking.
+/// A check GitHub refused for its limit on requests made without signing
+/// in, and when it resets, in seconds since the Unix epoch, where it said.
+#[derive(Debug)]
+pub struct RateLimited {
+    pub reset: Option<u64>,
+}
+
+impl std::fmt::Display for RateLimited {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.reset {
+            Some(reset) => write!(
+                f,
+                "GitHub's rate limit was reached; try again after {}",
+                utc_time(reset)
+            ),
+            None => write!(f, "GitHub's rate limit was reached; try again later"),
+        }
+    }
+}
+
+impl std::error::Error for RateLimited {}
+
+/// Asks GitHub for the repository's releases, 100 to a page. Blocking.
 fn fetch_releases(repository: &str) -> Result<Value> {
     let url = format!("https://api.github.com/repos/{repository}/releases?per_page=100");
+    let headers_file = std::env::temp_dir().join(format!(
+        "suspense-github-headers-{}",
+        std::process::id()
+    ));
+    // Not `-f`, so a refusal's status and message can be told.
     let output = crate::process::command("curl")
-        .args(["-fsSL", "--max-time", TIMEOUT_SECS])
+        .args(["-sSL", "--max-time", TIMEOUT_SECS])
         .args(["-H", "Accept: application/vnd.github+json"])
-        .args(["-H", "User-Agent: suspense"])
+        .arg("-H")
+        .arg(user_agent())
+        .arg("-D")
+        .arg(&headers_file)
+        .args(["-w", "\n%{http_code}"])
         .arg(&url)
         .stdin(Stdio::null())
         .output()
         .context("couldn't run curl to ask GitHub for releases")?;
+    let headers = std::fs::read_to_string(&headers_file).unwrap_or_default();
+    std::fs::remove_file(&headers_file).ok();
     if !output.status.success() {
         bail!(
             "couldn't reach GitHub: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         );
     }
-    serde_json::from_slice(&output.stdout).context("GitHub's answer couldn't be read")
+    let stdout = output.stdout;
+    let split = stdout.iter().rposition(|&b| b == b'\n').unwrap_or(0);
+    let (body, code) = stdout.split_at(split);
+    let code: u16 = String::from_utf8_lossy(code).trim().parse().unwrap_or(0);
+    read_answer(code, &headers, body, now())
+}
+
+/// GitHub's answer, `body` with the status `code` and `headers`, at `now`:
+/// the releases, or why it refused, telling its rate limit from any other
+/// refusal.
+pub fn read_answer(code: u16, headers: &str, body: &[u8], now: u64) -> Result<Value> {
+    if code == 200 {
+        return serde_json::from_slice(body).context("GitHub's answer couldn't be read");
+    }
+    // The last of each header, as redirects each give their own.
+    let header = |name: &str| {
+        headers
+            .lines()
+            .rev()
+            .find_map(|line| {
+                let (key, value) = line.split_once(':')?;
+                key.trim()
+                    .eq_ignore_ascii_case(name)
+                    .then(|| value.trim().to_string())
+            })
+    };
+    let remaining = header("x-ratelimit-remaining").and_then(|v| v.parse::<u64>().ok());
+    let retry_after = header("retry-after").and_then(|v| v.parse::<u64>().ok());
+    if matches!(code, 403 | 429) && (remaining == Some(0) || retry_after.is_some()) {
+        let reset = header("x-ratelimit-reset")
+            .and_then(|v| v.parse::<u64>().ok())
+            .or(retry_after.map(|after| now + after));
+        return Err(RateLimited { reset }.into());
+    }
+    let message = serde_json::from_slice::<Value>(body)
+        .ok()
+        .and_then(|answer| answer.get("message")?.as_str().map(str::to_string))
+        .unwrap_or_else(|| {
+            String::from_utf8_lossy(body)
+                .trim()
+                .chars()
+                .take(200)
+                .collect()
+        });
+    if code == 0 {
+        bail!("GitHub gave no answer: {message}");
+    }
+    bail!("GitHub refused the check ({code}): {message}")
+}
+
+/// `seconds` since the Unix epoch as a UTC time, "2026-10-05 14:02 UTC".
+pub fn utc_time(seconds: u64) -> String {
+    let (date, time) = utc_parts(seconds);
+    format!("{date} {} UTC", &time[..5])
+}
+
+/// `seconds` since the Unix epoch as a UTC date and time, "2026-10-05" and
+/// "14:02:31".
+fn utc_parts(seconds: u64) -> (String, String) {
+    let days = (seconds / 86_400) as i64 + 719_468;
+    let era = days.div_euclid(146_097);
+    let day_of_era = days.rem_euclid(146_097);
+    let year_of_era =
+        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_index = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_index + 2) / 5 + 1;
+    let month = if month_index < 10 {
+        month_index + 3
+    } else {
+        month_index - 9
+    };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    let secs = seconds % 86_400;
+    (
+        format!("{year:04}-{month:02}-{day:02}"),
+        format!("{:02}:{:02}:{:02}", secs / 3600, secs / 60 % 60, secs % 60),
+    )
 }
 
 /// The binary running, as it will be relaunched.
@@ -184,6 +310,36 @@ pub fn staged(exe: &Path) -> PathBuf {
 
 fn staged_version(exe: &Path) -> PathBuf {
     sibling(exe, "update-version")
+}
+
+/// The version an update put in place last, to be confirmed at the next
+/// launch.
+fn updated_marker(exe: &Path) -> PathBuf {
+    sibling(exe, "updated")
+}
+
+/// A release whose update didn't take effect, never put in place again by
+/// itself.
+fn skipped(exe: &Path) -> PathBuf {
+    sibling(exe, "skip")
+}
+
+/// The release put in place that didn't take effect, if one didn't.
+pub fn skipped_version() -> Option<String> {
+    let exe = running_binary().ok()?;
+    let version = std::fs::read_to_string(skipped(&exe)).ok()?;
+    let version = version.trim().to_string();
+    (!version.is_empty()).then_some(version)
+}
+
+/// What is staged beside the running binary, by its version, if anything.
+pub fn staged_now() -> Option<String> {
+    let exe = running_binary().ok()?;
+    staged(&exe).is_file().then(|| {
+        std::fs::read_to_string(staged_version(&exe))
+            .map(|version| version.trim().to_string())
+            .unwrap_or_else(|_| "a version not recorded".into())
+    })
 }
 
 /// Where the running binary is set aside while an update takes its place,
@@ -217,7 +373,9 @@ pub fn download(release: &Release, exe: &Path, got: &AtomicU64) -> Result<()> {
     std::fs::remove_dir_all(&unpacked).ok();
     let result = (|| {
         let mut curl = crate::process::command("curl")
-            .args(["-fsSL", "-H", "User-Agent: suspense", "-o"])
+            .args(["-fsSL", "-H"])
+            .arg(user_agent())
+            .arg("-o")
             .arg(&archive)
             .arg(&release.asset_url)
             .stdin(Stdio::null())
@@ -251,14 +409,24 @@ pub fn download(release: &Release, exe: &Path, got: &AtomicU64) -> Result<()> {
                 release.size
             );
         }
-        if let Some(expected) = &release.sha256 {
-            let actual: String = Sha256::digest(&bytes)
-                .iter()
-                .map(|byte| format!("{byte:02x}"))
-                .collect();
-            if &actual != expected {
-                bail!("the download's SHA-256 doesn't match GitHub's");
+        match &release.sha256 {
+            Some(expected) => {
+                let actual: String = Sha256::digest(&bytes)
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect();
+                if !actual.eq_ignore_ascii_case(expected) {
+                    bail!(
+                        "the download's SHA-256 doesn't match GitHub's: {actual}, where GitHub gives {expected}"
+                    );
+                }
+                log::write(format!("download {}: {} bytes, SHA-256 matches", release.version(), bytes.len()));
             }
+            None => log::write(format!(
+                "download {}: {} bytes; GitHub gives no digest to check",
+                release.version(),
+                bytes.len()
+            )),
         }
         std::fs::create_dir_all(&unpacked)?;
         let untar = crate::process::command("tar")
@@ -292,6 +460,11 @@ pub fn download(release: &Release, exe: &Path, got: &AtomicU64) -> Result<()> {
         // A newer one replaces any staged before it.
         std::fs::rename(&binary, staged(exe)).context("couldn't stage the update")?;
         std::fs::write(staged_version(exe), release.version()).ok();
+        log::write(format!(
+            "staged {} at {}",
+            release.version(),
+            staged(exe).display()
+        ));
         Ok(())
     })();
     std::fs::remove_file(&archive).ok();
@@ -301,42 +474,134 @@ pub fn download(release: &Release, exe: &Path, got: &AtomicU64) -> Result<()> {
 
 /// Puts an update staged beside `exe` in its place, setting the running
 /// binary aside first where the platform won't replace it; a step that fails
-/// puts back the binary that was there. The version put in place, if one was.
-pub fn apply(exe: &Path) -> Result<Option<String>> {
+/// puts back the binary that was there. One no newer than `running`, the N
+/// of the version running, is deleted instead. The version put in place, if
+/// one was, recorded to be confirmed at the next launch.
+pub fn apply(exe: &Path, running: Option<u64>) -> Result<Option<String>> {
     let staged = staged(exe);
     if !staged.is_file() {
         return Ok(None);
     }
-    let version = std::fs::read_to_string(staged_version(exe)).ok();
-    if cfg!(windows) {
-        let aside = aside(exe);
-        std::fs::remove_file(&aside).ok();
-        std::fs::rename(exe, &aside).context("couldn't set the running binary aside")?;
-        if let Err(err) = std::fs::rename(&staged, exe) {
-            // Never left without a binary.
-            std::fs::rename(&aside, exe).ok();
-            return Err(err).context("couldn't put the update in place");
-        }
-    } else {
-        // A rename over the running binary replaces it in one step, or not
-        // at all.
-        std::fs::rename(&staged, exe).context("couldn't put the update in place")?;
-    }
-    std::fs::remove_file(staged_version(exe)).ok();
-    Ok(Some(version.unwrap_or_default().trim().to_string()))
-}
-
-/// At launch, before anything else: deletes a binary set aside by an update,
-/// and puts in place an update a quit that never finished left staged, which
-/// takes effect at the launch after. The version so put in place, if any, or
-/// why it couldn't be.
-pub fn at_launch() -> Result<Option<String>, String> {
-    if cant_update().is_some() {
+    let version = std::fs::read_to_string(staged_version(exe))
+        .map(|version| version.trim().to_string())
+        .unwrap_or_default();
+    if let (Some(n), Some(running)) = (sequence(&version), running)
+        && n <= running
+    {
+        std::fs::remove_file(&staged).ok();
+        std::fs::remove_file(staged_version(exe)).ok();
+        log::write(format!(
+            "deleted the staged {version}: it is no newer than the {} running",
+            crate::version::VERSION
+        ));
         return Ok(None);
     }
-    let exe = running_binary().map_err(|err| format!("{err:#}"))?;
-    std::fs::remove_file(aside(&exe)).ok();
-    apply(&exe).map_err(|err| format!("Suspense couldn't update: {err:#}"))
+    let result = (|| {
+        if cfg!(windows) {
+            let aside = aside(exe);
+            std::fs::remove_file(&aside).ok();
+            std::fs::rename(exe, &aside).with_context(|| {
+                format!(
+                    "couldn't set the running binary {} aside as {}",
+                    exe.display(),
+                    aside.display()
+                )
+            })?;
+            if let Err(err) = std::fs::rename(&staged, exe) {
+                // Never left without a binary.
+                std::fs::rename(&aside, exe).ok();
+                return Err(err).with_context(|| {
+                    format!(
+                        "couldn't put the update {} in place at {}",
+                        staged.display(),
+                        exe.display()
+                    )
+                });
+            }
+        } else {
+            // A rename over the running binary replaces it in one step, or
+            // not at all.
+            std::fs::rename(&staged, exe).with_context(|| {
+                format!(
+                    "couldn't put the update {} in place at {}",
+                    staged.display(),
+                    exe.display()
+                )
+            })?;
+        }
+        anyhow::Ok(())
+    })();
+    match &result {
+        Ok(()) => log::write(format!("put {version} in place at {}", exe.display())),
+        Err(err) => log::write(format!("couldn't put {version} in place: {err:#}")),
+    }
+    result?;
+    std::fs::remove_file(staged_version(exe)).ok();
+    std::fs::write(updated_marker(exe), &version).ok();
+    Ok(Some(version))
+}
+
+/// What happened at launch, before anything else.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AtLaunch {
+    /// An update a quit that never finished left staged, put in place now:
+    /// it takes effect at the launch after.
+    pub finished: Option<String>,
+    /// The update put in place last, now confirmed running.
+    pub confirmed: Option<String>,
+    /// Why updating failed, or the update that didn't take effect.
+    pub failed: Option<String>,
+}
+
+/// At launch, before anything else: deletes a binary set aside by an
+/// update, tried again at each launch while it can't be; confirms the
+/// update put in place last is the version now running, never putting in
+/// place by itself again one that isn't; and puts in place an update a quit
+/// that never finished left staged.
+pub fn at_launch() -> AtLaunch {
+    let mut launch = AtLaunch::default();
+    if cant_update().is_some() {
+        return launch;
+    }
+    let exe = match running_binary() {
+        Ok(exe) => exe,
+        Err(err) => {
+            launch.failed = Some(format!("{err:#}"));
+            return launch;
+        }
+    };
+    let set_aside = aside(&exe);
+    if set_aside.exists()
+        && let Err(err) = std::fs::remove_file(&set_aside)
+    {
+        log::write(format!(
+            "couldn't delete {} yet, trying again next launch: {err}",
+            set_aside.display()
+        ));
+    }
+    let running = crate::version::VERSION;
+    if let Ok(updated) = std::fs::read_to_string(updated_marker(&exe)) {
+        let updated = updated.trim().to_string();
+        std::fs::remove_file(updated_marker(&exe)).ok();
+        if updated.is_empty() || updated == running {
+            log::write(format!("launch: confirmed {running} is running"));
+            std::fs::remove_file(skipped(&exe)).ok();
+            launch.confirmed = Some(running.to_string());
+        } else {
+            log::write(format!(
+                "launch: the update to {updated} didn't take effect; {running} is running"
+            ));
+            std::fs::write(skipped(&exe), &updated).ok();
+            launch.failed = Some(format!(
+                "The update to Suspense {updated} didn't take effect: Suspense {running} is still running. It won't be put in place again by itself; Check for updates tries it again."
+            ));
+        }
+    }
+    match apply(&exe, sequence(running)) {
+        Ok(finished) => launch.finished = finished,
+        Err(err) => launch.failed = Some(format!("Suspense couldn't update: {err:#}")),
+    }
+    launch
 }
 
 /// Where the updates stand, as the Updates section shows it.
@@ -351,6 +616,10 @@ pub enum Status {
         total: u64,
     },
     Ready {
+        version: String,
+    },
+    /// The update put in place last is running, until the next check.
+    Updated {
         version: String,
     },
     /// The running binary's directory can't be written: the release's page,
@@ -372,6 +641,13 @@ pub struct Updates {
     /// An update a quit that never finished left staged, put in place at
     /// this launch: it takes effect once Suspense restarts.
     pub finished_at_launch: Option<String>,
+    /// Until when GitHub's rate limit holds, in seconds since the Unix epoch:
+    /// no automatic check is made before.
+    pub rate_limited_until: Option<u64>,
+    /// The newest release the last check found, whether or not it was newer.
+    pub newest_found: Option<String>,
+    /// The Updates section's Details are shown.
+    pub details_open: bool,
     /// The check under way was asked for from the ribbon's Check for
     /// Updates, which says how it went in a notification.
     notify_outcome: bool,
@@ -394,13 +670,17 @@ static RESTART: AtomicBool = AtomicBool::new(false);
 impl Updates {
     /// Starts looking for updates, if this build updates itself, and puts a
     /// staged update in place whenever Suspense quits.
-    pub fn init(at_launch: Result<Option<String>, String>, cx: &mut App) {
+    pub fn init(at_launch: AtLaunch, cx: &mut App) {
         let checks = if cant_update().is_none() {
             cx.spawn(async move |cx| {
                 cx.background_executor().timer(FIRST_CHECK).await;
                 loop {
                     cx.update(|cx| {
-                        if Self::get(cx).is_some_and(|updates| updates.automatic) {
+                        // Not before GitHub's rate limit resets.
+                        if Self::get(cx).is_some_and(|updates| {
+                            updates.automatic
+                                && updates.rate_limited_until.is_none_or(|until| now() >= until)
+                        }) {
                             Self::check(false, cx);
                         }
                     });
@@ -410,15 +690,25 @@ impl Updates {
         } else {
             Task::ready(())
         };
-        let (status, finished_at_launch) = match at_launch {
-            Ok(finished) => (Status::Idle, finished),
-            Err(why) => (Status::Failed(why), None),
+        let status = match (&at_launch.failed, &at_launch.confirmed) {
+            (Some(why), _) => Status::Failed(why.clone()),
+            (None, Some(version)) => {
+                notify_updated(version, cx);
+                Status::Updated {
+                    version: version.clone(),
+                }
+            }
+            (None, None) => Status::Idle,
         };
+        let finished_at_launch = at_launch.finished;
         cx.set_global(Self {
             status,
             last_checked: None,
             automatic: preference::load(),
             finished_at_launch,
+            rate_limited_until: None,
+            newest_found: None,
+            details_open: false,
             notify_outcome: false,
             got: Arc::default(),
             _checks: checks,
@@ -428,7 +718,7 @@ impl Updates {
             if cant_update().is_none()
                 && let Ok(exe) = running_binary()
             {
-                match apply(&exe) {
+                match apply(&exe, sequence(crate::version::VERSION)) {
                     Ok(_) => {
                         if RESTART.load(Ordering::SeqCst) {
                             crate::process::command(&exe).spawn().ok();
@@ -520,6 +810,12 @@ impl Updates {
     }
 
     /// Turns automatic checks on or off, remembering the choice.
+    /// Shows or hides the Updates section's Details.
+    pub fn toggle_details(cx: &mut App) {
+        cx.update_global::<Self, _>(|updates, _| updates.details_open = !updates.details_open);
+        cx.refresh_windows();
+    }
+
     pub fn set_automatic(on: bool, cx: &mut App) {
         preference::save(on);
         cx.update_global::<Self, _>(|updates, _| updates.automatic = on);
@@ -550,14 +846,73 @@ impl Updates {
             .map(|updates| updates.status.clone())
             .unwrap_or(Status::Idle);
         Self::set(Status::Checking, cx);
+        log::write(format!(
+            "check{}: {repository}, running {}",
+            if asked { " (asked)" } else { "" },
+            crate::version::VERSION
+        ));
         let found = cx.background_spawn(async move {
             let releases = fetch_releases(repository)?;
-            anyhow::Ok(newest(&releases, running, asset_name))
+            // The newest whatever the version running, to show in Details.
+            let newest_any = newest(&releases, 0, asset_name).map(|release| release.version());
+            let count = releases.as_array().map_or(0, Vec::len);
+            anyhow::Ok((newest(&releases, running, asset_name), newest_any, count))
         });
         cx.spawn(async move |cx| {
             let found = found.await;
             cx.update(|cx| {
                 cx.update_global::<Self, _>(|updates, _| updates.last_checked = Some(now()));
+                let found = match found {
+                    Ok((release, newest_any, count)) => {
+                        log::write(match &release {
+                            Some(release) => format!(
+                                "check: {count} releases; taking {}",
+                                release.version()
+                            ),
+                            None => format!(
+                                "check: {count} releases; none newer than {} with this platform's asset (newest {})",
+                                crate::version::VERSION,
+                                newest_any.as_deref().unwrap_or("none")
+                            ),
+                        });
+                        cx.update_global::<Self, _>(|updates, _| {
+                            updates.newest_found = newest_any;
+                            updates.rate_limited_until = None;
+                        });
+                        // One whose update didn't take effect is never put
+                        // in place again by itself.
+                        let skip = skipped_version();
+                        match release {
+                            Some(release)
+                                if !asked && skip.as_deref() == Some(&release.version()) =>
+                            {
+                                log::write(format!(
+                                    "check: not taking {} again by itself; its update didn't take effect",
+                                    release.version()
+                                ));
+                                Self::set(
+                                    match before.clone() {
+                                        Status::Checking => Status::Idle,
+                                        before => before,
+                                    },
+                                    cx,
+                                );
+                                return;
+                            }
+                            release => Ok(release),
+                        }
+                    }
+                    Err(err) => {
+                        log::write(format!("check failed: {err:#}"));
+                        if let Some(limit) = err.downcast_ref::<RateLimited>() {
+                            let until = limit.reset;
+                            cx.update_global::<Self, _>(|updates, _| {
+                                updates.rate_limited_until = until;
+                            });
+                        }
+                        Err(err)
+                    }
+                };
                 match found {
                     Ok(None) => {
                         // A staged update stays ready.
@@ -567,7 +922,14 @@ impl Updates {
                         };
                         Self::set(status, cx)
                     }
-                    Ok(Some(release)) => Self::download(release, cx),
+                    Ok(Some(release)) => {
+                        // Asked for by hand, a release that didn't take
+                        // effect is tried again.
+                        if let Ok(exe) = running_binary() {
+                            std::fs::remove_file(skipped(&exe)).ok();
+                        }
+                        Self::download(release, cx)
+                    }
                     Err(err) if asked => Self::set(Status::Failed(format!("{err:#}")), cx),
                     // Quiet, trying again at the next.
                     Err(_) => Self::set(
@@ -656,7 +1018,10 @@ impl Updates {
                     );
                     notify_ready(&version, cx);
                 }
-                Err(err) => Self::set(Status::Failed(format!("{err:#}")), cx),
+                Err(err) => {
+                    log::write(format!("download {version} failed: {err:#}"));
+                    Self::set(Status::Failed(format!("{err:#}")), cx)
+                }
             });
         })
         .detach();
@@ -713,7 +1078,7 @@ fn outcome(before: &Status, status: &Status) -> (Option<Outcome>, bool) {
             ))),
             true,
         ),
-        Status::Ready { .. } | Status::Idle => (None, true),
+        Status::Ready { .. } | Status::Updated { .. } | Status::Idle => (None, true),
     }
 }
 
@@ -728,6 +1093,15 @@ fn push_notification(note: gpui_kit::component::notification::Notification, cx: 
             .update(cx, |_, window, cx| window.push_notification(note, cx))
             .ok();
     });
+}
+
+/// Says, in the window, that Suspense was updated to `version`.
+fn notify_updated(version: &str, cx: &mut App) {
+    use gpui_kit::component::notification::Notification;
+    push_notification(
+        Notification::success(format!("Updated to Suspense {version}")),
+        cx,
+    );
 }
 
 /// Says, in the window, that `version` is ready, with Restart and Later.
@@ -769,6 +1143,114 @@ fn notify_ready(version: &str, cx: &mut App) {
             })
             .ok();
     });
+}
+
+/// What updating rests on, as the Updates section's Details show it: each
+/// as a label and its value.
+pub fn details(cx: &App) -> Vec<(&'static str, String)> {
+    let exe = running_binary().ok();
+    let dir = exe.as_ref().and_then(|exe| exe.parent().map(Path::to_path_buf));
+    let updates = Updates::get(cx);
+    vec![
+        ("Version", crate::version::VERSION.to_string()),
+        (
+            "Repository",
+            REPOSITORY
+                .map(str::to_string)
+                .unwrap_or_else(|| "none, so this isn't an edge build".into()),
+        ),
+        (
+            "Binary",
+            match (&exe, &dir) {
+                (Some(exe), Some(dir)) => format!(
+                    "{} ({})",
+                    exe.display(),
+                    if writable(dir) {
+                        "its folder can be written"
+                    } else {
+                        "its folder can't be written"
+                    }
+                ),
+                _ => "not found".into(),
+            },
+        ),
+        (
+            "Last check",
+            match updates.and_then(|updates| updates.last_checked) {
+                Some(then) => format!(
+                    "{}, newest release {}",
+                    utc_time(then),
+                    updates
+                        .and_then(|updates| updates.newest_found.clone())
+                        .unwrap_or_else(|| "not found".into())
+                ),
+                None => "none yet".into(),
+            },
+        ),
+        ("Staged", staged_now().unwrap_or_else(|| "nothing".into())),
+    ]
+}
+
+/// The details as plain text, with the log's last 50 lines, for a bug report.
+pub fn details_text(cx: &App) -> String {
+    let mut text = String::from("Suspense updates\n");
+    for (label, value) in details(cx) {
+        text.push_str(&format!("{label}: {value}\n"));
+    }
+    text.push_str("\nupdates.log, last 50 lines:\n");
+    for line in log::tail(50) {
+        text.push_str(&line);
+        text.push('\n');
+    }
+    text
+}
+
+/// What updating does, one line per step with its time, in `updates.log` in
+/// Suspense's own data directory, beside its preferences, keeping the last
+/// 1,000 lines, as the SelfUpdateScope's diagnostics say. Tests write none.
+pub mod log {
+    use std::path::PathBuf;
+
+    /// How many lines it keeps.
+    const KEEP: usize = 1000;
+
+    /// The log's file.
+    pub fn file() -> Option<PathBuf> {
+        if cfg!(test) {
+            return None;
+        }
+        Some(dirs::config_dir()?.join("suspense").join("updates.log"))
+    }
+
+    /// Adds `line`, with the time, keeping the last lines.
+    pub fn write(line: impl AsRef<str>) {
+        let Some(file) = file() else {
+            return;
+        };
+        let (date, time) = super::utc_parts(super::now());
+        let mut lines: Vec<String> = std::fs::read_to_string(&file)
+            .map(|text| text.lines().map(str::to_string).collect())
+            .unwrap_or_default();
+        lines.push(format!("{date} {time} {}", line.as_ref()));
+        let from = lines.len().saturating_sub(KEEP);
+        if let Some(dir) = file.parent() {
+            std::fs::create_dir_all(dir).ok();
+        }
+        std::fs::write(&file, lines[from..].join("\n") + "\n").ok();
+    }
+
+    /// Its last `n` lines.
+    pub fn tail(n: usize) -> Vec<String> {
+        let Some(file) = file() else {
+            return Vec::new();
+        };
+        let text = std::fs::read_to_string(file).unwrap_or_default();
+        let lines: Vec<&str> = text.lines().collect();
+        lines[lines.len().saturating_sub(n)..]
+            .iter()
+            .map(|line| line.to_string())
+            .collect()
+    }
 }
 
 /// Whether to check for updates automatically, remembered for the user, as
@@ -859,7 +1341,7 @@ mod tests {
     fn a_build_made_elsewhere_never_updates() {
         if super::REPOSITORY.is_none() {
             assert!(super::cant_update().is_some());
-            assert_eq!(super::at_launch(), Ok(None));
+            assert_eq!(super::at_launch(), super::AtLaunch::default());
         }
     }
 
@@ -912,14 +1394,67 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let exe = dir.join("suspense");
         std::fs::write(&exe, "old").unwrap();
-        assert_eq!(apply(&exe).unwrap(), None, "nothing was staged");
+        assert_eq!(apply(&exe, Some(5)).unwrap(), None, "nothing was staged");
         std::fs::write(staged(&exe), "new").unwrap();
         std::fs::write(staged_version(&exe), "0.1.7").unwrap();
-        assert_eq!(apply(&exe).unwrap().as_deref(), Some("0.1.7"));
+        assert_eq!(apply(&exe, Some(5)).unwrap().as_deref(), Some("0.1.7"));
         assert_eq!(std::fs::read_to_string(&exe).unwrap(), "new");
         assert!(!staged(&exe).exists());
+        // Recorded, to be confirmed at the next launch.
+        assert_eq!(
+            std::fs::read_to_string(super::updated_marker(&exe)).unwrap(),
+            "0.1.7"
+        );
         assert!(writable(&dir));
+
+        // One no newer than the version running is deleted, never put in
+        // place.
+        std::fs::write(staged(&exe), "older").unwrap();
+        std::fs::write(staged_version(&exe), "0.1.7").unwrap();
+        assert_eq!(apply(&exe, Some(7)).unwrap(), None);
+        assert!(!staged(&exe).exists() && !staged_version(&exe).exists());
+        assert_eq!(std::fs::read_to_string(&exe).unwrap(), "new");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Only tags `v0.1.N` count as releases.
+    #[test]
+    fn only_v_0_1_n_tags_count() {
+        use super::tag_sequence;
+        assert_eq!(tag_sequence("v0.1.42"), Some(42));
+        assert_eq!(tag_sequence("0.1.42"), None);
+        assert_eq!(tag_sequence("v0.2.1"), None);
+        assert_eq!(tag_sequence("nightly"), None);
+    }
+
+    /// GitHub's rate limit is told from any other refusal, and says when it
+    /// resets; any other refusal says GitHub's status and message.
+    #[test]
+    fn refusals_say_why() {
+        use super::{RateLimited, read_answer};
+        let ok = read_answer(200, "", b"[]", 0).unwrap();
+        assert_eq!(ok, json!([]));
+        let limited = read_answer(
+            403,
+            "HTTP/2 403\r\nx-ratelimit-remaining: 0\r\nx-ratelimit-reset: 1791200000\r\n",
+            br#"{"message":"API rate limit exceeded"}"#,
+            0,
+        )
+        .unwrap_err();
+        let limit = limited.downcast_ref::<RateLimited>().expect("not a rate limit");
+        assert_eq!(limit.reset, Some(1_791_200_000));
+        assert!(limited.to_string().starts_with("GitHub's rate limit was reached; try again after 2026-"));
+        let retry = read_answer(429, "retry-after: 60\n", b"", 100).unwrap_err();
+        assert_eq!(retry.downcast_ref::<RateLimited>().unwrap().reset, Some(160));
+        let missing = read_answer(404, "", br#"{"message":"Not Found"}"#, 0).unwrap_err();
+        assert!(missing.downcast_ref::<RateLimited>().is_none());
+        assert_eq!(missing.to_string(), "GitHub refused the check (404): Not Found");
+    }
+
+    #[test]
+    fn times_read_as_utc() {
+        assert_eq!(super::utc_time(0), "1970-01-01 00:00 UTC");
+        assert_eq!(super::utc_time(1_791_200_000), "2026-10-05 11:33 UTC");
     }
 
     /// A download is checked against the size and digest GitHub gives, and
