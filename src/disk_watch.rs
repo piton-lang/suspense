@@ -68,12 +68,31 @@ fn watch() -> &'static DiskWatch {
 /// Watches what it is asked to, each folder once.
 fn run(watcher: &mut RecommendedWatcher, commands: Receiver<Command>) {
     let mut watched = HashSet::new();
+    // Trees watched from their root, all the way down, on Windows.
+    let mut whole: Vec<PathBuf> = Vec::new();
     let mut add = |dir: PathBuf, watcher: &mut RecommendedWatcher| {
         if !watched.contains(&dir) && watcher.watch(&dir, RecursiveMode::NonRecursive).is_ok() {
             watched.insert(dir);
         }
     };
     for command in commands {
+        let asked = match &command {
+            Command::Folder(dir) | Command::Tree(dir) => dir,
+        };
+        if whole.iter().any(|root| asked.starts_with(root)) {
+            continue;
+        }
+        // On Windows a folder can't be renamed while one inside it is
+        // watched, so there a tree is watched once, from its root, which
+        // also sees new folders as they appear.
+        if cfg!(windows)
+            && let Command::Tree(root) = &command
+        {
+            if watcher.watch(root, RecursiveMode::Recursive).is_ok() {
+                whole.push(root.clone());
+            }
+            continue;
+        }
         match command {
             Command::Folder(dir) => add(dir, watcher),
             Command::Tree(root) => {

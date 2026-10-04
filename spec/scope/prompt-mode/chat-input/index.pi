@@ -339,9 +339,9 @@ shape ChatInputShape:
             nearest to running out, such as "Usage 42%", turning the theme's
             warning colour from 80% and its error colour once the limit is
             reached. When the harness reports no plan limits, the summary is
-            the cost of this project's runs since it was opened, such as
-            "Usage $1.24", or the tokens they used, as the context figure is
-            written, when it reports no cost either. Until anything has been
+            what this project's runs would cost at API prices, as below, such
+            as "Usage $1.24", or the tokens they used, as the context figure is
+            written, when no cost can be worked out. Until anything has been
             reported, it reads "Usage", with nothing after it.
 
             Clicking the summary opens a popover above it with all the details,
@@ -353,9 +353,10 @@ shape ChatInputShape:
               percentage, and when it resets.
             - Conversation: the context the selected tab's conversation holds,
               and its input, output, cache-read, and cache-written tokens, and
-              its cost.
-            - This project: the same totals for every run in the project since
-              it was opened, tasks and questions, and how many runs there were.
+              what they would cost at API prices.
+            - This project: every run the project has made, as below, split
+              into tasks and questions, with its tokens by model and what
+              they would cost at API prices.
             - The harness and model the figures came from, and when they were
               last reported.
             \\
@@ -363,11 +364,57 @@ shape ChatInputShape:
             A group, or a figure, the harness doesn't report is left out rather
             than shown as zero, and when nothing has been reported the popover
             says so. The figures come from what the harness reports as its runs
-            go, never from running anything of its own to ask, and update in
+            go, and from what it reported for the runs saved in the project,
+            never from running anything of its own to ask, and update in
             place while the popover is open, following each reply. Clicking
             outside the popover, or pressing Escape, closes it. The summary's
             tooltip says to click for the details. Like the context figure, it
             is never cut off: the help text gives way to it.
+
+            A run's own usage is never the figures its result reports as they
+            stand. Claude Code's result reports its `modelUsage` and
+            `total_cost_usd` as running totals for the whole conversation, so a
+            run that carries on a conversation includes every run before it in
+            that conversation. A run's own figures are how much its
+            conversation's totals rose since that conversation's previous run,
+            each model's tokens apart; a run that carries on a copy of a
+            conversation, as a question asked while another runs does, is
+            measured from the run whose conversation it copied. When the totals
+            went down instead, any of them, the conversation started over, and
+            the run counts in full, as does the first run of a conversation.
+            Runs are taken in the order they were sent, whether they were
+            saved in the history or have just reported, so every run is counted
+            once and no run's figures are counted again in a later one's.
+
+            This project covers every run saved with the project, every task
+            in its history, each step of a chain counted as a run of its own,
+            and every question in its asks, not only those since it was
+            opened, worked out from what the harness printed for each, as its
+            record keeps it. It keeps updating as new runs report, each run
+            counted once it reports, and a run under way not yet counted. It is
+            split into Tasks and Questions, each giving how many runs there
+            were and, beside it, muted, how many of them reported no usage,
+            such as "42 runs · 3 without usage", the latter left out when none.
+            Beneath them, for each model the runs used, by name, its input,
+            output, cache-read, and cache-written tokens, as the context figure
+            writes them, across tasks and questions together.
+
+            Cost is worked out from the tokens, at each model's published API
+            prices per million tokens, which the application keeps for the
+            models it knows: input, output, cache reads, and cache writes, at
+            the 5-minute rate or the 1-hour rate, using the split between them
+            the harness reports. Cache writes it reports no split for are
+            priced at the 5-minute rate. A model is matched by its id, whatever
+            date or context-size suffix it carries. The cost the harness
+            reports itself, such as `total_cost_usd`, is never used. A model
+            whose prices aren't known gets no cost, never a guess: its tokens
+            are still shown, it is marked "Price unknown", and the totals that
+            leave it out say so beside them. The project's cost is shown as a
+            total, and beneath it how much of it was input, output, cache
+            reads, and cache writes, each in dollars and as a share of the
+            total, since caching is most of it. Beneath the cost, muted, it
+            says this is what the tokens would cost at API prices, not what a
+            subscription charges.
 
         slice:
             Just left of the context figure sits the Slice toggle: a small ghost

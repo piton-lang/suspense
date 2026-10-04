@@ -95,7 +95,7 @@ use crate::task_table::{
 };
 use crate::theme::Hue;
 use crate::understanding::{self, Understanding};
-use crate::usage::{self, Conversation, PlanLimits, ProjectUsage, UsageReport};
+use crate::usage::{self, Conversation, PlanLimits, ProjectUsage, RunKind, UsageReport};
 use ask_pane::{ASK_SPLIT_SHARE, AskPane, AskSplitResize};
 
 /// How long the file pane takes to slide in from the sidebar, or back into it
@@ -5197,16 +5197,21 @@ impl PromptMode {
             });
             let [code, spec] = session;
             let session = PerLane { code, spec };
+            let runs = saved_runs(&history, RunKind::Task);
             let tasks = history
                 .into_iter()
                 .map(|saved| PromptTask::restore_in(saved, Some(&project_dir)))
                 .collect::<Vec<_>>();
-            (tasks, session)
+            (tasks, session, runs)
         });
         self._history_load = cx.spawn(async move |this, cx| {
-            let (tasks, session) = load.await;
+            let (tasks, session, runs) = load.await;
             this.update(cx, |this, cx| {
                 this.in_project(&project_dir, cx, |this, cx| {
+                    // Every task's run counts in the project's usage, those
+                    // followed since it was opened counted once.
+                    this.usage.set_saved(RunKind::Task, runs);
+                    cx.notify();
                     if this.working.any() {
                         this.history_stale = true;
                         return;
@@ -6332,17 +6337,18 @@ impl PromptMode {
             harness = Some(agent);
             reported = limits_reported;
         }
-        UsageReport {
+        let mut report = UsageReport {
             limits,
             conversation: Some(conversation),
             context,
-            conversation_spend: self.usage.conversation(conversation, epoch),
-            project_spend: self.usage.project(),
-            runs: self.usage.runs(),
+            project: self.usage.project(),
             harness,
             model,
             reported,
-        }
+            ..UsageReport::default()
+        };
+        report.set_conversation(&self.usage.conversation(conversation, epoch));
+        report
     }
 
     #[cfg(test)]
@@ -6382,16 +6388,19 @@ impl PromptMode {
                 &project_dir,
                 left.as_deref(),
             );
+            let runs = saved_runs(&saved, RunKind::Question);
             let answers = saved
                 .into_iter()
                 .map(|saved| PromptTask::restore_in(saved, Some(&project_dir)))
                 .collect::<Vec<_>>();
-            (answers, session)
+            (answers, session, runs)
         });
         self._ask_history_load = cx.spawn(async move |this, cx| {
-            let (answers, session) = load.await;
+            let (answers, session, runs) = load.await;
             this.update(cx, |this, cx| {
                 this.in_project(&project_dir, cx, |this, cx| {
+                    // Every question's run counts in the project's usage.
+                    this.usage.set_saved(RunKind::Question, runs);
                     // Those asked since are listed as they were asked.
                     let open: Vec<SharedString> = this
                         .asks
@@ -6766,6 +6775,7 @@ impl PromptMode {
                     record.sent_to(agent, sent_system.as_deref());
                     record.instructions = instructions.clone();
                     record.resumed = resume.is_some();
+                    record.resumed_from = resume.clone();
                     let given = Given {
                         harness: agent,
                         system_prompt: sent_system.clone(),
@@ -6854,8 +6864,14 @@ impl PromptMode {
                     if this
                         .update(cx, |this, cx| {
                             this.in_project(&project_dir, cx, |this, cx| {
-                                usage_run =
-                                    Some(this.usage.start_run(usage_conversation(lane), epoch));
+                                let counted = this.usage.start_run(
+                                    usage_conversation(lane),
+                                    epoch,
+                                    RunKind::Task,
+                                    resume.clone(),
+                                );
+                                this.usage.name_run(counted, &anchor);
+                                usage_run = Some(counted);
                                 // More can be sent to it while it runs.
                                 if let Some(task) = this.tasks.get_mut(task_ix) {
                                     task.feed = feed;
@@ -6985,6 +7001,15 @@ impl PromptMode {
                             return;
                         }
                     }
+                    // The run is over, so the project counts it.
+                    this.update(cx, |this, cx| {
+                        this.in_project(&project_dir, cx, |this, _| {
+                            if let Some(run) = usage_run {
+                                this.usage.end_run(run);
+                            }
+                        });
+                    })
+                    .ok();
                     // Run in a container with no code, a spec run is followed
                     // by a build on the host, as the SpecBuildScope says, so
                     // the host's reference and shape guidance are current;
@@ -7525,6 +7550,7 @@ impl PromptMode {
                     log.record.sent_to(agent, sent_system.as_deref());
                     log.record.instructions = instructions;
                     log.record.resumed = resume.is_some();
+                    log.record.resumed_from = resume.clone();
                     let mut usage_run = None;
                     // A question runs in a container holding the code and
                     // the compiled reference, read only, and no spec source,
@@ -7550,12 +7576,18 @@ impl PromptMode {
                         project_dir.clone(),
                         protected,
                     );
-                    let compiled = Compiled::new(anchor.into(), prompt);
+                    let compiled = Compiled::new(anchor.clone().into(), prompt);
                     if this
                         .update(cx, |this, cx| {
                             this.in_project(&project_dir, cx, |this, cx| {
-                                usage_run =
-                                    Some(this.usage.start_run(Conversation::Questions, epoch));
+                                let counted = this.usage.start_run(
+                                    Conversation::Questions,
+                                    epoch,
+                                    RunKind::Question,
+                                    resume.clone(),
+                                );
+                                this.usage.name_run(counted, &anchor);
+                                usage_run = Some(counted);
                                 this.update_ask(run, |ask| ask.set_compiled(compiled), cx)
                             });
                         })
@@ -7615,6 +7647,15 @@ impl PromptMode {
                             return;
                         }
                     }
+                    // The run is over, so the project counts it.
+                    this.update(cx, |this, cx| {
+                        this.in_project(&project_dir, cx, |this, _| {
+                            if let Some(run) = usage_run {
+                                this.usage.end_run(run);
+                            }
+                        });
+                    })
+                    .ok();
                     if let Some(resume) = resume.filter(|_| !started && !fork) {
                         this.update(cx, |this, cx| {
                             this.in_project(&project_dir, cx, |this, _| {
@@ -9382,6 +9423,22 @@ fn anchor_mode(anchor: &HiddenAnchor) -> Option<SendMode> {
             .as_deref()
             .and_then(hidden_anchor::mode_of)
     })
+}
+
+/// The runs `saved` keeps, of tasks or questions as `kind` says, for the
+/// project's usage.
+fn saved_runs(saved: &[SavedPrompt], kind: RunKind) -> Vec<usage::SavedRun> {
+    saved
+        .iter()
+        .filter_map(|saved| {
+            usage::SavedRun::of(
+                saved.record.as_ref()?,
+                saved.anchor.name(),
+                saved.sent_at,
+                kind,
+            )
+        })
+        .collect()
 }
 
 /// `millis` since the Unix epoch, as a time.
@@ -13460,7 +13517,7 @@ mod tests {
     #[gpui_kit::test]
     async fn usage_follows_the_runs_by_conversation_and_project(cx: &mut TestAppContext) {
         use crate::agent::Agent;
-        use crate::usage::{Conversation, PlanLimit, Spend};
+        use crate::usage::{Conversation, PlanLimit, RunKind, Spend};
 
         let dir = std::env::temp_dir().join(format!("suspense-usage-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -13478,53 +13535,103 @@ mod tests {
                 .unwrap();
             input.read_with(cx, |input, _| input.usage().clone())
         };
-        let spend = |input: u64, output: u64, cost: f64| HarnessEvent::Spent {
+        // A Claude Code result: its conversation's running totals of a
+        // model.
+        let spend = |model: &str, input: u64, output: u64| HarnessEvent::Spent {
+            model: Some(model.into()),
             spend: Spend {
                 input: Some(input),
                 output: Some(output),
-                cost: Some(cost),
                 ..Spend::default()
             },
-            tally: crate::usage::Tally::Run,
+            tally: crate::usage::Tally::Conversation,
         };
         assert!(shown(cx).is_empty());
         assert_eq!(shown(cx).summary().0, "Usage");
 
         prompt_mode.update(cx, |this, _| {
-            let task = Some(
-                this.usage
-                    .start_run(Conversation::Tasks, this.session_epoch.code),
-            );
+            let epoch = this.session_epoch.code;
+            let first = this
+                .usage
+                .start_run(Conversation::Tasks, epoch, RunKind::Task, None);
             for event in [
                 HarnessEvent::Session("s1".into()),
-                HarnessEvent::Model("claude-opus".into()),
-                spend(10, 100, 0.5),
+                HarnessEvent::Model("claude-opus-5-5".into()),
+                spend("claude-opus-5-5[1m]", 1_000_000, 100_000),
             ] {
-                this.follow_usage(task, Agent::Claude, &event);
+                this.follow_usage(Some(first), Agent::Claude, &event);
             }
-            let question = Some(
+            this.usage.end_run(first);
+            // Carrying the conversation on, its totals include the first
+            // run's: only what they rose by is its own.
+            let second =
                 this.usage
-                    .start_run(Conversation::Questions, this.ask_session_epoch),
+                    .start_run(Conversation::Tasks, epoch, RunKind::Task, Some("s1".into()));
+            for event in [
+                HarnessEvent::Session("s1".into()),
+                spend("claude-opus-5-5[1m]", 1_500_000, 150_000),
+            ] {
+                this.follow_usage(Some(second), Agent::Claude, &event);
+            }
+            this.usage.end_run(second);
+            let question = Some(this.usage.start_run(
+                Conversation::Questions,
+                this.ask_session_epoch,
+                RunKind::Question,
+                None,
+            ));
+            this.follow_usage(
+                question,
+                Agent::Claude,
+                &spend("claude-haiku-4-5", 0, 50_000),
             );
-            this.follow_usage(question, Agent::Claude, &spend(5, 50, 0.25));
+            this.usage.end_run(question.unwrap());
+            // A run under way isn't counted in the project yet, and one
+            // that reports nothing counts without usage once over.
+            let quiet = this
+                .usage
+                .start_run(Conversation::Tasks, epoch, RunKind::Task, None);
+            this.usage.end_run(quiet);
+            this.usage
+                .start_run(Conversation::Tasks, epoch, RunKind::Task, None);
         });
         let usage = shown(cx);
         assert_eq!(usage.conversation, Some(Conversation::Tasks));
-        assert_eq!(usage.conversation_spend.cost, Some(0.5));
-        assert_eq!(usage.project_spend.cost, Some(0.75));
-        assert_eq!(usage.project_spend.output, Some(150));
-        assert_eq!(usage.project_spend.cache_read, None);
-        assert_eq!(usage.runs, 2);
+        assert_eq!(usage.conversation_spend.input, Some(1_500_000));
+        assert_eq!(usage.conversation_spend.output, Some(150_000));
+        assert_eq!(usage.conversation_spend.cache_read, None);
+        // At $4 and $20 per million: $6 and $3.
+        let cost = usage.conversation_cost.clone().unwrap();
+        assert!((cost.total() - 9.).abs() < 1e-9, "{cost:?}");
+        assert_eq!(usage.project.tasks.runs, 3);
+        assert_eq!(usage.project.tasks.without_usage, 1);
+        assert_eq!(usage.project.questions.runs, 1);
+        let models: Vec<_> = usage
+            .project
+            .models
+            .iter()
+            .map(|model| (model.name.as_str(), model.spend.output))
+            .collect();
+        assert_eq!(
+            models,
+            [
+                ("claude-haiku-4-5", Some(50_000)),
+                ("claude-opus-5-5", Some(150_000))
+            ]
+        );
+        // And $0.25 for the question's output.
+        let project = usage.project.cost.clone().unwrap();
+        assert!((project.total() - 9.25).abs() < 1e-9, "{project:?}");
         assert_eq!(usage.harness, Some(Agent::Claude));
-        assert_eq!(usage.model.as_deref(), Some("claude-opus"));
+        assert_eq!(usage.model.as_deref(), Some("claude-opus-5-5"));
         assert!(usage.limits.is_empty());
-        assert_eq!(usage.summary().0, "Usage $0.75");
+        assert_eq!(usage.summary().0, "Usage $9.25");
 
         // On the Ask tab, the questions' conversation.
         prompt_mode.update(cx, |this, _| this.on_ask_tab = true);
         let usage = shown(cx);
         assert_eq!(usage.conversation, Some(Conversation::Questions));
-        assert_eq!(usage.conversation_spend.cost, Some(0.25));
+        assert_eq!(usage.conversation_spend.output, Some(50_000));
         prompt_mode.update(cx, |this, _| this.on_ask_tab = false);
 
         // Plan limits, once reported, lead the summary.
@@ -13555,7 +13662,8 @@ mod tests {
         cx.run_until_parked();
         let usage = shown(cx);
         assert!(usage.conversation_spend.is_empty());
-        assert_eq!(usage.project_spend.cost, Some(0.75));
+        assert!(usage.conversation_cost.is_none());
+        assert_eq!(usage.project.tasks.runs, 3);
         std::fs::remove_dir_all(&dir).ok();
     }
 

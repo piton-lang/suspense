@@ -454,12 +454,19 @@ impl ProjectTree {
 
     /// Reads a folder in the background, then shows its entries.
     fn load(&mut self, dir: PathBuf, cx: &mut Context<Self>) {
-        // Watched before it is read, so no change slips in between.
+        // Watched before it is read, so no change slips in between. On
+        // Windows a folder can't be renamed while one inside it is watched,
+        // so there the project is watched once, from its root, all the way
+        // down.
+        let (watch, mode) = match &self.root {
+            Some(root) if cfg!(windows) => (root.clone(), RecursiveMode::Recursive),
+            _ => (dir.clone(), RecursiveMode::NonRecursive),
+        };
         if let Some(watcher) = &mut self.watcher
-            && !self.watched.contains(&dir)
-            && watcher.watch(&dir, RecursiveMode::NonRecursive).is_ok()
+            && !self.watched.contains(&watch)
+            && watcher.watch(&watch, mode).is_ok()
         {
-            self.watched.insert(dir.clone());
+            self.watched.insert(watch);
         }
 
         let root = self.root.clone();

@@ -110,11 +110,19 @@ pub enum HarnessEvent {
     Usage {
         context: u64,
     },
-    /// Tokens and cost the run reported, counted as its `tally` says. A
-    /// figure left `None` wasn't reported.
+    /// Tokens the run reported of `model`, or of the run's own model where
+    /// it didn't say, counted as its `tally` says. A figure left `None`
+    /// wasn't reported. What the harness says they cost is never kept.
     Spent {
+        model: Option<String>,
         spend: Spend,
         tally: Tally,
+    },
+    /// How the run's cache writes split between the 5-minute and the
+    /// 1-hour rate, as the harness last reported it.
+    CacheWrites {
+        five_minute: u64,
+        one_hour: u64,
     },
     /// The plan limits the harness reported, each with the share used so
     /// far; a limit not among them is as it was.
@@ -1428,9 +1436,10 @@ fn codex_spent(event: &Value) -> Option<HarnessEvent> {
         output: tokens("output_tokens"),
         cache_read: cached,
         cache_write: written,
-        cost: None,
+        cache_write_1h: None,
     };
     (!spend.is_empty()).then_some(HarnessEvent::Spent {
+        model: None,
         spend,
         tally: Tally::Conversation,
     })
@@ -1563,8 +1572,8 @@ fn parse_opencode(event: &Value) -> Vec<HarnessEvent> {
                     + tokens("/cache/read")
                     + tokens("/cache/write"),
             }];
-            // Each step's tokens and cost, on top of the steps before it;
-            // its reasoning is written, so counts as output.
+            // Each step's tokens, on top of the steps before it; its
+            // reasoning is written, so counts as output.
             let spend = Spend {
                 input: reported("/input"),
                 output: match (reported("/output"), reported("/reasoning")) {
@@ -1573,10 +1582,11 @@ fn parse_opencode(event: &Value) -> Vec<HarnessEvent> {
                 },
                 cache_read: reported("/cache/read"),
                 cache_write: reported("/cache/write"),
-                cost: part.get("cost").and_then(Value::as_f64),
+                cache_write_1h: None,
             };
             if !spend.is_empty() {
                 events.push(HarnessEvent::Spent {
+                    model: None,
                     spend,
                     tally: Tally::More,
                 });
@@ -1812,63 +1822,66 @@ fn parse_claude(event: &Value) -> Vec<HarnessEvent> {
 }
 
 /// What a Claude Code run has spent, from a `result`. Its `modelUsage`,
-/// each model's tokens and cost, subagents' included, and its
-/// `total_cost_usd` are the run's totals so far, even for a run fed several
-/// messages, each answered with a result of its own; its `usage` is only the
-/// last turn's, so is added on, where there is no `modelUsage`.
+/// each model's tokens, subagents' included, are running totals for the
+/// whole conversation, every run before this one in it included; its
+/// `usage` is only this run's, so is added on, where there is no
+/// `modelUsage`. How its cache writes split between the 5-minute and the
+/// 1-hour rate is in its `usage`. Its `total_cost_usd` is never kept.
 fn claude_spent(event: &Value) -> Vec<HarnessEvent> {
-    let cost = event.get("total_cost_usd").and_then(Value::as_f64);
+    let usage = event.get("usage");
+    let split = usage.and_then(|usage| usage.get("cache_creation"));
+    let ttl = |key: &str| {
+        split
+            .and_then(|split| split.get(key))
+            .and_then(Value::as_u64)
+    };
+    let (five_minute, one_hour) = (
+        ttl("ephemeral_5m_input_tokens"),
+        ttl("ephemeral_1h_input_tokens"),
+    );
+    let mut events = Vec::new();
     if let Some(models) = event.get("modelUsage").and_then(Value::as_object)
         && !models.is_empty()
     {
-        let sum = |key: &str| {
-            models
-                .values()
-                .filter_map(|model| model.get(key)?.as_u64())
-                .reduce(|a, b| a + b)
-        };
-        let spend = Spend {
-            input: sum("inputTokens"),
-            output: sum("outputTokens"),
-            cache_read: sum("cacheReadInputTokens"),
-            cache_write: sum("cacheCreationInputTokens"),
-            cost: cost.or_else(|| {
-                models
-                    .values()
-                    .filter_map(|model| model.get("costUSD")?.as_f64())
-                    .reduce(|a, b| a + b)
-            }),
-        };
-        return vec![HarnessEvent::Spent {
-            spend,
-            tally: Tally::Run,
-        }];
+        for (model, used) in models {
+            let tokens = |key: &str| used.get(key).and_then(Value::as_u64);
+            let spend = Spend {
+                input: tokens("inputTokens"),
+                output: tokens("outputTokens"),
+                cache_read: tokens("cacheReadInputTokens"),
+                cache_write: tokens("cacheCreationInputTokens"),
+                cache_write_1h: None,
+            };
+            events.push(HarnessEvent::Spent {
+                model: Some(model.clone()),
+                spend,
+                tally: Tally::Conversation,
+            });
+        }
+        if five_minute.is_some() || one_hour.is_some() {
+            events.push(HarnessEvent::CacheWrites {
+                five_minute: five_minute.unwrap_or(0),
+                one_hour: one_hour.unwrap_or(0),
+            });
+        }
+        return events;
     }
-    let mut events = Vec::new();
-    if let Some(usage) = event.get("usage") {
+    if let Some(usage) = usage {
         let tokens = |key: &str| usage.get(key).and_then(Value::as_u64);
         let spend = Spend {
             input: tokens("input_tokens"),
             output: tokens("output_tokens"),
             cache_read: tokens("cache_read_input_tokens"),
             cache_write: tokens("cache_creation_input_tokens"),
-            cost: None,
+            cache_write_1h: one_hour,
         };
         if !spend.is_empty() {
             events.push(HarnessEvent::Spent {
+                model: None,
                 spend,
                 tally: Tally::More,
             });
         }
-    }
-    if cost.is_some() {
-        events.push(HarnessEvent::Spent {
-            spend: Spend {
-                cost,
-                ..Spend::default()
-            },
-            tally: Tally::Run,
-        });
     }
     events
 }
@@ -2237,12 +2250,15 @@ wait
         );
         assert_eq!(named(json!({})), []);
 
-        // A fed run's second result: `usage` is its last turn's, while
-        // `modelUsage` and `total_cost_usd` count the whole run.
+        // `modelUsage` is each model's running totals for the whole
+        // conversation; `usage` says how this run's cache writes split. Its
+        // `total_cost_usd` is never kept.
         let result = json!({ "type": "result", "subtype": "success", "is_error": false,
             "result": "Bye!", "total_cost_usd": 0.0148501,
             "usage": { "input_tokens": 10, "output_tokens": 61,
-                "cache_read_input_tokens": 21679, "cache_creation_input_tokens": 1109 },
+                "cache_read_input_tokens": 21679, "cache_creation_input_tokens": 1109,
+                "cache_creation": { "ephemeral_5m_input_tokens": 109,
+                    "ephemeral_1h_input_tokens": 1000 } },
             "modelUsage": {
                 "claude-haiku-4-5-20251001": { "inputTokens": 20, "outputTokens": 125,
                     "cacheReadInputTokens": 39331, "cacheCreationInputTokens": 5136,
@@ -2251,14 +2267,19 @@ wait
             parse(&result),
             [
                 HarnessEvent::Spent {
+                    model: Some("claude-haiku-4-5-20251001".into()),
                     spend: Spend {
                         input: Some(20),
                         output: Some(125),
                         cache_read: Some(39331),
                         cache_write: Some(5136),
-                        cost: Some(0.0148501),
+                        cache_write_1h: None,
                     },
-                    tally: Tally::Run,
+                    tally: Tally::Conversation,
+                },
+                HarnessEvent::CacheWrites {
+                    five_minute: 109,
+                    one_hour: 1000,
                 },
                 HarnessEvent::Finished {
                     is_error: false,
@@ -2266,14 +2287,15 @@ wait
                 }
             ]
         );
-        // Without `modelUsage`, the turn's tokens add on, and the cost is the
-        // run's so far.
+        // Without `modelUsage`, the run's tokens add on, of its own model,
+        // and its cost is still never kept.
         let result = json!({ "type": "result", "is_error": false, "result": "",
             "total_cost_usd": 0.5, "usage": { "input_tokens": 3, "output_tokens": 4 } });
         assert_eq!(
-            &parse(&result)[..2],
+            parse(&result),
             [
                 HarnessEvent::Spent {
+                    model: None,
                     spend: Spend {
                         input: Some(3),
                         output: Some(4),
@@ -2281,12 +2303,9 @@ wait
                     },
                     tally: Tally::More,
                 },
-                HarnessEvent::Spent {
-                    spend: Spend {
-                        cost: Some(0.5),
-                        ..Spend::default()
-                    },
-                    tally: Tally::Run,
+                HarnessEvent::Finished {
+                    is_error: false,
+                    result: String::new()
                 },
             ]
         );
@@ -2301,8 +2320,8 @@ wait
     }
 
     /// Codex's turn reports its tokens, of which its cached input was read
-    /// from the cache, and no cost; OpenCode's steps report their tokens and
-    /// cost, its reasoning counted as output. A turn or step reporting none
+    /// from the cache; OpenCode's steps report their tokens, its reasoning
+    /// counted as output, and what they say they cost is never kept. A turn or step reporting none
     /// spends nothing.
     #[test]
     fn parses_codex_and_opencode_usage() {
@@ -2311,6 +2330,7 @@ wait
         assert_eq!(
             parse(&turn)[0],
             HarnessEvent::Spent {
+                model: None,
                 spend: Spend {
                     input: Some(315),
                     output: Some(122),
@@ -2329,12 +2349,13 @@ wait
         assert_eq!(
             parse(&turn)[0],
             HarnessEvent::Spent {
+                model: None,
                 spend: Spend {
                     input: Some(100),
                     output: Some(50),
                     cache_read: Some(600),
                     cache_write: Some(300),
-                    cost: None,
+                    cache_write_1h: None,
                 },
                 tally: Tally::Conversation,
             }
@@ -2354,12 +2375,13 @@ wait
         assert_eq!(
             parse(&step)[1],
             HarnessEvent::Spent {
+                model: None,
                 spend: Spend {
                     input: Some(50),
                     output: Some(10),
                     cache_read: Some(400),
                     cache_write: Some(0),
-                    cost: Some(0.0123),
+                    cache_write_1h: None,
                 },
                 tally: Tally::More,
             }
@@ -2452,6 +2474,7 @@ wait
                 HarnessEvent::TextStarted,
                 HarnessEvent::TextDelta("Done.".into()),
                 HarnessEvent::Spent {
+                    model: None,
                     spend: Spend {
                         input: Some(10),
                         output: Some(2),
@@ -2524,12 +2547,13 @@ wait
                 HarnessEvent::TextDelta("It's a.".into()),
                 HarnessEvent::Usage { context: 1115 },
                 HarnessEvent::Spent {
+                    model: None,
                     spend: Spend {
                         input: Some(100),
                         output: Some(5),
                         cache_read: Some(1000),
                         cache_write: Some(10),
-                        cost: None,
+                        cache_write_1h: None,
                     },
                     tally: Tally::More,
                 },

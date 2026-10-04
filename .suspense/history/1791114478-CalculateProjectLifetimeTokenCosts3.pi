@@ -1,0 +1,100 @@
+from /scope/prompt-mode/chat-input import ChatInputScope
+
+export anchor CalculateProjectLifetimeTokenCosts3:
+    userPrompt:
+        \\\
+        @{ChatInputScope} The usage popover's project totals are wrong, and they only cover the runs since the project was opened. Let's fix both and show what the project has cost at API prices.
+
+        Claude Code's result reports `modelUsage` and `total_cost_usd` as running totals for the whole conversation, not for the run. A run that carries on a conversation includes every run before it in that conversation. Right now we add them up per run, so a project that cost about $2,000 at API prices shows as about $18,000. A run's own figures are how much its conversation's totals rose since that conversation's previous run. If the totals went down instead, the conversation started over, and the run counts in full.
+
+        The "This project" group should cover every run saved in the project's history and asks, not only those since it was opened, and keep updating as new runs report. Split it into tasks and questions, each with how many runs there were and how many reported no usage. For each model the runs used, show its input, output, cache-read and cache-written tokens.
+
+        Cost should be worked out from the tokens at each model's published API prices: input, output, cache read, and cache writes at the 5-minute or 1-hour rate, using the split the harness reports. Show the total, and how much of it was input, output, cache reads and cache writes, since caching is most of it. A model whose prices aren't known gets no cost, never a guess. Say that this is what the tokens would cost at API prices, not what a subscription charges.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            @{ChatInputScope} The usage popover's project totals are wrong, and they only cover the runs since the project was opened. Let's fix both and show what the project has cost at API prices.
+
+            Claude Code's result reports `modelUsage` and `total_cost_usd` as running totals for the whole conversation, not for the run. A run that carries on a conversation includes every run before it in that conversation. Right now we add them up per run, so a project that cost about $2,000 at API prices shows as about $18,000. A run's own figures are how much its conversation's totals rose since that conversation's previous run. If the totals went down instead, the conversation started over, and the run counts in full.
+
+            The "This project" group should cover every run saved in the project's history and asks, not only those since it was opened, and keep updating as new runs report. Split it into tasks and questions, each with how many runs there were and how many reported no usage. For each model the runs used, show its input, output, cache-read and cache-written tokens.
+
+            Cost should be worked out from the tokens at each model's published API prices: input, output, cache read, and cache writes at the 5-minute or 1-hour rate, using the split the harness reports. Show the total, and how much of it was input, output, cache reads and cache writes, since caching is most of it. A model whose prices aren't known gets no cost, never a guess. Say that this is what the tokens would cost at API prices, not what a subscription charges.
+            \\\
+        result:
+            \\\
+            I rewrote the Usage section of the chat input spec to cover all three problems. `piton check` reports no problems, `piton build` wrote 79 files, and the new text appears in `.claude/reference/scope/prompt-mode/chat-input/index.md#usage`.
+
+            ## What changed in the spec
+
+            All edits are in `spec/scope/prompt-mode/chat-input/index.pi`, in the `usage` section.
+
+            **Per-run figures (the overcount)**
+            - Claude Code's `modelUsage` and `total_cost_usd` are now described as running totals for the whole conversation.
+            - A run's own figures are how much its conversation's totals rose since that conversation's previous run, each model counted separately.
+            - If any total went down, the conversation started over and the run counts in full. The first run of a conversation also counts in full.
+            - **One addition you didn't ask for:** a question asked while another is running carries on a copy of that conversation. Its rise is measured from the run it copied, so the copied history isn't counted twice.
+            - Runs are taken in the order they were sent, whether from the saved history or just reported, so each run counts exactly once.
+
+            **"This project" group**
+            - It covers every task in the history (each chain step as its own run) and every question saved in asks, not only runs since the project was opened.
+            - It is worked out from the harness lines each saved record already keeps.
+            - It keeps updating as new runs report. A run still going isn't counted yet.
+            - It is split into Tasks and Questions, each showing a run count and, muted, how many reported no usage, such as "42 runs · 3 without usage". The second part is left out when it's zero.
+            - Under them, each model the runs used gets its input, output, cache-read and cache-written tokens, tasks and questions together.
+
+            **Cost at API prices**
+            - Cost is worked out from the tokens at each model's published per-million prices, kept in the app. That covers input, output, cache reads, and cache writes at the 5-minute or 1-hour rate, using the split the harness reports.
+            - Harness-reported cost such as `total_cost_usd` is never used.
+            - A model whose prices aren't known gets no cost. It is marked "Price unknown", and the totals that leave it out say so.
+            - The total is shown with its breakdown into input, output, cache reads and cache writes, each in dollars and as a share of the total.
+            - A muted note says this is what the tokens would cost at API prices, not what a subscription charges.
+            - The summary's "Usage $…" and the Conversation group's cost now use the same calculation.
+
+            **Two choices I made that you didn't specify**
+            - **Cache writes without a split:** if the harness doesn't report a 5-minute/1-hour split, those writes are priced at the 5-minute rate.
+            - **Model matching:** models are matched to prices by id, ignoring any date or context-size suffix.
+
+            The constraints are in `.suspense/history/1791114404-CalculateProjectLifetimeTokenCosts2.understanding.md`.
+
+            ## Anchors the code should follow
+            - `ChatInputScope` → `#usage` in `.claude/reference/scope/prompt-mode/chat-input/index.md`, for all of the above.
+            - `ProjectDataScope` → `#contents`: the task history and asks records the project totals are rebuilt from.
+            - `HarnessIntegrationScope` → `#context`: conversations per lane and for questions, and copies of conversations, which decide each run's "previous run".
+
+            The Gmail, Google Calendar and Google Drive connectors still need authorizing in your claude.ai connector settings before they can be used. None of them were needed here.
+            \\\
+
+    sentFrom: CalculateProjectLifetimeTokenCosts2
+
+    references:
+        - @{ChatInputScope}

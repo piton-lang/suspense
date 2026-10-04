@@ -3214,7 +3214,9 @@ mod tests {
     /// outside, or Escape closes them.
     #[gpui_kit::test]
     async fn usage_summary_opens_its_details(cx: &mut TestAppContext) {
-        use crate::usage::{Conversation, PlanLimit, Spend, UsageReport};
+        use crate::usage::{
+            Conversation, Cost, ModelSpend, PlanLimit, ProjectReport, RunCount, Spend, UsageReport,
+        };
         use gpui_kit::component::ActiveTheme as _;
 
         cx.update(|cx| {
@@ -3293,12 +3295,22 @@ mod tests {
                 output: Some(1_200),
                 ..Spend::default()
             },
-            project_spend: Spend {
-                input: Some(900),
-                output: Some(41_200),
-                ..Spend::default()
+            project: ProjectReport {
+                tasks: RunCount {
+                    runs: 3,
+                    without_usage: 1,
+                },
+                models: vec![ModelSpend {
+                    name: "gpt-5-codex".into(),
+                    spend: Spend {
+                        input: Some(900),
+                        output: Some(41_200),
+                        ..Spend::default()
+                    },
+                    priced: false,
+                }],
+                ..ProjectReport::default()
             },
-            runs: 3,
             harness: Some(crate::agent::Agent::Codex),
             reported: Some(crate::usage::now()),
             ..UsageReport::default()
@@ -3315,7 +3327,10 @@ mod tests {
             assert!(window.try_find("usage-conversation-output").is_some());
             assert!(window.try_find("usage-conversation-cache-read").is_none());
             assert!(window.try_find("usage-conversation-cost").is_none());
-            assert!(window.try_find("usage-project-runs").is_some());
+            assert!(window.try_find("usage-project-tasks").is_some());
+            assert!(window.try_find("usage-project-questions").is_none());
+            assert!(window.try_find("usage-project-model-0").is_some());
+            assert!(window.try_find("usage-project-model-0-output").is_some());
             assert!(window.try_find("usage-project-cost").is_none());
             assert!(window.try_find("usage-source").is_some());
         })
@@ -3327,7 +3342,11 @@ mod tests {
         assert!(!open(cx));
 
         // A cost, then a plan limit, take over the summary.
-        usage.project_spend.cost = Some(1.2391);
+        usage.project.cost = Some(Cost {
+            output: 1.,
+            cache_read: 0.2391,
+            ..Cost::default()
+        });
         set(usage.clone(), cx);
         assert_eq!(summary(cx), "Usage $1.24");
         usage.limits = vec![
@@ -3361,6 +3380,8 @@ mod tests {
             window.render_frame(cx);
             assert!(window.try_find("usage-group-limits").is_some());
             assert!(window.try_find("usage-project-cost").is_some());
+            assert!(window.try_find("usage-project-cost-cache-reads").is_some());
+            assert!(window.try_find("usage-project-cost-note").is_some());
             window.click("tab-help", cx);
             window.render_frame(cx);
             assert!(window.try_find("usage-popover").is_none());

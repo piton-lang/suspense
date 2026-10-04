@@ -927,6 +927,7 @@ impl Reply {
             | HarnessEvent::NewConversation(_)
             | HarnessEvent::Usage { .. }
             | HarnessEvent::Spent { .. }
+            | HarnessEvent::CacheWrites { .. }
             | HarnessEvent::Limits(_)
             | HarnessEvent::Model(_)
             | HarnessEvent::ToolCalled { .. }

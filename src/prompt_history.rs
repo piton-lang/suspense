@@ -47,6 +47,11 @@ pub struct RunRecord {
     /// conversation's first prompt.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub resumed: bool,
+    /// The conversation it carried on, or carried on a copy of, by the
+    /// harness's id, so what it spent is measured from that conversation's
+    /// totals; none for one saved before this was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resumed_from: Option<String>,
     /// Each line the harness printed, as JSON where it was, else as a string,
     /// and each message sent to the run while it worked, where it was sent,
     /// as `{"sent": {"text": …, "compiled": …}}`.
@@ -127,6 +132,7 @@ impl RunRecord {
             HarnessEvent::NewConversation(_) => {
                 self.output.retain(|line| line.get("sent").is_some());
                 self.resumed = false;
+                self.resumed_from = None;
             }
             _ => {}
         }

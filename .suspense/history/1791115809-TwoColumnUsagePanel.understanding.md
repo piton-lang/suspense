@@ -1,0 +1,5 @@
+- [Clicking the usage summary opens a popover above it, each group headed and each figure labelled](.claude/reference/scope/prompt-mode/chat-input/index.md#usage)
+- [The popover's groups are Plan limits, Conversation, This project, and the harness and model the figures came from](.claude/reference/scope/prompt-mode/chat-input/index.md#usage)
+- [This project is split into Tasks and Questions, then tokens per model, then cost with its breakdown and an API-prices note](.claude/reference/scope/prompt-mode/chat-input/index.md#usage)
+- [A group or figure the harness doesn't report is left out rather than shown as zero; with nothing reported the popover says so](.claude/reference/scope/prompt-mode/chat-input/index.md#usage)
+- [Figures update in place while the popover is open; outside click or Escape closes it](.claude/reference/scope/prompt-mode/chat-input/index.md#usage)
