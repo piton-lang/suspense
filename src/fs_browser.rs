@@ -998,6 +998,12 @@ mod tests {
             cx.run_until_parked();
         };
         let selected = |cx: &mut TestAppContext| browser.read_with(cx, |b, _| b.selected());
+        // Pressed as the platform binds them.
+        let (toggle_hidden, new_folder, choose) = if cfg!(target_os = "macos") {
+            ("cmd-shift-.", "cmd-shift-n", "cmd-enter")
+        } else {
+            ("ctrl-h", "ctrl-shift-n", "ctrl-enter")
+        };
         let name = |cx: &mut TestAppContext| {
             browser.read_with(cx, |b, _| {
                 b.choice()
@@ -1048,17 +1054,17 @@ mod tests {
         press(&["left"], cx);
         assert_eq!(name(cx), "beta");
 
-        press(&["ctrl-h"], cx);
+        press(&[toggle_hidden], cx);
         assert!(browser.read_with(cx, |b, _| b.show_hidden()));
         assert_eq!(
             name(cx),
             "beta",
             "showing hidden folders lost the selection"
         );
-        press(&["ctrl-h"], cx);
+        press(&[toggle_hidden], cx);
         assert!(!browser.read_with(cx, |b, _| b.show_hidden()));
 
-        press(&["ctrl-shift-n"], cx);
+        press(&[new_folder], cx);
         assert!(browser.read_with(cx, |b, _| b.new_folder_open()));
         press(&["escape"], cx);
         assert!(!browser.read_with(cx, |b, _| b.new_folder_open()));
@@ -1067,7 +1073,7 @@ mod tests {
             "Escape in the row also cancelled the browser"
         );
 
-        press(&["ctrl-enter"], cx);
+        press(&[choose], cx);
         assert_eq!(*chosen.borrow(), [dir.join("beta")]);
         press(&["escape"], cx);
         assert!(cancelled.get(), "Escape didn't cancel");

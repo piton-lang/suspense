@@ -302,6 +302,11 @@ struct PromptTask {
     spec_fix_due: Option<String>,
     /// A chain step whose next step waits for the spec fix sent after it.
     held_for_fix: bool,
+    /// When it was sent, once it was, and when it was over, once it is, so
+    /// how long it took can be told; none for a task from the history whose
+    /// record doesn't say.
+    started: Option<std::time::SystemTime>,
+    ended: Option<std::time::SystemTime>,
 }
 
 /// Asks for a file's changes while a task ran, between the snapshots taken
@@ -586,6 +591,8 @@ impl PromptTask {
             feed: None,
             spec_fix_due: None,
             held_for_fix: false,
+            started: None,
+            ended: None,
         }
     }
 
@@ -639,6 +646,11 @@ impl PromptTask {
             task.status = TaskStatus::Unrecorded;
             return task;
         };
+        // Only a record holding both its start and its end says how long.
+        if let (Some(started), Some(ended)) = (record.started_at, record.ended_at) {
+            task.started = Some(from_millis(started));
+            task.ended = Some(from_millis(ended));
+        }
         task.given = record.harness().map(|harness| Given {
             harness,
             system_prompt: record.system_prompt.clone(),
@@ -675,6 +687,25 @@ impl PromptTask {
     fn apply(&mut self, event: HarnessEvent) {
         self.apply_event(event);
         self.settle_outcome();
+        self.stamp_end();
+    }
+
+    /// Once it is over, keeps when, so its running time stops there.
+    fn stamp_end(&mut self) {
+        if self.started.is_some() && !self.status.is_active() && self.ended.is_none() {
+            self.ended = Some(std::time::SystemTime::now());
+        }
+    }
+
+    /// How long it has been under way, or took; none when that isn't known.
+    fn elapsed(&self) -> Option<Duration> {
+        let started = self.started?;
+        let until = match self.ended {
+            Some(ended) => ended,
+            None if self.status.is_active() => std::time::SystemTime::now(),
+            None => return None,
+        };
+        Some(until.duration_since(started).unwrap_or_default())
     }
 
     /// Once its run is over, heads its final summary with what it did: the
@@ -733,6 +764,7 @@ impl PromptTask {
         if self.status != TaskStatus::Cancelled {
             self.status = TaskStatus::Failed;
         }
+        self.stamp_end();
     }
 
     /// Cancels it, keeping the output it had so far: tool calls still running
@@ -741,6 +773,7 @@ impl PromptTask {
         self.status = TaskStatus::Cancelled;
         self.subagents.end();
         self.reply.cancel();
+        self.stamp_end();
     }
 
     /// Whether it can be cancelled: it is under way, sent from here.
@@ -753,6 +786,7 @@ impl PromptTask {
     fn end(&mut self) {
         self.end_run();
         self.settle_outcome();
+        self.stamp_end();
     }
 
     fn end_run(&mut self) {
@@ -2975,6 +3009,10 @@ pub struct PromptMode {
     /// The heights the referenced spec sidebar's panels were dragged to,
     /// kept while the application runs, as its width is.
     refs_panels: referenced_spec::PanelHeights,
+    /// Draws the view again every second while a task or a background task
+    /// is under way, so their running times count up; whether it is going.
+    _elapsed_tick: Task<()>,
+    elapsed_ticking: bool,
     refs_split: Entity<ResizableState>,
     refs_scroll: ScrollHandle,
     understanding_scroll: ScrollHandle,
@@ -3189,6 +3227,8 @@ impl PromptMode {
             slide_height: Rc::default(),
             refs_width: Rc::new(Cell::new(referenced_spec::WIDTH)),
             refs_panels: referenced_spec::PanelHeights::default(),
+            _elapsed_tick: Task::ready(()),
+            elapsed_ticking: false,
             refs_split: cx.new(|_| ResizableState::default()),
             refs_scroll: ScrollHandle::new(),
             understanding_scroll: ScrollHandle::new(),
@@ -5915,10 +5955,11 @@ impl PromptMode {
     /// started them. While a chain runs, those of each of its steps so far,
     /// a group per step labelled by what it did, in that step's own mode:
     /// the spec step and follow-up Spec's, the code step Code's.
-    fn running_subagents(&self, cx: &App) -> Vec<referenced_spec::SubagentGroup> {
+    fn running_subagents(&self, cx: &Context<Self>) -> Vec<referenced_spec::SubagentGroup> {
         let Some(latest) = self.latest_ix() else {
             return Vec::new();
         };
+        let (this, project_dir) = (cx.entity().downgrade(), self.project_dir.clone());
         let group = |ix: usize, step: Option<ChainStep>| {
             let task = &self.tasks[ix];
             let (label, mode, started_by) = match step {
@@ -5939,6 +5980,26 @@ impl PromptMode {
                 started_by: started_by.into(),
                 color: mode.map(|mode| chat_input::mode_color(mode, cx)),
                 agents: task.subagents.clone(),
+                // Only a run whose input is still open can stop one on its
+                // own.
+                stop: task
+                    .feed
+                    .as_ref()
+                    .filter(|feed| task.status.is_active() && feed.is_open())
+                    .map(|_| {
+                        let (this, project_dir) = (this.clone(), project_dir.clone());
+                        Rc::new(move |id: String, _: &mut Window, cx: &mut App| {
+                            this.update(cx, |this, cx| match project_dir.as_deref() {
+                                Some(dir) => {
+                                    this.in_project(dir, cx, |this, cx| {
+                                        this.stop_subagent(ix, id, cx)
+                                    });
+                                }
+                                None => this.stop_subagent(ix, id, cx),
+                            })
+                            .ok();
+                        }) as referenced_spec::StopSubagent
+                    }),
             }
         };
         let layout = chain_layout(&self.tasks);
@@ -5949,6 +6010,60 @@ impl PromptMode {
                 .collect(),
             None => vec![group(latest, None)],
         }
+    }
+
+    /// Whether anything shown is under way, whose running time counts up.
+    fn counting(&self) -> bool {
+        self.tasks.iter().any(|task| {
+            (task.status.is_active() && task.started.is_some()) || task.subagents.any_running()
+        })
+    }
+
+    /// While anything is under way, draws the view again every second, so
+    /// its running time counts up.
+    fn tick_elapsed(&mut self, cx: &mut Context<Self>) {
+        if self.elapsed_ticking || !self.counting() {
+            return;
+        }
+        self.elapsed_ticking = true;
+        self._elapsed_tick = cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(Duration::from_secs(1)).await;
+                let going = this
+                    .update(cx, |this, cx| {
+                        let going = this.counting();
+                        this.elapsed_ticking = going;
+                        cx.notify();
+                        going
+                    })
+                    .unwrap_or(false);
+                if !going {
+                    break;
+                }
+            }
+        });
+    }
+
+    /// Stops the background task `id` of the task at `ix`'s run on its own,
+    /// asking its harness on the run's input: the task and its other
+    /// background tasks carry on, and the row stays at work until the
+    /// harness notifies its end.
+    fn stop_subagent(&mut self, ix: usize, id: String, cx: &mut Context<Self>) {
+        let Some(task) = self.tasks.get_mut(ix) else {
+            return;
+        };
+        let Some(feed) = task.feed.clone().filter(harness::Feed::is_open) else {
+            return;
+        };
+        task.subagents.stopping(&id);
+        cx.notify();
+        // Off the UI thread, since writing to the harness can block.
+        cx.background_spawn(async move {
+            // Its input closed meanwhile, the run is ending, and the task
+            // with it.
+            feed.stop_task(&id).ok();
+        })
+        .detach();
     }
 
     fn running_understanding(&self) -> Understanding {
@@ -6309,6 +6424,7 @@ impl PromptMode {
             return;
         };
         let task_ix = self.push_task(text.clone().into(), cx);
+        self.tasks[task_ix].started = Some(std::time::SystemTime::now());
         // Sent, the Freeform chat goes to its bottom to follow it.
         self.lock_freeform_chat();
         self.tasks[task_ix].sent = match &sending {
@@ -7070,6 +7186,20 @@ impl PromptMode {
             }
 
             record.cancelled = is_cancelled();
+            // When it was sent and was over, so how long it took is kept.
+            if let Some(Some((started, ended))) = this
+                .update(cx, |this, cx| {
+                    this.in_project(&project_dir, cx, |this, _| {
+                        let task = this.tasks.get(task_ix)?;
+                        Some((task.started?, task.ended))
+                    })
+                })
+                .ok()
+                .flatten()
+            {
+                record.started_at = Some(to_millis(started));
+                record.ended_at = Some(to_millis(ended.unwrap_or_else(std::time::SystemTime::now)));
+            }
             // Marked done by hand while it ran, it is saved so; marked or
             // unmarked while this saves, it is saved again below.
             record.marked_done = this
@@ -8675,6 +8805,7 @@ impl Render for PromptMode {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // A task cancelled or failed may leave another heading the view.
         self.settle_latest();
+        self.tick_elapsed(cx);
         // The chat input shows how much context its next prompt carries on.
         let context = self.context();
         if self.chat_input.read(cx).context() != context {
@@ -9253,6 +9384,17 @@ fn anchor_mode(anchor: &HiddenAnchor) -> Option<SendMode> {
     })
 }
 
+/// `millis` since the Unix epoch, as a time.
+fn from_millis(millis: u64) -> std::time::SystemTime {
+    std::time::UNIX_EPOCH + Duration::from_millis(millis)
+}
+
+/// `time` in milliseconds since the Unix epoch.
+fn to_millis(time: std::time::SystemTime) -> u64 {
+    time.duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_millis() as u64)
+}
+
 /// The first line of `text` with anything in it.
 fn first_line(text: &str) -> SharedString {
     text.lines()
@@ -9277,11 +9419,21 @@ fn task_title(ix: usize, task: &PromptTask, origin: bool, cx: &App) -> Div {
         .id(("task-status", ix))
         .flex_none()
         .child(task.status.tag(cx));
+    // Beside it, how long it has been under way, or took.
+    let elapsed = task.elapsed().map(|elapsed| {
+        gpui_kit::TestSupportExt::test_support(div().id(("task-elapsed", ix)))
+            .flex_none()
+            .text_sm()
+            .text_color(theme.muted_foreground)
+            .font_features(crate::subagents::tabular_figures())
+            .child(crate::subagents::format_elapsed(elapsed))
+    });
     h_flex()
         .min_w_0()
         .gap_2()
         // Lets UI tests find the status; inert in normal builds.
         .child(gpui_kit::TestSupportExt::test_support(status))
+        .children(elapsed)
         .when(task.status.is_active(), |row| {
             row.child(div().flex_none().child(Spinner::new().small()))
         })
@@ -12366,9 +12518,13 @@ mod tests {
         let agent = |id: &str| Subagent {
             id: id.into(),
             description: format!("Look into {id}").into(),
+            task: crate::subagents::Kind::Subagent,
             kind: None,
             activity: None,
             state: State::Running,
+            started: std::time::Instant::now(),
+            ended: None,
+            stopping: false,
         };
         prompt_mode.update(cx, |this, cx| {
             let ix = this.push_task("Alone".into(), cx);
@@ -12376,7 +12532,7 @@ mod tests {
             this.tasks[ix].sent.mode = Some(SendMode::Code);
             this.tasks[ix].subagents.list.push(agent("a"));
         });
-        let groups = cx.update(|cx| prompt_mode.read(cx).running_subagents(cx));
+        let groups = prompt_mode.update(cx, |this, cx| this.running_subagents(cx));
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].label, None);
         assert_eq!(groups[0].started_by.as_ref(), "the Code task");
@@ -12402,7 +12558,7 @@ mod tests {
             this.set_working(true);
             cx.notify();
         });
-        let groups = cx.update(|cx| prompt_mode.read(cx).running_subagents(cx));
+        let groups = prompt_mode.update(cx, |this, cx| this.running_subagents(cx));
         let shown: Vec<_> = groups
             .iter()
             .map(|group| {
@@ -12734,7 +12890,7 @@ mod tests {
         prompt_mode.update(cx, |this, cx| {
             this.push_task("Old".into(), cx);
         });
-        let groups = cx.update(|cx| prompt_mode.read(cx).running_subagents(cx));
+        let groups = prompt_mode.update(cx, |this, cx| this.running_subagents(cx));
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].color, None);
         assert_eq!(groups[0].label, None);
@@ -12746,7 +12902,7 @@ mod tests {
             this.tasks[ix].sent.mode = Some(SendMode::Both);
         });
         let spec = cx.update(|cx| mode_color(SendMode::Spec, cx));
-        let groups = cx.update(|cx| prompt_mode.read(cx).running_subagents(cx));
+        let groups = prompt_mode.update(cx, |this, cx| this.running_subagents(cx));
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].label.as_ref().map(|l| l.as_ref()), Some("Spec"));
         assert_eq!(groups[0].color, Some(spec));

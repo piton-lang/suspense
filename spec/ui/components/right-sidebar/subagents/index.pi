@@ -4,9 +4,8 @@ use /ui/components/sidebar/Panel
 from .. import RightSidebarScope
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/prompt-mode/modes import PromptModesScope
-
 export panel SubagentsPanel:
-    title: Subagents
+    title: Subagents and commands
     counted: false
     height: fit
     scrolls: true
@@ -17,48 +16,78 @@ export panel SubagentsPanel:
 concept SubagentsConcept:
     pitch:
         The bottom panel of the @{RightSidebarScope}, beneath the referenced
-        files and the understanding: the subagents the harness started for
-        the running task, each shown in the colour of the mode that started
-        it.
+        files and the understanding: the subagents and background commands
+        the harness started for the running task, each shown in the colour of
+        the mode that started it, with how long it has been running, so one
+        that seems stuck can be seen and stopped.
 
     shape: {SubagentsShape}
 
 shape SubagentsShape:
     description:
-        It lists only subagents, the agents the harness started, never the
-        other background tasks a run starts, such as shell commands run in the
-        background, which hold the run open, as the
-        @{HarnessIntegrationScope} says, but aren't shown here.
+        It lists the background tasks the harness started for the run, as the
+        @{HarnessIntegrationScope} keeps them: its subagents, the agents it
+        started, and its background commands, the shell commands it ran in the
+        background, such as a long build. A background task of any other kind
+        isn't shown.
 
-        It is shown only once the run has started a subagent, and takes no
-        room before. One row per subagent, in the order they started, each 24
-        pixels tall, 8 pixels in from the panel's edges: a spinner while it is
-        at work, then a tick, a cross, or a dash for how it ended, done,
-        failed, or stopped, beside what it was started to do, in small text,
-        cut off with an ellipsis, muted once it has ended. Its tooltip gives
-        what it was started to do, and beneath, muted, its kind and what it
-        is doing or how it ended. The panel is only as tall as its rows need,
-        up to 30% of the sidebar's height, scrolling beyond that.
+        It is shown only once the run has started one, and takes no room
+        before. One row per background task, in the order they started,
+        subagents and commands together, each 24 pixels tall, 8 pixels in
+        from the panel's edges: a spinner while it is at work, then a tick, a
+        cross, or a dash for how it ended, done, failed, or stopped, beside a
+        small icon for its kind, a robot for a subagent and a terminal for a
+        command, in the theme's muted grey, then what it was started to do, in
+        small text, cut off with an ellipsis, muted once it has ended. For a
+        subagent that is its description, and for a command the command
+        itself, on one line, in monospace. Its tooltip gives what it was
+        started to do, and beneath, muted, its kind, "Subagent" or "Command",
+        and what it is doing or how it ended. The panel is only as tall as its
+        rows need, up to 30% of the sidebar's height, scrolling beyond that.
+
+    elapsed:
+        At the right of each row, 8 pixels in from the panel's edge, is how
+        long it has been running, from when the harness said it started, in
+        extra small muted tabular figures, as a task's elapsed time is written
+        beside its status: "0:42", "12:05", "1:02:33". While it is at work it
+        counts up every second; once it has ended it stops at how long it ran.
+        What it was started to do is cut off before the time rather than
+        running beneath it.
+
+    stopping:
+        A row at work can be stopped, from a Stop button: a small ghost button
+        with a stop icon, 18 pixels square, which takes the place of its
+        running time while the row is hovered, whose tooltip reads "Stop this
+        subagent" or "Stop this command". Clicking it stops only that
+        background task, as the @{HarnessIntegrationScope} says: the task the
+        run is for and every other background task carry on, and nothing else
+        in the panel or the task's output changes. Once clicked, the button
+        is disabled and the row's spinner stays until the harness notifies its
+        end, when it shows a dash for stopped, as any stopped one does. A row
+        that has ended has no Stop button, and neither does one whose run
+        can't stop it on its own, as one whose input is already closed, where
+        the task's own Cancel button stops everything still going.
 
     byMode:
-        Each subagent is shown according to the mode of the task that started
-        it, as the @{PromptModesScope} colours modes: its row has a bar 2
-        pixels wide down its left edge in that mode's colour, and its spinner
-        and tick are drawn in it too, while a cross or dash keeps its own
-        colour. A subagent's mode is the mode its task was sent in, and for a
-        step of a chain, the step's own: the spec step and a spec follow-up
-        are Spec's, and the code step is Code's, never Chain's purple. Its
-        tooltip names the mode, "Started by the Code task", "Started by the
-        Spec step", and so on. A task whose mode isn't known, as one from the
-        history saved before modes were, has no bar and keeps its spinner and
-        tick in their own colours, its tooltip reading "Started by the task".
-        A Chain task on its own, before its code step has been sent, is the
-        chain's spec step, so its subagents are Spec's and labelled "Spec".
+        Each background task is shown according to the mode of the task that
+        started it, as the @{PromptModesScope} colours modes: its row has a
+        bar 2 pixels wide down its left edge in that mode's colour, and its
+        spinner and tick are drawn in it too, while a cross or dash keeps its
+        own colour. A background task's mode is the mode its task was sent
+        in, and for a step of a chain, the step's own: the spec step and a
+        spec follow-up are Spec's, and the code step is Code's, never Chain's
+        purple. Its tooltip names the mode, "Started by the Code task",
+        "Started by the Spec step", and so on. A task whose mode isn't known,
+        as one from the history saved before modes were, has no bar and keeps
+        its spinner and tick in their own colours, its tooltip reading
+        "Started by the task". A Chain task on its own, before its code step
+        has been sent, is the chain's spec step, so its background tasks are
+        Spec's and labelled "Spec".
 
-        While a chain runs, the panel keeps the subagents of each of its
-        steps, not only the step running: they are grouped by step, in the
-        order the steps ran, each group headed by a small label in its mode's
-        colour, "Spec", "Code", or "Spec follow-up", with the step running
-        last. A task that isn't part of a chain has one group, and no label.
-        Once the run is over, the sidebar slides back with them all, as it
-        says.
+        While a chain runs, the panel keeps the background tasks of each of
+        its steps, not only the step running: they are grouped by step, in
+        the order the steps ran, each group headed by a small label in its
+        mode's colour, "Spec", "Code", or "Spec follow-up", with the step
+        running last. A task that isn't part of a chain has one group, and no
+        label. Once the run is over, the sidebar slides back with them all,
+        as it says.

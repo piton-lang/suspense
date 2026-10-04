@@ -7,3 +7,16 @@ export shape MessageListStatusShape:
         "Failed" in red, "Cancelled" in orange, and "Not recorded" in grey for
         a task from the history with no record of its run. The labels are
         readable in both light and dark mode.
+
+    elapsed:
+        Beside its status label, a task shows how long it has been under way,
+        from when it was sent, building and compiling included, in small
+        muted tabular figures: minutes and seconds, "0:42" or "12:05", with
+        hours ahead of them once it reaches an hour, "1:02:33". While the task
+        is building, compiling, or running, it counts up every second, so a
+        task that seems stuck can be told from one that has only just
+        started. Once the task is over, however it ended, it stops and stays
+        at how long the task took. It shows wherever the status label does,
+        the latest task's header and the heading of each previous task,
+        including a task running in the other lane. A task from the history
+        whose record holds no start and end shows none.

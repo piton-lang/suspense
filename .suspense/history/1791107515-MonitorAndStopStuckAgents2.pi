@@ -1,0 +1,82 @@
+
+export anchor MonitorAndStopStuckAgents2:
+    userPrompt:
+        \\\
+        Sometimes it seems like an agent or a command gets stuck.  We should be able to see these in the @{SubagentsPanel} and we should be able to stop them.  We should also be able to see how long both the current task and the sub agents/commands have been running.
+        \\\
+
+    mode: code
+
+    newConversation: true
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Sometimes it seems like an agent or a command gets stuck.  We should be able to see these in the @{SubagentsPanel} and we should be able to stop them.  We should also be able to see how long both the current task and the sub agents/commands have been running.
+            \\\
+        result:
+            \\\
+            I've changed the spec only. `piton check` reports no problems, and `piton build` wrote 79 files without errors. I confirmed the new sections appear in the refreshed `.claude/reference`.
+
+            ## What changed in the spec
+
+            **1. Subagents panel** (`.claude/reference/ui/components/right-sidebar/subagents/index.md`)
+            - **Title:** now "Subagents and commands".
+            - **What it lists (`#description`):** it now shows the run's background shell commands, such as a long build, as well as its subagents. Before, it explicitly left commands out. Subagents and commands share one list in the order they started.
+            - **Row layout:** each row has the spinner or end icon as before, then a small muted icon for its kind (a robot for a subagent, a terminal for a command), then what it was started to do. That is the description for a subagent, or the command itself in monospace on one line. The tooltip now names the kind, "Subagent" or "Command".
+            - **`#elapsed` (new):** at the right of each row is how long it has been running, counted from when the harness said it started. It uses the same format as the task time below and counts up every second. Once the row ends it stays at how long it ran, and the row's text is cut off before the time.
+            - **`#stopping` (new):** hovering a running row swaps its time for an 18px ghost Stop button with a stop icon. The tooltip reads "Stop this subagent" or "Stop this command".
+              - Clicking it stops only that one. The main task and everything else keep going.
+              - The button then turns disabled, and the spinner stays until the harness reports that it ended. The row then shows the dash for stopped.
+              - There's no Stop button on rows that have ended, or when the run can no longer stop one on its own (its input is already closed). In that case the task's own Cancel button is the way to stop it.
+            - **`#by-mode`:** the existing mode colour bar and chain-step grouping are unchanged, and now cover commands too.
+
+            **2. Running background tasks** (`.claude/reference/scope/harness-integration/index.md#feeding`, new paragraph)
+            - **Kind:** each background task is a subagent (started by an Agent or Task tool call) or a command (a shell command run in the background). Its kind comes from what started it.
+            - **Start time:** recorded when the harness says it started.
+            - **Stopping one:** the harness is asked on the run's input to stop that task by its id. For Claude Code, that is its stream-json control request for stopping a task. The task then ends, as stopped, when the harness reports it, and the run carries on.
+            - **Never by killing the process:** stopping one task must not end the harness's process. A run whose input is closed, or whose harness can't take more input (Codex, OpenCode), can't stop a single task.
+
+            **3. How long the current task has run** (`.claude/reference/scope/prompt-mode/message-list/index.md#elapsed`, under Status)
+            - **Where:** beside every task's status label, both in the latest task's header and in each previous task's heading. That includes a task running in the other lane.
+            - **What it counts:** time since the task was sent, building and compiling included. It uses small muted tabular figures, "0:42", "12:05", or "1:02:33" once past an hour.
+            - **When it stops:** it counts up every second while the task is under way, and stops at the total once the task is over.
+            - **History:** tasks from the history whose record has no start and end show no time. So the code should save each task's start and end times in its record.
+
+            **4. Right sidebar** (`.claude/reference/ui/components/right-sidebar/index.md#description`): its wording now says the bottom panel holds subagents and background commands.
+
+            ## Anchors the code should follow
+            - `SubagentsPanel`: `#description`, `#elapsed`, `#stopping`, `#by-mode`
+            - `HarnessIntegrationScope`: `#feeding`
+            - `MessageList`: `#status` / `#elapsed`
+            - `RightSidebarScope`: `#description`
+
+            The constraints are in `.suspense/history/1791107396-MonitorAndStopStuckAgents.understanding.md`.
+
+            The Claude Docs, Gmail, Google Calendar and Google Drive connectors need authorizing in your claude.ai connector settings before they can be used. None of them were needed here.
+            \\\
+
+    sentFrom: MonitorAndStopStuckAgents

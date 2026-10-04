@@ -68,6 +68,13 @@ pub struct RunRecord {
     /// card answered stays answered.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub picked: std::collections::BTreeMap<String, String>,
+    /// When the task was sent, in milliseconds since the Unix epoch; none
+    /// for one saved before this was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<u64>,
+    /// When the task was over, in milliseconds since the Unix epoch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ended_at: Option<u64>,
     /// In a git repository, the tree the working tree was snapshotted as
     /// when the harness started the task, pinned under
     /// `refs/suspense/<task>/before`.

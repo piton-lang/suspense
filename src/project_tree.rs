@@ -1757,7 +1757,9 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("suspense-tree-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(dir.join("spec")).unwrap();
-        fs::write(dir.join("spec/index.pi"), "").unwrap();
+        // As the project's root is named, as /private/var for /var on macOS.
+        let dir = dunce::canonicalize(&dir).unwrap();
+        fs::write(dir.join("spec").join("index.pi"), "").unwrap();
         fs::write(dir.join("Cargo.toml"), "").unwrap();
         fs::write(dir.join("a.txt"), "").unwrap();
 
@@ -1814,7 +1816,7 @@ mod tests {
             window.click(("project-entry", 1usize), cx)
         })
         .unwrap();
-        let index = dir.join("spec/index.pi");
+        let index = dir.join("spec").join("index.pi");
         cx.wait_for(handle, TIMEOUT, |_, _| *opened.borrow() == [index.clone()])
             .await;
 
@@ -2258,6 +2260,8 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("suspense-tree-diff-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
+        // As the project's root is named, as /private/var for /var on macOS.
+        let dir = dunce::canonicalize(&dir).unwrap();
         fs::write(dir.join("changed.txt"), "one\n").unwrap();
         fs::write(dir.join("same.txt"), "same\n").unwrap();
         let git = |args: &[&str]| {

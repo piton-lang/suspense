@@ -137,6 +137,19 @@ shape HarnessIntegrationShape:
         matched by id against those seen starting. The harness wakes the run
         when a background task ends, so it can act on what came of it.
 
+        Each background task is known by its kind, from what started it: a
+        subagent, started by an Agent or Task tool call, or a command, a shell
+        command run in the background. Its start is when the harness said it
+        had started, so how long it has been running can be told. A single
+        background task can be stopped while the run goes on, without ending
+        the run or any other task: the harness is asked, on the run's input,
+        to stop that task by its id, Claude Code with its stream-json control
+        request for stopping a task. The task then ends when the harness
+        notifies its end, as ever, as stopped, and the harness carries on
+        with what came of it. Stopping one is never done by stopping the
+        harness's process, and a run whose input is already closed, or whose
+        harness can't be fed, can't stop one on its own.
+
         A result no longer ends the task on its own. The run's last result is
         the first to come once every message sent has been taken in and no
         background task is still going. A result that comes before then, while

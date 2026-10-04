@@ -4118,6 +4118,8 @@ mod tests {
         for name in ["first", "second", "gone"] {
             std::fs::create_dir_all(base.join(name)).unwrap();
         }
+        // As the platform names it, as /private/var for /var on macOS.
+        let base = dunce::canonicalize(&base).unwrap();
         for name in ["first", "second"] {
             std::fs::write(base.join(name).join("piton.config.pi"), "").unwrap();
         }
@@ -4172,8 +4174,7 @@ mod tests {
         cx.run_until_parked();
         assert_eq!(
             cx.update(|cx| ProjectDirectory::get(cx)),
-            // As the platform names it, as /private/var for /var on macOS.
-            dunce::canonicalize(base.join("first")).ok()
+            Some(base.join("first"))
         );
         // Opening it noted it, newest first, and saved that.
         assert_eq!(
@@ -5832,6 +5833,8 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("suspense-focus-chat-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
+        // As the project's root is named, as /private/var for /var on macOS.
+        let dir = dunce::canonicalize(&dir).unwrap();
         std::fs::write(dir.join("notes.md"), "# Notes\n").unwrap();
 
         cx.update(|cx| {

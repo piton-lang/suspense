@@ -82,21 +82,25 @@ pub enum HarnessEvent {
         compiled: String,
     },
     Failed(String),
-    /// The run started a subagent, which it counts as still at work until
-    /// the subagent ends.
+    /// The run started a background task, a subagent or a shell command run
+    /// in the background, which it counts as still at work until it ends.
     SubagentStarted {
         id: String,
+        /// What started it: a subagent or a command.
+        task: BackgroundKind,
         /// What it was started to do.
         description: String,
         /// Which kind of agent it is, such as Explore or Plan, when known.
         kind: Option<String>,
+        /// The tool call that started it, when known.
+        tool: Option<String>,
     },
-    /// What a running subagent is doing now.
+    /// What a running background task is doing now.
     SubagentProgress {
         id: String,
         activity: String,
     },
-    /// A subagent ended: completed, failed, or stopped.
+    /// A background task ended: completed, failed, or stopped.
     SubagentEnded {
         id: String,
         state: SubagentState,
@@ -132,6 +136,14 @@ pub enum HarnessEvent {
     /// The harness isn't logged in in its container, and must be before the
     /// run can go; the run then fails saying so.
     LoginNeeded,
+}
+
+/// What started a background task: an Agent or Task tool call, or a shell
+/// command run in the background.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BackgroundKind {
+    Subagent,
+    Command,
 }
 
 /// How a subagent ended.
@@ -471,6 +483,8 @@ struct Feeding {
     /// place among them, until the run is over.
     events: Option<mpsc::UnboundedSender<HarnessEvent>>,
     messages: Messages,
+    /// How many control requests were sent, each given an id of its own.
+    requests: u64,
 }
 
 impl Feed {
@@ -479,6 +493,7 @@ impl Feed {
             stdin: None,
             events: Some(events),
             messages: Messages::default(),
+            requests: 0,
         })))
     }
 
@@ -512,6 +527,28 @@ impl Feed {
             events
                 .unbounded_send(HarnessEvent::Sent { text, compiled })
                 .ok();
+        }
+        Ok(())
+    }
+
+    /// Asks the harness, on the run's input, to stop the background task
+    /// `id` while the run goes on, with Claude Code's stream-json control
+    /// request for stopping a task. The task ends once the harness notifies
+    /// its end. Fails, sending nothing, once the run's input is closed.
+    /// Blocks while the request is written.
+    pub fn stop_task(&self, id: &str) -> Result<()> {
+        let mut feeding = self.lock();
+        feeding.requests += 1;
+        let line = stop_task_request(&format!("stop-{}", feeding.requests), id);
+        let Some(stdin) = feeding.stdin.as_mut() else {
+            bail!("the task is over");
+        };
+        let written = stdin
+            .write_all(line.as_bytes())
+            .and_then(|()| stdin.flush());
+        if let Err(err) = written {
+            feeding.stdin = None;
+            return Err(err).context("could not write to the harness");
         }
         Ok(())
     }
@@ -572,6 +609,19 @@ impl Feed {
         feed.lock().stdin = cat.stdin.take();
         (feed, rx)
     }
+}
+
+/// A control request for a harness reading `--input-format stream-json`,
+/// asking it to stop its background task `task`, as a line of JSON.
+fn stop_task_request(request_id: &str, task: &str) -> String {
+    let mut line = json!({
+        "type": "control_request",
+        "request_id": request_id,
+        "request": { "subtype": "stop_task", "task_id": task },
+    })
+    .to_string();
+    line.push('\n');
+    line
 }
 
 /// A message for a harness reading `--input-format stream-json`: a user
@@ -1609,22 +1659,30 @@ fn tool_call(
     events
 }
 
-/// The subagent event one of Claude Code's `system` reports on its tasks
-/// stands for. Only a task started of the `local_agent` kind is a subagent,
-/// rather than a shell command run in the background; later reports on a
-/// task don't say its kind, so they are given for every task, and are for a
-/// subagent only where their id is one that started as one.
+/// The background task event one of Claude Code's `system` reports on its
+/// tasks stands for. A task started of the `local_agent` kind is a subagent,
+/// and one of the `local_bash` kind a shell command run in the background;
+/// one of any other kind starts nothing. Later reports on a task don't say
+/// its kind, so they are given for every task, and are for one shown only
+/// where their id is one seen starting.
 fn subagent_event(event: &Value) -> Option<HarnessEvent> {
     if str_at(event, "/type").as_deref() != Some("system") {
         return None;
     }
     let id = str_at(event, "/task_id")?;
     match str_at(event, "/subtype").as_deref()? {
-        "task_started" if str_at(event, "/task_type").as_deref() == Some("local_agent") => {
+        "task_started" => {
+            let task = match str_at(event, "/task_type").as_deref()? {
+                "local_agent" => BackgroundKind::Subagent,
+                "local_bash" => BackgroundKind::Command,
+                _ => return None,
+            };
             Some(HarnessEvent::SubagentStarted {
                 id,
+                task,
                 description: str_at(event, "/description").unwrap_or_default(),
                 kind: str_at(event, "/subagent_type"),
+                tool: str_at(event, "/tool_use_id"),
             })
         }
         "task_progress" => Some(HarnessEvent::SubagentProgress {
@@ -2509,24 +2567,39 @@ wait
     /// answered by the result of what it was doing, and one taken in after
     /// is answered by a result of its own. Until then, a result is an
     /// answer, and the run goes on.
-    /// Claude Code's reports on a subagent become subagent events; its
-    /// reports on a shell command run in the background start none.
+    /// Claude Code's reports on a subagent and on a shell command run in the
+    /// background become background task events, each of its kind; a task
+    /// of any other kind starts none.
     #[test]
     fn subagents_are_read_from_task_reports() {
-        use super::SubagentState;
+        use super::{BackgroundKind, SubagentState};
         let started = json!({ "type": "system", "subtype": "task_started", "task_id": "a1",
             "description": "Plan the code", "subagent_type": "Plan", "task_type": "local_agent" });
         assert_eq!(
             parse(&started),
             [HarnessEvent::SubagentStarted {
                 id: "a1".into(),
+                task: BackgroundKind::Subagent,
                 description: "Plan the code".into(),
                 kind: Some("Plan".into()),
+                tool: None,
             }]
         );
         let shell = json!({ "type": "system", "subtype": "task_started", "task_id": "b1",
-            "description": "cargo test", "task_type": "local_bash" });
-        assert!(parse(&shell).is_empty());
+            "description": "cargo test", "task_type": "local_bash", "tool_use_id": "t1" });
+        assert_eq!(
+            parse(&shell),
+            [HarnessEvent::SubagentStarted {
+                id: "b1".into(),
+                task: BackgroundKind::Command,
+                description: "cargo test".into(),
+                kind: None,
+                tool: Some("t1".into()),
+            }]
+        );
+        let other = json!({ "type": "system", "subtype": "task_started", "task_id": "c1",
+            "task_type": "remote_agent" });
+        assert!(parse(&other).is_empty());
         let progress = json!({ "type": "system", "subtype": "task_progress", "task_id": "a1",
             "description": "Running Read files" });
         assert_eq!(
@@ -2595,8 +2668,7 @@ wait
             "status": "completed" });
         let result = json!({ "type": "result", "is_error": false, "result": "ok" });
         feed.read(&taken, parse(&taken));
-        // Not a subagent: the panel isn't told of it.
-        assert!(feed.read(&shell, parse(&shell)).is_empty());
+        assert_eq!(feed.read(&shell, parse(&shell)).len(), 1);
         assert_eq!(
             feed.read(&result, parse(&result)),
             [HarnessEvent::Answered {
@@ -2614,6 +2686,24 @@ wait
             }]
         );
         assert!(!feed.is_open(), "the last result left the input open");
+    }
+
+    /// Stopping one background task asks the harness on the run's input,
+    /// with a stream-json control request naming it, and leaves the input
+    /// open; once the input is closed, nothing is asked.
+    #[test]
+    fn a_background_task_is_stopped_on_the_runs_input() {
+        let line: serde_json::Value = serde_json::from_str(&super::stop_task_request("stop-1", "b1")).unwrap();
+        assert_eq!(
+            line,
+            json!({ "type": "control_request", "request_id": "stop-1",
+                "request": { "subtype": "stop_task", "task_id": "b1" } })
+        );
+        let (feed, _events) = super::Feed::for_test();
+        feed.stop_task("b1").unwrap();
+        assert!(feed.is_open(), "stopping a task closed the run's input");
+        feed.close();
+        assert!(feed.stop_task("b1").is_err());
     }
 
     /// A run whose last result has come doesn't finish until the harness's

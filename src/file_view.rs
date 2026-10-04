@@ -2578,6 +2578,8 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("suspense-disk-{}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
         std::fs::create_dir_all(&dir).unwrap();
+        // As the watcher reports it, as /private/var for /var on macOS.
+        let dir = dunce::canonicalize(&dir).unwrap();
         let file = dir.join("a.txt");
         std::fs::write(&file, "one\ntwo\nthree\n").unwrap();
         init(cx, None);

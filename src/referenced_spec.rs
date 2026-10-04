@@ -14,9 +14,12 @@ use std::rc::Rc;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::base::ElementExt as _;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{
+    ActiveTheme as _, Disableable as _, Icon, Sizable as _, h_flex, v_flex,
+};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use serde_json::Value;
@@ -24,7 +27,7 @@ use serde_json::Value;
 use crate::file_link::OpenFile;
 use crate::harness::HarnessEvent;
 use crate::shell_paths::{self, Scope};
-use crate::subagents::{State, Subagents};
+use crate::subagents::{Kind, State, Subagents};
 use crate::understanding::Understanding;
 
 /// How wide the sidebar starts, and how narrow it can be dragged.
@@ -242,10 +245,16 @@ pub const PANEL_MIN_HEIGHT: Pixels = px(32. + 32.);
 /// How tall the hit area of the edge between two panels is, centred on it.
 const PANEL_HANDLE_HEIGHT: Pixels = px(6.);
 
-/// The subagents one task started, shown by the mode that started them: a
-/// chain's step labelled by what it did, its mode's colour, and who started
-/// them, as their tooltips say.
-#[derive(Clone, Debug, Default)]
+/// Stops one background task of a run, by its id, while the run goes on.
+pub type StopSubagent = Rc<dyn Fn(String, &mut Window, &mut App)>;
+
+/// How big a row's Stop button is, square.
+const STOP_SIZE: Pixels = px(18.);
+
+/// The background tasks one task started, shown by the mode that started
+/// them: a chain's step labelled by what it did, its mode's colour, and who
+/// started them, as their tooltips say.
+#[derive(Clone, Default)]
 pub struct SubagentGroup {
     /// "Spec", "Code", or "Spec follow-up" for a chain's step; none for a
     /// task of its own.
@@ -255,6 +264,9 @@ pub struct SubagentGroup {
     /// The colour of the mode that started them, when known.
     pub color: Option<Hsla>,
     pub agents: Subagents,
+    /// Stops one of them on its own; none once its run can't, as when its
+    /// input is closed.
+    pub stop: Option<StopSubagent>,
 }
 
 /// Which edge between the panels is dragged: the one below the referenced
@@ -283,6 +295,9 @@ struct Heights {
     laid_subagents: Pixels,
     /// The edge being dragged.
     dragging: Option<PanelEdge>,
+    /// The background task row the pointer is over, which shows its Stop
+    /// button in place of its running time.
+    hovered_agent: Option<usize>,
 }
 
 impl PanelHeights {
@@ -468,8 +483,12 @@ pub fn render(
         .filter(|group| !group.agents.list.is_empty());
     let labels = groups.clone().filter(|group| group.label.is_some()).count();
     let mut next = 0;
+    let hovered_agent = layout.heights.0.get().hovered_agent;
+    let agent_heights = layout.heights.clone();
     let agent_rows = groups.flat_map(|group| {
         let color = group.color;
+        let stop = group.stop.clone();
+        let agent_heights = agent_heights.clone();
         let started_by = group.started_by.clone();
         let label = group.label.clone().map(|label| {
             gpui_kit::TestSupportExt::test_support(
@@ -495,6 +514,41 @@ pub fn render(
             .map(move |(at, agent)| {
                 let ix = first + at;
                 let started_by = started_by.clone();
+                let running = agent.state == State::Running;
+                let (kind_icon, kind_name, stop_tooltip) = match agent.task {
+                    Kind::Subagent => (IconName::Bot, "Subagent", "Stop this subagent"),
+                    Kind::Command => (IconName::SquareTerminal, "Command", "Stop this command"),
+                };
+                // At its right, how long it has been running, or, hovered
+                // while at work, a Stop button in its place, where its run
+                // can stop it on its own.
+                let trailing: AnyElement = match stop.clone() {
+                    Some(stop) if running && hovered_agent == Some(ix) => {
+                        let id = agent.id.clone();
+                        Button::new(("stop-subagent", ix))
+                            .ghost()
+                            .xsmall()
+                            .size(STOP_SIZE)
+                            .icon(IconName::CircleStop)
+                            .tooltip(stop_tooltip)
+                            .disabled(agent.stopping)
+                            .on_click(move |_, window, cx| {
+                                cx.stop_propagation();
+                                stop(id.clone(), window, cx)
+                            })
+                            .into_any_element()
+                    }
+                    _ => div()
+                        .flex_none()
+                        .h(STOP_SIZE)
+                        .flex()
+                        .items_center()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .font_features(crate::subagents::tabular_figures())
+                        .child(crate::subagents::format_elapsed(agent.elapsed()))
+                        .into_any_element(),
+                };
                 let icon: AnyElement = match agent.state {
                     State::Running => match color {
                         Some(color) => Spinner::new().xsmall().color(color).into_any_element(),
@@ -520,6 +574,7 @@ pub fn render(
                     State::Stopped => "Stopped".into(),
                 };
                 let (description, kind) = (agent.description.clone(), agent.kind.clone());
+                let agent_heights = agent_heights.clone();
                 // Lets UI tests find each row; inert in normal builds.
                 gpui_kit::TestSupportExt::test_support(h_flex().id(("subagent", ix)))
                     .flex_none()
@@ -531,15 +586,35 @@ pub fn render(
                     .text_sm()
                     .child(div().flex_none().child(icon))
                     .child(
+                        Icon::new(kind_icon)
+                            .xsmall()
+                            .flex_none()
+                            .text_color(theme.muted_foreground),
+                    )
+                    .child(
                         div()
                             .flex_1()
                             .min_w_0()
                             .truncate()
-                            .when(agent.state != State::Running, |this| {
-                                this.text_color(theme.muted_foreground)
+                            .when(agent.task == Kind::Command, |this| {
+                                this.font_family(theme.mono_font_family.clone())
                             })
+                            .when(!running, |this| this.text_color(theme.muted_foreground))
                             .child(agent.description.clone()),
                     )
+                    .child(div().flex_none().child(trailing))
+                    .on_hover(move |hovered, window, _| {
+                        let was = agent_heights.0.get().hovered_agent;
+                        let now = match (*hovered, was) {
+                            (true, _) => Some(ix),
+                            (false, Some(was)) if was == ix => None,
+                            (false, was) => was,
+                        };
+                        if now != was {
+                            agent_heights.update(|heights| heights.hovered_agent = now);
+                            window.refresh();
+                        }
+                    })
                     .tooltip(move |window, cx| {
                         let (description, kind, state) =
                             (description.clone(), kind.clone(), state.clone());
@@ -549,8 +624,8 @@ pub fn render(
                             v_flex()
                                 .child(description.clone())
                                 .child(div().text_color(muted).child(match &kind {
-                                    Some(kind) => format!("{kind} · {state}"),
-                                    None => state.to_string(),
+                                    Some(kind) => format!("{kind_name} · {kind} · {state}"),
+                                    None => format!("{kind_name} · {state}"),
                                 }))
                                 .child(
                                     div()
@@ -748,7 +823,7 @@ pub fn render(
                     .on_prepaint(laid(|heights, height| heights.laid_subagents = height))
                     .child(find(
                         "subagents-header",
-                        crate::sidebar::header("Subagents", panel_body, cx),
+                        crate::sidebar::header("Subagents and commands", panel_body, cx),
                     ))
                     .child(body("subagents", layout.subagents_scroll, agents_list, cx))
                     .child(handle(PanelEdge::Subagents, "subagents-resize")),
