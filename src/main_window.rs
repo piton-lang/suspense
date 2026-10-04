@@ -1589,7 +1589,6 @@ impl MainWindow {
             }
         }
         self.tour = Some(Tour::new());
-        walkthrough::set_showing(true, cx);
         self.show_tour_step(window, cx);
     }
 
@@ -1651,7 +1650,6 @@ impl MainWindow {
         if self.tour.take().is_none() {
             return;
         }
-        walkthrough::set_showing(false, cx);
         walkthrough::preference::set_taken();
         if done {
             let chat = self.prompt_mode.read(cx).chat_input_view();
@@ -2029,6 +2027,7 @@ impl Render for MainWindow {
             .text_color(cx.theme().foreground)
             // Painted first: what overlapping hit areas are, afresh.
             .child(crate::hit_areas::frame_start())
+            .child(crate::walkthrough::frame_start())
             .on_action(cx.listener(|this, _: &Dismiss, window, cx| {
                 // The context-less Esc binding outranks the palette's own, so
                 // the palette's Esc is handled here.
@@ -5066,7 +5065,14 @@ mod tests {
             // The callout sits beneath the Project tab it points at.
             let tab = window.find(("ribbon-tab", 0usize)).bounds();
             let callout = window.find("walkthrough-callout").bounds();
-            assert!(callout.top() > tab.bottom(), "{callout:?} isn't beneath {tab:?}");
+            // 12 pixels beneath the cut-out, itself 4 pixels around the tab,
+            // and centred on it, unless slid in from the window's edge.
+            assert_eq!(callout.top(), tab.bottom() + gpui_kit::px(16.), "{callout:?} beside {tab:?}");
+            assert!(
+                (callout.center().x - tab.center().x).abs() < gpui_kit::px(1.)
+                    || callout.left() == gpui_kit::px(16.),
+                "{callout:?} isn't centred on {tab:?}"
+            );
             // Clicking the dimmed window does nothing.
             window.click_at("walkthrough", gpui_kit::point(gpui_kit::px(600.), gpui_kit::px(400.)), cx);
         })
@@ -5113,8 +5119,20 @@ mod tests {
             main.update(cx, |main, cx| {
                 main.tour_next(window, cx);
                 assert_eq!(main.tour.as_ref().map(|tour| tour.step()), Some(Step::Ready));
-                main.tour_next(window, cx);
             })
+        })
+        .unwrap();
+        frame(cx);
+        // The text box, at the window's foot, once the cut-out has eased
+        // there: the callout above it, 12 pixels from the cut-out 4 pixels
+        // around it.
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let text_box = window.find("prompt-box").bounds();
+            let callout = window.find("walkthrough-callout").bounds();
+            assert_eq!(callout.bottom(), text_box.top() - gpui_kit::px(16.), "{callout:?} beside {text_box:?}");
+            main.update(cx, |main, cx| main.tour_next(window, cx));
         })
         .unwrap();
         frame(cx);

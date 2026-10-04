@@ -15,7 +15,6 @@ use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonRounded, Bu
 use gpui_kit::component::{ActiveTheme, Icon, Sizable as _, Size, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use gpui_kit::base::ElementExt as _;
 
 use crate::activity::{Job, RevealJob};
 use crate::project_directory::ProjectDirectory;
@@ -543,7 +542,7 @@ impl Ribbon {
             Command::NewProject => div()
                 .flex()
                 .flex_none()
-                .on_prepaint(crate::walkthrough::note(
+                .child(crate::walkthrough::mark(
                     crate::walkthrough::Target::NewProject,
                 ))
                 .child(project_tab::new_project(button))
@@ -696,7 +695,7 @@ impl Render for Ribbon {
                     .when(!open, |this| this.hover(|this| this.bg(hover)))
                     // The walkthrough points at the Project tab.
                     .when(tab == RibbonTab::Project, |this| {
-                        this.on_prepaint(crate::walkthrough::note(
+                        this.child(crate::walkthrough::mark(
                             crate::walkthrough::Target::ProjectTab,
                         ))
                     })

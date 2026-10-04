@@ -642,12 +642,16 @@ pub mod preference {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use std::sync::atomic::{AtomicU64, Ordering};
 
     use serde_json::json;
+    #[cfg(unix)]
     use sha2::{Digest as _, Sha256};
 
-    use super::{Release, apply, download, newest, sequence, staged, staged_version, writable};
+    #[cfg(unix)]
+    use super::{Release, download};
+    use super::{apply, newest, sequence, staged, staged_version, writable};
 
     #[test]
     fn versions_are_compared_by_number() {

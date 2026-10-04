@@ -192,7 +192,7 @@ impl RunView {
         })
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub fn status(&self) -> Option<RunStatus> {
         match &self.holding {
             Holding::Running { status, .. } => Some(*status),
@@ -200,7 +200,7 @@ impl RunView {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub fn lines(&self) -> Vec<SharedString> {
         match &self.holding {
             Holding::Running { lines, .. } => lines.iter().map(|line| line.text.clone()).collect(),
@@ -744,7 +744,9 @@ pub mod tests {
     use gpui_kit::component::Root;
     use gpui_kit::{AppContext as _, TestAppContext};
 
-    use super::{RunStatus, RunView, TargetsFound};
+    #[cfg(unix)]
+    use super::RunStatus;
+    use super::{RunView, TargetsFound};
     use crate::divergence::Cancel;
     use crate::run_targets::{self, Kind, Target};
 

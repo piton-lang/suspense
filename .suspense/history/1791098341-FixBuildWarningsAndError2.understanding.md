@@ -1,0 +1,5 @@
+- [The code and its tests compile on Linux, Windows, and macOS with no compiler warnings](.claude/reference/scope/edge-releases/index.md#builds)
+- [Platform-specific code, as a differing system call or an import only one platform uses, is written per platform and gated to it](.claude/reference/scope/edge-releases/index.md#builds)
+- [No deprecated function is called where its replacement is available](.claude/reference/scope/edge-releases/index.md#builds)
+- [Each CI job denies warnings in its build and tests, so a warning fails the job and nothing is published](.claude/reference/scope/edge-releases/index.md#builds)
+- [A build script's own notes are not compiler warnings and don't fail the job](.claude/reference/scope/edge-releases/index.md#builds)

@@ -4,11 +4,13 @@
 //! prompt modes one by one.
 //!
 //! The parts it points at say where they are as they are laid out, through
-//! [`note`]; the window showing the walkthrough keeps a [`Tour`] and draws
+//! [`mark`]; the window showing the walkthrough keeps a [`Tour`] and draws
 //! it over everything with [`overlay`], selecting what each step points at
 //! before it shows.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -27,14 +29,15 @@ const CUT_OUT_RADIUS: Pixels = px(6.);
 const MOVE: Duration = Duration::from_millis(200);
 /// The callout's widest.
 const CALLOUT_WIDTH: Pixels = px(320.);
-/// About how tall a callout is, to place it where it fits.
-const CALLOUT_HEIGHT: Pixels = px(200.);
-/// How far the callout stands from the part it points at.
+/// How far the callout stands from the cut-out.
 const GAP: Pixels = px(12.);
 /// How far the callout keeps from the window's edges.
-const MARGIN: Pixels = px(8.);
-/// The pointer's size.
-const POINTER: Pixels = px(10.);
+const MARGIN: Pixels = px(16.);
+/// The pointer's width along the card's edge, and how far it reaches out.
+const POINTER_WIDTH: Pixels = px(12.);
+const POINTER_DEPTH: Pixels = px(6.);
+/// How near the pointer comes to the card's corners.
+const POINTER_INSET: Pixels = px(12.);
 
 /// A part of the window a step points at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -53,32 +56,55 @@ pub enum Target {
     TextBox,
 }
 
-/// Where each part was last laid out, and whether a walkthrough shows.
+/// Where each part was laid out, and in which frame.
 #[derive(Default)]
 struct Targets {
-    bounds: HashMap<Target, Bounds<Pixels>>,
-    showing: bool,
+    bounds: HashMap<Target, (Bounds<Pixels>, u64)>,
+    /// Counts the frames, so only where a part is laid out in this frame is
+    /// taken.
+    frame: u64,
 }
 
 impl Global for Targets {}
 
-/// Notes where `target` is as it is laid out, for an element's
-/// `on_prepaint`; while a walkthrough shows, a part that moved draws it again.
-pub fn note(target: Target) -> impl Fn(Bounds<Pixels>, &mut Window, &mut App) + 'static {
-    move |bounds, window, cx| {
-        let targets = cx.default_global::<Targets>();
-        if targets.bounds.get(&target) != Some(&bounds) {
-            targets.bounds.insert(target, bounds);
-            if targets.showing {
-                window.refresh();
-            }
-        }
-    }
+/// Marks its parent as `target`: a child covering the parent edge to edge,
+/// padding and all, that notes where the parent is laid out, in the
+/// window's coordinates, in this frame. It takes no room and no mouse.
+pub fn mark(target: Target) -> impl IntoElement {
+    canvas(
+        move |bounds, _, cx| {
+            let targets = cx.default_global::<Targets>();
+            let frame = targets.frame;
+            targets.bounds.insert(target, (bounds, frame));
+        },
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .bottom_0()
+    .right_0()
 }
 
-/// Where `target` was last laid out.
+/// Starts a frame: painted first in the window, before any part it points
+/// at, so a part not laid out in this frame isn't pointed at where it was.
+pub fn frame_start() -> impl IntoElement {
+    canvas(
+        |_, _, cx| {
+            let targets = cx.default_global::<Targets>();
+            targets.frame += 1;
+        },
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .size_0()
+}
+
+/// Where `target` is laid out in this frame, in the window's coordinates.
 fn bounds_of(target: Target, cx: &App) -> Option<Bounds<Pixels>> {
-    cx.try_global::<Targets>()?.bounds.get(&target).copied()
+    let targets = cx.try_global::<Targets>()?;
+    let (bounds, frame) = targets.bounds.get(&target)?;
+    (*frame == targets.frame).then_some(*bounds)
 }
 
 /// A step, in order.
@@ -205,7 +231,12 @@ pub struct Tour {
     /// The project has been created, or the open one taken: the steps that
     /// create it are passed over.
     created: bool,
-    /// The cut-out as it moves: where from, where to, and since when.
+    /// The cut-out as it moves, kept as it is drawn.
+    motion: Rc<RefCell<Motion>>,
+}
+
+/// The cut-out as it moves: where from, where to, and since when.
+struct Motion {
     from: Option<Bounds<Pixels>>,
     to: Option<Bounds<Pixels>>,
     moved_at: Instant,
@@ -223,9 +254,11 @@ impl Tour {
         Self {
             step: Step::Projects,
             created: false,
-            from: None,
-            to: None,
-            moved_at: Instant::now(),
+            motion: Rc::new(RefCell::new(Motion {
+                from: None,
+                to: None,
+                moved_at: Instant::now(),
+            })),
         }
     }
 
@@ -265,6 +298,9 @@ impl Tour {
         })
     }
 
+}
+
+impl Motion {
     /// Where the cut-out is now, moving toward `target`; whether it is
     /// still moving.
     fn cut_out(&mut self, target: Option<Bounds<Pixels>>) -> (Option<Bounds<Pixels>>, bool) {
@@ -306,137 +342,290 @@ pub struct Actions {
     pub use_open_project: Option<Box<dyn Fn(&mut Window, &mut App)>>,
 }
 
-/// Marks a walkthrough as showing, or not, so the parts it points at draw
-/// it again as they move.
-pub fn set_showing(showing: bool, cx: &mut App) {
-    cx.default_global::<Targets>().showing = showing;
-}
-
 /// The walkthrough over the window: dimmed but for the cut-out around the
 /// step's part, which alone takes the mouse with the callout beside it.
 pub fn overlay(tour: &mut Tour, actions: Actions, window: &mut Window, cx: &App) -> AnyElement {
     let step = tour.step;
-    let target = step
-        .targets()
-        .into_iter()
-        .filter_map(|target| bounds_of(target, cx))
-        .reduce(|a, b| a.union(&b))
-        .map(|bounds| bounds.dilate(ROOM));
-    let (cut, moving) = tour.cut_out(target);
-    if moving || cut.is_none() {
-        window.request_animation_frame();
-    }
-    let viewport = window.viewport_size();
     let theme = cx.theme();
-    let dim = crate::theme::dimming(cx);
     let accent = step
         .mode()
         .map_or(theme.ring, |mode| chat_input::mode_color(mode, cx));
-    // The dimmed window, in four pieces around the cut-out, each taking the
-    // mouse and doing nothing with it.
-    let shade = |left: Pixels, top: Pixels, width: Pixels, height: Pixels| {
-        div()
-            .absolute()
-            .left(left)
-            .top(top)
-            .w(width.max(px(0.)))
-            .h(height.max(px(0.)))
-            .bg(dim)
-            .occlude()
-    };
-    let mut layer = div()
-        .id("walkthrough")
-        .absolute()
-        .top_0()
-        .left_0()
-        .size_full();
-    match cut {
-        Some(cut) => {
-            let (l, t, r, b) = (cut.left(), cut.top(), cut.right(), cut.bottom());
-            layer = layer
-                .child(shade(px(0.), px(0.), viewport.width, t))
-                .child(shade(px(0.), b, viewport.width, viewport.height - b))
-                .child(shade(px(0.), t, l, b - t))
-                .child(shade(r, t, viewport.width - r, b - t))
-                .child(
-                    div()
-                        .absolute()
-                        .left(l)
-                        .top(t)
-                        .w(cut.size.width)
-                        .h(cut.size.height)
-                        .rounded(CUT_OUT_RADIUS)
-                        .border_2()
-                        .border_color(accent),
-                );
-        }
-        None => layer = layer.child(shade(px(0.), px(0.), viewport.width, viewport.height)),
-    }
-    let anchor = cut.unwrap_or(Bounds {
-        origin: point(viewport.width / 2., viewport.height / 2.),
-        size: Size::default(),
-    });
-    let (position, side) = place(anchor, viewport);
-    let layer = layer.child(callout(
-        step,
-        tour.back().is_some(),
-        actions,
-        position,
-        side,
-        anchor,
+    let width = CALLOUT_WIDTH.min(window.viewport_size().width - MARGIN * 2.);
+    let card = callout(step, tour.back().is_some(), actions, width, accent, cx);
+    let spotlight = Spotlight {
+        targets: step.targets(),
+        motion: tour.motion.clone(),
         accent,
-        cx,
-    ));
+        dim: crate::theme::dimming(cx),
+        surface: theme.popover,
+        border: theme.border,
+        callout: Some(card),
+    };
     // Lets UI tests find the walkthrough; inert in normal builds.
-    gpui_kit::TestSupportExt::test_support(layer).into_any_element()
+    gpui_kit::TestSupportExt::test_support(div().id("walkthrough").absolute().inset_0().child(spotlight))
+        .into_any_element()
 }
 
-/// Which side of its part the callout sits on.
+/// Which side of its cut-out the callout sits on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Side {
     Below,
     Above,
     Right,
     Left,
+    /// No side has room, as for a panel filling the window: over it.
     Over,
 }
 
-/// Where the callout goes beside `part`, in a window `viewport` big: on
-/// whichever side has room, below first, never off the window.
-pub fn place(part: Bounds<Pixels>, viewport: Size<Pixels>) -> (Point<Pixels>, Side) {
-    let fits_x = |x: Pixels| x.max(MARGIN).min(viewport.width - CALLOUT_WIDTH - MARGIN);
-    let fits_y = |y: Pixels| y.max(MARGIN).min(viewport.height - CALLOUT_HEIGHT - MARGIN);
-    let centre_x = part.center().x - CALLOUT_WIDTH / 2.;
-    let centre_y = part.center().y - CALLOUT_HEIGHT / 2.;
-    let (at, side) = if viewport.height - part.bottom() >= CALLOUT_HEIGHT + GAP + MARGIN {
-        (point(centre_x, part.bottom() + GAP), Side::Below)
-    } else if part.top() >= CALLOUT_HEIGHT + GAP + MARGIN {
-        (point(centre_x, part.top() - GAP - CALLOUT_HEIGHT), Side::Above)
-    } else if viewport.width - part.right() >= CALLOUT_WIDTH + GAP + MARGIN {
-        (point(part.right() + GAP, centre_y), Side::Right)
-    } else if part.left() >= CALLOUT_WIDTH + GAP + MARGIN {
-        (point(part.left() - GAP - CALLOUT_WIDTH, centre_y), Side::Left)
+/// Where a callout `card` big goes beside `cut`, in a window `viewport`
+/// big: beneath, above, right, or left, the first side it fits on whole,
+/// 12 pixels from the cut-out, centred on it along that side, slid to stay
+/// 16 pixels inside the window.
+pub fn place(cut: Bounds<Pixels>, card: Size<Pixels>, viewport: Size<Pixels>) -> (Point<Pixels>, Side) {
+    let slide_x = |x: Pixels| x.min(viewport.width - MARGIN - card.width).max(MARGIN);
+    let slide_y = |y: Pixels| y.min(viewport.height - MARGIN - card.height).max(MARGIN);
+    let centred_x = slide_x(cut.center().x - card.width / 2.);
+    let centred_y = slide_y(cut.center().y - card.height / 2.);
+    let fits_tall = card.height + MARGIN * 2. <= viewport.height;
+    let fits_wide = card.width + MARGIN * 2. <= viewport.width;
+    if fits_wide && cut.bottom() + GAP + card.height <= viewport.height - MARGIN {
+        (point(centred_x, cut.bottom() + GAP), Side::Below)
+    } else if fits_wide && cut.top() - GAP - card.height >= MARGIN {
+        (point(centred_x, cut.top() - GAP - card.height), Side::Above)
+    } else if fits_tall && cut.right() + GAP + card.width <= viewport.width - MARGIN {
+        (point(cut.right() + GAP, centred_y), Side::Right)
+    } else if fits_tall && cut.left() - GAP - card.width >= MARGIN {
+        (point(cut.left() - GAP - card.width, centred_y), Side::Left)
     } else {
-        // A part as big as the window, as a panel: over it, near its foot.
+        // Over it, near its foot, inside the window.
         (
             point(
-                part.right() - CALLOUT_WIDTH - px(24.),
-                part.bottom() - CALLOUT_HEIGHT - px(24.),
+                slide_x(cut.right() - card.width - MARGIN * 2.),
+                slide_y(cut.bottom() - card.height - MARGIN * 2.),
             ),
             Side::Over,
         )
-    };
-    (point(fits_x(at.x), fits_y(at.y)), side)
+    }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// The pointer's three corners, on the edge of a callout at `card` facing
+/// the cut-out on `side`, aimed at `cut`'s centre, kept 12 pixels from the
+/// card's corners: its base's two ends, then its tip.
+pub fn pointer(card: Bounds<Pixels>, cut: Bounds<Pixels>, side: Side) -> Option<[Point<Pixels>; 3]> {
+    let half = POINTER_WIDTH / 2.;
+    let along_x = cut
+        .center()
+        .x
+        .max(card.left() + POINTER_INSET + half)
+        .min(card.right() - POINTER_INSET - half);
+    let along_y = cut
+        .center()
+        .y
+        .max(card.top() + POINTER_INSET + half)
+        .min(card.bottom() - POINTER_INSET - half);
+    Some(match side {
+        Side::Below => [
+            point(along_x - half, card.top()),
+            point(along_x + half, card.top()),
+            point(along_x, card.top() - POINTER_DEPTH),
+        ],
+        Side::Above => [
+            point(along_x - half, card.bottom()),
+            point(along_x + half, card.bottom()),
+            point(along_x, card.bottom() + POINTER_DEPTH),
+        ],
+        Side::Right => [
+            point(card.left(), along_y - half),
+            point(card.left(), along_y + half),
+            point(card.left() - POINTER_DEPTH, along_y),
+        ],
+        Side::Left => [
+            point(card.right(), along_y - half),
+            point(card.right(), along_y + half),
+            point(card.right() + POINTER_DEPTH, along_y),
+        ],
+        Side::Over => return None,
+    })
+}
+
+/// The dimming, the cut-out, and the callout, placed as the window is laid
+/// out in this frame: the cut-out from where its part is laid out, in the
+/// window's own coordinates, and the callout beside it at its measured size.
+struct Spotlight {
+    targets: Vec<Target>,
+    motion: Rc<RefCell<Motion>>,
+    accent: Hsla,
+    dim: Hsla,
+    surface: Hsla,
+    border: Hsla,
+    callout: Option<AnyElement>,
+}
+
+/// What a spotlight placed, to paint it.
+struct Placed {
+    cut: Option<Bounds<Pixels>>,
+    card: Bounds<Pixels>,
+    side: Side,
+    shades: Vec<Bounds<Pixels>>,
+}
+
+impl IntoElement for Spotlight {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
+
+impl Element for Spotlight {
+    type RequestLayoutState = ();
+    type PrepaintState = Placed;
+
+    fn id(&self) -> Option<ElementId> {
+        None
+    }
+
+    fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, Self::RequestLayoutState) {
+        let mut style = Style {
+            position: Position::Absolute,
+            ..Style::default()
+        };
+        style.inset = Edges::all(px(0.).into());
+        style.size = size(relative(1.).into(), relative(1.).into());
+        (window.request_layout(style, [], cx), ())
+    }
+
+    fn prepaint(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        _: Bounds<Pixels>,
+        _: &mut Self::RequestLayoutState,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self::PrepaintState {
+        let viewport = window.viewport_size();
+        // Where the parts are laid out in this frame, before this.
+        let target = self
+            .targets
+            .iter()
+            .filter_map(|target| bounds_of(*target, cx))
+            .reduce(|a, b| a.union(&b))
+            .map(|bounds| bounds.dilate(ROOM));
+        let (cut, moving) = self.motion.borrow_mut().cut_out(target);
+        if moving {
+            window.request_animation_frame();
+        }
+        let whole = Bounds::new(point(px(0.), px(0.)), viewport);
+        let shades = match cut {
+            Some(cut) => vec![
+                Bounds::from_corners(point(px(0.), px(0.)), point(viewport.width, cut.top())),
+                Bounds::from_corners(point(px(0.), cut.bottom()), point(viewport.width, viewport.height)),
+                Bounds::from_corners(point(px(0.), cut.top()), point(cut.left(), cut.bottom())),
+                Bounds::from_corners(point(cut.right(), cut.top()), point(viewport.width, cut.bottom())),
+            ],
+            None => vec![whole],
+        };
+        // The dimmed window takes the mouse, and does nothing with it.
+        for shade in &shades {
+            window.insert_hitbox(*shade, HitboxBehavior::BlockMouse);
+        }
+        let anchor = cut.unwrap_or(Bounds::new(
+            point(viewport.width / 2., viewport.height / 2.),
+            Size::default(),
+        ));
+        let Some(callout) = self.callout.as_mut() else {
+            return Placed {
+                cut,
+                card: Bounds::default(),
+                side: Side::Over,
+                shades,
+            };
+        };
+        let measured = callout.layout_as_root(
+            size(AvailableSpace::MinContent, AvailableSpace::MinContent),
+            window,
+            cx,
+        );
+        let (origin, side) = place(anchor, measured, viewport);
+        callout.prepaint_at(origin, window, cx);
+        Placed {
+            cut,
+            card: Bounds::new(origin, measured),
+            side,
+            shades,
+        }
+    }
+
+    fn paint(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        _: Bounds<Pixels>,
+        _: &mut Self::RequestLayoutState,
+        placed: &mut Self::PrepaintState,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        for shade in &placed.shades {
+            window.paint_quad(fill(*shade, self.dim));
+        }
+        if let Some(cut) = placed.cut {
+            window.paint_quad(quad(
+                cut,
+                CUT_OUT_RADIUS,
+                transparent_black(),
+                px(2.),
+                self.accent,
+                BorderStyle::default(),
+            ));
+        }
+        if let Some(callout) = self.callout.as_mut() {
+            callout.paint(window, cx);
+        }
+        // The pointer over the card's edge, in its colour, with its border
+        // along the two sides that stand out.
+        if let Some(cut) = placed.cut
+            && let Some([a, b, tip]) = pointer(placed.card, cut, placed.side)
+        {
+            let mut fill = PathBuilder::fill();
+            fill.move_to(a);
+            fill.line_to(tip);
+            fill.line_to(b);
+            fill.close();
+            if let Ok(path) = fill.build() {
+                window.paint_path(path, self.surface);
+            }
+            let mut line = PathBuilder::stroke(px(1.));
+            line.move_to(a);
+            line.line_to(tip);
+            line.line_to(b);
+            if let Ok(path) = line.build() {
+                window.paint_path(path, self.border);
+            }
+        }
+    }
+}
+
+/// The callout's card, `width` wide: with 16 pixels of padding, left
+/// aligned, the title, its text 8 pixels beneath, and 12 pixels beneath
+/// that the footer, Skip tour at its left, and at its right, 8 pixels
+/// apart, where the step is, Back, and Next.
 fn callout(
     step: Step,
     has_back: bool,
     actions: Actions,
-    position: Point<Pixels>,
-    side: Side,
-    part: Bounds<Pixels>,
+    width: Pixels,
     accent: Hsla,
     cx: &App,
 ) -> AnyElement {
@@ -449,88 +638,74 @@ fn callout(
     } = actions;
     let last = step == Step::Ready;
     let count = Step::ALL.len();
+    // A mode's step reads in its mode's colour.
     let title_color = step.mode().map_or(theme.foreground, |_| accent);
-    let surface = theme.popover;
-    // A small square, half beneath the card's edge, toward the part.
-    let pointer = {
-        let along_x = (part.center().x - position.x - POINTER / 2.)
-            .max(px(12.))
-            .min(CALLOUT_WIDTH - px(12.) - POINTER);
-        let along_y = (part.center().y - position.y - POINTER / 2.).max(px(12.)).min(px(60.));
-        let nub = div()
-            .absolute()
-            .size(POINTER)
-            .bg(surface)
-            .border_color(theme.border);
-        match side {
-            Side::Below => Some(nub.top(-POINTER / 2.).left(along_x).border_t_1().border_l_1()),
-            Side::Above => Some(nub.bottom(-POINTER / 2.).left(along_x).border_b_1().border_r_1()),
-            Side::Right => Some(nub.left(-POINTER / 2.).top(along_y).border_l_1().border_b_1()),
-            Side::Left => Some(nub.right(-POINTER / 2.).top(along_y).border_r_1().border_t_1()),
-            Side::Over => None,
-        }
-    };
     let card = v_flex()
         .id("walkthrough-callout")
-        .absolute()
-        .left(position.x)
-        .top(position.y)
-        .max_w(CALLOUT_WIDTH)
-        .w(CALLOUT_WIDTH)
+        .w(width)
+        .items_start()
         .p_4()
-        .gap_3()
         .rounded(px(8.))
         .border_1()
         .border_color(theme.border)
-        .bg(surface)
+        .bg(theme.popover)
         .text_color(theme.popover_foreground)
         .shadow_lg()
         .occlude()
-        .children(pointer)
         .child(
             div()
                 .font_semibold()
                 .text_color(title_color)
                 .child(step.title()),
         )
-        .child(div().text_sm().child(step.text()))
+        .child(div().mt_2().w_full().text_sm().child(step.text()))
         .children(use_open_project.map(|use_open| {
-            Button::new("walkthrough-use-open-project")
-                .small()
-                .label("Use the open project")
-                .on_click(move |_, window, cx| use_open(window, cx))
+            div().mt_3().child(
+                Button::new("walkthrough-use-open-project")
+                    .small()
+                    .label("Use the open project")
+                    .on_click(move |_, window, cx| use_open(window, cx)),
+            )
         }))
         .child(
-            div()
-                .text_xs()
-                .text_color(theme.muted_foreground)
-                .child(format!("Step {} of {count}", step.index() + 1)),
-        )
-        .child(
             h_flex()
-                .gap_2()
+                .mt_3()
+                .w_full()
+                .items_center()
                 .child(
                     Button::new("walkthrough-skip")
                         .link()
                         .small()
+                        .text_color(theme.muted_foreground)
                         .label("Skip tour")
                         .on_click(move |_, window, cx| skip(window, cx)),
                 )
                 .child(div().flex_1())
                 .child(
-                    Button::new("walkthrough-back")
-                        .small()
-                        .label("Back")
-                        .disabled(!has_back)
-                        .on_click(move |_, window, cx| back(window, cx)),
-                )
-                .child(
-                    Button::new("walkthrough-next")
-                        .small()
-                        .primary()
-                        .label(if last { "Done" } else { "Next" })
-                        .disabled(!step.can_go_on())
-                        .on_click(move |_, window, cx| next(window, cx)),
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.muted_foreground)
+                                .child(format!("Step {} of {count}", step.index() + 1)),
+                        )
+                        .child(
+                            Button::new("walkthrough-back")
+                                .small()
+                                .label("Back")
+                                .disabled(!has_back)
+                                .on_click(move |_, window, cx| back(window, cx)),
+                        )
+                        .child(
+                            Button::new("walkthrough-next")
+                                .small()
+                                .primary()
+                                .label(if last { "Done" } else { "Next" })
+                                .disabled(!step.can_go_on())
+                                .on_click(move |_, window, cx| next(window, cx)),
+                        ),
                 ),
         );
     gpui_kit::TestSupportExt::test_support(card).into_any_element()
@@ -570,7 +745,7 @@ pub mod preference {
 mod tests {
     use gpui_kit::{Bounds, point, px, size};
 
-    use super::{Side, Step, Tour, place};
+    use super::{Side, Step, Tour, place, pointer};
 
     #[test]
     fn steps_go_on_and_back_past_the_project_once_it_exists() {
@@ -594,17 +769,31 @@ mod tests {
     #[test]
     fn the_callout_goes_where_it_fits() {
         let window = size(px(1200.), px(800.));
-        let tab = Bounds::new(point(px(100.), px(10.)), size(px(60.), px(24.)));
-        let (at, side) = place(tab, window);
+        let card = size(px(320.), px(180.));
+        let tab = Bounds::new(point(px(400.), px(10.)), size(px(60.), px(24.)));
+        let (at, side) = place(tab, card, window);
         assert_eq!(side, Side::Below);
-        assert!(at.y > px(34.));
+        // 12 pixels beneath, centred on it.
+        assert_eq!(at.y, px(46.));
+        assert_eq!(at.x + px(160.), tab.center().x);
         let bottom = Bounds::new(point(px(100.), px(700.)), size(px(400.), px(60.)));
-        assert_eq!(place(bottom, window).1, Side::Above);
-        // Never off the window.
-        let corner = Bounds::new(point(px(1190.), px(10.)), size(px(10.), px(10.)));
-        let (at, _) = place(corner, window);
-        assert!(at.x + px(320.) <= px(1200.));
-        let panel = Bounds::new(point(px(32.), px(32.)), size(px(1136.), px(736.)));
-        assert_eq!(place(panel, window).1, Side::Over);
+        let (at, side) = place(bottom, card, window);
+        assert_eq!(side, Side::Above);
+        assert_eq!(at.y + card.height, px(688.));
+        // Slid to stay 16 pixels in, the pointer still at the part's centre.
+        let corner = Bounds::new(point(px(1180.), px(10.)), size(px(10.), px(10.)));
+        let (at, side) = place(corner, card, window);
+        assert_eq!(at.x + px(320.), px(1184.));
+        let tip = pointer(Bounds::new(at, card), corner, side).unwrap()[2];
+        assert_eq!(tip.y, at.y - px(6.));
+        assert!(tip.x <= px(1184.) - px(18.));
+        let centred = Bounds::new(point(px(400.), px(10.)), size(px(60.), px(24.)));
+        let (at, side) = place(centred, card, window);
+        let [a, b, tip] = pointer(Bounds::new(at, card), centred, side).unwrap();
+        assert_eq!(tip.x, centred.center().x);
+        assert_eq!(b.x - a.x, px(12.));
+        // A panel filling the window: over it.
+        let panel = Bounds::new(point(px(28.), px(28.)), size(px(1144.), px(744.)));
+        assert_eq!(place(panel, card, window).1, Side::Over);
     }
 }

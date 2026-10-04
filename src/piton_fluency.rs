@@ -87,7 +87,7 @@ fn print_prompt(program: &str, project_dir: &Path) -> String {
 mod tests {
     use std::path::Path;
 
-    use super::{file, print_prompt, write_with};
+    use super::print_prompt;
 
     /// Without `piton`, the fluency is empty rather than an error.
     #[test]
@@ -109,6 +109,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn the_fluency_is_written_to_its_file() {
+        use super::{file, write_with};
         use std::os::unix::fs::PermissionsExt as _;
         let dir = std::env::temp_dir().join(format!("suspense-fluency-{}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();

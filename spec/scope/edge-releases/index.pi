@@ -51,6 +51,18 @@ shape EdgeReleasesShape:
         needs them. The Windows binary is a GUI application, opening no
         console of its own, as the @{ApplicationScope} says.
 
+        The code compiles, its tests included, on each of the three
+        platforms, with no compiler warnings on any of them. What differs
+        between platforms, as a system call whose signature differs between
+        Linux and macOS, or an import only one platform uses, is written for
+        each platform it builds on, and gated to the platforms that use it,
+        so nothing is unused or mistyped on another. No deprecated function
+        is called where its replacement is available. Each job denies
+        warnings in its build and its tests, so a warning fails the job, and
+        no edge release is published, as for an error. A build script's own
+        notes, as one saying where the default prompts were taken from, are
+        not compiler warnings, and don't fail it.
+
     publishing:
         Once every platform's job has succeeded, one GitHub release is
         published for the commit, tagged `v0.1.N` on that commit, titled

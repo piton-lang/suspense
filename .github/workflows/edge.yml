@@ -54,6 +54,10 @@ jobs:
       # its releases.
       SUSPENSE_REPOSITORY: ${{ github.repository }}
       ARCHIVE: suspense-${{ needs.version.outputs.version }}-${{ matrix.platform }}
+      # A compiler warning, in the build or its tests, fails the job, as an
+      # error does. Dependencies' own lints are capped by cargo, and a build
+      # script's notes aren't compiler warnings.
+      RUSTFLAGS: -D warnings
     steps:
       - uses: actions/checkout@v4
 

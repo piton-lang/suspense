@@ -13423,7 +13423,7 @@ mod tests {
             )
         });
         assert_eq!(shown(cx), Some(42_100));
-        cx.update_window(handle, |_, window, cx| {
+        cx.update_window(handle, |_, window, _| {
             assert!(window.find("chat-context").visible());
         })
         .unwrap();
@@ -16888,7 +16888,7 @@ mod tests {
             cx.run_until_parked();
             cx.update_window(handle, |_, window, cx| {
                 window.render_frame(cx);
-                let mut menu = window.within("popup-menu");
+                let menu = window.within("popup-menu");
                 assert!(menu.try_find(1usize).is_none(), "more than one item");
                 menu.find(0usize)
                     .label()
@@ -17561,7 +17561,6 @@ mod tests {
         use crate::chat_input::SendMode;
         use crate::hidden_anchor::CodeTask;
         use crate::system_prompts;
-        use std::os::unix::fs::PermissionsExt as _;
         if crate::piton_build::piton_missing() {
             return;
         }
@@ -18015,10 +18014,10 @@ mod tests {
     /// spec step said; with Post-Build Spec Update on, the code step then
     /// goes to Spec, as a Code task sent to Spec does. Each step knows the
     /// one it was sent from.
+    #[cfg(unix)]
     #[gpui_kit::test]
     async fn chains_are_sent_as_their_steps(cx: &mut TestAppContext) {
         use crate::chat_input::SendMode;
-        use std::os::unix::fs::PermissionsExt as _;
         if crate::piton_build::piton_missing() {
             return;
         }
@@ -18318,6 +18317,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    #[cfg(unix)]
     fn recording_harness(dir: &std::path::Path, finishes: bool) -> (PathBuf, PathBuf) {
         use std::os::unix::fs::PermissionsExt as _;
         let runs = dir.join("runs");
@@ -18357,6 +18357,7 @@ mod tests {
 
     /// Run `n` of a [`recording_harness`]: the message it was sent, as text,
     /// and the system prompt it was given, if any.
+    #[cfg(unix)]
     fn recorded_run(runs: &std::path::Path, n: usize) -> (String, Option<String>) {
         let sent = std::fs::read_to_string(runs.join(n.to_string())).unwrap();
         // Fed, the message is a stream-json user message.
@@ -18372,6 +18373,7 @@ mod tests {
     }
 
     /// The instructions heading a message, between their markers.
+    #[cfg(unix)]
     fn instructions_in(message: &str) -> &str {
         let start = message
             .strip_prefix(&format!("{}\n", crate::system_prompts::INSTRUCTIONS_OPEN))
@@ -19481,6 +19483,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
     }
 
     /// The raw prompt `task` restored from the history shows.
+    #[cfg(unix)]
     fn raw_prompt_of(task: &PromptTask) -> crate::raw_prompt::RawPrompt {
         let compiled = task.compiled.as_ref().expect("it didn't compile");
         crate::raw_prompt::RawPrompt::new(

@@ -424,7 +424,7 @@ impl Stop {
     }
 
     /// The harness's process id, once it has started.
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub fn pid(&self) -> Option<u32> {
         self.lock().child.as_ref().map(Child::id)
     }
@@ -2650,15 +2650,19 @@ wait
                 start.elapsed() < std::time::Duration::from_secs(10),
                 "never finished"
             );
-            match events.try_next() {
-                Ok(Some(HarnessEvent::Finished { result, .. })) => {
+            match events.try_recv() {
+                Ok(HarnessEvent::Finished { result, .. }) => {
                     assert_eq!(result, "Done.");
                     assert!(exited.exists(), "finished before its process exited");
                     break;
                 }
-                Ok(Some(event)) => seen.push(event),
-                Ok(None) => panic!("the run ended without finishing: {seen:?}"),
-                Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
+                Ok(event) => seen.push(event),
+                Err(futures::channel::mpsc::TryRecvError::Closed) => {
+                    panic!("the run ended without finishing: {seen:?}")
+                }
+                Err(futures::channel::mpsc::TryRecvError::Empty) => {
+                    std::thread::sleep(std::time::Duration::from_millis(10))
+                }
             }
         }
         std::fs::remove_dir_all(&dir).ok();
@@ -2778,6 +2782,7 @@ done
     }
 
     /// Every event of a run, until it ends.
+    #[cfg(unix)]
     fn all_events(
         events: futures::channel::mpsc::UnboundedReceiver<HarnessEvent>,
     ) -> Vec<HarnessEvent> {
@@ -2787,6 +2792,7 @@ done
 
     /// The image content blocks of a stream-json user message: each image's
     /// media type and its bytes, decoded.
+    #[cfg(unix)]
     pub(crate) fn image_blocks_of(message: &serde_json::Value) -> Vec<(String, Vec<u8>)> {
         use base64::Engine as _;
         message["message"]["content"]
@@ -3194,15 +3200,19 @@ done
                 start.elapsed() < std::time::Duration::from_secs(20),
                 "never finished"
             );
-            match events.try_next() {
-                Ok(Some(HarnessEvent::Finished { result, .. })) => {
+            match events.try_recv() {
+                Ok(HarnessEvent::Finished { result, .. }) => {
                     assert_eq!(result, "Done.");
                     break;
                 }
-                Ok(Some(HarnessEvent::Failed(error))) => panic!("failed: {error}"),
-                Ok(Some(_)) => {}
-                Ok(None) => panic!("the run ended without finishing"),
-                Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
+                Ok(HarnessEvent::Failed(error)) => panic!("failed: {error}"),
+                Ok(_) => {}
+                Err(futures::channel::mpsc::TryRecvError::Closed) => {
+                    panic!("the run ended without finishing")
+                }
+                Err(futures::channel::mpsc::TryRecvError::Empty) => {
+                    std::thread::sleep(std::time::Duration::from_millis(10))
+                }
             }
         }
         let calls = std::fs::read_to_string(&log).unwrap();
@@ -3286,12 +3296,16 @@ done
                 start.elapsed() < std::time::Duration::from_secs(20),
                 "never failed"
             );
-            match events.try_next() {
-                Ok(Some(HarnessEvent::Failed(error))) => break error,
-                Ok(Some(HarnessEvent::Finished { .. })) => panic!("it finished"),
-                Ok(Some(_)) => {}
-                Ok(None) => panic!("ended without failing"),
-                Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
+            match events.try_recv() {
+                Ok(HarnessEvent::Failed(error)) => break error,
+                Ok(HarnessEvent::Finished { .. }) => panic!("it finished"),
+                Ok(_) => {}
+                Err(futures::channel::mpsc::TryRecvError::Closed) => {
+                    panic!("ended without failing")
+                }
+                Err(futures::channel::mpsc::TryRecvError::Empty) => {
+                    std::thread::sleep(std::time::Duration::from_millis(10))
+                }
             }
         };
         assert!(
@@ -3349,16 +3363,18 @@ done
                 start.elapsed() < std::time::Duration::from_secs(10),
                 "never finished: {seen:?}"
             );
-            match events.try_next() {
-                Ok(Some(HarnessEvent::Finished { is_error, result })) => {
+            match events.try_recv() {
+                Ok(HarnessEvent::Finished { is_error, result }) => {
                     assert!(!is_error, "{result}");
                     assert_eq!(result, "Answered.");
                     break;
                 }
-                Ok(Some(HarnessEvent::Failed(error))) => panic!("failed: {error}"),
-                Ok(Some(event)) => seen.push(event),
-                Ok(None) => panic!("ended: {seen:?}"),
-                Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
+                Ok(HarnessEvent::Failed(error)) => panic!("failed: {error}"),
+                Ok(event) => seen.push(event),
+                Err(futures::channel::mpsc::TryRecvError::Closed) => panic!("ended: {seen:?}"),
+                Err(futures::channel::mpsc::TryRecvError::Empty) => {
+                    std::thread::sleep(std::time::Duration::from_millis(10))
+                }
             }
         }
         assert!(

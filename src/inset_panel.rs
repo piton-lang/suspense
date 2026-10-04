@@ -10,7 +10,6 @@
 use gpui_kit::component::{ActiveTheme as _, FocusTrapElement as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use gpui_kit::base::ElementExt as _;
 
 use crate::animations::rise_in::{self, Direction};
 
@@ -63,7 +62,7 @@ pub fn inset_panel(
         .occlude()
         // The walkthrough points at the New Project form.
         .when(name == "new-project", |panel| {
-            panel.on_prepaint(crate::walkthrough::note(
+            panel.child(crate::walkthrough::mark(
                 crate::walkthrough::Target::NewProjectForm,
             ))
         })

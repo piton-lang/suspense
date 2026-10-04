@@ -33,19 +33,40 @@ shape WalkthroughShape:
         While a step shows, the window is dimmed, as an inset panel dims it,
         but for a cut-out around the part the step points at, with 4 pixels
         of room and corners rounded 6 pixels, outlined in the theme's accent,
-        so that part reads as lit. The cut-out moves to each step's part,
-        easing between them over 200 milliseconds, and follows it if the
-        window is resized.
+        so that part reads as lit. The cut-out is taken from where the part
+        is actually laid out in the window, in the window's own coordinates,
+        each frame, so it sits exactly around it, the same 4 pixels on every
+        side, never offset by the title bar, the ribbon, the display's
+        scale, or a scrolled container, and never lags a frame behind it.
+        The cut-out moves to each step's part, easing between them over 200
+        milliseconds, and follows it as it moves, as when the window is
+        resized or the ribbon collapses.
 
         Beside it sits the callout, a card on the theme's raised surface with
-        corners rounded 8 pixels, a border, and a shadow, at most 320 pixels
-        wide, placed on whichever side of the part has room, with a small
-        pointer toward it, and never off the window. It holds the step's
-        title, its text as a paragraph or two, "Step N of M", muted, and
-        along its bottom a Back button, disabled on the first step, a primary
-        Next button, reading "Done" on the last step, and a "Skip tour" link
-        at the left. It is drawn in the theme's roles, in dark mode and
-        light.
+        corners rounded 8 pixels, a border, and a shadow, 320 pixels wide, or
+        the window's width less 32 pixels where that is narrower, as tall as
+        what it holds. It is placed beneath the cut-out, 12 pixels from it,
+        where it fits there, and otherwise above it, to its right, or to its
+        left, in that order, the first side it fits on whole. Beneath or
+        above, it is centred on the cut-out horizontally; to a side, it is
+        centred on it vertically. Where centring would put it closer than 16
+        pixels to the window's edge, it is slid along that edge until it is
+        16 pixels in, and never off the window, nor over the cut-out. Its
+        pointer, a triangle 12 pixels wide and 6 deep in the card's colour,
+        with its border, sits on the card's edge facing the cut-out, pointing
+        at the cut-out's centre wherever the card was slid, but never nearer
+        than 12 pixels to the card's corners. When the part moves, the callout
+        moves with the cut-out, easing with it.
+
+        It holds, with 16 pixels of padding, left aligned: the step's title,
+        in the body's text colour, semibold, then 8 pixels beneath it its
+        text as a paragraph or two, wrapping within the card, then 12 pixels
+        beneath that a footer row. In the footer, "Skip tour", a muted link,
+        sits at the left, and "Step N of M", muted, and then a Back button,
+        disabled on the first step, and a primary Next button, reading "Done"
+        on the last step, 8 pixels apart, sit at the right, everything in the
+        row centred on one line vertically. It is drawn in the theme's roles,
+        in dark mode and light.
 
         While a step shows, only the callout and the part lit take the
         mouse, and clicks on the dimmed window do nothing, so the walkthrough is

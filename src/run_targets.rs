@@ -263,7 +263,7 @@ impl Running {
     }
 
     /// Waits for it to end; its exit code, or `None` when a signal ended it.
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub fn wait(&self) -> Result<Option<i32>> {
         loop {
             if let Some(status) = self.child.lock().unwrap().try_wait()? {

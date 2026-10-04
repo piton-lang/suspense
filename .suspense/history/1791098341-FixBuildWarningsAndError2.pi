@@ -1,0 +1,243 @@
+
+export anchor FixBuildWarningsAndError2:
+    userPrompt:
+        \\\
+        We're getting some errors on the GitHub build warning: variable does not need to be mutable
+             --> src/prompt_mode.rs:16891:21
+              |
+        16891 |                 let mut menu = window.within("popup-menu");
+              |                     ----^^^^
+              |                     |
+              |                     help: remove this `mut`
+              |
+              = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+        warning: use of deprecated method `futures::futures_channel::mpsc::UnboundedReceiver::<T>::try_next`: please use `try_recv` instead
+            --> src/harness.rs:2653:26
+             |
+        2653 |             match events.try_next() {
+             |                          ^^^^^^^^
+             |
+             = note: `#[warn(deprecated)]` on by default
+
+        warning: use of deprecated method `futures::futures_channel::mpsc::UnboundedReceiver::<T>::try_next`: please use `try_recv` instead
+            --> src/harness.rs:3197:26
+             |
+        3197 |             match events.try_next() {
+             |                          ^^^^^^^^
+
+        warning: use of deprecated method `futures::futures_channel::mpsc::UnboundedReceiver::<T>::try_next`: please use `try_recv` instead
+            --> src/harness.rs:3289:26
+             |
+        3289 |             match events.try_next() {
+             |                          ^^^^^^^^
+
+        warning: use of deprecated method `futures::futures_channel::mpsc::UnboundedReceiver::<T>::try_next`: please use `try_recv` instead
+            --> src/harness.rs:3352:26
+             |
+        3352 |             match events.try_next() {
+             |                          ^^^^^^^^
+
+        error[E0308]: arguments to this function are incorrect
+            --> src/login_view.rs:263:13
+             |
+         263 |             libc::openpty(
+             |             ^^^^^^^^^^^^^
+             |
+        note: types differ in mutability
+            --> src/login_view.rs:267:17
+             |
+         267 |                 std::ptr::null(),
+             |                 ^^^^^^^^^^^^^^^^
+             = note: expected raw pointer `*mut termios`
+                        found raw pointer `*const _`
+        note: types differ in mutability
+            --> src/login_view.rs:268:17
+             |
+         268 |                 std::ptr::null(),
+             |                 ^^^^^^^^^^^^^^^^
+             = note: expected raw pointer `*mut winsize`
+                        found raw pointer `*const _`
+        note: function defined here
+            --> /Users/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libc-0.2.189/src/unix/bsd/apple/mod.rs:4699:12
+             |
+        4699 |     pub fn openpty(
+             |            ^^^^^^^
+
+        warning: unused import: `std::os::unix::fs::PermissionsExt`
+             --> src/prompt_mode.rs:17564:13
+              |
+        17564 |         use std::os::unix::fs::PermissionsExt as _;
+              |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+        warning: unused import: `std::os::unix::fs::PermissionsExt`
+             --> src/prompt_mode.rs:18021:13
+              |
+        18021 |         use std::os::unix::fs::PermissionsExt as _;
+              |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+        warning: unused variable: `cx`
+             --> src/prompt_mode.rs:13426:46
+              |
+        13426 |         cx.update_window(handle, |_, window, cx| {
+              |                                              ^^ help: if this is intentional, prefix it with an underscore: `_cx`
+              |
+              = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+        For more information about this error, try `rustc --explain E0308`.
+        warning: `suspense` (bin "suspense" test) generated 12 warnings
+        warning: suspense@0.1.0: `piton` isn't installed, so the prompts come from system-prompts/compiled.json, as last compiled
+        error: could not compile `suspense` (bin "suspense" test) due to 1 previous error; 12 warnings emitted
+        Error: Process completed with exit code 101.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            We're getting some errors on the GitHub build warning: variable does not need to be mutable
+                 --> src/prompt_mode.rs:16891:21
+                  |
+            16891 |                 let mut menu = window.within("popup-menu");
+                  |                     ----^^^^
+                  |                     |
+                  |                     help: remove this `mut`
+                  |
+                  = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+            warning: use of deprecated method `futures::futures_channel::mpsc::UnboundedReceiver::<T>::try_next`: please use `try_recv` instead
+                --> src/harness.rs:2653:26
+                 |
+            2653 |             match events.try_next() {
+                 |                          ^^^^^^^^
+                 |
+                 = note: `#[warn(deprecated)]` on by default
+
+            warning: use of deprecated method `futures::futures_channel::mpsc::UnboundedReceiver::<T>::try_next`: please use `try_recv` instead
+                --> src/harness.rs:3197:26
+                 |
+            3197 |             match events.try_next() {
+                 |                          ^^^^^^^^
+
+            warning: use of deprecated method `futures::futures_channel::mpsc::UnboundedReceiver::<T>::try_next`: please use `try_recv` instead
+                --> src/harness.rs:3289:26
+                 |
+            3289 |             match events.try_next() {
+                 |                          ^^^^^^^^
+
+            warning: use of deprecated method `futures::futures_channel::mpsc::UnboundedReceiver::<T>::try_next`: please use `try_recv` instead
+                --> src/harness.rs:3352:26
+                 |
+            3352 |             match events.try_next() {
+                 |                          ^^^^^^^^
+
+            error[E0308]: arguments to this function are incorrect
+                --> src/login_view.rs:263:13
+                 |
+             263 |             libc::openpty(
+                 |             ^^^^^^^^^^^^^
+                 |
+            note: types differ in mutability
+                --> src/login_view.rs:267:17
+                 |
+             267 |                 std::ptr::null(),
+                 |                 ^^^^^^^^^^^^^^^^
+                 = note: expected raw pointer `*mut termios`
+                            found raw pointer `*const _`
+            note: types differ in mutability
+                --> src/login_view.rs:268:17
+                 |
+             268 |                 std::ptr::null(),
+                 |                 ^^^^^^^^^^^^^^^^
+                 = note: expected raw pointer `*mut winsize`
+                            found raw pointer `*const _`
+            note: function defined here
+                --> /Users/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libc-0.2.189/src/unix/bsd/apple/mod.rs:4699:12
+                 |
+            4699 |     pub fn openpty(
+                 |            ^^^^^^^
+
+            warning: unused import: `std::os::unix::fs::PermissionsExt`
+                 --> src/prompt_mode.rs:17564:13
+                  |
+            17564 |         use std::os::unix::fs::PermissionsExt as _;
+                  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+            warning: unused import: `std::os::unix::fs::PermissionsExt`
+                 --> src/prompt_mode.rs:18021:13
+                  |
+            18021 |         use std::os::unix::fs::PermissionsExt as _;
+                  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+            warning: unused variable: `cx`
+                 --> src/prompt_mode.rs:13426:46
+                  |
+            13426 |         cx.update_window(handle, |_, window, cx| {
+                  |                                              ^^ help: if this is intentional, prefix it with an underscore: `_cx`
+                  |
+                  = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+            For more information about this error, try `rustc --explain E0308`.
+            warning: `suspense` (bin "suspense" test) generated 12 warnings
+            warning: suspense@0.1.0: `piton` isn't installed, so the prompts come from system-prompts/compiled.json, as last compiled
+            error: could not compile `suspense` (bin "suspense" test) due to 1 previous error; 12 warnings emitted
+            Error: Process completed with exit code 101.
+            \\\
+        result:
+            \\\
+            These are code problems, so the code step makes the actual fixes. On the spec side, I added a rule that the code must compile cleanly on all three platforms and that CI fails on any warning, so this gets caught early. `piton check` reports no problems, the file is formatted, and `piton build` succeeds. I confirmed the rule in the refreshed reference.
+
+            **What broke the build:** one real error, on macOS only. `libc::openpty` takes `*mut termios` and `*mut winsize` there, but `src/login_view.rs:263` passes `std::ptr::null()`, which gives `*const`. It probably compiled on Linux, where the arguments are declared differently.
+
+            **The warnings:**
+            - **`src/harness.rs`** lines 2653, 3197, 3289 and 3352: `try_next()` on the event channel is deprecated in favour of `try_recv()`.
+            - **`src/prompt_mode.rs`:**
+              - line 16891: an unneeded `mut` on `menu`
+              - lines 17564 and 18021: `PermissionsExt` imports that aren't used on this platform
+              - line 13426: an unused `cx` closure argument
+
+            ## What changed in the spec, and the anchors the code should follow
+
+            - **`EdgeReleasesShape.builds` (new paragraph):**
+              - The code and its tests compile on Linux, Windows and macOS with no compiler warnings on any of them.
+              - Platform-specific code is written for each platform it builds on and gated to the platforms that use it.
+              - No deprecated function is called where its replacement is available.
+              - Each CI job denies warnings in both build and tests. Build-script notes, such as the "`piton` isn't installed" line, don't count as warnings.
+
+            **Fixes for the code step:**
+            1. **`src/login_view.rs:267–268`:** pass `std::ptr::null_mut()` for the termios and winsize arguments. That type-checks on macOS, and on Linux too, since a mutable pointer coerces to a const one.
+            2. **`src/harness.rs` (four places):** replace `events.try_next()` with `try_recv()` and update the `match` arms for its result type. `try_next` returns `Result<Option<T>, _>`, and `try_recv` returns `Result<T, TryRecvError>`. Keep the "closed" and "empty" cases apart, as they are now.
+            3. **`src/prompt_mode.rs`:**
+               - Drop the `mut` at line 16891.
+               - Put `#[cfg(unix)]` on the `PermissionsExt` imports at 17564 and 18021, or remove them if nothing uses them.
+               - Rename `cx` to `_cx` at line 13426.
+            4. **`.github/workflows/edge.yml`:** set `RUSTFLAGS: -D warnings` for the test and build steps on every platform, so warnings fail the job.
+            \\\
+
+    sentFrom: FixBuildWarningsAndError

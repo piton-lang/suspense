@@ -1,0 +1,73 @@
+
+export anchor FixGuidedTourPopoverLightment2:
+    userPrompt:
+        \\\
+        The lightment of the guided tour popover isn't quite right.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            The lightment of the guided tour popover isn't quite right.
+            \\\
+        result:
+            \\\
+            I've pinned down exactly how the tour's spotlight and callout are positioned and laid out. I read "lightment" as alignment, covering both the lit cut-out and the callout. I can't see the app, so if you meant something else, such as the lighting or dimming itself, tell me what looks off. `piton check` reports no problems, the file is formatted, and `piton build` succeeds. I confirmed the changes in the refreshed reference.
+
+            **The highlighted cut-out:**
+            - It's measured every frame from where the target is actually drawn in the window, with exactly 4 px of room on every side.
+            - It must never be offset by the title bar, the ribbon, the display's scaling or a scrolled container, and never lag a frame behind the target.
+            - It follows the target if the window resizes or the ribbon collapses.
+
+            **Callout placement:**
+            - **Size:** 320 px wide, or the window's width minus 32 px if narrower, and as tall as its contents.
+            - **Side:** 12 px from the cut-out, below it if it fits, otherwise above, then right, then left, whichever it fits on completely first.
+            - **Centring:** centred on the cut-out along that side. It slides to stay 16 px from the window's edges, and never covers the cut-out.
+            - **Pointer:** a 12×6 px pointer, in the card's colour with its border, on the edge facing the cut-out. It always points at the cut-out's centre, even when the card has slid, and stays 12 px clear of the card's corners.
+            - **Movement:** the callout eases along with the cut-out when the target moves.
+
+            **Callout contents:**
+            - 16 px of padding, everything left-aligned.
+            - The title in semibold, the text 8 px below it, then a footer row 12 px below that.
+            - The footer has **Skip tour** at the left. At the right, 8 px apart, are "Step N of M", **Back** and **Next** (or **Done**), all centred vertically on one line.
+
+            ## What changed in the spec, and the anchors the code should follow
+
+            - **`WalkthroughShape.spotlight`:**
+              - **Cut-out:** compute it each frame from the target element's laid-out bounds in window coordinates, so it's correct whatever the title bar, ribbon, scale factor or scroll position. Draw the callout in the same coordinate space.
+              - **Placement:**
+                - Width and side order as above, with the 12 px gap.
+                - Centre the callout along the chosen side, clamped 16 px inside the window, and never overlapping the cut-out.
+                - Point the pointer at the cut-out's centre, clamped 12 px from the corners.
+                - Ease the callout together with the cut-out.
+              - **Inner layout:** the padding, spacing and footer arrangement above.
+            \\\
+
+    sentFrom: FixGuidedTourPopoverLightment

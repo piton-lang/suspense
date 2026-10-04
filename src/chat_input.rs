@@ -24,7 +24,6 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use gpui_kit::base::ElementExt as _;
 use lsp_types::{CompletionContext, CompletionResponse};
 
 use crate::attached_image::{self, AttachedImage};
@@ -1133,13 +1132,13 @@ impl ChatInput {
     }
 
     /// Turns the Post-Build Spec Update toggle on or off, as clicking it does.
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub fn set_post_build_update(&mut self, on: bool) {
         self.post_build_update = on;
     }
 
     /// Turns the Slice toggle on or off, as clicking it does.
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub fn set_slices(&mut self, on: bool) {
         self.slice = on;
     }
@@ -2190,7 +2189,7 @@ impl Render for ChatInput {
                 });
             gpui_kit::TestSupportExt::test_support(div().id(TABS[ix].id()))
                 // The walkthrough points at each mode's tab.
-                .on_prepaint(crate::walkthrough::note(crate::walkthrough::Target::ChatTab(
+                .child(crate::walkthrough::mark(crate::walkthrough::Target::ChatTab(
                     TABS[ix],
                 )))
                 .child(inner)
@@ -2386,7 +2385,7 @@ impl Render for ChatInput {
         let tabs = gpui_kit::TestSupportExt::test_support(
             div()
                 .id("chat-tabs")
-                .on_prepaint(crate::walkthrough::note(crate::walkthrough::Target::ChatTabs))
+                .child(crate::walkthrough::mark(crate::walkthrough::Target::ChatTabs))
                 .relative()
                 .flex()
                 .h(TAB_STRIP_HEIGHT)
@@ -2586,7 +2585,7 @@ impl Render for ChatInput {
         let editor = self.editor.clone();
         let input_area = div()
             .id("prompt-box")
-            .on_prepaint(crate::walkthrough::note(crate::walkthrough::Target::TextBox))
+            .child(crate::walkthrough::mark(crate::walkthrough::Target::TextBox))
             .flex_1()
             .min_w_0()
             // The editor, drawn out past the box's sides, is cut off at them.
@@ -2829,7 +2828,7 @@ mod tests {
     use gpui_kit::component::{Root, Theme, ThemeMode};
     use gpui_kit::test::{TestAppContextExt as _, TestWindowExt as _};
     use gpui_kit::{
-        AppContext as _, Context, Entity, Focusable as _, Hsla, IntoElement, ParentElement as _,
+        AppContext as _, Context, Entity, Focusable as _, IntoElement, ParentElement as _,
         Render, Styled as _, TestAppContext, Window, div,
     };
 
@@ -3720,7 +3719,7 @@ mod tests {
     /// input as it was, and Ctrl+Enter from the preview sends it.
     #[gpui_kit::test]
     async fn the_send_menu_previews_the_compiled_prompt(cx: &mut TestAppContext) {
-        use super::{Preview, PreviewPrompt, SendMode, Submit};
+        use super::{Preview, PreviewPrompt, SendMode};
         cx.update(|cx| {
             gpui_kit::init(cx);
             super::bind_keys(cx);
@@ -3867,7 +3866,7 @@ mod tests {
     /// and either way what was set aside comes back.
     #[gpui_kit::test]
     async fn queue_option_and_editing_a_queued_prompt(cx: &mut TestAppContext) {
-        use super::{QueuedEdit, SendMode, Submit};
+        use super::{QueuedEdit, SendMode};
         cx.update(|cx| {
             gpui_kit::init(cx);
             super::bind_keys(cx);
@@ -4018,7 +4017,7 @@ mod tests {
     /// ever.
     #[gpui_kit::test]
     async fn send_to_task_is_offered_while_a_task_can_be_sent_more(cx: &mut TestAppContext) {
-        use super::{SendMode, SendOption, Submit};
+        use super::{SendMode, SendOption};
         cx.update(|cx| {
             gpui_kit::init(cx);
             super::bind_keys(cx);
@@ -4825,8 +4824,6 @@ mod tests {
         height: gpui_kit::Pixels,
         /// The offset the text was painted at in this frame.
         painted_scroll_y: gpui_kit::Pixels,
-        /// The offset the editor kept after painting.
-        scroll_y: gpui_kit::Pixels,
         cursor_top: gpui_kit::Pixels,
         cursor_bottom: gpui_kit::Pixels,
     }
@@ -4873,7 +4870,6 @@ mod tests {
             window.draw(cx).clear(cx);
             let bounds = window.find("prompt-editor").bounds();
             let editor = editor.read(cx);
-            let scroll_y = editor.scroll_offset().y;
             // The cursor is laid out in window coordinates, before scrolling.
             let (cursor, _) = editor.cursor_layout().unwrap();
             let painted_scroll_y = painted.get();
@@ -4883,7 +4879,6 @@ mod tests {
                 bottom: bounds.bottom(),
                 height: bounds.size.height,
                 painted_scroll_y,
-                scroll_y,
                 cursor_top: cursor.top() + painted_scroll_y,
                 cursor_bottom: cursor.bottom() + painted_scroll_y,
             }

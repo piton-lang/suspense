@@ -1381,6 +1381,7 @@ mod tests {
 
     /// A fake `podman` printing `version`, and `machines` for its machine
     /// list.
+    #[cfg(unix)]
     fn fake_podman(name: &str, machines: &str) -> PathBuf {
         let dir =
             std::env::temp_dir().join(format!("suspense-podman-{name}-{}", std::process::id()));

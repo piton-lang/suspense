@@ -1,0 +1,8 @@
+- [The code and its tests compile on Linux, Windows and macOS with no compiler warnings](.claude/reference/scope/edge-releases/index.md#builds)
+- [Platform-specific code is written per platform and gated, so nothing is unused or mistyped elsewhere](.claude/reference/scope/edge-releases/index.md#builds)
+- [No deprecated function is called where its replacement is available](.claude/reference/scope/edge-releases/index.md#builds)
+- [Each CI job denies warnings in build and tests, so a warning fails it like an error](.claude/reference/scope/edge-releases/index.md#builds)
+- [Build-script notes are not compiler warnings and don't fail the job](.claude/reference/scope/edge-releases/index.md#builds)
+- [Release builds run per platform: Linux x86_64, Windows x86_64, macOS aarch64, tests first](.claude/reference/scope/edge-releases/index.md#builds)
+- [If any platform's job fails, nothing is published for that commit](.claude/reference/scope/edge-releases/index.md#publishing)
+- [The login view's command runs under a pseudo-terminal](.claude/reference/scope/container-environment/index.md#logging-in)

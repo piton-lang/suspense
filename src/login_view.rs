@@ -264,8 +264,10 @@ fn spawn(mut command: std::process::Command, tty: bool) -> anyhow::Result<Spawne
                 &mut leader,
                 &mut follower,
                 std::ptr::null_mut(),
-                std::ptr::null(),
-                std::ptr::null(),
+                // Mutable on macOS, const on Linux: a mutable pointer suits
+                // both.
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
             )
         };
         if opened != 0 {
