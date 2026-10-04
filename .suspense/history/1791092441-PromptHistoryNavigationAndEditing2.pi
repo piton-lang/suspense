@@ -1,0 +1,65 @@
+
+export anchor PromptHistoryNavigationAndEditing2:
+    userPrompt:
+        \\\
+        Up arrow in a prompt window should allow me to edit the last sent prompt.  If there's multiple in the queue, the queue list should auto expand.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Up arrow in a prompt window should allow me to edit the last sent prompt.  If there's multiple in the queue, the queue list should auto expand.
+            \\\
+        result:
+            \\\
+            I've specced Up-arrow recall in the chat input, plus auto-expanding the queue list. `piton check` reports no problems, both files are formatted, and `piton build` succeeds. I confirmed both changes in the refreshed reference.
+
+            **How it works:**
+            - **When Up acts:** only when the chat input is empty, nothing is attached, no preview is showing and no menu is open. Otherwise Up moves the cursor as usual, and while the send menu is open Up still moves its highlight.
+            - **With prompts in the queue (Code, Chain, Spec and Freeform tabs):**
+              - Up edits the **last queued prompt** through the existing edit flow, so Ctrl+Enter saves, Esc cancels, and the prompt is held while you edit it.
+              - While you haven't changed the text, Up on the first line moves the edit to the queued prompt before it, and Down on the last line moves to the one after. Down past the last prompt cancels and leaves the input empty.
+            - **Queue list:** if the queue holds more than one prompt, editing via Up expands the list and keeps the prompt being edited in view as you move along. When the edit ends, the list collapses again, but only if Up was what expanded it.
+            - **With the queue empty, or on the Ask tab:** a prompt that has already run can't be edited, so Up brings back the last task sent, or the last question asked, as a **new prompt**. It comes with its attachments and its tab selected, and sending it runs it again. Up and Down step back and forward through the history until you change the text.
+
+            Two choices you may want to change:
+            - When nothing is queued, Up behaves like shell history and recalls past prompts. It could instead do nothing.
+            - Up only acts on an empty input, so it never interferes with moving the cursor through text you've typed.
+
+            ## What changed in the spec, and the anchors the code should follow
+
+            - **`ChatInputShape.upArrow` (new):** handle Up and Down in the text input under the conditions above.
+              - **Queue non-empty, on a task tab:** start the existing queued-prompt edit on the last prompt in the queue. Step along the queue with Up and Down while the edit is unchanged, cancelling the current edit first. Down past the end cancels the edit.
+              - **Queue empty, or Ask tab:** load the latest task from the prompt history, or the latest question, as a fresh prompt with its text as typed, its attachments and its tab. Step through history while the text is unchanged.
+            - **`QueueListShape.placement`:** when an edit starts from Up and the queue holds more than one prompt, expand the list and scroll the edited row into view, following it as the edit moves. When the edit ends, collapse the list only if Up expanded it.
+            - **`ChatInputShape.editingQueued`** and **`QueueListShape.editing`:** unchanged. Reuse them for the edit itself.
+            \\\
+
+    sentFrom: PromptHistoryNavigationAndEditing

@@ -1,0 +1,81 @@
+
+export anchor CrossPlatformReleaseCIPipeline2:
+    userPrompt:
+        \\\
+        Let's add some CI/CD for this via GitHub actions.  I want a Linux, Windows, and Mac binary to be published every time a commit to main is generated.  We'll start a v 0.1.X where x is the current sequential github commit -- it's a sort of nightly or "edge" build
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Let's add some CI/CD for this via GitHub actions.  I want a Linux, Windows, and Mac binary to be published every time a commit to main is generated.  We'll start a v 0.1.X where x is the current sequential github commit -- it's a sort of nightly or "edge" build
+            \\\
+        result:
+            \\\
+            I've added a new EdgeReleasesScope that specs a GitHub Actions workflow publishing Linux, Windows and macOS binaries for every commit to main. `piton check` reports no problems, both files are formatted, and `piton build` succeeds. I confirmed the new scope in the refreshed reference.
+
+            **How it works:**
+            - **Trigger:** each push to `main` runs `.github/workflows/edge.yml` for the commit at its head. Pull requests, other branches and tags don't trigger it.
+            - **Version:** `0.1.N`, where N is `git rev-list --count` of the commit. That needs a full checkout, not a shallow clone. Each commit gets the next number, and the same commit always gets the same version. The version is baked into the binary at build time. Local builds keep the `Cargo.toml` version.
+            - **Builds:** release mode, one job per platform, run in parallel on GitHub-hosted runners: Linux x86_64 on Ubuntu, Windows x86_64, and macOS on Apple silicon. Each job runs the tests first. The Windows binary opens no console, matching the rule from last turn.
+            - **Publishing:**
+              - Once all three jobs pass, one GitHub release is published, tagged `v0.1.N`, titled "Suspense 0.1.N (edge)" and marked as a pre-release. Its notes give the linked short hash and the commit message's first line.
+              - The assets are `suspense-0.1.N-linux-x86_64.tar.gz`, `suspense-0.1.N-windows-x86_64.zip` and `suspense-0.1.N-macos-aarch64.tar.gz`, each holding just the binary.
+            - **Safety:**
+              - If any platform fails, nothing is published for that commit.
+              - Re-running a commit that's already released succeeds without publishing anything more.
+              - Runs queue in push order and never cancel each other.
+              - The workflow only gets permission to write repository contents, using the run's own GitHub token, so no secrets are needed.
+
+            Choices I made that you may want to change:
+            - **macOS:** Apple silicon only, no Intel or universal binary.
+            - **Packaging:** plain archives holding the bare binary, with no `.app` bundle or installer.
+            - **Signing:** the binaries aren't signed or notarized, so macOS Gatekeeper and Windows SmartScreen will warn the first time someone opens them.
+            - **Tests:** they run on every platform before anything is published.
+
+            ## What changed in the spec, and the anchors the code should follow
+
+            - **New `spec/scope/edge-releases/index.pi`, exporting `EdgeReleasesScope`:**
+              - **`EdgeReleasesShape.description`:** add `.github/workflows/edge.yml`, triggered on push to `main` only.
+              - **`EdgeReleasesShape.version`:**
+                - Check out with `fetch-depth: 0` and compute `0.1.$(git rev-list --count HEAD)`.
+                - Pass the version to the build, for example as an environment variable read with `option_env!`, falling back to `CARGO_PKG_VERSION`.
+              - **`EdgeReleasesShape.builds`:**
+                - Use a matrix of `ubuntu` (x86_64), `windows` (x86_64) and `macos` (aarch64) runners.
+                - Install the Linux GUI build dependencies, then run `cargo test` and `cargo build --release`.
+                - Make sure the Windows release binary uses the GUI subsystem.
+              - **`EdgeReleasesShape.publishing`:**
+                - A final job that needs all three builds creates the `v0.1.N` pre-release with the specified title, notes and archive names.
+                - It skips if the release already exists.
+                - Use `permissions: contents: write`, a concurrency group with `cancel-in-progress: false`, and `GITHUB_TOKEN` only.
+            - **`ApplicationShape.edgeReleases`:** links the new scope. No code change needed for it.
+            \\\
+
+    sentFrom: CrossPlatformReleaseCIPipeline

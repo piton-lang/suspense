@@ -62,7 +62,7 @@ use gpui_kit::*;
 use crate::activity::{Job, JobKind};
 use crate::attached_image::{self, AttachedImage};
 use crate::chat_input::{
-    self, ChatInput, FocusActiveEditor, Lane, Lanes, NewConversation, PreviewPrompt, QueuedEdit,
+    self, ChatInput, FocusActiveEditor, Lane, Lanes, NewConversation, PreviewPrompt, QueuedEdit, Recall,
     SendMode, Submit, TabChanged,
 };
 use crate::commit_notes;
@@ -297,6 +297,11 @@ struct PromptTask {
     asked_at: Option<u64>,
     /// Sends it more while it runs, where its harness can be fed more.
     feed: Option<harness::Feed>,
+    /// What the host's build reported after its spec run, once it failed
+    /// because of the spec, until the spec fix it calls for is sent.
+    spec_fix_due: Option<String>,
+    /// A chain step whose next step waits for the spec fix sent after it.
+    held_for_fix: bool,
 }
 
 /// Asks for a file's changes while a task ran, between the snapshots taken
@@ -579,6 +584,8 @@ impl PromptTask {
             new_conversation: false,
             asked_at: None,
             feed: None,
+            spec_fix_due: None,
+            held_for_fix: false,
         }
     }
 
@@ -1311,6 +1318,25 @@ impl HistoryList {
         });
         let open_rows = open_at.zip(table.as_ref().map(|(items, _)| *items));
         let chain_color = chat_input::mode_color(SendMode::Both, cx);
+        // Each group's steps are set in beneath a line in its colour.
+        let group_colors: Rc<Vec<Hsla>> = Rc::new(
+            layout
+                .steps
+                .iter()
+                .map(|step| match step {
+                    Some(step) => {
+                        let steps: Vec<&PromptTask> = layout
+                            .members(*step)
+                            .iter()
+                            .filter_map(|&ix| tasks.get(ix))
+                            .collect();
+                        chat_input::mode_color(group_mode(&steps), cx)
+                    }
+                    None => chain_color,
+                })
+                .collect(),
+        );
+        let heading_colors = group_colors.clone();
         let render_chains = chains.clone();
         let heading_chains = chains.clone();
         let (heading_heads, render_heads) = (heads.clone(), heads.clone());
@@ -1506,7 +1532,13 @@ impl HistoryList {
                                             div()
                                                 .w_full()
                                                 .border_l_2()
-                                                .border_color(chain_color.opacity(0.6))
+                                                .border_color(
+                                                    heading_colors
+                                                        .get(place)
+                                                        .copied()
+                                                        .unwrap_or(chain_color)
+                                                        .opacity(0.6),
+                                                )
                                                 .child(trigger),
                                         ),
                                     )
@@ -1678,7 +1710,13 @@ impl HistoryList {
                         div()
                             .w_full()
                             .border_l_2()
-                            .border_color(chain_color.opacity(0.6))
+                            .border_color(
+                                group_colors
+                                    .get(item)
+                                    .copied()
+                                    .unwrap_or(chain_color)
+                                    .opacity(0.6),
+                            )
                             .child(element),
                     )
                     .into_any_element(),
@@ -2174,6 +2212,31 @@ struct ChainStep {
     start: usize,
     pos: usize,
     len: usize,
+    kind: StepKind,
+}
+
+/// What a step listed beneath another did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StepKind {
+    /// A chain's spec step, or a Spec task with a spec fix beneath it.
+    Spec,
+    Code,
+    FollowUp,
+    /// The spec fix sent after the step before it.
+    SpecFix,
+}
+
+impl StepKind {
+    /// What it says, and the mode whose colour it reads in: the code step
+    /// Code's, the others Spec's.
+    fn label(self) -> (&'static str, SendMode) {
+        match self {
+            StepKind::Spec => ("Spec", SendMode::Spec),
+            StepKind::Code => ("Code", SendMode::Code),
+            StepKind::FollowUp => ("Spec follow-up", SendMode::Spec),
+            StepKind::SpecFix => ("Spec fix", SendMode::Spec),
+        }
+    }
 }
 
 /// How the previous tasks are listed: oldest first, but with each chain's
@@ -2217,18 +2280,22 @@ impl ChainLayout {
 /// sent from it. Its steps are found by which step each was sent from, not by
 /// being next to each other, since tasks of the other lane may run between
 /// them: each is the first task after the step before it sent from it in its
-/// mode. A task sent or resent from a step by hand, later, is a task of its
-/// own.
+/// mode. A spec fix is listed beneath the task it fixes, as a step after it,
+/// and so a Spec task with one heads steps of its own. A task sent or resent
+/// from a step by hand, later, is a task of its own.
 fn chain_layout(tasks: &[PromptTask]) -> ChainLayout {
     let count = tasks.len();
     // The tasks told what another did, by the name of the one they were sent
-    // from, oldest first.
+    // from, oldest first; and the spec fixes, by the task each fixes.
     let mut sent_from: HashMap<&str, Vec<usize>> = HashMap::new();
+    let mut fixes: HashMap<&str, Vec<usize>> = HashMap::new();
     for (ix, task) in tasks.iter().enumerate() {
-        if let Some(from) = task.sent.sent_from.as_deref()
-            && task.sent.code_task.is_some()
-        {
-            sent_from.entry(from).or_default().push(ix);
+        if let Some(from) = task.sent.sent_from.as_deref() {
+            if task.sent.code_task.is_some() {
+                sent_from.entry(from).or_default().push(ix);
+            } else if is_spec_fix(&task.sent) {
+                fixes.entry(from).or_default().push(ix);
+            }
         }
     }
     let mut claimed = vec![false; count];
@@ -2239,23 +2306,50 @@ fn chain_layout(tasks: &[PromptTask]) -> ChainLayout {
             .copied()
             .find(|&ix| ix > from && !claimed[ix] && tasks[ix].sent.mode == Some(mode))
     };
-    let mut chains: Vec<Option<Vec<usize>>> = vec![None; count];
+    let fix_of = |claimed: &[bool], of: usize| {
+        fixes
+            .get(tasks[of].name.as_ref())?
+            .iter()
+            .copied()
+            .find(|&ix| ix > of && !claimed[ix])
+    };
+    // A step, then the spec fix after it, if it has one.
+    let take = |claimed: &mut Vec<bool>, chain: &mut Vec<(usize, StepKind)>, ix, kind| {
+        claimed[ix] = true;
+        chain.push((ix, kind));
+        if let Some(fix) = fix_of(claimed, ix) {
+            claimed[fix] = true;
+            chain.push((fix, StepKind::SpecFix));
+        }
+    };
+    let mut chains: Vec<Option<Vec<(usize, StepKind)>>> = vec![None; count];
     for ix in 0..count {
         if tasks[ix].sent.mode != Some(SendMode::Both) {
             continue;
         }
-        let mut chain = vec![ix];
+        let mut chain = Vec::new();
+        take(&mut claimed, &mut chain, ix, StepKind::Spec);
         if let Some(code) = next(&claimed, ix, SendMode::Code) {
-            claimed[code] = true;
-            chain.push(code);
+            take(&mut claimed, &mut chain, code, StepKind::Code);
             if tasks[code].sent.post_build_update
                 && let Some(update) = next(&claimed, code, SendMode::Spec)
             {
-                claimed[update] = true;
-                chain.push(update);
+                take(&mut claimed, &mut chain, update, StepKind::FollowUp);
             }
         }
+        // Heads its own steps, listed where it is.
+        claimed[ix] = false;
         chains[ix] = Some(chain);
+    }
+    // Any other task a fix was sent after, with its fix.
+    for ix in 0..count {
+        if claimed[ix] || chains[ix].is_some() || is_spec_fix(&tasks[ix].sent) {
+            continue;
+        }
+        if let Some(fix) = fix_of(&claimed, ix) {
+            claimed[fix] = true;
+            chains[ix] = Some(vec![(ix, StepKind::Spec), (fix, StepKind::SpecFix)]);
+        }
     }
     let mut layout = ChainLayout {
         order: Vec::with_capacity(count),
@@ -2266,12 +2360,13 @@ fn chain_layout(tasks: &[PromptTask]) -> ChainLayout {
         match &chains[ix] {
             Some(chain) => {
                 let start = layout.order.len();
-                for (pos, &step) in chain.iter().enumerate() {
+                for (pos, &(step, kind)) in chain.iter().enumerate() {
                     layout.order.push(step);
                     layout.steps.push(Some(ChainStep {
                         start,
                         pos,
                         len: chain.len(),
+                        kind,
                     }));
                 }
             }
@@ -2287,13 +2382,22 @@ fn chain_layout(tasks: &[PromptTask]) -> ChainLayout {
     layout
 }
 
+/// The mode whose colour a group of steps reads in: Chain's for a chain,
+/// and Spec's for a Spec task with its spec fix.
+fn group_mode(steps: &[&PromptTask]) -> SendMode {
+    match steps.first().and_then(|task| task.sent.mode) {
+        Some(SendMode::Both) => SendMode::Both,
+        _ => SendMode::Spec,
+    }
+}
+
 /// A chain's parent row in the previous tasks, heading its `steps`: tinted
 /// the Chain colour, a joined chain icon, the prompt's first line, the
 /// chain's status as a whole, and how many steps it has; `latest` when a step
 /// of it is the latest task. It has nothing to click.
 fn chain_parent(task_ix: usize, steps: &[&PromptTask], latest: bool, cx: &App) -> AnyElement {
     let theme = cx.theme();
-    let color = chat_input::mode_color(SendMode::Both, cx);
+    let color = chat_input::mode_color(group_mode(steps), cx);
     let text = steps
         .first()
         .map(|task| first_line(&task.text))
@@ -2341,19 +2445,9 @@ fn chain_parent(task_ix: usize, steps: &[&PromptTask], latest: bool, cx: &App) -
         .into_any_element()
 }
 
-/// A chain step's summary in its heading: what it did, "Spec", "Code", or
-/// "Spec follow-up", in that step's mode colour, then its status, with no
-/// prompt, which its parent row shows.
-/// What a chain's step at `pos` did, and the mode it did it in: the spec
-/// step and follow-up Spec's, the code step Code's.
-fn chain_step_label(pos: usize) -> (&'static str, SendMode) {
-    match pos {
-        0 => ("Spec", SendMode::Spec),
-        1 => ("Code", SendMode::Code),
-        _ => ("Spec follow-up", SendMode::Spec),
-    }
-}
-
+/// A chain step's summary in its heading: what it did, "Spec", "Code",
+/// "Spec follow-up", or "Spec fix", in that step's mode colour, then its
+/// status, with no prompt, which its parent row shows.
 fn chain_step_summary(
     id: (&'static str, usize),
     ix: usize,
@@ -2361,7 +2455,7 @@ fn chain_step_summary(
     step: ChainStep,
     cx: &App,
 ) -> AnyElement {
-    let (label, mode) = chain_step_label(step.pos);
+    let (label, mode) = step.kind.label();
     let summary = h_flex()
         .id(id)
         .flex_1()
@@ -2791,6 +2885,12 @@ pub struct PromptMode {
     chat_input: Entity<ChatInput>,
     /// The queued prompt being edited in the chat input, by its id.
     editing_queued: Option<usize>,
+    /// The queue's list was expanded by <Up> editing a queued prompt, to
+    /// collapse again once the edit is over.
+    queue_expanded_by_up: bool,
+    /// The prompt sent before that <Up> brought back into the chat input,
+    /// counted back from the latest sent from its tab.
+    recalled: Option<usize>,
     /// The lanes the harness is working on a task in, as the
     /// PromptSendingScope says: a task of each lane runs beside the other's.
     working: Lanes,
@@ -2995,6 +3095,9 @@ impl PromptMode {
                 window,
                 |this, _, edit: &QueuedEdit, window, cx| this.queued_edit_over(edit, window, cx),
             ),
+            cx.subscribe_in(&chat_input, window, |this, _, recall: &Recall, window, cx| {
+                this.recall(*recall, window, cx)
+            }),
             cx.subscribe(&chat_input, |this, input, preview: &PreviewPrompt, cx| {
                 this.preview(input, preview, cx)
             }),
@@ -3033,6 +3136,8 @@ impl PromptMode {
             queue_scroll: ScrollHandle::new(),
             chat_input,
             editing_queued: None,
+            queue_expanded_by_up: false,
+            recalled: None,
             working: Lanes::NONE,
             history_stale: false,
             _history_load: Task::ready(()),
@@ -5248,8 +5353,99 @@ impl PromptMode {
         if self.editing_queued.take().is_some() {
             self.chat_input
                 .update(cx, |input, cx| input.cancel_editing(window, cx));
+            self.collapse_queue_up_expanded();
             cx.notify();
         }
+    }
+
+    /// The queue's list collapses again once an edit <Up> began is over, if
+    /// <Up> expanded it.
+    fn collapse_queue_up_expanded(&mut self) {
+        if std::mem::take(&mut self.queue_expanded_by_up) {
+            self.queue_expanded = false;
+        }
+    }
+
+    /// <Up> or <Down> in the chat input going through what was sent, as the
+    /// ChatInputScope's Up Arrow says: on a tab that queues, while anything
+    /// is queued, along the queue, editing each queued prompt; otherwise
+    /// back through the prompts sent from the tab, each brought back as a
+    /// new prompt.
+    fn recall(&mut self, recall: Recall, window: &mut Window, cx: &mut Context<Self>) {
+        let mode = self.chat_input.read(cx).mode();
+        let editing = self
+            .editing_queued
+            .and_then(|id| self.queue.iter().position(|item| item.id == id));
+        let queues = mode != SendMode::Ask && !self.queue.is_empty();
+        if let Some(ix) = editing.filter(|_| !recall.fresh) {
+            match (recall.back, ix) {
+                (true, 0) => {}
+                (true, ix) => self.edit_queued_from_up(ix - 1, window, cx),
+                (false, ix) if ix + 1 < self.queue.len() => {
+                    self.edit_queued_from_up(ix + 1, window, cx)
+                }
+                // Past the last, the edit is cancelled.
+                (false, _) => self.cancel_queued_edit(window, cx),
+            }
+            return;
+        }
+        if recall.fresh && queues {
+            self.recalled = None;
+            self.edit_queued_from_up(self.queue.len() - 1, window, cx);
+            return;
+        }
+        // Back through the prompts sent from the tab, latest first: not
+        // those sent on from another task, as a chain's later steps.
+        let sent: Vec<&PromptTask> = if mode == SendMode::Ask {
+            self.asks.iter().map(|ask| &ask.task).rev().collect()
+        } else {
+            self.tasks
+                .iter()
+                .rev()
+                .filter(|task| task.sent.mode == Some(mode) && task.sent.sent_from.is_none())
+                .collect()
+        };
+        let at = match (recall.fresh, self.recalled) {
+            (true, _) | (false, None) => Some(0).filter(|_| recall.back),
+            (false, Some(at)) if recall.back => Some((at + 1).min(sent.len().saturating_sub(1))),
+            (false, Some(at)) => at.checked_sub(1),
+        };
+        let prompt = at.and_then(|at| sent.get(at)).map(|task| {
+            let images = attached_image::load_saved(
+                &task.sent.attached_images,
+                self.project_dir.as_deref(),
+            );
+            (
+                task.text.to_string(),
+                task.sent.mode.unwrap_or(mode),
+                task.sent.attached_text.clone(),
+                images,
+            )
+        });
+        if prompt.is_none() && recall.back {
+            // Nothing was sent from the tab: <Up> does nothing.
+            return;
+        }
+        self.recalled = at.filter(|_| prompt.is_some());
+        self.chat_input
+            .update(cx, |input, cx| input.recall(prompt, window, cx));
+        cx.notify();
+    }
+
+    /// Edits the queued prompt at `ix` from <Up> or <Down>, expanding the
+    /// queue's list, scrolled to it, while it holds more than one prompt.
+    fn edit_queued_from_up(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(id) = self.queue.get(ix).map(|item| item.id) else {
+            return;
+        };
+        if self.queue.len() > 1 {
+            if !self.queue_expanded {
+                self.queue_expanded = true;
+                self.queue_expanded_by_up = true;
+            }
+            self.queue_scroll.scroll_to_item(ix);
+        }
+        self.edit_queued(id, window, cx);
     }
 
     /// Editing a queued prompt is over: saved, its new text takes its place
@@ -5259,6 +5455,7 @@ impl PromptMode {
         let Some(id) = self.editing_queued.take() else {
             return;
         };
+        self.collapse_queue_up_expanded();
         let QueuedEdit::Saved {
             text,
             mode,
@@ -5522,6 +5719,7 @@ impl PromptMode {
             self.editing_queued = None;
             self.chat_input
                 .update(cx, |input, cx| input.cancel_editing(window, cx));
+            self.collapse_queue_up_expanded();
         }
         let item = self.queue.remove(ix);
         if let Some(saved) = &item.saved
@@ -5696,7 +5894,7 @@ impl PromptMode {
             let task = &self.tasks[ix];
             let (label, mode, started_by) = match step {
                 Some(step) => {
-                    let (label, mode) = chain_step_label(step.pos);
+                    let (label, mode) = step.kind.label();
                     (Some(label.into()), Some(mode), format!("the {label} step"))
                 }
                 None => (
@@ -5718,8 +5916,7 @@ impl PromptMode {
         match layout.step_of(latest) {
             Some(step) => layout.members(step)[..=step.pos]
                 .iter()
-                .enumerate()
-                .map(|(pos, &ix)| group(ix, Some(ChainStep { pos, ..step })))
+                .map(|&ix| group(ix, layout.step_of(ix)))
                 .collect(),
             None => vec![group(latest, None)],
         }
@@ -6679,10 +6876,12 @@ impl PromptMode {
                             .as_ref()
                             .ok()
                             .and_then(piton_build::BuildOutcome::replaced_note);
-                        let failure = match built {
-                            Ok(outcome) if outcome.success => None,
-                            Ok(outcome) => Some(outcome.report),
-                            Err(err) => Some(format!("could not run piton build: {err:#}")),
+                        // A build that ran and failed failed because of the
+                        // spec; one that couldn't run didn't.
+                        let (failure, spec_broke) = match built {
+                            Ok(outcome) if outcome.success => (None, false),
+                            Ok(outcome) => (Some(outcome.report), true),
+                            Err(err) => (Some(format!("could not run piton build: {err:#}")), false),
                         };
                         this.update(cx, |this, cx| {
                             this.in_project(&project_dir, cx, |this, cx| {
@@ -6694,10 +6893,24 @@ impl PromptMode {
                                         task.reply.push_notice(note, String::new());
                                     }
                                     if let Some(report) = failure {
-                                        task.reply.push_notice(
-                                            "piton build failed after this spec run, so the compiled reference may be out of date".into(),
-                                            report,
-                                        );
+                                        // The spec is fixed before anything
+                                        // goes on, once for each task, never
+                                        // for a fix, nor after a task that
+                                        // was cancelled or failed.
+                                        let fix = spec_broke
+                                            && task.status == TaskStatus::Done
+                                            && !is_spec_fix(&task.sent);
+                                        let summary = if fix {
+                                            "piton build failed after this spec run, so a spec fix follows"
+                                        } else if is_spec_fix(&task.sent) {
+                                            "piton build still failed after this spec fix, so the compiled reference may be out of date"
+                                        } else {
+                                            "piton build failed after this spec run, so the compiled reference may be out of date"
+                                        };
+                                        if fix {
+                                            task.spec_fix_due = Some(report.clone());
+                                        }
+                                        task.reply.push_notice(summary.into(), report);
                                     }
                                 }
                                 cx.notify();
@@ -6904,12 +7117,32 @@ impl PromptMode {
                 }
                 // A chain step done goes on to the next step of its chain,
                 // in its own lane, ahead of that lane's queue: see
-                // `chain_next`.
-                let next = this
+                // `chain_next`. A task whose spec no longer builds is
+                // followed by its spec fix first, the chain's next step
+                // waiting for it.
+                let done = this
                     .tasks
                     .get(task_ix)
-                    .filter(|task| task.status == TaskStatus::Done && !is_cancelled())
-                    .and_then(chain_next);
+                    .is_some_and(|task| task.status == TaskStatus::Done && !is_cancelled());
+                let fix_due = this
+                    .tasks
+                    .get_mut(task_ix)
+                    .and_then(|task| task.spec_fix_due.take())
+                    .filter(|_| done);
+                let next = match fix_due {
+                    Some(report) => {
+                        let task = &mut this.tasks[task_ix];
+                        task.held_for_fix = chain_next(task).is_some();
+                        Some(spec_fix(task, &report))
+                    }
+                    None => match this.tasks.get(task_ix) {
+                        Some(task) if is_spec_fix(&task.sent) => {
+                            this.release_held_chain(task_ix, done)
+                        }
+                        Some(task) if done => chain_next(task),
+                        _ => None,
+                    },
+                };
                 // Deferred: starting the next run replaces this task. Only this
                 // project's queues send, whichever project is on screen.
                 let prompt_mode = cx.entity();
@@ -6929,6 +7162,19 @@ impl PromptMode {
             })
             .ok();
         });
+    }
+
+    /// The chain step the spec fix at `fix_ix` held back, once that fix is
+    /// over: its next step, where the fix was `done`, and none otherwise, as
+    /// a chain stops at a step that failed or was cancelled.
+    fn release_held_chain(&mut self, fix_ix: usize, done: bool) -> Option<(String, Sending)> {
+        let from = self.tasks.get(fix_ix)?.sent.sent_from.clone()?;
+        let held = self
+            .tasks
+            .iter_mut()
+            .find(|task| task.name.as_ref() == from && task.held_for_fix)?;
+        held.held_for_fix = false;
+        done.then(|| chain_next(held)).flatten()
     }
 
     /// Sends a chain's next step, `sending`, as [`chain_next`] makes it: at
@@ -7631,6 +7877,17 @@ impl PromptMode {
             {
                 ("Spec follow-up", SendMode::Spec)
             }
+            // Sent from a Spec task or a chain's spec step, a spec fix.
+            SendMode::Spec
+                if item.sent_from.as_deref().is_some_and(|from| {
+                    self.tasks.iter().any(|task| {
+                        task.name.as_ref() == from
+                            && matches!(task.sent.mode, Some(SendMode::Spec | SendMode::Both))
+                    })
+                }) =>
+            {
+                ("Spec fix", SendMode::Spec)
+            }
             mode => (mode.label(), mode),
         })
     }
@@ -7668,6 +7925,8 @@ impl PromptMode {
                         .label(format!("{count} queued"))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.queue_expanded = !this.queue_expanded;
+                            // Expanded or collapsed by hand, it stays so.
+                            this.queue_expanded_by_up = false;
                             // It opens on the prompts queued last.
                             if this.queue_expanded {
                                 this.queue_scroll.scroll_to_bottom();
@@ -8885,6 +9144,46 @@ fn chain_next(task: &PromptTask) -> Option<(String, Sending)> {
             Some(task.name.to_string()),
         ),
     ))
+}
+
+/// Whether a task was sent as a spec fix: a Spec task sent from another Spec
+/// task, which nothing else is, and told no code task.
+fn is_spec_fix(sent: &SentAs) -> bool {
+    sent.mode == Some(SendMode::Spec) && sent.sent_from.is_some() && sent.code_task.is_none()
+}
+
+/// The prompt of the spec fix sent after `task`, whose spec no longer
+/// builds: that it doesn't, asking for it fixed and nothing else, then what
+/// the build reported, as written.
+fn spec_fix_prompt(report: &str) -> String {
+    let mut fence = "```".to_string();
+    while report.contains(fence.as_str()) {
+        fence.push('`');
+    }
+    format!(
+        "The spec no longer builds: `piton build` fails on the spec as the last task left it. \
+         Fix the spec so that it builds, changing nothing else.\n\n\
+         What the build reported:\n\n{fence}\n{}\n{fence}",
+        report.trim_end()
+    )
+}
+
+/// The spec fix sent after `task`, whose spec no longer builds with what
+/// `report` says: a Spec task, at the head of the spec lane, carrying on its
+/// conversation, sent from it.
+fn spec_fix(task: &PromptTask, report: &str) -> (String, Sending) {
+    (
+        spec_fix_prompt(report),
+        Sending::Now(
+            SendMode::Spec,
+            Attached::default(),
+            false,
+            None,
+            Some(task.name.to_string()),
+            false,
+            Some(task.name.to_string()),
+        ),
+    )
 }
 
 /// The hidden anchor a message sent to a running task is compiled as: as
@@ -10189,6 +10488,105 @@ mod tests {
             assert!(window.try_find("referenced-files").is_none());
         })
         .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// <Up> in an empty chat input edits the last queued prompt, expanding
+    /// the queue's list while it holds more than one; <Up> and <Down> step
+    /// along the queue while the edit is unchanged, <Down> past the last
+    /// cancelling it and collapsing the list again. With nothing queued, <Up>
+    /// brings back the prompts sent from the tab, latest first.
+    #[gpui_kit::test]
+    async fn up_edits_the_queue_then_goes_back_through_the_history(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        let dir = std::env::temp_dir().join(format!("suspense-queue-up-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("piton.config.pi"),
+            "export piton-config Project:\n    root: ./spec\n\nbelay-config Belay:\n    codeRoot: ./src\n",
+        )
+        .unwrap();
+        let dir = std::fs::canonicalize(&dir).unwrap();
+        for text in ["first", "second"] {
+            prompt_queue::add(HiddenAnchor::random(), text.into(), &dir).unwrap();
+        }
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| {
+            crate::chat_input::bind_keys(cx);
+            ProjectDirectory::set(dir.clone(), cx)
+        });
+        cx.run_until_parked();
+        let chat = prompt_mode.read_with(cx, |this, _| this.chat_input_view());
+        let ids: Vec<usize> =
+            prompt_mode.read_with(cx, |this, _| this.queue.iter().map(|item| item.id).collect());
+        assert_eq!(ids.len(), 2);
+        let press = |key: &str, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.press(key, cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        };
+        cx.update_window(handle, |_, window, cx| {
+            chat.update(cx, |input, cx| input.focus(window, cx));
+        })
+        .unwrap();
+        cx.run_until_parked();
+
+        press("up", cx);
+        prompt_mode.read_with(cx, |this, cx| {
+            assert_eq!(this.editing_queued, Some(ids[1]));
+            assert!(this.queue_expanded && this.queue_expanded_by_up);
+            assert_eq!(this.chat_input.read(cx).editor_text_for_test(cx), "second");
+        });
+        press("up", cx);
+        prompt_mode.read_with(cx, |this, _| assert_eq!(this.editing_queued, Some(ids[0])));
+        // Never past the first.
+        press("up", cx);
+        prompt_mode.read_with(cx, |this, _| assert_eq!(this.editing_queued, Some(ids[0])));
+        press("down", cx);
+        prompt_mode.read_with(cx, |this, _| assert_eq!(this.editing_queued, Some(ids[1])));
+        press("down", cx);
+        prompt_mode.read_with(cx, |this, cx| {
+            assert_eq!(this.editing_queued, None);
+            assert!(!this.queue_expanded, "the list Up expanded stayed open");
+            assert_eq!(this.chat_input.read(cx).editor_text_for_test(cx), "");
+        });
+
+        // Nothing queued, the prompts sent from the tab come back.
+        prompt_mode.update(cx, |this, cx| {
+            this.queue.clear();
+            let mode = this.chat_input.read(cx).mode();
+            for text in ["older", "elsewhere", "newer"] {
+                let ix = this.push_task(text.into(), cx);
+                this.tasks[ix].sent.mode =
+                    Some(if text == "elsewhere" { SendMode::Ask } else { mode });
+                this.tasks[ix].status = TaskStatus::Done;
+            }
+        });
+        let text = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, cx| {
+                this.chat_input.read(cx).editor_text_for_test(cx)
+            })
+        };
+        press("up", cx);
+        assert_eq!(text(cx), "newer");
+        press("up", cx);
+        assert_eq!(text(cx), "older");
+        press("down", cx);
+        assert_eq!(text(cx), "newer");
+        press("down", cx);
+        assert_eq!(text(cx), "");
+        // Changed, it moves the cursor as ever.
+        press("up", cx);
+        cx.update_window(handle, |_, window, cx| {
+            chat.update(cx, |input, cx| input.set_text_for_test("newer!", window, cx));
+        })
+        .unwrap();
+        press("up", cx);
+        assert_eq!(text(cx), "newer!");
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -11765,7 +12163,15 @@ mod tests {
         prompt_mode.read_with(cx, |this, _| {
             let layout = super::chain_layout(&this.tasks);
             let chains: Vec<_> = (0..this.tasks.len()).map(|ix| layout.step_of(ix)).collect();
-            let step = |start, pos, len| Some(super::ChainStep { start, pos, len });
+            let step = |start, pos, len| {
+                let kind = [super::StepKind::Spec, super::StepKind::Code, super::StepKind::FollowUp][pos];
+                Some(super::ChainStep {
+                    start,
+                    pos,
+                    len,
+                    kind,
+                })
+            };
             assert_eq!(
                 chains,
                 [
@@ -12330,11 +12736,12 @@ mod tests {
         step(SendMode::Spec, Some(3), false); // 5: its follow-up
         let layout = super::chain_layout(&tasks);
         assert_eq!(layout.order, [0, 3, 5, 1, 2, 4]);
-        let chain = |pos| {
+        let chain = |pos: usize| {
             Some(super::ChainStep {
                 start: 0,
                 pos,
                 len: 3,
+                kind: [super::StepKind::Spec, super::StepKind::Code, super::StepKind::FollowUp][pos],
             })
         };
         assert_eq!(
@@ -12344,6 +12751,91 @@ mod tests {
         assert_eq!(layout.step_of(5), chain(2));
         assert_eq!(layout.place[1], 3);
         assert_eq!(layout.members(chain(0).unwrap()), [0, 3, 5]);
+    }
+
+    /// A spec fix is listed beneath the task it fixes: a chain's step, as
+    /// another step after it, and a Spec task, as heading steps of its own.
+    #[test]
+    fn spec_fixes_are_listed_beneath_what_they_fix() {
+        use super::StepKind::{Code, Spec, SpecFix};
+        use crate::chat_input::SendMode;
+        use crate::hidden_anchor::CodeTask;
+        let mut tasks: Vec<PromptTask> = Vec::new();
+        let mut step = |mode: SendMode, from: Option<usize>, told: bool| {
+            let mut task = PromptTask::new("Build it".into());
+            task.name = format!("Task{}", tasks.len()).into();
+            task.sent.mode = Some(mode);
+            task.sent.sent_from = from.map(|from| tasks[from].name.to_string());
+            task.sent.code_task = told.then(CodeTask::default);
+            tasks.push(task);
+        };
+        step(SendMode::Both, None, false); // 0: the chain
+        step(SendMode::Spec, Some(0), false); // 1: its spec step's fix
+        step(SendMode::Code, Some(0), true); // 2: its code step
+        step(SendMode::Spec, None, false); // 3: a Spec task
+        step(SendMode::Spec, Some(3), false); // 4: its fix
+        step(SendMode::Spec, None, false); // 5: one with none
+        assert!(super::is_spec_fix(&tasks[1].sent));
+        assert!(!super::is_spec_fix(&tasks[2].sent));
+        let layout = super::chain_layout(&tasks);
+        assert_eq!(layout.order, [0, 1, 2, 3, 4, 5]);
+        let kinds: Vec<_> = layout
+            .steps
+            .iter()
+            .map(|step| step.map(|step| (step.start, step.len, step.kind)))
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                Some((0, 3, Spec)),
+                Some((0, 3, SpecFix)),
+                Some((0, 3, Code)),
+                Some((3, 2, Spec)),
+                Some((3, 2, SpecFix)),
+                None
+            ]
+        );
+        let steps: Vec<_> = tasks[3..5].iter().collect();
+        assert_eq!(super::group_mode(&steps), SendMode::Spec);
+    }
+
+    /// A chain's next step waits for the spec fix sent after its step, and
+    /// goes on once the fix is done, once; a fix that failed stops it.
+    #[gpui_kit::test]
+    async fn a_chain_waits_for_its_spec_fix(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        let (prompt_mode, _) = open(cx);
+        prompt_mode.update(cx, |this, cx| {
+            let chain = this.push_task("Build it".into(), cx);
+            this.tasks[chain].sent.mode = Some(SendMode::Both);
+            this.tasks[chain].status = TaskStatus::Done;
+            let (text, _) = super::spec_fix(&this.tasks[chain], "error: broken");
+            assert!(text.contains("error: broken"));
+            assert!(super::chain_next(&this.tasks[chain]).is_some());
+            this.tasks[chain].held_for_fix = true;
+            let fix = this.push_task(text.into(), cx);
+            this.tasks[fix].sent.mode = Some(SendMode::Spec);
+            this.tasks[fix].sent.sent_from = Some(this.tasks[chain].name.to_string());
+            assert!(super::is_spec_fix(&this.tasks[fix].sent));
+            let next = this.release_held_chain(fix, true);
+            assert!(matches!(next, Some((_, super::Sending::Now(SendMode::Code, ..)))));
+            assert!(!this.tasks[chain].held_for_fix);
+            assert!(this.release_held_chain(fix, true).is_none(), "sent once");
+            this.tasks[chain].held_for_fix = true;
+            assert!(this.release_held_chain(fix, false).is_none());
+            assert!(!this.tasks[chain].held_for_fix);
+        });
+    }
+
+    /// A spec fix's prompt asks for the spec fixed and nothing else, with
+    /// what the build reported as written, fenced however it is.
+    #[test]
+    fn a_spec_fix_carries_the_build_report() {
+        let report = "error: spec/a.pi:1:1: no such field [unknown-field]\n```\n";
+        let prompt = super::spec_fix_prompt(report);
+        assert!(prompt.starts_with("The spec no longer builds"), "{prompt}");
+        assert!(prompt.contains("changing nothing else"), "{prompt}");
+        assert!(prompt.contains("````\nerror: spec/a.pi:1:1: no such field [unknown-field]\n```\n````"), "{prompt}");
     }
 
     /// Each lane sends its own queued prompts, first to last, whatever the

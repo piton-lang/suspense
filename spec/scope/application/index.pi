@@ -1,7 +1,9 @@
 use /lib
 from ./MainWindow import MainWindowScope
 from /scope/container-environment import ContainerEnvironmentScope
+from /scope/edge-releases import EdgeReleasesScope
 from /scope/project-data import ProjectDataScope
+from /scope/self-update import SelfUpdateScope
 from /scope/user-preferences import UserPreferencesScope
 from /ui/theme import ThemeScope
 
@@ -54,3 +56,5 @@ shape ApplicationShape:
 
     mainWindow: @{MainWindowScope}
     userPreferences: @{UserPreferencesScope}
+    edgeReleases: @{EdgeReleasesScope}
+    selfUpdate: @{SelfUpdateScope}

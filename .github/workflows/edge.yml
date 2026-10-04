@@ -1,0 +1,130 @@
+# Publishes an edge release for each push to main, as the EdgeReleasesScope
+# says: Suspense 0.1.N (edge), N being the commit's sequence number on main,
+# with a Linux, a Windows, and a macOS binary, once all three have built.
+name: Edge
+
+on:
+  push:
+    branches: [main]
+
+# Pushes are handled in order: a run waits for the one before it, rather than
+# cancelling it, so every commit on main gets its edge release.
+concurrency:
+  group: edge
+  cancel-in-progress: false
+
+# Only what publishing needs, with the run's own token.
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # The version, from the whole history, so every platform builds the same.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: version
+        run: echo "version=0.1.$(git rev-list --count HEAD)" | tee -a "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    strategy:
+      # One failing builds nothing more worth publishing; the run shows which.
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux-x86_64
+            os: ubuntu-24.04
+          - platform: windows-x86_64
+            os: windows-latest
+          - platform: macos-aarch64
+            os: macos-14
+    runs-on: ${{ matrix.os }}
+    env:
+      # Baked into the binary, as the application's own version.
+      SUSPENSE_VERSION: ${{ needs.version.outputs.version }}
+      # The repository it was published from, so it can update itself from
+      # its releases.
+      SUSPENSE_REPOSITORY: ${{ github.repository }}
+      ARCHIVE: suspense-${{ needs.version.outputs.version }}-${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # What GPUI needs to build on Linux: X11, Wayland, keyboard layouts,
+      # fonts, and Vulkan.
+      - name: Install system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+            libx11-xcb-dev libxcb1-dev libfontconfig-dev libfreetype-dev \
+            libvulkan-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: edge-${{ matrix.platform }}
+
+      # Tests that need the `piton` CLI skip themselves here, where it isn't
+      # installed.
+      - name: Test
+        run: cargo test --locked
+
+      # A release build on Windows is a GUI application, opening no console.
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Package (Linux, macOS)
+        if: runner.os != 'Windows'
+        run: tar -czf "$ARCHIVE.tar.gz" -C target/release suspense
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path target/release/suspense.exe -DestinationPath "$env:ARCHIVE.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARCHIVE }}
+          path: ${{ env.ARCHIVE }}.*
+          if-no-files-found: error
+
+  # Once every platform has built, they're published together, once.
+  publish:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish the edge release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          # Already published, as when a run is re-run: nothing more to do.
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "$tag is already published."
+            exit 0
+          fi
+          short=$(git rev-parse --short "$GITHUB_SHA")
+          subject=$(git log -1 --format=%s "$GITHUB_SHA")
+          notes="[\`$short\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA) $subject"
+          gh release create "$tag" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Suspense $VERSION (edge)" \
+            --notes "$notes" \
+            --prerelease \
+            --latest=false

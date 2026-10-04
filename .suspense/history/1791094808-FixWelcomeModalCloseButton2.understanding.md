@@ -1,0 +1,6 @@
+- [The welcome page closes with its close button, Get started, Escape, or a click on the dimmed window around it](.claude/reference/scope/welcome/index.md#closing)
+- [It always closes, whatever its checks say and however it was opened](.claude/reference/scope/welcome/index.md#closing)
+- [Closing never waits on a check or a running fix; a fix carries on and reruns its check without opening the page](.claude/reference/scope/welcome/index.md#closing)
+- [Once closed, focus goes back to the chat input](.claude/reference/scope/welcome/index.md#closing)
+- [It opens by itself at most once a launch; after closing or another panel opening, only the Welcome command opens it](.claude/reference/scope/welcome/index.md#opening)
+- [Checks rerun, a fix finishing, or checks still failing never reopen it](.claude/reference/scope/welcome/index.md#opening)

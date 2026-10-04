@@ -8,6 +8,7 @@ from ../project-directory import ProjectDirectoryScope
 from ../prompt-mode/chat-input import ChatInputScope
 from ../prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from ../prompt-mode/modes import PromptModesScope
+from ../self-update import SelfUpdateScope
 from ../user-preferences import UserPreferencesScope
 from /ui/components/growing-text-input import GrowingTextInputScope
 from /ui/components/inset-panel import InsetPanelScope
@@ -20,8 +21,8 @@ concept SettingsWindowConcept:
     pitch:
         The application's settings, in sections picked from a sidebar: the
         system prompts each tab of the @{ChatInputScope} sends, the prompts
-        injected into them, the harness runs go to, and the containers they
-        run in.
+        injected into them, the harness runs go to, the containers they run
+        in, and the application's updates.
 
     shape: {SettingsWindowShape}
 
@@ -35,7 +36,7 @@ shape SettingsWindowShape:
     sidebar:
         Beneath the heading, down its left, a sidebar of vertical tabs, one
         per section, in order: "System prompts", "Injected prompts", "Agent",
-        and "Containers". Each
+        "Containers", and "Updates", as the @{SelfUpdateScope} says. Each
         tab is a row across the sidebar's width reading the section's name,
         and the one picked is marked with the theme's accent. Clicking a tab
         picks its section, and the page beside the sidebar shows only that

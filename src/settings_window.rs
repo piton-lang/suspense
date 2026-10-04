@@ -45,14 +45,16 @@ enum Section {
     InjectedPrompts,
     Agent,
     Containers,
+    Updates,
 }
 
 impl Section {
-    const ALL: [Section; 4] = [
+    const ALL: [Section; 5] = [
         Section::SystemPrompts,
         Section::InjectedPrompts,
         Section::Agent,
         Section::Containers,
+        Section::Updates,
     ];
 
     fn label(self) -> &'static str {
@@ -61,6 +63,7 @@ impl Section {
             Section::InjectedPrompts => "Injected prompts",
             Section::Agent => "Agent",
             Section::Containers => "Containers",
+            Section::Updates => "Updates",
         }
     }
 
@@ -70,6 +73,7 @@ impl Section {
             Section::InjectedPrompts => "injected-prompts",
             Section::Agent => "agent",
             Section::Containers => "containers",
+            Section::Updates => "updates",
         }
     }
 
@@ -86,11 +90,129 @@ impl Section {
     }
 }
 
+/// The running version, and where it can update itself, whether it checks
+/// automatically, a check on demand, and where things stand.
+fn render_updates(cx: &mut App) -> impl IntoElement {
+    use crate::self_update::{Status, Updates, cant_update};
+    let theme = cx.theme();
+    let (muted, danger) = (theme.muted_foreground, theme.danger);
+    let version = div()
+        .font_medium()
+        .child(format!("Suspense {}", crate::version::VERSION));
+    let section = v_flex().gap_3().child(version);
+    if let Some(why) = cant_update() {
+        return section.child(div().text_color(muted).child(why));
+    }
+    let Some(updates) = Updates::get(cx) else {
+        return section;
+    };
+    let busy = Updates::busy(cx);
+    let restart = |id: &'static str| {
+        Button::new(id)
+            .small()
+            .primary()
+            .label("Restart")
+            .on_click(|_, _, cx| Updates::restart(cx))
+    };
+    let status: AnyElement = match &updates.status {
+        Status::Idle => div().into_any_element(),
+        Status::Checking => div().text_color(muted).child("Checking for updates…").into_any_element(),
+        Status::UpToDate => {
+            let checked = updates
+                .last_checked
+                .map(|then| {
+                    format!(
+                        " Checked {}.",
+                        crate::divergence::ago(then, crate::self_update::now())
+                    )
+                })
+                .unwrap_or_default();
+            div()
+                .child(format!("Suspense is up to date.{checked}"))
+                .into_any_element()
+        }
+        Status::Downloading { version, got, total } => {
+            let percent = (*got * 100).checked_div(*total).unwrap_or(0).min(100);
+            div()
+                .text_color(muted)
+                .child(format!(
+                    "Downloading {version}… {percent}% ({:.1} of {:.1} MB)",
+                    *got as f64 / 1_000_000.,
+                    *total as f64 / 1_000_000.
+                ))
+                .into_any_element()
+        }
+        Status::Ready { version } => h_flex()
+            .gap_2()
+            .child(format!("Suspense {version} is ready"))
+            .child(restart("settings-update-restart"))
+            .into_any_element(),
+        Status::NotWritable { dir, page } => {
+            let page = page.clone();
+            v_flex()
+                .gap_1()
+                .child(div().text_color(danger).child(format!(
+                    "Suspense can't update itself in {}, as it can't write there.",
+                    dir.display()
+                )))
+                .child(
+                    Button::new("settings-update-page")
+                        .small()
+                        .label("Open the release's page")
+                        .on_click(move |_, _, cx| cx.open_url(&page)),
+                )
+                .into_any_element()
+        }
+        Status::Failed(why) => div().text_color(danger).child(why.clone()).into_any_element(),
+    };
+    section
+        .child(
+            crate::checkbox::checkbox("settings-check-updates", "Check for updates automatically")
+                .checked(updates.automatic)
+                .on_click(|checked, _, cx| Updates::set_automatic(*checked, cx)),
+        )
+        .child(
+            Button::new("settings-check-now")
+                .small()
+                .label("Check for updates")
+                .disabled(busy)
+                .on_click(|_, _, cx| Updates::check(true, cx)),
+        )
+        .child(status)
+        .when_some(
+            updates
+                .finished_at_launch
+                .clone()
+                .filter(|_| !matches!(updates.status, Status::Ready { .. })),
+            |section, version| {
+                section.child(
+                    h_flex()
+                        .gap_2()
+                        .child(if version.is_empty() {
+                            "An update was put in place as Suspense started; a restart finishes it."
+                                .to_string()
+                        } else {
+                            format!(
+                                "Suspense {version} was put in place as Suspense started; a restart finishes it."
+                            )
+                        })
+                        .child(restart("settings-update-finish")),
+                )
+            },
+        )
+}
+
 /// The section picked, kept while the settings are closed and opened again.
 #[derive(Default)]
 struct PickedSection(Section);
 
 impl Global for PickedSection {}
+
+/// Picks the Agent section, for the settings to open on it, as choosing
+/// another harness from the welcome page does.
+pub fn pick_agent_section(cx: &mut App) {
+    cx.set_global(PickedSection(Section::Agent));
+}
 
 /// Ctrl+, (Cmd+, on macOS) opens the settings from anywhere in the main
 /// window, which handles the action.
@@ -634,6 +756,14 @@ impl Render for SettingsWindow {
                     .to_string(),
                 "",
             ),
+            Section::Updates => (
+                "Updates",
+                "Suspense updates itself from its edge releases: a newer one \
+                 is downloaded in the background and put in place when \
+                 Suspense restarts."
+                    .to_string(),
+                "",
+            ),
             Section::Agent => (
                 "Agent",
                 "Every run goes to the harness picked here: the tasks, the \
@@ -647,6 +777,8 @@ impl Render for SettingsWindow {
             self.render_agents(cx).into_any_element()
         } else if section == Section::Containers {
             self.render_containers(cx).into_any_element()
+        } else if section == Section::Updates {
+            render_updates(cx).into_any_element()
         } else if ProjectDirectory::get(cx).is_some() {
             let prompts: Vec<AnyElement> = self
                 .prompts
@@ -737,6 +869,16 @@ mod tests {
     use crate::project_directory::ProjectDirectory;
     use crate::system_prompts;
     use crate::system_prompts::Prompt;
+
+    /// The sidebar ends with Updates, after Containers.
+    #[test]
+    fn updates_come_last() {
+        let labels: Vec<&str> = Section::ALL.iter().map(|section| section.label()).collect();
+        assert_eq!(
+            labels,
+            ["System prompts", "Injected prompts", "Agent", "Containers", "Updates"]
+        );
+    }
 
     fn text(
         settings: &Entity<SettingsWindow>,

@@ -1,0 +1,86 @@
+
+export anchor GuidedWalkthroughProjectAndPromptModes2:
+    userPrompt:
+        \\\
+        Great, now we want a guided walkthrough.  Project tab first, create new project.  Once that's done, go to the prompt modes and explain them one by one.  Code, Spec, Code+Spec, and Ask.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Great, now we want a guided walkthrough.  Project tab first, create new project.  Once that's done, go to the prompt modes and explain them one by one.  Code, Spec, Code+Spec, and Ask.
+            \\\
+        result:
+            \\\
+            I've specced a guided walkthrough: it starts on the Project tab, has you create a project, then explains Code, Spec, Code + Spec and Ask one at a time. `piton check` reports no problems, all changed files are formatted, and `piton build` succeeds. I confirmed the new scope and the ribbon changes in the refreshed reference.
+
+            **How it looks:** each step dims the window except for a cut-out around the part it's explaining. The cut-out is outlined in the theme's accent and glides to the next part over 200 ms. A callout card sits beside it with a title, a short explanation, "Step N of M", **Back**, **Next** (which reads **Done** on the last step) and **Skip tour**. Clicks on the dimmed area do nothing. Esc skips the tour, and Enter goes to the next step.
+
+            **The steps:**
+            1. **Projects live here:** opens the Project tab. A project is a folder with its spec, its code and a `piton.config.pi`.
+            2. **Create a project:** lights up New Project. It moves on by itself once the New Project form opens. If a project is already open, the callout also offers **Use the open project**, which skips to the modes.
+            3. **Fill it in:** lights up the New Project form, briefly explains the name, location, template and agents, and says the defaults are fine. It moves on by itself once the project is created. Cancelling goes back a step.
+            4. **Every prompt has a mode:** lights up the chat input's tabs.
+            5. **Code:** selects the Code tab. Changes the code to match the spec and runs on your machine.
+            6. **Spec:** selects the Spec tab. Changes only the spec, so you can agree on a change before anything is built. Runs in a container and builds the spec afterwards.
+            7. **Code and Spec:** selects the Chain tab. Updates the spec first, then a code step matches it. It's the default tab and the usual way to ask for a change.
+            8. **Ask:** selects the Ask tab. Questions change nothing, run straight away and are answered beside the tasks.
+            9. **You're ready:** lights up the text box, and mentions where to take the walkthrough again.
+
+            Each mode's step is drawn in that mode's colour. Back never returns to the project-creation steps once the project exists, and the walkthrough never sends a prompt.
+
+            **Starting and ending:**
+            - It starts by itself once per user: after **Get started** on the Welcome page, or at launch when everything is already ready and the Welcome page doesn't open.
+            - A new **Walkthrough** button follows Welcome in the Application tab's Help group.
+            - It waits for any open floating panel to close, and isn't offered while work is running.
+            - **Done** leaves the chat input on Chain with focus in the text box. Done or Skip marks it as taken, so it isn't offered again.
+
+            Choices you may want to change:
+            - **Freeform:** I left it out of the tour, since you listed four modes.
+            - **Accidental exits:** clicks outside the callout are ignored, so the tour can't end by accident. Only Skip tour or Esc ends it.
+
+            ## What changed in the spec, and the anchors the code should follow
+
+            - **New `spec/scope/walkthrough/index.pi` (`WalkthroughScope`):**
+              - **`WalkthroughShape.spotlight`:** a dimmed overlay with a cut-out (4 px of room, 6 px corners, accent outline) easing between targets over 200 ms. A callout card at most 320 px wide, with corners rounded 8 px and a pointer toward the target, placed where it fits. Only the callout and the target take input, Esc skips and Enter goes next.
+              - **`WalkthroughShape.steps`:**
+                - The nine steps in order.
+                - Before showing each step, select its target: open the Project tab, expanding the ribbon if collapsed, or select the chat input tab.
+                - Move on automatically when the New Project form opens and again when the project opens. Cancelling the form goes back a step.
+                - Offer "Use the open project" when a project is already open.
+                - Colour each mode step in its mode's colour. Back never re-enters the creation steps after the project is created.
+              - **`WalkthroughShape.ending`:** Done selects Chain and focuses the text box. Done or Skip saves the "taken" preference.
+              - **`WalkthroughShape.starting`:** auto-start once, after the Welcome page's Get started or at launch when the Welcome page doesn't open. Wait for any inset panel to close first and don't start while work is running. Starting from the command closes any open panel first.
+            - **`RibbonApplicationTabShape.groups.help`** and **`.commands.walkthrough`:** a full, non-primary "Walkthrough" button with a signpost icon, after Welcome.
+            - **`WelcomeShape.ready`:** Get started closes the page, then starts the walkthrough if it hasn't been taken.
+            - **`UserPreferencesShape.preferences`:** add "walkthrough taken or skipped", which starts as not taken.
+            \\\
+
+    sentFrom: GuidedWalkthroughProjectAndPromptModes

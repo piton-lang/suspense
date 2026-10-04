@@ -1,0 +1,90 @@
+
+export anchor WelcomeAndSetupVerification:
+    userPrompt:
+        \\\
+        We want a welcome page that checks what's installed, ensures everything's good to go, provides guidance, etc.  It'll appear if Suspense isn't ready to run yet, and can be revisited under the Application tab
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            We want a welcome page that checks what's installed, ensures everything's good to go, provides guidance, etc.  It'll appear if Suspense isn't ready to run yet, and can be revisited under the Application tab
+            \\\
+        result:
+            \\\
+            I've added a Welcome page that checks what Suspense needs, explains what's missing, and opens by itself at launch when something isn't ready. You can reopen it from a new **Welcome** button on the Application tab. `piton check` reports no problems, `piton build` succeeds, and the changed files are formatted. I confirmed the new scope and the ribbon change in the refreshed reference.
+
+            **The page:** it opens in the same kind of floating panel as Settings, headed "Welcome to Suspense", with one row per check. Each row shows a pass, fail or warning icon (or a spinner while checking), what was found (such as a version), and, when it fails, what's wrong, why Suspense needs it, and how to fix it.
+
+            **The checks, in order** (all required):
+
+            | Check | How it's checked | Fix offered |
+            |---|---|---|
+            | Git | `git --version` | link to git-scm.com/downloads |
+            | Piton | `piton --version` | link to github.com/piton-lang/piton-rs |
+            | Harness (the one picked in Settings) | `<command> --version` | its install page, plus "Choose another harness", which opens Settings → Agent |
+            | Podman | `podman --version` | Podman's install link for your platform |
+            | Podman machine (macOS and Windows) | is a machine running | "Set up Podman" or "Start Podman" |
+            | Containers | `podman info` | says Podman couldn't be accessed, with what Podman printed |
+            | Harness login | logged in inside its container | "Log in", which opens the existing login view |
+
+            Checks that depend on others wait for them. For example, Harness login waits until Containers passes. All checks run in the background without console windows, and a command that doesn't answer within 10 seconds fails its check.
+
+            **Ready and rechecking:**
+            - When every check passes, the foot of the page says "Suspense is ready" with a **Get started** button. Otherwise it says how many things need attention.
+            - **Check again** reruns everything. Finishing a fix, such as starting Podman or logging in, reruns that check and the ones waiting on it.
+
+            **When it appears:**
+            - At each launch, the checks run in the background. The page opens only if a required check fails, unless you've turned off "Show at launch when something needs attention".
+            - The **Welcome** button sits in a new last group, "Help", on the Application tab. Opening the page always reruns the checks, and it works with or without a project open.
+
+            Choices you may want to change:
+            - **Required checks:** I marked every check required, so the amber "optional" state exists but nothing uses it yet.
+            - **Piton link:** it points at github.com/piton-lang/piton-rs, the repository the fluency file mentions. Give me the right URL if there's a better install page.
+
+            The Gmail, Google Calendar and Google Drive connectors still need authorizing in your claude.ai connector settings, though nothing here uses them.
+
+            ## What changed in the spec, and the anchors the code should follow
+
+            - **New `spec/scope/welcome/index.pi` (`WelcomeScope`):**
+              - **`WelcomeShape.description`:** the floating panel's layout, heading and close button.
+              - **`WelcomeShape.checks`:**
+                - The seven checks in order, with the command each runs, its dependencies and its fix.
+                - Reuse the existing Podman setup and start commands, the login view, and the platform install links from `ContainerEnvironmentScope`. "Choose another harness" opens Settings → Agent.
+                - Run checks in the background through the shared no-console process helper, with a 10-second timeout.
+              - **`WelcomeShape.ready`:** the ready line and Get started. Check again reruns everything, and a finished fix reruns its check and those waiting on it.
+              - **`WelcomeShape.opening`:**
+                - Run the checks at launch and open the page if a required check fails and the preference is on. The page's checkbox controls that preference.
+                - Opening the page reruns the checks, with or without a project.
+            - **`RibbonApplicationTabShape.groups.help`** and **`.commands.welcome`:** a last "Help" group holding a full, non-primary "Welcome" button with a checklist icon and the given tooltip.
+            - **`UserPreferencesShape.preferences`:** add "show the welcome page at launch when something needs attention", which starts on.
+            \\\
+
+    sentFrom: Prompt_de0bf8e3061ee53f

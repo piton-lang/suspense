@@ -1,0 +1,98 @@
+use /lib
+use /ui
+from /scope/new-project import NewProjectScope
+from /scope/prompt-mode/ask-conversation import AskConversationScope
+from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/prompt-mode/modes import PromptModesScope
+from /scope/user-preferences import UserPreferencesScope
+from /scope/welcome import WelcomeScope
+from /ui/components/ribbon/application-tab import RibbonApplicationTabScope
+from /ui/components/ribbon/project-tab import RibbonProjectTabScope
+
+export ui-component WalkthroughScope:
+    concept: {WalkthroughConcept}
+
+concept WalkthroughConcept:
+    pitch:
+        A guided walkthrough that takes a new user from nothing to a project
+        of their own, then through the prompt modes one by one, pointing at
+        each part of the window as it explains it, so the first prompt is
+        sent knowing what each mode does.
+
+    shape: {WalkthroughShape}
+
+shape WalkthroughShape:
+    description:
+        The walkthrough is a series of steps, each pointing at one part of
+        the window with a spotlight and explaining it in a callout. It never
+        sends a prompt or changes anything but what the user does at its
+        bidding, as creating the project, and what it selects to show, as a
+        ribbon tab or a chat input tab.
+
+    spotlight:
+        While a step shows, the window is dimmed, as an inset panel dims it,
+        but for a cut-out around the part the step points at, with 4 pixels
+        of room and corners rounded 6 pixels, outlined in the theme's accent,
+        so that part reads as lit. The cut-out moves to each step's part,
+        easing between them over 200 milliseconds, and follows it if the
+        window is resized.
+
+        Beside it sits the callout, a card on the theme's raised surface with
+        corners rounded 8 pixels, a border, and a shadow, at most 320 pixels
+        wide, placed on whichever side of the part has room, with a small
+        pointer toward it, and never off the window. It holds the step's
+        title, its text as a paragraph or two, "Step N of M", muted, and
+        along its bottom a Back button, disabled on the first step, a primary
+        Next button, reading "Done" on the last step, and a "Skip tour" link
+        at the left. It is drawn in the theme's roles, in dark mode and
+        light.
+
+        While a step shows, only the callout and the part lit take the
+        mouse, and clicks on the dimmed window do nothing, so the walkthrough is
+        never left by accident. <Escape> skips the tour, as Skip tour does,
+        and <Enter>, while Next is enabled, goes to the next step.
+
+    steps:
+        The steps, in order, each selecting what it points at before it
+        shows, as opening the Project tab of the ribbon, expanding the ribbon
+        first if it is collapsed:
+
+        - "Projects live here", the Project tab of the ribbon, opened: a project is a folder holding its spec, its code, and a piton.config.pi that says where each is, and everything Suspense does, it does in the project open.
+        - "Create a project", the New Project button of the @{RibbonProjectTabScope}: it asks for the project to be created. Next is disabled, and the step goes on by itself once the New Project form opens, as clicking the button opens it. Where a project is already open, the callout also offers "Use the open project", which skips to the prompt modes with it.
+        - "Fill it in", the New Project form, as the @{NewProjectScope} says, lit whole, the callout beside the panel, above it: it names the project, where it goes, the template it starts from, and the agents it is written for, and says the defaults are a fine start. Next is disabled; the step goes on by itself once the project is created and opens. Cancelling the form goes back to the step before.
+        - "Every prompt has a mode", the tabs of the @{ChatInputScope}: what is typed below is sent in the mode of the tab selected, and each mode does a different kind of work.
+        - "Code", the Code tab, selected: changes the code to do what the prompt asks, reading the spec to know how, and leaves the spec as it is. Code tasks run on this machine, in the project.
+        - "Spec", the Spec tab, selected: changes the spec, the description of what the application should be, and leaves the code as it is, so a change can be agreed on before anything is built. Spec tasks run in a container that holds only the spec, and the spec is built after each.
+        - "Code and Spec", the Chain tab, selected, Code and Spec together: changes the spec first, then hands it to a code step that changes the code to match, one prompt doing both. It is where the chat input starts, and the usual way to ask for a change.
+        - "Ask", the Ask tab, selected: asks a question about the code and the spec, changing neither, and answers beside the tasks, as the @{AskConversationScope} shows; questions run straight away, never waiting behind tasks.
+        - "You're ready", the chat input's text box: type a prompt, pick its mode, and send it. The walkthrough can be taken again from Walkthrough, in the Application tab.
+
+        Each mode's step reads in that mode's colour, its title and its
+        outline, as the @{PromptModesScope} colours it. Back goes to the
+        step before, selecting again what it selects, but never back into
+        the steps that create the project once it has been created.
+
+    ending:
+        Done, on the last step, ends the walkthrough, leaving the chat input
+        on the Chain tab, as it starts, with keyboard focus in its text box.
+        Skip tour ends it straight away, at any step, leaving everything as
+        it is. Either way the dimming goes, and the walkthrough is remembered
+        as taken for the user, as the @{UserPreferencesScope} says, so it is
+        never offered again by itself.
+
+    starting:
+        The walkthrough starts by itself only once for a user, until it has
+        been taken or skipped: when the @{WelcomeScope}'s Get started is
+        pressed, or, where the welcome page doesn't open at launch because
+        everything is ready, once the window has opened. It can be taken
+        again at any time with the Walkthrough command, a "Walkthrough"
+        button with a signpost icon in the Help group of the
+        @{RibbonApplicationTabScope}, after Welcome, whose tooltip says it
+        walks through creating a project and the prompt modes. It is a full
+        button, and not primary. Started with a project open, it starts at
+        its first step all the same, offering "Use the open project" at the
+        second.
+
+        It never starts over an inset panel, but waits for it to close, and
+        it isn't offered while work is running; started from its command, it
+        closes any inset panel open first.

@@ -17,6 +17,9 @@ pub const APP_TITLE: &str = "Suspense";
 actions!(suspense, [Quit]);
 
 pub fn run() {
+    // An update a quit left staged is put in place, and a binary an update
+    // set aside is deleted, before anything else.
+    let finished_update = crate::self_update::at_launch();
     // The full icon catalogue: the default bundle leaves out icons the app
     // uses, such as the Edit and Reply badges', which then render blank.
     let app = gpui_kit::application().with_assets(gpui_kit::assets::AllAssets);
@@ -31,6 +34,8 @@ pub fn run() {
         if let Some(last) = recent_projects::init(recent_projects::default_file(), cx) {
             ProjectDirectory::set(last, cx);
         }
+
+        crate::self_update::Updates::init(finished_update, cx);
 
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([

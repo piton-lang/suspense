@@ -1,0 +1,128 @@
+use /lib
+use /ui
+from /scope/container-environment import ContainerEnvironmentScope
+from /scope/harness-integration import HarnessIntegrationScope
+from /scope/settings-window import SettingsWindowScope
+from /scope/walkthrough import WalkthroughScope
+from /ui/components/inset-panel import InsetPanelScope
+from /ui/components/ribbon/application-tab import RibbonApplicationTabScope
+
+export ui-component WelcomeScope:
+    concept: {WelcomeConcept}
+
+concept WelcomeConcept:
+    pitch:
+        A welcome page that checks what Suspense needs is installed and
+        working, says plainly what isn't, and guides each fix, so Suspense
+        is ready before the first prompt is sent rather than failing on it.
+
+    shape: {WelcomeShape}
+
+shape WelcomeShape:
+    description:
+        Shown in an @{InsetPanelScope}, as the settings are, headed "Welcome
+        to Suspense", with a close button whose tooltip says it closes the
+        welcome page. Beneath the heading, a muted line says that Suspense
+        runs coding harnesses on a project's code and spec, and checks here
+        that what it needs is in place. Then a checklist, one row per check,
+        in order, and at its foot a "Check again" button, and a line saying
+        whether Suspense is ready.
+
+    checks:
+        Each check is a row: a status icon, a green check when it passes, a
+        red cross when a required check fails, an amber warning when an
+        optional one does, and a spinner while it is being checked; the
+        check's name; muted beside it what was found, as the version a
+        command reports; and, beneath, while it fails, a line of guidance
+        saying what is wrong, why Suspense needs it, and how to fix it, with
+        the action that fixes it where Suspense can take one. The checks go
+        in this order.
+
+        - "Git", found by running `git --version`, required, since projects
+            are git repositories. Missing, its guidance links to
+            https://git-scm.com/downloads.
+        - "Piton", found by running `piton --version`, required, since the
+            spec is built, sliced, and checked with it. Missing, its guidance
+            links to https://github.com/piton-lang/piton-rs.
+        - "Harness", the harness in use, as the @{HarnessIntegrationScope}
+            says, found by running its command with `--version`, required,
+            since Code tasks run it on the host. Missing, its guidance names the
+            command and links to the harness's installation instructions,
+            https://docs.claude.com/en/docs/claude-code/setup for Claude Code,
+            https://github.com/openai/codex for Codex, and
+            https://opencode.ai/docs/ for OpenCode, with a "Choose another
+            harness" button that opens the Agent section of the
+            @{SettingsWindowScope}.
+        - "Podman", found by running `podman --version`, required, since
+            Spec tasks, a Chain prompt's spec steps, and questions run in a
+            container, as the @{ContainerEnvironmentScope} says. Missing, its
+            guidance links to Podman's installation instructions for the
+            platform, as it gives them.
+        - "Podman machine", on macOS and Windows only, required, passing
+            while a Podman machine is running. With none, its guidance offers
+            "Set up Podman", and with one stopped, "Start Podman", each as the
+            @{ContainerEnvironmentScope} says, what the command prints shown
+            beneath the row as it runs. It is checked only once Podman is
+            found, and shows "Needs Podman", muted, until then.
+        - "Containers", required, passing once Podman runs a container for
+            the application, as by running `podman info`. Failing, its guidance
+            says Podman couldn't be accessed, with what Podman printed, as the
+            @{ContainerEnvironmentScope} says. It is checked only once the
+            checks above it pass.
+        - "Harness login", required, passing while the harness in use is
+            logged in in its container, read from its volume. Not logged in,
+            its guidance offers "Log in", which shows the login view, as the
+            @{ContainerEnvironmentScope} says. It is checked only once
+            "Containers" passes.
+
+        Every check runs in the background, all at once where they don't
+        wait on one another, as each command is run without a console
+        window, never holding up the window. A command that takes longer
+        than 10 seconds fails its check, saying it didn't answer.
+
+    ready:
+        Suspense is ready when every required check passes, and the line at
+        the checklist's foot then reads "Suspense is ready", with a
+        "Get started" button that closes the welcome page, starting the
+        walkthrough after it while it has never been taken, as the
+        @{WalkthroughScope} says; otherwise it
+        reads how many checks still need attention, as "2 things need
+        attention", and Get started is not shown, the close button closing
+        the page all the same, since what passes still works.
+
+        "Check again" runs every check anew. A check whose action, as setting
+        up Podman or logging in, finishes runs again by itself, and so do the
+        checks waiting on it. A link opened in the browser leaves the page as
+        it is, until Check again.
+
+    opening:
+        At each launch, Suspense runs the checks in the background as it
+        starts. If any required check fails, the welcome page opens over the
+        main window once they are done, unless the user has turned off
+        "Show at launch when something needs attention", a checkbox at the
+        page's foot, on until turned off, remembered for the user. When
+        every check passes, nothing is shown. It opens by itself at most
+        once in a launch: once it has been closed, or the user has opened
+        anything else in the inset panel meanwhile, nothing opens it again
+        but the Welcome command, not checks run again, not a fix finishing,
+        and not checks still failing.
+
+    closing:
+        The welcome page closes as any inset panel does, as the
+        @{InsetPanelScope} says: with its close button, its Get started
+        button, <Escape>, or a click on the dimmed window around it, and
+        always, whatever its checks say, failing, passing, or still running,
+        and however it was opened. Closing it never waits on a check, nor on
+        a fix still running, as setting up Podman, which carries on in the
+        background, its check running again once it finishes without opening
+        the page. Once it closes, focus goes back to the chat input, and
+        everything beneath it works as it does with the page closed, what
+        needs a failing check failing as it says it does.
+
+        It can be opened at any time with the Welcome command, a "Welcome"
+        button with a checklist icon in a "Help" group, the last group of the
+        @{RibbonApplicationTabScope}, after Preferences, whose tooltip says it
+        checks that Suspense is ready to run. It is a full button, and not
+        primary, so the collapsed ribbon leaves it out. Opening it runs every
+        check anew. It needs no project, and works the same with or without
+        one.

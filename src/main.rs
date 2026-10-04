@@ -71,6 +71,7 @@ mod run_targets;
 mod run_view;
 mod scrollbar;
 mod selection_popover;
+mod self_update;
 mod settings_window;
 mod shell_format;
 mod shell_paths;
@@ -86,7 +87,16 @@ mod theme_editor;
 mod theme_preference;
 mod understanding;
 mod usage;
+mod version;
+mod walkthrough;
+mod welcome;
 
 fn main() {
+    // `suspense --version` says which build it is, as an edge release's
+    // `0.1.N`, and opens nothing.
+    if std::env::args().skip(1).any(|arg| arg == "--version") {
+        println!("suspense {}", version::VERSION);
+        return;
+    }
     app::run();
 }

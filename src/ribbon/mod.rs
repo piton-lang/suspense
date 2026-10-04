@@ -15,6 +15,7 @@ use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonRounded, Bu
 use gpui_kit::component::{ActiveTheme, Icon, Sizable as _, Size, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
+use gpui_kit::base::ElementExt as _;
 
 use crate::activity::{Job, RevealJob};
 use crate::project_directory::ProjectDirectory;
@@ -170,6 +171,8 @@ enum Command {
     ResetBrightness,
     Theme,
     Settings,
+    Welcome,
+    Walkthrough,
 }
 
 /// Where a command sits in its tab, and whether it stays in the collapsed
@@ -459,6 +462,15 @@ impl Ribbon {
         self.select_tab(tab, cx);
     }
 
+    /// Opens `tab` alone, expanding the ribbon if it is collapsed, as the
+    /// walkthrough shows a tab.
+    pub fn show_tab(&mut self, tab: RibbonTab, cx: &mut Context<Self>) {
+        if self.collapsed {
+            self.toggle_collapsed(cx);
+        }
+        self.select_tab(tab, cx);
+    }
+
     /// Opens `tab` alone.
     pub fn select_tab(&mut self, tab: RibbonTab, cx: &mut Context<Self>) {
         self.open_tabs = vec![tab];
@@ -527,7 +539,15 @@ impl Ribbon {
             Command::FindHowToRun => code_tab::find_how_to_run(&button_with, cx),
             Command::FindRunAgain => code_tab::find_again(&button_with, cx),
             Command::RunTarget(ix) => code_tab::run_target(ix, &button_with, cx),
-            Command::NewProject => project_tab::new_project(button),
+            // The walkthrough points at New Project.
+            Command::NewProject => div()
+                .flex()
+                .flex_none()
+                .on_prepaint(crate::walkthrough::note(
+                    crate::walkthrough::Target::NewProject,
+                ))
+                .child(project_tab::new_project(button))
+                .into_any_element(),
             Command::OpenProject => project_tab::open_project(button),
             Command::BuildSpec => spec_tab::build_spec(self, button, cx),
             Command::NewScope => spec_tab::new_scope(button, cx),
@@ -542,6 +562,8 @@ impl Ribbon {
             Command::ResetBrightness => application_tab::reset_brightness_button(button, cx),
             Command::Theme => application_tab::theme(button),
             Command::Settings => application_tab::settings(button),
+            Command::Welcome => application_tab::welcome(button),
+            Command::Walkthrough => application_tab::walkthrough(button),
         }
     }
 }
@@ -672,6 +694,12 @@ impl Render for Ribbon {
                     .aria_selected(open)
                     .when(open, |this| this.bg(area))
                     .when(!open, |this| this.hover(|this| this.bg(hover)))
+                    // The walkthrough points at the Project tab.
+                    .when(tab == RibbonTab::Project, |this| {
+                        this.on_prepaint(crate::walkthrough::note(
+                            crate::walkthrough::Target::ProjectTab,
+                        ))
+                    })
                     .child(div().relative().text_color(label).child(tab.label()))
                     .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
                         this.tab_clicked(

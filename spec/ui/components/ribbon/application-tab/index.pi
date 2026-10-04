@@ -2,6 +2,8 @@ use /lib
 use /ui
 from /scope/settings-window import SettingsWindowScope
 from /scope/user-preferences import UserPreferencesScope
+from /scope/walkthrough import WalkthroughScope
+from /scope/welcome import WelcomeScope
 from /ui/components/theme-editor import ThemeEditorScope
 from /ui/theme import ThemeScope
 
@@ -31,6 +33,10 @@ shape RibbonApplicationTabShape:
 
         preferences:
             A "Preferences" group holds the Settings command.
+
+        help:
+            A "Help" group, the last, after Preferences, holds the Welcome
+            command, then the Walkthrough command.
 
     commands:
         brightness:
@@ -83,3 +89,19 @@ shape RibbonApplicationTabShape:
             Ctrl+, (Cmd+, on macOS).
 
             It is primary, and a full button.
+
+        welcome:
+            A "Welcome" button with a checklist icon. Clicking it opens the
+            @{WelcomeScope}, running its checks anew. Its tooltip says it
+            checks that Suspense is ready to run.
+
+            It is a full button, and not primary, so the collapsed ribbon
+            leaves it out.
+
+        walkthrough:
+            A "Walkthrough" button with a signpost icon. Clicking it starts
+            the @{WalkthroughScope} from its first step. Its tooltip says it
+            walks through creating a project and the prompt modes.
+
+            It is a full button, and not primary, so the collapsed ribbon
+            leaves it out.

@@ -24,6 +24,7 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
+use gpui_kit::base::ElementExt as _;
 use lsp_types::{CompletionContext, CompletionResponse};
 
 use crate::attached_image::{self, AttachedImage};
@@ -146,6 +147,19 @@ struct Editing {
     /// Its place in the queue, counted from 1.
     position: usize,
     set_aside: SetAside,
+    /// Its text as the edit began, to tell whether it has changed.
+    text: String,
+}
+
+/// Emitted by <Up> and <Down> where they go back through what was sent,
+/// as the ChatInputScope's Up Arrow says, rather than move the cursor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Recall {
+    /// <Up>, back, or <Down>, forward.
+    pub back: bool,
+    /// From an empty input, starting afresh, rather than stepping on from
+    /// the queued prompt being edited or the prompt brought back.
+    pub fresh: bool,
 }
 
 /// Emitted when editing a queued prompt is over: saved, with what it now
@@ -503,7 +517,7 @@ impl Lanes {
 }
 
 /// What a prompt is sent to work on: the selected tab.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SendMode {
     Code,
     /// The code and the spec together.
@@ -699,6 +713,9 @@ pub struct ChatInput {
     preview_scroll: ScrollHandle,
     /// The queued prompt being edited, while one is.
     editing: Option<Editing>,
+    /// The text of a prompt sent before, brought back by <Up>, while it is
+    /// in the input.
+    recalled: Option<String>,
     /// What was being written when a prompt from an answer's card was put
     /// in its place, to come back once that prompt is sent or cleared.
     set_aside_text: Option<String>,
@@ -719,6 +736,7 @@ pub struct ChatInput {
 }
 
 impl EventEmitter<QueuedEdit> for ChatInput {}
+impl EventEmitter<Recall> for ChatInput {}
 
 impl EventEmitter<Submit> for ChatInput {}
 impl EventEmitter<PreviewPrompt> for ChatInput {}
@@ -827,6 +845,7 @@ impl ChatInput {
             preview_slices_open: false,
             preview_scroll: ScrollHandle::new(),
             editing: None,
+            recalled: None,
             set_aside_text: None,
             slice: false,
             post_build_update: false,
@@ -1732,12 +1751,77 @@ impl ChatInput {
             .iter()
             .position(|tab| *tab == mode)
             .unwrap_or(DEFAULT_TAB);
-        self.put_back(text, tab, window, cx);
+        self.put_back(text.clone(), tab, window, cx);
+        self.recalled = None;
         self.editing = Some(Editing {
             position,
             set_aside,
+            text,
         });
         cx.notify();
+    }
+
+    /// Puts a prompt sent before back in the input as a new prompt, as <Up>
+    /// brings it back: its text as typed, its attachments, its mode's tab
+    /// selected, the cursor at the end; or, with none, empties the input.
+    pub fn recall(
+        &mut self,
+        prompt: Option<(String, SendMode, Vec<String>, Vec<AttachedImage>)>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.attachments.clear();
+        let Some((text, mode, attached_text, attached_images)) = prompt else {
+            self.recalled = None;
+            let tab = self.selected_tab;
+            self.put_back(String::new(), tab, window, cx);
+            cx.notify();
+            return;
+        };
+        for text in attached_text {
+            self.attach_text(text, cx);
+        }
+        for image in attached_images {
+            self.attach_image(image, cx);
+        }
+        let tab = TABS
+            .iter()
+            .position(|tab| *tab == mode)
+            .unwrap_or(self.selected_tab);
+        self.put_back(text.clone(), tab, window, cx);
+        self.recalled = Some(text);
+        cx.notify();
+    }
+
+    /// What <Up>, `back`, or <Down> does in the text input, if it goes
+    /// through what was sent rather than moving the cursor: from an empty
+    /// input, with nothing attached, <Up> starts afresh; on a queued prompt
+    /// being edited, or a prompt brought back, still unchanged, <Up> on its
+    /// first line and <Down> on its last step along.
+    fn recall_for(&self, back: bool, cx: &App) -> Option<Recall> {
+        if self.preview.is_some() || self.send_menu.is_some() || self.completion.read(cx).is_open() {
+            return None;
+        }
+        let editor = self.editor.read(cx);
+        let value = editor.value();
+        let from = self
+            .editing
+            .as_ref()
+            .map(|editing| editing.text.as_str())
+            .or(self.recalled.as_deref());
+        if value.is_empty() && self.attachments.is_empty() && self.editing.is_none() {
+            return back.then_some(Recall { back, fresh: true });
+        }
+        if from != Some(value.as_ref()) {
+            return None;
+        }
+        let cursor = editor.cursor().min(value.len());
+        let on_edge = if back {
+            !value[..cursor].contains('\n')
+        } else {
+            !value[cursor..].contains('\n')
+        };
+        on_edge.then_some(Recall { back, fresh: false })
     }
 
     /// Cancels editing a queued prompt, if one is being edited, bringing back
@@ -1824,6 +1908,7 @@ impl ChatInput {
         }
         self.editor
             .update(cx, |editor, cx| editor.set_value("", window, cx));
+        self.recalled = None;
         // The attachments go with the prompt.
         let (attached_text, attached_images) =
             split_attachments(std::mem::take(&mut self.attachments));
@@ -2103,7 +2188,12 @@ impl Render for ChatInput {
                         .update(cx, |this, cx| this.select_tab(ix, window, cx))
                         .ok();
                 });
-            gpui_kit::TestSupportExt::test_support(div().id(TABS[ix].id())).child(inner)
+            gpui_kit::TestSupportExt::test_support(div().id(TABS[ix].id()))
+                // The walkthrough points at each mode's tab.
+                .on_prepaint(crate::walkthrough::note(crate::walkthrough::Target::ChatTab(
+                    TABS[ix],
+                )))
+                .child(inner)
         };
         let measure_chain = {
             let chat_input = chat_input.clone();
@@ -2296,6 +2386,7 @@ impl Render for ChatInput {
         let tabs = gpui_kit::TestSupportExt::test_support(
             div()
                 .id("chat-tabs")
+                .on_prepaint(crate::walkthrough::note(crate::walkthrough::Target::ChatTabs))
                 .relative()
                 .flex()
                 .h(TAB_STRIP_HEIGHT)
@@ -2495,6 +2586,7 @@ impl Render for ChatInput {
         let editor = self.editor.clone();
         let input_area = div()
             .id("prompt-box")
+            .on_prepaint(crate::walkthrough::note(crate::walkthrough::Target::TextBox))
             .flex_1()
             .min_w_0()
             // The editor, drawn out past the box's sides, is cut off at them.
@@ -2597,6 +2689,10 @@ impl Render for ChatInput {
                     cx.stop_propagation();
                     this.completion
                         .update(cx, |menu, cx| menu.select_next(-1, window, cx));
+                } else if let Some(recall) = this.recall_for(true, cx) {
+                    // Back through what was sent, as a shell's history.
+                    cx.stop_propagation();
+                    cx.emit(recall);
                 }
             }))
             .capture_action(cx.listener(|this, _: &MoveDown, window, cx| {
@@ -2607,6 +2703,9 @@ impl Render for ChatInput {
                     cx.stop_propagation();
                     this.completion
                         .update(cx, |menu, cx| menu.select_next(1, window, cx));
+                } else if let Some(recall) = this.recall_for(false, cx) {
+                    cx.stop_propagation();
+                    cx.emit(recall);
                 }
             }))
             .child(tabs)

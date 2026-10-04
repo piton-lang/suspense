@@ -1,7 +1,8 @@
 //! The ribbon's Application tab, for the application rather than the project:
 //! the Brightness slider, which runs the interface from its darkest to its
-//! lightest, Reset Brightness beneath it, Theme, which opens the theme editor, and Settings, which opens
-//! the settings window.
+//! lightest, Reset Brightness beneath it, Theme, which opens the theme editor, Settings, which opens
+//! the settings window, Welcome, which opens the welcome page, and
+//! Walkthrough, which starts the walkthrough.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::Button;
@@ -16,6 +17,8 @@ use gpui_kit::*;
 use super::{Command, CommandPlace, CommandSize, Ribbon};
 use crate::settings_window::OpenSettings;
 use crate::theme_editor::OpenThemeEditor;
+use crate::walkthrough::OpenWalkthrough;
+use crate::welcome::OpenWelcome;
 use crate::{theme, theme_preference};
 
 pub(super) const COMMANDS: &[CommandPlace] = &[
@@ -45,6 +48,19 @@ pub(super) const COMMANDS: &[CommandPlace] = &[
         group: "Preferences",
         size: CommandSize::Full,
         primary: true,
+    },
+    // Last; the collapsed ribbon leaves it out.
+    CommandPlace {
+        command: Command::Welcome,
+        group: "Help",
+        size: CommandSize::Full,
+        primary: false,
+    },
+    CommandPlace {
+        command: Command::Walkthrough,
+        group: "Help",
+        size: CommandSize::Full,
+        primary: false,
     },
 ];
 
@@ -282,6 +298,27 @@ pub(super) fn settings(
             None,
         )
         .on_click(|_, window, cx| window.dispatch_action(Box::new(OpenSettings), cx))
+        .into_any_element()
+}
+
+/// Welcome: opens the welcome page in the inset panel, running its checks
+/// anew.
+pub(super) fn welcome(
+    button: impl Fn(&'static str, IconName, SharedString) -> Button,
+) -> AnyElement {
+    button("welcome", IconName::ListChecks, "Welcome".into())
+        .tooltip("Check that Suspense is ready to run")
+        .on_click(|_, window, cx| window.dispatch_action(Box::new(OpenWelcome), cx))
+        .into_any_element()
+}
+
+/// Walkthrough: starts the walkthrough from its first step.
+pub(super) fn walkthrough(
+    button: impl Fn(&'static str, IconName, SharedString) -> Button,
+) -> AnyElement {
+    button("walkthrough", IconName::Signpost, "Walkthrough".into())
+        .tooltip("Walk through creating a project and the prompt modes")
+        .on_click(|_, window, cx| window.dispatch_action(Box::new(OpenWalkthrough), cx))
         .into_any_element()
 }
 

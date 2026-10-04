@@ -98,3 +98,18 @@ shape SpecBuildShape:
         fails, or can't be run, never changes that state: the task's output
         ends with a passive notice saying the build failed, with what it
         reported. The chain's next step is sent only once it is over.
+
+        Where that build fails because of the spec itself, that is, with any
+        error but one it can't be run for, or an `unowned-output` it clears
+        as Owned Reference says, the spec is fixed before anything goes on.
+        Once the task finishes, a spec fix is sent at the head of the spec
+        lane, carrying on its conversation: a Spec task, run as any is, in a
+        container, whose prompt says that the spec no longer builds, and
+        asks for it to be fixed, changing nothing else, followed by what the
+        build reported, as written. It is listed beneath the task it fixes,
+        as a chain's steps are, labelled "Spec fix" in Spec's colour, and a
+        chain's next step waits for it, sent only once it is over. A spec fix
+        is sent at most once for each task, never for a spec fix itself, so
+        a build that still fails after it fails as ever, its passive notice
+        saying so. A task that was cancelled, or failed, is never followed by
+        a spec fix: its build fails as ever.

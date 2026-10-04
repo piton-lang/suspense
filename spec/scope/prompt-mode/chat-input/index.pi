@@ -12,6 +12,7 @@ from /scope/prompt-mode/ask-conversation import AskConversationScope
 from /scope/prompt-mode/message-list import MessageList
 from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from /scope/prompt-mode/modes import PromptModesScope
+from /scope/prompt-mode/queue-list import QueueListScope
 from /scope/prompt-mode/sending import PromptSendingScope
 from /shape/ChatInput import ChatInputInstruction
 from /ui/components/growing-text-input import GrowingTextInputScope
@@ -119,6 +120,36 @@ shape ChatInputShape:
         it was. Saving an empty prompt isn't possible, just as sending one
         isn't. Editing another queued prompt meanwhile first cancels the edit in
         progress; so does switching projects.
+
+    upArrow:
+        <Up> in the text input, while it is empty, nothing is attached, no
+        preview shows, and no menu is open to take it, goes back to the last
+        prompt sent from the tab selected, as a shell goes back through its
+        history. Anywhere else, as with text typed, <Up> moves the cursor as
+        ever.
+
+        On the Code, Chain, Spec, and Freeform tabs, while the queue holds
+        any prompt, it edits the last prompt in the queue, as editing it from
+        the queue does, as Editing Queued says. While the edit is unchanged,
+        <Up> with the cursor on the text's first line edits the prompt before
+        it in the queue instead, and <Down> with the cursor on the last line
+        the one after it, each cancelling the edit in progress first, as
+        editing another queued prompt does; <Down> past the last prompt
+        cancels the edit, leaving the input empty again. Neither goes past
+        the first prompt. While the queue holds more than one prompt, editing
+        from <Up> expands the queue's list, if it isn't already, scrolled to
+        the prompt being edited, as the @{QueueListScope} says.
+
+        While the queue is empty, and on the Ask tab, where nothing queues,
+        <Up> instead puts the last prompt sent from that tab, the latest task
+        in the prompt history, or the latest question asked, back in the
+        input as a new prompt, as it was typed, with its attachments, and
+        its mode's tab selected, with the cursor at the end of its text. It
+        is not an edit of what was sent, which has run: sending it sends it
+        again as a new prompt. While it is unchanged, <Up> on its first line
+        goes back to the one sent before it, and <Down> on its last line
+        forward to the one after, <Down> past the latest leaving the input
+        empty. Once it is changed, <Up> and <Down> move the cursor as ever.
 
     preview:
         Preview Compiled Prompt compiles the prompt as it would be sent from the

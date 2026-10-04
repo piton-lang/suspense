@@ -1,0 +1,81 @@
+use /lib
+from /scope/application import ApplicationScope
+
+export scope EdgeReleasesScope:
+    concept: {EdgeReleasesConcept}
+
+concept EdgeReleasesConcept:
+    pitch:
+        Every commit that lands on main is built for Linux, Windows, and
+        macOS, and published on GitHub as an edge release anyone can
+        download, so the newest Suspense is always one download away.
+
+    shape: {EdgeReleasesShape}
+
+shape EdgeReleasesShape:
+    description:
+        A GitHub Actions workflow in this application's own repository,
+        `.github/workflows/edge.yml`, builds and publishes an edge release
+        for each push to its `main` branch, and for nothing else: not pull
+        requests, not other branches, and not tags. It runs once per push,
+        for the commit at its head. Edge releases are nightly-like builds of
+        whatever main holds, not stable releases, and are marked as such.
+
+    version:
+        An edge release's version is `0.1.N`, where N is the commit's
+        sequence number on main: how many commits its history holds,
+        counted by `git rev-list --count` on that commit, so each commit on
+        main has its own number, one more than its parent's, and the same
+        commit always gets the same version. The workflow checks out the
+        whole history to count it, never a shallow clone.
+
+        The version is baked into the binary when it is built, so the
+        application knows its own version, and so is the repository it is
+        published from, as `owner/name`, which marks it as an edge build that
+        can update itself. A build made anywhere else, as on a developer's
+        machine, has the version Cargo.toml gives it, and no repository.
+
+    builds:
+        The application is built in release mode, one job per platform, run
+        side by side, each on a GitHub-hosted runner of that platform:
+
+        - Linux, x86_64, on Ubuntu
+        - Windows, x86_64
+        - macOS, Apple silicon, aarch64
+
+        Each job runs the project's tests before building, and installs
+        whatever the platform needs to build the application's GUI, as
+        Linux's windowing and font libraries. Each builds from the
+        repository as it is at that commit, the default prompts in
+        `.suspense/system-prompts` included, as the application's build
+        needs them. The Windows binary is a GUI application, opening no
+        console of its own, as the @{ApplicationScope} says.
+
+    publishing:
+        Once every platform's job has succeeded, one GitHub release is
+        published for the commit, tagged `v0.1.N` on that commit, titled
+        "Suspense 0.1.N (edge)", and marked as a pre-release, never as the
+        latest stable release. Its notes give the commit's short hash,
+        linked to the commit, and its message's first line.
+
+        Its assets are one archive per platform, each holding the binary
+        alone, named for the version and the platform:
+
+        - `suspense-0.1.N-linux-x86_64.tar.gz`
+        - `suspense-0.1.N-windows-x86_64.zip`
+        - `suspense-0.1.N-macos-aarch64.tar.gz`
+
+        The binaries are not signed or notarized.
+
+        If any platform's job fails, nothing is published for that commit,
+        so no edge release ever lacks a platform; the workflow run shows
+        which job failed. A release already published for a version, as when
+        a run is re-run, is never published twice: the run publishes nothing
+        more for it and succeeds.
+
+        Pushes are handled in the order they came: a run waits for the one
+        before it to finish rather than cancelling it, so every commit on
+        main gets its edge release. The workflow is given only the
+        permission it needs to publish, writing the repository's contents,
+        and uses the token GitHub gives each run, needing no secrets of its
+        own.

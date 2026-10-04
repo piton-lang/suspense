@@ -1,10 +1,10 @@
 use /lib
 from /scope/container-environment import ContainerEnvironmentScope
-from /scope/prompt-mode/ask-conversation import AskConversationScope
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/new-project import NewProjectScope
 from /scope/project-data import ProjectDataScope
 from /scope/project-locations import ProjectLocationsScope
+from /scope/prompt-mode/ask-conversation import AskConversationScope
 from /scope/prompt-mode/modes import PromptModesScope
 from /scope/prompt-mode/sending import PromptSendingScope
 from /scope/settings-window import SettingsWindowScope
@@ -234,7 +234,7 @@ shape ModeSystemPromptsShape:
         and then, on another:
 
         \\
-        Open a .pi file only to change it. Once you have changed the spec, run `piton build` and check the result in the refreshed reference under ${HARNESS_DIRECTORY}/reference, not by reading the source again.
+        Open a .pi file only to change it. Once you have changed the spec, run `piton check` and fix every error it reports, then run `piton build` and check the result in the refreshed reference under ${HARNESS_DIRECTORY}/reference, not by reading the source again. Never finish with a spec that `piton check` or `piton build` reports errors in.
         \\
 
         The Code, Chain, and Spec defaults then end with, on a paragraph of

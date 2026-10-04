@@ -1,0 +1,64 @@
+
+export anchor FixWelcomeModalCloseButton2:
+    userPrompt:
+        \\\
+        Seems that we can't currently close the welcome modal
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Seems that we can't currently close the welcome modal
+            \\\
+        result:
+            \\\
+            I've tightened the Welcome page spec so it can always be closed and can't reopen itself. `piton check` reports no problems, the file is formatted, and `piton build` succeeds. I confirmed the new section in the refreshed reference.
+
+            The spec already said the page should close like any floating panel. So this is most likely a code bug, not a gap in the spec. I can't see the code from here. The likeliest causes:
+            - The close button or Esc doesn't actually close it.
+            - It closes, but checks that are still failing open it again straight away.
+
+            I've made both rules explicit in the spec.
+
+            ## What changed in the spec, and the anchors the code should follow
+
+            - **`WelcomeShape.closing` (new):**
+              - **Ways to close:** the close button, Get started, Esc, or a click on the dimmed area around it.
+              - **Always closes:** whether checks are failing, passing or still running, and however the page was opened.
+              - **No waiting:** closing never waits on a check or on a fix in progress, such as setting up Podman. The fix carries on in the background and reruns its check without reopening the page.
+              - **Focus:** returns to the chat input after closing.
+              - **Wiring:** route closing through the shared panel's close path, as Settings does. Don't add a separate blocking state.
+            - **`WelcomeShape.opening`:** the page opens by itself at most once per launch.
+              - After it's been closed, or after anything else has been opened in the panel, only the Welcome command opens it again.
+              - Rerunning checks, a fix finishing, or checks still failing never reopen it.
+              - Track "already auto-opened this launch" so a check result never reopens the page.
+            \\\
+
+    sentFrom: FixWelcomeModalCloseButton

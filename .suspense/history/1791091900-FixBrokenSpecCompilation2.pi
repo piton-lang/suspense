@@ -1,0 +1,73 @@
+
+export anchor FixBrokenSpecCompilation2:
+    userPrompt:
+        \\\
+        Seems that the spec keeps getting broken and won't compile.  Fix this.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Seems that the spec keeps getting broken and won't compile.  Fix this.
+            \\\
+        result:
+            \\\
+            The spec compiles right now: `piton check` reports no problems and `piton build` succeeds. The recurring breakage has two causes, and I've added safeguards in the spec for both.
+
+            **1. The code still doesn't follow two rules already in the spec.** This is most of what you've been seeing. This run's `.piton` is still a temporary filesystem, not the project's own folder. So whenever a Spec run adds a new spec file, the container's build writes a new reference file, but the project's real manifest never hears about it. The next build on your machine then refuses that file. That happened with both new scopes in the last few turns: edge-releases and self-update.
+            - `ContainerEnvironmentShape.mounts.spec` requires the project's own `.piton` to be mounted.
+            - `SpecBuildShape.ownedReference` requires deleting the unowned reference files and building once more.
+
+            Either rule alone would stop that error. Neither has been implemented yet.
+
+            **2. Nothing forces a Spec run to leave the spec compiling.** I've added two safeguards:
+            - **Spec and Chain default prompt:** a run must now run `piton check` and fix every error it reports, then `piton build`. It must never finish with errors from either.
+            - **Automatic spec fix:**
+              - If the build on your machine after a Spec task fails because of the spec, one **"Spec fix"** task is sent automatically. It goes to the front of the spec lane and carries on the same conversation. Its prompt says the spec no longer builds, asks for that fixed and nothing else, and includes the build's output.
+              - It shows beneath the original task, and a Chain's code step waits for it.
+              - Only one is sent per task, never for a Spec fix itself, and never after a task that was cancelled or failed, so it can't loop.
+
+            I also ran `piton format` on `mode-system-prompts`, which had been failing the format check. It only reordered one import line.
+
+            ## What changed in the spec, and the anchors the code should follow
+
+            - **Implement these existing anchors first. They're the main fix:**
+              - **`ContainerEnvironmentShape.mounts.spec`:** bind-mount `<project>/.piton` read-write, creating it on the host if missing. Never use a temporary filesystem or a copy.
+              - **`SpecBuildShape.ownedReference`:** on a build whose only errors are `unowned-output` inside reference folders, delete those files, rebuild once, and add the passive "Replaced N reference files…" line.
+            - **`SpecBuildShape.afterSpecWork` (new paragraph):** after a Spec task that finished normally, if the build on the host fails for any reason other than piton not running or the unowned-output case above:
+              - Queue a Spec task at the head of the spec lane, in the same conversation.
+              - Its prompt is the fixed request plus the build output exactly as written.
+              - Label it "Spec fix" and list it beneath the task, as chain steps are.
+              - Hold a chain's next step until it finishes.
+              - Send at most one per task.
+            - **`ModeSystemPromptsShape.defaults`:** update the Spec and Chain default text in the app's `.suspense/system-prompts/spec.md` and `combined.md` to the new `piton check` paragraph. Projects that saved their own prompts keep theirs.
+            \\\
+
+    sentFrom: FixBrokenSpecCompilation

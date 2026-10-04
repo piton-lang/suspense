@@ -36,6 +36,9 @@ use crate::ribbon::{self, Ribbon};
 use crate::run_targets::{self, ProjectTargets};
 use crate::run_view::{CloseRun, MinimizeRun, RunView, TargetsFound};
 use crate::settings_window::{CloseSettings, OpenSettings, SettingsWindow};
+use crate::chat_input::SendMode;
+use crate::walkthrough::{self, OpenWalkthrough, Step, Tour};
+use crate::welcome::{Checked, ChooseHarness, CloseWelcome, GetStarted, OpenWelcome, WelcomeView};
 use crate::spec_component_form::{
     CloseSpecComponent, ComponentCreated, RunComponentSkill, SpecComponentForm,
 };
@@ -101,6 +104,15 @@ pub struct MainWindow {
     /// The panel writing a new instruction.
     new_instruction: Option<Entity<NewInstructionForm>>,
     settings: Option<Entity<SettingsWindow>>,
+    /// The welcome page, checking what Suspense needs.
+    welcome: Option<Entity<WelcomeView>>,
+    /// The checks run at launch, opening the welcome page once they are
+    /// done if anything needs attention.
+    _launch_checks: Option<(Entity<WelcomeView>, Subscription)>,
+    /// The walkthrough under way.
+    tour: Option<Tour>,
+    /// The walkthrough waits to start by itself for the inset panel to close.
+    tour_pending: bool,
     /// The theme editor.
     theme_editor: Option<Entity<ThemeEditor>>,
     /// The Generate Skills panel.
@@ -177,6 +189,8 @@ impl MainWindow {
             theme_preference::restore_brightness(cx);
             theme_preference::apply(window, cx);
             let view = cx.new(|cx| MainWindow::new(window, cx));
+            // What Suspense needs is checked as it starts.
+            view.update(cx, |this, cx| this.run_launch_checks(window, cx));
             cx.new(|cx| Root::new(view, window, cx))
         })
     }
@@ -293,6 +307,7 @@ impl MainWindow {
             }),
         ];
         subscriptions.push(Self::intercept_focus_chat(window, cx));
+        subscriptions.push(Self::intercept_walkthrough_keys(window, cx));
         // While the inset panel is open, nothing beneath it can take focus:
         // focus that leaves it goes back to where it was within it.
         let panel_focus = cx.focus_handle();
@@ -310,7 +325,7 @@ impl MainWindow {
         let this = cx.weak_entity();
         window.on_window_should_close(cx, move |window, cx| {
             let close = this
-                .update(cx, |this, cx| this.confirm_quit(window, cx))
+                .update(cx, |this, cx| this.confirm_quit(false, window, cx))
                 .unwrap_or(true);
             // The settings window does not keep the application running.
             if close {
@@ -343,6 +358,10 @@ impl MainWindow {
             spec_component: None,
             new_instruction: None,
             settings: None,
+            welcome: None,
+            _launch_checks: None,
+            tour: None,
+            tour_pending: false,
             theme_editor: None,
             generate_skills: None,
             project_picker: None,
@@ -395,11 +414,15 @@ impl MainWindow {
     /// Takes away whatever is in the inset panel to make room for something
     /// else, minimizing a divergence analysis.
     fn clear_panel(&mut self) {
+        // Anything opened in the panel before the launch checks are done
+        // keeps the welcome page from opening by itself.
+        self._launch_checks = None;
         self.diff = None;
         self.new_project = None;
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.welcome = None;
         self.theme_editor = None;
         self.generate_skills = None;
         self.project_picker = None;
@@ -457,6 +480,64 @@ impl MainWindow {
         cx.notify();
     }
 
+    /// Opens the welcome page in the inset panel, in place of anything else
+    /// there, running every check anew.
+    pub fn open_welcome(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let welcome = cx.new(WelcomeView::new);
+        self.show_welcome(welcome, window, cx);
+    }
+
+    /// Shows `welcome` in the inset panel, in place of anything else there.
+    fn show_welcome(
+        &mut self,
+        welcome: Entity<WelcomeView>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.clear_panel();
+        self._panel_subscriptions = vec![
+            cx.subscribe_in(&welcome, window, |this, _, _: &CloseWelcome, window, cx| {
+                this.close_panel(window, cx)
+            }),
+            cx.subscribe_in(&welcome, window, |this, _, _: &GetStarted, window, cx| {
+                this.close_panel(window, cx);
+                this.start_walkthrough(false, window, cx);
+            }),
+            cx.subscribe_in(&welcome, window, |this, _, _: &ChooseHarness, window, cx| {
+                crate::settings_window::pick_agent_section(cx);
+                this.open_settings(window, cx);
+            }),
+        ];
+        welcome.read(cx).focus_handle(cx).focus(window, cx);
+        self.welcome = Some(welcome);
+        cx.notify();
+    }
+
+    /// Runs the welcome page's checks in the background as Suspense starts,
+    /// opening the page once they are done if any fails, unless the user
+    /// turned that off. Nothing open in the inset panel is replaced by it,
+    /// and it opens by itself only this once in a launch: what its checks
+    /// say later never opens it again.
+    fn run_launch_checks(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let welcome = cx.new(WelcomeView::new);
+        let subscription = cx.subscribe_in(
+            &welcome,
+            window,
+            |this, welcome, checked: &Checked, window, cx| {
+                if this._launch_checks.take().is_none() {
+                    return;
+                }
+                if checked.ready {
+                    // Nothing to welcome: the walkthrough instead, the once.
+                    this.start_walkthrough(false, window, cx);
+                } else if crate::welcome::preference::load() && this.panel_content().is_none() {
+                    this.show_welcome(welcome.clone(), window, cx);
+                }
+            },
+        );
+        self._launch_checks = Some((welcome, subscription));
+    }
+
     /// Opens the theme editor in the inset panel, in place of anything else
     /// there; already open, it stays as it is.
     pub fn open_theme_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -509,6 +590,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.welcome = None;
         self.theme_editor = None;
         self.generate_skills = None;
         self.project_picker = None;
@@ -592,6 +674,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.welcome = None;
         self.theme_editor = None;
         self.generate_skills = None;
         self.project_picker = None;
@@ -693,6 +776,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.welcome = None;
         self.theme_editor = None;
         self.generate_skills = None;
         self.project_picker = None;
@@ -838,6 +922,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.welcome = None;
         self.theme_editor = None;
         self.generate_skills = None;
         self.project_picker = None;
@@ -1180,6 +1265,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.welcome = None;
         self.theme_editor = None;
         self.generate_skills = None;
         self.project_picker = None;
@@ -1196,7 +1282,15 @@ impl MainWindow {
                 window,
                 |this, _, ProjectCreated(folder, warning), window, cx| {
                     ProjectDirectory::set(folder.clone(), cx);
+                    // The walkthrough goes on to the prompt modes.
+                    let filling_in = this.tour.as_ref().is_some_and(|tour| tour.step() == Step::FillIn);
+                    if let Some(tour) = this.tour.as_mut().filter(|_| filling_in) {
+                        tour.project_ready();
+                    }
                     this.close_panel(window, cx);
+                    if filling_in {
+                        this.show_tour_step(window, cx);
+                    }
                     // Something that didn't stop the project opening, like
                     // Git, still failed.
                     if let Some(warning) = warning {
@@ -1212,6 +1306,15 @@ impl MainWindow {
             ),
         ];
         self.new_project = Some(form);
+        self._launch_checks = None;
+        // The walkthrough's Create a project goes on by itself.
+        if let Some(tour) = self
+            .tour
+            .as_mut()
+            .filter(|tour| tour.step() == Step::Create)
+        {
+            tour.go_to(Step::FillIn);
+        }
         cx.notify();
     }
 
@@ -1369,6 +1472,7 @@ impl MainWindow {
             || self.spec_component.is_some()
             || self.new_instruction.is_some()
             || self.settings.is_some()
+            || self.welcome.is_some()
             || self.theme_editor.is_some()
             || self.generate_skills.is_some()
             || self.project_picker.is_some()
@@ -1404,6 +1508,7 @@ impl MainWindow {
             && self.spec_component.is_none()
             && self.new_instruction.is_none()
             && self.settings.is_none()
+            && self.welcome.is_none()
             && self.theme_editor.is_none()
             && self.generate_skills.is_none()
             && self.project_picker.is_none()
@@ -1428,6 +1533,7 @@ impl MainWindow {
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
+        self.welcome = None;
         self.theme_editor = None;
         self.generate_skills = None;
         self.project_picker = None;
@@ -1435,7 +1541,181 @@ impl MainWindow {
         self._panel_subscriptions.clear();
         self.prompt_mode
             .update(cx, |prompt_mode, cx| prompt_mode.focus_chat(window, cx));
+        // The New Project form cancelled while the walkthrough had it filled
+        // in: back to the step before.
+        if let Some(tour) = self
+            .tour
+            .as_mut()
+            .filter(|tour| tour.step() == Step::FillIn)
+        {
+            tour.go_to(Step::Create);
+            self.show_tour_step(window, cx);
+        }
+        // A walkthrough waiting for the panel to close starts.
+        if std::mem::take(&mut self.tour_pending) {
+            self.start_walkthrough(false, window, cx);
+        }
         cx.notify();
+    }
+
+    /// Starts the walkthrough from its first step: by itself only while it
+    /// has never been taken, waiting for the inset panel to close; from its
+    /// command, closing the panel first. Never while work is running.
+    pub fn start_walkthrough(&mut self, from_command: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if self.tour.is_some() {
+            return;
+        }
+        let working = self.prompt_mode.read(cx).is_working() || self.ribbon.read(cx).is_building();
+        if working {
+            if from_command {
+                window.push_notification(
+                    gpui_kit::component::notification::Notification::info(
+                        "The walkthrough can be taken once the work running is over.",
+                    ),
+                    cx,
+                );
+            }
+            return;
+        }
+        if from_command {
+            self.close_panel(window, cx);
+        } else {
+            if walkthrough::preference::taken() {
+                return;
+            }
+            if self.panel_open() {
+                self.tour_pending = true;
+                return;
+            }
+        }
+        self.tour = Some(Tour::new());
+        walkthrough::set_showing(true, cx);
+        self.show_tour_step(window, cx);
+    }
+
+    /// Selects what the walkthrough's step points at, as it shows.
+    fn show_tour_step(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(step) = self.tour.as_ref().map(Tour::step) else {
+            return;
+        };
+        match step {
+            Step::Projects | Step::Create => self.ribbon.update(cx, |ribbon, cx| {
+                ribbon.show_tab(crate::ribbon::RibbonTab::Project, cx)
+            }),
+            Step::FillIn | Step::Modes | Step::Ready => {}
+            Step::Code | Step::Spec | Step::Chain | Step::Ask => {
+                let mode = step.mode().unwrap_or(SendMode::Both);
+                let chat = self.prompt_mode.read(cx).chat_input_view();
+                chat.update(cx, |chat, cx| chat.select_mode(mode, window, cx));
+            }
+        }
+        cx.notify();
+    }
+
+    /// The walkthrough's Next: on to the next step, or, on the last, Done.
+    fn tour_next(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(tour) = self.tour.as_mut() else {
+            return;
+        };
+        if !tour.step().can_go_on() {
+            return;
+        }
+        match tour.next() {
+            Some(step) => {
+                tour.go_to(step);
+                self.show_tour_step(window, cx);
+            }
+            None => self.end_walkthrough(true, window, cx),
+        }
+    }
+
+    fn tour_back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(tour) = self.tour.as_mut() else {
+            return;
+        };
+        if let Some(step) = tour.back() {
+            // Back from filling in the form closes it.
+            let closing_form = tour.step() == Step::FillIn;
+            tour.go_to(step);
+            if closing_form {
+                self.close_panel(window, cx);
+            }
+            self.show_tour_step(window, cx);
+        }
+    }
+
+    /// Ends the walkthrough, remembering it as taken: Done leaves the chat
+    /// input on Chain with focus in its text box; Skip tour leaves
+    /// everything as it is.
+    fn end_walkthrough(&mut self, done: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if self.tour.take().is_none() {
+            return;
+        }
+        walkthrough::set_showing(false, cx);
+        walkthrough::preference::set_taken();
+        if done {
+            let chat = self.prompt_mode.read(cx).chat_input_view();
+            chat.update(cx, |chat, cx| chat.select_mode(SendMode::Both, window, cx));
+        }
+        cx.notify();
+    }
+
+    /// The walkthrough over everything, while one is under way.
+    fn render_tour(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let this = cx.entity().downgrade();
+        let act = move |f: fn(&mut MainWindow, &mut Window, &mut Context<MainWindow>)| {
+            let this = this.clone();
+            Box::new(move |window: &mut Window, cx: &mut App| {
+                this.update(cx, |this, cx| f(this, window, cx)).ok();
+            }) as Box<dyn Fn(&mut Window, &mut App)>
+        };
+        let offers_open = self.tour.as_ref()?.step() == Step::Create && ProjectDirectory::get(cx).is_some();
+        let actions = walkthrough::Actions {
+            back: act(|this, window, cx| this.tour_back(window, cx)),
+            next: act(|this, window, cx| this.tour_next(window, cx)),
+            skip: act(|this, window, cx| this.end_walkthrough(false, window, cx)),
+            use_open_project: offers_open.then(|| {
+                act(|this, window, cx| {
+                    if let Some(tour) = this.tour.as_mut() {
+                        tour.project_ready();
+                    }
+                    this.show_tour_step(window, cx);
+                })
+            }),
+        };
+        let tour = self.tour.as_mut()?;
+        Some(walkthrough::overlay(tour, actions, window, cx))
+    }
+
+    /// While the walkthrough shows, <Escape> skips it and <Enter> goes on,
+    /// while Next is enabled, before anything else hears them.
+    fn intercept_walkthrough_keys(window: &Window, cx: &mut Context<Self>) -> Subscription {
+        let this = cx.weak_entity();
+        let handle = window.window_handle();
+        cx.intercept_keystrokes(move |event, window, cx| {
+            let keystroke = &event.keystroke;
+            if window.window_handle() != handle
+                || keystroke.modifiers.modified()
+                || !matches!(keystroke.key.as_str(), "escape" | "enter")
+            {
+                return;
+            }
+            let _ = this.update(cx, |this, cx| {
+                let Some(step) = this.tour.as_ref().map(Tour::step) else {
+                    return;
+                };
+                if window.has_active_dialog(cx) {
+                    return;
+                }
+                if keystroke.key == "escape" {
+                    this.end_walkthrough(false, window, cx);
+                    cx.stop_propagation();
+                } else if step.can_go_on() {
+                    this.tour_next(window, cx);
+                    cx.stop_propagation();
+                }
+            });
+        })
     }
 
     /// The diff or the new project form, in an inset panel over the window;
@@ -1466,6 +1746,9 @@ impl MainWindow {
         }
         if let Some(settings) = &self.settings {
             return Some(("settings", settings.clone().into()));
+        }
+        if let Some(welcome) = &self.welcome {
+            return Some(("welcome", welcome.clone().into()));
         }
         if let Some(editor) = &self.theme_editor {
             return Some(("theme-editor", editor.clone().into()));
@@ -1505,14 +1788,47 @@ impl MainWindow {
 
     /// Quits, once confirmed if a task is running.
     fn quit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.confirm_quit(window, cx) {
+        self.quit_and(false, window, cx);
+    }
+
+    /// Quits as [`Self::quit`] does, starting Suspense again once it has
+    /// where `restart`, as an update's Restart does.
+    fn quit_and(&mut self, restart: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if self.confirm_quit(restart, window, cx) {
+            if restart {
+                crate::self_update::restart_on_quit();
+            }
             cx.quit();
         }
     }
 
+    /// Quits from any window, through the main window's confirmation,
+    /// starting Suspense again once it has where `restart`.
+    pub fn quit_from_anywhere(restart: bool, cx: &mut App) {
+        for handle in cx.windows() {
+            let Some(root) = handle.downcast::<Root>() else {
+                continue;
+            };
+            let Ok(Ok(main)) = root.read_with(cx, |root, _| root.view().clone().downcast::<MainWindow>())
+            else {
+                continue;
+            };
+            root.update(cx, |_, window, cx| {
+                window.activate_window();
+                main.update(cx, |this, cx| this.quit_and(restart, window, cx));
+            })
+            .ok();
+            return;
+        }
+        if restart {
+            crate::self_update::restart_on_quit();
+        }
+        cx.quit();
+    }
+
     /// Whether the application can end now: nothing is running. While a
     /// prompt or a build is, it asks instead, quitting once confirmed.
-    fn confirm_quit(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+    fn confirm_quit(&mut self, restart: bool, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let prompt_mode = self.prompt_mode.read(cx);
         let working = prompt_mode.is_working();
         let ribbon = self.ribbon.read(cx);
@@ -1547,16 +1863,23 @@ impl MainWindow {
         if !window.has_active_dialog(cx) {
             window.open_alert_dialog(cx, move |alert, _, _| {
                 alert
-                    .title("Quit while a task is running?")
+                    .title(if restart {
+                        "Restart while a task is running?"
+                    } else {
+                        "Quit while a task is running?"
+                    })
                     .description(description.clone())
                     .button_props(
                         DialogButtonProps::default()
                             .show_cancel(true)
-                            .ok_text("Quit")
+                            .ok_text(if restart { "Restart" } else { "Quit" })
                             .ok_variant(ButtonVariant::Danger)
                             .cancel_text("Keep Running"),
                     )
-                    .on_ok(|_, _, cx| {
+                    .on_ok(move |_, _, cx| {
+                        if restart {
+                            crate::self_update::restart_on_quit();
+                        }
                         cx.quit();
                         true
                     })
@@ -1789,6 +2112,12 @@ impl Render for MainWindow {
             .on_action(
                 cx.listener(|this, _: &OpenSettings, window, cx| this.open_settings(window, cx)),
             )
+            .on_action(
+                cx.listener(|this, _: &OpenWelcome, window, cx| this.open_welcome(window, cx)),
+            )
+            .on_action(cx.listener(|this, _: &OpenWalkthrough, window, cx| {
+                this.start_walkthrough(true, window, cx)
+            }))
             .on_action(cx.listener(|this, _: &OpenThemeEditor, window, cx| {
                 this.open_theme_editor(window, cx)
             }))
@@ -1850,6 +2179,7 @@ impl Render for MainWindow {
                 ),
             )
             .children(self.render_panel(window, cx))
+            .children(self.render_tour(window, cx))
             // Inside the window's element tree, so actions such as
             // TogglePalette reach it from a focused dialog.
             .children(Root::render_dialog_layer(window, cx))
@@ -4653,6 +4983,231 @@ mod tests {
         cx.run_until_parked();
         assert!(main.read_with(cx, |main, _| main.theme_editor.is_none()));
     }
+
+    /// The Welcome command opens the welcome page in the inset panel, with
+    /// or without a project; choosing another harness opens the settings on
+    /// the Agent section.
+    #[gpui_kit::test]
+    async fn welcome_opens_in_the_inset_panel(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        cx.update_window(handle, |_, window, cx| {
+            window.dispatch_action(Box::new(crate::welcome::OpenWelcome), cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let welcome = main.read_with(cx, |main, _| main.welcome.clone().expect("no welcome page"));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("welcome-panel").is_some());
+            assert!(window.try_find("welcome-close").is_some());
+            assert!(window.try_find("welcome-check-again").is_some());
+        })
+        .unwrap();
+        welcome.update(cx, |_, cx| cx.emit(crate::welcome::ChooseHarness));
+        cx.run_until_parked();
+        main.read_with(cx, |main, _| {
+            assert!(main.welcome.is_none());
+            assert!(main.settings.is_some(), "the settings didn't open");
+        });
+    }
+
+    /// The walkthrough starts at the Project tab, goes on to the New Project
+    /// form once it opens, back once it is cancelled, through the modes
+    /// with each tab selected, and Done leaves Chain selected; Escape skips
+    /// it, and clicks on the dimmed window do nothing.
+    #[gpui_kit::test]
+    async fn the_walkthrough_goes_from_projects_through_the_modes(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        use crate::walkthrough::Step;
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        let step = |cx: &mut TestAppContext| {
+            main.read_with(cx, |main, _| main.tour.as_ref().map(|tour| tour.step()))
+        };
+        let frame = |cx: &mut TestAppContext| {
+            for _ in 0..2 {
+                cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                    .unwrap();
+            }
+            cx.run_until_parked();
+        };
+        cx.update_window(handle, |_, window, cx| {
+            window.dispatch_action(Box::new(crate::walkthrough::OpenWalkthrough), cx)
+        })
+        .unwrap();
+        frame(cx);
+        assert_eq!(step(cx), Some(Step::Projects));
+        cx.update_window(handle, |_, window, cx| {
+            // The callout sits beneath the Project tab it points at.
+            let tab = window.find(("ribbon-tab", 0usize)).bounds();
+            let callout = window.find("walkthrough-callout").bounds();
+            assert!(callout.top() > tab.bottom(), "{callout:?} isn't beneath {tab:?}");
+            // Clicking the dimmed window does nothing.
+            window.click_at("walkthrough", gpui_kit::point(gpui_kit::px(600.), gpui_kit::px(400.)), cx);
+        })
+        .unwrap();
+        frame(cx);
+        assert_eq!(step(cx), Some(Step::Projects));
+        cx.update_window(handle, |_, window, cx| window.press("enter", cx))
+            .unwrap();
+        frame(cx);
+        assert_eq!(step(cx), Some(Step::Create));
+        // Next waits for the form; opening it goes on, cancelling it back.
+        cx.update_window(handle, |_, window, cx| window.press("enter", cx))
+            .unwrap();
+        assert_eq!(step(cx), Some(Step::Create));
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| main.open_new_project(window, cx))
+        })
+        .unwrap();
+        frame(cx);
+        assert_eq!(step(cx), Some(Step::FillIn));
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| main.close_panel(window, cx))
+        })
+        .unwrap();
+        assert_eq!(step(cx), Some(Step::Create));
+        // As though the project were created, on to the modes.
+        main.update(cx, |main, _| main.tour.as_mut().unwrap().project_ready());
+        let chat = main.read_with(cx, |main, cx| main.prompt_mode.read(cx).chat_input_view());
+        for (expected, mode) in [
+            (Step::Code, SendMode::Code),
+            (Step::Spec, SendMode::Spec),
+            (Step::Chain, SendMode::Both),
+            (Step::Ask, SendMode::Ask),
+        ] {
+            cx.update_window(handle, |_, window, cx| {
+                main.update(cx, |main, cx| main.tour_next(window, cx))
+            })
+            .unwrap();
+            frame(cx);
+            assert_eq!(step(cx), Some(expected));
+            assert_eq!(chat.read_with(cx, |chat, _| chat.mode()), mode);
+        }
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| {
+                main.tour_next(window, cx);
+                assert_eq!(main.tour.as_ref().map(|tour| tour.step()), Some(Step::Ready));
+                main.tour_next(window, cx);
+            })
+        })
+        .unwrap();
+        frame(cx);
+        assert_eq!(step(cx), None, "Done didn't end it");
+        assert_eq!(chat.read_with(cx, |chat, _| chat.mode()), SendMode::Both);
+
+        // Escape skips it.
+        cx.update_window(handle, |_, window, cx| {
+            window.dispatch_action(Box::new(crate::walkthrough::OpenWalkthrough), cx)
+        })
+        .unwrap();
+        frame(cx);
+        cx.update_window(handle, |_, window, cx| window.press("escape", cx))
+            .unwrap();
+        frame(cx);
+        assert_eq!(step(cx), None);
+    }
+
+    /// The welcome page closes with its close button, Escape, and a click
+    /// around it, whatever its checks say, even while they run; checks
+    /// finishing after the launch never open it again once it was closed or
+    /// something else was opened.
+    #[gpui_kit::test]
+    async fn welcome_always_closes_and_opens_itself_once(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        let open = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.dispatch_action(Box::new(crate::welcome::OpenWelcome), cx);
+                window.render_frame(cx);
+            })
+            .unwrap();
+            assert!(main.read_with(cx, |main, _| main.welcome.is_some()));
+        };
+        let closed = |cx: &mut TestAppContext| {
+            cx.run_until_parked();
+            main.read_with(cx, |main, _| {
+                assert!(main.welcome.is_none(), "the welcome page stayed open");
+                assert!(!main.panel_open());
+            });
+        };
+        // Straight away, while its checks still run.
+        open(cx);
+        cx.update_window(handle, |_, window, cx| window.click("welcome-close", cx))
+            .unwrap();
+        closed(cx);
+        open(cx);
+        cx.update_window(handle, |_, window, cx| window.press("escape", cx))
+            .unwrap();
+        closed(cx);
+        open(cx);
+        cx.update_window(handle, |_, window, cx| {
+            window.click_at(
+                "welcome-backdrop",
+                gpui_kit::point(gpui_kit::px(4.), gpui_kit::px(4.)),
+                cx,
+            )
+        })
+        .unwrap();
+        closed(cx);
+
+        // The launch checks open it by themselves once, unless something
+        // else was opened first.
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| main.run_launch_checks(window, cx))
+        })
+        .unwrap();
+        cx.update_window(handle, |_, window, cx| {
+            main.update(cx, |main, cx| {
+                main.open_theme_editor(window, cx);
+                main.close_panel(window, cx);
+            })
+        })
+        .unwrap();
+        cx.run_until_parked();
+        main.read_with(cx, |main, _| {
+            assert!(main._launch_checks.is_none());
+            assert!(main.welcome.is_none(), "it opened after something else was");
+        });
+    }
+
 
     /// Ctrl/Cmd+, opens the settings in the inset panel, in the main window
     /// rather than a window of their own; opening them again keeps the one

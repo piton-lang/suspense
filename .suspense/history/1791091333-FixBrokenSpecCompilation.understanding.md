@@ -1,0 +1,8 @@
+- [Spec and Chain defaults say to run piton check, fix every error, then piton build, and never finish with errors](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#defaults)
+- [After Spec work, a host build runs however the run ended, before the task shows finished](.claude/reference/scope/spec-build/index.md#after-spec-work)
+- [If that build fails because of the spec, one "Spec fix" task is sent at the head of the spec lane, carrying on the conversation](.claude/reference/scope/spec-build/index.md#after-spec-work)
+- [The spec fix prompt says the spec doesn't build, asks to fix only that, and gives the build output](.claude/reference/scope/spec-build/index.md#after-spec-work)
+- [At most one spec fix per task, never for a spec fix, nor after a cancelled or failed task](.claude/reference/scope/spec-build/index.md#after-spec-work)
+- [A chain's next step waits for the spec fix](.claude/reference/scope/spec-build/index.md#after-spec-work)
+- [Unowned-output errors only inside reference folders are cleared by deleting those files and building once more](.claude/reference/scope/spec-build/index.md#owned-reference)
+- [A Spec run mounts the project's own .piton, never an empty, temporary or copied one](.claude/reference/scope/container-environment/index.md#spec)

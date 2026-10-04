@@ -1,0 +1,97 @@
+
+export anchor ImplementSuspenseSelfUpdates2:
+    userPrompt:
+        \\\
+        I'd also like a self-update functionality built into Suspense that checks for more recent versions and will download them and replace the current binary on restart.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            I'd also like a self-update functionality built into Suspense that checks for more recent versions and will download them and replace the current binary on restart.
+            \\\
+        result:
+            \\\
+            I've added a self-update spec: Suspense finds newer edge releases, downloads them in the background, and swaps in the new binary when it quits or restarts. `piton check` reports no problems, every changed file is formatted, and `piton build` succeeds. I confirmed the new scope and the Settings change in the refreshed reference.
+
+            **How it works:**
+            - **Which builds update:** only builds published by the edge-release workflow. Those builds now also bake in the repository they came from (`owner/name`). A build made anywhere else, such as a local `cargo run`, never checks, downloads or replaces itself.
+            - **Checking:**
+              - It asks GitHub's releases API for the highest `0.1.N`, pre-releases included, comparing N as a number. It never goes back to an older version.
+              - It checks a few seconds after launch and then every 6 hours, while "Check for updates automatically" is on. That's a new user preference, on by default.
+              - Automatic checks fail quietly. A "Check for updates" you ask for says why it failed.
+            - **Downloading:**
+              - It downloads the asset for the running platform and checks it against the size GitHub gives, and against the SHA-256 digest where GitHub gives one.
+              - The binary is unpacked and staged in the same directory as the running binary, so a rename can put it in place.
+              - If that directory isn't writable, nothing is downloaded. The Updates section says so and links to the release page.
+            - **Restarting:**
+              - A notification says "Suspense 0.1.N is ready", with **Restart** and **Later**.
+              - Restart quits the normal way, asking first if work is running, then relaunches.
+              - Any quit puts a staged update in place. On Windows, the running binary is renamed aside first and deleted at the next launch.
+              - An update left staged by a crash is put in place at the next launch and takes effect the launch after.
+              - If a step fails, the old binary is put back.
+            - **Settings:** a new **Updates** section, after Containers, shows:
+              - the running version
+              - the "check automatically" checkbox and a Check for updates button
+              - a status line: checking, up to date (with when it last checked), downloading, ready with a Restart button, or the error in red
+
+            **This run hit the same unowned-file error you showed me.** The build refused `.claude/reference/scope/edge-releases/index.md`, written by last turn's build. This container's `.piton` is still a temporary filesystem rather than the project's own folder, so the fix from two turns ago isn't in the code yet. I deleted the file, since it's generated reference output, and rebuilt cleanly.
+
+            Choices I made that you may want to change:
+            - **Timing:** it downloads automatically as soon as an update is found, and doesn't ask first.
+            - **Applying the update:** it happens on any quit, not only through the Restart button.
+            - **Signing:** none. It relies on HTTPS plus GitHub's size and digest, since the release binaries are unsigned.
+
+            ## What changed in the spec, and the anchors the code should follow
+
+            - **New `spec/scope/self-update/index.pi` (`SelfUpdateScope`):**
+              - **`SelfUpdateShape.description`:** only update when the build has a baked-in repository.
+              - **`SelfUpdateShape.checking`:**
+                - Use the GitHub releases API with pre-releases included, and pick the release with the highest numeric N that has this platform's asset.
+                - Check at startup plus a few seconds, then every 6 hours, while the preference is on. The manual check ignores the preference.
+                - Automatic failures are quiet; a manual check reports why.
+              - **`SelfUpdateShape.downloading`:**
+                - Download in the background, check size and the SHA-256 `digest` when present, and unpack `.tar.gz` or `.zip`.
+                - Stage the binary in the executable's directory and mark it executable on Unix. Only one download runs at a time.
+                - If the directory isn't writable, download nothing and show the directory and a link to the release page.
+              - **`SelfUpdateShape.restarting`:**
+                - Show the notification with Restart and Later.
+                - Restart goes through the normal quit, including its confirmation, then relaunches from the same path.
+                - On every quit, rename the staged binary into place. On Windows, rename the running binary aside first.
+                - At launch, delete the set-aside binary and apply any update left staged.
+                - If a swap fails, roll back. Any child process this starts follows `ApplicationShape.childProcesses`.
+              - **`SelfUpdateShape.updatesSection`:** the Settings section's contents and status lines.
+            - **`EdgeReleasesShape.version`:** bake in the repository as well as the version, for example from `GITHUB_REPOSITORY` via `option_env!`.
+            - **`SettingsWindowShape.sidebar`:** add "Updates" after "Containers".
+            - **`UserPreferencesShape.preferences`:** add "check for updates automatically", which starts on.
+            - **`ApplicationShape.selfUpdate`:** links the new scope. No code needed for it.
+            \\\
+
+    sentFrom: ImplementSuspenseSelfUpdates

@@ -1,0 +1,98 @@
+use /lib
+from /scope/application/MainWindow import MainWindowScope
+from /scope/edge-releases import EdgeReleasesScope
+from /scope/settings-window import SettingsWindowScope
+from /scope/user-preferences import UserPreferencesScope
+
+export scope SelfUpdateScope:
+    concept: {SelfUpdateConcept}
+
+concept SelfUpdateConcept:
+    pitch:
+        Suspense keeps itself up to date: it looks for a newer edge release,
+        downloads it in the background, and puts it in place of its own
+        binary when it restarts, so the newest build is only a restart away.
+
+    shape: {SelfUpdateShape}
+
+shape SelfUpdateShape:
+    description:
+        Updates come from the edge releases, as the @{EdgeReleasesScope}
+        says, published in the GitHub repository the running build was
+        published from, which it knows because that is baked into it. Only
+        such a build updates itself. A build made anywhere else, as on a
+        developer's machine, never looks for an update, never downloads one,
+        and never replaces its binary, and the Updates section says why.
+
+    checking:
+        A check asks GitHub's releases API for the repository's releases,
+        pre-releases included, and takes the one with the highest version
+        `0.1.N`, comparing N as a number, never as text. It is newer only
+        when its N is greater than the running build's; an older or equal one
+        is never taken, so an update never goes back. A release without the
+        asset for the running platform is passed over for the newest one
+        that has it.
+
+        Suspense checks a few seconds after it starts, and then every 6
+        hours while it runs, in the background, never holding up anything
+        else, and only while "Check for updates automatically" is on, as it
+        is until turned off. That choice is remembered for the user, as the
+        @{UserPreferencesScope} says. Check for updates, in the Updates
+        section, checks straight away, whether it is on or not. A check that
+        can't be made, as with no network or GitHub refusing it, is quiet
+        when automatic, trying again at the next, and says why when asked
+        for.
+
+    downloading:
+        A newer release found is downloaded straight away, in the background,
+        taking the asset for the platform and architecture running,
+        `suspense-0.1.N-linux-x86_64.tar.gz`, `suspense-0.1.N-windows-x86_64.zip`, or
+        `suspense-0.1.N-macos-aarch64.tar.gz`. It is checked against the size
+        GitHub gives for it, and against its SHA-256 digest where GitHub
+        gives one, and one that doesn't match is thrown away and never used.
+        The binary is taken out of the archive and staged beside the running
+        binary, in the same directory, so it can be put in place by a rename,
+        marked executable where the platform has such a mark. One download
+        runs at a time; a newer release found while one is staged replaces
+        it. A download that fails says so in the Updates section, and is
+        tried again at the next check.
+
+        Where the running binary's directory can't be written, nothing is
+        downloaded, and the Updates section says that Suspense can't update
+        itself there, with the directory, and a link to the release's page,
+        opened in the browser, so it can be updated by hand.
+
+    restarting:
+        Once an update is staged, a notification says "Suspense 0.1.N is
+        ready", with a Restart button and a Later button. The Updates section
+        says the same, with a Restart button, for as long as it stays staged.
+        Later only closes the notification; the update stays staged, and is
+        put in place whenever Suspense next quits.
+
+        Restart quits as quitting does, as the @{MainWindowScope} says,
+        asking first while work is running, and doing nothing more if the
+        quit is cancelled, then starts Suspense again from the same path once
+        the update is in place. However Suspense quits, a staged update is
+        put in place as it does: the staged binary is renamed over the
+        running one, the running one renamed aside first where the platform
+        won't replace a running binary, as on Windows. The binary set aside
+        is deleted at the next launch. An update left staged by a quit that
+        never finished, as a crash, is put in place at the next launch, before
+        anything else, and takes effect at the launch after, the Updates
+        section saying a restart finishes it.
+
+        Putting an update in place never leaves Suspense without a binary:
+        a step that fails puts back the binary that was there, and the
+        Updates section says why it couldn't update.
+
+    updatesSection:
+        The @{SettingsWindowScope} has an "Updates" section. It says the
+        running version, as "Suspense 0.1.42", and where it can't update
+        itself, as for a build made elsewhere, why, and offers nothing else.
+        Otherwise it shows a checkbox reading "Check for updates
+        automatically", a "Check for updates" button, disabled while a check
+        or download is under way, and a line saying where things stand:
+        "Checking for updates…", "Suspense is up to date", checked when, as
+        "Checked 5 minutes ago", "Downloading 0.1.N…" with how much has
+        come, "Suspense 0.1.N is ready" with a Restart button, or, in the
+        theme's error colour, why the last check, download, or update failed.

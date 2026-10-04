@@ -125,6 +125,15 @@ thread_local! {
     static CURRENT: std::cell::Cell<Option<Agent>> = const { std::cell::Cell::new(None) };
 }
 
+/// Where `agent`'s installation instructions are.
+pub fn install_url(agent: Agent) -> &'static str {
+    match agent {
+        Agent::Claude => "https://docs.claude.com/en/docs/claude-code/setup",
+        Agent::Codex => "https://github.com/openai/codex",
+        Agent::OpenCode => "https://opencode.ai/docs/",
+    }
+}
+
 /// The agent every run goes to: the one the user picked, or Claude Code until
 /// one is. Tests always start with Claude Code, whatever the user picked.
 pub fn current() -> Agent {

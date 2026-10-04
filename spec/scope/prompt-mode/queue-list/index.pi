@@ -53,6 +53,13 @@ shape QueueListShape:
         prompts queued most recently, however it was scrolled when last
         closed. The same area holds the auto-send switch and the "Send next"
         button.
+
+        Editing a queued prompt from the chat input's <Up>, as the
+        @{ChatInputScope} says, expands the list while the queue holds more
+        than one prompt, scrolled so the prompt being edited is in view,
+        following it as <Up> and <Down> move the edit along the queue. Once
+        the edit is saved or cancelled, a list it expanded collapses again;
+        one already expanded stays as it was.
         The queue is shown only while it has anything in it.
 
     cancel:
