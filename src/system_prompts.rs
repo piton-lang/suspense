@@ -61,6 +61,19 @@ pub const CODE_RESULT: &str = "${CODE_RESULT}";
 pub const SPEC_PROMPT: &str = "${SPEC_PROMPT}";
 pub const SPEC_RESULT: &str = "${SPEC_RESULT}";
 
+/// The card format every question is told, after its project's Ask
+/// instructions, whatever they say: how an answer hands back prompts and
+/// questions as the cards the user acts on. The application's own, not a
+/// project's to edit, baked in from this repository's
+/// `.suspense/system-prompts/ask-cards.md`.
+pub fn ask_cards() -> &'static str {
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/.suspense/system-prompts/ask-cards.md"
+    ))
+    .trim_end()
+}
+
 /// What CODE_RESULT is filled in with for a code task that left no final
 /// output.
 pub const NO_CODE_RESULT: &str = "The code task left no final output: it failed, was \

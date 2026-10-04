@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /scope/application import ApplicationScope
 from /scope/project-data import ProjectDataScope
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/project/open-project import OpenProjectScope
@@ -120,7 +121,11 @@ shape NewProjectShape:
         overwrites anything: a folder that already holds a piton.config.pi is
         refused, a file already in the spec root is left as it is, and folders
         that already exist are kept. A project created from either template
-        builds with `piton build` straight away.
+        builds with `piton build` straight away. Everything it creates,
+        folders, files, and the Git repository alike, belongs to the user,
+        as the @{ApplicationScope} says, never to Administrators on Windows,
+        so the project can be edited, built, and committed at once, with no
+        ownership to take.
 
         With "Initialize a Git repository" checked, once the rest is created the
         project's folder is made a Git repository with `git init`, unless it

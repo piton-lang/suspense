@@ -1,0 +1,75 @@
+
+export anchor FormatPromptsForSuspenseButtons:
+    userPrompt:
+        \\\
+        Any time I ask for a prompt in ask mode, it should be instructed to format it such that Suspense can interpret it and give me buttons to s"send to code send to chain, send to spec"
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Any time I ask for a prompt in ask mode, it should be instructed to format it such that Suspense can interpret it and give me buttons to s"send to code send to chain, send to spec"
+            \\\
+        result:
+            \\\
+            I changed the spec so every Ask question is told to give prompts as cards, and each prompt card gets Send to Code, Send to Chain and Send to Spec buttons. `piton check` reports no problems, `piton build` wrote 79 files, and the new sections appear in the refreshed reference.
+
+            **The Send buttons send right away.** "Send to Code", "Send to Chain" and "Send to Spec" each send the prompt immediately in that mode, as if you'd typed it on that tab and pressed send. A task queues if its lane is busy. If you'd rather they only fill the chat input for you to send yourself, say so and I'll switch them. The new Edit button does that today.
+
+            ## What changed in the spec
+
+            **1. New `#card-format` section** in `.claude/reference/scope/prompt-mode/mode-system-prompts/index.md`
+            - **What it says:** whenever the user asks for a prompt, or the answer suggests one, give it as a `suspense-prompt` block with its mode, never as plain text, a quote or any other code block. Pick `chain` when the work changes both spec and code. It also keeps the existing `suspense-question` rule.
+            - **Not editable:** the app adds it to every question's `<task-instructions>` block, after the project's own Ask instructions. So it reaches projects whose `ask.md` was saved before this change, which a new default alone wouldn't.
+            - **Source:** the text is built into the app from `ask-cards.md` in this repo's `.suspense/system-prompts/`, and a build can't be made without it.
+            - **Ask default:** `#defaults` no longer holds this paragraph, so it isn't given twice.
+
+            **2. Prompt card buttons** in `.claude/reference/scope/prompt-mode/ask-conversation/index.md#suggested-prompts`
+            - **Buttons, in order:** Copy, Edit, then Send to Code, Send to Chain, Send to Spec. Each is in its mode's colour, 4px apart, and the row wraps when the card is narrow.
+            - **Highlighting:** the button for the card's own mode is filled in its colour and the others are ghost buttons. An `ask` card has "Ask" first and a `freeform` card has "Send to Freeform" first, filled, with the three after it.
+            - **Sending:** sends with the Slice toggle as it is and nothing attached, and leaves whatever you're typing in the chat input alone. The button reads "Sent to Code" (and so on) with a check for 2 seconds, and clicking again sends again.
+            - **Edit:** does what "Send to prompt" used to do: puts the text in the chat input on the card's mode tab, setting aside anything already typed. It reads "Edited" for 2 seconds after.
+            - **Unknown mode:** a card whose mode is missing or unknown shows all three send buttons as ghosts, and its Edit selects Chain.
+
+            **3. Suspense fluency** (`#suspense-fluency`): it now says prompt cards have buttons that send to Code, Chain or Spec.
+
+            The constraints are in `.suspense/history/1791129571-Prompt_12d373dbb0306780.understanding.md`.
+
+            ## Anchors the code should follow
+            - `ModeSystemPromptsScope`: `#card-format` (append the fixed paragraph to every question and add `ask-cards.md`), `#defaults` (take the paragraph out of the default `ask.md`), `#suspense-fluency` (update `suspense-fluency.md`).
+            - `AskConversationScope`: `#suggested-prompts`.
+            - `PromptSendingScope`: how a send button's prompt is sent.
+
+            The Gmail, Google Calendar and Google Drive connectors still need authorizing in your claude.ai connector settings before they can be used. None of them were needed here.
+            \\\
+
+    sentFrom: Prompt_12d373dbb0306780

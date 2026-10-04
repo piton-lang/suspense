@@ -29,7 +29,7 @@ pub struct ProjectCreated(pub PathBuf, pub Option<String>);
 
 /// The .gitignore written into a new repository: what Suspense keeps for this
 /// machine alone rather than for the project.
-const GITIGNORE: &str = "\
+pub(crate) const GITIGNORE: &str = "\
 # Suspense's per-machine state. The prompt history is kept.
 /.suspense/harness.json
 /.suspense/fluency.md
@@ -51,7 +51,7 @@ pub use crate::agent::Agent;
 /// the guidance Belay places throughout the code root, which OpenCode doesn't
 /// on its own, and hides the skills Belay writes for commands, which OpenCode
 /// would otherwise also offer as ordinary skills.
-fn opencode_json(code_root: &str) -> String {
+pub(crate) fn opencode_json(code_root: &str) -> String {
     let code_root = code_root.strip_prefix("./").unwrap_or(code_root);
     let instructions = if code_root == "." || code_root.is_empty() {
         "**/AGENTS.md".to_string()

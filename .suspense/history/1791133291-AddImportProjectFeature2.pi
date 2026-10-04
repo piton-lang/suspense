@@ -1,0 +1,90 @@
+
+export anchor AddImportProjectFeature2:
+    userPrompt:
+        \\\
+        We need to add an import project feature that will allow us to take an existing folder and it'll create a piton config file -- you can still choose you agent and such.  
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            We need to add an import project feature that will allow us to take an existing folder and it'll create a piton config file -- you can still choose you agent and such.  
+            \\\
+        result:
+            \\\
+            I added an Import Project feature to the spec: it makes an existing folder into a project, with the same agent, template and root choices as New Project. `piton check` reports no problems, `piton build` wrote 80 files, and the new page is at `.claude/reference/scope/import-project/index.md`.
+
+            ## What changed in the spec
+
+            **1. New Import Project form** (`spec/scope/import-project/index.pi`)
+            - **`#description`:** an "Import Project" form laid out like New Project. The Name and Location fields are replaced by a single "Folder" row. Everything else is the same: the Git checkbox, spec/code/shape roots, template and agents. The buttons are Cancel and Import.
+            - **`#folder`:**
+              - Browse opens the folder browser, titled "Choose the folder to import".
+              - The project is named after the folder.
+              - A folder that already has a `piton.config.pi` is refused, with an "Open it instead" link.
+              - A folder you can't write to says so.
+            - **`#defaults`:**
+              - The spec root starts as `./spec`.
+              - The code root starts as `./src` if that folder exists, otherwise `./`, meaning the whole folder.
+              - The shape root starts as `./spec/shape`.
+              - If the folder is already a Git repository, the Git checkbox is checked, disabled and reads "Already a Git repository".
+              - A root that already exists is marked "Uses the existing folder".
+            - **`#importing`:**
+              - It writes `piton.config.pi`, and `opencode.json` if OpenCode is checked and there isn't one, the same way New Project does.
+              - It creates any missing roots, and adds template files only where no file of that name exists.
+              - It never overwrites, moves, renames or deletes anything already in the folder.
+              - It optionally runs `git init`. Where the folder is in a Git repository, Suspense's machine-only ignore lines are added to `.gitignore`. An existing `.gitignore` keeps its contents and only the missing lines are added at the end, under a `# Suspense` comment.
+              - `piton.config.pi` is written last, so a failed import is never mistaken for a project.
+              - On success the project opens as with Open Project; on failure the form stays open and says what went wrong.
+
+            **2. Where you open it**
+            - **Ribbon** (`.claude/reference/ui/components/ribbon/project-tab/index.md`): a slim primary "Import Project…" button sits between New Project and Open Project (`#groups`, `#commands`).
+            - **Main window** (`.claude/reference/scope/application/MainWindow.md`): `#import-project` opens it in the inset panel, fresh each time, replacing any diff or New Project form there.
+            - **Palette** (`.claude/reference/scope/palette/index.md`): the system commands now include "New Project…" and "Import Project…".
+
+            **Three choices of mine you may want to change:**
+            - The code root defaults to `./` when there is no `src` folder.
+            - An existing `.gitignore` gets Suspense's lines added at the end, rather than being left alone as New Project does.
+            - The import can be used on a folder that's already a Git repository.
+
+            The constraints are in `.suspense/history/1791132918-AddImportProjectFeature.understanding.md`.
+
+            ## Anchors the code should follow
+            - `ImportProjectScope`: `#description`, `#folder`, `#defaults`, `#importing`.
+            - `NewProjectScope`: `#config`, `#agents`, `#folders`, `#templates`, which the import reuses.
+            - `RibbonProjectTabScope`: `#groups`, `#commands`.
+            - `MainWindowScope`: `#import-project`.
+            - `PaletteScope`: its system commands.
+            - `ApplicationScope`: `#file-ownership`.
+            \\\
+
+    sentFrom: AddImportProjectFeature

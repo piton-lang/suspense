@@ -1,0 +1,5 @@
+- [Claude Code runs are `claude -p` in auto mode, the system prompt given with --append-system-prompt](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [Every run the application starts goes to the harness picked, tasks, questions, and one-off runs alike](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [A run in a container is never given the user's MCP servers](.claude/reference/scope/container-environment/index.md#question)
+- [Spec runs and questions run in a container; Code, Chain code steps, and Freeform run on the host](.claude/reference/scope/harness-integration/index.md#description)
+- [No run is given the claude.ai account connectors; Claude Code runs with ENABLE_CLAUDEAI_MCP_SERVERS=false](.claude/reference/scope/harness-integration/index.md#harnesses)

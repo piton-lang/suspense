@@ -34,7 +34,9 @@ shape PromptEditorShape:
     basicDesignAndLayout:
         The @{MessageList} fills the body's Chat tab: all the space between
         the body's tab bar and the @{ChatInputScope} along the bottom. From top to bottom it holds the
-        previous tasks row, the header for the latest task, the latest task's
+        previous tasks row, the header, holding the latest task and every
+        other task under way, one of them selected and shown in full and the
+        rest as compact rows, as the @{MessageList} says, the selected task's
         output, and the queue.
 
         Before any task has been sent, the space shows a hint instead, which
@@ -47,8 +49,9 @@ shape PromptEditorShape:
 
     previousTasks:
         Previous tasks are a @{HistoryListScope} along the top of the view,
-        listing every task sent. Its row counts every task but the latest,
-        which heads the view: "No previous tasks", "1 previous task", or
+        listing every task sent. Its row counts every task but those the
+        header shows, the latest, which heads the view, and any other under
+        way: "No previous tasks", "1 previous task", or
         "N previous tasks", and each offers Resend. Expanded, the list takes the place of the latest
         task and its output, and the row reads "Back to the latest task".
 

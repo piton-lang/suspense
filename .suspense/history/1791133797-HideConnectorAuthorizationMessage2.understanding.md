@@ -1,0 +1,6 @@
+- [No run the application starts is given the claude.ai account's connectors, on the host or in a container](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [Claude Code is run with ENABLE_CLAUDEAI_MCP_SERVERS=false in its environment](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [Every run counts: tasks, questions, one-off runs, file search, notes, commit messages, and titles](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [Nothing about a connector needing authorizing is ever shown in a task's output or an answer](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [MCP servers the project configures for a run on the host are left as they are](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [A run in a container has no MCP servers](.claude/reference/scope/container-environment/index.md#container-environment-scope)

@@ -47,6 +47,30 @@ shape ApplicationShape:
         @{ContainerEnvironmentScope} says. On macOS and Linux, nothing
         changes in how a program is started.
 
+    fileOwnership:
+        Every file and folder the application creates belongs to the user
+        running it, as one the user made in Explorer or a terminal would, on
+        every platform, so the user never has to take ownership of anything,
+        or change its permissions, to edit, move, or delete it, or for git,
+        piton, or the harness to use it. That goes for a new project's folder
+        and everything written into it, the project's data under .suspense,
+        the files a task or the editor writes, and the application's own
+        files, as its preferences.
+
+        On Windows, the application never asks to run as administrator: its
+        build declares that it runs with the rights of whoever starts it, as
+        invoked, and never requires elevation, nor does its installer start
+        it elevated once it is installed, nor its self-update when it starts
+        the new version. Should it be run elevated all the same, as from an
+        administrator's terminal, what it creates is still the user's: each
+        file and folder is made owned by the user who is signed in, never by
+        the Administrators group, and takes the permissions it inherits from
+        the folder it is in, never permissions of its own. The same holds for
+        what the programs it starts create, git's repository included, so git
+        never refuses a project for being owned by someone else.
+        Nothing the application creates is ever left owned by Administrators,
+        SYSTEM, or another account.
+
     name:
         The application is called Suspense.
 

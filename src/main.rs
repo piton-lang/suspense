@@ -44,7 +44,9 @@ mod markdown;
 mod measured_list;
 mod mode_guard;
 mod new_instruction;
+mod import_project;
 mod new_project;
+mod ownership;
 mod palette;
 mod piton_build;
 mod piton_fluency;
@@ -101,5 +103,8 @@ fn main() {
         println!("suspense {}", version::VERSION);
         return;
     }
+    // Run elevated all the same, what it and the programs it starts create
+    // is still the user's.
+    ownership::own_what_is_created();
     app::run();
 }

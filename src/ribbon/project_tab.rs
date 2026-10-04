@@ -1,5 +1,6 @@
 //! The ribbon's Project tab, for the project as a whole: New Project, which
-//! sets up a new project and opens it, and Open Project, which picks a
+//! sets up a new project and opens it, Import Project, which makes an
+//! existing folder a project and opens it, and Open Project, which picks a
 //! piton.config.pi whose folder becomes the project.
 
 use gpui_kit::assets::IconName;
@@ -7,12 +8,19 @@ use gpui_kit::component::button::Button;
 use gpui_kit::*;
 
 use super::{Command, CommandPlace, CommandSize};
+use crate::import_project::ImportProject;
 use crate::new_project::NewProject;
 use crate::project::open_project::OpenProject;
 
 pub(super) const COMMANDS: &[CommandPlace] = &[
     CommandPlace {
         command: Command::NewProject,
+        group: "Project",
+        size: CommandSize::Slim,
+        primary: true,
+    },
+    CommandPlace {
+        command: Command::ImportProject,
         group: "Project",
         size: CommandSize::Slim,
         primary: true,
@@ -33,6 +41,20 @@ pub(super) fn new_project(
         .tooltip("Create a new project and open it")
         .on_click(|_, window, cx| window.dispatch_action(Box::new(NewProject), cx))
         .into_any_element()
+}
+
+/// Import Project: opens the form that makes an existing folder a project.
+pub(super) fn import_project(
+    button: impl Fn(&'static str, IconName, SharedString) -> Button,
+) -> AnyElement {
+    button(
+        "import-project",
+        IconName::FolderInput,
+        "Import Project…".into(),
+    )
+    .tooltip("Make an existing folder a project and open it")
+    .on_click(|_, window, cx| window.dispatch_action(Box::new(ImportProject), cx))
+    .into_any_element()
 }
 
 /// Open Project: always so, whether or not a project is open; the project

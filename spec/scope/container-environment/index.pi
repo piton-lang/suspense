@@ -1,4 +1,5 @@
 use /lib
+from /scope/application import ApplicationScope
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/project-data import ProjectDataScope
 from /scope/project-locations import ProjectLocationsScope
@@ -48,7 +49,13 @@ shape ContainerEnvironmentShape:
         On Linux, Podman runs rootless, and the container runs as the user,
         with `--userns=keep-id`, so every file a run writes belongs to the
         user, as it would on the host. On macOS and Windows, Podman runs its
-        containers in a Podman machine, a virtual machine it manages.
+        containers in a Podman machine, a virtual machine it manages. There
+        too, what a run writes to the project belongs to the user, as the
+        @{ApplicationScope} says of every file the application creates:
+        the container runs as the user rather than as root inside the
+        machine, and a file it writes into a folder mounted from Windows is
+        the user's, owned by them and inheriting the folder's permissions,
+        never owned by Administrators or another account.
 
     missingPodman:
         Where `podman` isn't installed, a prompt that has to run in a

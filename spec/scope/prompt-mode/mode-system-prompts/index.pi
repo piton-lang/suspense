@@ -192,7 +192,7 @@ shape ModeSystemPromptsShape:
         - that a Chain prompt runs as two steps: a spec step, which writes the prompt into the spec, then a code step, sent the prompt and what the spec step replied, which changes the code to match the spec as built, and that each step is its own run, in its own lane
         - that Suspense adds each mode's instructions to a prompt itself, in a block marked <task-instructions> at its head, and the spec's references and the understanding file with them, so a prompt written for a mode is only what the user wants done, in the user's own terms, and never holds a <task-instructions> block, steps the mode already takes, or instructions about building, checking, or the understanding file
         - how to write a good prompt for each mode: a Chain or Spec prompt says what should be true of the application once it is met, not how to edit the spec; a Code prompt says what the code should do, and may link to the compiled reference for the spec it follows; an Ask prompt is a question; and a prompt that names part of the spec links to its compiled reference under the harness's directory, as the user would
-        - that an answer hands a prompt back to the user, for them to read, edit, and send, as a fenced code block whose info string is `suspense-prompt` and the mode it is for, and asks the user something back as one whose info string is `suspense-question`, with any answers to pick from one per line, each starting with `- `, as the Ask instructions say, both shown as cards the user acts on, never sent by themselves
+        - that an answer hands a prompt back to the user, for them to read, edit, and send, as a fenced code block whose info string is `suspense-prompt` and the mode it is for, and asks the user something back as one whose info string is `suspense-question`, with any answers to pick from one per line, each starting with `- `, as the card format says, both shown as cards the user acts on, a prompt card with buttons that send it to Code, Chain, or Spec, never sent by themselves
         - what a task's understanding file is, the short list of constraints it takes from the spec, shown beside the task as it runs
         - that the user can cancel, resend, or send a task to the other mode, send more to a running task, and start a new conversation, so a prompt never needs to say any of that is possible
         \\
@@ -241,6 +241,24 @@ shape ModeSystemPromptsShape:
         Chain prompt hands on to, after the Code instructions, with
         SPEC_PROMPT and SPEC_RESULT, the Chain prompt as it was typed and its
         spec step's final output, saved in spec-to-code.md.
+
+    cardFormat:
+        Every question is told how an answer hands back prompts and questions
+        in the forms the @{AskConversationScope} shows as cards, so whenever
+        the user asks for a prompt, it comes back as a card they can send to
+        Code, Chain, or Spec. It is not a project's to edit or leave out: the
+        application adds it to each question's <task-instructions> block,
+        after the project's Ask instructions, on a paragraph of its own,
+        whatever those say, including a project's Ask instructions saved
+        before it was added, which are kept as they are. Its text is baked
+        into the application from this application's own repository, in
+        `ask-cards.md` in its `.suspense/system-prompts` directory beside the
+        defaults, and a build can't be made without it. It is never given to a
+        task, and Freeform sends nothing. It says:
+
+        \\
+        Whenever the user asks you for a prompt, or your answer suggests one for them to send, give each prompt as a fenced code block whose info string is `suspense-prompt` and the mode it is for, one of `code`, `chain`, `spec`, `ask`, or `freeform`, such as ```` ```suspense-prompt chain ````, holding only the prompt's text, ready to send, never as plain text, a quote, or any other code block, since only this form lets the user send it from your answer. Pick the mode that fits the work, `chain` when it changes both the spec and the code; the user can send it to Code, Chain, or Spec all the same. When you need the user to answer something before you can go on, write the question as a fenced code block whose info string is `suspense-question`, the question on its first lines and then, if there are answers to pick from, one per line, each starting with `- `. Use these blocks only for prompts and questions meant for the user, never for code or examples.
+        \\
 
     saving:
         Each project has its own system template, instructions, and injected
@@ -318,13 +336,9 @@ shape ModeSystemPromptsShape:
         to learn what the spec says. Since a question can see the spec
         location, that paragraph is always sent with it.
 
-        The Ask default then says, on a paragraph of its own, how an answer
-        hands back prompts and questions in the forms the
-        @{AskConversationScope} shows as cards:
-
-        \\
-        When your answer suggests a prompt for the user to send, write it as a fenced code block whose info string is `suspense-prompt` and the mode it is for, one of `code`, `chain`, `spec`, `ask`, or `freeform`, such as ```` ```suspense-prompt chain ````, holding only the prompt's text, ready to send. When you need the user to answer something before you can go on, write the question as a fenced code block whose info string is `suspense-question`, the question on its first lines and then, if there are answers to pick from, one per line, each starting with `- `. Use these blocks only for prompts and questions meant for the user, never for code or examples.
-        \\
+        The Ask default says nothing of how an answer hands back prompts
+        and questions: that is the card format below, which every question is
+        given whatever its project's Ask instructions say.
 
         The Spec and Chain
         defaults never name the code location, and the Code default names the

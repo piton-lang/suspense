@@ -2838,6 +2838,8 @@ struct ProjectSession {
     files: Vec<FileTab>,
     selected_file: Option<usize>,
     latest_settled: Option<(usize, SharedString)>,
+    selected_task: Option<usize>,
+    parked_outputs: HashMap<usize, (TaskTable, bool)>,
     mode_tab: SendMode,
 }
 
@@ -2889,6 +2891,8 @@ impl ProjectSession {
             files: Vec::new(),
             selected_file: None,
             latest_settled: None,
+            selected_task: None,
+            parked_outputs: HashMap::new(),
             // A project opened for the first time starts on Chain.
             mode_tab: SendMode::Both,
         }
@@ -2980,6 +2984,13 @@ pub struct PromptMode {
     /// name: once nothing is under way, the one that finished most recently,
     /// which heads it then.
     latest_settled: Option<(usize, SharedString)>,
+    /// The task of the header shown in full, by its index, as the
+    /// MessageList's running tasks say; none to show the latest. Tasks keep
+    /// their index until the history is read again, which clears it.
+    selected_task: Option<usize>,
+    /// The output of each task in the header not shown in full, as it was
+    /// left, and whether it was locked to its bottom, by the task's index.
+    parked_outputs: HashMap<usize, (TaskTable, bool)>,
     /// The chat input's tab the project on screen was on, as it was left:
     /// filled in as it is switched away from, and selected as it comes back.
     mode_tab: SendMode,
@@ -3068,8 +3079,8 @@ pub struct PromptMode {
     ask_split_share: f32,
     /// The chat input's Ask tab is selected.
     on_ask_tab: bool,
-    /// When each prompt card's Send to prompt was last pressed, by the card,
-    /// so it reads "Sent to prompt" a while after.
+    /// When each prompt card's Edit and send buttons were last pressed, by
+    /// the card and the button, so each reads as done a while after.
     sent_to_prompt: HashMap<String, Instant>,
     /// The mode of the chat input's selected tab, whose conversations its
     /// context figure and New conversation are for.
@@ -3216,6 +3227,8 @@ impl PromptMode {
             files: Vec::new(),
             selected_file: None,
             latest_settled: None,
+            selected_task: None,
+            parked_outputs: HashMap::new(),
             mode_tab: SendMode::Both,
             disk_conflicts: Vec::new(),
             conflict_asked: None,
@@ -3316,6 +3329,8 @@ impl PromptMode {
         swap(&mut self.files, &mut other.files);
         swap(&mut self.selected_file, &mut other.selected_file);
         swap(&mut self.latest_settled, &mut other.latest_settled);
+        swap(&mut self.selected_task, &mut other.selected_task);
+        swap(&mut self.parked_outputs, &mut other.parked_outputs);
         swap(&mut self.mode_tab, &mut other.mode_tab);
     }
 
@@ -3492,20 +3507,14 @@ impl PromptMode {
         self.stop_ask(id, cx);
     }
 
-    /// Brings the running task at `ix` into view: the latest task's output,
-    /// out from behind the previous tasks and scrolled to its end, or a task
-    /// running in the other lane opened among the previous tasks.
+    /// Brings the running task at `ix` into view: selected in the header,
+    /// shown in full, out from behind the previous tasks and scrolled to its
+    /// end, as the RunningActivityScope's list says.
     pub fn reveal_running_task(&mut self, ix: usize, cx: &mut Context<Self>) {
-        if ix >= self.tasks.len() || Some(ix) == self.latest_ix() {
-            return self.reveal_task(cx);
+        if self.header_ixs().contains(&ix) {
+            self.select_task(ix, cx);
         }
-        if !self.task_history.expanded {
-            self.task_history.toggle();
-            self.follow_task_history();
-        }
-        self.task_history.filters.clear();
-        self.task_history.open = Some(ix);
-        cx.notify();
+        self.reveal_task(cx)
     }
 
     /// Brings the latest task's output into view: out from behind the
@@ -4050,7 +4059,12 @@ impl PromptMode {
     fn push_task(&mut self, text: SharedString, cx: &mut Context<Self>) -> usize {
         let mut task = PromptTask::new(text);
         task.references = referenced_spec::References::new(self.project_dir.clone());
+        // A task just sent is selected, the one shown before kept as it was.
+        self.park_shown_output();
         self.tasks.push(task);
+        let ix = self.tasks.len() - 1;
+        self.output_locked = false;
+        self.selected_task = Some(ix);
         // A new task's output starts at its top.
         self.scroll_output_to_top();
         self.settle_latest();
@@ -4060,21 +4074,102 @@ impl PromptMode {
 
     /// The task heading the view as the latest: of the tasks under way, in
     /// either lane, the one sent most recently; while none is, the one that
-    /// finished most recently, or else the one sent most recently.
-    fn latest_ix(&self) -> Option<usize> {
+    /// finished most recently, or else the one sent most recently. It always
+    /// stays in the header, compact or in full.
+    fn true_latest_ix(&self) -> Option<usize> {
         latest_of(&self.tasks, self.latest_settled.as_ref())
     }
 
-    /// The latest task.
+    /// The task the header shows in full: the one selected, as the
+    /// MessageList's running tasks say, or else the latest.
+    fn latest_ix(&self) -> Option<usize> {
+        self.selected_task
+            .filter(|ix| *ix < self.tasks.len())
+            .or_else(|| self.true_latest_ix())
+    }
+
+    /// The task the header shows in full.
     fn latest_task(&self) -> Option<&PromptTask> {
         self.latest_ix().map(|ix| &self.tasks[ix])
     }
 
-    /// Notes which task heads the view, for once nothing is under way, and
-    /// when another has come to head it, shows its output as a task just
-    /// sent shows its own: from its top.
+    /// The tasks the header shows, oldest first: the latest, every other
+    /// task under way, and the one selected, finished or not.
+    fn header_ixs(&self) -> Vec<usize> {
+        let (latest, selected) = (self.true_latest_ix(), self.latest_ix());
+        self.tasks
+            .iter()
+            .enumerate()
+            .filter(|(ix, task)| {
+                Some(*ix) == latest || Some(*ix) == selected || task.status.is_active()
+            })
+            .map(|(ix, _)| ix)
+            .collect()
+    }
+
+    /// Selects the task at `ix` of the header, to be shown in full, at once:
+    /// the output of the one shown before is kept as it was left, and the
+    /// selected one's comes back as it was left, a locked one at its end.
+    fn select_task(&mut self, ix: usize, cx: &mut Context<Self>) {
+        if ix >= self.tasks.len() {
+            return;
+        }
+        if self.latest_ix() == Some(ix) {
+            self.selected_task = Some(ix);
+            return;
+        }
+        self.park_shown_output();
+        match self.parked_outputs.remove(&ix) {
+            Some((output, locked)) => {
+                self.output_table = output;
+                self.output_locked = locked;
+                if locked {
+                    self.output_table.scroll_to_end();
+                }
+            }
+            None => self.output_locked = false,
+        }
+        self.selected_task = Some(ix);
+        // What the header no longer shows has no output to keep.
+        let shown = self.header_ixs();
+        self.parked_outputs.retain(|ix, _| shown.contains(ix));
+        cx.notify();
+    }
+
+    /// Keeps the output of the task shown in full as it was left, for when
+    /// it is selected again.
+    fn park_shown_output(&mut self) {
+        if let Some(shown) = self.latest_ix() {
+            let output = std::mem::replace(&mut self.output_table, TaskTable::new());
+            self.parked_outputs
+                .insert(shown, (output, self.output_locked));
+        }
+    }
+
+    /// The task whose referenced spec, understanding, and subagents the
+    /// right sidebar shows: the one selected while it runs, or else another
+    /// still running.
+    fn sidebar_ix(&self) -> Option<usize> {
+        let shown = self.latest_ix();
+        if shown.is_some_and(|ix| self.tasks[ix].status.is_active()) {
+            return shown;
+        }
+        self.tasks
+            .iter()
+            .rposition(|task| task.status.is_active())
+            .or(shown)
+    }
+
+    /// The task the right sidebar follows.
+    fn sidebar_task(&self) -> Option<&PromptTask> {
+        self.sidebar_ix().map(|ix| &self.tasks[ix])
+    }
+
+    /// Notes which task heads the view, for once nothing is under way, and,
+    /// while nothing has been selected, when another has come to head it,
+    /// shows its output as a task just sent shows its own: from its top.
     fn settle_latest(&mut self) {
-        let Some(ix) = self.latest_ix() else {
+        let Some(ix) = self.true_latest_ix() else {
             self.latest_settled = None;
             return;
         };
@@ -4083,7 +4178,7 @@ impl PromptMode {
             .latest_settled
             .as_ref()
             .is_some_and(|(was, was_name)| *was != ix || *was_name != name);
-        if changed && ix + 1 != self.tasks.len() {
+        if changed && ix + 1 != self.tasks.len() && self.selected_task.is_none() {
             self.scroll_output_to_top();
         }
         self.latest_settled = Some((ix, name));
@@ -5217,6 +5312,9 @@ impl PromptMode {
                         return;
                     }
                     this.tasks = tasks;
+                    // The latest heads the view, alone.
+                    this.selected_task = None;
+                    this.parked_outputs.clear();
                     let count = this.tasks.len();
                     this.task_history.selected.retain(|&ix| ix < count);
                     // The history's conversation, unless it was left for a new
@@ -5923,7 +6021,7 @@ impl PromptMode {
     /// Code, Chain, or Spec tab runs, once it has anything to show. A
     /// Freeform prompt references nothing.
     fn refs_wanted(&self) -> bool {
-        self.latest_task().is_some_and(|task| {
+        self.sidebar_task().is_some_and(|task| {
             self.working.any()
                 && task.status.is_active()
                 && !matches!(task.mode, Some(SendMode::Ask | SendMode::Freeform))
@@ -5934,16 +6032,17 @@ impl PromptMode {
     }
 
     /// Whether the running task has anything for the sidebar to show: a
-    /// spec file referenced, a constraint understood, or a subagent started.
+    /// spec file referenced, a constraint understood, or a subagent or
+    /// command the subagents panel shows.
     fn refs_have_contents(&self) -> bool {
-        self.latest_task().is_some_and(|task| {
-            !task.understanding.rows.is_empty() || !task.subagents.list.is_empty()
+        self.sidebar_task().is_some_and(|task| {
+            !task.understanding.rows.is_empty() || task.subagents.shown().next().is_some()
         }) || !self.referenced_files().is_empty()
     }
 
     /// The spec files the running task references.
     fn referenced_files(&self) -> Vec<referenced_spec::Referenced> {
-        let (Some(project_dir), Some(task)) = (self.project_dir.as_deref(), self.latest_task())
+        let (Some(project_dir), Some(task)) = (self.project_dir.as_deref(), self.sidebar_task())
         else {
             return Vec::new();
         };
@@ -5961,7 +6060,7 @@ impl PromptMode {
     /// a group per step labelled by what it did, in that step's own mode:
     /// the spec step and follow-up Spec's, the code step Code's.
     fn running_subagents(&self, cx: &Context<Self>) -> Vec<referenced_spec::SubagentGroup> {
-        let Some(latest) = self.latest_ix() else {
+        let Some(latest) = self.sidebar_ix() else {
             return Vec::new();
         };
         let (this, project_dir) = (cx.entity().downgrade(), self.project_dir.clone());
@@ -6072,8 +6171,7 @@ impl PromptMode {
     }
 
     fn running_understanding(&self) -> Understanding {
-        self.tasks
-            .last()
+        self.sidebar_task()
             .map(|task| task.understanding.clone())
             .unwrap_or_default()
     }
@@ -7935,7 +8033,123 @@ impl PromptMode {
         if self.task_history.expanded {
             return None;
         }
-        self.render_latest_header(cx)
+        let compact = self.render_compact_rows(cx);
+        let full = self.render_latest_header(cx);
+        match (compact, full) {
+            (None, full) => full,
+            (Some(compact), full) => Some(
+                v_flex()
+                    .flex_none()
+                    .w_full()
+                    .child(compact)
+                    .children(full)
+                    .into_any_element(),
+            ),
+        }
+    }
+
+    /// The header's tasks other than the one shown in full, as compact rows,
+    /// in the order they were sent, oldest at the top; none while it is the
+    /// only one.
+    fn render_compact_rows(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let selected = self.latest_ix();
+        let rows: Vec<AnyElement> = self
+            .header_ixs()
+            .into_iter()
+            .filter(|ix| Some(*ix) != selected)
+            .map(|ix| self.render_compact_row(ix, cx))
+            .collect();
+        (!rows.is_empty()).then(|| {
+            gpui_kit::TestSupportExt::test_support(v_flex().id("compact-tasks"))
+                .flex_none()
+                .w_full()
+                .children(rows)
+                .into_any_element()
+        })
+    }
+
+    /// A task of the header not shown in full, on one line: its status and
+    /// how long it has been under way, its prompt's first line, and its
+    /// Cancel button while it is under way. Clicking it selects it.
+    fn render_compact_row(&self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
+        let task = &self.tasks[ix];
+        let theme = cx.theme();
+        let tint = task.mode.map(|mode| Hsla {
+            a: HISTORY_MODE_HINT,
+            ..chat_input::mode_color(mode, cx)
+        });
+        let hover = theme.list_hover;
+        let first_lines: SharedString = task
+            .text
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .take(3)
+            .collect::<Vec<_>>()
+            .join("\n")
+            .into();
+        let mode_label: SharedString = match task.mode {
+            Some(SendMode::Both) => "Chain".into(),
+            Some(mode) => mode.label().into(),
+            None => "Mode not known".into(),
+        };
+        let elapsed = task.elapsed().map(|elapsed| {
+            div()
+                .flex_none()
+                .text_sm()
+                .text_color(theme.muted_foreground)
+                .font_features(crate::subagents::tabular_figures())
+                .child(crate::subagents::format_elapsed(elapsed))
+        });
+        let row = div()
+            .id(("compact-task", ix))
+            .flex_none()
+            .w_full()
+            .h(px(28.))
+            .border_b_1()
+            .border_color(theme.border)
+            .when_some(tint, |row, tint| row.bg(tint))
+            .child(
+                h_flex()
+                    .size_full()
+                    .px_2()
+                    .gap_2()
+                    .cursor_pointer()
+                    .hover(move |row| row.bg(hover))
+                    .child(div().flex_none().child(task.status.tag(cx)))
+                    .children(elapsed)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_sm()
+                            .child(first_line(&task.text)),
+                    )
+                    .when(task.can_cancel(), |row| {
+                        row.child(cancel_button(("cancel-compact", ix)).on_click(cx.listener(
+                            move |this, _, _, cx| {
+                                // The button's click isn't the row's.
+                                cx.stop_propagation();
+                                this.cancel_task(ix, cx)
+                            },
+                        )))
+                    }),
+            )
+            .tooltip(move |window, cx| {
+                let (first_lines, mode_label) = (first_lines.clone(), mode_label.clone());
+                gpui_kit::component::tooltip::Tooltip::element(move |_, cx| {
+                    v_flex()
+                        .child(first_lines.clone())
+                        .child(
+                            div()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(mode_label.clone()),
+                        )
+                })
+                .build(window, cx)
+            })
+            .on_click(cx.listener(move |this, _, _, cx| this.select_task(ix, cx)));
+        gpui_kit::TestSupportExt::test_support(row).into_any_element()
     }
 
     /// The latest task's header, whether or not the previous tasks cover it,
@@ -8424,11 +8638,11 @@ impl PromptMode {
     /// whatever other chips are on; the latest task, heading the view, isn't
     /// one of them.
     fn filter_count(&self, filter: TaskFilter) -> usize {
-        let latest = self.latest_ix();
+        let header = self.header_ixs();
         self.tasks
             .iter()
             .enumerate()
-            .filter(|(ix, _)| Some(*ix) != latest)
+            .filter(|(ix, _)| !header.contains(ix))
             .filter(|(_, task)| self.matches_filter(task, filter))
             .count()
     }
@@ -8882,14 +9096,17 @@ impl Render for PromptMode {
             "Open a project to start prompting."
         };
 
-        // While any filter is on, the row says how many tasks show.
-        self.task_history.shown.set(
-            // The previous tasks shown; the latest, heading the view, isn't one.
-            self.task_visibility().map(|visible| {
-                let previous = visible.len().saturating_sub(1);
-                visible[..previous].iter().filter(|&&shows| shows).count()
-            }),
-        );
+        // While any filter is on, the row says how many tasks show: the
+        // previous tasks shown, those the header shows not among them.
+        let header = self.header_ixs();
+        self.task_history.shown.set(self.task_visibility().map(|visible| {
+            visible
+                .iter()
+                .enumerate()
+                .filter(|(ix, shows)| **shows && !header.contains(ix))
+                .count()
+        }));
+        let previous_count = self.tasks.len() - header.len();
         let content = if self.tasks.is_empty() {
             // The hint may shrink below one line, so it wraps in a narrow view
             // instead of running past its edges.
@@ -8957,8 +9174,8 @@ impl Render for PromptMode {
             .id("history")
             .size_full()
             .child(self.task_history.render_row(
-                // The latest task heads the view, so it isn't counted.
-                self.tasks.len().saturating_sub(1),
+                // The tasks the header shows aren't counted.
+                previous_count,
                 !self.tasks.is_empty(),
                 |this| &mut this.task_history,
                 self.render_selection_actions(cx),
@@ -12572,6 +12789,8 @@ mod tests {
         let (prompt_mode, handle) = open(cx);
         let agent = |id: &str| Subagent {
             id: id.into(),
+            task_id: Some(id.into()),
+            waited: false,
             description: format!("Look into {id}").into(),
             task: crate::subagents::Kind::Subagent,
             kind: None,
@@ -14782,10 +15001,15 @@ mod tests {
             );
         });
         frames(handle, cx);
+        // A Code card sends to Code, Chain, and Spec, with no Ask button.
+        assert!(bounds_of(handle, "prompt-card-send-ask-0:1", cx).is_none());
         for id in [
             "prompt-card-0:1",
             "prompt-card-copy-0:1",
-            "prompt-card-send-0:1",
+            "prompt-card-edit-0:1",
+            "prompt-card-send-code-0:1",
+            "prompt-card-send-chain-0:1",
+            "prompt-card-send-spec-0:1",
             "question-card-0:2",
             "question-card-answer-0:2-0",
             "question-card-answer-0:2-1",
@@ -18776,8 +19000,10 @@ mod tests {
     async fn the_most_recent_active_task_heads_the_view(cx: &mut TestAppContext) {
         let (prompt_mode, handle) = open(cx);
         cx.run_until_parked();
+        // The latest task, which always stays in the header, whichever is
+        // selected.
         let latest =
-            |cx: &mut TestAppContext| prompt_mode.read_with(cx, |this, _| this.latest_ix());
+            |cx: &mut TestAppContext| prompt_mode.read_with(cx, |this, _| this.true_latest_ix());
         let push = |status: TaskStatus, cx: &mut TestAppContext| {
             prompt_mode.update(cx, |this, cx| {
                 let ix = this.push_task(format!("Task {}", this.tasks.len()).into(), cx);
@@ -18831,6 +19057,77 @@ mod tests {
         finish(b, cx);
         finish(a, cx);
         assert_eq!(latest(cx), Some(a));
+    }
+
+    /// Every task under way is in the header; only the one selected is shown
+    /// in full, the others compact rows above it, oldest first. A task just
+    /// sent is selected; a task finishing doesn't move the selection; one
+    /// finished and not selected leaves the header, while the latest stays.
+    #[gpui_kit::test]
+    async fn running_tasks_share_the_header_one_selected(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        cx.run_until_parked();
+        let push = |cx: &mut TestAppContext| {
+            prompt_mode.update(cx, |this, cx| {
+                let ix = this.push_task(format!("Task {}", this.tasks.len()).into(), cx);
+                this.tasks[ix].status = TaskStatus::Running;
+                this.settle_latest();
+                ix
+            })
+        };
+        let state = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| (this.latest_ix(), this.header_ixs()))
+        };
+        let earlier = prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("Done long ago".into(), cx);
+            this.tasks[ix].status = TaskStatus::Done;
+            ix
+        });
+        let spec = push(cx);
+        let code = push(cx);
+        assert_eq!(state(cx), (Some(code), vec![spec, code]));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find(("compact-task", spec)).is_some());
+            assert!(window.try_find(("compact-task", code)).is_none());
+            assert!(window.try_find(("compact-task", earlier)).is_none());
+            let (row, header) = (
+                window.find(("compact-task", spec)).bounds(),
+                window.find("task-header").bounds(),
+            );
+            assert!(row.bottom() <= header.top(), "{row:?} isn't above {header:?}");
+            assert!((row.size.height - gpui_kit::px(28.)).abs() < gpui_kit::px(1.));
+        })
+        .unwrap();
+        // Clicking the compact row selects its task.
+        cx.update_window(handle, |_, window, cx| {
+            window.click(("compact-task", spec), cx);
+            window.render_frame(cx);
+            assert!(window.try_find(("compact-task", code)).is_some());
+            assert!(window.try_find(("compact-task", spec)).is_none());
+        })
+        .unwrap();
+        assert_eq!(state(cx).0, Some(spec));
+        // The selected task finishing doesn't move the selection, and it
+        // stays until another is selected.
+        prompt_mode.update(cx, |this, cx| {
+            this.tasks[spec].status = TaskStatus::Done;
+            this.settle_latest();
+            cx.notify();
+        });
+        assert_eq!(state(cx), (Some(spec), vec![spec, code]));
+        prompt_mode.update(cx, |this, cx| this.select_task(code, cx));
+        assert_eq!(state(cx), (Some(code), vec![code]));
+        // The latest always stays, finished or not, while a newer one runs
+        // in the other lane and is selected.
+        prompt_mode.update(cx, |this, cx| {
+            this.tasks[code].status = TaskStatus::Done;
+            this.settle_latest();
+            cx.notify();
+        });
+        assert_eq!(state(cx), (Some(code), vec![code]));
+        let next = push(cx);
+        assert_eq!(state(cx), (Some(next), vec![next]));
     }
 
     /// An answer's question card, once picked, asks the question quoted and
@@ -18900,10 +19197,11 @@ mod tests {
 
         cx.update_window(handle, |_, window, cx| {
             prompt_mode.update(cx, |this, cx| {
-                this.send_card_prompt(
+                this.card_prompt(
                     "1:0".into(),
                     "Fix it.".into(),
                     Some(SendMode::Spec),
+                    super::ask_pane::CardAction::Edit,
                     window,
                     cx,
                 )
@@ -18915,7 +19213,35 @@ mod tests {
             let input = this.chat_input.read(cx);
             assert_eq!(input.value(cx).as_ref(), "Fix it.");
             assert_eq!(input.mode(), SendMode::Spec);
-            assert!(this.sent_to_prompt("1:0"));
+            assert!(this.sent_to_prompt("1:0", super::ask_pane::CardAction::Edit));
+        });
+
+        // A send button sends it at once, in its own mode, leaving what is
+        // being written in the chat input alone.
+        let tasks_before = prompt_mode.read_with(cx, |this, _| this.tasks.len());
+        let send = super::ask_pane::CardAction::Send(SendMode::Code);
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.card_prompt(
+                    "1:0".into(),
+                    "Send it.".into(),
+                    Some(SendMode::Spec),
+                    send,
+                    window,
+                    cx,
+                )
+            })
+        })
+        .unwrap();
+        cx.run_until_parked();
+        prompt_mode.read_with(cx, |this, cx| {
+            assert_eq!(this.chat_input.read(cx).value(cx).as_ref(), "Fix it.");
+            let sent = this.tasks[tasks_before..]
+                .iter()
+                .any(|task| task.text.as_ref() == "Send it." && task.mode == Some(SendMode::Code));
+            assert!(sent, "it wasn't sent as a Code task");
+            assert!(this.sent_to_prompt("1:0", send));
+            assert!(!this.sent_to_prompt("1:0", super::ask_pane::CardAction::Send(SendMode::Spec)));
         });
         crate::harness::use_program_for_test(None);
         std::fs::remove_dir_all(&dir).ok();

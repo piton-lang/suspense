@@ -153,6 +153,7 @@ impl RibbonTab {
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Command {
     NewProject,
+    ImportProject,
     OpenProject,
     BuildSpec,
     NewScope,
@@ -548,6 +549,7 @@ impl Ribbon {
                 ))
                 .child(project_tab::new_project(button))
                 .into_any_element(),
+            Command::ImportProject => project_tab::import_project(button),
             Command::OpenProject => project_tab::open_project(button),
             Command::BuildSpec => spec_tab::build_spec(self, button, cx),
             Command::NewScope => spec_tab::new_scope(button, cx),

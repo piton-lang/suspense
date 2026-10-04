@@ -2,6 +2,8 @@ use /lib
 use /ui
 from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
 from /scope/harness-integration/catalog import HarnessCatalogScope
+from /scope/import-project import ImportProjectScope
+from /scope/new-project import NewProjectScope
 from /scope/no-project import NoProjectStateScope
 from /scope/open-file import OpenFileScope
 from /scope/project-directory import ProjectDirectoryScope
@@ -95,7 +97,9 @@ shape PaletteShape:
 
         system:
             The application's own commands, each doing what its toolbar control
-            or shortcut does: "Open Project…", which opens the
+            or shortcut does: "New Project…" and "Import Project…", which open
+            the @{NewProjectScope} and the @{ImportProjectScope} as the ribbon's
+            commands do, "Open Project…", which opens the
             @{OpenProjectScope}, "Build", "Dark mode" or
             "Light mode" (whichever is not the current one), "Settings…", which
             opens the @{SettingsWindowScope}, and "Quit". Build builds the spec

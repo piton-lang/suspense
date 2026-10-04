@@ -1,0 +1,7 @@
+- [The import form finds a repository with `git rev-parse --show-toplevel` run in the folder, at its top or within it](.claude/reference/scope/import-project/index.md#defaults)
+- ["Initialize a Git repository" starts checked only where the folder isn't in a Git repository](.claude/reference/scope/import-project/index.md#defaults)
+- [In a repository, the checkbox is unchecked, disabled, reads "Already a Git repository", its tooltip naming the top folder](.claude/reference/scope/import-project/index.md#defaults)
+- [Just before `git init`, the folder is checked again; in a repository by then, `git init` is never run, whatever the checkbox says](.claude/reference/scope/import-project/index.md#importing)
+- [No repository is ever nested inside an existing one; its history, branches, index, hooks, and configuration stay as they were](.claude/reference/scope/import-project/index.md#importing)
+- [Where the folder is in a repository, its .gitignore gets Suspense's machine-only lines, only those it lacks, under a "# Suspense" comment](.claude/reference/scope/import-project/index.md#importing)
+- [If Git fails, the project still opens, with a warning saying why the repository couldn't be initialized](.claude/reference/scope/import-project/index.md#importing)

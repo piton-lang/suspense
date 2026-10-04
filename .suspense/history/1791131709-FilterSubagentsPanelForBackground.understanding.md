@@ -1,0 +1,8 @@
+- [The panel shows every subagent, background commands, and waited-on commands only once they've run 15 seconds](.claude/reference/ui/components/right-sidebar/subagents/index.md#description)
+- [It is shown only once the run has something to show in it, and takes no room before](.claude/reference/ui/components/right-sidebar/subagents/index.md#description)
+- [Each row shows how long it has been running, from when the harness said it started](.claude/reference/ui/components/right-sidebar/subagents/index.md#elapsed)
+- [A row at work can be stopped by its Stop button, unless its run can't stop it on its own](.claude/reference/ui/components/right-sidebar/subagents/index.md#stopping)
+- [Rows are grouped by chain step and coloured by the mode that started them](.claude/reference/ui/components/right-sidebar/subagents/index.md#by-mode)
+- [Background tasks are subagents or shell commands run in the background, tracked by id until their end is notified](.claude/reference/scope/harness-integration/index.md#feeding)
+- [Only a background task can be stopped on its own, by asking the harness to stop it by id](.claude/reference/scope/harness-integration/index.md#feeding)
+- [Every tool call, foreground commands included, is a row of the task's output table](.claude/reference/ui/components/task-table/index.md#types)

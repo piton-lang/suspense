@@ -1,0 +1,70 @@
+
+export anchor PreventGitReinitOnImport:
+    userPrompt:
+        \\\
+        When importing a project, make sure if there's already a git repo you don't reinit
+
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            When importing a project, make sure if there's already a git repo you don't reinit
+
+            \\\
+        result:
+            \\\
+            Importing a folder that's already inside a Git repository can no longer run `git init` on it. `piton check` reports no problems, `piton build` wrote 80 files, and the new text is in `.claude/reference/scope/import-project/index.md`.
+
+            ## What changed in the spec
+
+            Both changes are in `spec/scope/import-project/index.pi`.
+
+            **1. The Git checkbox (`#defaults`)**
+            - The form checks for a repository with `git rev-parse --show-toplevel`. That catches a folder at the top of a repository and a folder inside one, such as a subfolder of a larger repo.
+            - If the folder is in a repository, "Initialize a Git repository" is unchecked and disabled and reads "Already a Git repository". Its tooltip names the repository's top folder.
+            - Before this, the checkbox was shown checked but disabled in that case, which could still lead to `git init`.
+
+            **2. When Import is pressed (`#importing`)**
+            - Just before `git init`, the folder is checked again. If it's in a repository by then, `git init` is skipped whatever the checkbox says.
+            - A nested repository is never created inside an existing one.
+            - The existing repository's history, branches, index, hooks and configuration are left untouched.
+            - Adding Suspense's lines to `.gitignore` still happens for a folder that's in a repository, as before.
+
+            The constraints are in `.suspense/history/1791133003-Prompt_7ad0d2aa453a3464.understanding.md`.
+
+            ## Anchors the code should follow
+            - `ImportProjectScope`: `#defaults` (detecting a repository and the checkbox state) and `#importing` (checking again and never running `git init` inside a repository).
+            - `NewProjectScope`: `#creating` is unchanged.
+            \\\
+
+    sentFrom: Prompt_7ad0d2aa453a3464

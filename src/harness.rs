@@ -893,6 +893,7 @@ fn run(
         None => None,
     };
     let mut command = crate::process::command(program);
+    command.envs(agent.env().iter().copied());
     let mut input = prompt_as_given(agent, prompt, system_prompt, resume.is_some());
     match agent {
         Agent::Claude => {
@@ -1241,6 +1242,7 @@ fn with_system_prompt(prompt: &str, system_prompt: &str) -> String {
 pub fn one_off_command(project_dir: &Path) -> Command {
     let agent = agent::current();
     let mut command = crate::process::command(agent.command());
+    command.envs(agent.env().iter().copied());
     match agent {
         Agent::Claude => command.args([
             "-p",
@@ -1275,6 +1277,7 @@ pub fn ask_quickly(project_dir: &Path, prompt: &str) -> Result<String> {
     let mut command = match agent {
         Agent::Claude => {
             let mut command = crate::process::command(agent.command());
+            command.envs(agent.env().iter().copied());
             command.args([
                 "-p",
                 "--model",
@@ -2709,6 +2712,25 @@ wait
             }]
         );
         assert!(!feed.is_open(), "the last result left the input open");
+    }
+
+    /// No Claude Code run is given the claude.ai account's connectors: each
+    /// one-off and quick run turns them off in its environment.
+    #[test]
+    fn claude_runs_never_get_the_accounts_connectors() {
+        use crate::agent::Agent;
+        assert_eq!(
+            Agent::Claude.env(),
+            [("ENABLE_CLAUDEAI_MCP_SERVERS", "false")]
+        );
+        assert!(Agent::Codex.env().is_empty() && Agent::OpenCode.env().is_empty());
+        if crate::agent::current() == Agent::Claude {
+            let command = super::one_off_command(std::path::Path::new("."));
+            assert!(command.get_envs().any(|(name, value)| {
+                name == "ENABLE_CLAUDEAI_MCP_SERVERS"
+                    && value == Some(std::ffi::OsStr::new("false"))
+            }));
+        }
     }
 
     /// Stopping one background task asks the harness on the run's input,

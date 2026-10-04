@@ -4,6 +4,7 @@ from /scope/application/Body import BodyScope
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/open-projects import OpenProjectsScope
 from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from /scope/prompt-mode/modes import PromptModesScope
 from /scope/prompt-mode/sending import PromptSendingScope
 from /ui/components/scrollbar import ScrollbarScope
@@ -118,7 +119,8 @@ shape AskConversationShape:
         code block whose info string is `suspense-prompt`, followed by a
         space and the mode it is meant for, `code`, `chain`, `spec`, `ask`, or
         `freeform`, as the @{PromptModesScope} names them, and holding the
-        prompt's text, as the Ask instructions tell the harness. Such a block
+        prompt's text, as the card format of the @{ModeSystemPromptsScope}
+        tells the harness. Such a block
         is never shown as a code block. It is shown in the answer, where it
         stands among the reply's markdown, as a prompt card: a box on the
         theme's raised surface, faintly tinted the mode's colour, with
@@ -126,24 +128,46 @@ shape AskConversationShape:
         top runs a small header, the mode's icon and name in the mode's
         colour, as "Code prompt", and beneath it the prompt's text as it was
         written, wrapped, in the body's text colour, not rendered as
-        markdown. Along its bottom, at its right, are two buttons, Copy, with
-        a copy icon, which puts the prompt's text on the clipboard, and
-        "Send to prompt", in the mode's colour, with an arrow icon.
+        markdown. Along its bottom, at its right, is a row of small buttons,
+        4 pixels apart, wrapping onto another line where the card is too
+        narrow: Copy, with a copy icon, which puts the prompt's text on the
+        clipboard; Edit, with a pencil icon, as below; and then "Send to
+        Code", "Send to Chain", and "Send to Spec", in that order, each with
+        an arrow icon and in its mode's colour, as the @{PromptModesScope}
+        colours them. The send button for the card's own mode, where it is
+        one of those three, is filled in its colour, and the others are ghost
+        buttons in theirs, so the one the answer meant stands out while every
+        task mode is a click away. A card for `ask` or `freeform` has, before
+        the three, "Ask" or "Send to Freeform", filled in that mode's colour,
+        the three after it as ghosts.
 
-        Send to prompt puts the prompt's text in the @{ChatInputScope}'s text
-        input and selects the mode's tab, Chain for Code and Spec selected
+        Each send button sends the prompt's text at once, in its mode, as
+        though it had been written in the @{ChatInputScope} on that tab and
+        sent, as the @{PromptSendingScope} says, the Chain button sending it as
+        a Chain prompt: a task is compiled anew, building the spec first,
+        and queues while its lane is busy, and a question runs at once. It
+        is sent with the Slice toggle as it stands, with nothing attached,
+        and what is being written in the chat input, and attached to it, is
+        left alone. The button then reads "Sent to Code", "Sent to Chain",
+        "Sent to Spec", "Asked", or "Sent to Freeform", with a check, for 2
+        seconds, and can be clicked again to send it again. The tooltip of
+        each says what it does, as "Send this prompt as a Code task".
+
+        Edit puts the prompt's text in the chat input's text input instead,
+        and selects the card's mode's tab, Chain for Code and Spec selected
         together where the mode is `chain`, giving the input keyboard focus
-        with the cursor at the end of the text. It never sends anything:
-        the user reads, edits, and sends it as any prompt. Where the input
+        with the cursor at the end of the text. It never sends anything: the
+        user reads, edits, and sends it as any prompt. Where the input
         already holds text, that text is set aside first as the chat input
         sets aside a prompt for editing a queued one, and comes back once the
         prompt from the card is sent or cleared, so nothing typed is lost.
         What is attached to the prompt being written stays attached. The
-        button reads "Sent to prompt", with a check, for 2 seconds after.
+        button reads "Edited", with a check, for 2 seconds after.
 
         A block whose mode is missing or isn't one of those five is still a
-        prompt card, headed "Prompt", in Ask's colour, and Send to prompt
-        selects Chain, the tab the chat input starts on. While a block is
+        prompt card, headed "Prompt", in Ask's colour, with all three send
+        buttons as ghosts, and Edit selects Chain, the tab the chat input
+        starts on. While a block is
         still streaming in, its card is shown with what has come so far and
         its buttons disabled until the block closes. A block never closed by
         the end of a finished answer is a card all the same, holding what

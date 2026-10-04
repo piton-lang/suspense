@@ -3,6 +3,7 @@ use /ui
 from ../divergence import DivergenceScope
 from ../editor import EditorScope
 from ../harness-integration/catalog import HarnessCatalogScope
+from ../import-project import ImportProjectScope
 from ../new-project import NewProjectScope
 from ../open-file import OpenFileScope
 from ../palette import PaletteScope
@@ -134,6 +135,13 @@ shape MainWindowShape:
             @{InsetPanelScope}, fresh each time, in place of any diff open
             there. Once the project is created, the panel closes and the new
             project is open.
+
+        importProject:
+            The ribbon's Import Project command opens the @{ImportProjectScope}
+            in an @{InsetPanelScope} the same way, fresh each time, in place of
+            any diff or New Project form open there, as opening New Project
+            replaces an Import Project form. Once the folder is imported, the
+            panel closes and the project is open.
 
         openProject:
             The Open Project commands, from the ribbon or the palette, show the

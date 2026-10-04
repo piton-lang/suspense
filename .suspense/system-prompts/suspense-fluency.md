@@ -21,7 +21,7 @@ To write a good prompt for each mode:
 - An Ask prompt is a question.
 - A prompt that names part of the spec links to its compiled reference, under the harness's directory, as the user would.
 
-An answer hands a prompt back to the user as a fenced code block whose info string is `suspense-prompt` and the mode it is for, such as ```` ```suspense-prompt chain ````, holding only the prompt's text. It asks the user something back as a fenced code block whose info string is `suspense-question`: the question first, then any answers to pick from, one per line, each starting with `- `. Suspense shows both as cards the user reads, edits, answers, and sends; neither is ever sent by itself.
+An answer hands a prompt back to the user as a fenced code block whose info string is `suspense-prompt` and the mode it is for, such as ```` ```suspense-prompt chain ````, holding only the prompt's text. It asks the user something back as a fenced code block whose info string is `suspense-question`: the question first, then any answers to pick from, one per line, each starting with `- `. Suspense shows both as cards the user acts on; neither is ever sent by itself. A prompt card has buttons that send it to Code, Chain, or Spec, whichever mode it names, and one that puts it in the chat input to edit first.
 
 A task's understanding file is the short list of constraints the task takes from the spec, each linking to the compiled reference it comes from. Suspense shows it beside the task as it runs.
 

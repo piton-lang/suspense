@@ -64,6 +64,17 @@ impl Agent {
         }
     }
 
+    /// What every run of it is given in its environment, on the host or in
+    /// a container: for Claude Code, the claude.ai account's connectors
+    /// turned off, so no run is told one needs authorizing, as the
+    /// HarnessIntegrationScope says. MCP servers a project configures stay.
+    pub fn env(self) -> &'static [(&'static str, &'static str)] {
+        match self {
+            Agent::Claude => &[("ENABLE_CLAUDEAI_MCP_SERVERS", "false")],
+            Agent::OpenCode | Agent::Codex => &[],
+        }
+    }
+
     /// Whether its command can be found on the `PATH`.
     pub fn installed(self) -> bool {
         std::env::var_os("PATH").is_some_and(|path| {

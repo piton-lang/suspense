@@ -192,6 +192,8 @@ impl PaletteTab {
 /// The application's own commands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SystemCommand {
+    NewProject,
+    ImportProject,
     OpenProject,
     Build,
     ToggleDarkMode,
@@ -210,6 +212,8 @@ impl SystemState {
     fn commands(self) -> Vec<Candidate> {
         let theme = if self.dark { "Light mode" } else { "Dark mode" };
         [
+            (SystemCommand::NewProject, "New Project…", true),
+            (SystemCommand::ImportProject, "Import Project…", true),
             (SystemCommand::OpenProject, "Open Project…", true),
             (SystemCommand::Build, "Build Spec", self.can_build),
             (SystemCommand::ToggleDarkMode, theme, true),

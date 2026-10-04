@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /scope/import-project import ImportProjectScope
 from /scope/new-project import NewProjectScope
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/project/open-project import OpenProjectScope
@@ -21,14 +22,22 @@ shape RibbonProjectTabShape:
 
     groups:
         project:
-            A "Project" group holds the New Project command, then the Open
-            Project command, both slim, stacked with New Project on top.
+            A "Project" group holds the New Project command, then the Import
+            Project command, then the Open Project command, all slim, stacked
+            in that order with New Project on top.
 
     commands:
         newProject:
             A "New Project" button with a folder-plus icon. Clicking it opens
             the @{NewProjectScope}, and its tooltip says it creates a new
             project and opens it.
+
+            It is primary, and a slim button.
+
+        importProject:
+            An "Import Project…" button with a folder-input icon. Clicking it
+            opens the @{ImportProjectScope}, and its tooltip says it makes an
+            existing folder into a project and opens it.
 
             It is primary, and a slim button.
 

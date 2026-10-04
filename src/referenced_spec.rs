@@ -477,10 +477,15 @@ pub fn render(
     // Each is shown by the mode that started it: a bar down its left, and
     // its spinner and tick, in that mode's colour; grouped by a chain's
     // steps, each group headed by its label.
-    let agent_count: usize = subagents.iter().map(|group| group.agents.list.len()).sum();
+    // Only what goes on apart from the main thread: a short command it waits
+    // on, or one a subagent runs, is never a row.
+    let agent_count: usize = subagents
+        .iter()
+        .map(|group| group.agents.shown().count())
+        .sum();
     let groups = subagents
         .iter()
-        .filter(|group| !group.agents.list.is_empty());
+        .filter(|group| group.agents.shown().next().is_some());
     let labels = groups.clone().filter(|group| group.label.is_some()).count();
     let mut next = 0;
     let hovered_agent = layout.heights.0.get().hovered_agent;
@@ -505,11 +510,10 @@ pub fn render(
             .into_any_element()
         });
         let first = next;
-        next += group.agents.list.len();
+        next += group.agents.shown().count();
         let rows = group
             .agents
-            .list
-            .iter()
+            .shown()
             .enumerate()
             .map(move |(at, agent)| {
                 let ix = first + at;
@@ -517,14 +521,19 @@ pub fn render(
                 let running = agent.state == State::Running;
                 let (kind_icon, kind_name, stop_tooltip) = match agent.task {
                     Kind::Subagent => (IconName::Bot, "Subagent", "Stop this subagent"),
+                    Kind::Command if agent.waited => (
+                        IconName::SquareTerminal,
+                        "Command, waited on",
+                        "Stop this command",
+                    ),
                     Kind::Command => (IconName::SquareTerminal, "Command", "Stop this command"),
                 };
                 // At its right, how long it has been running, or, hovered
                 // while at work, a Stop button in its place, where its run
                 // can stop it on its own.
                 let trailing: AnyElement = match stop.clone() {
-                    Some(stop) if running && hovered_agent == Some(ix) => {
-                        let id = agent.id.clone();
+                    Some(stop) if agent.stoppable() && hovered_agent == Some(ix) => {
+                        let id = agent.task_id.clone().unwrap_or_default();
                         Button::new(("stop-subagent", ix))
                             .ghost()
                             .xsmall()

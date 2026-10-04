@@ -4,6 +4,7 @@ use /ui/components/sidebar/Panel
 from .. import RightSidebarScope
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/prompt-mode/modes import PromptModesScope
+from /ui/components/task-table import TaskTableScope
 export panel SubagentsPanel:
     title: Subagents and commands
     counted: false
@@ -31,8 +32,36 @@ shape SubagentsShape:
         background, such as a long build. A background task of any other kind
         isn't shown.
 
-        It is shown only once the run has started one, and takes no room
-        before. One row per background task, in the order they started,
+        It is for what goes on apart from the run's main thread, so that
+        while the main thread is waiting, paused, or has finished its turn,
+        what is still going on is still seen. Every subagent is shown,
+        whether the harness waits on it or runs it in the background. A
+        command is shown only when it runs in the background, or when it runs long,
+        as follows. An ordinary command the main thread waits on, a Bash tool call
+        not run in the background, is never shown while it is short, and is
+        shown only once it has been running for 15 seconds without its result
+        coming back, from then until it ends, its time counting from its start
+        as any row's does, its row taking its place among the others by when
+        it started. A short command, done within those 15 seconds, never
+        appears at all, not even for a moment, and neither does a command a
+        subagent runs, which is part of that subagent's work, nor any other
+        tool call. All of them are still rows of the task's output, as the
+        @{TaskTableScope} says; this panel only leaves them out.
+
+        A long command the main thread waits on isn't a background task: it
+        doesn't hold the run open, and it ends when its tool call's result
+        comes back, done or failed as that result says, or when the run ends,
+        as the run did. Its tooltip's kind reads "Command, waited on". It has
+        no Stop button, since the harness can stop only a background task on
+        its own; the task's Cancel button stops it with the run.
+
+        A subagent the main thread waits on ends when the harness notifies its
+        end, or else when its tool call's result comes back, whichever comes
+        first, and can be stopped as a background one can wherever the
+        harness gave it a task id, its Stop button left out otherwise.
+
+        It is shown only once the run has something to show in it, and takes
+        no room before. One row per subagent or command shown, in the order they started,
         subagents and commands together, each 24 pixels tall, 8 pixels in
         from the panel's edges: a spinner while it is at work, then a tick, a
         cross, or a dash for how it ended, done, failed, or stopped, beside a

@@ -84,6 +84,19 @@ shape HarnessIntegrationShape:
         prompt titles are written with a small model where the harness can be
         told one, Claude Code's haiku, and with the harness's default model otherwise.
 
+        No run the application starts is given the connectors of the user's
+        claude.ai account, such as Gmail, Google Calendar, or Google Drive,
+        on the host or in a container, whatever the account has connected or
+        left unauthorized: Claude Code is run with them turned off, with
+        `ENABLE_CLAUDEAI_MCP_SERVERS` set to `false` in its environment. So
+        the harness is never told that a connector needs authorizing or is
+        still connecting, never searches for or calls one, and never passes
+        such a notice on in what it replies, and nothing of the kind is ever
+        shown in a task's output, a question's answer, or anywhere else. MCP
+        servers the project itself configures for a run on the host are left
+        as they are; a run in a container has none, as the
+        @{ContainerEnvironmentScope} says.
+
         When the harness picked isn't installed, a run on the host fails
         saying that it can't be run, as any run that can't be started does. A
         run in a container uses the harness in its image instead, and fails,

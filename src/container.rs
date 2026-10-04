@@ -324,12 +324,18 @@ impl Plan {
         if tty {
             out.push("-t".into());
         }
-        // Files it writes belong to the user, as on the host.
-        if self.platform == Platform::Linux {
-            out.push("--userns=keep-id".into());
-        }
+        // Files it writes belong to the user, as on the host: it runs as the
+        // user, never as root, on Linux and inside the Podman machine on
+        // macOS and Windows alike, so what it writes into a folder mounted
+        // from the host is the user's.
+        out.push("--userns=keep-id".into());
         out.extend(["--label".into(), "suspense=run".into()]);
         out.extend(["-e".into(), format!("HOME={HOME}").into()]);
+        // What the harness is given on the host too, as the claude.ai
+        // account's connectors turned off.
+        for (name, value) in self.agent.env() {
+            out.extend(["-e".into(), format!("{name}={value}").into()]);
+        }
         // The harness's login and settings, shared by every project.
         out.extend([
             "-v".into(),
@@ -1147,6 +1153,28 @@ mod tests {
             "{spec_args}"
         );
         assert!(spec_args.contains("--userns=keep-id"));
+        // Never given the claude.ai account's connectors.
+        assert!(
+            spec_args.contains("-e ENABLE_CLAUDEAI_MCP_SERVERS=false"),
+            "{spec_args}"
+        );
+        // As the user inside the Podman machine on macOS and Windows too,
+        // never as root.
+        for platform in [Platform::MacOs, Platform::Windows] {
+            let args: Vec<String> = Plan::new(
+                RunKind::Spec,
+                Agent::Claude,
+                project,
+                &locations(project),
+                None,
+                platform,
+            )
+            .run_args("img", "claude", &[], false)
+            .into_iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+            assert!(args.iter().any(|arg| arg == "--userns=keep-id"), "{platform:?}: {args:?}");
+        }
         assert!(spec_args.contains("-w /workspace"));
         // The build's manifest, and an empty scratch folder in the code's
         // place, writable, never the code itself.

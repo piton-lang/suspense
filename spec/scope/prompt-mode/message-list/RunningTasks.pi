@@ -1,0 +1,62 @@
+use /lib
+from /scope/prompt-mode/sending import PromptSendingScope
+from /ui/components/right-sidebar import RightSidebarScope
+
+export shape MessageListRunningTasksShape:
+    description:
+        The header heads the view with every task under way, not only the
+        latest, that is the latest task, and every other task building, compiling,
+        or running, as when a Spec task and a Code task run in their two
+        lanes at once, or a chain's step runs beside a task of the other
+        lane. Only one of them is selected at a time, and only it is shown in
+        full, with its header as a task's header always is, its compiled prompt,
+        hidden anchor's name, status label and elapsed time, and buttons, and
+        beneath it its output table and the files it changed. The others are
+        compact rows, one each, stacked above the selected task's header, in
+        the order they were sent, oldest at the top. With only one task to
+        show, there are no compact rows, and the header is just as it was.
+
+    compactRow:
+        A compact row is one line, 28 pixels tall, across the view's full
+        width, on a faint tint of its task's mode's colour, as a previous
+        task's heading is tinted, with a thin line in the theme's line colour
+        between one row and the next and beneath the last. From left to
+        right, 8 pixels in: its status label and elapsed time, as every
+        task's are, then the first line of its prompt, as it was typed, in
+        small text, cut off with an ellipsis, then, at its right, its Cancel
+        button while it is under way, as the @{PromptSendingScope} gives every
+        task one, and nothing else: no compiled prompt, no hidden anchor's
+        name, no Resend or Send to the other mode, no output, and no changed
+        files. Its tooltip gives the prompt's first lines and the mode it was
+        sent in. Hovering it shows the theme's hover over the tint.
+
+    selecting:
+        Clicking a compact row, anywhere but its Cancel button, selects its
+        task, which takes the full form, in its place beneath the compact rows,
+        and the task selected before becomes a compact row, in its own place
+        in the order sent, the switch made at once, without a slide. Each
+        task's output keeps how far it was scrolled, and whether its lock to
+        the bottom was on, while another is selected, so selecting it again
+        shows it just as it was left, locked tables showing all that arrived
+        meanwhile. The selected task's header keeps its mode's colour, as the
+        latest task's always has, and the @{RightSidebarScope} shows the selected
+        task's referenced spec, understanding, and subagents while it runs,
+        and the other running task's once it has finished while another
+        still runs.
+
+        A newly sent task, once it starts building, is selected, as the
+        latest task always has been, the one selected before becoming a
+        compact row. Otherwise the selection stays where it was put: a task
+        finishing doesn't move it. A task other than the latest that
+        finishes leaves the header for the previous tasks as soon as it isn't
+        selected, there showing as any finished task does; one finishing
+        while selected stays, in full, until another is selected, and then
+        leaves. The latest task always stays, compact or in full, finished
+        or not, as it always heads the view. Each open project keeps its own
+        selection, as it keeps the rest of its message list.
+
+    previousTasks:
+        A task in the header, compact or in full, is not among the previous
+        tasks, and isn't counted in their row, which counts every task but
+        those the header shows. Once it leaves the header, it is among them
+        as any task is.

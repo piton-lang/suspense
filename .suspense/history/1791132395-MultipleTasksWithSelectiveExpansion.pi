@@ -1,0 +1,83 @@
+
+export anchor MultipleTasksWithSelectiveExpansion:
+    userPrompt:
+        \\\
+        If we have multiple running tasks they should all be visible in the header.  However only one can be "selected" at a time, and that's the one that shows full details.  The rest are in a compact, less dense form.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            If we have multiple running tasks they should all be visible in the header.  However only one can be "selected" at a time, and that's the one that shows full details.  The rest are in a compact, less dense form.
+            \\\
+        result:
+            \\\
+            I changed the spec so the header shows every task under way, with one selected in full and the rest as compact rows. `piton check` reports no problems, `piton build` wrote 79 files, and the new "Running Tasks" section is in the refreshed reference.
+
+            ## What changed in the spec
+
+            **1. New "Running Tasks" section** (`.claude/reference/scope/prompt-mode/message-list/index.md#running-tasks`, from the new `spec/scope/prompt-mode/message-list/RunningTasks.pi`)
+            - **What the header holds:** the latest task plus every other task that is building, compiling or running, such as a Spec task and a Code task running at once.
+            - **Selected task:** only one is selected. It shows in full: compiled prompt, hidden anchor's name, status and elapsed time, buttons, and beneath it its output table and changed files.
+            - **Compact rows (`#compact-row`):** the others are one-line rows stacked above the selected task, oldest at the top.
+              - Each is 28px tall, faintly tinted in its mode's colour, with a thin line between rows.
+              - Each shows its status label and elapsed time, the first line of its prompt (cut off with an ellipsis), and its Cancel button while it's under way. Nothing else.
+              - The tooltip gives the prompt's first lines and its mode.
+            - **Only one task:** with nothing else under way there are no compact rows, and the header looks as it does today.
+            - **Selecting (`#selecting`):**
+              - Clicking a compact row selects it straight away, with no animation, and the previously selected task becomes a compact row.
+              - Each task keeps its scroll position and bottom lock while another is selected.
+              - The right sidebar follows the selected task while it runs.
+              - A newly sent task is selected once it starts building. Otherwise the selection only moves when you click.
+              - A task that isn't the latest leaves the header once it has finished and isn't selected. If it finishes while selected, it stays until you pick another.
+              - The latest task always stays.
+              - Each open project keeps its own selection.
+            - **Previous tasks (`#previous-tasks`):** tasks shown in the header aren't in the previous tasks list and aren't counted in its row.
+
+            **2. Supporting changes**
+            - **Layout** (`.claude/reference/scope/prompt-mode/index.md`, `#basic-design-and-layout` and `#previous-tasks`): the view's layout and the previous tasks row count are updated to match.
+            - **Cancelling** (`.claude/reference/scope/prompt-mode/sending/index.md#cancelling`): Cancel sits on the selected task's header. Each compact row has its own Cancel, and clicking it never selects the row. A task running in the other lane no longer shows among the previous tasks as "Running".
+            - **Activity list** (`.claude/reference/scope/running-activity/index.md#list`): clicking a running task there selects it in the header and shows its output in full, rather than opening it among the previous tasks.
+
+            The constraints are in `.suspense/history/1791132300-Prompt_ea29fc7e259b1dbd.understanding.md`.
+
+            ## Anchors the code should follow
+            - `MessageList`: `#running-tasks` (`#description`, `#compact-row`, `#selecting`, `#previous-tasks`), with `#status`/`#elapsed` and `#backgrounds` as they stand.
+            - `PromptEditor`: `#basic-design-and-layout`, `#previous-tasks`.
+            - `PromptSendingScope`: `#cancelling`.
+            - `RunningActivityScope`: `#list`.
+            - `RightSidebarScope`: it follows the selected task, as `#running-tasks` says.
+
+            The Gmail, Google Calendar and Google Drive connectors still need authorizing in your claude.ai connector settings before they can be used. None of them were needed here.
+            \\\
+
+    sentFrom: Prompt_ea29fc7e259b1dbd

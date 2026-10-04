@@ -1,0 +1,72 @@
+
+export anchor ProjectsCreatedWithWindowsAdmin2:
+    userPrompt:
+        \\\
+        Bug: when adding projects in created them with windows admin and I had to retake them to fix it
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Bug: when adding projects in created them with windows admin and I had to retake them to fix it
+            \\\
+        result:
+            \\\
+            I couldn't find the cause in the spec. It said nothing about who owns the files Suspense creates, so I added a rule that everything it creates belongs to the signed-in user. `piton check` reports no problems, `piton build` wrote 79 files, and the new text is in the refreshed reference.
+
+            **The two likely causes:**
+            - **Suspense running as administrator.** Files an elevated process creates on Windows end up owned by the Administrators group.
+            - **Files written from the Podman machine.** A container run writes into the Windows project folder from inside a virtual machine, which can leave odd ownership.
+
+            The spec now rules out both, but the code step should confirm which one actually happened to you.
+
+            ## What changed in the spec
+
+            **1. New "File Ownership" section** (`.claude/reference/scope/application/index.md#file-ownership`)
+            - **Who owns what:** every file and folder Suspense creates belongs to the user, as if you'd made it yourself, on every platform. That covers new project folders and their contents, `.suspense` data, files written by tasks or the editor, and Suspense's own files such as preferences.
+            - **No elevation on Windows:** Suspense declares that it runs with the rights of whoever starts it and never requires elevation. Its installer and self-update must not start it elevated either.
+            - **If it runs elevated anyway:** each file and folder it creates is still owned by the signed-in user, not Administrators, and takes its permissions from the folder it's in. The same applies to the programs it starts, including git's repository, so git never refuses a project as owned by someone else.
+            - **Never left behind:** nothing is ever left owned by Administrators, SYSTEM or another account.
+
+            **2. New Project** (`.claude/reference/scope/new-project/index.md#creating`): everything the form creates, Git repository included, belongs to you, so the project can be edited, built and committed right away with no ownership to take.
+
+            **3. Containers** (`.claude/reference/scope/container-environment/index.md#description`): on macOS and Windows, container runs act as you rather than root inside the Podman machine. Files they write into a folder mounted from Windows are yours and inherit that folder's permissions.
+
+            The constraints are in `.suspense/history/1791132843-ProjectsCreatedWithWindowsAdmin.understanding.md`.
+
+            ## Anchors the code should follow
+            - `ApplicationScope`: `#file-ownership`. This covers the Windows build's setting that it runs without elevation, the installer, self-update, and setting ownership when Suspense finds itself elevated.
+            - `NewProjectScope`: `#creating`.
+            - `ContainerEnvironmentScope`: `#description`, for the user Podman runs containers as on Windows and macOS.
+            \\\
+
+    sentFrom: ProjectsCreatedWithWindowsAdmin

@@ -1,0 +1,113 @@
+use /lib
+use /ui
+from /scope/application import ApplicationScope
+from /scope/new-project import NewProjectScope
+from /scope/project-data import ProjectDataScope
+from /scope/project-directory import ProjectDirectoryScope
+from /scope/project/open-project import OpenProjectScope
+from /ui/components/folder-browser import FolderBrowserScope
+
+export ui-component ImportProjectScope:
+    concept: {ImportProjectConcept}
+
+concept ImportProjectConcept:
+    pitch:
+        Makes an existing folder, such as a codebase that has never had a
+        spec, into a Piton project, writing its piton.config.pi set up for
+        Belay and the agents it should write for, as a new project's is, and
+        opens it, leaving everything already in the folder as it was.
+
+    shape: {ImportProjectShape}
+
+shape ImportProjectShape:
+    description:
+        A form titled "Import Project", with a close button, laid out as the
+        @{NewProjectScope}'s form is, two columns of equal width, and along
+        the bottom a "Cancel" button and a primary "Import" button. It holds
+        the same fields as a new project's, each looking and checked just as
+        it does there, but for where the project is: in place of the Name
+        field and the Location row, a "Folder" row, at the top of the first
+        column, beneath which come the Git checkbox, the spec, code, and
+        shape roots, and, in the second column, the template and the agents.
+        The folder's Browse button has focus when the form opens.
+
+    folder:
+        A "Folder" row showing the existing folder to import, with a
+        "Browse…" button beside it, empty to start with, reading "Choose a
+        folder", muted. Browse opens a @{FolderBrowserScope} in place of the
+        form, titled "Choose the folder to import", starting in the folder
+        holding the open project, or the user's home folder when no project
+        is open. Choosing a folder makes it the folder, and choosing or
+        cancelling goes back to the form, just as it was left. Beneath the
+        row, muted, the folder's full path. The project's name, which names
+        its config's anchor as a new project's name does, is the folder's
+        name.
+
+        A folder that already holds a piton.config.pi is already a project,
+        and can't be imported: the row says so beneath it, with an "Open it
+        instead" link that opens it as the @{OpenProjectScope} would and
+        closes the form. A folder the user can't write to says that instead.
+
+    defaults:
+        Once a folder is chosen, the fields start from what is in it, and
+        what has been typed in a field since is kept when another folder is
+        chosen. The spec root starts as ./spec. The code root starts as ./src
+        where the folder has a src folder, and as ./, the folder itself,
+        where it doesn't, since an imported codebase's code is most often all
+        of it. The shape root starts as ./spec/shape. "Initialize a Git
+        repository" starts checked where the folder isn't in a Git
+        repository. Where it is, whether it is the top of one or a folder
+        within one, as `git rev-parse --show-toplevel` run in it finds, the
+        checkbox is unchecked and disabled, and reads "Already a Git
+        repository", its tooltip naming the repository's top folder, so an
+        existing repository can never be initialized again. The template and the agents start as a
+        new project's do.
+
+        The roots are written and checked as a new project's are, but the
+        code root may be ./, the folder itself, holding the spec root, as the
+        project's locations allow. A root that already exists in the folder
+        is used as it is, and says so beneath its field, muted, "Uses the
+        existing folder".
+
+    importing:
+        "Import" is disabled, with a tooltip saying why, until a folder that
+        can be imported is chosen, the paths are valid, and an agent is
+        checked, and while it is importing.
+
+        Pressing it writes the folder's piton.config.pi, just as a new
+        project's config is written, named after the folder, with its roots
+        and an adapter for each checked agent, and opencode.json as a new
+        project writes it, unless there is one. It creates the spec root, the
+        code root, and any shape root where they aren't there, and writes the
+        chosen template's files into the spec root, each only where no file
+        of that name is there already, or an empty index.pi where the
+        template gives none and the spec root has no index.pi. It never
+        overwrites, moves, renames, or deletes anything already in the
+        folder: the folder's own files, its code, and anything already in a
+        root are left exactly as they were, and nothing outside the folder
+        is touched.
+
+        With "Initialize a Git repository" checked, once the rest is written
+        the folder is made a Git repository with `git init`, as a new
+        project's is, and nothing is committed. Just before, the folder is
+        checked again, and where it is in a Git repository by then, the top
+        of one or within one, `git init` is never run, whatever the checkbox
+        said: an existing repository is never initialized again, nor a new
+        one nested inside it, and its history, branches, index, hooks, and
+        configuration are left exactly as they were. Whether or not Git was just
+        initialized, where the folder is in a Git repository, a .gitignore in
+        the folder is given the lines ignoring what Suspense keeps for this
+        machine alone, as the @{ProjectDataScope} says: written as a new
+        project's is where there is none, and where there is one, only the
+        lines it lacks are added at its end, beneath a "# Suspense" comment,
+        the rest of the file left as it was. If Git fails, the project still
+        opens, and a warning notification says the repository couldn't be
+        initialized, and why.
+
+        Everything it creates belongs to the user, as the @{ApplicationScope}
+        says. Once imported, the project opens as if opened with the
+        @{OpenProjectScope}, becoming the @{ProjectDirectoryScope}, and the
+        form closes. If anything fails, the form stays open and says what
+        went wrong above its buttons, and nothing it wrote before the failure
+        is left half done: the piton.config.pi is written after every other file it writes, so a folder
+        whose import failed is never taken for a project.

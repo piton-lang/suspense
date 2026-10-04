@@ -830,7 +830,8 @@ fn blank_for_lsp(line: &str) -> String {
 /// fluency file written first if it never has been (see
 /// [`crate::piton_fluency`]), and every mode with instructions has the
 /// Suspense fluency file written where it is missing or out of date (see
-/// [`crate::suspense_fluency`]). `${UNDERSTANDING_FILE}` is left as written,
+/// [`crate::suspense_fluency`]). A question's end with the card format (see
+/// [`system_prompts::ask_cards`]). `${UNDERSTANDING_FILE}` is left as written,
 /// filled in as the prompt is sent. None for a mode with none, as Freeform,
 /// or a template left empty.
 pub fn instructions(mode: SendMode, project_dir: &Path) -> Result<Option<String>> {
@@ -841,7 +842,13 @@ pub fn instructions(mode: SendMode, project_dir: &Path) -> Result<Option<String>
     if mode != SendMode::Freeform {
         crate::suspense_fluency::ensure(project_dir);
     }
-    filled_instructions(mode.into(), Some(mode), project_dir)
+    let filled = filled_instructions(mode.into(), Some(mode), project_dir)?;
+    // Every question is told the card format, after its project's own Ask
+    // instructions, on a paragraph of its own.
+    if mode == SendMode::Ask {
+        return joined(filled, Some(system_prompts::ask_cards().to_string()));
+    }
+    Ok(filled)
 }
 
 /// Which of the project's locations a run in `mode` can see, the code and
@@ -1576,17 +1583,27 @@ mod tests {
                 SendMode::Spec | SendMode::Both => ("", "./spec"),
                 _ => ("./src", "./spec"),
             };
+            let template = system_prompts::fill_instructions(
+                system_prompts::default_prompt(mode),
+                code,
+                spec,
+                system_prompts::Fluency {
+                    piton: Some(&fluency_file),
+                    suspense: Some(&suspense_file),
+                },
+            );
+            // A question ends with the card format, on a paragraph of its
+            // own; no task is given it.
+            let expected = if mode == SendMode::Ask {
+                format!("{template}\n\n{}", system_prompts::ask_cards())
+            } else {
+                template
+            };
+            assert_eq!(given, expected);
             assert_eq!(
-                given,
-                system_prompts::fill_instructions(
-                    system_prompts::default_prompt(mode),
-                    code,
-                    spec,
-                    system_prompts::Fluency {
-                        piton: Some(&fluency_file),
-                        suspense: Some(&suspense_file),
-                    },
-                )
+                given.contains("suspense-prompt"),
+                mode == SendMode::Ask,
+                "{mode:?}: {given}"
             );
             // Every mode with instructions points at the Suspense fluency.
             assert!(
@@ -1628,8 +1645,13 @@ mod tests {
                 .as_deref(),
             Some("Code in ./src only.")
         );
+        // A question left with no Ask instructions of its own is still told
+        // the card format.
         system_prompts::save(SendMode::Ask, "", &project_dir).unwrap();
-        assert_eq!(instructions(SendMode::Ask, &project_dir).unwrap(), None);
+        assert_eq!(
+            instructions(SendMode::Ask, &project_dir).unwrap().as_deref(),
+            Some(system_prompts::ask_cards())
+        );
         // A template saved before instructions were sent apart from the
         // system prompt, still naming the spec reading and the fluency, gives
         // neither.

@@ -24,6 +24,7 @@ use crate::generate_skills_view::{CloseGenerateSkills, GenerateSkills, GenerateS
 use crate::git_panel::GitPanel;
 use crate::inset_panel::{closing_panel, inset_panel};
 use crate::new_instruction::{CloseInstruction, NewInstruction, NewInstructionForm};
+use crate::import_project::{CloseImportProject, ImportProject, ImportProjectForm};
 use crate::new_project::{CloseNewProject, NewProject, NewProjectForm, ProjectCreated};
 use crate::palette::{Palette, Picked, SystemCommand, SystemState};
 use crate::project::open_project::{self, OpenProject};
@@ -99,6 +100,8 @@ pub struct MainWindow {
     /// window in an inset panel.
     diff: Option<Entity<DiffView>>,
     new_project: Option<Entity<NewProjectForm>>,
+    /// The Import Project form, while it is open in the inset panel.
+    import_project: Option<Entity<ImportProjectForm>>,
     /// The form creating a scope, concept, or shape.
     spec_component: Option<Entity<SpecComponentForm>>,
     /// The panel writing a new instruction.
@@ -355,6 +358,7 @@ impl MainWindow {
             git_height: None,
             diff: None,
             new_project: None,
+            import_project: None,
             spec_component: None,
             new_instruction: None,
             settings: None,
@@ -419,6 +423,7 @@ impl MainWindow {
         self._launch_checks = None;
         self.diff = None;
         self.new_project = None;
+        self.import_project = None;
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
@@ -587,6 +592,7 @@ impl MainWindow {
 
     fn show_diff(&mut self, diff: Entity<DiffView>, window: &mut Window, cx: &mut Context<Self>) {
         self.new_project = None;
+        self.import_project = None;
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
@@ -671,6 +677,7 @@ impl MainWindow {
     ) {
         self.diff = None;
         self.new_project = None;
+        self.import_project = None;
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
@@ -773,6 +780,7 @@ impl MainWindow {
     ) {
         self.diff = None;
         self.new_project = None;
+        self.import_project = None;
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
@@ -919,6 +927,7 @@ impl MainWindow {
     fn restore_run(&mut self, view: &Entity<RunView>, window: &mut Window, cx: &mut Context<Self>) {
         self.diff = None;
         self.new_project = None;
+        self.import_project = None;
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
@@ -1259,9 +1268,57 @@ impl MainWindow {
         }
     }
 
+    /// Opens the Import Project form in the inset panel, fresh each time, in
+    /// place of any diff or New Project form there.
+    pub fn open_import_project(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let form = cx.new(|cx| ImportProjectForm::new(window, cx));
+        self.diff = None;
+        self.new_project = None;
+        self.spec_component = None;
+        self.new_instruction = None;
+        self.settings = None;
+        self.welcome = None;
+        self.theme_editor = None;
+        self.generate_skills = None;
+        self.project_picker = None;
+        self.divergence_minimized = self.divergence.is_some();
+        self.rescope_minimized = self.rescope.is_some();
+        self.run_minimized = self.run.is_some();
+        self._panel_subscriptions = vec![
+            cx.subscribe_in(&form, window, |this, _, _: &CloseImportProject, window, cx| {
+                this.close_panel(window, cx)
+            }),
+            // Once imported, or opened instead, the project opens as with
+            // Open Project and the panel closes.
+            cx.subscribe_in(
+                &form,
+                window,
+                |this, _, ProjectCreated(folder, warning), window, cx| {
+                    ProjectDirectory::set(folder.clone(), cx);
+                    this.close_panel(window, cx);
+                    // Git failing didn't stop the project opening.
+                    if let Some(warning) = warning {
+                        window.push_notification(
+                            gpui_kit::component::notification::Notification::warning(
+                                warning.clone(),
+                            )
+                            .title("Project imported"),
+                            cx,
+                        );
+                    }
+                },
+            ),
+        ];
+        self.import_project = Some(form);
+        self._launch_checks = None;
+        cx.notify();
+    }
+
     pub fn open_new_project(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let form = cx.new(|cx| NewProjectForm::new(window, cx));
         self.diff = None;
+        // Opening New Project replaces an Import Project form.
+        self.import_project = None;
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
@@ -1431,6 +1488,8 @@ impl MainWindow {
             diff.read(cx).focus_handle(cx)
         } else if let Some(form) = &self.new_project {
             form.read(cx).focus_handle(cx)
+        } else if let Some(form) = &self.import_project {
+            form.read(cx).focus_handle(cx)
         } else if let Some(form) = &self.spec_component {
             form.read(cx).focus_handle(cx)
         } else if let Some(form) = &self.new_instruction {
@@ -1469,6 +1528,7 @@ impl MainWindow {
     fn panel_open(&self) -> bool {
         self.diff.is_some()
             || self.new_project.is_some()
+            || self.import_project.is_some()
             || self.spec_component.is_some()
             || self.new_instruction.is_some()
             || self.settings.is_some()
@@ -1505,6 +1565,7 @@ impl MainWindow {
         }
         if self.diff.is_none()
             && self.new_project.is_none()
+            && self.import_project.is_none()
             && self.spec_component.is_none()
             && self.new_instruction.is_none()
             && self.settings.is_none()
@@ -1530,6 +1591,7 @@ impl MainWindow {
         }
         self.diff = None;
         self.new_project = None;
+        self.import_project = None;
         self.spec_component = None;
         self.new_instruction = None;
         self.settings = None;
@@ -1757,6 +1819,9 @@ impl MainWindow {
         if let Some(form) = &self.new_instruction {
             return Some(("new-instruction", form.clone().into()));
         }
+        if let Some(form) = &self.import_project {
+            return Some(("import-project", form.clone().into()));
+        }
         let form = self.new_project.clone()?;
         Some(("new-project", form.into()))
     }
@@ -1918,6 +1983,8 @@ impl MainWindow {
                 prompt_mode.insert_mention(mention, window, cx)
             }),
             Picked::System(command) => match command {
+                SystemCommand::NewProject => self.open_new_project(window, cx),
+                SystemCommand::ImportProject => self.open_import_project(window, cx),
                 SystemCommand::OpenProject => self.open_project_picker(window, cx),
                 SystemCommand::Build => self
                     .ribbon
@@ -2108,6 +2175,9 @@ impl Render for MainWindow {
             .on_action(
                 cx.listener(|this, _: &NewProject, window, cx| this.open_new_project(window, cx)),
             )
+            .on_action(cx.listener(|this, _: &ImportProject, window, cx| {
+                this.open_import_project(window, cx)
+            }))
             .on_action(
                 cx.listener(|this, _: &OpenSettings, window, cx| this.open_settings(window, cx)),
             )
@@ -2252,7 +2322,7 @@ mod tests {
         // commands at all.
         let project = body_of(
             RibbonTab::Project,
-            &["new-project", "project-directory"],
+            &["new-project", "import-project", "project-directory"],
             cx,
         );
         let spec = body_of(
@@ -3341,9 +3411,12 @@ mod tests {
                     px(8.),
                     "{mode:?}: the group isn't 8px above the bottom"
                 );
-                // Project's two commands are slim, stacked from the top.
+                // Project's commands are slim, stacked from the top, two to
+                // a column: New Project above Import Project, then Open
+                // Project starting the next column.
                 let slim = window.find("new-project").bounds();
-                let below = window.find("project-directory").bounds();
+                let below = window.find("import-project").bounds();
+                let open = window.find("project-directory").bounds();
                 assert_eq!(
                     slim.top() - body.top(),
                     px(8.),
@@ -3354,7 +3427,7 @@ mod tests {
                     group.left(),
                     "{mode:?}: space before New Project"
                 );
-                for button in [slim, below] {
+                for button in [slim, below, open] {
                     assert_eq!(
                         button.size.height,
                         px(27.),
@@ -3364,7 +3437,16 @@ mod tests {
                 assert_eq!(
                     (below.left(), below.top() - slim.bottom()),
                     (slim.left(), px(4.)),
-                    "{mode:?}: Open Project isn't stacked 4px under New Project"
+                    "{mode:?}: Import Project isn't stacked 4px under New Project"
+                );
+                assert_eq!(
+                    open.top(),
+                    slim.top(),
+                    "{mode:?}: Open Project doesn't start the next column at the top"
+                );
+                assert!(
+                    open.left() >= slim.right().max(below.right()) + px(4.) - px(0.5),
+                    "{mode:?}: Open Project isn't a column along"
                 );
                 square_and_apart(window, slim, mode, cx);
             })
@@ -5372,6 +5454,72 @@ mod tests {
     /// New Project opens the form in the inset panel; browsing for a location
     /// goes through the folder browser and back; and New creates the project,
     /// opens it, and closes the panel.
+    #[gpui_kit::test]
+    async fn import_project_makes_a_folder_a_project_and_opens_it(cx: &mut TestAppContext) {
+        let folder =
+            std::env::temp_dir().join(format!("suspense-import-ui-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&folder);
+        std::fs::create_dir_all(folder.join("src")).unwrap();
+        std::fs::write(folder.join("src/main.rs"), "fn main() {}\n").unwrap();
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+
+        // The ribbon's Import Project opens the form in the inset panel.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("import-project", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let form = main.read_with(cx, |main, _| main.import_project.clone().expect("no form"));
+        assert!(main.read_with(cx, |main, _| main.new_project.is_none()));
+        cx.update_window(handle, |_, window, cx| {
+            form.update(cx, |form, cx| form.set_folder(folder.clone(), window, cx));
+        })
+        .unwrap();
+        cx.run_until_parked();
+        // It starts from what the folder holds: its src folder is the code
+        // root, already there.
+        let settings = form.read_with(cx, |form, cx| form.settings(cx));
+        assert_eq!(settings.code_root, "./src");
+        assert_eq!(
+            settings.name,
+            folder.file_name().unwrap().to_string_lossy()
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("import-project-import", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        // Once imported, the project is open, the panel closed, and nothing
+        // that was there is changed.
+        assert_eq!(
+            cx.update(|cx| ProjectDirectory::get(cx)),
+            Some(folder.clone())
+        );
+        assert!(main.read_with(cx, |main, _| main.import_project.is_none()));
+        assert!(folder.join(crate::project_directory::CONFIG_FILE_NAME).exists());
+        assert_eq!(
+            std::fs::read_to_string(folder.join("src/main.rs")).unwrap(),
+            "fn main() {}\n"
+        );
+        std::fs::remove_dir_all(&folder).ok();
+    }
+
     #[gpui_kit::test]
     async fn new_project_creates_and_opens_a_project(cx: &mut TestAppContext) {
         let base =

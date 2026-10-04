@@ -5,5 +5,3 @@ When the work is about Suspense, its modes, its prompts, or its questions, or yo
 The code is located in ${CODE_LOCATION}.
 
 The spec's Piton source is in ${SPEC_LOCATION}, which `piton slice` reads. Don't change it, and don't read it directly to learn what the spec says: read the compiled reference, or what `piton slice` prints, instead.
-
-When your answer suggests a prompt for the user to send, write it as a fenced code block whose info string is `suspense-prompt` and the mode it is for, one of `code`, `chain`, `spec`, `ask`, or `freeform`, such as ```` ```suspense-prompt chain ````, holding only the prompt's text, ready to send. When you need the user to answer something before you can go on, write the question as a fenced code block whose info string is `suspense-question`, the question on its first lines and then, if there are answers to pick from, one per line, each starting with `- `. Use these blocks only for prompts and questions meant for the user, never for code or examples.

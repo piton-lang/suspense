@@ -16,6 +16,7 @@
 //! and however long their answers, only the rows in view are laid out.
 
 use super::*;
+use gpui_kit::component::button::ButtonCustomVariant;
 use crate::task_table::ChatSegment;
 
 /// The share of the width above the chat input the pane starts at, and the
@@ -286,33 +287,76 @@ pub(super) fn now_secs() -> u64 {
         .map_or(0, |since| since.as_secs())
 }
 
-/// How long Send to prompt reads "Sent to prompt" after it is pressed.
+/// How long a prompt card's button reads as done, "Edited" or "Sent to
+/// Code", after it is pressed.
 const SENT_TO_PROMPT_FOR: Duration = Duration::from_secs(2);
 
+/// Which of a prompt card's buttons was pressed: Edit, or a send button, by
+/// the mode it sends in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum CardAction {
+    Edit,
+    Send(SendMode),
+}
+
+impl CardAction {
+    /// What it is known by among the card's buttons.
+    fn key(self, card: &str) -> String {
+        match self {
+            CardAction::Edit => format!("{card}/edit"),
+            CardAction::Send(mode) => format!("{card}/{}", mode_slug(mode)),
+        }
+    }
+}
+
+/// A mode as a `suspense-prompt` block names it.
+fn mode_slug(mode: SendMode) -> &'static str {
+    match mode {
+        SendMode::Code => "code",
+        SendMode::Both => "chain",
+        SendMode::Spec => "spec",
+        SendMode::Ask => "ask",
+        SendMode::Freeform => "freeform",
+    }
+}
+
 impl PromptMode {
-    /// Whether the prompt card `card`'s Send to prompt was pressed just now.
-    pub(super) fn sent_to_prompt(&self, card: &str) -> bool {
+    /// Whether the prompt card `card`'s button for `action` was pressed just
+    /// now.
+    pub(super) fn sent_to_prompt(&self, card: &str, action: CardAction) -> bool {
         self.sent_to_prompt
-            .get(card)
+            .get(&action.key(card))
             .is_some_and(|at| at.elapsed() < SENT_TO_PROMPT_FOR)
     }
 
-    /// Puts the prompt a card holds in the chat input, in `mode`'s tab, or
-    /// Chain's for a card of no known mode, sending nothing, as the
-    /// AskConversationScope's suggested prompts say.
-    pub(super) fn send_card_prompt(
+    /// Does what a prompt card's button `action` does with the prompt `text`
+    /// it holds, of `mode`, as the AskConversationScope's suggested prompts
+    /// say. Edit puts it in the chat input, in `mode`'s tab, or Chain's for
+    /// a card of no known mode, sending nothing; a send button sends it at
+    /// once in its own mode, as though written on that tab and sent, with
+    /// the Slice toggle as it stands and nothing attached, leaving what is
+    /// being written alone.
+    pub(super) fn card_prompt(
         &mut self,
         card: String,
         text: String,
         mode: Option<SendMode>,
+        action: CardAction,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let mode = mode.unwrap_or(SendMode::Both);
-        self.chat_input
-            .update(cx, |input, cx| input.put_prompt(text, mode, window, cx));
-        self.sent_to_prompt.insert(card, Instant::now());
-        // It reads as sent for a while, then as before.
+        match action {
+            CardAction::Edit => {
+                let mode = mode.unwrap_or(SendMode::Both);
+                self.chat_input
+                    .update(cx, |input, cx| input.put_prompt(text, mode, window, cx));
+            }
+            CardAction::Send(mode) => {
+                self.send_attached(text, mode, Attached::default(), window, cx)
+            }
+        }
+        self.sent_to_prompt.insert(action.key(&card), Instant::now());
+        // It reads as done for a while, then as before.
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(SENT_TO_PROMPT_FOR).await;
             this.update(cx, |_, cx| cx.notify()).ok();
@@ -1515,8 +1559,24 @@ fn card_box(id: impl Into<ElementId>, color: Hsla, cx: &App) -> Stateful<Div> {
         }))
 }
 
+/// A send button's label, before and after it is pressed, and its tooltip.
+fn send_labels(mode: SendMode) -> (&'static str, &'static str, &'static str) {
+    match mode {
+        SendMode::Code => ("Send to Code", "Sent to Code", "Send this prompt as a Code task"),
+        SendMode::Both => ("Send to Chain", "Sent to Chain", "Send this prompt as a Chain task"),
+        SendMode::Spec => ("Send to Spec", "Sent to Spec", "Send this prompt as a Spec task"),
+        SendMode::Ask => ("Ask", "Asked", "Ask this prompt as a question"),
+        SendMode::Freeform => (
+            "Send to Freeform",
+            "Sent to Freeform",
+            "Send this prompt as a Freeform task",
+        ),
+    }
+}
+
 /// A prompt an answer hands back, as a card: headed by its mode, its text as
-/// written, and Copy and Send to prompt, usable once `ready`.
+/// written, and Copy, Edit, and a button sending it to each of Code, Chain,
+/// and Spec, usable once `ready`.
 fn prompt_card(
     this: &WeakEntity<PromptMode>,
     card: &str,
@@ -1531,9 +1591,10 @@ fn prompt_card(
         Some(mode) => format!("{} prompt", mode.label()),
         None => "Prompt".to_string(),
     };
-    let sent = this
-        .upgrade()
-        .is_some_and(|this| this.read(cx).sent_to_prompt(card));
+    let done = |action: CardAction, cx: &App| {
+        this.upgrade()
+            .is_some_and(|this| this.read(cx).sent_to_prompt(card, action))
+    };
     let id = SharedString::from(format!("prompt-card-{card}"));
     let copy = {
         let text = text.clone();
@@ -1546,30 +1607,82 @@ fn prompt_card(
             .on_click(move |_, _, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(text.clone()))
             })
+            .into_any_element()
     };
-    let send = {
+    // A button doing `action`, and whether it was pressed just now.
+    let action_button = |id: String, action: CardAction, cx: &mut App| {
+        let pressed = done(action, cx);
         let (this, card, text) = (this.clone(), card.to_string(), text.clone());
-        Button::new(SharedString::from(format!("prompt-card-send-{card}")))
+        let button = Button::new(SharedString::from(id))
             .small()
-            .icon(if sent {
-                IconName::Check
-            } else {
-                IconName::ArrowRight
-            })
-            .label(if sent {
-                "Sent to prompt"
-            } else {
-                "Send to prompt"
-            })
-            .text_color(color)
             .disabled(!ready)
             .on_click(move |_, window, cx| {
                 this.update(cx, |this, cx| {
-                    this.send_card_prompt(card.clone(), text.clone(), mode, window, cx)
+                    this.card_prompt(card.clone(), text.clone(), mode, action, window, cx)
                 })
                 .ok();
-            })
+            });
+        (button, pressed)
     };
+    let (edit, edited) = action_button(format!("prompt-card-edit-{card}"), CardAction::Edit, cx);
+    let edit = edit
+        .ghost()
+        .icon(if edited {
+            IconName::Check
+        } else {
+            IconName::Pencil
+        })
+        .label(if edited { "Edited" } else { "Edit" })
+        .tooltip("Put this prompt in the chat input to edit before sending")
+        .into_any_element();
+    // Ask's or Freeform's own first, then each task mode, the card's own
+    // filled in its colour and the rest ghosts.
+    let lead = mode.filter(|mode| matches!(mode, SendMode::Ask | SendMode::Freeform));
+    let sends = lead
+        .into_iter()
+        .chain([SendMode::Code, SendMode::Both, SendMode::Spec])
+        .map(|send| {
+            let (label, sent_label, tooltip) = send_labels(send);
+            let send_color = chat_input::mode_color(send, cx);
+            let (button, sent) = action_button(
+                format!("prompt-card-send-{}-{card}", mode_slug(send)),
+                CardAction::Send(send),
+                cx,
+            );
+            let button = button
+                .icon(if sent {
+                    IconName::Check
+                } else {
+                    IconName::ArrowRight
+                })
+                .label(if sent { sent_label } else { label })
+                .tooltip(tooltip);
+            if mode == Some(send) {
+                // Light text on a dark colour, dark on a light one.
+                let foreground = if send_color.l > 0.6 {
+                    gpui_kit::black()
+                } else {
+                    gpui_kit::white()
+                };
+                button
+                    .custom(
+                        ButtonCustomVariant::new(cx)
+                            .color(send_color)
+                            .hover(send_color.opacity(0.9))
+                            .active(send_color.opacity(0.8))
+                            .foreground(foreground),
+                    )
+                    // gpui-kit keeps only a fifth of a custom button's
+                    // resting colour, so the colour is given to the button
+                    // itself.
+                    .bg(send_color)
+                    .text_color(foreground)
+                    .into_any_element()
+            } else {
+                button.ghost().text_color(send_color).into_any_element()
+            }
+        })
+        .collect::<Vec<_>>();
     let card_box = card_box(id, color, cx)
         .child(
             h_flex()
@@ -1591,10 +1704,12 @@ fn prompt_card(
         .child(
             h_flex()
                 .w_full()
+                .flex_wrap()
                 .justify_end()
                 .gap_1()
                 .child(copy)
-                .child(send),
+                .child(edit)
+                .children(sends),
         );
     gpui_kit::TestSupportExt::test_support(card_box).into_any_element()
 }

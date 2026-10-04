@@ -126,12 +126,11 @@ shape PromptSendingShape:
     cancelling:
         A task under way can be cancelled, from a Cancel button: a small
         ghost button with a stop icon, whose tooltip says "Cancel this task",
-        at the right of the latest task's header, beside its Resend button,
-        shown only while the task is building, compiling, or running. With a
-        task running in each lane, the one that isn't the latest task shows
-        among the previous tasks as Running, with the same Cancel button at
-        the right of its heading, beside its Resend button, and clicking it
-        never opens or closes the item. A task
+        at the right of the selected task's header, beside its Resend
+        button, shown only while the task is building, compiling, or running.
+        With more than one task under way, each of the others is a compact
+        row in the header, as the @{MessageList} says, with the same Cancel
+        button at its right, and clicking it never selects the row. A task
         is cancelled straight away, whatever the harness is in the middle of:
         a build or compile under way is abandoned before the task is run, and
         a run is stopped, the harness's process ended, not left to finish its
