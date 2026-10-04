@@ -12,7 +12,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail};
@@ -664,9 +664,6 @@ pub fn now() -> u64 {
         .map_or(0, |since| since.as_secs())
 }
 
-/// Set when Restart quits, so Suspense starts again once it has.
-static RESTART: AtomicBool = AtomicBool::new(false);
-
 impl Updates {
     /// Starts looking for updates, if this build updates itself, and puts a
     /// staged update in place whenever Suspense quits.
@@ -718,13 +715,8 @@ impl Updates {
             if cant_update().is_none()
                 && let Ok(exe) = running_binary()
             {
-                match apply(&exe, sequence(crate::version::VERSION)) {
-                    Ok(_) => {
-                        if RESTART.load(Ordering::SeqCst) {
-                            crate::process::command(&exe).spawn().ok();
-                        }
-                    }
-                    Err(err) => eprintln!("couldn't put the update in place: {err:#}"),
+                if let Err(err) = apply(&exe, sequence(crate::version::VERSION)) {
+                    eprintln!("couldn't put the update in place: {err:#}");
                 }
             }
             async {}
@@ -1027,16 +1019,59 @@ impl Updates {
         .detach();
     }
 
-    /// Quits, as quitting does, asking first while work runs, and starts
-    /// Suspense again once the update is in place.
+    /// Asks for a restart: quits, as quitting does, asking first while work
+    /// runs, and starts Suspense again with the update in place. Never from
+    /// within the click that asks for it: it runs in a later turn of the
+    /// application's loop, once no window is being updated, so nothing it
+    /// does touches the window the click came from while it is.
     pub fn restart(cx: &mut App) {
-        crate::main_window::MainWindow::quit_from_anywhere(true, cx);
+        cx.spawn(async move |cx| {
+            cx.update(|cx| crate::main_window::MainWindow::quit_from_anywhere(true, cx));
+        })
+        .detach();
     }
 }
 
-/// Suspense is quitting to start again.
-pub fn restart_on_quit() {
-    RESTART.store(true, Ordering::SeqCst);
+/// Restarts Suspense, as its quit is confirmed: puts a staged update in
+/// place, then starts the binary from the same path, before the running one
+/// exits. Fails, leaving Suspense to keep running and the update in place for
+/// the next launch, where either can't be done.
+pub fn restart_now() -> Result<()> {
+    let exe = running_binary()?;
+    if cant_update().is_none() {
+        apply(&exe, sequence(crate::version::VERSION))?;
+    }
+    // A test never starts another copy of itself.
+    #[cfg(test)]
+    {
+        RESTARTED.set(true);
+        let _ = exe;
+        Ok(())
+    }
+    #[cfg(not(test))]
+    {
+        crate::process::command(&exe)
+            .spawn()
+            .with_context(|| format!("couldn't start {}", exe.display()))?;
+        log::write(format!("restart: started {}", exe.display()));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// A restart was asked for and would have started Suspense again.
+    pub static RESTARTED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Says, in the window, that the restart failed and why, Suspense running on.
+pub fn notify_restart_failed(why: &str, cx: &mut App) {
+    use gpui_kit::component::notification::Notification;
+    log::write(format!("restart failed: {why}"));
+    push_notification(
+        Notification::error(why.to_string()).title("Suspense couldn't restart"),
+        cx,
+    );
 }
 
 /// What a check asked for from the ribbon says, as it goes.

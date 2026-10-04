@@ -37,7 +37,8 @@ pub fn run() {
 
         crate::self_update::Updates::init(finished_update, cx);
 
-        cx.on_action(|_: &Quit, cx| cx.quit());
+        // Never from within the window the action came from.
+        cx.on_action(|_: &Quit, cx| main_window::MainWindow::quit_later(false, cx));
         cx.bind_keys([
             #[cfg(target_os = "macos")]
             KeyBinding::new("cmd-q", Quit, None),

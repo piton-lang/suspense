@@ -1,0 +1,8 @@
+- [Restart quits as quitting does, asking first while work runs, then starts Suspense again from the same path](.claude/reference/scope/self-update/index.md#restarting)
+- [A cancelled quit means Restart does nothing more](.claude/reference/scope/self-update/index.md#restarting)
+- [However Suspense quits, a staged update is put in place by renaming it over the running binary](.claude/reference/scope/self-update/index.md#restarting)
+- [Restart appears on the "ready" notification and in the Updates section](.claude/reference/scope/self-update/index.md#restarting)
+- [Quitting by Ctrl+Q, the palette's Quit, or the close button asks first while work is running](.claude/reference/scope/application/MainWindow.md#quitting)
+- [Putting an update in place never leaves Suspense without a binary](.claude/reference/scope/self-update/index.md#restarting)
+- [Every step of updating is logged to updates.log, failures with their whole error](.claude/reference/scope/self-update/index.md#diagnostics)
+- [Restart begins only after the click's handling ends, never touching a window still being updated](.claude/reference/scope/self-update/index.md#restarting)

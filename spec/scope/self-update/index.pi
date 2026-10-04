@@ -86,6 +86,31 @@ shape SelfUpdateShape:
         a step that fails puts back the binary that was there, and the
         Updates section says why it couldn't update.
 
+        Restart never quits from within the click that asks for it. The
+        click, on the notification's Restart or the Updates section's, only
+        asks for a restart, and the restart begins once that click's handling
+        is over and no window is being updated, in a later turn of the
+        application's own loop, as any quit asked for from within the window
+        does. So asking whether to quit, closing the window, putting the
+        update in place, and starting Suspense again never touch a window
+        while it is still being updated, and never panic for it, as GPUI does
+        with "attempted to read a window that is already on the stack". The
+        same holds for every way Suspense quits, Ctrl+Q, the palette's Quit,
+        the window's close button, the quit dialog's Quit, and a restart
+        from anywhere else, as the About panel's Check for Updates leads to:
+        each asks for the quit and lets it run once the window it came from
+        is free.
+
+        The new Suspense is started only once the update is in place, and
+        the running one then exits, its window closed and its work stopped
+        as quitting stops it, never left running beside the new one. A
+        restart that can't start the new binary, as where it won't run,
+        doesn't quit: Suspense keeps running, the update left in place for
+        the next launch, and a notification says why the restart failed,
+        recorded in the log, so it never quits with nothing started. Nothing in a restart ever panics: a step that
+        fails is reported and logged, and Suspense is left either running
+        as it was, or quit with the update in place and the new one started.
+
     updatesSection:
         The @{SettingsWindowScope} has an "Updates" section. It says the
         running version, as "Suspense 0.1.42", and where it can't update

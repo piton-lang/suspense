@@ -335,7 +335,7 @@ impl MainWindow {
                 .unwrap_or(true);
             // The settings window does not keep the application running.
             if close {
-                cx.defer(|cx| cx.quit());
+                Self::quit_later(false, cx);
             }
             close
         });
@@ -1895,11 +1895,26 @@ impl MainWindow {
     /// where `restart`, as an update's Restart does.
     fn quit_and(&mut self, restart: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.confirm_quit(restart, window, cx) {
-            if restart {
-                crate::self_update::restart_on_quit();
-            }
-            cx.quit();
+            Self::quit_later(restart, cx);
         }
+    }
+
+    /// Quits, starting Suspense again first where `restart`, in a later turn
+    /// of the application's loop, once the window this is asked from is no
+    /// longer being updated, so quitting never touches a window still on the
+    /// stack. A restart that can't start the new Suspense doesn't quit: it
+    /// says why, and Suspense runs on.
+    pub fn quit_later(restart: bool, cx: &mut App) {
+        cx.spawn(async move |cx| {
+            cx.update(|cx| {
+                if restart && let Err(err) = crate::self_update::restart_now() {
+                    crate::self_update::notify_restart_failed(&format!("{err:#}"), cx);
+                    return;
+                }
+                cx.quit();
+            });
+        })
+        .detach();
     }
 
     /// Quits from any window, through the main window's confirmation,
@@ -1913,17 +1928,17 @@ impl MainWindow {
             else {
                 continue;
             };
-            root.update(cx, |_, window, cx| {
-                window.activate_window();
-                main.update(cx, |this, cx| this.quit_and(restart, window, cx));
-            })
-            .ok();
+            // Through the window, not its root view, which asking first reads
+            // for an open dialog.
+            handle
+                .update(cx, |_, window, cx| {
+                    window.activate_window();
+                    main.update(cx, |this, cx| this.quit_and(restart, window, cx));
+                })
+                .ok();
             return;
         }
-        if restart {
-            crate::self_update::restart_on_quit();
-        }
-        cx.quit();
+        Self::quit_later(restart, cx);
     }
 
     /// Whether the application can end now: nothing is running. While a
@@ -1977,10 +1992,7 @@ impl MainWindow {
                             .cancel_text("Keep Running"),
                     )
                     .on_ok(move |_, _, cx| {
-                        if restart {
-                            crate::self_update::restart_on_quit();
-                        }
-                        cx.quit();
+                        Self::quit_later(restart, cx);
                         true
                     })
             });
@@ -7103,6 +7115,59 @@ mod tests {
     /// While a prompt runs, quitting or closing the window asks first: Keep
     /// Running or Esc dismisses the question and leaves the window open. With
     /// nothing running the window closes straight away.
+    #[gpui_kit::test]
+    async fn restart_from_within_the_window_never_panics(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle = window.into();
+        cx.wait_for(handle, TIMEOUT, |window, _| {
+            window.try_find("prompt-editor").is_some()
+        })
+        .await;
+        crate::self_update::RESTARTED.set(false);
+
+        // While work runs, Restart, clicked within the window as the
+        // notification's is, asks first, and restarts nothing yet.
+        main.update(cx, |main, cx| {
+            main.prompt_mode
+                .update(cx, |prompt_mode, _| prompt_mode.set_working(true))
+        });
+        cx.update_window(handle, |_, _, cx| crate::self_update::Updates::restart(cx))
+            .unwrap();
+        cx.run_until_parked();
+        cx.wait_for(handle, TIMEOUT, |window, _| window.try_find("ok").is_some())
+            .await;
+        assert!(!crate::self_update::RESTARTED.get());
+        // Its Restart, confirmed, restarts once the dialog's click is over.
+        cx.update_window(handle, |_, window, cx| window.click("ok", cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert!(crate::self_update::RESTARTED.get());
+
+        // With nothing running, it restarts straight away, as asked from
+        // within the window, never reading the window still being updated.
+        crate::self_update::RESTARTED.set(false);
+        main.update(cx, |main, cx| {
+            main.prompt_mode
+                .update(cx, |prompt_mode, _| prompt_mode.set_working(false))
+        });
+        cx.update_window(handle, |_, _, cx| crate::self_update::Updates::restart(cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert!(crate::self_update::RESTARTED.get());
+    }
+
     #[gpui_kit::test]
     async fn quitting_while_a_task_runs_asks_first(cx: &mut TestAppContext) {
         cx.update(|cx| {
