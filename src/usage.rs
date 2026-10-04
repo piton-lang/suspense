@@ -885,9 +885,19 @@ fn excluding(cost: &Cost) -> Option<String> {
     (!cost.unpriced.is_empty()).then(|| format!("excluding {}", cost.unpriced.join(", ")))
 }
 
+/// How wide a column of the popover's details is: more than the 240 pixels
+/// it is at least, so each figure's label and value fit beside each other.
+pub const COLUMN_WIDTH: Pixels = px(260.);
+
+/// The gap between the popover's two columns, the line between them down
+/// its middle.
+pub const COLUMN_GAP: Pixels = px(16.);
+
 /// The popover's details, as of `now`: each group headed, each figure
-/// labelled, and the groups and figures not reported left out.
-pub fn details(report: &UsageReport, now: u64, cx: &App) -> Div {
+/// labelled, and the groups and figures not reported left out. What is going
+/// on now is in one column, and the project in another beside it, or, short
+/// of `side_by_side`, beneath it.
+pub fn details(report: &UsageReport, now: u64, side_by_side: bool, cx: &App) -> Div {
     let theme = cx.theme();
     let muted = theme.muted_foreground;
     let heading = |text: &str| {
@@ -904,7 +914,14 @@ pub fn details(report: &UsageReport, now: u64, cx: &App) -> Div {
                 .justify_between()
                 .gap_4()
                 .child(div().text_color(muted).child(label.to_string()))
-                .child(value),
+                .child(
+                    div()
+                        .flex()
+                        .justify_end()
+                        .text_right()
+                        .font_features(crate::subagents::tabular_figures())
+                        .child(value),
+                ),
         )
         .into_any_element()
     };
@@ -963,7 +980,11 @@ pub fn details(report: &UsageReport, now: u64, cx: &App) -> Div {
                             .justify_between()
                             .gap_4()
                             .child(div().text_color(muted).child(limit.label()))
-                            .child(format!("{}%", limit.percent())),
+                            .child(
+                                div()
+                                    .font_features(crate::subagents::tabular_figures())
+                                    .child(format!("{}%", limit.percent())),
+                            ),
                     )
                     .child(
                         div()
@@ -1126,21 +1147,61 @@ pub fn details(report: &UsageReport, now: u64, cx: &App) -> Div {
                 .child("Nothing reported yet. Usage shows once the harness reports it."),
         ));
     }
-    body.children(limits)
-        .children(conversation)
-        .children(project)
-        .when(!source.is_empty(), |this| {
-            this.child(gpui_kit::TestSupportExt::test_support(
-                div()
-                    .id("usage-source")
-                    .pt_2()
-                    .border_t_1()
-                    .border_color(theme.border)
-                    .text_xs()
-                    .text_color(muted)
-                    .child(source.join(" · ")),
-            ))
-        })
+    // What is going on now: the plan limits, the conversation, and at its
+    // foot where the figures came from.
+    let now_shown = limits.is_some() || conversation.is_some() || !source.is_empty();
+    let left = now_shown.then(|| {
+        gpui_kit::TestSupportExt::test_support(
+            v_flex()
+                .id("usage-column-now")
+                .flex_none()
+                .w(COLUMN_WIDTH)
+                .gap_3()
+                .children(limits)
+                .children(conversation)
+                .when(!source.is_empty(), |this| {
+                    this.child(gpui_kit::TestSupportExt::test_support(
+                        div()
+                            .id("usage-source")
+                            .pt_2()
+                            .border_t_1()
+                            .border_color(theme.border)
+                            .text_xs()
+                            .text_color(muted)
+                            .child(source.join(" · ")),
+                    ))
+                }),
+        )
+    });
+    // The project, the longest.
+    let right = project.map(|project| {
+        gpui_kit::TestSupportExt::test_support(
+            v_flex()
+                .id("usage-column-project")
+                .flex_none()
+                .w(COLUMN_WIDTH)
+                .gap_3()
+                .child(project),
+        )
+    });
+    match (left, right) {
+        (Some(left), Some(right)) if side_by_side => body.child(
+            h_flex()
+                .items_start()
+                .gap(COLUMN_GAP / 2.)
+                .child(left)
+                .child(gpui_kit::TestSupportExt::test_support(
+                    div()
+                        .id("usage-column-line")
+                        .self_stretch()
+                        .flex_none()
+                        .w(px(1.))
+                        .bg(theme.border),
+                ))
+                .child(right),
+        ),
+        (left, right) => body.children(left).children(right),
+    }
 }
 
 /// A cost in US dollars, to the cent: "$1.24". Less than a cent, but more

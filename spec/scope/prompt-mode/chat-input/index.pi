@@ -361,6 +361,27 @@ shape ChatInputShape:
               last reported.
             \\
 
+            The popover is laid out in two columns side by side, with a gap of
+            16 pixels between them and a thin line in the theme's line colour
+            down the middle. The left column holds what is going on now: Plan
+            limits, then Conversation, then, at its foot, the harness and model
+            the figures came from. The right column holds This project, which
+            is the longest: Tasks and Questions, then the tokens by model, then
+            its cost with its breakdown and the note about API prices. Each
+            column is as tall as its own groups, both starting at the top, and
+            the popover is as tall as the taller of them. Each column is at
+            least 240 pixels wide, so the popover is about twice as wide as it
+            was as one column, but never wider than the window less 16 pixels
+            each side; where the window is too narrow for both, the right
+            column goes beneath the left, as one column again, with no line
+            between them. A column whose groups are all left out is not shown,
+            and the other is the popover's only column; when nothing has been
+            reported at all, the popover is a single column saying so. Within
+            each column, each figure is a row, its label at the left
+            and its value right-aligned in tabular figures. The popover scrolls
+            as a whole, not each column on its own, when it is taller than
+            the room above the summary.
+
             A group, or a figure, the harness doesn't report is left out rather
             than shown as zero, and when nothing has been reported the popover
             says so. The figures come from what the harness reports as its runs

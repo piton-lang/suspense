@@ -773,6 +773,12 @@ pub fn tokens_label(tokens: u64) -> String {
     }
 }
 
+/// How far the usage popover keeps from the window's edges.
+const USAGE_POPOVER_MARGIN: Pixels = px(16.);
+
+/// The usage popover's padding.
+const USAGE_POPOVER_PADDING: Pixels = px(12.);
+
 impl ChatInput {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let editor = cx.new(|cx| {
@@ -1553,7 +1559,7 @@ impl ChatInput {
 
     /// The usage's summary, muted like the context figure unless a plan
     /// limit is nearly or wholly used, with its popover above it.
-    fn render_usage(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_usage(&self, viewport: Size<Pixels>, cx: &mut Context<Self>) -> AnyElement {
         let (text, level) = self.usage.summary();
         let color = level.color(cx).unwrap_or(cx.theme().muted_foreground);
         let hover = cx.theme().foreground;
@@ -1585,26 +1591,41 @@ impl ChatInput {
             .relative()
             .flex_none()
             .child(gpui_kit::TestSupportExt::test_support(summary))
-            .children(self.render_usage_popover(cx))
+            .children(self.render_usage_popover(viewport, cx))
             .into_any_element()
     }
 
     /// The usage's popover, above its summary, its right edge on the
-    /// summary's.
-    fn render_usage_popover(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+    /// summary's: its two columns side by side where the window, `viewport`
+    /// big, has room for them, never wider than the window less a margin each
+    /// side, and scrolling as a whole when taller than the room above the
+    /// summary.
+    fn render_usage_popover(
+        &self,
+        viewport: Size<Pixels>,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
         if !self.usage_open {
             return None;
         }
         let theme = cx.theme();
         let summary = self.usage_bounds.clone();
+        let widest = viewport.width - USAGE_POPOVER_MARGIN * 2.;
+        let side_by_side = widest
+            >= usage::COLUMN_WIDTH * 2. + usage::COLUMN_GAP + USAGE_POPOVER_PADDING * 2. + px(2.);
+        // The room above the summary, less the gap beneath the popover and
+        // the margin above it.
+        let room = summary.get().top() - px(4.) - USAGE_POPOVER_MARGIN;
         let popover = div()
             .id("usage-popover")
             .absolute()
             .bottom_full()
             .right_0()
             .mb_1()
-            .p_3()
-            .w(px(280.))
+            .p(USAGE_POPOVER_PADDING)
+            .max_w(widest)
+            .when(room > px(0.), |this| this.max_h(room))
+            .overflow_y_scroll()
             .bg(theme.popover)
             .text_color(theme.popover_foreground)
             .border_1()
@@ -1619,7 +1640,7 @@ impl ChatInput {
                     cx.notify();
                 }
             }))
-            .child(usage::details(&self.usage, usage::now(), cx));
+            .child(usage::details(&self.usage, usage::now(), side_by_side, cx));
         // Lets UI tests find the popover; inert in normal builds.
         Some(
             deferred(gpui_kit::TestSupportExt::test_support(popover))
@@ -2354,7 +2375,7 @@ impl Render for ChatInput {
                     }),
             ))
             // Beside it, the agent's usage, which opens its details above it.
-            .child(self.render_usage(cx))
+            .child(self.render_usage(window.viewport_size(), cx))
             .child(
                 Button::new("new-conversation")
                     .ghost()
@@ -3382,6 +3403,26 @@ mod tests {
             assert!(window.try_find("usage-project-cost").is_some());
             assert!(window.try_find("usage-project-cost-cache-reads").is_some());
             assert!(window.try_find("usage-project-cost-note").is_some());
+            // What is going on now at the left, the project at the right,
+            // both from the top, a line between them, inside the window.
+            let (now, line, project, popover) = (
+                window.find("usage-column-now").bounds(),
+                window.find("usage-column-line").bounds(),
+                window.find("usage-column-project").bounds(),
+                window.find("usage-popover").bounds(),
+            );
+            assert_eq!(now.top(), project.top(), "{now:?} and {project:?} don't start together");
+            assert!(
+                now.right() <= line.left() && line.right() <= project.left(),
+                "{now:?} | {line:?} | {project:?} aren't side by side"
+            );
+            assert!(now.size.width >= gpui_kit::px(240.) && project.size.width >= gpui_kit::px(240.));
+            assert!(
+                (project.left() - now.right() - gpui_kit::px(16.)).abs() < gpui_kit::px(1.5),
+                "the columns aren't 16 pixels apart"
+            );
+            assert!(window.find("usage-source").bounds().bottom() <= now.bottom());
+            assert!(popover.left() >= gpui_kit::px(16.), "{popover:?} runs off the window");
             window.click("tab-help", cx);
             window.render_frame(cx);
             assert!(window.try_find("usage-popover").is_none());
@@ -3437,6 +3478,25 @@ mod tests {
                 help.size.width < wide_help && help.right() <= context.left(),
                 "the help {help:?} doesn't give way"
             );
+        })
+        .unwrap();
+
+        // Too narrow for both columns, the project goes beneath, with no
+        // line between.
+        cx.simulate_window_resize(
+            handle,
+            gpui_kit::size(gpui_kit::px(560.), gpui_kit::px(900.)),
+        );
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("chat-usage", cx);
+            window.render_frame(cx);
+            let (now, project) = (
+                window.find("usage-column-now").bounds(),
+                window.find("usage-column-project").bounds(),
+            );
+            assert!(project.top() >= now.bottom(), "{project:?} isn't beneath {now:?}");
+            assert!(window.try_find("usage-column-line").is_none());
         })
         .unwrap();
     }
