@@ -751,9 +751,17 @@ fn version_in(text: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+/// Where piton's releases are published, its own Linux builds among them.
+const PITON_RELEASES: &str = "https://github.com/piton-lang/piton-rs/releases";
+
 /// The default image's Containerfile: the harnesses at `versions`, each
-/// `None` taking its latest, and piton copied in when `with_piton`.
-pub fn default_containerfile(versions: &[(Agent, Option<String>)], with_piton: bool) -> String {
+/// `None` taking its latest, and piton at `piton`, or its latest, each
+/// installed from its own Linux release in the image, never copied from the
+/// host, whose binaries can't run in a Linux image on macOS or Windows. A
+/// piton version not published, or none for the machine's architecture,
+/// falls back to the latest, or to no piton at all where Linux has no build
+/// for that architecture.
+pub fn default_containerfile(versions: &[(Agent, Option<String>)], piton: Option<&str>) -> String {
     let packages = versions
         .iter()
         .map(|(agent, version)| match version {
@@ -763,20 +771,24 @@ pub fn default_containerfile(versions: &[(Agent, Option<String>)], with_piton: b
         .collect::<Vec<_>>()
         .join(" ");
     let mut file = String::from(
-        // A recent Debian, whose C library is new enough for the host's own
-        // piton, copied in, to run.
         "FROM docker.io/library/node:22-trixie-slim\n\
          RUN apt-get update \\\n \
-         && apt-get install -y --no-install-recommends git ca-certificates ripgrep \\\n \
+         && apt-get install -y --no-install-recommends git ca-certificates curl ripgrep \\\n \
          && rm -rf /var/lib/apt/lists/*\n\
          RUN mkdir -p /workspace\n",
     );
     file.push_str(&format!("RUN npm install -g {packages}\n"));
-    if with_piton {
-        // The host's piton; once built, the image is checked that it runs
-        // (see `check_commands`).
-        file.push_str("COPY piton /usr/local/bin/piton\n");
-    }
+    // piton's own installer picks the build for the machine's architecture.
+    let version = piton.map(|v| format!("PITON_VERSION={v} ")).unwrap_or_default();
+    file.push_str(&format!(
+        "RUN case \"$(uname -m)\" in x86_64|amd64) \\\n \
+         curl -fsSL {PITON_RELEASES}/latest/download/install.sh -o /tmp/install-piton.sh \\\n \
+         && ({version}PITON_INSTALL_DIR=/usr/local/bin sh /tmp/install-piton.sh \\\n \
+         || PITON_INSTALL_DIR=/usr/local/bin sh /tmp/install-piton.sh) \\\n \
+         && rm /tmp/install-piton.sh ;; \\\n \
+         *) echo \"piton publishes no Linux build for $(uname -m); the image goes without it\" ;; \\\n \
+         esac\n"
+    ));
     file
 }
 
@@ -800,22 +812,20 @@ fn image_exists(image: &str) -> bool {
 /// Containerfile.
 struct Images {
     containerfile: String,
-    piton: Option<PathBuf>,
     default: String,
     /// The project's image, and its Containerfile.
     own: Option<(String, PathBuf)>,
 }
 
 impl Images {
-    /// The commands the image holds, each of which has to run in it.
+    /// The commands the image holds, each of which has to run in it; piton
+    /// only where Linux has a build of it for the machine.
     fn commands(&self) -> Vec<&'static str> {
         let mut commands: Vec<&'static str> = Agent::RUNNABLE
             .iter()
             .map(|agent| agent.command())
             .collect();
-        if self.piton.is_some() {
-            commands.push("piton");
-        }
+        commands.push("piton");
         commands
     }
 
@@ -825,13 +835,9 @@ impl Images {
             .iter()
             .map(|agent| (*agent, host_version(agent.command())))
             .collect();
-        let piton = which("piton").filter(|_| Platform::current() == Platform::Linux);
-        let containerfile = default_containerfile(&versions, piton.is_some());
-        let piton_version = piton.as_ref().and_then(|_| host_version("piton"));
-        let default = format!(
-            "{DEFAULT_IMAGE}:{}",
-            short_hash(&format!("{containerfile}{piton_version:?}"))
-        );
+        let piton = host_version("piton");
+        let containerfile = default_containerfile(&versions, piton.as_deref());
+        let default = format!("{DEFAULT_IMAGE}:{}", short_hash(&containerfile));
         let own_file = project_dir.join(APP_DIR).join("Containerfile");
         let own = std::fs::read_to_string(&own_file).ok().map(|text| {
             (
@@ -845,7 +851,6 @@ impl Images {
         });
         Self {
             containerfile,
-            piton,
             default,
             own,
         }
@@ -864,6 +869,15 @@ pub fn built_image(project_dir: &Path) -> Option<String> {
     image_exists(images.used()).then(|| images.used().to_string())
 }
 
+/// Builds of images one at a time, and how the last of each ended, so a
+/// run, a login, or a check that needs an image already being built waits
+/// for that build and shares how it ended, rather than racing it.
+static BUILDING: std::sync::Mutex<Option<(String, u64, Result<(), String>)>> =
+    std::sync::Mutex::new(None);
+
+/// Counts builds, so a wait can tell a build finished while it waited.
+static BUILDS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 /// The image a run in the project at `project_dir` uses, built first, or
 /// built again, if it is out of date, each line the build prints given to
 /// `on_line`, `on_build` called once before a build starts. Blocking.
@@ -874,60 +888,222 @@ pub fn ensure_image(
 ) -> Result<String> {
     let images = Images::of(project_dir);
     if !image_exists(&images.default) {
-        on_build();
-        let context = std::env::temp_dir().join(format!("suspense-image-{}", std::process::id()));
-        std::fs::create_dir_all(&context)?;
-        std::fs::write(context.join("Containerfile"), &images.containerfile)?;
-        if let Some(piton) = &images.piton {
-            std::fs::copy(piton, context.join("piton"))?;
-        }
-        let built = stream(
-            podman_command()
-                .args(["build", "-t", &images.default, "-t", DEFAULT_IMAGE, "-f"])
-                .arg(context.join("Containerfile"))
-                .arg(&context),
-            on_line,
-        );
-        std::fs::remove_dir_all(&context).ok();
-        built?;
-        // Each command it holds has to run in it, or it is never used.
-        if let Err(err) = check_commands(&images.default, &images.commands(), on_line) {
-            podman_command()
-                .args(["rmi", "-f", &images.default, DEFAULT_IMAGE])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .ok();
-            return Err(err);
-        }
+        let context = images.containerfile.clone();
+        build_once(&images.default, on_build, on_line, &mut |on_line| {
+            build_default(&images, &context, on_line)
+        })?;
     }
     // A project's own Containerfile, built FROM the default.
     if let Some((image, file)) = &images.own
         && !image_exists(image)
     {
-        on_build();
-        stream(
-            podman_command()
-                .args(["build", "-t", image, "--build-arg"])
-                .arg(format!("SUSPENSE_IMAGE={}", images.default))
-                .arg("-f")
-                .arg(file)
-                .arg(project_dir.join(APP_DIR)),
-            on_line,
-        )?;
-        if let Err(err) = check_commands(image, &images.commands(), on_line) {
-            podman_command()
-                .args(["rmi", "-f", image])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .ok();
-            return Err(err);
-        }
+        build_once(image, on_build, on_line, &mut |on_line| {
+            build(
+                podman_command()
+                    .args(["build", "--build-arg"])
+                    .arg(format!("SUSPENSE_IMAGE={}", images.default))
+                    .arg("-f")
+                    .arg(file)
+                    .arg(project_dir.join(APP_DIR)),
+                image,
+                &[image.as_str()],
+                &images.commands(),
+                on_line,
+            )
+        })?;
     }
     Ok(images.used().to_string())
+}
+
+/// Builds `image` with `build_it`, unless another is building it: then waits
+/// for that build and shares how it ended. What the build prints is also
+/// kept in the build log.
+fn build_once(
+    image: &str,
+    on_build: &mut dyn FnMut(),
+    on_line: &mut dyn FnMut(String),
+    build_it: &mut dyn FnMut(&mut dyn FnMut(String)) -> Result<()>,
+) -> Result<()> {
+    let waited_from = BUILDS.load(std::sync::atomic::Ordering::SeqCst);
+    let mut last = BUILDING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    // Built while this waited, or failed while it did: that is how it ended.
+    if image_exists(image) {
+        return Ok(());
+    }
+    if let Some((built, n, ended)) = last.as_ref()
+        && built == image
+        && *n > waited_from
+        && let Err(why) = ended
+    {
+        bail!("{why}");
+    }
+    on_build();
+    build_log::begin(image);
+    let mut logged = |line: String| {
+        build_log::line(&line);
+        on_line(line);
+    };
+    let result = build_it(&mut logged);
+    if let Err(err) = &result {
+        build_log::line(&format!("failed: {err:#}"));
+    }
+    let n = BUILDS.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    *last = Some((
+        image.to_string(),
+        n,
+        result.as_ref().map(|_| ()).map_err(|err| format!("{err:#}")),
+    ));
+    result
+}
+
+/// Builds the default image from its Containerfile, in a build context of
+/// its own holding nothing else.
+fn build_default(images: &Images, containerfile: &str, on_line: &mut dyn FnMut(String)) -> Result<()> {
+    let context = std::env::temp_dir().join(format!(
+        "suspense-image-{}-{}",
+        std::process::id(),
+        BUILDS.load(std::sync::atomic::Ordering::SeqCst)
+    ));
+    std::fs::remove_dir_all(&context).ok();
+    std::fs::create_dir_all(&context)?;
+    std::fs::write(context.join("Containerfile"), containerfile)?;
+    let built = build(
+        podman_command()
+            .args(["build", "-f"])
+            .arg(context.join("Containerfile"))
+            .arg(&context),
+        &images.default,
+        &[images.default.as_str(), DEFAULT_IMAGE],
+        &images.commands(),
+        on_line,
+    );
+    std::fs::remove_dir_all(&context).ok();
+    built
+}
+
+/// Runs `command`, a `podman build` without a tag, then checks each of
+/// `commands` runs in what it built, and only then tags it `tags`, so a build
+/// that fails or is cut short never leaves an image taken for a good one.
+fn build(
+    command: &mut Command,
+    image: &str,
+    tags: &[&str],
+    commands: &[&str],
+    on_line: &mut dyn FnMut(String),
+) -> Result<()> {
+    let iid = std::env::temp_dir().join(format!(
+        "suspense-image-id-{}-{}",
+        std::process::id(),
+        short_hash(image)
+    ));
+    std::fs::remove_file(&iid).ok();
+    let mut printed: Vec<String> = Vec::new();
+    let mut keep = |line: String| {
+        printed.push(line.clone());
+        on_line(line);
+    };
+    let built = stream(command.arg("--iidfile").arg(&iid), &mut keep);
+    if let Err(err) = built {
+        bail!("{}", build_failure(&printed, &format!("{err:#}")));
+    }
+    let id = std::fs::read_to_string(&iid)
+        .context("podman built the image but didn't say which it is")?
+        .trim()
+        .to_string();
+    std::fs::remove_file(&iid).ok();
+    // Each command it holds has to run in it, or it is never used.
+    if let Err(err) = check_commands(&id, commands, on_line) {
+        podman_command()
+            .args(["rmi", "-f", &id])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .ok();
+        return Err(err);
+    }
+    for tag in tags {
+        let tagged = podman_command()
+            .args(["tag", &id, tag])
+            .stdin(Stdio::null())
+            .output()
+            .context("could not run podman")?;
+        if !tagged.status.success() {
+            bail!(
+                "podman couldn't tag the image {tag}: {}",
+                String::from_utf8_lossy(&tagged.stderr).trim()
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Why a build failed, in Podman's own words: the step it failed at, and the
+/// last of what it printed, with where the whole of it is kept.
+pub fn build_failure(printed: &[String], why: &str) -> String {
+    let step = printed
+        .iter()
+        .rev()
+        .find(|line| line.trim_start().starts_with("STEP "))
+        .map(|step| step.trim().to_string());
+    let from = printed.len().saturating_sub(40);
+    let mut message = match step {
+        Some(step) => format!("The container's image couldn't be built, at {step}"),
+        None => "The container's image couldn't be built".to_string(),
+    };
+    message.push_str(&format!(": {why}"));
+    if !printed.is_empty() {
+        message.push_str("\n\nPodman printed:\n");
+        message.push_str(&printed[from..].join("\n"));
+    }
+    if let Some(log) = build_log::file() {
+        message.push_str(&format!("\n\nThe whole build is in {}", log.display()));
+    }
+    message
+}
+
+/// The log of image builds, `image-builds.log` beside the preferences,
+/// keeping the last builds' output. Tests write none.
+pub mod build_log {
+    use std::path::PathBuf;
+
+    /// How many lines it keeps.
+    const KEEP: usize = 5000;
+
+    pub fn file() -> Option<PathBuf> {
+        if cfg!(test) {
+            return None;
+        }
+        Some(dirs::config_dir()?.join("suspense").join("image-builds.log"))
+    }
+
+    fn append(lines: &[String]) {
+        let Some(file) = file() else {
+            return;
+        };
+        let mut kept: Vec<String> = std::fs::read_to_string(&file)
+            .map(|text| text.lines().map(str::to_string).collect())
+            .unwrap_or_default();
+        kept.extend(lines.iter().cloned());
+        let from = kept.len().saturating_sub(KEEP);
+        if let Some(dir) = file.parent() {
+            std::fs::create_dir_all(dir).ok();
+        }
+        std::fs::write(&file, kept[from..].join("\n") + "\n").ok();
+    }
+
+    /// A build of `image` begins.
+    pub fn begin(image: &str) {
+        append(&[format!(
+            "== building {image} at {}",
+            crate::self_update::utc_time(crate::self_update::now())
+        )]);
+    }
+
+    /// A line the build printed.
+    pub fn line(line: &str) {
+        append(&[line.to_string()]);
+    }
 }
 
 /// Runs each of `commands`' version command in `image`, as `piton --version`,
@@ -936,8 +1112,20 @@ pub fn ensure_image(
 fn check_commands(image: &str, commands: &[&str], on_line: &mut dyn FnMut(String)) -> Result<()> {
     for command in commands {
         on_line(format!("$ {command} --version"));
-        let output = podman_command()
-            .args(["run", "--rm", image, command, "--version"])
+        let mut run = podman_command();
+        run.args(["run", "--rm", image]);
+        if *command == "piton" {
+            // Left out where Linux has no build of it for the machine; one
+            // there has to run.
+            run.args([
+                "sh",
+                "-c",
+                "command -v piton >/dev/null || { echo 'piton is left out of this image'; exit 0; }; piton --version",
+            ]);
+        } else {
+            run.args([command, "--version"]);
+        }
+        let output = run
             .stdin(Stdio::null())
             .output()
             .context("could not run podman")?;
@@ -957,14 +1145,6 @@ fn check_commands(image: &str, commands: &[&str], on_line: &mut dyn FnMut(String
         }
     }
     Ok(())
-}
-
-/// Where `command` is on the `PATH`.
-fn which(command: &str) -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|dir| dir.join(command))
-        .find(|file| file.is_file())
 }
 
 /// How a harness says whether it is logged in, and logs in, in a container.
@@ -1022,8 +1202,28 @@ fn bare(agent: Agent, kind: RunKind, platform: Platform) -> Plan {
     }
 }
 
+/// Creates `agent`'s volume where it isn't there, before it is first used,
+/// so it is ready for the first login; mounted with `:U`, it is the
+/// container user's to write. Blocking.
+pub fn ensure_volume(agent: Agent) -> Result<()> {
+    let output = podman_command()
+        .args(["volume", "create", "--ignore", &home_volume(agent)])
+        .stdin(Stdio::null())
+        .output()
+        .context("could not run podman")?;
+    if !output.status.success() {
+        bail!(
+            "podman couldn't create the volume {}: {}",
+            home_volume(agent),
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(())
+}
+
 /// Whether `agent` is logged in, in its volume, using `image`. Blocking.
 pub fn logged_in(agent: Agent, image: &str, platform: Platform) -> Result<bool> {
+    ensure_volume(agent)?;
     let args: Vec<OsString> = status_args(agent).iter().map(Into::into).collect();
     let plan = bare(agent, RunKind::Question, platform);
     let output = podman_command()
@@ -1521,13 +1721,38 @@ mod tests {
     fn the_default_image_pins_the_hosts_versions() {
         let file = default_containerfile(
             &[(Agent::Claude, Some("2.1.0".into())), (Agent::Codex, None)],
-            true,
+            Some("0.1.58"),
         );
         assert!(file.contains("@anthropic-ai/claude-code@2.1.0"));
         assert!(file.contains("@openai/codex\n") || file.contains("@openai/codex "));
-        assert!(file.contains("COPY piton"));
         assert!(file.starts_with("FROM docker.io/library/node:22-trixie-slim\n"));
-        assert!(!file.contains("rm -f /usr/local/bin/piton"), "{file}");
+        // piton from its own Linux release, at the host's version or else
+        // its latest, never copied from the host.
+        assert!(!file.contains("COPY"), "{file}");
+        assert!(file.contains("PITON_VERSION=0.1.58 "), "{file}");
+        assert!(file.contains("piton-lang/piton-rs/releases/latest/download/install.sh"));
+        assert!(file.contains("PITON_INSTALL_DIR=/usr/local/bin sh /tmp/install-piton.sh)"));
+        // Without a host version, its latest.
+        let latest = default_containerfile(&[(Agent::Claude, None)], None);
+        assert!(!latest.contains("PITON_VERSION"), "{latest}");
+    }
+
+    /// A failed build says the step it failed at, and what Podman printed.
+    #[test]
+    fn a_failed_build_says_where_and_why() {
+        let printed: Vec<String> = [
+            "STEP 1/5: FROM docker.io/library/node:22-trixie-slim",
+            "STEP 4/5: RUN npm install -g @anthropic-ai/claude-code",
+            "npm error code ENOTFOUND",
+        ]
+        .iter()
+        .map(|line| line.to_string())
+        .collect();
+        let message = super::build_failure(&printed, "podman failed: exit status 1");
+        assert!(message.starts_with(
+            "The container's image couldn't be built, at STEP 4/5: RUN npm install -g @anthropic-ai/claude-code"
+        ), "{message}");
+        assert!(message.contains("npm error code ENOTFOUND"), "{message}");
     }
 
     /// Only what is there on the host is mounted: a folder the run writes to

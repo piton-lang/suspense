@@ -33,19 +33,36 @@ pub struct LoggedIn;
 /// Where a login stands.
 #[derive(Clone, Debug, PartialEq)]
 enum State {
+    /// Its image is being built, before the login command runs.
+    Preparing,
     Running,
     Succeeded,
     Failed(String),
+    /// Its image couldn't be built: no login was started, and it can be
+    /// tried again.
+    BuildFailed(String),
 }
 
 /// What the login's thread reports.
 enum Report {
     Output(String),
-    Ended(Result<(), String>),
+    /// The image is being built.
+    Preparing,
+    /// The image is ready, and the login command runs.
+    LoggingIn,
+    Ended(Result<(), Failure>),
+}
+
+/// Why a login didn't succeed: its image couldn't be built, or the login
+/// itself failed.
+enum Failure {
+    Build(String),
+    Login(String),
 }
 
 pub struct LoginView {
     agent: Agent,
+    project_dir: std::path::PathBuf,
     /// What the command printed, line by line, the last perhaps unfinished.
     lines: Vec<String>,
     state: State,
@@ -93,16 +110,36 @@ impl LoginView {
         cx: &mut Context<Self>,
     ) -> Self {
         let code = cx.new(|cx| InputState::new(window, cx).placeholder("Paste the code here"));
+        let mut view = Self {
+            agent,
+            project_dir,
+            lines: vec![String::new()],
+            state: State::Running,
+            code,
+            input: None,
+            opened: HashSet::new(),
+            _poll: Task::ready(()),
+        };
+        view.start(window, cx);
+        view
+    }
+
+    /// Starts the login: its image built first where it isn't there or is
+    /// out of date, then its command. Started again by Try again.
+    fn start(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.lines = vec![String::new()];
+        self.state = State::Running;
+        self.input = None;
+        let (agent, project_dir) = (self.agent, self.project_dir.clone());
         let (tx, rx) = mpsc::channel();
         let (input_tx, input_rx) = mpsc::channel::<Box<dyn std::io::Write + Send>>();
         std::thread::spawn(move || {
-            let result =
-                run_login(agent, &project_dir, &tx, &input_tx).map_err(|err| format!("{err:#}"));
+            let result = run_login(agent, &project_dir, &tx, &input_tx);
             tx.send(Report::Ended(result)).ok();
         });
         // Collected on a timer rather than awaited: the login reports from
         // its own thread, which must not wake app tasks.
-        let poll = cx.spawn_in(window, async move |this, cx| {
+        self._poll = cx.spawn_in(window, async move |this, cx| {
             loop {
                 cx.background_executor().timer(POLL).await;
                 let reports: Vec<Report> = rx.try_iter().collect();
@@ -115,6 +152,8 @@ impl LoginView {
                     for report in reports {
                         match report {
                             Report::Output(chunk) => this.take_output(&chunk, cx),
+                            Report::Preparing => this.state = State::Preparing,
+                            Report::LoggingIn => this.state = State::Running,
                             Report::Ended(result) => {
                                 ended = true;
                                 this.input = None;
@@ -123,7 +162,8 @@ impl LoginView {
                                         cx.emit(LoggedIn);
                                         State::Succeeded
                                     }
-                                    Err(err) => State::Failed(err),
+                                    Err(Failure::Build(why)) => State::BuildFailed(why),
+                                    Err(Failure::Login(why)) => State::Failed(why),
                                 };
                             }
                         }
@@ -135,15 +175,7 @@ impl LoginView {
                 }
             }
         });
-        Self {
-            agent,
-            lines: vec![String::new()],
-            state: State::Running,
-            code,
-            input: None,
-            opened: HashSet::new(),
-            _poll: poll,
-        }
+        cx.notify();
     }
 
     /// Takes in what the command printed, opening any login URL in it in the
@@ -201,25 +233,42 @@ fn run_login(
     project_dir: &std::path::Path,
     tx: &mpsc::Sender<Report>,
     input_tx: &mpsc::Sender<Box<dyn std::io::Write + Send>>,
-) -> anyhow::Result<()> {
+) -> Result<(), Failure> {
     let platform = container::Platform::current();
     let state = container::podman_state(platform);
     if let Some(why) = container::unavailable(&state, platform) {
-        anyhow::bail!("{}", why.message);
+        return Err(Failure::Build(why.message));
     }
+    // The image first: a login needs it, as any run in a container does.
     let image = container::ensure_image(
         project_dir,
         &mut || {
+            tx.send(Report::Preparing).ok();
             tx.send(Report::Output("Preparing environment…\n".into()))
                 .ok();
         },
         &mut |line| {
             tx.send(Report::Output(format!("{line}\n"))).ok();
         },
-    )?;
+    )
+    .map_err(|err| Failure::Build(format!("{err:#}")))?;
+    tx.send(Report::LoggingIn).ok();
+    log_in(agent, &image, platform, tx, input_tx).map_err(|err| Failure::Login(format!("{err:#}")))
+}
+
+/// Runs `agent`'s login command in its container, using `image`, its volume
+/// ready for it first. Blocking.
+fn log_in(
+    agent: Agent,
+    image: &str,
+    platform: container::Platform,
+    tx: &mpsc::Sender<Report>,
+    input_tx: &mpsc::Sender<Box<dyn std::io::Write + Send>>,
+) -> anyhow::Result<()> {
+    container::ensure_volume(agent)?;
     let tty = cfg!(unix);
     let mut command = container::podman_command();
-    command.args(container::login_args_for(agent, &image, platform, tty));
+    command.args(container::login_args_for(agent, image, platform, tty));
     let (mut child, mut output, input) = spawn(command, tty)?;
     input_tx.send(input).ok();
     let mut buffer = [0u8; 4096];
@@ -238,7 +287,7 @@ fn run_login(
     if !status.success() {
         anyhow::bail!("the login ended with {status}");
     }
-    if !container::logged_in(agent, &image, platform)? {
+    if !container::logged_in(agent, image, platform)? {
         anyhow::bail!("{} still isn't logged in", agent.label());
     }
     Ok(())
@@ -315,10 +364,13 @@ impl Render for LoginView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
         let status = match &self.state {
+            State::Preparing => "Preparing environment…".to_string(),
             State::Running => "Logging in…".to_string(),
             State::Succeeded => format!("{} is logged in.", self.agent.label()),
             State::Failed(err) => format!("Could not log in: {err}"),
+            State::BuildFailed(err) => err.clone(),
         };
+        let build_failed = matches!(self.state, State::BuildFailed(_));
         let output = v_flex()
             .id("login-output")
             .h(px(260.))
@@ -361,7 +413,26 @@ impl Render for LoginView {
                         ),
                 )
             })
-            .child(div().text_sm().font_medium().child(status));
+            .child(
+                div()
+                    .id("login-status")
+                    .text_sm()
+                    .font_medium()
+                    .whitespace_normal()
+                    .when(build_failed, |this| this.text_color(theme.danger))
+                    .child(status),
+            )
+            // A build that failed can be tried again, as no login started.
+            .when(build_failed, |view| {
+                view.child(
+                    h_flex().child(
+                        Button::new("login-try-again")
+                            .small()
+                            .label("Try again")
+                            .on_click(cx.listener(|this, _, window, cx| this.start(window, cx))),
+                    ),
+                )
+            });
         gpui_kit::TestSupportExt::test_support(view)
     }
 }

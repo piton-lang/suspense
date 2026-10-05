@@ -130,6 +130,30 @@ shape ContainerEnvironmentShape:
         "Preparing environment" as its status, and what the build prints goes
         to its raw output. A build that fails fails the run, saying why.
 
+        The image is a Linux image, whatever the host is, so what it holds is
+        installed in it for Linux, for the architecture Podman runs: each
+        harness and piton at the version found on the host, from its own
+        Linux release or package, never a binary copied from the host, which
+        on macOS or Windows can't run in it. The build is given only the
+        Containerfile the application writes for it, in a build context of
+        its own, a fresh temporary directory holding nothing else, never the
+        project or the user's home, and needs nothing from the host but the
+        network. A version that can't be found on the host, or isn't
+        published for Linux, is installed at its latest.
+
+        Only one build of an image runs at a time. A run, a login, or a
+        welcome or settings check that needs an image already being built
+        waits for that build and shares how it ended, rather than starting
+        another, so two builds never race to tag the same image. A build is
+        tagged only once it has succeeded, so a build that fails or is
+        interrupted never leaves an image that is taken for a good one, and
+        the next need of it builds it again.
+
+        A build that fails says why in Podman's own words: the step it
+        failed at and everything the build printed, as written, never only
+        that the image couldn't be created, and the same is kept in the log
+        the application writes for its builds, beside its preferences.
+
     mounts:
         What each run sees is what is mounted into its container, and nothing
         else from the host. The project is mounted at the same fixed path in
@@ -235,6 +259,24 @@ shape ContainerEnvironmentShape:
         device code, that is how it logs in. The run waiting on the login is
         sent once the login succeeds, and fails, saying so, if it is
         cancelled or fails.
+
+        A login needs the image, as any run in a container does, and the
+        first login on a machine is most often the first thing to need it.
+        So the login view builds it first where it isn't there or is out of
+        date, showing "Preparing environment" and what the build prints as it
+        goes, and starts the login command only once the build has
+        succeeded. A build that fails shows why in the login view, as a
+        failed build says it, with a "Try again" button that builds it again,
+        and starts no login.
+
+        The harness's volume is ready for it before its first login: created
+        by the application with `podman volume create` where it isn't there,
+        and mounted so that the user the container runs as owns it and can
+        write it, as with Podman's `:U` option, never left owned by root
+        where the harness runs as the user. The container's HOME, where the
+        volume is mounted beneath it, as ~/.claude, is a directory that user
+        owns, as is the volume, so the login command
+        can write its credentials there on the first login as on any other.
 
         The credentials stay in the harness's volume, and are refreshed
         there, so a harness is logged in once on a machine, not for every

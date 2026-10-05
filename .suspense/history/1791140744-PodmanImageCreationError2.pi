@@ -1,0 +1,77 @@
+
+export anchor PodmanImageCreationError2:
+    userPrompt:
+        \\\
+        We're getting an error when we first login and podman tries to create the image.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            We're getting an error when we first login and podman tries to create the image.
+            \\\
+        result:
+            \\\
+            I couldn't see the actual error, so I made the spec cover the likeliest causes of a first-login image failure. If you paste the error text, I can narrow it down to one. `piton check` reports no problems and `piton build` wrote 81 files.
+
+            **Likeliest causes:**
+            - **Host binaries copied into the image.** If the build copies the host's harness or piton binary in, it can't run on macOS or Windows, because the image is Linux.
+            - **A brand-new harness volume owned by root.** The container runs as you, so the login command can't write its credentials.
+            - **Two image builds at once.** The login and the Welcome or Settings check can each start a build of the same image, and they collide.
+
+            ## What changed in the spec
+
+            **Image** (`.claude/reference/scope/container-environment/index.md#image`)
+            - **Linux tools only:** the image is always Linux. Each harness and piton is installed from its own Linux release at the version found on the host, never copied from the host. Anything not found or not published for Linux is installed at its latest.
+            - **Isolated build:** the build gets a fresh temporary directory containing only the Containerfile the app writes. It never sees the project or your home folder, and needs only the network.
+            - **One build at a time:** a run, login or check that needs an image already being built waits for that build instead of starting another.
+            - **No half-built images:** the image is tagged only after the build succeeds, so a failed or interrupted build is never mistaken for a good one.
+            - **Full errors:** a failed build shows the step it failed at and everything Podman printed, and the same goes to a build log kept beside the preferences.
+
+            **Logging in** (`.claude/reference/scope/container-environment/index.md#logging-in`)
+            - **Image first:** the login view builds the image if it's missing or out of date, showing "Preparing environment" and the build output. The login command starts only after the build succeeds.
+            - **Retry:** if the build fails, the login view shows why, with a "Try again" button.
+            - **Volume ready before first use:** the harness's volume is created with `podman volume create` before the first login. It is mounted so the container's user owns it and can write to it, for example with Podman's `:U` option.
+            - **HOME:** the container's home folder, where the volume is mounted beneath it as `~/.claude`, is owned by that same user, so the first login can write its credentials.
+
+            The constraints are in `.suspense/history/1791140688-PodmanImageCreationError.understanding.md`.
+
+            ## Anchors the code should follow
+            - `ContainerEnvironmentScope`:
+              - `#image`: the Containerfile, build context, build lock, tagging only on success, and error output.
+              - `#logging-in`: build before login, Try again, volume creation and ownership, HOME.
+              - `#volumes`: where each volume is mounted.
+              - `#podman-access`: for failures where Podman can't be reached.
+            - `WelcomeScope` and `SettingsWindowScope`: their login checks and buttons, which share the one build.
+            \\\
+
+    sentFrom: PodmanImageCreationError
