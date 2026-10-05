@@ -1,0 +1,68 @@
+
+export anchor PreventPodmanFromOpeningWebsites2:
+    userPrompt:
+        \\\
+        So it seems that whenever podman runs in order to log in,  it actually opens a bunch of websites while the container installs.  We obviously don't want that.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            So it seems that whenever podman runs in order to log in,  it actually opens a bunch of websites while the container installs.  We obviously don't want that.
+            \\\
+        result:
+            \\\
+            The websites most likely opened because of the old rule that "any login URL the command prints opens in the browser". The login view also shows the image build's output, and package installs print plenty of URLs, so each one was being opened. I changed the spec so only the harness's own sign-in link ever opens, and only once. `piton check` reports no problems and `piton build` wrote 81 files.
+
+            ## What changed in the spec
+
+            New text in `spec/scope/container-environment/index.pi`, under `#logging-in` (`.claude/reference/scope/container-environment/index.md#logging-in`):
+
+            - **Login output only:** URLs are watched for only once the login command has started. Anything the image build or Podman prints while pulling, building or starting the container is shown as text and never opened; at most its URLs are clickable.
+            - **Sign-in URLs only:** a URL opens only if it leads to the harness's sign-in, for example:
+              - Claude Code's link to claude.ai or console.anthropic.com
+              - Codex's link to auth.openai.com
+              - OpenCode's link to whichever provider it's logging in with
+              - a localhost callback the login asks to be visited
+
+              Links to documentation, release notes or package homepages are only shown.
+            - **One URL at most:** a login opens at most one URL by itself, the first sign-in one. Any later sign-in URL is shown as a link for you to click.
+            - **Nothing recognized, nothing opened:** if no sign-in URL is recognized, nothing opens and every URL the command printed is shown as a link.
+
+            The constraints are in `.suspense/history/1791218318-PreventPodmanFromOpeningWebsites.understanding.md`.
+
+            ## Anchors the code should follow
+            - `ContainerEnvironmentScope`: `#logging-in`, for which output is watched for URLs, which URLs count as sign-in, and the open-once rule. Also `#image`, since build output goes to the login view and must not be scanned for URLs to open.
+            - `WelcomeScope` and `SettingsWindowScope`: both start the same login view, so the fix covers them too.
+            \\\
+
+    sentFrom: PreventPodmanFromOpeningWebsites

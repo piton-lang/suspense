@@ -4,7 +4,6 @@
 //! host's browser; a code it asks for is pasted into the field and goes to
 //! the command. The credentials stay in the harness's volume.
 
-use std::collections::HashSet;
 use std::io::{Read as _, Write as _};
 use std::sync::mpsc;
 use std::time::Duration;
@@ -69,7 +68,17 @@ pub struct LoginView {
     code: Entity<InputState>,
     /// The command's input, while it runs.
     input: Option<Box<dyn std::io::Write + Send>>,
-    opened: HashSet<String>,
+    /// How many lines have been dropped from the top of `lines`, so a line
+    /// is known by where it came, however many were dropped since.
+    dropped: usize,
+    /// The first line the login command itself printed, once it has started:
+    /// only its output is read for its sign-in URL, never the image build's
+    /// or Podman's.
+    login_from: Option<usize>,
+    /// The next line to read for it.
+    scanned: usize,
+    /// The sign-in URL opened, once one has: a login opens at most one.
+    opened: Option<String>,
     _poll: Task<()>,
 }
 
@@ -117,7 +126,10 @@ impl LoginView {
             state: State::Running,
             code,
             input: None,
-            opened: HashSet::new(),
+            dropped: 0,
+            login_from: None,
+            scanned: 0,
+            opened: None,
             _poll: Task::ready(()),
         };
         view.start(window, cx);
@@ -130,6 +142,10 @@ impl LoginView {
         self.lines = vec![String::new()];
         self.state = State::Running;
         self.input = None;
+        self.dropped = 0;
+        self.login_from = None;
+        self.scanned = 0;
+        self.opened = None;
         let (agent, project_dir) = (self.agent, self.project_dir.clone());
         let (tx, rx) = mpsc::channel();
         let (input_tx, input_rx) = mpsc::channel::<Box<dyn std::io::Write + Send>>();
@@ -153,7 +169,16 @@ impl LoginView {
                         match report {
                             Report::Output(chunk) => this.take_output(&chunk, cx),
                             Report::Preparing => this.state = State::Preparing,
-                            Report::LoggingIn => this.state = State::Running,
+                            Report::LoggingIn => {
+                                this.state = State::Running;
+                                // From here on, what is printed is the
+                                // login command's own.
+                                let last = this.lines.len() - 1;
+                                let from = this.dropped
+                                    + if this.lines[last].is_empty() { last } else { last + 1 };
+                                this.login_from = Some(from);
+                                this.scanned = from;
+                            }
                             Report::Ended(result) => {
                                 ended = true;
                                 this.input = None;
@@ -190,14 +215,36 @@ impl LoginView {
             }
         }
         if self.lines.len() > MAX_LINES {
-            self.lines.drain(..self.lines.len() - MAX_LINES);
+            let drop = self.lines.len() - MAX_LINES;
+            self.lines.drain(..drop);
+            self.dropped += drop;
         }
-        for line in &self.lines {
+        self.open_sign_in(cx);
+    }
+
+    /// Opens, in the host's browser, the first URL the login command printed
+    /// that leads to the harness's sign-in, and no other, ever: never one
+    /// the image build or Podman printed, nor any after the first. Only whole
+    /// lines are read, so a URL still coming is never opened cut short.
+    fn open_sign_in(&mut self, cx: &mut Context<Self>) {
+        if self.login_from.is_none() || self.opened.is_some() {
+            return;
+        }
+        // The last line may be unfinished.
+        let complete = self.dropped + self.lines.len() - 1;
+        while self.scanned < complete {
+            let at = self.scanned;
+            self.scanned += 1;
+            let Some(line) = at.checked_sub(self.dropped).and_then(|ix| self.lines.get(ix)) else {
+                continue;
+            };
             let shown = ConsoleLine::parse(line).text;
             if let Some(url) = container::url_in(&shown)
-                && self.opened.insert(url.clone())
+                && container::is_sign_in(self.agent, &url)
             {
                 cx.open_url(&url);
+                self.opened = Some(url);
+                return;
             }
         }
     }
@@ -380,11 +427,33 @@ impl Render for LoginView {
             .bg(theme.muted)
             .font_family(theme.mono_font_family.clone())
             .text_xs()
-            .children(
-                self.lines
-                    .iter()
-                    .map(|line| div().child(ConsoleLine::parse(line).text)),
-            );
+            .children(self.lines.iter().enumerate().map(|(ix, line)| {
+                let text = ConsoleLine::parse(line).text.to_string();
+                // Any URL shown is a link to click; only the login's own
+                // sign-in ever opens by itself.
+                match container::url_in(&text) {
+                    Some(url) => {
+                        let at = text.find(&url).unwrap_or(0);
+                        let (before, after) = (&text[..at], &text[at + url.len()..]);
+                        let shown = url.clone();
+                        h_flex()
+                            .flex_wrap()
+                            .child(before.to_string())
+                            .child(
+                                div()
+                                    .id(("login-link", ix))
+                                    .text_color(theme.link)
+                                    .underline()
+                                    .cursor_pointer()
+                                    .child(shown)
+                                    .on_click(move |_, _, cx| cx.open_url(&url)),
+                            )
+                            .child(after.to_string())
+                            .into_any_element()
+                    }
+                    None => div().child(text).into_any_element(),
+                }
+            }));
         let running = self.state == State::Running;
         let view = v_flex()
             .id("login-view")

@@ -1,0 +1,7 @@
+- [The login URL opens in the host's browser once, and nothing else ever opens one](.claude/reference/scope/container-environment/index.md#logging-in)
+- [Only the login command's own output, from when it starts, is read for a URL to open](.claude/reference/scope/container-environment/index.md#logging-in)
+- [What the image build or Podman prints is shown as text, never opened; its URLs at most clickable links](.claude/reference/scope/container-environment/index.md#logging-in)
+- [Only a URL leading to the harness's sign-in opens: claude.ai or console.anthropic.com, auth.openai.com, OpenCode's provider, or a localhost callback](.claude/reference/scope/container-environment/index.md#logging-in)
+- [Any other URL the login prints, as documentation or release notes, is only shown](.claude/reference/scope/container-environment/index.md#logging-in)
+- [A login opens at most one URL by itself, the first sign-in one; any later is shown as a link to click](.claude/reference/scope/container-environment/index.md#logging-in)
+- [Where no sign-in URL is recognized, nothing opens, and every URL the command printed is shown as a link](.claude/reference/scope/container-environment/index.md#logging-in)

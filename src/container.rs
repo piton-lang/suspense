@@ -1270,6 +1270,37 @@ pub fn url_in(line: &str) -> Option<String> {
     (url.len() > "https://".len()).then_some(url)
 }
 
+/// Whether `url` leads to `agent`'s sign-in, which its login opens in the
+/// browser by itself: Claude Code's to claude.ai or console.anthropic.com,
+/// Codex's to auth.openai.com, OpenCode's to the provider it logs in with,
+/// or a localhost callback the login asks to be visited. A link to
+/// documentation, release notes, or a package's homepage is none.
+pub fn is_sign_in(agent: Agent, url: &str) -> bool {
+    let rest = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+        .unwrap_or(url);
+    let (host, path) = rest.split_once('/').unwrap_or((rest, ""));
+    let host = host.split(':').next().unwrap_or(host).to_lowercase();
+    let is = |domain: &str| host == domain || host.ends_with(&format!(".{domain}"));
+    if host == "localhost" || host == "127.0.0.1" {
+        return true;
+    }
+    let claude = is("claude.ai") || host == "console.anthropic.com";
+    let openai = host == "auth.openai.com";
+    match agent {
+        Agent::Claude => claude,
+        Agent::Codex => openai,
+        // OpenCode signs in with whichever provider it is logging in with.
+        Agent::OpenCode => {
+            claude
+                || openai
+                || (host == "github.com" && path.starts_with("login/"))
+                || (is("opencode.ai") && path.starts_with("auth"))
+        }
+    }
+}
+
 /// Whether a line a login printed asks for a code to be pasted.
 pub fn asks_for_code(line: &str) -> bool {
     let line = line.to_lowercase();
@@ -1735,6 +1766,36 @@ mod tests {
         // Without a host version, its latest.
         let latest = default_containerfile(&[(Agent::Claude, None)], None);
         assert!(!latest.contains("PITON_VERSION"), "{latest}");
+    }
+
+    /// Only a URL leading to the harness's sign-in counts as its login's:
+    /// never a link to documentation, release notes, or a package's homepage,
+    /// as an image build prints.
+    #[test]
+    fn only_sign_in_urls_are_a_logins() {
+        use super::is_sign_in;
+        assert!(is_sign_in(
+            Agent::Claude,
+            "https://claude.ai/oauth/authorize?code=true&client_id=abc"
+        ));
+        assert!(is_sign_in(Agent::Claude, "https://console.anthropic.com/oauth/code/callback"));
+        assert!(is_sign_in(Agent::Codex, "https://auth.openai.com/codex/device"));
+        assert!(is_sign_in(Agent::Codex, "http://localhost:1455/auth/callback"));
+        assert!(is_sign_in(Agent::OpenCode, "https://github.com/login/device"));
+        for not in [
+            "https://docs.anthropic.com/en/docs/claude-code",
+            "https://www.npmjs.com/package/@anthropic-ai/claude-code",
+            "https://github.com/openai/codex/releases",
+            "https://deb.debian.org/debian",
+            "https://registry.npmjs.org/opencode-ai",
+            "https://claude.ai.evil.example/oauth",
+        ] {
+            for agent in [Agent::Claude, Agent::Codex, Agent::OpenCode] {
+                assert!(!is_sign_in(agent, not), "{agent:?} would open {not}");
+            }
+        }
+        // Each harness's own sign-in, not another's.
+        assert!(!is_sign_in(Agent::Codex, "https://claude.ai/oauth/authorize"));
     }
 
     /// A failed build says the step it failed at, and what Podman printed.

@@ -1,0 +1,6 @@
+- [Any login URL the login command prints opens in the host's browser](.claude/reference/scope/container-environment/index.md#logging-in)
+- [The login view builds the image first, showing "Preparing environment" and what the build prints](.claude/reference/scope/container-environment/index.md#logging-in)
+- [The login command starts only once the image build has succeeded](.claude/reference/scope/container-environment/index.md#logging-in)
+- [The login runs under a pseudo-terminal in a container, its output shown in a login view](.claude/reference/scope/container-environment/index.md#logging-in)
+- [While an image builds for a run, what the build prints goes to its raw output](.claude/reference/scope/container-environment/index.md#image)
+- [Only the first sign-in URL of the login command itself opens; build and Podman output never open anything](.claude/reference/scope/container-environment/index.md#logging-in)

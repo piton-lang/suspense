@@ -251,8 +251,25 @@ shape ContainerEnvironmentShape:
         When the harness isn't logged in, in its volume, the application runs
         its login command in a container, under a pseudo-terminal, and shows
         a login view in an inset panel, titled for the harness, with what the
-        command prints. Any login URL the command prints opens in the host's
-        browser. Where the command asks for a code to be pasted, the view has
+        command prints. The login URL the command prints opens in the host's
+        browser, once, and nothing else ever opens one.
+
+        Only the login command's own output is read for it, from when the
+        command starts, never what the image build prints before it, nor
+        anything Podman prints while it pulls, builds, or starts the
+        container, all of which is shown as text and never opened, its URLs
+        at most clickable links. And only a URL that is the harness's login
+        is opened: the first one the login command prints that leads to its
+        sign-in, as Claude Code's to claude.ai or console.anthropic.com,
+        Codex's to auth.openai.com, or OpenCode's to the provider it is
+        logging in with, or a localhost callback it asks to be visited. Any
+        other URL it prints, as a link to documentation, release notes, or a
+        package's homepage, is only shown. A login opens at most one URL by
+        itself, the first such one; any later is shown as a link, for the
+        user to click. Where no URL is recognized, nothing opens, and the
+        view shows every URL the command printed as a link instead.
+
+        Where the command asks for a code to be pasted, the view has
         a field for it, and what is entered there goes to the command. Where
         the command waits for a callback on a known localhost port, that port
         is published for the login run. Where it offers to log in with a
