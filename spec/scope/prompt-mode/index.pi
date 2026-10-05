@@ -146,9 +146,19 @@ shape PromptEditorShape:
         Each step runs in the lane of the work it does, as the
         @{PromptSendingScope} says: the Chain task and its spec follow-up in
         the spec lane, the code step in the code lane. A step is sent once the
-        step before it finishes, never before, and goes to the head of its
-        lane's queue, ahead of the prompts already waiting there, so it runs
-        as soon as that lane is free, and straight away if it already is. The
+        step before it finishes, never before, and takes its place in its
+        lane's queue by when its chain was sent, not when the step itself was:
+        behind every prompt waiting there that was sent before its chain,
+        earlier chains' steps included, and ahead of every prompt sent after
+        it. So a chain's code step never jumps ahead of a Code prompt, or
+        another chain's code step, sent before the chain was, and a Code
+        prompt sent while the chain's spec step ran waits for the chain's code
+        step rather than coming between the chain's steps. Two steps whose
+        chains were sent in the same order run in that order, whichever spec
+        step finished first. Where nothing sent before its chain is waiting,
+        it runs as soon as its lane is free, and straight away if it already
+        is. Its place holds however it came to be queued, so a restart, with
+        the queue read back from the project, keeps it there. The
         lane it leaves is free for its own queue meanwhile, so a Spec task
         sent while a chain's code step runs runs beside it. A step waiting for
         its lane shows in the queue like any prompt, and can be cancelled

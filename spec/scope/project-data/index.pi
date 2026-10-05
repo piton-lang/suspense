@@ -28,7 +28,7 @@ shape ProjectDataShape:
         - `snapshot-index`: in a git repository, the private index the task snapshots are built with, as they say
         - `images/`: every image attached to a task or question, saved when it is sent or queued, named by the second it was saved and a short hash of its content, with its own extension, so the same image attached twice is saved once
         - `asks/`: every question asked from the Ask tab, saved the same way as a task but apart from them
-        - `queue/`: each queued prompt, as its hidden anchor's source, imports included, named so they list in the order they were queued, marked when each was queued rather than when it was saved, so prompts queued one straight after another keep their order however long each takes to save
+        - `queue/`: each queued prompt, as its hidden anchor's source, imports included, named so they list in the order they were queued, marked when each was queued rather than when it was saved, so prompts queued one straight after another keep their order however long each takes to save, and a chain's step marked when its chain was sent, so it lists in the place the chain's steps take in its lane's queue
         - `divergence/`: each divergence report, a JSON file named by when it was made
         - `system-prompts/`: each mode's system prompt template, a Markdown file named after its mode, code.md, combined.md for Chain, spec.md, and ask.md, and the spec-reading prompt injected into them, spec-reading.md
         - `commit-notes.json`: the Git panel's commit notes

@@ -1,0 +1,8 @@
+- [A chain step is sent only once the step before it finishes](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A step takes its place in its lane's queue by when its chain was sent, not when the step was](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [It waits behind every prompt sent before its chain, earlier chains' steps included, and goes ahead of every prompt sent after](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [Two chains' steps run in the order their chains were sent, whichever spec step finished first](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [With nothing sent before its chain waiting, a step runs as soon as its lane is free](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A step's place survives a restart, the queue read back from the project](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [Queue files are named to list in queued order; a chain's step is marked when its chain was sent](.claude/reference/scope/project-data/index.md#contents)
+- [A waiting step shows in the queue like any prompt and can be cancelled there, ending the chain](.claude/reference/scope/prompt-mode/index.md#chained-tasks)

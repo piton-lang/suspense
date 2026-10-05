@@ -138,6 +138,18 @@ const ASK_HISTORY_IX: usize = usize::MAX / 2;
 /// element ids.
 const ASK_IX: usize = usize::MAX;
 
+/// Where a prompt is put in the queue.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum QueuePlace {
+    /// After every prompt waiting.
+    End,
+    /// Ahead of every prompt waiting, as a spec fix is.
+    Head,
+    /// By when its chain was sent, at this queue stamp: behind every prompt
+    /// queued before it and ahead of every one queued after.
+    ChainSentAt(u128),
+}
+
 /// A prompt in the queue. Its hidden anchor is resolved and saved in the
 /// background just after it is queued; until then it cannot be sent.
 struct QueueItem {
@@ -302,6 +314,12 @@ struct PromptTask {
     spec_fix_due: Option<String>,
     /// A chain step whose next step waits for the spec fix sent after it.
     held_for_fix: bool,
+    /// When its chain was sent, as a queue stamp (see
+    /// [`prompt_queue::stamp`]): a chain's next step takes its place in its
+    /// lane's queue by it, behind every prompt sent before the chain and
+    /// ahead of every one sent after. For a task not of a chain, when it was
+    /// sent.
+    chain_stamp: Option<u128>,
     /// When it was sent, once it was, and when it was over, once it is, so
     /// how long it took can be told; none for a task from the history whose
     /// record doesn't say.
@@ -591,6 +609,7 @@ impl PromptTask {
             feed: None,
             spec_fix_due: None,
             held_for_fix: false,
+            chain_stamp: None,
             started: None,
             ended: None,
         }
@@ -2988,6 +3007,9 @@ pub struct PromptMode {
     /// MessageList's running tasks say; none to show the latest. Tasks keep
     /// their index until the history is read again, which clears it.
     selected_task: Option<usize>,
+    /// When the chain of the step about to be sent straight away was sent,
+    /// for that step to take as its own.
+    next_chain_stamp: Option<u128>,
     /// The output of each task in the header not shown in full, as it was
     /// left, and whether it was locked to its bottom, by the task's index.
     parked_outputs: HashMap<usize, (TaskTable, bool)>,
@@ -3228,6 +3250,7 @@ impl PromptMode {
             selected_file: None,
             latest_settled: None,
             selected_task: None,
+            next_chain_stamp: None,
             parked_outputs: HashMap::new(),
             mode_tab: SendMode::Both,
             disk_conflicts: Vec::new(),
@@ -4720,7 +4743,11 @@ impl PromptMode {
         }
         if mode == SendMode::Ask {
             self.ask(text, attached, sliced, named_after, cx);
-        } else if self.working.queues(mode) {
+        } else if self.working.queues(mode)
+            // A chain sent before it, its next step still to come in this
+            // lane: it waits for that step rather than coming between.
+            || self.chain_holds(Lanes::of(Some(mode)), prompt_queue::stamp())
+        {
             self.enqueue(
                 text,
                 false,
@@ -5363,7 +5390,7 @@ impl PromptMode {
         cx: &mut Context<Self>,
     ) {
         self.enqueue_at(
-            false,
+            QueuePlace::End,
             text,
             wait,
             mode,
@@ -5377,13 +5404,11 @@ impl PromptMode {
         );
     }
 
-    /// Queues a prompt as [`Self::enqueue`] does, at the end of the queue, or
-    /// at its `head`, ahead of every prompt waiting, as a chain's next step
-    /// waits for its lane.
+    /// Queues a prompt as [`Self::enqueue`] does, at `place` in the queue.
     #[allow(clippy::too_many_arguments)]
     fn enqueue_at(
         &mut self,
-        head: bool,
+        place: QueuePlace,
         text: String,
         wait: bool,
         mode: SendMode,
@@ -5411,10 +5436,23 @@ impl PromptMode {
         );
         // Its place on disk is taken now, not once it has compiled, so prompts
         // queued in a row, as a batch sent to the other mode is, come back in
-        // the order they were queued; at the head, before the first.
-        let queued_at = match self.queue.first().filter(|_| head) {
-            Some(first) => first.queued_at.saturating_sub(1),
-            None => prompt_queue::stamp(),
+        // the order they were queued; at the head, before the first; and a
+        // chain's step by when its chain was sent.
+        let (queued_at, at) = match place {
+            QueuePlace::End => (prompt_queue::stamp(), self.queue.len()),
+            QueuePlace::Head => (
+                self.queue
+                    .first()
+                    .map_or_else(prompt_queue::stamp, |first| first.queued_at.saturating_sub(1)),
+                0,
+            ),
+            QueuePlace::ChainSentAt(stamp) => (
+                stamp,
+                self.queue
+                    .iter()
+                    .position(|item| item.queued_at > stamp)
+                    .unwrap_or(self.queue.len()),
+            ),
         };
         let item = QueueItem {
             id,
@@ -5427,8 +5465,8 @@ impl PromptMode {
             mode: Some(mode),
             queued_at,
         };
-        if head {
-            self.queue.insert(0, item);
+        if at < self.queue.len() {
+            self.queue.insert(at, item);
             if !self.in_background {
                 self.sync_editing_position(cx);
             }
@@ -5769,6 +5807,20 @@ impl PromptMode {
     /// own prompts first to last, so a prompt that must wait, for its lane,
     /// for being saved, or for being edited, holds back those of its lane
     /// after it; a Freeform prompt, needing both lanes, holds back both.
+    /// Whether a chain sent before `stamp`, whose next step is still to
+    /// come in `lanes`, holds them: nothing sent after the chain comes
+    /// between its steps.
+    fn chain_holds(&self, lanes: Lanes, stamp: u128) -> bool {
+        self.tasks.iter().any(|task| {
+            (task.status.is_active() || task.held_for_fix)
+                && task.chain_stamp.is_some_and(|chain| chain < stamp)
+                && matches!(
+                    chain_next(task),
+                    Some((_, Sending::Now(mode, ..))) if Lanes::of(Some(mode)).overlaps(lanes)
+                )
+        })
+    }
+
     fn next_sendable(&self) -> Option<usize> {
         // Without a project it could not be sent, and must stay queued.
         self.project_dir.as_ref()?;
@@ -5776,7 +5828,10 @@ impl PromptMode {
         for (ix, item) in self.queue.iter().enumerate() {
             let lanes = Lanes::of(item.mode);
             let ready = item.saved.is_some()
-                && (self.in_background || Some(item.id) != self.editing_queued);
+                && (self.in_background || Some(item.id) != self.editing_queued)
+                // Sent after a chain whose next step is still to come in its
+                // lane, it waits for that step.
+                && !self.chain_holds(lanes, item.queued_at);
             if ready && !held.overlaps(lanes) {
                 return Some(ix);
             }
@@ -6531,6 +6586,14 @@ impl PromptMode {
             return;
         };
         let task_ix = self.push_task(text.clone().into(), cx);
+        // When its chain was sent: a queued prompt's queue stamp, which a
+        // chain's step queued takes from its chain, or else now.
+        self.tasks[task_ix].chain_stamp = match &sending {
+            Sending::Queued(saved) => prompt_queue::queued_at(&saved.file),
+            Sending::Now(..) => None,
+        }
+        .or_else(|| self.next_chain_stamp.take())
+        .or_else(|| Some(prompt_queue::stamp()));
         self.tasks[task_ix].started = Some(std::time::SystemTime::now());
         // Sent, the Freeform chat goes to its bottom to follow it.
         self.lock_freeform_chat();
@@ -7411,17 +7474,20 @@ impl PromptMode {
                     .get_mut(task_ix)
                     .and_then(|task| task.spec_fix_due.take())
                     .filter(|_| done);
+                // Each with when its chain was sent; a spec fix with none.
                 let next = match fix_due {
                     Some(report) => {
                         let task = &mut this.tasks[task_ix];
                         task.held_for_fix = chain_next(task).is_some();
-                        Some(spec_fix(task, &report))
+                        let (text, sending) = spec_fix(task, &report);
+                        Some((text, sending, None))
                     }
                     None => match this.tasks.get(task_ix) {
                         Some(task) if is_spec_fix(&task.sent) => {
                             this.release_held_chain(task_ix, done)
                         }
-                        Some(task) if done => chain_next(task),
+                        Some(task) if done => chain_next(task)
+                            .map(|(text, sending)| (text, sending, task.chain_stamp)),
                         _ => None,
                     },
                 };
@@ -7432,8 +7498,8 @@ impl PromptMode {
                 cx.defer(move |cx| {
                     prompt_mode.update(cx, |this, cx| {
                         this.in_project(&dir, cx, |this, cx| {
-                            if let Some((text, sending)) = next {
-                                this.chain_on(text, sending, cx);
+                            if let Some((text, sending, chain_stamp)) = next {
+                                this.chain_on(text, sending, chain_stamp, cx);
                             }
                             this.auto_send_next(cx)
                         });
@@ -7449,21 +7515,36 @@ impl PromptMode {
     /// The chain step the spec fix at `fix_ix` held back, once that fix is
     /// over: its next step, where the fix was `done`, and none otherwise, as
     /// a chain stops at a step that failed or was cancelled.
-    fn release_held_chain(&mut self, fix_ix: usize, done: bool) -> Option<(String, Sending)> {
+    fn release_held_chain(
+        &mut self,
+        fix_ix: usize,
+        done: bool,
+    ) -> Option<(String, Sending, Option<u128>)> {
         let from = self.tasks.get(fix_ix)?.sent.sent_from.clone()?;
         let held = self
             .tasks
             .iter_mut()
             .find(|task| task.name.as_ref() == from && task.held_for_fix)?;
         held.held_for_fix = false;
-        done.then(|| chain_next(held)).flatten()
+        let chain_stamp = held.chain_stamp;
+        done.then(|| chain_next(held))
+            .flatten()
+            .map(|(text, sending)| (text, sending, chain_stamp))
     }
 
-    /// Sends a chain's next step, `sending`, as [`chain_next`] makes it: at
-    /// once while its lane is free, and otherwise at the head of the queue,
-    /// ahead of every prompt waiting for its lane, where it shows and can be
-    /// cancelled.
-    fn chain_on(&mut self, text: String, sending: Sending, cx: &mut Context<Self>) {
+    /// Sends a chain's next step, `sending`, as [`chain_next`] makes it, its
+    /// chain sent at `chain_stamp`: at once while its lane is free and
+    /// nothing sent before its chain waits for that lane, and otherwise in
+    /// the queue by when its chain was sent, behind every prompt sent before
+    /// it and ahead of every one sent after, where it shows and can be
+    /// cancelled. A spec fix, of no chain, goes at the head of the queue.
+    fn chain_on(
+        &mut self,
+        text: String,
+        sending: Sending,
+        chain_stamp: Option<u128>,
+        cx: &mut Context<Self>,
+    ) {
         let Sending::Now(
             mode,
             attached,
@@ -7476,7 +7557,15 @@ impl PromptMode {
         else {
             return self.start(text, sending, cx);
         };
-        if !self.working.queues(mode) {
+        let lanes = Lanes::of(Some(mode));
+        let earlier_waits = chain_stamp.is_some_and(|stamp| {
+            self.queue
+                .iter()
+                .any(|item| item.queued_at < stamp && Lanes::of(item.mode).overlaps(lanes))
+                || self.chain_holds(lanes, stamp)
+        });
+        if !self.working.queues(mode) && !earlier_waits {
+            self.next_chain_stamp = chain_stamp;
             let sending = Sending::Now(
                 mode,
                 attached,
@@ -7489,7 +7578,10 @@ impl PromptMode {
             return self.start(text, sending, cx);
         }
         self.enqueue_at(
-            true,
+            match chain_stamp {
+                Some(stamp) => QueuePlace::ChainSentAt(stamp),
+                None => QueuePlace::Head,
+            },
             text,
             false,
             mode,
@@ -13272,6 +13364,84 @@ mod tests {
         assert_eq!(super::group_mode(&steps), SendMode::Spec);
     }
 
+    /// A chain's next step takes its place in its lane's queue by when its
+    /// chain was sent: behind every prompt sent before the chain, an earlier
+    /// chain's step included, and ahead of every one sent after; and while a
+    /// chain's next step is still to come, nothing sent after the chain comes
+    /// between its steps.
+    #[gpui_kit::test]
+    async fn a_chains_step_keeps_its_chains_place_in_the_queue(cx: &mut TestAppContext) {
+        use crate::chat_input::{Lanes, SendMode};
+        let dir = std::env::temp_dir().join(format!("suspense-chain-order-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, _) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        let code_item = |id: usize, text: &str, queued_at: u128| super::QueueItem {
+            id,
+            text: text.to_string().into(),
+            saved: None,
+            wait: false,
+            sent_from: None,
+            images: Vec::new(),
+            new_conversation: false,
+            mode: Some(SendMode::Code),
+            queued_at,
+        };
+        let order = prompt_mode.update(cx, |this, cx| {
+            // The code lane busy, two Code prompts waiting: one sent at 100,
+            // one at 300.
+            this.working = Lanes {
+                code: true,
+                spec: false,
+            };
+            this.next_queue_id = 10;
+            this.queue = vec![code_item(1, "before", 100), code_item(2, "after", 300)];
+            // A chain sent at 200 finishes its spec step: its code step
+            // takes its place between them, not at the head.
+            let step = super::Sending::Now(
+                SendMode::Code,
+                super::Attached::default(),
+                false,
+                None,
+                None,
+                false,
+                None,
+            );
+            this.chain_on("chain step".into(), step, Some(200), cx);
+            this.queue
+                .iter()
+                .map(|item| (item.text.to_string(), item.queued_at))
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(
+            order,
+            [
+                ("before".to_string(), 100),
+                ("chain step".to_string(), 200),
+                ("after".to_string(), 300)
+            ]
+        );
+
+        // A chain sent at 150, its spec step running: a Code prompt sent
+        // after it waits for its code step, one sent before doesn't.
+        prompt_mode.update(cx, |this, cx| {
+            let chain = this.push_task("Build it".into(), cx);
+            this.tasks[chain].sent.mode = Some(SendMode::Both);
+            this.tasks[chain].status = TaskStatus::Running;
+            this.tasks[chain].chain_stamp = Some(150);
+            let code = Lanes::of(Some(SendMode::Code));
+            assert!(this.chain_holds(code, 300));
+            assert!(!this.chain_holds(code, 100));
+            assert!(!this.chain_holds(Lanes::of(Some(SendMode::Spec)), 300));
+            // Once its step is over, it holds nothing.
+            this.tasks[chain].status = TaskStatus::Failed;
+            assert!(!this.chain_holds(code, 300));
+        });
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// A chain's next step waits for the spec fix sent after its step, and
     /// goes on once the fix is done, once; a fix that failed stops it.
     #[gpui_kit::test]
@@ -13291,7 +13461,7 @@ mod tests {
             this.tasks[fix].sent.sent_from = Some(this.tasks[chain].name.to_string());
             assert!(super::is_spec_fix(&this.tasks[fix].sent));
             let next = this.release_held_chain(fix, true);
-            assert!(matches!(next, Some((_, super::Sending::Now(SendMode::Code, ..)))));
+            assert!(matches!(next, Some((_, super::Sending::Now(SendMode::Code, ..), _))));
             assert!(!this.tasks[chain].held_for_fix);
             assert!(this.release_held_chain(fix, true).is_none(), "sent once");
             this.tasks[chain].held_for_fix = true;

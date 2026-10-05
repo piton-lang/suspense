@@ -1,0 +1,7 @@
+- [A Chain prompt runs as a spec step, then a code step, then maybe a spec follow-up, each a task of its own](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A chain step is sent once the step before it finishes, never before](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A step waiting for its lane shows in the queue like any prompt and can be cancelled there](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [Each lane's queue sends its prompts one at a time, first to last](.claude/reference/scope/prompt-mode/sending/index.md#lanes)
+- [A task waits in its queue in the order it was sent](.claude/reference/scope/prompt-mode/sending/index.md#description)
+- [Queued prompts are named so they list in the order they were queued](.claude/reference/scope/project-data/index.md#contents)
+- [A chain step queues by when its chain was sent: behind prompts sent before it, ahead of those after](.claude/reference/scope/prompt-mode/index.md#chained-tasks)

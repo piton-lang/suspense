@@ -1,0 +1,68 @@
+
+export anchor ChainModePromptOrderInvestigation2:
+    userPrompt:
+        \\\
+        So when we went chain mode prompts, it seems like the most recent Code prompt is actually being sent before the other pending ones.  Is there a reason for that ?
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            So when we went chain mode prompts, it seems like the most recent Code prompt is actually being sent before the other pending ones.  Is there a reason for that ?
+            \\\
+        result:
+            \\\
+            Yes, there was a reason: the spec told the code to do it. It said a chain's next step "goes to the head of its lane's queue, ahead of the prompts already waiting there". So whenever a chain's spec step finished, its code step jumped ahead of every Code prompt already waiting. That included other chains' code steps queued earlier, which is the out-of-order sending you saw. I changed the rule; `piton check` reports no problems and `piton build` wrote 81 files.
+
+            ## What changed in the spec
+
+            **Chained tasks** (`.claude/reference/scope/prompt-mode/index.md#chained-tasks`)
+            - A chain step now takes its place in its lane's queue by when its chain was sent, not when the step itself was ready.
+              - It waits behind every prompt sent before its chain, including earlier chains' steps.
+              - It goes ahead of every prompt sent after its chain.
+            - A chain's code step never jumps ahead of a Code prompt or another chain's code step sent before it.
+            - A Code prompt sent while a chain's spec step is running waits for that chain's code step, so nothing lands between a chain's steps.
+            - Two chains' code steps run in the order the chains were sent, whichever spec step finished first.
+            - If nothing sent earlier is waiting, the step runs as soon as its lane is free, as before.
+
+            **Saved queue** (`.claude/reference/scope/project-data/index.md#contents`)
+            - A queued chain step is saved marked with when its chain was sent, so it keeps its place in the queue after a restart.
+
+            The constraints are in `.suspense/history/1791224395-ChainModePromptOrderInvestigation.understanding.md`.
+
+            ## Anchors the code should follow
+            - `PromptEditor`: `#chained-tasks`, for where a step is inserted into its lane's queue.
+            - `PromptSendingScope`: `#lanes`, for each queue running first to last.
+            - `ProjectDataScope`: `#contents`, for how `queue/` files are named and marked so their order survives a restart.
+            \\\
+
+    sentFrom: ChainModePromptOrderInvestigation
