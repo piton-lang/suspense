@@ -8,6 +8,7 @@
 use std::io::{BufRead as _, BufReader, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context as _, Result, bail};
@@ -431,6 +432,50 @@ impl Stop {
         stopping.child = Some(child);
     }
 
+    /// Whether the run's process has exited, reaping it.
+    fn exited(&self) -> bool {
+        self.lock()
+            .child
+            .as_mut()
+            .is_some_and(|child| matches!(child.try_wait(), Ok(Some(_))))
+    }
+
+    /// Ends what is left of the process group the run's process heads,
+    /// asked first and then killed once [`crate::process_tree::GRACE`] is
+    /// over, reaping it, so nothing it started is left running. On Windows,
+    /// where it heads no group, its tree is ended while it runs.
+    fn end_group(&self) {
+        let Some(pid) = self.lock().child.as_ref().map(Child::id) else {
+            return;
+        };
+        #[cfg(unix)]
+        {
+            let group = -(pid as i32);
+            let alive = || unsafe { libc::kill(group, 0) == 0 };
+            if alive() {
+                unsafe { libc::kill(group, libc::SIGTERM) };
+                let asked = std::time::Instant::now();
+                while alive() && asked.elapsed() < crate::process_tree::GRACE {
+                    // Reaped once over, the run's own process leaves it.
+                    self.exited();
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                if alive() {
+                    unsafe { libc::kill(group, libc::SIGKILL) };
+                }
+            }
+        }
+        #[cfg(windows)]
+        let _ = pid;
+        let mut stopping = self.lock();
+        if let Some(child) = stopping.child.as_mut() {
+            #[cfg(windows)]
+            kill(child);
+            #[cfg(unix)]
+            child.wait().ok();
+        }
+    }
+
     /// Waits for the run's process to end, however it ends, reaping it.
     fn wait(&self) -> Result<std::process::ExitStatus> {
         loop {
@@ -449,6 +494,16 @@ impl Stop {
         self.lock().child.as_ref().map(Child::id)
     }
 }
+
+/// How often a run's harness is looked at while it prints nothing.
+const TICK: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// How long what a harness printed is read for once its process has exited.
+const OUTPUT_GRACE: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// How long a harness's process is given to exit after its last result
+/// before it is ended with its whole process group.
+const EXIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// Ends `child`, the leader of its own process group, and everything it
 /// started, then reaps it, so no zombie is left.
@@ -530,7 +585,7 @@ impl Feed {
             feeding.stdin = None;
             return Err(err).context("could not write to the harness");
         }
-        feeding.messages.sent += 1;
+        feeding.messages.sent();
         if let Some(events) = &feeding.events {
             events
                 .unbounded_send(HarnessEvent::Sent { text, compiled })
@@ -545,20 +600,17 @@ impl Feed {
     /// its end. Fails, sending nothing, once the run's input is closed.
     /// Blocks while the request is written.
     pub fn stop_task(&self, id: &str) -> Result<()> {
+        self.lock().stop_task(id)
+    }
+
+    /// Asks the harness to stop each background command left running that
+    /// has gone idle, once the run's work is done: see [`Messages::idle`].
+    /// Once all of them have ended, the result that came is the run's last.
+    fn stop_idle(&self) {
         let mut feeding = self.lock();
-        feeding.requests += 1;
-        let line = stop_task_request(&format!("stop-{}", feeding.requests), id);
-        let Some(stdin) = feeding.stdin.as_mut() else {
-            bail!("the task is over");
-        };
-        let written = stdin
-            .write_all(line.as_bytes())
-            .and_then(|()| stdin.flush());
-        if let Err(err) = written {
-            feeding.stdin = None;
-            return Err(err).context("could not write to the harness");
+        for id in feeding.messages.idle(std::time::Instant::now()) {
+            feeding.stop_task(&id).ok();
         }
-        Ok(())
     }
 
     /// Whether messages can still be sent to the run.
@@ -584,13 +636,53 @@ impl Feed {
     /// [`Messages::events`].
     fn read(&self, line: &Value, events: Vec<HarnessEvent>) -> Vec<HarnessEvent> {
         let mut feeding = self.lock();
+        let was_over = feeding.messages.over;
         let last = feeding.messages.read(line);
         if last == Some(true) {
             // Closed as the last result is read, under the lock, so a message
             // sent from now on fails rather than going unanswered.
             feeding.stdin = None;
         }
-        Messages::relabel(last, events)
+        let mut events = Messages::relabel(last, events);
+        if was_over {
+            // Past its last result, nothing more answers.
+            events.retain(|event| {
+                !matches!(
+                    event,
+                    HarnessEvent::Finished { .. } | HarnessEvent::Answered { .. }
+                )
+            });
+        } else if feeding.messages.over {
+            // Its idle commands stopped and ended, the result that came is
+            // its last.
+            feeding.stdin = None;
+            if let Some(settled) = &feeding.messages.settled {
+                events.push(HarnessEvent::Finished {
+                    is_error: settled.is_error,
+                    result: settled.result.clone(),
+                });
+            }
+        }
+        events
+    }
+}
+
+impl Feeding {
+    /// See [`Feed::stop_task`].
+    fn stop_task(&mut self, id: &str) -> Result<()> {
+        self.requests += 1;
+        let line = stop_task_request(&format!("stop-{}", self.requests), id);
+        let Some(stdin) = self.stdin.as_mut() else {
+            bail!("the task is over");
+        };
+        let written = stdin
+            .write_all(line.as_bytes())
+            .and_then(|()| stdin.flush());
+        if let Err(err) = written {
+            self.stdin = None;
+            return Err(err).context("could not write to the harness");
+        }
+        Ok(())
     }
 }
 
@@ -739,8 +831,47 @@ pub struct Messages {
     /// their kind: subagents, shell commands run in the background, or any
     /// other. While any is going the run goes on, however many results it
     /// has reported: the harness answers again once they end.
-    background: std::collections::HashSet<String>,
+    background: HashMap<String, Background>,
+    /// The file each shell command run in the background writes what it
+    /// prints to, by the tool call that ran it, as its result says.
+    outputs: HashMap<String, PathBuf>,
+    /// The result that came once every message sent was taken in, with no
+    /// subagent going, and when; until another turn gets under way.
+    settled: Option<Settled>,
+    /// Its idle background commands were stopped, and have all ended: the
+    /// settled result was the run's last, and nothing after it counts.
+    over: bool,
 }
+
+/// A background task the run has started and not yet ended.
+#[derive(Clone, Debug, PartialEq)]
+struct Background {
+    /// A shell command run in the background, rather than a subagent or a
+    /// task of another kind.
+    command: bool,
+    /// The tool call that started it.
+    tool: Option<String>,
+    /// Where it writes what it prints, once known.
+    output: Option<PathBuf>,
+    /// How much of it there was when last looked at.
+    printed: Option<u64>,
+    /// Since when it has printed nothing.
+    quiet_since: std::time::Instant,
+    /// It was asked to stop for being idle.
+    asked: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct Settled {
+    at: std::time::Instant,
+    is_error: bool,
+    result: String,
+}
+
+/// How long a background command left running once the run's work is done
+/// prints nothing before it is taken as idle, as a server waiting for
+/// requests is.
+const IDLE_COMMAND: std::time::Duration = std::time::Duration::from_secs(60);
 
 impl Default for Messages {
     fn default() -> Self {
@@ -749,6 +880,9 @@ impl Default for Messages {
             taken: 0,
             results: 0,
             background: Default::default(),
+            outputs: Default::default(),
+            settled: None,
+            over: false,
         }
     }
 }
@@ -757,6 +891,81 @@ impl Messages {
     /// Another message was sent.
     pub fn sent(&mut self) {
         self.sent += 1;
+        self.settled = None;
+    }
+
+    /// The background commands to stop for being idle, as of `now`, each
+    /// given once: every one of them, once a result has come, every message
+    /// sent has been taken in, no subagent is going, and every background
+    /// task left is a command that has printed nothing for [`IDLE_COMMAND`]
+    /// since that result. A command whose output can't be read is never
+    /// taken as idle.
+    fn idle(&mut self, now: std::time::Instant) -> Vec<String> {
+        if self.over || self.settled.is_none() || self.background.is_empty() {
+            return Vec::new();
+        }
+        if self.background.values().any(|task| !task.command) {
+            return Vec::new();
+        }
+        let mut idle = true;
+        for task in self.background.values_mut() {
+            let printed = task
+                .output
+                .as_ref()
+                .and_then(|output| std::fs::metadata(output).ok())
+                .map(|meta| meta.len());
+            let Some(printed) = printed else {
+                idle = false;
+                continue;
+            };
+            if task.printed.is_some_and(|before| before != printed) {
+                task.quiet_since = now;
+            }
+            task.printed = Some(printed);
+            idle &= now.saturating_duration_since(task.quiet_since) >= IDLE_COMMAND;
+        }
+        if !idle {
+            return Vec::new();
+        }
+        let mut ids: Vec<String> = self
+            .background
+            .iter_mut()
+            .filter_map(|(id, task)| {
+                (!std::mem::replace(&mut task.asked, true)).then(|| id.clone())
+            })
+            .collect();
+        ids.sort();
+        ids
+    }
+
+    /// The output file a shell command's tool result says it writes to, as
+    /// Claude Code's "Output is being written to: <path>.".
+    fn output_file(line: &Value) -> Vec<(String, PathBuf)> {
+        let Some(content) = line.pointer("/message/content").and_then(Value::as_array) else {
+            return Vec::new();
+        };
+        content
+            .iter()
+            .filter(|block| str_at(block, "/type").as_deref() == Some("tool_result"))
+            .filter_map(|block| {
+                let tool = str_at(block, "/tool_use_id")?;
+                let text = match block.get("content")? {
+                    Value::String(text) => text.clone(),
+                    Value::Array(parts) => parts
+                        .iter()
+                        .filter_map(|part| str_at(part, "/text"))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                    _ => return None,
+                };
+                let (_, after) = text.split_once("Output is being written to: ")?;
+                let path = after
+                    .split(char::is_whitespace)
+                    .next()?
+                    .trim_end_matches('.');
+                (!path.is_empty()).then(|| (tool, PathBuf::from(path)))
+            })
+            .collect()
     }
 
     /// Reads a line of Claude Code's output. For a result, returns whether it
@@ -771,14 +980,43 @@ impl Messages {
                 if top_level && line.get("isReplay").and_then(Value::as_bool) == Some(true) =>
             {
                 self.taken += 1;
+                self.settled = None;
+                None
+            }
+            Some("user") if top_level => {
+                for (tool, output) in Self::output_file(line) {
+                    for task in self.background.values_mut() {
+                        if task.tool.as_deref() == Some(tool.as_str()) {
+                            task.output = Some(output.clone());
+                        }
+                    }
+                    self.outputs.insert(tool, output);
+                }
+                None
+            }
+            // Another turn under way: the result before it settles nothing.
+            Some("assistant" | "stream_event") if top_level => {
+                self.settled = None;
                 None
             }
             Some("result") => {
                 self.results += 1;
-                Some(
-                    self.background.is_empty()
-                        && (self.taken >= self.sent || self.results >= self.sent),
-                )
+                let answered = self.taken >= self.sent || self.results >= self.sent;
+                if answered && self.background.values().all(|task| task.command) {
+                    let at = std::time::Instant::now();
+                    self.settled = Some(Settled {
+                        at,
+                        is_error: line.get("is_error").and_then(Value::as_bool) == Some(true),
+                        result: str_at(line, "/result").unwrap_or_default(),
+                    });
+                    // Quiet since that result, what each printed before it
+                    // aside.
+                    for task in self.background.values_mut() {
+                        task.quiet_since = at;
+                        task.printed = None;
+                    }
+                }
+                Some(self.background.is_empty() && answered)
             }
             Some("system") => {
                 // A notification doesn't say what kind of task ended, so it
@@ -786,10 +1024,31 @@ impl Messages {
                 if let Some(id) = str_at(line, "/task_id") {
                     match str_at(line, "/subtype").as_deref() {
                         Some("task_started") => {
-                            self.background.insert(id);
+                            let tool = str_at(line, "/tool_use_id");
+                            let output = tool.as_ref().and_then(|tool| self.outputs.get(tool));
+                            self.background.insert(
+                                id,
+                                Background {
+                                    command: str_at(line, "/task_type").as_deref()
+                                        == Some("local_bash"),
+                                    output: output.cloned(),
+                                    tool,
+                                    printed: None,
+                                    quiet_since: std::time::Instant::now(),
+                                    asked: false,
+                                },
+                            );
                         }
                         Some("task_notification") => {
-                            self.background.remove(&id);
+                            let asked = self.background.remove(&id).is_some_and(|task| task.asked);
+                            // The last of the idle commands ended: the result
+                            // that came is the run's last.
+                            if asked
+                                && self.background.is_empty()
+                                && self.settled.is_some()
+                            {
+                                self.over = true;
+                            }
                         }
                         _ => {}
                     }
@@ -1032,12 +1291,47 @@ fn run(
     // The run's last result, held back until its process has exited, so the
     // task isn't shown finished while the harness is still at work.
     let mut last = None;
-    for line in BufReader::new(stdout).lines() {
+    // Read apart from the run, so it is looked at while nothing comes: a
+    // server it started may hold its output open long after it is done.
+    let (lines_tx, lines) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines() {
+            if lines_tx.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    // When its last result came, and when its process was seen exiting.
+    let mut last_at = None;
+    let mut exited_at = None;
+    loop {
         // Stopped, nothing more it prints is taken.
         if stop.is_stopped() {
             break;
         }
-        let line = line?;
+        let line = match lines.recv_timeout(TICK) {
+            Ok(line) => line?,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                if let Some(feed) = feed {
+                    feed.stop_idle();
+                }
+                let now = std::time::Instant::now();
+                if exited_at.is_none() && stop.exited() {
+                    exited_at = Some(now);
+                }
+                // Its process over and what it printed read, something it
+                // started that keeps its output open doesn't keep it going;
+                // nor does one not over 10 seconds after its last result.
+                let lingering = exited_at.is_some_and(|at| now - at >= OUTPUT_GRACE);
+                let overdue = last_at.is_some_and(|at| now - at >= EXIT_TIMEOUT);
+                if lingering || overdue {
+                    stop.end_group();
+                    break;
+                }
+                continue;
+            }
+        };
         // Paths the harness saw in its container are the host's to whatever
         // reads them.
         let line = match contained {
@@ -1071,6 +1365,7 @@ fn run(
             let event = replying.take(event);
             if matches!(event, HarnessEvent::Finished { .. }) {
                 last = Some(event);
+                last_at.get_or_insert_with(std::time::Instant::now);
                 continue;
             }
             if tx.unbounded_send(event).is_err() {
@@ -1086,7 +1381,17 @@ fn run(
     if stop.is_stopped() {
         return Ok(Ended::Done);
     }
-    let stderr = stderr.join().unwrap_or_default();
+    // Nothing it started outlives it, a server it left running included.
+    stop.end_group();
+    // What it left holding its error output open isn't waited on either.
+    let drained = std::time::Instant::now();
+    while !stderr.is_finished() && drained.elapsed() < OUTPUT_GRACE {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let stderr = match stderr.is_finished() {
+        true => stderr.join().unwrap_or_default(),
+        false => String::new(),
+    };
     // In a container, Podman failing before the harness started is Podman's
     // failure, said plainly, never the harness's.
     if contained.is_some()
@@ -2807,6 +3112,135 @@ wait
                 }
             }
         }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A background command left running once the run's work is done, as a
+    /// server, is stopped once it has printed nothing for 60 seconds, and
+    /// the result that came is then the run's last; one still printing, or
+    /// a subagent still going, holds the run open.
+    #[test]
+    fn idle_background_commands_are_stopped() {
+        use std::time::{Duration, Instant};
+        let dir = std::env::temp_dir().join(format!("suspense-idle-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let output = dir.join("b1.output");
+        std::fs::write(&output, "listening on 5173\n").unwrap();
+        let taken = json!({ "type": "user", "isReplay": true, "parent_tool_use_id": null,
+            "message": { "role": "user", "content": [{ "type": "text", "text": "m" }] } });
+        let shell = json!({ "type": "system", "subtype": "task_started", "task_id": "b1",
+            "tool_use_id": "t1", "description": "npm run dev", "task_type": "local_bash" });
+        let ran = json!({ "type": "user", "parent_tool_use_id": null, "message": { "content": [{
+            "type": "tool_result", "tool_use_id": "t1",
+            "content": format!("Command running in background with ID: b1. Output is being written to: {}. You will be notified when it completes.", output.display()) }] } });
+        let result = json!({ "type": "result", "is_error": false, "result": "Started it." });
+        let ended = json!({ "type": "system", "subtype": "task_notification", "task_id": "b1",
+            "status": "killed" });
+
+        let (feed, _events) = super::Feed::for_test();
+        for line in [&taken, &shell, &ran] {
+            feed.read(line, parse(line));
+        }
+        assert_eq!(
+            feed.read(&result, parse(&result)),
+            [HarnessEvent::Answered { is_error: false, result: "Started it.".into() }]
+        );
+        let idle = |at: Duration| feed.lock().messages.idle(Instant::now() + at);
+        // Not yet quiet for long enough.
+        assert!(idle(Duration::ZERO).is_empty());
+        // Still printing, it is busy.
+        std::fs::write(&output, "listening on 5173\nrebuilt\n").unwrap();
+        assert!(idle(Duration::from_secs(30)).is_empty());
+        assert!(idle(Duration::from_secs(80)).is_empty());
+        // Quiet for 60 seconds, it is stopped, and only asked once.
+        assert_eq!(idle(Duration::from_secs(91)), ["b1"]);
+        assert!(idle(Duration::from_secs(200)).is_empty());
+        assert!(feed.is_open());
+        // Its end notified, the result that came is the last.
+        assert_eq!(
+            feed.read(&ended, parse(&ended)),
+            [
+                HarnessEvent::SubagentEnded { id: "b1".into(), state: super::SubagentState::Stopped },
+                HarnessEvent::Finished { is_error: false, result: "Started it.".into() },
+            ]
+        );
+        assert!(!feed.is_open());
+        // Nothing after it answers.
+        assert!(feed.read(&result, parse(&result)).is_empty());
+
+        // A subagent still going holds the run open, however quiet its
+        // commands are.
+        let (feed, _events) = super::Feed::for_test();
+        let agent = json!({ "type": "system", "subtype": "task_started", "task_id": "a1",
+            "task_type": "local_agent" });
+        for line in [&taken, &shell, &ran, &agent, &result] {
+            feed.read(line, parse(line));
+        }
+        assert!(feed.lock().messages.idle(Instant::now() + Duration::from_secs(600)).is_empty());
+
+        // A message sent since, not yet answered, does too.
+        let (feed, _events) = super::Feed::for_test();
+        for line in [&taken, &shell, &ran, &result] {
+            feed.read(line, parse(line));
+        }
+        feed.lock().messages.sent();
+        assert!(feed.lock().messages.idle(Instant::now() + Duration::from_secs(600)).is_empty());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A harness that has exited, leaving a server it started holding its
+    /// output open, finishes its run all the same, and the server is ended
+    /// with it.
+    #[cfg(unix)]
+    #[test]
+    fn a_server_holding_a_runs_output_never_keeps_it_going() {
+        let dir = std::env::temp_dir().join(format!("suspense-server-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).unwrap();
+        let pid = dir.join("server.pid");
+        let script = dir.join("harness.sh");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\n\
+                 echo '{{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Done.\"}}'\n\
+                 sleep 60 &\n\
+                 echo $! > {pid}\n",
+                pid = pid.display()
+            ),
+        )
+        .unwrap();
+        crate::test_scripts::make_executable(&script);
+        super::use_program_for_test(Some(script));
+        let super::Run { mut events, .. } = super::send_task(
+            "Go.".into(),
+            None,
+            Vec::new(),
+            None,
+            dir.clone(),
+            Default::default(),
+        );
+        super::use_program_for_test(None);
+        let start = std::time::Instant::now();
+        loop {
+            assert!(
+                start.elapsed() < std::time::Duration::from_secs(8),
+                "never finished"
+            );
+            match events.try_recv() {
+                Ok(HarnessEvent::Finished { result, .. }) => {
+                    assert_eq!(result, "Done.");
+                    break;
+                }
+                Ok(_) => {}
+                Err(futures::channel::mpsc::TryRecvError::Closed) => panic!("never finished"),
+                Err(futures::channel::mpsc::TryRecvError::Empty) => {
+                    std::thread::sleep(std::time::Duration::from_millis(10))
+                }
+            }
+        }
+        let server: i32 = std::fs::read_to_string(&pid).unwrap().trim().parse().unwrap();
+        assert!(unsafe { libc::kill(server, 0) != 0 }, "the server was left running");
         std::fs::remove_dir_all(&dir).ok();
     }
 

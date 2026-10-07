@@ -9770,6 +9770,15 @@ fn first_line(text: &str) -> SharedString {
         .into()
 }
 
+/// The status's tooltip for a run waiting on `count` background commands
+/// and nothing else.
+fn waiting_on_commands(count: usize) -> SharedString {
+    match count {
+        1 => "Waiting on 1 background command".into(),
+        count => format!("Waiting on {count} background commands").into(),
+    }
+}
+
 /// A task's status as a coloured label, a spinner while it is under way, and
 /// the name of the hidden anchor it was compiled from once it has compiled;
 /// with `origin`, as in the latest task's header, beneath the name, that a
@@ -9781,10 +9790,21 @@ fn task_title(ix: usize, task: &PromptTask, origin: bool, cx: &App) -> Div {
         .compiled
         .as_ref()
         .filter(|_| task.sent.mode != Some(SendMode::Freeform));
+    // Running on only for background commands, it says how many.
+    let waiting = match task.status {
+        TaskStatus::Running => task.subagents.waiting_on_commands(),
+        _ => 0,
+    };
     let status = div()
         .id(("task-status", ix))
         .flex_none()
-        .child(task.status.tag(cx));
+        .child(task.status.tag(cx))
+        .when(waiting > 0, |status| {
+            let tip = waiting_on_commands(waiting);
+            status.tooltip(move |window, cx| {
+                gpui_kit::component::tooltip::Tooltip::new(tip.clone()).build(window, cx)
+            })
+        });
     // Beside it, how long it has been under way, or took.
     let elapsed = task.elapsed().map(|elapsed| {
         gpui_kit::TestSupportExt::test_support(div().id(("task-elapsed", ix)))

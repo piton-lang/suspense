@@ -177,6 +177,32 @@ shape HarnessIntegrationShape:
         input and ends straight away, whatever is still going in the
         background, since its whole process group is ended with it.
 
+        A background command that never ends on its own, as a dev server
+        started with `npm run dev`, `vite`, or `node server.js`, or a watcher,
+        never keeps a task running once its work is done. Once a result has
+        come, every message sent has been taken in, and no subagent is still
+        going, a background command still running holds the run open only
+        while it is busy: one that has printed nothing for 60 seconds since
+        that result, as a server does once it has started and waits for
+        requests, is taken as idle. Once every background task left is an
+        idle command, the run asks the harness to stop each of them, as a
+        single background task is stopped above, and once their ends are
+        notified, the result that came is the run's last, and the task
+        finishes in its state, done where it was. A command that keeps
+        printing, as a long build or test run does, keeps the run open until
+        it ends or goes quiet. While the run waits on background commands
+        and nothing else, the task's status still reads "Running", and its
+        tooltip says it is waiting on background commands, naming how many,
+        which the subagents panel lists with their Stop buttons.
+
+        A harness's process that hasn't exited 10 seconds after the run's
+        last result, with its input closed, as when a server it started still
+        holds its output open, is ended with its whole process group, and
+        the task finishes in the state of that last result, never left
+        running. Whatever the run started is ended with it: no server a task
+        started is left running once the task is shown as finished, so its
+        port is free again.
+
         Codex's `codex exec` and OpenCode's `opencode run` read a single prompt
         and can't be fed more while they work, so a task running with either
         takes its prompt as ever and can't be sent more.

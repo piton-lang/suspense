@@ -143,6 +143,15 @@ shape RunTargetsShape:
             as when its command exits, leaves nothing it started running
             either: what is left of its group is stopped as above.
 
+            A target is over when its command's process exits, never only
+            when its output closes: a server or other child that still holds
+            the output open, after the command has exited, never keeps the
+            target reading "Running". What it prints until then is still
+            shown, and once the command has exited, the target reads "Exited
+            with N" or its success, and what is left of it is stopped. A
+            target whose command is the server itself keeps running, as it
+            should, until stopped.
+
         oneAtATime:
             One target runs at a time. Pressing the button of the target
             running brings back its panel. Pressing another's stops the one

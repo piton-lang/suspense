@@ -91,6 +91,9 @@ pub struct Subagents {
     /// The command each shell tool call of the run's own ran, by the call,
     /// so a command run in the background is shown as itself.
     commands: HashMap<String, String>,
+    /// The run has answered every message sent so far, its turn over, so
+    /// what is still at work goes on apart from it.
+    answered: bool,
 }
 
 impl Subagents {
@@ -213,6 +216,8 @@ impl Subagents {
                     agent.activity = Some(activity.clone().into());
                 }
             }
+            HarnessEvent::Answered { .. } => self.answered = true,
+            HarnessEvent::Sent { .. } => self.answered = false,
             HarnessEvent::SubagentEnded { id, state } => {
                 if let Some(agent) = self.find(id) {
                     agent.end(match state {
@@ -244,6 +249,22 @@ impl Subagents {
         for agent in &mut self.list {
             agent.end(State::Stopped);
         }
+    }
+
+    /// How many background commands the run, its turn over, waits on with
+    /// nothing else, no subagent still at work; none otherwise.
+    pub fn waiting_on_commands(&self) -> usize {
+        let running = |agent: &&Subagent| agent.state == State::Running;
+        if !self.answered
+            || self.list.iter().filter(running).any(|agent| agent.task == Kind::Subagent)
+        {
+            return 0;
+        }
+        self.list
+            .iter()
+            .filter(running)
+            .filter(|agent| agent.task == Kind::Command && !agent.waited)
+            .count()
     }
 
     /// Whether any is still at work.
@@ -295,6 +316,27 @@ mod tests {
             kind: None,
             tool: tool.map(Into::into),
         }
+    }
+
+    /// Its turn over, a run waiting on background commands and nothing
+    /// else says how many; a subagent still at work, or a message sent and
+    /// not yet answered, is more than that.
+    #[test]
+    fn counts_the_background_commands_waited_on() {
+        let mut agents = Subagents::default();
+        let answered = HarnessEvent::Answered { is_error: false, result: "ok".into() };
+        agents.apply(&started("b1", Kind::Command, "npm run dev", None));
+        agents.apply(&started("b2", Kind::Command, "vite", None));
+        assert_eq!(agents.waiting_on_commands(), 0);
+        agents.apply(&answered);
+        assert_eq!(agents.waiting_on_commands(), 2);
+        agents.apply(&started("a1", Kind::Subagent, "Plan", None));
+        assert_eq!(agents.waiting_on_commands(), 0);
+        agents.apply(&HarnessEvent::SubagentEnded { id: "a1".into(), state: SubagentState::Completed });
+        agents.apply(&HarnessEvent::SubagentEnded { id: "b2".into(), state: SubagentState::Stopped });
+        assert_eq!(agents.waiting_on_commands(), 1);
+        agents.apply(&HarnessEvent::Sent { text: "more".into(), compiled: "more".into() });
+        assert_eq!(agents.waiting_on_commands(), 0);
     }
 
     #[test]
