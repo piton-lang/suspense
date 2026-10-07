@@ -45,10 +45,25 @@ shape QueueListShape:
         The queue sits along the bottom of the view, below the output and
         directly above the chat input, with a border along its top. It is not
         part of the header. A row saying how many prompts are queued, with a
-        chevron, expands to list each queued prompt in order, a line or two of
-        each, with a button to cancel it. Each prompt in the list is numbered,
-        with its number, text, and cancel button vertically centred in its
-        row, and the list scrolls once it gets tall, with a @{ScrollbarScope}.
+        chevron, expands to list each queued prompt in order, one line each,
+        with a button to cancel it. Each prompt in the list is numbered, with
+        its number, text, and cancel button vertically centred in its row,
+        and the list scrolls once it gets tall, with a @{ScrollbarScope}.
+
+        Every row is one line, 28 pixels tall, whatever its prompt holds: the
+        prompt's first line of text, the first that isn't blank, in small
+        text, cut off with an ellipsis where it doesn't fit, never wrapped,
+        and never the rest of the prompt. A prompt with more lines than that
+        shows nothing more in its row, and one with images attached shows a
+        small muted image icon with how many, as "2", after its text, never
+        the images themselves. So every row is the same height, and the
+        list shows as many prompts as it has room for. Its tooltip gives the
+        prompt's first few lines, as typed. Clicking the row's text, or
+        anywhere in the row but its grip, switch, and buttons, edits the
+        prompt in the chat input, as its pencil button does, as the editing
+        below says: the whole prompt drops down into the input's editor, its
+        tab selected, ready to change. A press that turns into a drag, from
+        the grip, reorders rather than edits.
         Each time it is expanded, it opens scrolled to the bottom, on the
         prompts queued most recently, however it was scrolled when last
         closed. The same area holds the auto-send switch and the "Send next"

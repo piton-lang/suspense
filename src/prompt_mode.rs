@@ -2701,6 +2701,154 @@ fn gap_target(from: usize, gap: usize) -> Option<usize> {
     (gap != from && gap != from + 1).then(|| if gap > from { gap - 1 } else { gap })
 }
 
+/// How tall each prompt's row in the queue is, one line whatever it holds.
+const QUEUED_ROW_HEIGHT: Pixels = px(28.);
+
+/// How many of a queued prompt's lines its tooltip gives.
+const QUEUED_TOOLTIP_LINES: usize = 6;
+
+/// A queued prompt's tooltip: its first few lines, as typed, and an
+/// ellipsis where it goes on.
+fn queued_tooltip(text: &str) -> SharedString {
+    let text = text.trim_matches('\n');
+    let mut lines: Vec<&str> = text.lines().take(QUEUED_TOOLTIP_LINES + 1).collect();
+    if lines.len() > QUEUED_TOOLTIP_LINES {
+        lines.truncate(QUEUED_TOOLTIP_LINES);
+        lines.push("…");
+    }
+    lines.join("\n").into()
+}
+
+/// How near an edge of a scrolling area an item dragged over it scrolls it.
+const DRAG_SCROLL_EDGE: Pixels = px(32.);
+
+/// How far along a tab bar a "row" is, for how fast a drag scrolls it.
+const DRAG_SCROLL_TAB: Pixels = px(120.);
+
+/// The fastest a drag scrolls an area: about a row every 50 milliseconds.
+const DRAG_SCROLL_ROW_TIME: Duration = Duration::from_millis(50);
+
+/// How fast, in pixels a second, an item dragged with the pointer at `at`,
+/// along an area running from `start` to `end`, scrolls it: towards the end
+/// when positive, the start when negative, and not at all away from both
+/// edges. Slow at first, faster the nearer the pointer is to the edge, or
+/// the further past it, up to a `row` every [`DRAG_SCROLL_ROW_TIME`].
+fn drag_scroll_speed(at: Pixels, start: Pixels, end: Pixels, row: Pixels) -> f32 {
+    let fastest = row.as_f32() / DRAG_SCROLL_ROW_TIME.as_secs_f32();
+    let edge = DRAG_SCROLL_EDGE.as_f32();
+    // How far into the edge's band it is, a band's width past it fastest.
+    let speed = |into: f32| fastest * (into / (2. * edge)).clamp(0.1, 1.);
+    let (from_start, to_end) = ((at - start).as_f32(), (end - at).as_f32());
+    if from_start < edge && from_start <= to_end {
+        -speed(edge - from_start)
+    } else if to_end < edge {
+        speed(edge - to_end)
+    } else {
+        0.
+    }
+}
+
+/// Scrolls an area of drag-reorderable items while one is dragged near its
+/// edge, as the DragReorderBehaviour says, and has the gap shown chosen
+/// anew every frame from where the pointer is over the items now there,
+/// however the area scrolled, by the drag or the wheel.
+#[derive(Clone, Default)]
+struct DragScroll(Rc<Cell<Option<DragScrolling>>>);
+
+#[derive(Clone, Copy)]
+struct DragScrolling {
+    /// Where the pointer is.
+    at: Point<Pixels>,
+    /// When the area was last scrolled, while it goes on scrolling.
+    scrolled: Option<Instant>,
+}
+
+impl DragScroll {
+    /// The pointer is at `at`, an item being dragged.
+    fn follow(&self, at: Point<Pixels>) {
+        let scrolled = self.0.get().and_then(|state| state.scrolled);
+        self.0.set(Some(DragScrolling { at, scrolled }));
+    }
+
+    /// An element, taking no room, that every frame of a drag scrolls the
+    /// area `handle` tracks once the pointer is near its edge, along it
+    /// `vertical`ly or not, by `row`s, and then calls `choose` with where the
+    /// pointer is, the area's bounds, and each item's bounds as now laid out,
+    /// which says whether the gap shown changed, `view` drawn again if so.
+    fn driver(
+        &self,
+        handle: &ScrollHandle,
+        vertical: bool,
+        row: Pixels,
+        view: EntityId,
+        choose: impl Fn(Point<Pixels>, Bounds<Pixels>, &dyn Fn(usize) -> Option<Bounds<Pixels>>) -> bool
+            + 'static,
+    ) -> impl IntoElement {
+        let (state, handle) = (self.0.clone(), handle.clone());
+        canvas(
+            move |_, window, cx| {
+                let Some(DragScrolling { at, scrolled }) = state.get() else {
+                    return;
+                };
+                if !cx.has_active_drag() {
+                    state.set(None);
+                    return;
+                }
+                let area = handle.bounds();
+                let max = handle.max_offset();
+                let (along, start, end, max) = if vertical {
+                    (at.y, area.top(), area.bottom(), max.y)
+                } else {
+                    (at.x, area.left(), area.right(), max.x)
+                };
+                // An area holding every item in view doesn't scroll.
+                let speed = if max > px(0.) {
+                    drag_scroll_speed(along, start, end, row)
+                } else {
+                    0.
+                };
+                let mut now_scrolled = None;
+                if speed != 0. {
+                    let now = Instant::now();
+                    let since = scrolled.map_or(Duration::from_millis(16), |then| {
+                        now.saturating_duration_since(then).min(Duration::from_millis(100))
+                    });
+                    let mut offset = handle.offset();
+                    let current = if vertical { &mut offset.y } else { &mut offset.x };
+                    // Scrolled further on, the offset is further below zero.
+                    let next = (*current - px(speed * since.as_secs_f32()))
+                        .max(-max)
+                        .min(px(0.));
+                    if next != *current {
+                        *current = next;
+                        handle.set_offset(offset);
+                        now_scrolled = Some(now);
+                        // Smoothly, frame by frame, until its end.
+                        window.on_next_frame(move |_, cx| cx.notify(view));
+                    }
+                }
+                state.set(Some(DragScrolling {
+                    at,
+                    scrolled: now_scrolled,
+                }));
+                let offset = handle.offset();
+                let item = |ix: usize| {
+                    handle.bounds_for_item(ix).map(|bounds| Bounds {
+                        origin: bounds.origin + offset,
+                        size: bounds.size,
+                    })
+                };
+                if choose(at, area, &item) && now_scrolled.is_none() {
+                    window.on_next_frame(move |_, cx| cx.notify(view));
+                }
+            },
+            |_, _, _, _| {},
+        )
+        .absolute()
+        .size_0()
+    }
+}
+
 /// The insertion indicator of a drag reorder: a 2 pixel accent line across
 /// the gap, drawn over the items, with a small open circle at its leading
 /// end, taking no mouse. `vertical` for a line between tabs side by side;
@@ -2959,6 +3107,10 @@ pub struct PromptMode {
     /// While a file's tab is dragged: which, and the gap between file tabs
     /// it would be dropped into, if any.
     tab_gap: Rc<Cell<Option<(EntityId, Option<usize>)>>>,
+    /// Scrolls the queue while a prompt is dragged near its edge.
+    queue_drag_scroll: DragScroll,
+    /// Scrolls the tab bar while a file's tab is dragged near its edge.
+    tabs_drag_scroll: DragScroll,
     /// How far a scroll has pushed into the stretch at an end, toward the
     /// barrier it must get past to cross over.
     scroll_push: Rc<Cell<ScrollPush>>,
@@ -3229,6 +3381,8 @@ impl PromptMode {
             scroll_spent: Rc::default(),
             queue_gap: Rc::default(),
             tab_gap: Rc::default(),
+            queue_drag_scroll: DragScroll::default(),
+            tabs_drag_scroll: DragScroll::default(),
             scroll_push: Rc::default(),
             output_locked: false,
             output_left: None,
@@ -4070,12 +4224,48 @@ impl PromptMode {
                 ),
             )
             .children(file_tabs);
+        // Scrolled near its ends while a file's tab is dragged, the gap
+        // shown chosen anew each frame from the tabs now under the pointer.
+        let drag_scroll = {
+            let (tab_gap, views) = (self.tab_gap.clone(), views.clone());
+            self.tabs_drag_scroll.driver(
+                &self.tabs_scroll,
+                false,
+                DRAG_SCROLL_TAB,
+                cx.entity_id(),
+                move |at, area, item| {
+                    let Some((view, shown)) = tab_gap.get() else {
+                        return false;
+                    };
+                    // Chat is the bar's first item, before the files'.
+                    let gap = area
+                        .contains(&at)
+                        .then(|| (0..files_len).find_map(|ix| drag_gap(ix, item(ix + 1)?, at, false)))
+                        .flatten()
+                        .filter(|&at| {
+                            at > 0
+                                && views
+                                    .iter()
+                                    .position(|v| *v == view)
+                                    .and_then(|from| gap_target(from, at))
+                                    .is_some()
+                        });
+                    tab_gap.set(Some((view, gap)));
+                    gap != shown
+                },
+            )
+        };
+        let follow = self.tabs_drag_scroll.clone();
         // Lets UI tests find the tab bar; inert in normal builds.
         gpui_kit::TestSupportExt::test_support(div().id("body-tabs-row"))
             .flex_none()
             .w_full()
             .min_w_0()
+            .on_drag_move(move |event: &DragMoveEvent<FileTabDrag>, _, _| {
+                follow.follow(event.event.position)
+            })
             .child(bar)
+            .child(drag_scroll)
     }
 
     /// Adds a task for `text`, compiling, as the latest. Returns its index.
@@ -8487,12 +8677,40 @@ impl PromptMode {
             None => (None, None),
         };
         let queue_len = count;
+        // Scrolled near its edges while a prompt is dragged, the gap shown
+        // chosen anew each frame from the prompts now under the pointer.
+        let drag_scroll = expanded.then(|| {
+            let (queue_gap, saved) = (self.queue_gap.clone(), saved.clone());
+            self.queue_drag_scroll.driver(
+                &self.queue_scroll,
+                true,
+                QUEUED_ROW_HEIGHT,
+                cx.entity_id(),
+                move |at, area, item| {
+                    let Some((dragged, shown)) = queue_gap.get() else {
+                        return false;
+                    };
+                    let from = saved.iter().position(|&(id, _)| id == dragged);
+                    let gap = area
+                        .contains(&at)
+                        .then(|| (0..queue_len).find_map(|ix| drag_gap(ix, item(ix)?, at, true)))
+                        .flatten()
+                        .filter(|&gap| {
+                            from.and_then(|from| gap_target(from, gap))
+                                .is_some_and(|to| droppable(&saved, dragged, to))
+                        });
+                    queue_gap.set(Some((dragged, gap)));
+                    gap != shown
+                },
+            )
+        });
         let list = expanded.then(|| {
-            let queue_gap = self.queue_gap.clone();
+            let (queue_gap, drag_scroll) = (self.queue_gap.clone(), self.queue_drag_scroll.clone());
             v_flex()
                 .id("queue-list")
                 // Off the list, no gap is shown.
                 .on_drag_move(move |event: &DragMoveEvent<QueuedDrag>, window, cx| {
+                    drag_scroll.follow(event.event.position);
                     if !event.bounds.contains(&event.event.position)
                         && let Some((id, Some(_))) = queue_gap.get()
                     {
@@ -8520,13 +8738,15 @@ impl PromptMode {
                             .w(px(1.))
                             .when(joined, |line| line.bg(border))
                     };
-                    // As tall as the row, its padding included, so the line
-                    // meets the next row's across the gap between them.
+                    // As tall as the row, so the line meets the next row's
+                    // across the gap between them. A press on it never edits
+                    // the prompt.
                     let new_conversation = v_flex()
+                        .id(("new-conversation-queued-box", ix))
                         .flex_none()
                         .self_stretch()
-                        .my(px(-2.))
                         .items_center()
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                         .child(segment(joins_above))
                         .child(
                             Switch::new(("new-conversation-queued", ix))
@@ -8542,11 +8762,22 @@ impl PromptMode {
                                 })),
                         )
                         .child(segment(joins_below));
+                    let tip = queued_tooltip(&item.text);
                     let row = h_flex()
                         .id(("queued-prompt", ix))
+                        .h(QUEUED_ROW_HEIGHT)
                         .gap_2()
-                        .py_0p5()
                         .relative()
+                        .tooltip(move |window, cx| {
+                            gpui_kit::component::tooltip::Tooltip::new(tip.clone()).build(window, cx)
+                        })
+                        // Clicked anywhere but its grip, switch, and buttons,
+                        // it is edited, as its pencil button does.
+                        .when(item.saved.is_some(), |row| {
+                            row.cursor_pointer().on_click(cx.listener(move |this, _, window, cx| {
+                                this.edit_queued(id, window, cx)
+                            }))
+                        })
                         .when(editing, |row| row.bg(theme.list_active))
                         // The one dragged stays in its place, dimmed.
                         .when(dragging == Some(id), |row| row.opacity(0.5))
@@ -8584,28 +8815,39 @@ impl PromptMode {
                         .when(ix + 1 == queue_len && gap == Some(queue_len), |row| {
                             row.child(drop_indicator(false, true, cx))
                         })
-                        .when(item.saved.is_some(), |row| {
-                            let queue_gap = self.queue_gap.clone();
-                            row.cursor_grab().on_drag(
-                                QueuedDrag {
-                                    id,
-                                    text: item.text.clone().into(),
-                                },
-                                move |drag, _, _, cx| {
-                                    queue_gap.set(Some((drag.id, None)));
-                                    cx.new(|_| drag.clone())
-                                },
-                            )
-                        })
+                        // Dragged by its grip, which never edits it.
                         .child(
-                            Icon::new(IconName::GripVertical)
-                                .xsmall()
+                            div()
+                                .id(("queued-grip-box", ix))
                                 .flex_none()
-                                .text_color(if item.saved.is_some() {
-                                    muted
-                                } else {
-                                    transparent_black()
-                                }),
+                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                .child(
+                                    // Lets UI tests find the grip; inert in
+                                    // normal builds.
+                                    gpui_kit::TestSupportExt::test_support(div().id(("queued-grip", ix)))
+                                        .when(item.saved.is_some(), |grip| {
+                                            let queue_gap = self.queue_gap.clone();
+                                            grip.cursor_grab().on_drag(
+                                                QueuedDrag {
+                                                    id,
+                                                    text: first_line(&item.text),
+                                                },
+                                                move |drag, _, _, cx| {
+                                                    queue_gap.set(Some((drag.id, None)));
+                                                    cx.new(|_| drag.clone())
+                                                },
+                                            )
+                                        })
+                                        .child(
+                                            Icon::new(IconName::GripVertical)
+                                                .xsmall()
+                                                .text_color(if item.saved.is_some() {
+                                                    muted
+                                                } else {
+                                                    transparent_black()
+                                                }),
+                                        ),
+                                ),
                         )
                         .child(
                             div()
@@ -8624,25 +8866,41 @@ impl PromptMode {
                                 .text_color(chat_input::mode_color(mode, cx))
                                 .child(label)
                         }))
+                        // Its first line only, cut off where it doesn't fit.
                         .child(
-                            v_flex()
+                            div()
                                 .flex_1()
                                 .min_w_0()
-                                .gap_1()
-                                .child(div().min_w_0().line_clamp(2).child(item.text.clone()))
-                                .children(attached_image::prompt_thumbnails(
-                                    ("queued-images", ix),
-                                    &item.images,
-                                    self.project_dir.as_deref(),
-                                    attached_image::QUEUED_THUMBNAIL,
-                                    cx,
-                                )),
+                                .text_sm()
+                                .truncate()
+                                .child(first_line(&item.text)),
                         )
+                        // How many images it has, never the images.
+                        .when(!item.images.is_empty(), |row| {
+                            // Lets UI tests find it; inert in normal builds.
+                            row.child(
+                                gpui_kit::TestSupportExt::test_support(
+                                    h_flex().id(("queued-images", ix)),
+                                )
+                                    .flex_none()
+                                    .gap_1()
+                                    .text_xs()
+                                    .text_color(muted)
+                                    .child(Icon::new(IconName::Image).xsmall().text_color(muted))
+                                    .child(item.images.len().to_string()),
+                            )
+                        })
                         .when(item.saved.is_none(), |row| {
                             row.child(div().flex_none().child(Spinner::new().small()))
                         })
                         .child(new_conversation)
                         .child(
+                            h_flex()
+                                .id(("queued-buttons", ix))
+                                .flex_none()
+                                .gap_2()
+                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                .child(
                             Button::new(("edit-queued", ix))
                                 .ghost()
                                 .xsmall()
@@ -8663,6 +8921,7 @@ impl PromptMode {
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.cancel(id, window, cx)
                                 })),
+                                ),
                         );
                     // Lets UI tests find the row; inert in normal builds.
                     gpui_kit::TestSupportExt::test_support(row)
@@ -8687,6 +8946,7 @@ impl PromptMode {
                         cx,
                     )
                 }))
+                .children(drag_scroll)
                 .into_any_element(),
         )
     }
@@ -12998,10 +13258,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let dir = dunce::canonicalize(&dir).unwrap();
-        // The second wraps, so its row is taller than the others.
+        // The second is long and has more lines, yet its row is one line
+        // as the others are.
         for text in [
             "first",
-            "second word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word",
+            "\n\nsecond line\nmore\nand more\nword word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word",
             "third",
         ] {
             prompt_queue::add(HiddenAnchor::random(), text.into(), &dir).unwrap();
@@ -13058,13 +13319,13 @@ mod tests {
                     switches[ix]
                 );
             }
-            let rows: Vec<_> = (0..2usize)
-                .map(|ix| window.find(("queued-prompt", ix)).bounds().size.height)
-                .collect();
-            assert!(
-                rows[1] > rows[0] + gpui_kit::px(4.),
-                "the rows aren't of different heights: {rows:?}"
-            );
+            for ix in 0..3usize {
+                let row = window.find(("queued-prompt", ix)).bounds().size.height;
+                assert!(
+                    (row - super::QUEUED_ROW_HEIGHT).abs() < gpui_kit::px(0.5),
+                    "row {ix} is {row:?} tall, not one line"
+                );
+            }
             assert!(joined(0, 1), "the first two switches aren't joined");
             assert!(
                 !joined(1, 2),
@@ -13084,6 +13345,33 @@ mod tests {
 
     /// The gap a drag lands in: before an item over its first half, after it
     /// over its second; the gaps either side of the dragged item move nothing.
+    #[test]
+    fn drag_scrolls_faster_nearer_and_past_the_edge() {
+        use super::drag_scroll_speed;
+        use gpui_kit::px;
+        let speed = |at: f32| drag_scroll_speed(px(at), px(0.), px(300.), px(28.));
+        // Away from both edges, none.
+        assert_eq!(speed(150.), 0.);
+        assert_eq!(speed(33.), 0.);
+        // Near the bottom, down; near the top, up.
+        assert!(speed(290.) > 0.);
+        assert!(speed(10.) < 0.);
+        // Faster nearer the edge, and faster still past it, up to a row
+        // every 50 milliseconds.
+        assert!(speed(295.) > speed(280.));
+        assert!(speed(320.) > speed(299.));
+        assert!((speed(400.) - 28. / 0.05).abs() < 0.01);
+        assert!((speed(-100.) + 28. / 0.05).abs() < 0.01);
+    }
+
+    #[test]
+    fn a_queued_prompts_tooltip_gives_its_first_lines() {
+        assert_eq!(super::queued_tooltip("one\ntwo"), "one\ntwo");
+        let long = (1..=9).map(|n| n.to_string()).collect::<Vec<_>>().join("\n");
+        assert_eq!(super::queued_tooltip(&long), "1\n2\n3\n4\n5\n6\n…");
+        assert_eq!(super::first_line("\n  \nfirst\nsecond"), "first");
+    }
+
     #[test]
     fn drag_reorder_gaps() {
         use super::{drag_gap, gap_target};
@@ -13123,15 +13411,17 @@ mod tests {
             })
             .unwrap()
         };
-        let (first, third) = (row(cx, 0), row(cx, 2));
+        let third = row(cx, 2);
+        // Picked up by its grip.
+        let grip = cx
+            .update_window(handle, |_, window, _| {
+                window.find(("queued-grip", 0usize)).bounds().center()
+            })
+            .unwrap();
         let end = gpui_kit::point(third.center().x, third.top() + third.size.height * 0.8);
         let mut visual = gpui_kit::VisualTestContext::from_window(handle, cx);
-        visual.simulate_mouse_move(first.center(), None, Default::default());
-        visual.simulate_mouse_down(
-            first.center(),
-            gpui_kit::MouseButton::Left,
-            Default::default(),
-        );
+        visual.simulate_mouse_move(grip, None, Default::default());
+        visual.simulate_mouse_down(grip, gpui_kit::MouseButton::Left, Default::default());
         visual.simulate_mouse_move(end, gpui_kit::MouseButton::Left, Default::default());
         visual.simulate_mouse_move(end, gpui_kit::MouseButton::Left, Default::default());
         cx.run_until_parked();
@@ -14567,7 +14857,14 @@ mod tests {
                 .unwrap()
             };
             let share = if to > from { 0.8 } else { 0.2 };
-            let (start, end) = (at(cx, from, 0.5), at(cx, to, share));
+            // Picked up by its grip.
+            let start = cx
+                .update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    window.find(("queued-grip", from)).bounds().center()
+                })
+                .unwrap();
+            let end = at(cx, to, share);
             let mut visual = gpui_kit::VisualTestContext::from_window(handle, cx);
             visual.simulate_mouse_move(start, None, Default::default());
             visual.simulate_mouse_down(start, gpui_kit::MouseButton::Left, Default::default());
@@ -14632,6 +14929,98 @@ mod tests {
         prompt_mode.read_with(cx, |this, _| {
             assert!(this.queue.iter().all(|item| !item.new_conversation));
         });
+        // Neither dragging, toggling, nor pressing its grip edits it.
+        prompt_mode.read_with(cx, |this, _| assert_eq!(this.editing_queued, None));
+        click(cx, "queued-grip", 1);
+        prompt_mode.read_with(cx, |this, _| assert_eq!(this.editing_queued, None));
+        // Clicked anywhere else, it is edited, as its pencil does.
+        click(cx, "queued-prompt", 1);
+        let first = prompt_mode.read_with(cx, |this, _| this.queue[1].id);
+        prompt_mode.read_with(cx, |this, _| assert_eq!(this.editing_queued, Some(first)));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A queued prompt dragged and held near the bottom of the queue
+    /// scrolls it, and the gap shown follows the prompts now under the
+    /// pointer; one held away from the edges scrolls nothing.
+    #[gpui_kit::test]
+    async fn dragging_a_queued_prompt_near_the_edge_scrolls_the_queue(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-drag-scroll-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let dir = dunce::canonicalize(&dir).unwrap();
+        for ix in 0..30 {
+            prompt_queue::add(HiddenAnchor::random(), format!("prompt {ix}\nmore of it"), &dir).unwrap();
+        }
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        prompt_mode.update(cx, |this, cx| {
+            this.queue_expanded = true;
+            this.queue_scroll.set_offset(gpui_kit::Point::default());
+            cx.notify();
+        });
+        let frame = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+                .unwrap();
+        };
+        frame(cx);
+        let (start, list) = cx
+            .update_window(handle, |_, window, _| {
+                (
+                    window.find(("queued-grip", 0usize)).bounds().center(),
+                    window.find("queue-list").bounds(),
+                )
+            })
+            .unwrap();
+        let offset = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| this.queue_scroll.offset().y)
+        };
+        assert_eq!(offset(cx), gpui_kit::px(0.));
+        let mut visual = gpui_kit::VisualTestContext::from_window(handle, cx);
+        visual.simulate_mouse_move(start, None, Default::default());
+        visual.simulate_mouse_down(start, gpui_kit::MouseButton::Left, Default::default());
+        // Held in the middle, it doesn't scroll.
+        let middle = gpui_kit::point(start.x, list.center().y);
+        visual.simulate_mouse_move(middle, gpui_kit::MouseButton::Left, Default::default());
+        for _ in 0..5 {
+            std::thread::sleep(Duration::from_millis(10));
+            frame(cx);
+        }
+        assert_eq!(offset(cx), gpui_kit::px(0.));
+        // Near the bottom edge, it scrolls on its own, frame after frame.
+        let near = gpui_kit::point(start.x, list.bottom() - gpui_kit::px(4.));
+        visual.simulate_mouse_move(near, gpui_kit::MouseButton::Left, Default::default());
+        for _ in 0..10 {
+            std::thread::sleep(Duration::from_millis(20));
+            frame(cx);
+        }
+        let scrolled = offset(cx);
+        assert!(scrolled < gpui_kit::px(-10.), "it didn't scroll: {scrolled:?}");
+        // The gap shown is one under the pointer now, past where it started.
+        frame(cx);
+        let gap = prompt_mode.read_with(cx, |this, _| this.queue_gap.get().and_then(|(_, gap)| gap));
+        let under = cx
+            .update_window(handle, |_, window, _| {
+                (0..30usize)
+                    .find(|&ix| window.find(("queued-prompt", ix)).bounds().contains(&near))
+                    .unwrap()
+            })
+            .unwrap();
+        assert!(
+            gap == Some(under) || gap == Some(under + 1),
+            "the gap {gap:?} isn't by the prompt under the pointer, {under}"
+        );
+        // Moved away, it stops at once.
+        visual.simulate_mouse_move(middle, gpui_kit::MouseButton::Left, Default::default());
+        frame(cx);
+        let stopped = offset(cx);
+        for _ in 0..5 {
+            std::thread::sleep(Duration::from_millis(20));
+            frame(cx);
+        }
+        assert_eq!(offset(cx), stopped);
+        visual.simulate_mouse_up(middle, gpui_kit::MouseButton::Left, Default::default());
         std::fs::remove_dir_all(&dir).ok();
     }
 

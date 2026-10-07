@@ -211,9 +211,6 @@ pub fn resolve(path: &str, project_dir: Option<&Path>) -> PathBuf {
 /// The side of an image's thumbnail beneath a prompt.
 pub const PROMPT_THUMBNAIL: Pixels = px(56.);
 
-/// The side of an image's thumbnail beneath a queued prompt.
-pub const QUEUED_THUMBNAIL: Pixels = px(32.);
-
 /// The side the larger image shown while hovering a thumbnail fits in.
 const HOVER_SIZE: Pixels = px(320.);
 

@@ -52,6 +52,25 @@ shape DragReorderBehaviourShape:
         says. The item stays where it was in the list, dimmed to half its
         opacity, until it is dropped.
 
+    scrollingWhileDragging:
+        Items that scroll can be reordered past what is in view, so an item
+        can be dragged to any gap, however long the list. While an item is
+        dragged, held near an edge of the scrolling area the items run along,
+        within 32 pixels of its top or bottom for a list, or of its left or
+        right for a row, the area scrolls that way on its own, slowly at
+        first and faster the nearer the pointer is to the edge, or the
+        further past it, up to about a row every 50 milliseconds, smoothly
+        frame by frame rather than in jumps, and stops at its end. Moving
+        the pointer away from the edge stops it at once. The wheel and
+        trackpad scroll the area too while the item is dragged, as they do
+        at any time, without dropping it.
+
+        However the area scrolls, the dragged copy stays under the pointer,
+        and the gap shown is chosen anew each frame from where the pointer is
+        over the items now there, so the indicator is always exactly where a
+        drop would land. An area that doesn't scroll, or holds every item in
+        view, doesn't scroll on its own.
+
     dropping:
         Released over a gap that shows the indicator, the item moves into that
         gap, the items between shifting over by one. Released anywhere else,
