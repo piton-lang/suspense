@@ -108,6 +108,41 @@ shape RunTargetsShape:
             process it started with it, while it runs; once it is over, a
             "Run again" button runs it afresh in its place.
 
+        stopping:
+            Stopping a target stops everything it started, however deep: the
+            shell its command runs in, what the shell runs, and every process
+            those start in turn, as a `npm run dev` runs npm, which runs node,
+            which runs Vite and its esbuild, or a `cargo run` runs the binary
+            it built. A server a target starts, a dev server, a watcher, or
+            anything listening on a port, is stopped with it, so its port is
+            free once the target reads "Stopped", and running it again never
+            fails for the port being taken by the run before. Nothing it
+            started is left running, nor left behind as an orphan of the
+            shell, whatever the platform.
+
+            So a target's command is started as the head of a process group
+            of its own on macOS and Linux, a new session, and on Windows in a
+            job object that every process it starts belongs to, its children's
+            children included. Stopping it first asks the whole group or job
+            to end, as Ctrl+C in a terminal would, SIGINT and then SIGTERM to
+            the process group on macOS and Linux, and on Windows a Ctrl+Break
+            to its console group, so a server can shut down cleanly; whatever
+            is still running 3 seconds later is killed outright, SIGKILL to
+            the group on macOS and Linux, and the job terminated on Windows.
+            A process that left the group on its own, as one that starts a
+            session of its own, is found among the target's descendants and
+            stopped the same way.
+
+            The target reads "Stopped" only once every process it started has
+            exited, and its Stop button shows a spinner and is disabled until
+            then, so "Stopped" always means nothing of it is still running.
+            Stopping it the other ways, by running another target in its
+            place, finding the targets, closing its panel, or quitting, stops
+            it just the same, and quitting doesn't leave a process of it
+            running after Suspense has gone. A target that ends by itself,
+            as when its command exits, leaves nothing it started running
+            either: what is left of its group is stopped as above.
+
         oneAtATime:
             One target runs at a time. Pressing the button of the target
             running brings back its panel. Pressing another's stops the one

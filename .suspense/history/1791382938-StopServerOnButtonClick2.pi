@@ -1,0 +1,70 @@
+
+export anchor StopServerOnButtonClick2:
+    userPrompt:
+        \\\
+        With a vite/node/etc style project when we run it, it obviously starts a server.  But when the user clicks the STOP button it should stop the server.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            With a vite/node/etc style project when we run it, it obviously starts a server.  But when the user clicks the STOP button it should stop the server.
+            \\\
+        result:
+            \\\
+            The spec already said Stop ends the target "and every process it started with it", but it never said how. The likely bug is that only the shell gets killed, so the npm → node → Vite chain under it keeps the server running. I added a section spelling out how the whole process tree is stopped. `piton check` reports no problems, `piton build` wrote 81 files, and it's under `.claude/reference/scope/run-targets/index.md#stopping`.
+
+            ## What changed in the spec
+
+            New "stopping" section in `spec/scope/run-targets/index.pi`, under the panel's description:
+
+            - **Everything goes, however deep:** stopping a target ends its shell, what that runs, and every process those start. For example, `npm run dev` → npm → node → Vite and esbuild.
+              - Dev servers, watchers and anything listening on a port stop with it.
+              - The port is free once it reads "Stopped", so Run again never fails because the old server still holds it.
+              - No process is left orphaned, on any platform.
+            - **How it's grouped:** on macOS and Linux the command starts in its own process group and session. On Windows it starts in a job object that every descendant belongs to.
+            - **How it's stopped:**
+              - First it asks nicely, so servers can shut down cleanly: SIGINT then SIGTERM to the group on macOS and Linux, Ctrl+Break on Windows.
+              - Anything still running 3 seconds later is killed: SIGKILL to the group, or the job is terminated.
+              - Processes that left the group are found among the target's descendants and stopped the same way.
+            - **Honest status:** while it's stopping, the Stop button shows a spinner and is disabled. "Stopped" appears only once every process has exited.
+            - **Every way of stopping is the same:** running another target, finding targets, closing the panel and quitting all stop it this way. Nothing outlives Suspense.
+            - **Ending on its own:** if the target's command exits by itself, anything it left running in its group is cleaned up too.
+
+            The constraints are in `.suspense/history/1791382870-StopServerOnButtonClick.understanding.md`.
+
+            ## Anchors the code should follow
+            - `RunTargetsScope`: `#stopping` for spawning in a group or job, the graceful-then-kill sequence and when "Stopped" shows, plus `#while-running`, `#one-at-atime` and `#minimizing` for the other ways a target is stopped.
+            - `ApplicationScope`: `#child-processes`, which still applies on Windows. A target's shell starts without a console window, even inside its job.
+            \\\
+
+    sentFrom: StopServerOnButtonClick

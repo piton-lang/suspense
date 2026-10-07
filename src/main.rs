@@ -54,6 +54,7 @@ mod piton_fluency;
 mod piton_lsp;
 mod piton_syntax;
 mod process;
+mod process_tree;
 mod project;
 mod project_directory;
 mod project_indicator;

@@ -4481,9 +4481,17 @@ mod tests {
             });
         })
         .unwrap();
-        // Once stopped, it can be closed.
+        // Once stopped, everything it started having exited, it can be
+        // closed.
         panel.update(cx, |view, cx| view.stop(cx));
-        cx.run_until_parked();
+        for _ in 0..500 {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            cx.executor().advance_clock(crate::run_view::POLL);
+            cx.run_until_parked();
+            if !panel.read_with(cx, |view, _| view.can_stop()) {
+                break;
+            }
+        }
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             assert!(window.try_find("run-close").is_some());

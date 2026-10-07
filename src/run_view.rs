@@ -35,7 +35,7 @@ pub struct MinimizeRun;
 pub struct TargetsFound(pub Vec<Target>);
 
 /// How often a running target's output is gathered.
-const POLL: std::time::Duration = std::time::Duration::from_millis(40);
+pub(crate) const POLL: std::time::Duration = std::time::Duration::from_millis(40);
 
 /// Where the harness's output table numbers from, apart from others'.
 const OUTPUT_IX: usize = usize::MAX / 32;
@@ -44,8 +44,12 @@ const OUTPUT_IX: usize = usize::MAX / 32;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RunStatus {
     Running,
+    /// Being stopped: asked to end, everything it started given time to,
+    /// and killed after; not yet stopped while any of it still runs.
+    Stopping,
     /// Ended with its exit code, or with none when stopped by a signal.
     Exited(Option<i32>),
+    /// Stopped: every process it started has exited.
     Stopped,
     /// Couldn't be started.
     Failed,
@@ -156,7 +160,8 @@ impl RunView {
     pub fn can_stop(&self) -> bool {
         matches!(
             &self.holding,
-            Holding::Running { status, .. } if *status == RunStatus::Running
+            Holding::Running { status, .. }
+                if matches!(*status, RunStatus::Running | RunStatus::Stopping)
         )
     }
 
@@ -165,7 +170,9 @@ impl RunView {
             Holding::Finding { step, .. } => {
                 matches!(step, StepState::Pending | StepState::Running)
             }
-            Holding::Running { status, .. } => *status == RunStatus::Running,
+            Holding::Running { status, .. } => {
+                matches!(*status, RunStatus::Running | RunStatus::Stopping)
+            }
         }
     }
 
@@ -216,21 +223,24 @@ impl RunView {
         }
     }
 
+    /// Stops whatever it holds, a target stopped as Stop does, carrying on
+    /// in the background until all of it has ended.
     fn stop_all(&mut self) {
         self.cancel.cancel();
         if let Some(running) = self.running.take() {
-            running.stop();
+            running.stop_later();
         }
     }
 
-    /// Stops the target running, if one is.
+    /// Stops the target running, if one is: it reads "Stopped" once every
+    /// process it started has exited, its Stop button spinning until then.
     pub fn stop(&mut self, cx: &mut Context<Self>) {
-        if let Some(running) = self.running.take() {
-            running.stop();
+        if let Some(running) = &self.running {
+            running.stop_later();
             if let Holding::Running { status, .. } = &mut self.holding
                 && *status == RunStatus::Running
             {
-                *status = RunStatus::Stopped;
+                *status = RunStatus::Stopping;
             }
             cx.notify();
         }
@@ -349,6 +359,8 @@ impl RunView {
                 return;
             }
         };
+        // Kept for quitting to stop, whatever becomes of this panel.
+        crate::run_targets::keep(&running);
         self.running = Some(running.clone());
         // What it prints is gathered a few times a second, so a flood of
         // output is drawn in batches.
@@ -370,9 +382,27 @@ impl RunView {
                         if !lines.is_empty() {
                             this.push_lines(lines, cx);
                         }
+                        // Being stopped, it reads "Stopped" only once all of
+                        // it has exited.
+                        if running.is_stopping() {
+                            if !running.is_stopped() {
+                                return true;
+                            }
+                            this.running = None;
+                            if let Holding::Running { status, .. } = &mut this.holding
+                                && *status == RunStatus::Stopping
+                            {
+                                *status = RunStatus::Stopped;
+                            }
+                            cx.notify();
+                            return false;
+                        }
                         let Some(code) = exited else {
                             return true;
                         };
+                        // Ended by itself: what it left running in its tree
+                        // is stopped too.
+                        running.stop_later();
                         this.running = None;
                         if let Holding::Running { status, .. } = &mut this.holding
                             && *status == RunStatus::Running
@@ -433,6 +463,11 @@ impl RunView {
                     .text_color(theme.muted_foreground)
                     .child(Spinner::new().small())
                     .child("Running"),
+                RunStatus::Stopping => h_flex()
+                    .gap_1p5()
+                    .text_color(theme.muted_foreground)
+                    .child(Spinner::new().small())
+                    .child("Stopping…"),
                 RunStatus::Exited(Some(0)) => {
                     h_flex().text_color(theme.success).child("Exited with 0")
                 }
@@ -457,14 +492,23 @@ impl RunView {
                 .disabled(running)
                 .on_click(cx.listener(|this, _, _, cx| this.find(cx)))
                 .into_any_element(),
-            Holding::Running { .. } if running => Button::new("run-stop")
-                .ghost()
-                .small()
-                .icon(IconName::CircleStop)
-                .label("Stop")
-                .tooltip("Stop it, and everything it started")
-                .on_click(cx.listener(|this, _, _, cx| this.stop(cx)))
-                .into_any_element(),
+            Holding::Running { status, .. } if running => {
+                let stopping = *status == RunStatus::Stopping;
+                Button::new("run-stop")
+                    .ghost()
+                    .small()
+                    .icon(IconName::CircleStop)
+                    .label("Stop")
+                    .loading(stopping)
+                    .disabled(stopping)
+                    .tooltip(if stopping {
+                        "Stopping it, and everything it started"
+                    } else {
+                        "Stop it, and everything it started"
+                    })
+                    .on_click(cx.listener(|this, _, _, cx| this.stop(cx)))
+                    .into_any_element()
+            }
             Holding::Running { .. } => Button::new("run-again")
                 .ghost()
                 .small()
@@ -858,11 +902,60 @@ pub mod tests {
             assert_eq!(view.job_title().as_deref(), Some("Running Run"));
         });
         view.update(cx, |view, cx| view.stop(cx));
+        // Stopping until everything it started has exited, never "Stopped"
+        // before.
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.status(), Some(RunStatus::Stopping));
+            assert!(view.can_stop());
+        });
         settle(cx);
         assert_eq!(
             view.read_with(cx, |view, _| view.status()),
             Some(RunStatus::Stopped)
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A command that ends by itself, leaving a server running behind it,
+    /// leaves nothing of it running.
+    #[cfg(unix)]
+    #[gpui_kit::test]
+    async fn what_an_ended_command_left_running_is_stopped(cx: &mut TestAppContext) {
+        let dir = dir("run-leftovers");
+        cx.update(gpui_kit::init);
+        let target = Target {
+            name: "Run".into(),
+            command: "sleep 60 & echo $!".into(),
+            kind: Kind::Run,
+            release: false,
+        };
+        let mut view = None;
+        cx.add_window(|window, cx| {
+            let run = cx.new(|cx| RunView::running(dir.clone(), 0, target, cx));
+            view = Some(run.clone());
+            Root::new(run, window, cx)
+        });
+        let view = view.unwrap();
+        for _ in 0..200 {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            cx.executor().advance_clock(super::POLL);
+            cx.run_until_parked();
+            if !view.read_with(cx, |view, _| view.is_running()) {
+                break;
+            }
+        }
+        assert_eq!(
+            view.read_with(cx, |view, _| view.status()),
+            Some(RunStatus::Exited(Some(0)))
+        );
+        let pid: i32 = view.read_with(cx, |view, _| view.lines()[0].parse().unwrap());
+        let started = std::time::Instant::now();
+        while unsafe { libc::kill(pid, 0) == 0 }
+            && started.elapsed() < std::time::Duration::from_secs(5)
+        {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(unsafe { libc::kill(pid, 0) != 0 }, "{pid} was left running");
         std::fs::remove_dir_all(&dir).ok();
     }
 

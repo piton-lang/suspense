@@ -1,0 +1,6 @@
+- [A run target is a name and a shell command, run in the project directory](.claude/reference/scope/run-targets/index.md#description)
+- [The panel's Stop button stops the target and every process it started with it](.claude/reference/scope/run-targets/index.md#while-running)
+- [Once over, the panel says "Stopped" and offers Run again](.claude/reference/scope/run-targets/index.md#while-running)
+- [Running another target, finding targets, closing the panel, or quitting stops the one running](.claude/reference/scope/run-targets/index.md#one-at-atime)
+- [On Windows, every child process, a run target's shell included, starts without a console window](.claude/reference/scope/application/index.md#child-processes)
+- [Stopping ends the whole process tree, servers included, in a group or job, gracefully then killed after 3 seconds](.claude/reference/scope/run-targets/index.md#stopping)

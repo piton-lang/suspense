@@ -165,9 +165,15 @@ impl ProjectTargets {
     }
 }
 
-/// A target's command running, its whole process group with it.
+/// A target's command running, everything it starts with it, however deep:
+/// see [`crate::process_tree`].
 pub struct Running {
     child: Arc<Mutex<Child>>,
+    tree: crate::process_tree::Tree,
+    /// Stopping has begun.
+    stopping: std::sync::atomic::AtomicBool,
+    /// Stopping has ended: every process of it has exited.
+    stopped: Arc<std::sync::atomic::AtomicBool>,
     /// What it has printed and not yet been taken.
     printed: Arc<Mutex<Vec<String>>>,
     /// How many of its output and error are still being read.
@@ -202,12 +208,12 @@ impl Running {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        // Its own process group, so stopping it stops all it started.
-        #[cfg(unix)]
-        std::os::unix::process::CommandExt::process_group(&mut shell, 0);
+        // The head of a tree of its own, so stopping it stops all it started.
+        crate::process_tree::prepare(&mut shell);
         let mut child = shell
             .spawn()
             .with_context(|| format!("could not run {command}"))?;
+        let tree = crate::process_tree::Tree::of(&child);
         let on_line = Arc::new(on_line);
         let pipes: [Option<Box<dyn Read + Send>>; 2] = [
             child
@@ -237,6 +243,9 @@ impl Running {
         }
         Ok(Self {
             child: Arc::new(Mutex::new(child)),
+            tree,
+            stopping: Default::default(),
+            stopped: Default::default(),
             printed,
             open_pipes,
             ended_at: Mutex::new(None),
@@ -273,25 +282,64 @@ impl Running {
         }
     }
 
-    /// Stops it, and everything it started.
+    /// Stops it, and everything it started, however deep, returning once
+    /// every process of it has exited. Blocking: see [`Self::stop_later`].
     pub fn stop(&self) {
-        let mut child = self.child.lock().unwrap();
-        #[cfg(unix)]
-        {
-            let group = format!("-{}", child.id());
-            crate::process::command("kill")
-                .args(["-TERM", "--", &group])
-                .status()
-                .ok();
+        self.stopping.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.tree.stop(&self.child);
+        self.stopped.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Stops it as [`Self::stop`] does, off the UI thread; once begun, it
+    /// isn't begun again. It is kept until it has ended, so quitting waits
+    /// for it.
+    pub fn stop_later(self: &Arc<Self>) {
+        if self.stopping.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return;
         }
-        #[cfg(windows)]
-        {
-            crate::process::command("taskkill")
-                .args(["/T", "/F", "/PID", &child.id().to_string()])
-                .status()
-                .ok();
-        }
-        child.kill().ok();
+        let running = self.clone();
+        std::thread::spawn(move || running.stop());
+    }
+
+    /// Whether every process of it has exited, once stopped.
+    pub fn is_stopped(&self) -> bool {
+        self.stopped.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Whether stopping it has begun.
+    pub fn is_stopping(&self) -> bool {
+        self.stopping.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// Every target started, kept so quitting can stop each: none is left
+/// running after Suspense has gone.
+static STARTED: Mutex<Vec<std::sync::Weak<Running>>> = Mutex::new(Vec::new());
+
+/// Keeps `running` among those quitting stops.
+pub fn keep(running: &Arc<Running>) {
+    let mut started = STARTED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    started.retain(|weak| weak.upgrade().is_some_and(|running| !running.is_stopped()));
+    started.push(Arc::downgrade(running));
+}
+
+/// Stops every target still running, or still being stopped, each as
+/// [`Running::stop`] does, all at once, returning once they have all ended.
+/// Blocking: called as Suspense quits.
+pub fn stop_every_target() {
+    let started: Vec<Arc<Running>> = STARTED
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .drain(..)
+        .filter_map(|weak| weak.upgrade())
+        .filter(|running| !running.is_stopped())
+        .collect();
+    let stops: Vec<_> = started
+        .into_iter()
+        .map(|running| std::thread::spawn(move || running.stop()))
+        .collect();
+    for stop in stops {
+        stop.join().ok();
     }
 }
 

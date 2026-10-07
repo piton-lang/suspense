@@ -49,6 +49,14 @@ pub fn run() {
         file_view::bind_keys(cx);
         settings_window::bind_keys(cx);
 
+        // Nothing a target started outlives Suspense: quitting stops every
+        // one still running, waiting until all of it has exited.
+        cx.on_app_quit(|_| {
+            crate::run_targets::stop_every_target();
+            async {}
+        })
+        .detach();
+
         // Closing the last window ends the application on every platform.
         cx.on_window_closed(|cx, _| {
             if cx.windows().is_empty() {

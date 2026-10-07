@@ -1,0 +1,25 @@
+
+export anchor StopServerOnButtonClick:
+    userPrompt:
+        \\\
+        With a vite/node/etc style project when we run it, it obviously starts a server.  But when the user clicks the STOP button it should stop the server.
+        \\\
+
+    mode: combined
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on both the spec and the code, as a chain. This first step changes the spec only, located in ./spec; the code is changed in the next step.
+
+        Write the spec so it describes the application as it should be once the prompt is met, and constrains the code. Once you finish, the spec will be built and the same prompt sent to a coding agent, with your reply, to change the code to match it; so end your reply by saying what you changed in the spec and which anchors the code should follow.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        Before creating or editing any .pi file, read .suspense/fluency.md once in this conversation, unless you already have: it is how Piton is written.
+
+        Open a .pi file only to change it. Once you have changed the spec, run `piton check` and fix every error it reports, then run `piton build` and check the result in the refreshed reference under .claude/reference, not by reading the source again. Never finish with a spec that `piton check` or `piton build` reports errors in.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+        \\\
