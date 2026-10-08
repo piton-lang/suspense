@@ -128,7 +128,15 @@ shape AskConversationShape:
         top runs a small header, the mode's icon and name in the mode's
         colour, as "Code prompt", and beneath it the prompt's text as it was
         written, wrapped, in the body's text colour, not rendered as
-        markdown. Along its bottom, at its right, is a row of small buttons,
+        markdown.
+
+        A card starts collapsed, its text cut to its first line, cut off with
+        an ellipsis, and a chevron at the right of its header. Clicking the
+        header or the chevron expands it to show the whole prompt, the
+        chevron turning down, and clicking again collapses it; its buttons
+        work either way, sending or copying the whole prompt. Each card
+        stays as it was left for as long as the application runs, and
+        expanding or collapsing one never scrolls the pane. Along its bottom, at its right, is a row of small buttons,
         4 pixels apart, wrapping onto another line where the card is too
         narrow: Copy, with a copy icon, which puts the prompt's text on the
         clipboard; Edit, with a pencil icon, as below; and then "Send to
@@ -149,8 +157,12 @@ shape AskConversationShape:
         is sent with the Slice toggle as it stands, with nothing attached,
         and what is being written in the chat input, and attached to it, is
         left alone. The button then reads "Sent to Code", "Sent to Chain",
-        "Sent to Spec", "Asked", or "Sent to Freeform", with a check, for 2
-        seconds, and can be clicked again to send it again. The tooltip of
+        "Sent to Spec", "Asked", or "Sent to Freeform", with a check, and
+        keeps reading so: it never times out or resets, and it is disabled
+        for good, so the prompt is never sent twice from it, however long
+        after, and across restarts, kept with the question's record. The
+        card's other send buttons stay as they were, so the prompt can still
+        be sent to another mode, each once. The tooltip of
         each says what it does, as "Send this prompt as a Code task".
 
         Edit puts the prompt's text in the chat input's text input instead,
@@ -225,7 +237,11 @@ shape AskConversationShape:
         is at the bottom it stays locked there, following each question asked
         and each answer as it grows; scrolling up unlocks it, and scrolling
         back to the bottom locks it again. Asking a question always scrolls it
-        to the bottom and locks it. However many questions it holds, and
+        to the bottom and locks it. When a question's answer finishes,
+        however it ended, the pane scrolls so the start of that answer is at
+        its top, unlocking it, so the answer is read from its beginning,
+        unless the user scrolled the pane while it was answering, or another
+        question is still answering beneath it, when it is left where it is. However many questions it holds, and
         however long their answers, it lays out only what is in view: each
         question, divider, summary line, and block of an answer's markdown is
         drawn as it scrolls into view, so a long conversation costs no more to show,

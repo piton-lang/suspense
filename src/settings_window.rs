@@ -320,6 +320,8 @@ pub struct SettingsWindow {
     /// Where the containers stand, once read.
     containers: Option<Containers>,
     _containers_read: Task<()>,
+    /// Why the project's settings couldn't be saved, when they couldn't.
+    project_settings_error: Option<SharedString>,
     /// Set while the editors are filled from disk, so doing so saves nothing.
     loading: bool,
     scroll: ScrollHandle,
@@ -376,6 +378,7 @@ impl SettingsWindow {
         let mut this = Self {
             prompts,
             containers: None,
+            project_settings_error: None,
             _containers_read: Task::ready(()),
             loading: false,
             scroll: ScrollHandle::new(),
@@ -575,12 +578,106 @@ impl SettingsWindow {
                         )),
                     )
             }));
-        v_flex().gap_5().child(podman).child(
+        // For the open project alone: whether its Spec runs may read the code.
+        let reads_code = ProjectDirectory::get(cx).map(|project_dir| {
+            let settings = crate::project_settings::ProjectSettings::load(&project_dir);
+            let reads = settings.spec_reads_code;
+            // Offered only while they may read the code.
+            let whole = reads.then(|| {
+                v_flex()
+                    .pl_6()
+                    .gap_1()
+                    .child(
+                        crate::checkbox::checkbox(
+                            "settings-spec-reads-project",
+                            "Also let them read the whole project",
+                        )
+                        .checked(settings.spec_reads_project)
+                        .on_click(cx.listener(move |this, checked: &bool, _, cx| {
+                            this.set_spec_reads_project(*checked, cx)
+                        })),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(muted)
+                            .child(
+                                "The whole project directory is mounted read only, but for \
+                                 its .git and .suspense folders.",
+                            ),
+                    )
+            });
+            v_flex()
+                .gap_1()
+                .child(
+                    crate::checkbox::checkbox("settings-spec-reads-code", "Let Spec tasks read the code")
+                        .checked(reads)
+                        .on_click(cx.listener(move |this, checked: &bool, _, cx| {
+                            this.set_spec_reads_code(*checked, cx)
+                        })),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(muted)
+                        .child(
+                            "The code is mounted read only, so Spec tasks and a Chain prompt's \
+                             spec steps can read it but never change it.",
+                        ),
+                )
+                .children(whole)
+                .children(self.project_settings_error.clone().map(|error| {
+                    div().text_sm().text_color(cx.theme().danger).child(error)
+                }))
+        });
+        v_flex().gap_5().children(reads_code).child(podman).child(
             v_flex()
                 .gap_2()
                 .child(div().font_semibold().child("Logins"))
                 .child(logins),
         )
+    }
+
+    /// Lets the open project's Spec runs read the code, or not, saved with
+    /// the project at once; from its next run.
+    fn set_spec_reads_code(&mut self, reads: bool, cx: &mut Context<Self>) {
+        let Some(project_dir) = ProjectDirectory::get(cx) else {
+            return;
+        };
+        let mut settings = crate::project_settings::ProjectSettings::load(&project_dir);
+        settings.spec_reads_code = reads;
+        // Not reading the code, they read nothing else of it either.
+        if !reads {
+            settings.spec_reads_project = false;
+        }
+        self.project_settings_error = settings
+            .save(&project_dir)
+            .err()
+            .map(|err| format!("{err:#}").into());
+        crate::debug_log::log(
+            Some(&project_dir),
+            format!("Spec runs may read the code: {reads}"),
+        );
+        cx.notify();
+    }
+
+    /// Lets the open project's Spec runs read the whole project too, or not,
+    /// saved with the project at once; from its next run.
+    fn set_spec_reads_project(&mut self, reads: bool, cx: &mut Context<Self>) {
+        let Some(project_dir) = ProjectDirectory::get(cx) else {
+            return;
+        };
+        let mut settings = crate::project_settings::ProjectSettings::load(&project_dir);
+        settings.spec_reads_project = reads && settings.spec_reads_code;
+        self.project_settings_error = settings
+            .save(&project_dir)
+            .err()
+            .map(|err| format!("{err:#}").into());
+        crate::debug_log::log(
+            Some(&project_dir),
+            format!("Spec runs may read the whole project: {}", settings.spec_reads_project),
+        );
+        cx.notify();
     }
 
     /// Saves `which` as edited.
@@ -1136,6 +1233,41 @@ mod tests {
             Section::InjectedPrompts
         );
 
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Letting Spec tasks read the code is the open project's, saved with it
+    /// as soon as it is set, and off to start with.
+    #[gpui_kit::test]
+    async fn lets_spec_tasks_read_the_code(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-settings-reads-{}", std::process::id()));
+        fs::remove_dir_all(&dir).ok();
+        fs::create_dir_all(&dir).unwrap();
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            ProjectDirectory::set(dir.clone(), cx);
+        });
+        let mut settings = None;
+        cx.add_window(|window, cx| {
+            let view = cx.new(|cx| SettingsWindow::new(window, cx));
+            settings = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let settings = settings.unwrap();
+        assert!(!crate::project_settings::spec_reads_code(&dir));
+        settings.update(cx, |this, cx| this.set_spec_reads_code(true, cx));
+        assert!(crate::project_settings::spec_reads_code(&dir));
+        settings.update(cx, |this, cx| this.set_spec_reads_project(true, cx));
+        assert!(crate::project_settings::spec_reads_project(&dir));
+        // Unchecking the first unchecks the second.
+        settings.update(cx, |this, cx| this.set_spec_reads_code(false, cx));
+        assert!(!crate::project_settings::spec_reads_code(&dir));
+        assert!(!crate::project_settings::ProjectSettings::load(&dir).spec_reads_project);
+        // Nor can it be checked alone.
+        settings.update(cx, |this, cx| this.set_spec_reads_project(true, cx));
+        assert!(!crate::project_settings::ProjectSettings::load(&dir).spec_reads_project);
         fs::remove_dir_all(&dir).ok();
     }
 

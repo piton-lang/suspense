@@ -1,0 +1,5 @@
+- [The editor's header holds the path, unsaved dot, and at its right the Save and close buttons, 4px apart](.claude/reference/scope/editor/index.md#layout)
+- [Header buttons are small borderless ghost buttons 24px tall](.claude/reference/scope/editor/index.md#layout)
+- [A ruler line runs at the 80th column, shading past it, scrolling sideways with the text](.claude/reference/scope/editor/index.md#ruler)
+- [Preferences remembered for the user are listed in UserPreferencesScope](.claude/reference/scope/user-preferences/index.md#shape)
+- [The editor header has a Wrap toggle before Save; wrapping is display-only and remembered for the user](.claude/reference/scope/editor/index.md#wrap)

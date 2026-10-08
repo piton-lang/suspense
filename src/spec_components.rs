@@ -3,7 +3,6 @@
 //! concept or a shape added to a spec file. Either written straight into the
 //! spec, or handed with a description to a skill to write.
 
-use crate::process::Logged as _;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
@@ -509,7 +508,7 @@ mod tests {
                 .arg("compile")
                 .arg(&file)
                 .current_dir(&project)
-                .output_logged()
+                .output()
                 .unwrap();
             assert!(
                 out.status.success(),

@@ -1,0 +1,65 @@
+
+export anchor AddSpecCodeReadingOption2:
+    userPrompt:
+        \\\
+        We need to be able to let spec *read* code as an option.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            We need to be able to let spec *read* code as an option.
+            \\\
+        result:
+            \\\
+            Spec tasks can now be allowed to read the code through a new per-project setting, off by default. `piton check` reports no problems and `piton build` wrote 82 files.
+
+            **Changes in the spec:**
+            - **Containers** (`.claude/reference/scope/container-environment/index.md#spec`):
+              - With the setting on, a Spec task or a Chain prompt's spec step gets the code location mounted read only.
+              - A writable scratch folder covers only the code's guidance files, `CLAUDE.md` or `AGENTS.md`, so `piton build` still writes its shape guidance there and never into the code.
+              - The run can still write only the spec, the reference, `.piton` and its understanding file.
+              - A change takes effect from the next run.
+            - **Prompts** (`.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#templates`): with the setting on, those runs fill in `CODE_LOCATION`, and get their own paragraph saying the code is read only.
+            - **Settings** (`.claude/reference/scope/settings-window/index.md#containers`): a "Let Spec tasks read the code" checkbox in the Containers section, shown only while a project is open and saved the moment it's clicked.
+            - **Project data** (`.claude/reference/scope/project-data/index.md#contents`): a new `.suspense/settings.json` holds the setting.
+
+            **Anchors the code should follow:**
+            - `ContainerEnvironmentScope`: `#spec`.
+            - `ModeSystemPromptsScope`: `#templates`.
+            - `SettingsWindowScope`: `#containers`.
+            - `ProjectDataScope`: `#contents`.
+            \\\
+
+    sentFrom: AddSpecCodeReadingOption

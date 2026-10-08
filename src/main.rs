@@ -58,6 +58,7 @@ mod process;
 mod process_tree;
 mod project;
 mod project_directory;
+mod project_settings;
 mod project_indicator;
 mod project_lsp;
 mod project_templates;

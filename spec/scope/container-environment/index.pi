@@ -184,6 +184,40 @@ shape ContainerEnvironmentShape:
             with the container, so `piton build` finds the code location it
             places the shape's guidance in.
 
+            Unless the project lets its Spec runs read the code, a setting of
+            the project's, off until switched on in the @{SettingsWindowScope}'s
+            Containers section and saved with the project's data. While it is
+            on, a Spec run is given the code location too, read only, as a
+            question is, mounted in its place, so the harness can read the
+            code the spec describes but never change it, and the scratch
+            directory, writable, is mounted over the code location's
+            guidance files alone, its CLAUDE.md or AGENTS.md files, so
+            `piton build` writes its shape guidance there rather than into
+            the code. Where the code location holds the spec location, as
+            `./`, the spec location is still mounted read and write over it,
+            and the project's data still left out. Every other mount is as
+            above, and what the run may write is unchanged: only the spec,
+            the reference, `.piton`, and its understanding file. The setting
+            takes effect from the next run; a run already going keeps the
+            mounts it started with.
+
+            A second setting of the project's, also off until switched on,
+            and offered only while the first is on, lets its Spec runs read
+            the whole project as well: the project directory is then mounted
+            at `/workspace`, read only, beneath every other mount, so
+            everything in it, its README, its build files, its scripts, its
+            documentation, and whatever lies outside the code and spec
+            locations, can be read, and nothing of it changed. The spec
+            location, the reference, `.piton`, and the understanding file
+            are still mounted over it read and write, as above, and the
+            scratch directory over the guidance files. Even so, the
+            project's git directory, `.git`, and its data under `.suspense`
+            are never seen: each is covered by an empty directory, read
+            only, so no other task's record, session, or snapshot, nor the
+            repository's history, is in the run's view, but for the Suspense
+            fluency and fluency files, mounted on their own as ever. Turning
+            the first setting off turns this one off too.
+
         question:
             A question from the Ask tab: the code location, the spec
             location, the compiled reference, and piton.config.pi, each read

@@ -33,6 +33,7 @@ shape ProjectDataShape:
         - `system-prompts/`: each mode's system prompt template, a Markdown file named after its mode, code.md, combined.md for Chain, spec.md, and ask.md, and the spec-reading prompt injected into them, spec-reading.md
         - `commit-notes.json`: the Git panel's commit notes
         - `run.json`: the project's run targets, as the @{RunTargetsScope} says
+        - `settings.json`: the project's own settings, as whether its Spec runs may read the code, and whether they may read the whole project, as the @{ContainerEnvironmentScope} says
         - `harness.json`: the last report the harness gave of the skills and agents it has
         - `fluency.md`: the project's Piton fluency, as `piton agent --print-fluency` printed it at the last spec build, generated rather than edited, for the Spec and Chain prompts to point at, as the @{ModeSystemPromptsScope} says
         - `suspense-fluency.md`: the Suspense fluency, as this application ships it, generated rather than edited, for the Code, Chain, Spec, and Ask prompts to point at, as the @{ModeSystemPromptsScope} says

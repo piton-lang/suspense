@@ -3,6 +3,7 @@ use /ui
 from /scope/application/Body import BodyScope
 from /scope/lsp import LSP
 from /scope/open-file import OpenFileScope
+from /scope/user-preferences import UserPreferencesScope
 from /ui/components/diff-view import DiffViewScope
 from /ui/components/file-tree import FileTreeScope
 from /ui/components/selection-popover import SelectionPopoverScope
@@ -31,9 +32,10 @@ shape EditorShape:
         right, and a single 1 pixel line in the theme's line colour along its
         bottom, the only line in the tab. In it, from the left: the file's
         path, then 6 pixels after it the unsaved dot while there is one, then
-        at the far right the Save button and the close button, 4 pixels
-        apart. Both buttons are small ghost buttons 24 pixels tall, the
-        close button an icon button 24 pixels square, neither with a border.
+        at the far right the Wrap button, the Save button, and the close
+        button, 4 pixels apart. All are small ghost buttons 24 pixels tall,
+        the Wrap and close buttons icon buttons 24 pixels square, none with a
+        border.
         The header has no margin of its own above, below, or beside it: it
         starts at the top of the tab, directly beneath the tab bar, and its
         left and right edges are the tab's.
@@ -85,6 +87,26 @@ shape EditorShape:
         it, 25% in dark mode and 5% in light mode, so text running long stands
         out while staying as readable. The line and the shade scroll sideways
         with the text, are drawn behind it, and never take the mouse.
+
+    wrap:
+        The Wrap button, with a wrap-text icon, turns soft wrapping on and
+        off, showing as selected while it is on. Its tooltip says whether
+        long lines wrap or run past the edge, and that clicking does the
+        other, with its shortcut, Alt+Z. It starts off. While it is on, a line
+        longer than the editor is wide wraps at the editor's right edge, at
+        a space where there is one and mid-word where there isn't, onto as
+        many visual rows as it needs, each row after the first starting at
+        the line's own indentation, so the text never scrolls sideways and
+        the horizontal scrollbar goes. Only how the text shows changes: the
+        file's text, its line numbers, the language server's positions,
+        and what is saved are the same either way, and Home, End, and
+        selecting by line act on visual rows while on, as in other editors,
+        Home's smart indentation applying to the line's first row. The ruler
+        and its shade stay at the 80th column, wrapped or not. Turning it on
+        or off keeps the cursor's line in view where it was. The choice is
+        remembered for the user, as the @{UserPreferencesScope} says, the
+        same for every file and project, and holds for every file opened
+        after.
 
     keyboard:
         indentation:

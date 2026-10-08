@@ -73,6 +73,10 @@ pub struct RunRecord {
     /// card answered stays answered.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub picked: std::collections::BTreeMap<String, String>,
+    /// Each send button pressed on a prompt card of its answer, by the card
+    /// and the mode it sends in, as `0:1/code`, so it is never pressed again.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub sent_prompts: std::collections::BTreeSet<String>,
     /// When the task was sent, in milliseconds since the Unix epoch; none
     /// for one saved before this was kept.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -240,6 +244,33 @@ pub fn save_picked(prompt_file: &Path, card: &str, answer: &str) -> Result<()> {
     save_record(prompt_file, &record)
 }
 
+/// Keeps that the send button `sent`, a card's and a mode's, was pressed, in
+/// the record of the question or task saved as `prompt_file`, the rest of it
+/// as it is.
+pub fn save_sent_prompt(prompt_file: &Path, sent: &str) -> Result<()> {
+    let file = record_path(prompt_file);
+    let mut record: RunRecord = match fs::read_to_string(&file) {
+        Ok(json) => serde_json::from_str(&json)
+            .with_context(|| format!("could not read {}", file.display()))?,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => RunRecord::default(),
+        Err(err) => {
+            return Err(err).with_context(|| format!("could not read {}", file.display()));
+        }
+    };
+    record.sent_prompts.insert(sent.to_string());
+    save_record(prompt_file, &record)
+}
+
+/// The send buttons pressed on the cards of the question saved as
+/// `prompt_file`, as its record keeps them now.
+pub fn sent_prompts_in(prompt_file: &Path) -> std::collections::BTreeSet<String> {
+    fs::read_to_string(record_path(prompt_file))
+        .ok()
+        .and_then(|json| serde_json::from_str::<RunRecord>(&json).ok())
+        .map(|record| record.sent_prompts)
+        .unwrap_or_default()
+}
+
 /// The answers picked on the question saved as `prompt_file`, as its record
 /// keeps them now.
 pub fn picked_in(prompt_file: &Path) -> std::collections::BTreeMap<String, String> {
@@ -378,6 +409,24 @@ mod tests {
     /// in its record, keeping the rest; a task without a record is given one
     /// of its mark alone. A record saved before marks were kept loads back
     /// unmarked.
+    /// A prompt card's send buttons pressed are kept in the record, the
+    /// rest of it as it was.
+    #[test]
+    fn sent_prompts_are_kept_in_the_record() {
+        let dir = std::env::temp_dir().join(format!("suspense-sent-prompts-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("1-Question.pi");
+        fs::write(&file, "q").unwrap();
+        save_record(&file, &RunRecord { error: Some("kept".into()), ..RunRecord::default() }).unwrap();
+        super::save_sent_prompt(&file, "0:1/code").unwrap();
+        super::save_sent_prompt(&file, "0:1/spec").unwrap();
+        let sent = super::sent_prompts_in(&file);
+        assert_eq!(sent.into_iter().collect::<Vec<_>>(), ["0:1/code", "0:1/spec"]);
+        let json = fs::read_to_string(file.with_extension("json")).unwrap();
+        assert!(json.contains("\"sentPrompts\"") && json.contains("kept"), "{json}");
+        fs::remove_dir_all(&dir).ok();
+    }
+
     #[test]
     fn marks_are_saved_in_the_record() {
         let project_dir =

@@ -843,7 +843,15 @@ pub fn instructions(mode: SendMode, project_dir: &Path) -> Result<Option<String>
     if mode != SendMode::Freeform {
         crate::suspense_fluency::ensure(project_dir);
     }
-    let filled = filled_instructions(mode.into(), Some(mode), project_dir)?;
+    let mut filled = filled_instructions(mode.into(), Some(mode), project_dir)?;
+    // A Spec run that may read the code is told it is read only.
+    if matches!(mode, SendMode::Spec | SendMode::Both)
+        && crate::project_settings::spec_reads_code(project_dir)
+    {
+        let (code, _) = locations_for(Some(mode), project_dir)?;
+        let whole = crate::project_settings::spec_reads_project(project_dir);
+        filled = joined(filled, Some(code_read_only(&code, whole)))?;
+    }
     // Every question is told the card format, after its project's own Ask
     // instructions, on a paragraph of its own.
     if mode == SendMode::Ask {
@@ -852,14 +860,30 @@ pub fn instructions(mode: SendMode, project_dir: &Path) -> Result<Option<String>
     Ok(filled)
 }
 
+/// What a Spec run that may read the code, at `code`, is told of it.
+/// With `whole`, the run may read the whole project too, and is told so.
+pub fn code_read_only(code: &str, whole: bool) -> String {
+    let mut told = format!(
+        "The code, in {code}, is read only: read it to see what the spec describes, \
+         never change it."
+    );
+    if whole {
+        told.push_str(
+            " Everything else in the project directory is there to read as well, \
+             read only, but for its .git and .suspense folders.",
+        );
+    }
+    told
+}
+
 /// Which of the project's locations a run in `mode` can see, the code and
 /// the spec: in a container, only what is mounted, as the
 /// ContainerEnvironmentScope says; on the host, both.
 pub fn seen_locations(mode: Option<SendMode>, project_dir: &Path) -> (bool, bool) {
     use crate::container::RunKind;
-    let _ = project_dir;
     match RunKind::of(mode) {
-        Some(RunKind::Spec) => (false, true),
+        // The code only where the project lets its Spec runs read it.
+        Some(RunKind::Spec) => (crate::project_settings::spec_reads_code(project_dir), true),
         // A question sees both, read only.
         Some(RunKind::Question) => (true, true),
         None => (true, true),
@@ -1740,6 +1764,51 @@ mod tests {
         "            \\\\\\\n",
         "ends with \\",
     );
+
+    /// A project that lets its Spec runs read the code has them fill the
+    /// code location in, and tells them, on a paragraph of its own, that it
+    /// is read only; without that, they never name it.
+    #[test]
+    fn spec_runs_that_may_read_the_code_are_told_it_is_read_only() {
+        let project_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/spec-reads-code-test");
+        fs::remove_dir_all(&project_dir).ok();
+        fs::create_dir_all(&project_dir).unwrap();
+        fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join(CONFIG_FILE_NAME),
+            project_dir.join(CONFIG_FILE_NAME),
+        )
+        .unwrap();
+        system_prompts::save(SendMode::Spec, "Spec of ${SPEC_LOCATION}.\n\nCode at ${CODE_LOCATION}.", &project_dir).unwrap();
+        let spec = instructions(SendMode::Spec, &project_dir).unwrap().unwrap();
+        assert_eq!(spec, "Spec of ./spec.");
+        let system = super::project_system_prompt_for(Some(SendMode::Spec), &project_dir).unwrap().unwrap();
+        assert!(!system.contains("./src"), "{system}");
+
+        crate::project_settings::ProjectSettings { spec_reads_code: true, spec_reads_project: false }
+            .save(&project_dir)
+            .unwrap();
+        assert_eq!(super::seen_locations(Some(SendMode::Spec), &project_dir), (true, true));
+        let spec = instructions(SendMode::Spec, &project_dir).unwrap().unwrap();
+        assert_eq!(
+            spec,
+            format!("Spec of ./spec.\n\nCode at ./src.\n\n{}", super::code_read_only("./src", false))
+        );
+        assert!(super::code_read_only("./src", false).contains("read only"));
+        // Let read the whole project too, it is told so as well.
+        crate::project_settings::ProjectSettings { spec_reads_code: true, spec_reads_project: true }
+            .save(&project_dir)
+            .unwrap();
+        let spec = instructions(SendMode::Spec, &project_dir).unwrap().unwrap();
+        assert!(
+            spec.ends_with(&super::code_read_only("./src", true))
+                && spec.contains("Everything else in the project directory is there to read"),
+            "{spec}"
+        );
+        // Code tasks are as ever, told nothing of it.
+        let code = instructions(SendMode::Code, &project_dir).unwrap().unwrap();
+        assert!(!code.contains(&super::code_read_only("./src", false)), "{code}");
+        fs::remove_dir_all(&project_dir).ok();
+    }
 
     /// A Code task sent to Spec is given Spec's instructions, then, on a
     /// paragraph of its own, the code-to-spec prompt, filled in as a template

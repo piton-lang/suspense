@@ -1,0 +1,7 @@
+- [A project setting, off by default, lets Spec runs read the code location, mounted read only](.claude/reference/scope/container-environment/index.md#spec)
+- [Spec runs may still write only the spec, the reference, .piton, and their understanding file](.claude/reference/scope/container-environment/index.md#spec)
+- [The project is mounted at /workspace in every container](.claude/reference/scope/container-environment/index.md#mounts)
+- [Nothing else is mounted: not the home directory, user skills, MCP servers, or the project's git directory](.claude/reference/scope/container-environment/index.md#question)
+- [The setting is a checkbox in Settings' Containers section, saved with the project's data](.claude/reference/scope/settings-window/index.md#containers)
+- [The project's settings are kept in .suspense/settings.json](.claude/reference/scope/project-data/index.md#contents)
+- [A second setting, offered while the first is on, mounts the whole project read only, hiding .git and .suspense](.claude/reference/scope/container-environment/index.md#spec)

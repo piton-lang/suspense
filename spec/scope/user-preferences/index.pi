@@ -1,4 +1,5 @@
 use /lib
+from /scope/editor import EditorScope
 
 export scope UserPreferencesScope:
     concept: {UserPreferencesConcept}
@@ -20,6 +21,7 @@ shape UserPreferencesShape:
         - light or dark mode, which, until chosen, follows the operating system's appearance
         - the interface's brightness, one for dark mode and one for light, each starting at 0
         - the colours chosen in the theme editor, the base and Code, Chain, Spec, and Ask, for dark mode and for light, each the theme's own until chosen; restored before brightness, which they bound
+        - whether the editor wraps long lines, as the @{EditorScope} says, off until turned on
         - whether the ribbon is collapsed, which starts expanded
         - the layout of a file's diff, which starts side by side
         - the recent projects

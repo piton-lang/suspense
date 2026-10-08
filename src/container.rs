@@ -140,6 +140,45 @@ pub struct Plan {
     /// The folder its conversation's sessions are kept in, mounted where the
     /// harness keeps them under its home; none for a run of no conversation.
     pub sessions: Option<PathBuf>,
+    /// Guidance files in a code location mounted read only, as a Spec run
+    /// that may read the code is given it: each covered by a writable
+    /// scratch file that goes with the run, so a build writes its shape
+    /// guidance there rather than into the code. With the scratch file each
+    /// is covered by, once made on the host.
+    pub covered: Vec<(PathBuf, Option<PathBuf>)>,
+}
+
+/// The names of the guidance files a build writes into the code location.
+const GUIDANCE_FILES: [&str; 2] = ["CLAUDE.md", "AGENTS.md"];
+
+/// The guidance files in `code`, a build's shape guidance: those it holds,
+/// however deep, but for what is hidden, built, or installed, as `target`
+/// and `node_modules`.
+fn guidance_files(code: &Path) -> Vec<PathBuf> {
+    const SKIPPED: [&str; 3] = ["target", "node_modules", "dist"];
+    let mut found = Vec::new();
+    let mut folders = vec![(code.to_path_buf(), 0)];
+    while let Some((folder, depth)) = folders.pop() {
+        let Ok(entries) = std::fs::read_dir(&folder) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            if kind.is_dir() {
+                if depth < 8 && !name.starts_with('.') && !SKIPPED.contains(&name.as_str()) {
+                    folders.push((path, depth + 1));
+                }
+            } else if kind.is_file() && GUIDANCE_FILES.contains(&name.as_str()) {
+                found.push(path);
+            }
+        }
+    }
+    found.sort();
+    found
 }
 
 impl Plan {
@@ -229,7 +268,56 @@ impl Plan {
             hidden,
             scratch,
             sessions: Some(sessions_folder(project_dir, kind)),
+            covered: Vec::new(),
         }
+    }
+
+    /// This plan, for a Spec run, as the project lets it read the code at
+    /// `code`, or not: the code location mounted read only in place of its
+    /// scratch folder, its guidance files alone covered by scratch, so the
+    /// run can read the code but never change it. Every other mount, and
+    /// what the run may write, is as it was.
+    /// With `whole`, the project directory too, read only, beneath every
+    /// other mount, but for its git directory and data, each hidden.
+    pub fn reading_code(mut self, reads: bool, whole: bool, locations: &Locations) -> Self {
+        if !reads || self.kind != RunKind::Spec {
+            return self;
+        }
+        if whole && !self.mounts.iter().any(|mount| mount.host == self.project_dir) {
+            self.mounts.push(Mount {
+                host: self.project_dir.clone(),
+                writable: false,
+            });
+        }
+        let code = locations
+            .code
+            .clone()
+            .unwrap_or_else(|| self.project_dir.clone());
+        self.scratch.retain(|scratch| *scratch != code);
+        self.mounts.push(Mount {
+            host: code.clone(),
+            writable: false,
+        });
+        let data = self.project_dir.join(APP_DIR);
+        let spec = locations.spec.clone();
+        // What the spec location holds is its own, written as ever.
+        self.covered = guidance_files(&code)
+            .into_iter()
+            .filter(|file| spec.as_ref().is_none_or(|spec| !file.starts_with(spec)))
+            .filter(|file| !file.starts_with(&data))
+            .map(|file| (file, None))
+            .collect();
+        // The project's data and git directory, which the code location or
+        // the whole project may hold, are still left out.
+        let widest = if whole { self.project_dir.clone() } else { code };
+        for unseen in [data, self.project_dir.join(".git")] {
+            if unseen.starts_with(&widest) && unseen != widest && !self.hidden.contains(&unseen) {
+                self.hidden.push(unseen);
+            }
+        }
+        self.mounts
+            .sort_by_key(|mount| mount.host.components().count());
+        self
     }
 
     /// This plan as the host stands: a folder it writes to that isn't there
@@ -246,6 +334,30 @@ impl Plan {
             mount.host.exists()
         });
         plan.hidden.retain(|hidden| hidden.exists());
+        // Each guidance file covered by a scratch file of its own, empty,
+        // made for this run alone, where the project's data keeps what is
+        // the machine's: it goes once the run is long over.
+        if !plan.covered.is_empty() {
+            let all = self.project_dir.join(APP_DIR).join("sessions").join(".scratch");
+            forget_old_scratch(&all);
+            let run = all.join(format!(
+                "{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |since| since.as_nanos())
+            ));
+            std::fs::create_dir_all(&run).ok();
+            for (ix, (file, scratch)) in plan.covered.iter_mut().enumerate() {
+                let name = file.file_name().map_or_else(
+                    || "guidance.md".to_string(),
+                    |name| name.to_string_lossy().into_owned(),
+                );
+                let made = run.join(format!("{ix}-{name}"));
+                *scratch = std::fs::write(&made, "").ok().map(|()| made);
+            }
+            plan.covered.retain(|(file, scratch)| file.exists() && scratch.is_some());
+        }
         if let Some(sessions) = &plan.sessions {
             if !sessions.exists() {
                 std::fs::create_dir_all(sessions).ok();
@@ -366,6 +478,18 @@ impl Plan {
             spec.push(",ro=true");
             out.extend(["--mount".into(), spec]);
         }
+        // A guidance file in the code, read only, covered by a scratch file
+        // a build can write.
+        for (file, scratch) in &self.covered {
+            let Some(scratch) = scratch else {
+                continue;
+            };
+            let mut spec: OsString = "type=bind,src=".into();
+            spec.push(scratch.as_os_str());
+            spec.push(",dst=");
+            spec.push(self.container_path(file).as_os_str());
+            out.extend(["--mount".into(), spec]);
+        }
         // Writable, and gone with the container.
         for scratch in &self.scratch {
             let mut spec: OsString = "type=tmpfs,dst=".into();
@@ -378,6 +502,24 @@ impl Plan {
         out.push(command.into());
         out.extend(args.iter().cloned());
         out
+    }
+}
+
+/// Deletes the scratch files of runs over a day ago, in `all`.
+fn forget_old_scratch(all: &Path) {
+    let Ok(runs) = std::fs::read_dir(all) else {
+        return;
+    };
+    for run in runs.flatten() {
+        let old = run
+            .metadata()
+            .and_then(|meta| meta.modified())
+            .ok()
+            .and_then(|made| made.elapsed().ok())
+            .is_some_and(|age| age > std::time::Duration::from_secs(24 * 60 * 60));
+        if old {
+            std::fs::remove_dir_all(run.path()).ok();
+        }
     }
 }
 
@@ -1200,6 +1342,7 @@ fn bare(agent: Agent, kind: RunKind, platform: Platform) -> Plan {
         hidden: Vec::new(),
         scratch: Vec::new(),
         sessions: None,
+        covered: Vec::new(),
     }
 }
 
@@ -1334,6 +1477,79 @@ mod tests {
             .iter()
             .find(|mount| mount.host == path)
             .map(|mount| mount.writable)
+    }
+
+    /// A Spec run the project lets read the code is given it read only, its
+    /// guidance files alone covered by writable scratch files; everything
+    /// else, and what it may write, is as without the setting.
+    #[test]
+    fn a_spec_run_may_read_the_code_read_only() {
+        let project = std::env::temp_dir().join(format!("suspense-reads-code-{}", std::process::id()));
+        std::fs::remove_dir_all(&project).ok();
+        let code = project.join("src");
+        std::fs::create_dir_all(code.join("ui")).unwrap();
+        std::fs::create_dir_all(code.join("node_modules/x")).unwrap();
+        std::fs::create_dir_all(project.join("spec")).unwrap();
+        std::fs::write(code.join("CLAUDE.md"), "guidance").unwrap();
+        std::fs::write(code.join("ui/AGENTS.md"), "guidance").unwrap();
+        std::fs::write(code.join("node_modules/x/CLAUDE.md"), "theirs").unwrap();
+        std::fs::write(code.join("main.rs"), "fn main() {}").unwrap();
+        let locations = Locations {
+            spec: Some(project.join("spec")),
+            code: Some(code.clone()),
+        };
+        let plan = |reads: bool| {
+            Plan::new(RunKind::Spec, Agent::Claude, &project, &locations, None, Platform::Linux)
+                .reading_code(reads, false, &locations)
+        };
+        // Off, nothing changes.
+        assert_eq!(plan(false), Plan::new(RunKind::Spec, Agent::Claude, &project, &locations, None, Platform::Linux));
+        let reads = plan(true);
+        assert_eq!(mounted(&reads, &code), Some(false));
+        assert!(!reads.scratch.contains(&code));
+        assert_eq!(mounted(&reads, &project.join("spec")), Some(true));
+        let writable: Vec<_> = reads.mounts.iter().filter(|mount| mount.writable).map(|mount| mount.host.clone()).collect();
+        assert_eq!(writable, plan(false).mounts.iter().filter(|mount| mount.writable).map(|mount| mount.host.clone()).collect::<Vec<_>>());
+        let covered: Vec<_> = reads.covered.iter().map(|(file, _)| file.clone()).collect();
+        assert_eq!(covered, [code.join("CLAUDE.md"), code.join("ui/AGENTS.md")]);
+        let on_host = reads.as_on_host();
+        let args = args(&on_host).join(" ");
+        assert!(args.contains(",dst=/workspace/src,ro=true"), "{args}");
+        assert!(args.contains(",dst=/workspace/src/CLAUDE.md "), "{args}");
+        assert!(args.contains(",dst=/workspace/src/ui/AGENTS.md "), "{args}");
+        for (_, scratch) in &on_host.covered {
+            let scratch = scratch.as_ref().unwrap();
+            assert_eq!(std::fs::read_to_string(scratch).unwrap(), "");
+            assert!(scratch.starts_with(project.join(".suspense/sessions")));
+        }
+        // The whole project too: mounted read only beneath the rest, its git
+        // directory and data hidden, what is written as without it.
+        std::fs::create_dir_all(project.join(".git")).unwrap();
+        std::fs::create_dir_all(project.join(".suspense/history")).unwrap();
+        let whole = Plan::new(RunKind::Spec, Agent::Claude, &project, &locations, None, Platform::Linux)
+            .reading_code(true, true, &locations);
+        assert_eq!(mounted(&whole, &project), Some(false));
+        assert_eq!(mounted(&whole, &project.join("spec")), Some(true));
+        assert!(whole.hidden.contains(&project.join(".git")));
+        assert!(whole.hidden.contains(&project.join(".suspense")));
+        assert_eq!(whole.mounts[0].host, project, "not beneath the rest");
+        let whole_args = super::tests::args(&whole.as_on_host()).join(" ");
+        assert!(whole_args.contains(",dst=/workspace,ro=true"), "{whole_args}");
+        assert!(whole_args.contains("type=tmpfs,dst=/workspace/.git,ro=true"), "{whole_args}");
+        assert!(
+            whole_args.contains("type=tmpfs,dst=/workspace/.suspense,ro=true"),
+            "{whole_args}"
+        );
+        // Without the code, nothing.
+        assert_eq!(
+            Plan::new(RunKind::Spec, Agent::Claude, &project, &locations, None, Platform::Linux)
+                .reading_code(false, true, &locations),
+            plan(false)
+        );
+        // A question's plan is never changed by it.
+        let question = Plan::new(RunKind::Question, Agent::Claude, &project, &locations, None, Platform::Linux);
+        assert_eq!(question.clone().reading_code(true, true, &locations), question);
+        std::fs::remove_dir_all(&project).ok();
     }
 
     /// A Spec run sees the spec, the reference, the fluency, the config, and

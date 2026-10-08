@@ -295,6 +295,9 @@ struct PromptTask {
     marked_done: bool,
     /// The answer picked on each card its answer asked back, by the card.
     picked: std::collections::BTreeMap<String, String>,
+    /// The send buttons pressed on the prompt cards of its answer, by the
+    /// card and the mode, each pressed once for good.
+    sent_prompts: std::collections::BTreeSet<String>,
     /// The conversation its run was in, once the harness has said.
     session: Option<SharedString>,
     /// In a git repository, the files that changed while it ran, once its
@@ -605,6 +608,7 @@ impl PromptTask {
             given: None,
             marked_done: false,
             picked: Default::default(),
+            sent_prompts: Default::default(),
             session: None,
             changed: None,
             changed_open: false,
@@ -664,6 +668,11 @@ impl PromptTask {
             .record
             .as_ref()
             .map(|record| record.picked.clone())
+            .unwrap_or_default();
+        task.sent_prompts = saved
+            .record
+            .as_ref()
+            .map(|record| record.sent_prompts.clone())
             .unwrap_or_default();
         let recorded_at = saved.recorded_at;
         let Some(record) = saved.record.filter(|record| !record.holds_only_the_mark()) else {
@@ -2078,6 +2087,8 @@ impl Drop for AskLog {
         for (card, answer) in picked {
             record.picked.entry(card).or_insert(answer);
         }
+        // And its prompts' send buttons pressed.
+        record.sent_prompts.extend(prompt_history::sent_prompts_in(&file));
         // Off the UI thread: a long run's output can be large.
         std::thread::spawn(move || prompt_history::save_record(&file, &record).ok());
     }
@@ -3381,6 +3392,9 @@ pub struct PromptMode {
     /// When each prompt card's Edit and send buttons were last pressed, by
     /// the card and the button, so each reads as done a while after.
     sent_to_prompt: HashMap<String, Instant>,
+    /// The prompt cards expanded, by their question and card, kept while the
+    /// application runs; every other card is collapsed.
+    expanded_cards: HashSet<(usize, String)>,
     /// The mode of the chat input's selected tab, whose conversations its
     /// context figure and New conversation are for.
     selected_mode: SendMode,
@@ -3569,6 +3583,7 @@ impl PromptMode {
             ask_split_share: ASK_SPLIT_SHARE,
             on_ask_tab: false,
             sent_to_prompt: HashMap::new(),
+            expanded_cards: HashSet::new(),
             selected_mode: SendMode::Both,
             ask_session: None,
             ask_session_epoch: 0,
@@ -7298,13 +7313,21 @@ impl PromptMode {
                         {
                             std::fs::write(file, "").ok();
                         }
+                        let locations = crate::project_tree::Locations::read(&project_dir);
+                        // Read as it is now, so a change takes effect from
+                        // the next run.
                         crate::container::Plan::new(
                             kind,
                             agent,
                             &project_dir,
-                            &crate::project_tree::Locations::read(&project_dir),
+                            &locations,
                             understanding_file.as_deref(),
                             crate::container::Platform::current(),
+                        )
+                        .reading_code(
+                            crate::project_settings::spec_reads_code(&project_dir),
+                            crate::project_settings::spec_reads_project(&project_dir),
+                            &locations,
                         )
                     });
                     let protected = harness::Protected {
@@ -7753,8 +7776,13 @@ impl PromptMode {
             // to save it beside.
             let saved = match prompt_file {
                 Some(file) => {
-                    cx.background_spawn(async move { prompt_history::save_record(&file, &record) })
-                        .await
+                    cx.background_spawn(async move {
+                        // Sent from its cards meanwhile, those are kept too.
+                        let mut record = record;
+                        record.sent_prompts.extend(prompt_history::sent_prompts_in(&file));
+                        prompt_history::save_record(&file, &record)
+                    })
+                    .await
                 }
                 None => Ok(()),
             };
@@ -7989,6 +8017,7 @@ impl PromptMode {
         // the Ask conversation goes to the bottom to follow it.
         self.ask_new_pending = false;
         self.ask_pane.locked = true;
+        self.ask_pane.scrolled = false;
         // The project's system prompt, filled in for what a question sees.
         let system = {
             let project_dir = project_dir.clone();
@@ -8226,6 +8255,7 @@ impl PromptMode {
             this.update(cx, |this, cx| {
                 this.in_project(&project_dir, cx, |this, cx| {
                     this.update_ask(run, PromptTask::end, cx);
+                    this.answer_finished(ask_pane::QuestionKey::Ask(run));
                 });
             })
             .ok();
@@ -15837,6 +15867,94 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// A prompt card starts collapsed to its first line; its header expands
+    /// it and collapses it again, never scrolling the pane.
+    #[gpui_kit::test]
+    async fn prompt_cards_start_collapsed(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-ask-collapse-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        frames(handle, cx);
+        prompt_mode.update(cx, |this, cx| {
+            this.on_ask_tab = true;
+            let id = this.push_ask("What next?".into(), cx);
+            answer(
+                this,
+                id,
+                "Send this:\n\n```suspense-prompt code\nAdd a Save button.\nThen\nmore\nlines\nstill\n```\n",
+                cx,
+            );
+        });
+        frames(handle, cx);
+        let text = |cx: &mut TestAppContext| bounds_of(handle, "prompt-card-text-0:1", cx).unwrap();
+        let collapsed = text(cx);
+        prompt_mode.read_with(cx, |this, _| {
+            assert!(!this.card_expanded(super::ask_pane::QuestionKey::Ask(1), "0:1"))
+        });
+        cx.update_window(handle, |_, window, cx| window.click("prompt-card-header-0:1", cx))
+            .unwrap();
+        frames(handle, cx);
+        let expanded = text(cx);
+        assert!(
+            expanded.size.height > collapsed.size.height * 3.,
+            "{collapsed:?} didn't expand: {expanded:?}"
+        );
+        assert!(prompt_mode.read_with(cx, |this, _| !this.ask_pane.locked));
+        cx.update_window(handle, |_, window, cx| window.click("prompt-card-header-0:1", cx))
+            .unwrap();
+        frames(handle, cx);
+        assert!((text(cx).size.height - collapsed.size.height).abs() < gpui_kit::px(1.));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// When an answer finishes, the pane scrolls its start to the top,
+    /// unless the user scrolled meanwhile.
+    #[gpui_kit::test]
+    async fn a_finished_answer_is_read_from_its_start(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-ask-finish-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        frames(handle, cx);
+        let long: String = (0..200).map(|n| format!("Line {n} of the answer.\n\n")).collect();
+        let id = prompt_mode.update(cx, |this, cx| {
+            this.on_ask_tab = true;
+            let id = this.start_test_question("Long?", cx);
+            this.update_ask(id, |ask| ask.apply(HarnessEvent::TextDelta(long.clone())), cx);
+            id
+        });
+        frames(handle, cx);
+        prompt_mode.update(cx, |this, cx| this.stop_test_question(id, cx));
+        frames(handle, cx);
+        let pane = bounds_of(handle, "ask-pane-scroll", cx).unwrap();
+        let start = bounds_of(handle, ("question", super::ASK_IX - id), cx);
+        // The question's box is just above, out of view; its answer's start
+        // is at the top.
+        assert!(
+            start.is_none_or(|question| question.bottom() <= pane.top() + gpui_kit::px(2.)),
+            "{start:?} {pane:?}"
+        );
+        assert!(prompt_mode.read_with(cx, |this, _| !this.ask_pane.locked));
+        // Its start, the row past the question's box, heads the pane, far
+        // from the bottom.
+        prompt_mode.read_with(cx, |this, _| {
+            let top = this.ask_pane.rows().state().logical_scroll_top();
+            assert_eq!(top.item_ix, 1, "{top:?}");
+            assert!(this.ask_pane.rows().to_bottom() > gpui_kit::px(100.));
+        });
+
+        // Scrolled meanwhile, it is left where it is.
+        prompt_mode.update(cx, |this, _| {
+            this.ask_pane.scrolled = true;
+            this.answer_finished(super::ask_pane::QuestionKey::Ask(id));
+        });
+        prompt_mode.read_with(cx, |this, _| assert!(this.ask_pane.scrolled));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     #[gpui_kit::test]
     async fn the_ask_conversation_reads_as_a_chat_marking_each_new_conversation(
         cx: &mut TestAppContext,
@@ -20013,6 +20131,7 @@ mod tests {
         cx.update_window(handle, |_, window, cx| {
             prompt_mode.update(cx, |this, cx| {
                 this.card_prompt(
+                    key,
                     "1:0".into(),
                     "Fix it.".into(),
                     Some(SendMode::Spec),
@@ -20028,36 +20147,58 @@ mod tests {
             let input = this.chat_input.read(cx);
             assert_eq!(input.value(cx).as_ref(), "Fix it.");
             assert_eq!(input.mode(), SendMode::Spec);
-            assert!(this.sent_to_prompt("1:0", super::ask_pane::CardAction::Edit));
+            assert!(this.sent_to_prompt(key, "1:0", super::ask_pane::CardAction::Edit));
         });
 
         // A send button sends it at once, in its own mode, leaving what is
         // being written in the chat input alone.
         let tasks_before = prompt_mode.read_with(cx, |this, _| this.tasks.len());
         let send = super::ask_pane::CardAction::Send(SendMode::Code);
-        cx.update_window(handle, |_, window, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                this.card_prompt(
-                    "1:0".into(),
-                    "Send it.".into(),
-                    Some(SendMode::Spec),
-                    send,
-                    window,
-                    cx,
-                )
+        let press = |cx: &mut TestAppContext, send| {
+            cx.update_window(handle, |_, window, cx| {
+                prompt_mode.update(cx, |this, cx| {
+                    this.card_prompt(
+                        key,
+                        "1:0".into(),
+                        "Send it.".into(),
+                        Some(SendMode::Spec),
+                        send,
+                        window,
+                        cx,
+                    )
+                })
             })
-        })
-        .unwrap();
-        cx.run_until_parked();
+            .unwrap();
+            cx.run_until_parked();
+        };
+        press(cx, send);
         prompt_mode.read_with(cx, |this, cx| {
             assert_eq!(this.chat_input.read(cx).value(cx).as_ref(), "Fix it.");
             let sent = this.tasks[tasks_before..]
                 .iter()
                 .any(|task| task.text.as_ref() == "Send it." && task.mode == Some(SendMode::Code));
             assert!(sent, "it wasn't sent as a Code task");
-            assert!(this.sent_to_prompt("1:0", send));
-            assert!(!this.sent_to_prompt("1:0", super::ask_pane::CardAction::Send(SendMode::Spec)));
+            assert!(this.sent_to_prompt(key, "1:0", send));
+            assert!(!this.sent_to_prompt(key, "1:0", super::ask_pane::CardAction::Send(SendMode::Spec)));
         });
+        // Sent, it stays so however long after, and is never sent again from
+        // that button; the card's others still send, once each.
+        cx.executor().advance_clock(Duration::from_secs(10));
+        let sent_count = |cx: &mut TestAppContext, mode| {
+            prompt_mode.read_with(cx, |this, _| {
+                this.tasks
+                    .iter()
+                    .filter(|task| task.text.as_ref() == "Send it." && task.mode == Some(mode))
+                    .count()
+            })
+        };
+        press(cx, send);
+        assert_eq!(sent_count(cx, SendMode::Code), 1);
+        prompt_mode.read_with(cx, |this, _| assert!(this.sent_to_prompt(key, "1:0", send)));
+        let spec = super::ask_pane::CardAction::Send(SendMode::Spec);
+        press(cx, spec);
+        press(cx, spec);
+        assert_eq!(sent_count(cx, SendMode::Spec), 1);
         crate::harness::use_program_for_test(None);
         std::fs::remove_dir_all(&dir).ok();
     }

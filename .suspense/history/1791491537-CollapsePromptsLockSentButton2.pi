@@ -1,0 +1,55 @@
+
+export anchor CollapsePromptsLockSentButton2:
+    userPrompt:
+        \\\
+        The suggested prompts in ask mode should be collapsed by default and can be expanded.  And when a question finishes, we should scroll to the start of the response.  The "Sent to X" shouldn't time out and reset.  in fact once you've clicked it, it shouldn't be clickable again.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            The suggested prompts in ask mode should be collapsed by default and can be expanded.  And when a question finishes, we should scroll to the start of the response.  The "Sent to X" shouldn't time out and reset.  in fact once you've clicked it, it shouldn't be clickable again.
+            \\\
+        result:
+            \\\
+            I made all three changes in `spec/scope/prompt-mode/ask-conversation/index.pi`. `piton check` reports no problems and `piton build` wrote 82 files.
+
+            - **Collapsed cards:** prompt cards now start collapsed to their first line, with a chevron in the header. Clicking the header or chevron expands and collapses the card, and that never scrolls the pane. Its buttons still send or copy the whole prompt.
+            - **Sent buttons:** after you click a send button, it stays "Sent to X" and is disabled for good, including after a restart, since it's kept with the question's record. The card's other send buttons still work, once each.
+            - **Scrolling:** when an answer finishes, the pane scrolls so the answer's start is at the top. It doesn't do this if you scrolled while it was answering, or if another question below it is still answering.
+
+            **Anchors the code should follow:** `AskConversationScope` `#suggested-prompts` and `#scrolling`, and `ProjectDataScope` `#contents` for saving which buttons were used in the question's record.
+            \\\
+
+    sentFrom: CollapsePromptsLockSentButton

@@ -47,7 +47,7 @@ pub(super) struct AskSplitResize;
 /// A prompt in a chat: a question saved with the project, by its place
 /// among the saved questions, or asked since, by its id; or a Freeform task,
 /// by its place among the tasks.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) enum QuestionKey {
     Answer(usize),
     Ask(usize),
@@ -204,6 +204,8 @@ struct Look {
     status: TaskStatus,
     reply: (u64, u64),
     answer: AnswerLayout,
+    /// Its prompt cards expanded.
+    expanded: Vec<String>,
 }
 
 /// What the list was last laid out for.
@@ -224,6 +226,11 @@ pub(super) struct AskPane {
     pub(super) locked: bool,
     /// The question to scroll to once the pane is next laid out.
     reveal: Cell<Option<QuestionKey>>,
+    /// The question whose answer's start to scroll to the top once the pane
+    /// is next laid out.
+    reveal_answer: Cell<Option<QuestionKey>>,
+    /// The user scrolled it since a question was last asked.
+    pub(super) scrolled: bool,
 }
 
 impl AskPane {
@@ -234,6 +241,8 @@ impl AskPane {
             // It opens scrolled to the bottom, on the newest question.
             locked: true,
             reveal: Cell::new(None),
+            reveal_answer: Cell::new(None),
+            scrolled: false,
         }
     }
 
@@ -287,8 +296,7 @@ pub(super) fn now_secs() -> u64 {
         .map_or(0, |since| since.as_secs())
 }
 
-/// How long a prompt card's button reads as done, "Edited" or "Sent to
-/// Code", after it is pressed.
+/// How long a prompt card's Edit button reads "Edited" after it is pressed.
 const SENT_TO_PROMPT_FOR: Duration = Duration::from_secs(2);
 
 /// Which of a prompt card's buttons was pressed: Edit, or a send button, by
@@ -321,12 +329,57 @@ fn mode_slug(mode: SendMode) -> &'static str {
 }
 
 impl PromptMode {
-    /// Whether the prompt card `card`'s button for `action` was pressed just
-    /// now.
-    pub(super) fn sent_to_prompt(&self, card: &str, action: CardAction) -> bool {
-        self.sent_to_prompt
-            .get(&action.key(card))
-            .is_some_and(|at| at.elapsed() < SENT_TO_PROMPT_FOR)
+    /// Whether the prompt card `card` of the question `key` had its button
+    /// for `action` pressed: Edit just now, a send button ever.
+    pub(super) fn sent_to_prompt(&self, key: QuestionKey, card: &str, action: CardAction) -> bool {
+        match action {
+            CardAction::Edit => self
+                .sent_to_prompt
+                .get(&format!("{}/{}", key.id(), action.key(card)))
+                .is_some_and(|at| at.elapsed() < SENT_TO_PROMPT_FOR),
+            CardAction::Send(_) => self
+                .question(key)
+                .is_some_and(|task| task.sent_prompts.contains(&action.key(card))),
+        }
+    }
+
+    /// Whether the prompt card `card` of the question `key` is expanded.
+    pub(super) fn card_expanded(&self, key: QuestionKey, card: &str) -> bool {
+        self.expanded_cards.contains(&(key.id(), card.to_string()))
+    }
+
+    /// Expands the prompt card `card` of the question `key`, or collapses it,
+    /// leaving the pane scrolled where it is.
+    pub(super) fn toggle_card(&mut self, key: QuestionKey, card: String, cx: &mut Context<Self>) {
+        let card = (key.id(), card);
+        if !self.expanded_cards.remove(&card) {
+            self.expanded_cards.insert(card);
+        }
+        // Held where it is rather than following the bottom.
+        self.ask_pane.locked = false;
+        self.freeform_pane.locked = false;
+        cx.notify();
+    }
+
+    /// The question `key`'s answer finished, however it ended: the pane
+    /// scrolls the answer's start to its top, unless the user scrolled it
+    /// meanwhile or a question beneath it is still answering.
+    pub(super) fn answer_finished(&mut self, key: QuestionKey) {
+        if self.ask_pane.scrolled {
+            return;
+        }
+        let keys = self.question_keys();
+        let Some(at) = keys.iter().position(|k| *k == key) else {
+            return;
+        };
+        let beneath_answering = keys[at + 1..]
+            .iter()
+            .any(|k| self.question(*k).is_some_and(|task| task.status.is_active()));
+        if beneath_answering {
+            return;
+        }
+        self.ask_pane.locked = false;
+        self.ask_pane.reveal_answer.set(Some(key));
     }
 
     /// Does what a prompt card's button `action` does with the prompt `text`
@@ -336,8 +389,10 @@ impl PromptMode {
     /// once in its own mode, as though written on that tab and sent, with
     /// the Slice toggle as it stands and nothing attached, leaving what is
     /// being written alone.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn card_prompt(
         &mut self,
+        key: QuestionKey,
         card: String,
         text: String,
         mode: Option<SendMode>,
@@ -350,18 +405,42 @@ impl PromptMode {
                 let mode = mode.unwrap_or(SendMode::Both);
                 self.chat_input
                     .update(cx, |input, cx| input.put_prompt(text, mode, window, cx));
+                self.sent_to_prompt
+                    .insert(format!("{}/{}", key.id(), action.key(&card)), Instant::now());
+                // It reads as done for a while, then as before.
+                cx.spawn(async move |this, cx| {
+                    cx.background_executor().timer(SENT_TO_PROMPT_FOR).await;
+                    this.update(cx, |_, cx| cx.notify()).ok();
+                })
+                .detach();
             }
-            CardAction::Send(mode) => {
-                self.send_attached(text, mode, Attached::default(), window, cx)
+            CardAction::Send(send) => {
+                // Sent once from each button, for good.
+                let sent = action.key(&card);
+                let Some(task) = self.question_mut(key) else {
+                    return;
+                };
+                if !task.sent_prompts.insert(sent.clone()) {
+                    return;
+                }
+                let name = task.name.to_string();
+                if let Some(project_dir) = self.project_dir.clone() {
+                    cx.background_spawn(async move {
+                        let file = match key {
+                            QuestionKey::Task(_) => prompt_history::history_file(&project_dir, &name),
+                            _ => prompt_history::ask_file(&project_dir, &name),
+                        };
+                        if let Some(file) = file
+                            && let Err(err) = prompt_history::save_sent_prompt(&file, &sent)
+                        {
+                            eprintln!("could not keep the prompt sent: {err:#}");
+                        }
+                    })
+                    .detach();
+                }
+                self.send_attached(text, send, Attached::default(), window, cx)
             }
         }
-        self.sent_to_prompt.insert(action.key(&card), Instant::now());
-        // It reads as done for a while, then as before.
-        cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(SENT_TO_PROMPT_FOR).await;
-            this.update(cx, |_, cx| cx.notify()).ok();
-        })
-        .detach();
         cx.notify();
     }
 
@@ -524,6 +603,7 @@ impl PromptMode {
             ask.stopped.store(true, Ordering::SeqCst);
             // Dropping its run stops it, and saves what came of it.
             ask._run = Task::ready(());
+            self.answer_finished(QuestionKey::Ask(id));
             cx.notify();
         }
     }
@@ -635,6 +715,16 @@ impl PromptMode {
                 status: task.status,
                 reply: task.reply.version(),
                 answer: answer.clone(),
+                expanded: {
+                    let mut expanded: Vec<String> = self
+                        .expanded_cards
+                        .iter()
+                        .filter(|(question, _)| *question == key.id())
+                        .map(|(_, card)| card.clone())
+                        .collect();
+                    expanded.sort();
+                    expanded
+                },
             };
             let items = answer.items();
             if items != old {
@@ -1060,7 +1150,7 @@ impl PromptMode {
                 AnswerPart::Prompt { mode, text, closed } => {
                     // Usable once its block has closed, or the answer is over.
                     let ready = closed || done;
-                    prompt_card(&this, &card, mode, text, ready, cx)
+                    prompt_card(&this, key, &card, mode, text, ready, cx)
                 }
                 AnswerPart::Question {
                     question,
@@ -1295,6 +1385,14 @@ impl PromptMode {
                 item_ix: layout.starts[ix],
                 offset_in_item: px(0.),
             });
+        } else if let Some(key) = pane.reveal_answer.take()
+            && let Some(ix) = keys.iter().position(|k| *k == key)
+        {
+            // Its answer's start, just past the question's box.
+            rows.state().scroll_to(ListOffset {
+                item_ix: layout.starts[ix] + 1,
+                offset_in_item: px(0.),
+            });
         } else if pane.locked {
             rows.scroll_to_end();
         }
@@ -1417,6 +1515,7 @@ impl PromptMode {
                 let pane = this.chat_pane_mut(chat);
                 if pane.locked != locked {
                     pane.locked = locked;
+                    pane.scrolled = true;
                     cx.notify();
                 }
             })
@@ -1579,6 +1678,7 @@ fn send_labels(mode: SendMode) -> (&'static str, &'static str, &'static str) {
 /// and Spec, usable once `ready`.
 fn prompt_card(
     this: &WeakEntity<PromptMode>,
+    key: QuestionKey,
     card: &str,
     mode: Option<SendMode>,
     text: String,
@@ -1593,7 +1693,7 @@ fn prompt_card(
     };
     let done = |action: CardAction, cx: &App| {
         this.upgrade()
-            .is_some_and(|this| this.read(cx).sent_to_prompt(card, action))
+            .is_some_and(|this| this.read(cx).sent_to_prompt(key, card, action))
     };
     let id = SharedString::from(format!("prompt-card-{card}"));
     let copy = {
@@ -1613,12 +1713,14 @@ fn prompt_card(
     let action_button = |id: String, action: CardAction, cx: &mut App| {
         let pressed = done(action, cx);
         let (this, card, text) = (this.clone(), card.to_string(), text.clone());
+        // A send button pressed is disabled for good.
+        let spent = pressed && matches!(action, CardAction::Send(_));
         let button = Button::new(SharedString::from(id))
             .small()
-            .disabled(!ready)
+            .disabled(!ready || spent)
             .on_click(move |_, window, cx| {
                 this.update(cx, |this, cx| {
-                    this.card_prompt(card.clone(), text.clone(), mode, action, window, cx)
+                    this.card_prompt(key, card.clone(), text.clone(), mode, action, window, cx)
                 })
                 .ok();
             });
@@ -1683,23 +1785,59 @@ fn prompt_card(
             }
         })
         .collect::<Vec<_>>();
-    let card_box = card_box(id, color, cx)
+    // Collapsed to its first line until expanded, from its header.
+    let expanded = this
+        .upgrade()
+        .is_some_and(|this| this.read(cx).card_expanded(key, card));
+    let toggle = {
+        let (this, card) = (this.clone(), card.to_string());
+        move |_: &ClickEvent, _: &mut Window, cx: &mut App| {
+            this.update(cx, |this, cx| this.toggle_card(key, card.clone(), cx))
+                .ok();
+        }
+    };
+    let header = h_flex()
+        .id(SharedString::from(format!("prompt-card-header-{card}")))
+        .w_full()
+        .gap_1p5()
+        .cursor_pointer()
+        .text_xs()
+        .font_medium()
+        .text_color(color)
+        .child(Icon::new(mode_icon(mode)).xsmall())
+        .child(div().flex_1().child(title))
         .child(
-            h_flex()
-                .gap_1p5()
-                .text_xs()
-                .font_medium()
-                .text_color(color)
-                .child(Icon::new(mode_icon(mode)).xsmall())
-                .child(title),
+            Icon::new(if expanded {
+                IconName::ChevronDown
+            } else {
+                IconName::ChevronRight
+            })
+            .xsmall(),
         )
+        .on_click(toggle);
+    let shown = if expanded {
+        div()
+            .w_full()
+            .min_w_0()
+            .whitespace_normal()
+            .child(text)
+    } else {
+        let mut lines = text.lines();
+        let first = lines.next().unwrap_or_default();
+        let first = if lines.next().is_some() {
+            format!("{first}…")
+        } else {
+            first.to_string()
+        };
+        div().w_full().min_w_0().truncate().child(first)
+    };
+    let card_box = card_box(id, color, cx)
+        .child(gpui_kit::TestSupportExt::test_support(header))
         .child(
-            div()
-                .w_full()
-                .min_w_0()
-                .text_color(cx.theme().foreground)
-                .whitespace_normal()
-                .child(text),
+            gpui_kit::TestSupportExt::test_support(
+                shown.id(SharedString::from(format!("prompt-card-text-{card}"))),
+            )
+            .text_color(cx.theme().foreground),
         )
         .child(
             h_flex()

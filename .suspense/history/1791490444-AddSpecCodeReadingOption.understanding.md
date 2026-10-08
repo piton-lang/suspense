@@ -1,0 +1,8 @@
+- [A Spec run's container never holds the code location; an empty scratch directory stands in its place](.claude/reference/scope/container-environment/index.md#spec)
+- [A question mounts code and spec read only, both kept even where one holds the other](.claude/reference/scope/container-environment/index.md#question)
+- [A spec-lane run can't see the code and fills CODE_LOCATION in with nothing](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#templates)
+- [A paragraph holding CODE_LOCATION filled with nothing is left out of the prompt](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#templates)
+- [The Spec and Chain defaults never name the code location](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#defaults)
+- [The Containers settings section says Spec runs hold only what their mode may use](.claude/reference/scope/settings-window/index.md#containers)
+- [Settings for a project are saved with the project's data](.claude/reference/scope/settings-window/index.md#saving)
+- [A project setting, off by default, mounts the code read only into Spec runs](.claude/reference/scope/container-environment/index.md#spec)

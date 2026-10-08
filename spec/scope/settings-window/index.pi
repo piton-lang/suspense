@@ -125,6 +125,19 @@ shape SettingsWindowShape:
         use, and that Code tasks always run on the host, as the
         @{ContainerEnvironmentScope} says.
 
+        Beneath it, for the open project, a checkbox reading "Let Spec tasks
+        read the code", unchecked to start with, and muted beneath it that
+        the code is mounted read only, so Spec tasks and a Chain prompt's
+        spec steps can read it but never change it. It is the project's,
+        saved with its data as soon as it is clicked, and shown only while a
+        project is open, taking effect from the next run.
+
+        Beneath it, indented and shown only while it is checked, a second
+        checkbox reading "Also let them read the whole project", unchecked to
+        start with, and muted beneath it that the whole project directory is
+        mounted read only, but for its .git and .suspense folders. It is
+        saved the same way, and unchecking the first unchecks it too.
+
         First, whether Podman can run them: "Podman" and its version, or
         "Not installed" with the link to its installation instructions for
         the platform, and on macOS and Windows, whether its machine is

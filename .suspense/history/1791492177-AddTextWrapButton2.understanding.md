@@ -1,0 +1,8 @@
+- [The header's right holds the Wrap, Save, and close buttons, 4 pixels apart, small ghost buttons 24 pixels tall, Wrap an icon button 24 pixels square](.claude/reference/scope/editor/index.md#layout)
+- [The Wrap button has a wrap-text icon and shows as selected while wrapping is on](.claude/reference/scope/editor/index.md#wrap)
+- [Its tooltip says whether long lines wrap or run past the edge, that clicking does the other, and its shortcut Alt+Z](.claude/reference/scope/editor/index.md#wrap)
+- [Wrapping is soft, at the editor's right edge, at a space where there is one, rows after the first starting at the line's indentation, with no sideways scroll](.claude/reference/scope/editor/index.md#wrap)
+- [Only the display changes: text, line numbers, LSP positions, and saving are the same either way](.claude/reference/scope/editor/index.md#wrap)
+- [Home, End, and selecting by line act on visual rows while on](.claude/reference/scope/editor/index.md#wrap)
+- [The ruler stays at the 80th column, and toggling keeps the cursor's line in view](.claude/reference/scope/editor/index.md#wrap)
+- [The choice is a user preference, off until turned on, the same for every file and project](.claude/reference/scope/user-preferences/index.md#user-preferences-scope)

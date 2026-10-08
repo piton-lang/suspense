@@ -1,0 +1,6 @@
+- [A suspense-prompt block is a prompt card headed by its mode, its text beneath, its buttons along the bottom](.claude/reference/scope/prompt-mode/ask-conversation/index.md#suggested-prompts)
+- [Each send button sends the prompt at once in its mode, as though sent from the chat input](.claude/reference/scope/prompt-mode/ask-conversation/index.md#suggested-prompts)
+- [A card's buttons are disabled while its block is still streaming in](.claude/reference/scope/prompt-mode/ask-conversation/index.md#suggested-prompts)
+- [The pane locks to the bottom while there, following each answer as it grows; scrolling up unlocks it](.claude/reference/scope/prompt-mode/ask-conversation/index.md#scrolling)
+- [Asking a question scrolls the pane to the bottom and locks it](.claude/reference/scope/prompt-mode/ask-conversation/index.md#scrolling)
+- [Cards start collapsed to one line; a clicked send button stays "Sent to X" and disabled for good](.claude/reference/scope/prompt-mode/ask-conversation/index.md#suggested-prompts)

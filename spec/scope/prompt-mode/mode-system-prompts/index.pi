@@ -75,7 +75,15 @@ shape ModeSystemPromptsShape:
         see, as the @{ContainerEnvironmentScope} says. A run of the spec
         lane, a Spec task or a Chain prompt's spec step, can't see the code
         location, and fills CODE_LOCATION in with nothing, its instructions and
-        system template alike. A question can see the code location and the
+        system template alike, unless the project lets its Spec runs read
+        the code, as the @{ContainerEnvironmentScope} says, when it fills
+        CODE_LOCATION in as a question does, and is told, on a paragraph of
+        its own, that the code there is read only, for reading what the spec
+        describes, never for changing, and, where they may read the whole
+
+        project too, that everything in the project directory is there to
+
+        read, read only. A question can see the code location and the
         spec location, both read only, and fills both in. A run of the code
         lane, a Code task, a Chain prompt's code step, or a Freeform task,
         runs on the host and fills both in, as ever.
