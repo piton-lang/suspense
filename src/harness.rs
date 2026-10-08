@@ -5,6 +5,7 @@
 //! keeps its context between prompts, and a task's run can be fed more
 //! messages while it works, where the harness allows.
 
+use crate::process::Logged as _;
 use std::io::{BufRead as _, BufReader, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -519,14 +520,14 @@ fn kill(child: &mut Child) {
             .args(["-TERM", "--", &group])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .status()
+            .status_logged()
             .ok();
     }
     #[cfg(windows)]
     {
         crate::process::command("taskkill")
             .args(["/T", "/F", "/PID", &child.id().to_string()])
-            .status()
+            .status_logged()
             .ok();
     }
     child.kill().ok();
@@ -704,7 +705,7 @@ impl Feed {
         let mut cat = reader
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
-            .spawn()
+            .spawn_logged()
             .unwrap();
         feed.lock().stdin = cat.stdin.take();
         (feed, rx)
@@ -1232,6 +1233,11 @@ fn run(
         let args: Vec<std::ffi::OsString> = command.get_args().map(ToOwned::to_owned).collect();
         command = container::podman_command();
         command.args(plan.run_args(image, agent.command(), &args, false));
+        // Its mounts and the podman command, as the debug log keeps them.
+        crate::debug_log::log(
+            Some(project_dir),
+            format!("container for {name}: {}", crate::process::describe(&command)),
+        );
     }
     command
         .current_dir(project_dir)
@@ -1242,11 +1248,12 @@ fn run(
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut command, 0);
     let mut child = command
-        .spawn()
+        .spawn_logged()
         .with_context(|| format!("could not run `{name}`"))?;
     let stdin = child.stdin.take().context("the harness has no stdin");
     let stdout = child.stdout.take().context("the harness has no stdout");
     let stderr = child.stderr.take().context("the harness has no stderr");
+    let pid = child.id();
     // Held from here on, so stopping the run ends it wherever it is.
     stop.hold(child);
     let (mut stdin, stdout, stderr) = (stdin?, stdout?, stderr?);
@@ -1379,6 +1386,7 @@ fn run(
     // Stopped, it ended as it was asked to; what it left writing to its error
     // output is not waited on.
     if stop.is_stopped() {
+        crate::process::ended(pid, Some(status), None);
         return Ok(Ended::Done);
     }
     // Nothing it started outlives it, a server it left running included.
@@ -1392,6 +1400,7 @@ fn run(
         true => stderr.join().unwrap_or_default(),
         false => String::new(),
     };
+    crate::process::ended(pid, Some(status), Some(&stderr));
     // In a container, Podman failing before the harness started is Podman's
     // failure, said plainly, never the harness's.
     if contained.is_some()
@@ -1602,12 +1611,18 @@ pub fn ask_quickly(project_dir: &Path, prompt: &str) -> Result<String> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()
+        .spawn_logged()
         .with_context(|| format!("could not run `{}`", invocation(agent)))?;
     let mut stdin = child.stdin.take().context("the harness has no stdin")?;
     let prompt = prompt.to_string();
     let writer = std::thread::spawn(move || stdin.write_all(prompt.as_bytes()));
+    let pid = child.id();
     let output = child.wait_with_output()?;
+    crate::process::ended(
+        pid,
+        Some(output.status),
+        Some(&String::from_utf8_lossy(&output.stderr)),
+    );
     writer.join().ok();
     if !output.status.success() {
         bail!("{}", String::from_utf8_lossy(&output.stderr).trim());

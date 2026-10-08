@@ -1,0 +1,5482 @@
+{
+  "userPrompt": "I feel like we should also write debug info as part of suspense so I can give an agent files to go debug",
+  "harness": "claude",
+  "systemPrompt": "We're working in a project whose spec is compiled to .claude/reference, which is where to read it. Each prompt starts with a <task-instructions> block saying what that prompt is for and what it may change. Follow the block at the top of the prompt you are answering; an earlier prompt's block no longer applies.\n\nIts code is located in ./src.\n\nIts spec's Piton source, in ./spec, is only where edits to the spec go.\n\nRead the spec from its compiled reference under .claude/reference, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with this harness's adapter.\n\nNever read the .pi source under ./spec to learn what the spec says; that is only where edits to the spec go.\n\nBefore executing anything, read the spec it touches. Links to .claude/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.",
+  "instructions": "We're only asking a question about the project. Answer it without changing anything.\n\nWhen the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.\n\nThe code is located in ./src.\n\nThe spec's Piton source is in ./spec, which `piton slice` reads. Don't change it, and don't read it directly to learn what the spec says: read the compiled reference, or what `piton slice` prints, instead.\n\nWhenever the user asks you for a prompt, or your answer suggests one for them to send, give each prompt as a fenced code block whose info string is `suspense-prompt` and the mode it is for, one of `code`, `chain`, `spec`, `ask`, or `freeform`, such as ```` ```suspense-prompt chain ````, holding only the prompt's text, ready to send, never as plain text, a quote, or any other code block, since only this form lets the user send it from your answer. Pick the mode that fits the work, `chain` when it changes both the spec and the code; the user can send it to Code, Chain, or Spec all the same. When you need the user to answer something before you can go on, write the question as a fenced code block whose info string is `suspense-question`, the question on its first lines and then, if there are answers to pick from, one per line, each starting with `- `. Use these blocks only for prompts and questions meant for the user, never for code or examples.",
+  "resumed": true,
+  "resumedFrom": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+  "output": [
+    {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "/home/hyphyphyph/piton/repl",
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "tools": [
+        "Task",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "ListAgents",
+        "Monitor",
+        "NotebookEdit",
+        "PushNotification",
+        "Read",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write"
+      ],
+      "mcp_servers": [],
+      "model": "claude-opus-5-5[1m]",
+      "permissionMode": "auto",
+      "slash_commands": [
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "output-style",
+        "context",
+        "effort",
+        "fast",
+        "focus",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "skill-doctor",
+        "goal",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "terminal_slash_commands": [
+        "doctor",
+        "color",
+        "focus",
+        "reload-plugins"
+      ],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.281",
+      "output_style": "default",
+      "agents": [
+        "claude",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
+      "skills": [
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "plugins": [
+        {
+          "name": "agents-md",
+          "path": "builtin",
+          "source": "agents-md@builtin"
+        },
+        {
+          "name": "telemetry",
+          "path": "builtin",
+          "source": "telemetry@builtin"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "msg_lifecycle_v1",
+        "mcp_read_resource_v1",
+        "mcp_tool_ui_meta_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "3bfb7b9b-a956-410d-b71a-de95dcc71a61",
+      "memory_paths": {
+        "auto": "/home/suspense/.claude/projects/-workspace/memory/"
+      },
+      "messaging_socket_path": "/tmp/cc-socks/1.sock",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "per_turn_effort_active": true,
+      "view_mode": "default"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "fd3e11ba-9dea-4cc0-ab38-cf9af36a08f1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011CfqGKcSXLipibF2yUXbJm",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 2192,
+            "cache_read_input_tokens": 73727,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 2192
+            },
+            "output_tokens": 8,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [
+            {
+              "type": "thinking_dropped",
+              "path": "messages.2.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.5.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.8.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.11.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.17.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.20.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.23.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.26.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.29.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.35.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.38.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.41.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.44.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.47.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.50.content.0",
+              "reason": "prefix_binding_mismatch"
+            }
+          ],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "9ceb236a-c283-4bdd-b6f2-c708eb6b65a7",
+      "ttft_ms": 1124
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d4def4de-09bc-4e8a-ba8f-3eda2b4f6a39"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "3dd3f8e0-ffdb-47f8-9fa8-1b353adeecbd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "CAQS4QYKEAgSGAI4AUIIdGhpbmtpbmcSDNIr/OGb8IcDv2B05RoMZuPHJm4fbwY2Rw06IjDEgacGculSYKeUEbU4BcjWFGr0xUUJQpyEfjN7qaa7A/QZhQKptxRjc40PEdHLuV0q/gWBgnpzhJKQ5NIniTUN8jy9CMLVLwkFVRdtxc++26Y/HXWkTFvjFpGFfr0niiZHy0ZV9y7vUNrEq0eiQyrDj7Eo9L/DJbo6vDrVPnyNscQCUTKVCb0O1gSranHS6jUFt5+7I9hluj27Ma8jKh7/cP4JgCljEjpdZ2lc4Y5C28tecHoteYajoS1wYJkIy++Md1kPPgAGPWhw+zJDCW/vG+8IO692p50fA0imPAQeNMGXuMYZCku3Z2/KJ2qHvLL6RBAuXRSNVOqbGa9KstenNCwOoQUjaZBUNbxy4W7qlWYrfS0tP9cnWhTIrd/phA00lTE53mT0sONUwRDyogq6ZimkcZfXGALUBlQ0tz2me9+Ssmxtrd2BfaA3OtuBjFtJ4tYOV0WzLg9xVgPxtz6BFXnyD3+X/UNMRVRqJpxIN64hUX6x8H4l9lLcGvLNHqboY3hdVYKx+ZaPwSNRXxo/qoLzQ1MAqOe6l+7RUxta04VD9OSvap/gToF8ruS8OdhIbDLkgeee6hXVXYGzFOKhYeqmkbChArZVgJj5Mz0TEN4M8hCK0XIrEEKf87FJM80Zli5tix+oC/dnolAec9DnCInBXfqjNWpWLA3+qSfGhLa39tpn+xQPWFOJaO95xd7sWBapmMxxycosM+SlejV19PM/tEl2vBmJ75YiPBVzeP/MRA04XKF9GM829q1GGP4skWlm9NV9u9Exv4rjnXowRkQJ0EBkBS3V/sWveYkt5s0hS73YhJ42mbIxAmqLPF1rfTJSPTA4Y5BVwERHUYrhzSbXykp3AsR5YqP91UqPxOvN8QuK9Gr2ITNj+o5r4SAzkAEq7PrAaUsFcCv2yoG9AAVrvkIcMsw1fFnwiK+U8Aix8yWY4rtH/3de/Gi0G0wPK0EI1vzIcc3WIC+ED83PARCs5vkT9RuCFbCCFc0yXnhWeBE9Igk+LLOMEh/wc4WPEPaCOcxBEJhTFMxwvbveNseP4lZaxnOs4exWsibBzHXS5E7CvjgvkiO1v7AlqzcIGAE="
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "133f9a6f-1296-4950-890f-bae3e6055f64"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CfqGKcSXLipibF2yUXbJm",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAQS4QYKEAgSGAI4AUIIdGhpbmtpbmcSDNIr/OGb8IcDv2B05RoMZuPHJm4fbwY2Rw06IjDEgacGculSYKeUEbU4BcjWFGr0xUUJQpyEfjN7qaa7A/QZhQKptxRjc40PEdHLuV0q/gWBgnpzhJKQ5NIniTUN8jy9CMLVLwkFVRdtxc++26Y/HXWkTFvjFpGFfr0niiZHy0ZV9y7vUNrEq0eiQyrDj7Eo9L/DJbo6vDrVPnyNscQCUTKVCb0O1gSranHS6jUFt5+7I9hluj27Ma8jKh7/cP4JgCljEjpdZ2lc4Y5C28tecHoteYajoS1wYJkIy++Md1kPPgAGPWhw+zJDCW/vG+8IO692p50fA0imPAQeNMGXuMYZCku3Z2/KJ2qHvLL6RBAuXRSNVOqbGa9KstenNCwOoQUjaZBUNbxy4W7qlWYrfS0tP9cnWhTIrd/phA00lTE53mT0sONUwRDyogq6ZimkcZfXGALUBlQ0tz2me9+Ssmxtrd2BfaA3OtuBjFtJ4tYOV0WzLg9xVgPxtz6BFXnyD3+X/UNMRVRqJpxIN64hUX6x8H4l9lLcGvLNHqboY3hdVYKx+ZaPwSNRXxo/qoLzQ1MAqOe6l+7RUxta04VD9OSvap/gToF8ruS8OdhIbDLkgeee6hXVXYGzFOKhYeqmkbChArZVgJj5Mz0TEN4M8hCK0XIrEEKf87FJM80Zli5tix+oC/dnolAec9DnCInBXfqjNWpWLA3+qSfGhLa39tpn+xQPWFOJaO95xd7sWBapmMxxycosM+SlejV19PM/tEl2vBmJ75YiPBVzeP/MRA04XKF9GM829q1GGP4skWlm9NV9u9Exv4rjnXowRkQJ0EBkBS3V/sWveYkt5s0hS73YhJ42mbIxAmqLPF1rfTJSPTA4Y5BVwERHUYrhzSbXykp3AsR5YqP91UqPxOvN8QuK9Gr2ITNj+o5r4SAzkAEq7PrAaUsFcCv2yoG9AAVrvkIcMsw1fFnwiK+U8Aix8yWY4rtH/3de/Gi0G0wPK0EI1vzIcc3WIC+ED83PARCs5vkT9RuCFbCCFc0yXnhWeBE9Igk+LLOMEh/wc4WPEPaCOcxBEJhTFMxwvbveNseP4lZaxnOs4exWsibBzHXS5E7CvjgvkiO1v7AlqzcIGAE="
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2192,
+          "cache_read_input_tokens": 73727,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 2192
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [
+          {
+            "type": "thinking_dropped",
+            "path": "messages.2.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.5.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.8.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.11.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.17.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.20.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.23.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.26.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.29.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.35.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.38.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.41.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.44.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.47.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.50.content.0",
+            "reason": "prefix_binding_mismatch"
+          }
+        ],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "26902c92-997d-4966-a278-400b4d8052f8",
+      "timestamp": "2026-10-08T18:44:52.553Z",
+      "request_id": "req_011CfqGKbzEqHL5XSYBxGxzS"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "dd7603ed-275a-440c-b97c-05f1c10a3c7e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "tool_use",
+          "id": "toolu_01P6T9atFUqC8XRu55F22rLA",
+          "name": "Bash",
+          "input": {},
+          "caller": {
+            "type": "direct"
+          }
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "eab8f0d4-418c-4218-8a88-b630e8f7df30"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ""
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "0f8f1021-76f3-46f0-a8f2-6ed64a58d3d1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "{\"command\": \"cd /worksp"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "c6dc4397-adba-442e-b807-2467e7a2bacd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ace; grep -rln"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d1601aca-8357-4cfe-9ce0-72df8031557c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " -E"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "1f429cbe-dd45-4236-8df3-1ce7f734f059"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " 'tracing::"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "cc1c7a20-e83f-4b7d-ac36-5e88ea1d644b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "|log::|env"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "efa56fda-bc1a-41ce-96ba-086deb83d8fd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "_logger|eprintln"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b62507fb-4018-423e-95fe-0ad56f001445"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "!' src --include=*."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b43aaf1e-37fd-4148-ad5d-62c5a31dca4c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "rs | head; grep -"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "fc17e249-99f4-4007-99c8-82654cb4932f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "rn -i -E "
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "04e7c0d8-cd74-4086-a8b6-ca587dc7bc53"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "'debug|diagnost"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d059ab52-5e4f-48db-bb31-7e2e8d483ffa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ic|\\\\blog file"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "c8cbb96b-285a-4bc0-8aa1-edeb59422932"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "|"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "61e0e82c-d761-4b84-acff-dc82c248d6bf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "log"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "eafc68d9-beb0-4303-8a16-dcaf753dfa5e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "s?\\\\b' .claude"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "43b7d04b-6477-4a85-ba64-88e8305760d0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/reference --include=*."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "83131003-50e3-4a78-9b77-bef47efb3604"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "md | grep -v -i"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e7234ea4-cda5-497e-8cbf-a3a69cffa729"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " 'login"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "fb1eca11-078f-4428-a6cf-928e8b2e5038"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\\\|dialog\\\\|cat"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "6708b763-63e9-48d1-bce0-ca0c53e41ffc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "alog' | cut -c"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "231ea2c1-9adf-41a9-989d-df00d4c61573"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "1-200"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b0f31d3f-c8bd-456a-bcdc-604cb07f1625"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " | head -10"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "5d2f7920-038d-4e3f-86a8-8049449c6947"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "; grep -n -i "
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "bc7d3d94-a835-43bd-aab2-c7ce4c9e529b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "'time\\\\|second"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "0cbfff4d-c4d1-4ec8-a4d7-a960c72de525"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "'"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2b6af927-701a-4a47-9dc4-5307f529feb4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " .claude/reference/sc"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "3fcad9f1-fc31-4ab8-9cb8-4546ed7b96e2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ope/project-data/index."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "dfe4df28-58d9-48be-9f2b-090c2f4a0bff"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "md | cut -c1-"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a37acf93-ebc8-47f1-8ca4-b5c28f1da719"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "200 | head -5"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e1271e7a-ffbc-45a4-a082-40750fc3bb41"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\", \"description\": \"Check existing logging"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "067c3e00-985f-4f8f-8fae-a7f7703c59f5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " in"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "fc466abd-5df8-4861-b233-5bb5c7afb01d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " code and spec"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "485eb75b-e7bc-4281-8ea6-202bcc2a511f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\"}"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "dba83897-e82f-4128-adb5-ff6d4ea8a994"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CfqGKcSXLipibF2yUXbJm",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "toolu_01P6T9atFUqC8XRu55F22rLA",
+            "name": "Bash",
+            "input": {
+              "command": "cd /home/hyphyphyph/piton/repl; grep -rln -E 'tracing::|log::|env_logger|eprintln!' src --include=*.rs | head; grep -rn -i -E 'debug|diagnostic|\\blog file|logs?\\b' .claude/reference --include=*.md | grep -v -i 'login\\|dialog\\|catalog' | cut -c1-200 | head -10; grep -n -i 'time\\|second' .claude/reference/scope/project-data/index.md | cut -c1-200 | head -5",
+              "description": "Check existing logging in code and spec"
+            },
+            "caller": {
+              "type": "direct"
+            }
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2192,
+          "cache_read_input_tokens": 73727,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 2192
+          },
+          "output_tokens": 8,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [
+          {
+            "type": "thinking_dropped",
+            "path": "messages.2.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.5.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.8.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.11.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.17.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.20.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.23.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.26.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.29.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.35.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.38.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.41.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.44.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.47.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.50.content.0",
+            "reason": "prefix_binding_mismatch"
+          }
+        ],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "aa180a8f-1f85-4509-89d1-72eb9e10fdb8",
+      "timestamp": "2026-10-08T18:44:54.121Z",
+      "request_id": "req_011CfqGKbzEqHL5XSYBxGxzS",
+      "wire_tool_inputs": {
+        "toolu_01P6T9atFUqC8XRu55F22rLA": {
+          "command": "cd /home/hyphyphyph/piton/repl; grep -rln -E 'tracing::|log::|env_logger|eprintln!' src --include=*.rs | head; grep -rn -i -E 'debug|diagnostic|\\blog file|logs?\\b' .claude/reference --include=*.md | grep -v -i 'login\\|dialog\\|catalog' | cut -c1-200 | head -10; grep -n -i 'time\\|second' .claude/reference/scope/project-data/index.md | cut -c1-200 | head -5",
+          "description": "Check existing logging in code and spec"
+        }
+      }
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "606fc41a-493c-4430-b2bc-f0019d45a389"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {
+                  "toolu_01P6T9atFUqC8XRu55F22rLA": {
+                    "type": "evaluated",
+                    "outcome": "not_flagged"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 2192,
+          "cache_read_input_tokens": 73727,
+          "output_tokens": 278,
+          "output_tokens_details": {
+            "thinking_tokens": 33
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 278,
+              "cache_read_input_tokens": 73727,
+              "cache_creation_input_tokens": 2192,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 2192
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "bd2948cb-48d1-4002-b4da-3fae03a26fc0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "842e3b4a-9025-4592-8f43-af54a9ab9d5d"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1791486600,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.28,
+            "resetsAt": 1791486600
+          },
+          "seven_day": {
+            "utilization": 0.4,
+            "resetsAt": 1791918000
+          }
+        }
+      },
+      "uuid": "cc2ee4ee-ab5f-45a9-8fe7-4c9428f2bdb0",
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419"
+    },
+    {
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "tool_use_id": "toolu_01P6T9atFUqC8XRu55F22rLA",
+            "type": "tool_result",
+            "content": "src/project_lsp.rs\nsrc/new_instruction.rs\nsrc/piton_build.rs\nsrc/file_view.rs\nsrc/container.rs\nsrc/settings_window.rs\nsrc/prompt_mode.rs\nsrc/project_tree.rs\nsrc/main_window.rs\nsrc/ownership.rs\n.claude/reference/scope/run-targets/index.md:61:success colour, \"Exited with N\" in its error colour, or \"Stopped\". Beneath it, its command, muted, in the monospace font, and then what it prints, its o\n.claude/reference/scope/run-targets/index.md:157:success colour, \"Exited with N\" in its error colour, or \"Stopped\". Beneath it, its command, muted, in the monospace font, and then what it prints, its \n.claude/reference/scope/editor/index.md:86:hover: Hovering a name shows the server's `textDocument/hover`, and nothing else is hovered: only something hovering tells more about shows a popover. A name\n.claude/reference/scope/editor/index.md:88:diagnostics: What the server publishes for the file is underlined, with the message shown on hover, and kept while the text is edited until the server publis\n.claude/reference/scope/lsp/index.md:17:One `piton lsp` is started as a child process in the selected ProjectDirectoryScope, speaking JSON-RPC over stdio, shared by the chat input and the editor, and \n.claude/reference/scope/self-update/index.md:31:The new Suspense is started only once the update is in place, and the running one then exits, its window closed and its work stopped as quitting stops i\n.claude/reference/scope/self-update/index.md:53:#### Diagnostics\n.claude/reference/scope/self-update/index.md:55:Suspense keeps a log of what updating does, `updates.log` in its own data directory, beside its preferences, as the [UserPreferencesScope](../user-prefe\n.claude/reference/scope/self-update/index.md:56:The Updates section has a \"Details\" disclosure, collapsed to start with, that shows what updating rests on: the running version, the repository it updat\n.claude/reference/scope/container-environment/index.md:47:A build that fails says why in Podman's own words: the step it failed at and everything the build printed, as written, never only that the ima\n17:- `history/`: every task sent, as its hidden anchor's source, named by the second it was sent and the anchor's name, and beside it, once its run is over, a `.json` record of the same name holding t\n19:- `images/`: every image attached to a task or question, saved when it is sent or queued, named by the second it was saved and a short hash of its content, with its own extension, so the same image\n43:A snapshot is a git tree, made with git's plumbing alone: `git add -A` and then `git write-tree`, run with `GIT_INDEX_FILE` pointing at a private index, `.suspense/snapshot-index`, so the repositor",
+            "is_error": false
+          }
+        ]
+      },
+      "parent_tool_use_id": null,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "0bd48d4b-aba1-4b36-bc00-b42bf4f9c827",
+      "timestamp": "2026-10-08T18:44:54.508Z",
+      "tool_use_result": {
+        "stdout": "src/project_lsp.rs\nsrc/new_instruction.rs\nsrc/piton_build.rs\nsrc/file_view.rs\nsrc/container.rs\nsrc/settings_window.rs\nsrc/prompt_mode.rs\nsrc/project_tree.rs\nsrc/main_window.rs\nsrc/ownership.rs\n.claude/reference/scope/run-targets/index.md:61:success colour, \"Exited with N\" in its error colour, or \"Stopped\". Beneath it, its command, muted, in the monospace font, and then what it prints, its o\n.claude/reference/scope/run-targets/index.md:157:success colour, \"Exited with N\" in its error colour, or \"Stopped\". Beneath it, its command, muted, in the monospace font, and then what it prints, its \n.claude/reference/scope/editor/index.md:86:hover: Hovering a name shows the server's `textDocument/hover`, and nothing else is hovered: only something hovering tells more about shows a popover. A name\n.claude/reference/scope/editor/index.md:88:diagnostics: What the server publishes for the file is underlined, with the message shown on hover, and kept while the text is edited until the server publis\n.claude/reference/scope/lsp/index.md:17:One `piton lsp` is started as a child process in the selected ProjectDirectoryScope, speaking JSON-RPC over stdio, shared by the chat input and the editor, and \n.claude/reference/scope/self-update/index.md:31:The new Suspense is started only once the update is in place, and the running one then exits, its window closed and its work stopped as quitting stops i\n.claude/reference/scope/self-update/index.md:53:#### Diagnostics\n.claude/reference/scope/self-update/index.md:55:Suspense keeps a log of what updating does, `updates.log` in its own data directory, beside its preferences, as the [UserPreferencesScope](../user-prefe\n.claude/reference/scope/self-update/index.md:56:The Updates section has a \"Details\" disclosure, collapsed to start with, that shows what updating rests on: the running version, the repository it updat\n.claude/reference/scope/container-environment/index.md:47:A build that fails says why in Podman's own words: the step it failed at and everything the build printed, as written, never only that the ima\n17:- `history/`: every task sent, as its hidden anchor's source, named by the second it was sent and the anchor's name, and beside it, once its run is over, a `.json` record of the same name holding t\n19:- `images/`: every image attached to a task or question, saved when it is sent or queued, named by the second it was saved and a short hash of its content, with its own extension, so the same image\n43:A snapshot is a git tree, made with git's plumbing alone: `git add -A` and then `git write-tree`, run with `GIT_INDEX_FILE` pointing at a private index, `.suspense/snapshot-index`, so the repositor",
+        "stderr": "",
+        "interrupted": false,
+        "isImage": false,
+        "noOutputExpected": false
+      }
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "6367a133-fa0c-487b-9c76-0ab1cc0b1d5f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011CfqGKsNh3sUVZam3n7csR",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 1263,
+            "cache_read_input_tokens": 75919,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1263
+            },
+            "output_tokens": 16,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [
+            {
+              "type": "thinking_dropped",
+              "path": "messages.2.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.5.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.8.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.11.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.17.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.20.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.23.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.26.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.29.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.35.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.38.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.41.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.44.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.47.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.50.content.0",
+              "reason": "prefix_binding_mismatch"
+            }
+          ],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "055aa4c6-cc53-4301-997a-fb0825a5fe80",
+      "ttft_ms": 828
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "tool_use",
+          "id": "toolu_01CPaAettJjAoPigN24P4tco",
+          "name": "Bash",
+          "input": {},
+          "caller": {
+            "type": "direct"
+          }
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "be832f1d-b45d-429a-a0d0-4d0fd55539f7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ""
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "26603557-1419-49d4-be79-b72a898d9749"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "{\"command\": \"cd /worksp"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2b66415c-aedf-4469-a570-c90d9acac598"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ace; sed -n 53"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "420449a1-a060-4d3d-8960-3ae5918c02be"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ",56p .claude/re"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d28a651f-3463-4b5a-b050-3df2dbd75b7e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ference/scope/self-update"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "81daa647-9a83-44a0-9e6e-f553db627d00"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/index.md | cut -"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "ec1596ad-309d-40fe-beb3-c3e28f59d4fc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "c1-900"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e638d856-b31f-4d1e-a068-c7230d4e59de"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\", \"description\": \"Read exist"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b8b3a462-562a-4836-be3b-0437392689ca"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ing upd"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "4cf2fa4e-a761-4139-aa46-610cabca43a2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ates.log diagnostics"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d09e7814-f742-4f18-8e0c-342af79fd955"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " spec"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7bbf97c9-c1f2-4f05-9671-ff0c1d9bfb75"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\"}"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d785332b-0711-453a-b679-56b3a6c81cd9"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CfqGKsNh3sUVZam3n7csR",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "toolu_01CPaAettJjAoPigN24P4tco",
+            "name": "Bash",
+            "input": {
+              "command": "cd /home/hyphyphyph/piton/repl; sed -n 53,56p .claude/reference/scope/self-update/index.md | cut -c1-900",
+              "description": "Read existing updates.log diagnostics spec"
+            },
+            "caller": {
+              "type": "direct"
+            }
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1263,
+          "cache_read_input_tokens": 75919,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1263
+          },
+          "output_tokens": 16,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [
+          {
+            "type": "thinking_dropped",
+            "path": "messages.2.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.5.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.8.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.11.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.17.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.20.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.23.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.26.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.29.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.35.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.38.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.41.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.44.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.47.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.50.content.0",
+            "reason": "prefix_binding_mismatch"
+          }
+        ],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "a29b5d37-8f8e-462e-932f-6a6bdaec255a",
+      "timestamp": "2026-10-08T18:44:56.084Z",
+      "request_id": "req_011CfqGKruuunvB7gEqPgsb3",
+      "wire_tool_inputs": {
+        "toolu_01CPaAettJjAoPigN24P4tco": {
+          "command": "cd /home/hyphyphyph/piton/repl; sed -n 53,56p .claude/reference/scope/self-update/index.md | cut -c1-900",
+          "description": "Read existing updates.log diagnostics spec"
+        }
+      }
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "5e2c4951-715e-4d51-b9c5-fcba6bdf2a48"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {
+                  "toolu_01CPaAettJjAoPigN24P4tco": {
+                    "type": "evaluated",
+                    "outcome": "not_flagged"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1263,
+          "cache_read_input_tokens": 75919,
+          "output_tokens": 122,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 122,
+              "cache_read_input_tokens": 75919,
+              "cache_creation_input_tokens": 1263,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 1263
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "6bab7e5c-87a0-4a53-b9fc-b46a61e945ee"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "8e280826-c58e-4dd0-a072-261ac4b577ca"
+    },
+    {
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "tool_use_id": "toolu_01CPaAettJjAoPigN24P4tco",
+            "type": "tool_result",
+            "content": "#### Diagnostics\n\nSuspense keeps a log of what updating does, `updates.log` in its own data directory, beside its preferences, as the [UserPreferencesScope](../user-preferences/index.md#user-preferences-scope) keeps them: one line per step, with the time, each check with the repository and running version it checked for, the releases it found and the one it took or why it took none, each download with its asset, size, and digest check, each staging, each putting in place with its paths and how it went, and each launch's confirmation, every failure with its whole error. It keeps the last 1,000 lines.\nThe Updates section has a \"Details\" disclosure, collapsed to start with, that shows what updating rests on: the running version, the repository it updates from, or that it has none and so is not an edge build, the running binary's path and whether its directory can be written, the last check's time and the newest release it found, and what is staged, if anything, with a \"Show log\" button that opens `updates.log` as the [OpenFileScope](../open-file/index.md#open-file-scope) opens a file, and a \"Copy\" button that puts all of it, with the log's last 50 lines, on the clipboard, for a bug report.",
+            "is_error": false
+          }
+        ]
+      },
+      "parent_tool_use_id": null,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "de378fc2-0e9a-48bc-b02b-4cb946ba86e2",
+      "timestamp": "2026-10-08T18:44:56.490Z",
+      "tool_use_result": {
+        "stdout": "#### Diagnostics\n\nSuspense keeps a log of what updating does, `updates.log` in its own data directory, beside its preferences, as the [UserPreferencesScope](../user-preferences/index.md#user-preferences-scope) keeps them: one line per step, with the time, each check with the repository and running version it checked for, the releases it found and the one it took or why it took none, each download with its asset, size, and digest check, each staging, each putting in place with its paths and how it went, and each launch's confirmation, every failure with its whole error. It keeps the last 1,000 lines.\nThe Updates section has a \"Details\" disclosure, collapsed to start with, that shows what updating rests on: the running version, the repository it updates from, or that it has none and so is not an edge build, the running binary's path and whether its directory can be written, the last check's time and the newest release it found, and what is staged, if anything, with a \"Show log\" button that opens `updates.log` as the [OpenFileScope](../open-file/index.md#open-file-scope) opens a file, and a \"Copy\" button that puts all of it, with the log's last 50 lines, on the clipboard, for a bug report.",
+        "stderr": "",
+        "interrupted": false,
+        "isImage": false,
+        "noOutputExpected": false
+      }
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "b5e5f776-43d2-48f5-8596-54ef0ea6c5aa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011CfqGL1sfxsDN1FQQrz2MH",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 525,
+            "cache_read_input_tokens": 77182,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 525
+            },
+            "output_tokens": 4,
+            "service_tier": "standard",
+            "inference_geo": "not_available"
+          },
+          "input_transformations": [
+            {
+              "type": "thinking_dropped",
+              "path": "messages.2.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.5.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.8.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.11.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.17.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.20.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.23.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.26.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.29.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.35.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.38.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.41.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.44.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.47.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.50.content.0",
+              "reason": "prefix_binding_mismatch"
+            }
+          ],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b180707e-05be-4f34-97e2-1953f266bd30",
+      "ttft_ms": 862
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "thinking",
+          "thinking": "",
+          "signature": ""
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e3e820b3-c644-47c9-bf38-d11f8accb251"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 50,
+      "estimated_tokens_delta": 50,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "df51e7f5-c597-4ccf-882b-27991225d4f4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b294d463-0bf4-4e0d-91c6-e141db7b3f7a"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 150,
+      "estimated_tokens_delta": 100,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "784d1dd4-d1f7-411c-9d68-74444d182450"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 100
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "53388f3d-42d4-4a78-a81a-2fea4d140a31"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 250,
+      "estimated_tokens_delta": 100,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "8c7cdfec-781a-494c-9054-8666ee0f0bcf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 100
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2ecd0a32-f117-45cf-ab6e-1d1bcb9c33e7"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 300,
+      "estimated_tokens_delta": 50,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "276301b4-9cf2-4d4a-acb4-c0fbf2686360"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": 50
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "999934a9-4168-43e4-8983-8a7b7a6851a6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "thinking_delta",
+          "thinking": "",
+          "estimated_tokens": null
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e7985281-8a02-4f30-bc1c-7b6aa742e843"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens",
+      "estimated_tokens": 521,
+      "estimated_tokens_delta": 221,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "055649c1-d1f4-4d3e-892c-c367c81790f3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "signature_delta",
+          "signature": "CAQSmhAKEAgSGAI4AUIIdGhpbmtpbmcSDPxZE3QVNBYECXsheBoMQl5QK0Y9Ce6BZaYOIjAdz0rg+Eak/fCdE27xDNN4/AycfSuNRf3rqSwY1N76ZEiqAe5x6k4iuKuL28YCcIMqtw96E7iAakt/OA5XLZc8gEXKPR/1pAiurmN0jTlH9dl6y1ixL18eJEuWCviSGR1EMQrztj7uaGPegNA8uWEJatXjl2y7EOmEmjbNGt1qOG4IqMA0xsW7jrq8wVZK3CvcDd8vd6ZR8O9Jr9RyNaB6RQgz7BntQoe+9Pbk6kc7w00bwPJwTRJ2x6eUzwqq/QS0yWv1UU6WNkTNYlKW3gGG/44S1Cvkq9RATdY7kCrCnoiVHg0e8MdGqJjDoWIb7dxT4MKtNX+yQDrEW+GA6ymsNfliRXV3bXrHDLgnrq6mH3Un68pqtZe14PRSnDbMdHXmHQb6bHXJ5KztcoCLy3qbYHKzcshiKpbE79xLFeZpFy/p2WujyA78N3ExmDU/vzSkfbv4FQb0cGn6qhdkpfZ0d6SiG7BS/TtQoFBY/E8s6HRSLVX2MWDZvvsOisxf6TKnyiRkChBkjEIXJLRMmdoZsfRFzSE8gkCO1hkboLufh6RajllHwQzdbWa89N/iKu0giSmdmrvJmoXQw07cpnG6pEKGJvpnfQvY4F2dW484k37vzs8xxnOsBUqkWpVNVzr7aP66Yh9oKBF6hhwisxDw35UF70tXBL0LkaFO3jam6XQO4BY8A1xmZjuliOAbnQzkiZC5grPKWTE6neQj5VDnP3JqIN6tkz8B4NDbEnu82sP6zOX+xH0pAJRHUNUe/7oc9uG6Pv7PpAMyxTEM+mTiXCdCPaUiVv/kOOU3TgBmaU4cJ/x8cgMYhwaploxzWtvEq4HsKVEP0nX6iOO/Yu6xJ/LjRWghfj/jO6VkwItjF2zIykfzSXXcpopB0YMsHiJF5BGM7FMBaiHAlafDk53tTIm6QJn+IqH593/JZ5zDFvaCnJvdgEJVvMbnbJZfpk3KmoX/DdrSIlqXRQuLf3xRHSXD3GBFXp+3JSfUzKVULrv5kCw6+I0k0GQXn7VQ2HPnHlmbUVrRI1keavZUJF/vbhQDfYRFHWK9fqYxsRjhipalqBAPbEY0/NU9Y610LtZFQm0bw6MD3tMupeaQDb+7DDmLojArJsJmFwfBwfXqnzic3ji33uae6YODZK3UTMFd029xWtngrpzNtCE4C6uyvpr58VT1ysJW3sY6aGGWpCTD2bxq/EwLw+LnUmtw8Bx1pdHRIcYon9Yqk1BynoKMZH2mwt2TpyDJtkx/klDZu7bN2SwFDs2vYmKKQDP5geyp9x2VZXxnXuJ1NIiiZDB6Ky00lDKNypQMWfuaA61IZHmRP4am2Q9g1qZawjdXQIm1UQoK9tWvp63ZH/9bP8c9d8ih8z0/QJtKBvkMEtUpja9J7e5bNYMdl07JaGNTmEPzhIZij8qirco7ybh09ypPWVRRWN3b2JgqHZ1r/WjeVQlDUwzId/gggkb3np04K19sg+GF8PkqkgIOnQJHhYSoUCWGFhuEqqdRyBP1e4nyNJ8Vb+h/xXA6eGhz8vox0a0clmoIbHafdI+CLjpn69yQSUxe6Sk5SQpl+WneJrpxG3xkkTPnGVBc2eC2DMCs7/DK5aivzV7DCauKTtQ2ZPVBaEN7KhNRokRNU8H2zQGkBBo1pUEcEx8OlXc9VO/DAbpaVtl0epcUA7eI+jYA7Cf7uFjTFZzkjwycd/qa7uimlpdamxA6a0ERV7BD7NPkwFdpFMlsN9YcE5uZvbOalJxSylhCSgVJmUsOscKuJDiUHxv0zwsdETp7q2IvI09sugwzjpu5iYjKSzvU+yTQDACKKHLSKDzNwbo8JzvSgJZ/+O8C2aETdYhk90plj7OvMO+93Xnr/Cq40B4CUcr3dlw8/fkSSM8TptYOZqJWhYIP4ez1SKSkdKlGNpyraSDnd4HQHPITC3Cbsvv4/a8vE6sSePd0/bV9wDQn0hW/kxsfUodHeEkSDn+JhYdyEMeUTkB83rW6lx5GJXIzzUGNlnkaqxefQ4RiXwOaIUhefAKbosmvADeuUseKvOXVzDdQwvwJepaBMk+g6QISvz5VvwgIAdswTtsAAwqL5l3WgOy7RgJkdI7aBxYxrIy6SObDHLGET8y7o5HGUzT8taD2trTL8fzCo3O+WYSEwF14xtA7t5YosfyApBsMsA8Mdny6bZcEcJ/hVkM75HkDm+tcqHoSknFVP4v7BwLd6hjcVFijv9IA5pgIBHcH0rTTjeO244Pfn0VK9WvZYaaztMNBD0C1cQTx3MZBSBfD/wluiK2jyg9ZaWOtrqNGYOs2WxmOgcehI/Y16xOQIC1UqyOQ2lhhcQl/Gp6drwIiwFq0TQl5WF5IrBbPCkV8MEH1OUxPRELHHcupBfBsXetJIJVwunC2yLn41E0z0GZrnwEfzrmc8flkXCZ0WaNViIfmytEoH3fdI1K4YrJ8pcUCz/y+NBkyJwHB+gXGZCfA6sW1yLumT/Vby4gJ7t6tIWlAXleYrAsd/hvuNYLqtff/ke7W6f1WvbDADH4upWsIEv9nlEDi+O3SxK6vDHzB5CPBoDRxZGbQJHj9oJxoiTyrJjzgEfWYgcM4zEx5czmaThp+xegnGnNoelyWvVxWJfTcGS43YbEsXIaWLmvUZDMfENleZCJ16vyhVeuI/h+d7IFS9vYu13s9DsR+TU9hLT35GK2ThnF+tBKF1mxqVeF3GAE="
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7d17d3d8-a02a-4298-bfca-6c83d43fd3f8"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CfqGL1sfxsDN1FQQrz2MH",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "",
+            "signature": "CAQSmhAKEAgSGAI4AUIIdGhpbmtpbmcSDPxZE3QVNBYECXsheBoMQl5QK0Y9Ce6BZaYOIjAdz0rg+Eak/fCdE27xDNN4/AycfSuNRf3rqSwY1N76ZEiqAe5x6k4iuKuL28YCcIMqtw96E7iAakt/OA5XLZc8gEXKPR/1pAiurmN0jTlH9dl6y1ixL18eJEuWCviSGR1EMQrztj7uaGPegNA8uWEJatXjl2y7EOmEmjbNGt1qOG4IqMA0xsW7jrq8wVZK3CvcDd8vd6ZR8O9Jr9RyNaB6RQgz7BntQoe+9Pbk6kc7w00bwPJwTRJ2x6eUzwqq/QS0yWv1UU6WNkTNYlKW3gGG/44S1Cvkq9RATdY7kCrCnoiVHg0e8MdGqJjDoWIb7dxT4MKtNX+yQDrEW+GA6ymsNfliRXV3bXrHDLgnrq6mH3Un68pqtZe14PRSnDbMdHXmHQb6bHXJ5KztcoCLy3qbYHKzcshiKpbE79xLFeZpFy/p2WujyA78N3ExmDU/vzSkfbv4FQb0cGn6qhdkpfZ0d6SiG7BS/TtQoFBY/E8s6HRSLVX2MWDZvvsOisxf6TKnyiRkChBkjEIXJLRMmdoZsfRFzSE8gkCO1hkboLufh6RajllHwQzdbWa89N/iKu0giSmdmrvJmoXQw07cpnG6pEKGJvpnfQvY4F2dW484k37vzs8xxnOsBUqkWpVNVzr7aP66Yh9oKBF6hhwisxDw35UF70tXBL0LkaFO3jam6XQO4BY8A1xmZjuliOAbnQzkiZC5grPKWTE6neQj5VDnP3JqIN6tkz8B4NDbEnu82sP6zOX+xH0pAJRHUNUe/7oc9uG6Pv7PpAMyxTEM+mTiXCdCPaUiVv/kOOU3TgBmaU4cJ/x8cgMYhwaploxzWtvEq4HsKVEP0nX6iOO/Yu6xJ/LjRWghfj/jO6VkwItjF2zIykfzSXXcpopB0YMsHiJF5BGM7FMBaiHAlafDk53tTIm6QJn+IqH593/JZ5zDFvaCnJvdgEJVvMbnbJZfpk3KmoX/DdrSIlqXRQuLf3xRHSXD3GBFXp+3JSfUzKVULrv5kCw6+I0k0GQXn7VQ2HPnHlmbUVrRI1keavZUJF/vbhQDfYRFHWK9fqYxsRjhipalqBAPbEY0/NU9Y610LtZFQm0bw6MD3tMupeaQDb+7DDmLojArJsJmFwfBwfXqnzic3ji33uae6YODZK3UTMFd029xWtngrpzNtCE4C6uyvpr58VT1ysJW3sY6aGGWpCTD2bxq/EwLw+LnUmtw8Bx1pdHRIcYon9Yqk1BynoKMZH2mwt2TpyDJtkx/klDZu7bN2SwFDs2vYmKKQDP5geyp9x2VZXxnXuJ1NIiiZDB6Ky00lDKNypQMWfuaA61IZHmRP4am2Q9g1qZawjdXQIm1UQoK9tWvp63ZH/9bP8c9d8ih8z0/QJtKBvkMEtUpja9J7e5bNYMdl07JaGNTmEPzhIZij8qirco7ybh09ypPWVRRWN3b2JgqHZ1r/WjeVQlDUwzId/gggkb3np04K19sg+GF8PkqkgIOnQJHhYSoUCWGFhuEqqdRyBP1e4nyNJ8Vb+h/xXA6eGhz8vox0a0clmoIbHafdI+CLjpn69yQSUxe6Sk5SQpl+WneJrpxG3xkkTPnGVBc2eC2DMCs7/DK5aivzV7DCauKTtQ2ZPVBaEN7KhNRokRNU8H2zQGkBBo1pUEcEx8OlXc9VO/DAbpaVtl0epcUA7eI+jYA7Cf7uFjTFZzkjwycd/qa7uimlpdamxA6a0ERV7BD7NPkwFdpFMlsN9YcE5uZvbOalJxSylhCSgVJmUsOscKuJDiUHxv0zwsdETp7q2IvI09sugwzjpu5iYjKSzvU+yTQDACKKHLSKDzNwbo8JzvSgJZ/+O8C2aETdYhk90plj7OvMO+93Xnr/Cq40B4CUcr3dlw8/fkSSM8TptYOZqJWhYIP4ez1SKSkdKlGNpyraSDnd4HQHPITC3Cbsvv4/a8vE6sSePd0/bV9wDQn0hW/kxsfUodHeEkSDn+JhYdyEMeUTkB83rW6lx5GJXIzzUGNlnkaqxefQ4RiXwOaIUhefAKbosmvADeuUseKvOXVzDdQwvwJepaBMk+g6QISvz5VvwgIAdswTtsAAwqL5l3WgOy7RgJkdI7aBxYxrIy6SObDHLGET8y7o5HGUzT8taD2trTL8fzCo3O+WYSEwF14xtA7t5YosfyApBsMsA8Mdny6bZcEcJ/hVkM75HkDm+tcqHoSknFVP4v7BwLd6hjcVFijv9IA5pgIBHcH0rTTjeO244Pfn0VK9WvZYaaztMNBD0C1cQTx3MZBSBfD/wluiK2jyg9ZaWOtrqNGYOs2WxmOgcehI/Y16xOQIC1UqyOQ2lhhcQl/Gp6drwIiwFq0TQl5WF5IrBbPCkV8MEH1OUxPRELHHcupBfBsXetJIJVwunC2yLn41E0z0GZrnwEfzrmc8flkXCZ0WaNViIfmytEoH3fdI1K4YrJ8pcUCz/y+NBkyJwHB+gXGZCfA6sW1yLumT/Vby4gJ7t6tIWlAXleYrAsd/hvuNYLqtff/ke7W6f1WvbDADH4upWsIEv9nlEDi+O3SxK6vDHzB5CPBoDRxZGbQJHj9oJxoiTyrJjzgEfWYgcM4zEx5czmaThp+xegnGnNoelyWvVxWJfTcGS43YbEsXIaWLmvUZDMfENleZCJ16vyhVeuI/h+d7IFS9vYu13s9DsR+TU9hLT35GK2ThnF+tBKF1mxqVeF3GAE="
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 525,
+          "cache_read_input_tokens": 77182,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 525
+          },
+          "output_tokens": 4,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [
+          {
+            "type": "thinking_dropped",
+            "path": "messages.2.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.5.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.8.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.11.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.17.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.20.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.23.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.26.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.29.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.35.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.38.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.41.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.44.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.47.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.50.content.0",
+            "reason": "prefix_binding_mismatch"
+          }
+        ],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "57e59f1e-4fc8-4beb-9f91-226f07311f79",
+      "timestamp": "2026-10-08T18:45:09.270Z",
+      "request_id": "req_011CfqGL1SdT2rzPdKomQXJG"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a583b672-063c-4f14-9a16-700ba33eb48d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 1,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "522aeedd-4094-4036-9b4b-b56ce226307b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "That"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "1ea45b24-c22d-4ab8-a292-02329f685d15"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'s a good idea, and the"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7f784b86-a9ea-4d58-ad5d-505855afd94a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " spec already has a model"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e36ac0ce-6c97-4799-b39e-590566713db9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " for it. S"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "5bccd548-0078-4312-b10a-323a8e1cb171"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "elfUpdateScope"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e70bc4b7-992e-4322-8c3e-31920c84c5cb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " ›"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "76ca1f01-130e-4c93-9921-1052d8521a2c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Diagnostics kee"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "55deb505-2cd3-40ab-abcc-8e2e98183a29"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ps `updates.log` in"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a88d747f-ffe7-4d97-b910-e79f9044b88b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Suspense's data directory:"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "1f5ce941-1006-4e91-a810-6e9bc713f61f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " one tim"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "87481e65-0036-46be-bffb-a9a7657a839a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "estamped line per step, every"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e3fc3749-eec2-4ee3-bf4f-0fb54257575f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " failure with its whole error,"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "76a3bbcd-b230-44d9-939f-d2a0a7b77a9e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " capped at 1,000 "
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "f08acd25-9fac-4da9-bc0b-b4a098fde024"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "lines, with"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "3fe8cdc3-2252-4abd-8159-ed9bb11fdbb5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " \""
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "af7c76b0-97a6-4155-8ec9-73678e38bc6f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Show log\" and \"Cop"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "643d5423-705e-4840-9852-631b2db5bb23"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "y\" buttons. N"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "f7c9d8a7-0907-4c91-a13e-f115336c1509"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "othing like"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7e429089-d67e-421d-aa87-ffb73b959bff"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " that exists for the rest of"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "cacb91da-3280-41fd-8ef0-5bb6f2c43d2e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the app.\n\nWhat there"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "cfafff1a-3548-440b-ba75-a5f55fd9062a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is today:\n- **"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "3beaca2d-1e8d-4878-bb7c-1a5ac948dcea"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Task and question history records."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "057191cd-b354-41d9-9673-6d19db0bb538"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "** They ke"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b19ff7ca-9417-4a8d-a290-b65c3ce60d63"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ep the"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "3c23d0f5-6ddc-4580-b5b5-e5b331284bb7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " harness's output, but"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "8fa22740-fd4c-4a98-a59c-1ed519845286"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " without timing for"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7baeb6e1-8d93-4ac7-9dd6-927b8bb66dcc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " each"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "361930de-8f81-41d4-b9c4-82a34b2abd2e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " step.\n- **`epr"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "779bdb65-2bfe-4d93-8454-ed0a639925e1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "intln!` calls.**"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "dcd2996e-20a5-4358-a007-edf4625ca094"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " They're scattered across about"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "8a2b7bd4-8be0-4f1d-b4ed-f65f0e57bcdf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " "
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "3281ec87-149c-438d-8be7-97f516e81f1c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ten modules."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "6c896a1e-360f-4a46-8a71-19fd9b76345e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " In a"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "113dd640-aa4a-4990-add3-8368210dc0bd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Windows release build they"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "da3ea088-5102-434b-bd7d-0a61fa8efeed"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " go nowhere, because there"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "148e288c-3079-4f9f-8f2a-d135ba08cd97"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'s no console.\n- **No"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "0c1740d4-e920-4c07-8f48-d5a114015a37"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " panic log"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7e02baae-3d92-4409-9f10-25853e595ba0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".** A crash le"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e98599c1-f324-4611-b86c-3a7c673d7e4d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "aves no trace.\n\n**"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "641cfbb5-748a-4fbd-9122-aca473da5c96"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "What I"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "49053ed0-ef83-46cc-a1d0-c4ad19ee1729"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'d log**"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "532ef612-67fb-4831-a403-b388e95b9387"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n- **Every"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "0f34d324-65fb-45e9-be51-c2d0960b285b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " child process:"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "1a18549e-3025-4e35-ad05-decc83d80121"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "** the command, its"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "50e7c7d8-5909-4a85-89b2-6416a6217659"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " working folder, how"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b03cd005-d896-47c9-83eb-336c8958fdc8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " long it took, its"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a93a1307-5c37-49a3-97ee-500d6845f7c9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " exit status, and its"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "6e50d8f8-99e0-4c38-8c7f-081ca80bb4b7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " stderr when it fails."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "0e165bfd-516c-40a8-ad5f-20377ce1c574"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Child"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "4155de27-c6a6-4086-9bbf-4f18b0b015d2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " processes all"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "18b8c168-b1a3-49d5-8c54-68d1885f7071"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " go through `"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "9c244414-3ef2-4679-8847-698cdd42e7fd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "crate::process::command` now"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2f1c78ac-9e6c-4eed-98ee-7b08a09d1837"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", so this can"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "97fbfb8a-179c-4beb-ad9d-67c68431658e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " be added in one place.\n-"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "66140d01-a05b-4e4a-aaaa-53d2ddb29832"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " **Each task's phases,"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "ca03dc6c-8571-4031-a8b3-800ab66d0563"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " with timestamps:** que"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "41309732-abba-426c-882c-d0811c1a4ded"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ued, sp"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a377c670-f1f9-488e-856f-0892eae492fd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ec build, sn"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "53a8f7c1-75d5-436e-8f36-d75dcb254bac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "apshot, preparing the"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a194556b-9d7c-41c2-9eb8-f83832acc8cb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " container"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "6f21afda-c759-47b7-a914-38585d3cf8ab"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", har"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "ad2838fb-9dd1-4398-bf34-0441f5de9dce"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ness started"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "4bb58f91-f7e4-4617-ac7e-0da6decbe8bb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", first event, each tool call"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "78ae3f37-aee8-466a-8449-062bf045d694"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", result, and the"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "3fda53fa-4254-4f6e-9d90-b06fe223908f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " after-snapshot. This"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e884d94a-72c4-4637-803a-99050c1fec05"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " would answ"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "76070583-daf4-40ee-9f9e-8b99c0e6fe8e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "er \"why is my"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a7646034-c971-4102-afbe-7527294394dd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " prompt slow\" with"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "578fade6-860f-49b8-b86c-624f06d4bf72"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " numbers inst"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "96f55cc8-36ed-44d9-8f00-7ba4b523d307"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ead of gues"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e0460c02-b11a-4f84-8831-9575a13e9be5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ses."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "5fdfd0db-ef40-497c-9352-a1a82fa8a73b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " The same timings bel"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "74937b08-2add-4008-8b22-e9f05b704842"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ong in the task's history record."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "85ecfdb0-ef5f-4bf4-94c1-41f51f892542"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n- **Container runs:"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "4cce80bf-a7ea-4361-a6f6-6ed5915db144"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "** the mounts and the full"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "39c2efb4-5f43-40f2-83f7-c417cb00a46a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " `"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "966170da-a089-4f62-99a3-57ca95f0ca36"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "podman`"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "688f656d-a2b9-46f5-abef-c623cbe34ac3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " command line"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a5ae8e1a-c198-41a7-a9dc-e65fe548927f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n- **Background"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "40d76716-c4fd-4fcf-9e1f-f8edd8418713"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " work:** git status refresh"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e421d7fb-4f6a-480e-9e1d-b713a0625b5b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "es,"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "43942ef3-0238-4c53-955b-9a709f092cbf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " spec builds and"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "1bf43f22-6943-4b55-a3d1-cc782a659f28"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " L"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "9db457c2-4579-4e2d-a4b1-9d1351c33dc6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "SP rest"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "bceb9d71-8ec8-4fa5-8cc3-71a13733f105"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "arts, with"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "9e0c5f72-e608-4642-a623-72184a5a4473"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " how"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "926ecd31-5419-4f77-bded-a8623370eabf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " long each took,"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "74842c7e-39a2-4d3e-a3f1-c4983e8fc9d5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and a"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "9dbdc77d-ae88-4d3b-8a1f-fb386d5019f6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " warning when the UI thread"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "76ccaed5-9d57-44c6-bec0-ecc8f6901157"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " st"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "91b11104-203d-49ec-9366-b44c898da766"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "alls.\n- **Pan"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "91fc31f3-4256-4523-8aa8-170b30bdfe22"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ics:** with a"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "dbb72ffe-9f6e-478f-af14-34800a5ef5a6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " backtrace, written"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "fdfa8a86-920c-4f0f-8b06-fb8e705653ac"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " before the app d"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "07164848-3cce-435d-aa78-e502bede1775"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ies."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "9ed16cd2-4519-44e2-b0e2-4fbe8c9addce"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n- **Not logged:**"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "1e0480cd-80a2-4899-b452-b55cb29cf828"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " environment variables or"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "640b0b63-9d19-4441-ae6e-e7b941049298"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " tokens."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e0a49975-9bc5-4723-bf95-8c7a7a68ee82"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Prompt text bel"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2acba088-5c13-468d-860d-c76cebd4faed"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ongs in the history,"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b0e9096e-9109-44dc-b78f-185d57d48fbb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " not the"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7c68197d-16cc-43a9-a930-969a8f914996"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " log.\n\nTo"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "da5c661e-bac7-4de0-a526-d97d65a99830"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " hand it"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "00880991-29f4-4dd5-8a87-d9bcc5ac0bb4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " to an agent, add"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "db2e663d-fb88-4466-89ec-e2c5269d8e7d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a command that writes a single"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d69c9642-7fd0-4e89-9d35-3e69a25bb80a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " folder:"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "319a2559-ba18-469f-95d0-a0ed5447dcd3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the rec"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7b4cbe09-cf70-4ca7-92e2-046f066283c9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ent log"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a92e85d4-e327-4f74-9332-31eee7bd14aa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", `"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "350709d8-0c80-45f9-8a02-3c693f9bb2bc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "upd"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "f57f3312-a36b-422a-a1e6-ef790d875769"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ates.log`, the app's"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "cc17967d-e625-4771-abd3-dcac57ba6dbd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " version and platform, the"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "edec0fd9-8c33-41d8-9729-397c2cf28c33"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " harness report, and"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "f79b610d-e834-4d12-b001-668bcce7c60c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the history"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "eb35c765-b14a-4452-9625-7d3bf1af5506"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " records of the last"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b5038168-e8fd-4197-8e0d-55459e75198e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " few tasks. You"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "5d1a920d-660e-4f0f-9756-7fa4ba9a8b44"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "'"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "74ea6545-89fe-433c-b359-1ed37a06afce"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "d point the deb"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "5ec4433c-7890-4ebf-bd0f-e793a7107e02"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ugging agent at that folder"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "ff9d55b7-9f8f-434b-b0bd-8db20972ed67"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ".\n\n```suspense-pr"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "1159931a-5d67-4846-95e7-6f974d1d03f1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ompt chain\nSusp"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d360c91c-5a27-42ee-ace9-19c305e193c5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ense keeps a debug log"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "791a0822-cfd5-4e77-93ba-fd07e213dc36"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " of what it does, so that a"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e61a33ff-45bb-4da1-ae2d-d1f5b26320ee"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " problem can be hand"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "83f9980c-be49-4c4a-97e2-ce4b436f7b3f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ed to an agent as"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "f64fc537-512d-458f-855a-7cc5fc80a430"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " files"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "8bb69b83-038c-4a21-8add-368186600dde"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " to"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d10db4cd-9432-419e-8c39-a3c874a60b70"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " invest"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "038a0798-cc5d-4710-b02d-f0f3935622c4"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "igate."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "ac792606-1ffb-4410-ac50-d0e108baba57"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " It is `su"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "694920b7-87ab-4182-80b7-432fca7393e0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "spense.log` in"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "25fdb91f-5bd8-459b-a0c3-8910ab692288"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Suspense's own data directory"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a87f5c8a-c696-4f34-8a3c-415276cfed56"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", beside `"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "6c2ceca2-1c65-49f3-87fe-d0c89d6a43b1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "updates.log`, as the"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "eb000dce-546a-4137-b1f4-0c7d7f575ee7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " SelfUpdateSc"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "5a5a8bbe-a988-46b5-a8a5-0838605b4a5c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ope keeps that"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "747a153f-1ca0-4040-adca-95ed84ae1613"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " one, one line per event, each"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d4fcaf35-76db-4a20-af35-a61d4f46e1a7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " with the time to"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "801763f0-7788-451e-bdca-4cd5d865c082"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the millisecond, the project"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "673f1714-4ebb-4d8c-834f-87c443f8d8ba"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " it conc"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "71fa6357-bd51-4bae-8cff-c0109ee13f12"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "erns, and what"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "131692c7-d003-4c2a-90c9-0642a9eb3e18"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " happ"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "aaf4f5f0-ec96-4a9b-a2f7-0c39ed48dd16"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ened, ke"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "fe00338d-4040-40fe-927f-05f3b69b4177"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "eping the last 20"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a15e5bf5-c822-4aba-9fe0-6dd25d7deb49"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ",000 lines across"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "4745c70b-14dc-4138-b96c-5acc2132d546"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " s"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "af1f6a5c-a14d-4ec5-b530-b800f9f173fb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "essions.\n\nIt"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "16429932-75f7-46a4-9eea-7226d89613cc"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " logs every"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "98c6f803-c1ef-41bd-97ae-eaea2806ef06"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " child process the application starts, its"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e764a5a9-a540-46d4-8265-965545d8a6f6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " command, working direct"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b7271790-856c-4bdf-9a73-b94b79415482"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ory, how"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a0205b2f-ed8f-4e65-a4e6-d0638ba8c228"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " long it took, and"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "34c6a27c-337f-40b8-a787-dcc11a8f53e9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " its"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "31ef185a-c7d1-467f-909a-cb8b7bf820ef"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " exit status, with"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "9a8f8406-2494-4dce-bcfb-0d62e9f99e76"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " its standard error when it fail"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e72d69ec-b353-4182-997c-965ac06e9e4f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ed; each"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "6b3e238b-2745-4a15-8b6a-c4aa709d0fbf"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " task's and"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d7b6b350-c838-4172-b81b-bab79343157e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " question's phases as"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a23a186e-9e7d-4f1e-b487-93ee4159d812"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " they happ"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "77cdb836-b701-4363-9bc9-158aa610354d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "en, queued, spec build"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "c8e96111-59fa-4d7b-a0fc-1e7bba9d7bf0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", sn"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "46983460-39d5-471b-a791-ddb95f21658b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "apshot, preparing the"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e7ab9a35-e01e-45d3-9dfd-67860c939986"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " container with"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "6cc90443-de41-42dd-95fe-f8d5192b004f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " its mounts and the pod"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "81ed1fa5-4fd2-48b3-b02e-deba1d3b2d91"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "man command, harness started, its"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "4a9d6d9e-f24a-4cbd-a0c1-994a6cccea11"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " first event"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d1a9878b-eb6e-43e1-8762-a8a7ea7a314e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", each tool call, its"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "457d9e01-d3e5-4020-9230-f0b4bd93a523"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " result, and the clos"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "f308c54d-70e1-42a1-9123-4d6397b85ebd"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ing snapshot, each"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d980a998-b6ee-4e6c-b7fb-6c08a07cf80e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " with how long it took; each git"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2e1d3884-9068-4ef6-a271-3a45c2daeb4b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " status refresh, spec build"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b8407323-073c-4705-a842-39a301b4c9a7"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", and language server start"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2152d2b6-2511-44e1-92b3-dbb9dc02cae9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " or"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2e7c6d7a-dff2-4907-85c4-aa5824600db3"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " restart,"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "578cebba-cc16-4d3b-89da-8f9569ff1faa"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " with how long it took; any time"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "5c3c181f-96c8-4b9f-b592-c0dc89558066"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the window"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "56230071-4dee-44fb-a258-53653d109f68"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " was un"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d004af9d-351e-4875-8a8e-a02700af2e00"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "responsive for more than "
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "b1778a81-7200-4bc1-a9b5-05304b55e3eb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "200 milliseconds;"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "af9cd22c-4d9f-4333-950b-2fb4f8963308"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " and every"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "ef7310cc-ff98-480b-b965-f04177577a71"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " panic, with its"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "bf438774-be0b-46ae-8c4c-625105b8e523"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " backtrace, written before the"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7c5561ea-0dc1-4b9f-a8a9-ca14681f4f4f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " application exits. It never logs"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "277c417d-1744-4612-9388-af8c0d410c69"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " environment variables, cred"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "8e50b26a-81a1-4140-a095-e0bef398ffb1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "entials, or"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7dff74f1-eec1-4f46-bcb7-cca842dba0f0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " prompt text. A task's"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e139b76b-af7c-4ecd-9096-34012fbd4dc8"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " history record also keeps the times"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2d16813e-d2c4-46c7-a4cb-2f6110922f0f"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " of its phases."
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "08c60a36-481f-452f-9653-e84c06a4df42"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\nThe command"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "022a6938-1800-4b3d-a7c8-955859c923ba"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " palette has"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "c2d76f8d-9d19-46ec-8fd9-9dc5d46ea2a2"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " a \"Coll"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "35dd6c33-ab94-4a33-b8e1-eb9a8994f50d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ect debug info\" command that writ"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "db811795-fb21-432b-a6da-a7d75e9fb10d"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "es a"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "253f2597-dd2b-4148-96dc-bbadfc919a84"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " folder, named"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "77622faf-acdb-47a2-9bc4-0b3219220d63"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " for"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d8314c81-c7e6-4015-84eb-90e552d4ed95"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " the time,"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "490d1c67-3141-4709-a144-11d3c7af02c1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " in"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "770cc9be-8dd3-41ff-823b-c0f7f4b23ade"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " Suspense's data directory and"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "0d64f292-5094-4a53-87ce-acdbd65ad244"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " shows it in the file manager"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "cc923bbe-2810-4ddc-ba9b-219be8b3e5e9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ": the deb"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "18a0819b-e521-4aad-b6fe-cf54c77775a5"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ug log, `updates.log"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "776b27ac-56c1-4734-b665-9bb0d426851b"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "`, the application's version,"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7639079a-a735-426f-b7b5-258972af9f16"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " platform, and har"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "1a1af211-ec9f-49ae-a66b-f881a3063aef"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ness report"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "7c3513b9-95c8-43cb-812e-d61685a092af"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": ", and the history records of the open"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "6b9c2ef7-b53d-4909-840f-e30aacc67250"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " project's last "
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "bd19d768-a59b-43d7-bc49-ca63194a4898"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ten tasks and questions,"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "c23a8186-48c1-48c3-9ab6-663849733a11"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " with a short README"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "e64e89dc-97cb-46c5-a6a3-b510a721c88c"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " saying what"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "d4a6f111-70a8-4f0b-9b41-ab0c06401f12"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " each file"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "c1fe21d6-007a-4d68-a6a9-a4d108e15f1e"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " is. The pal"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "a50fd981-7832-41bb-b593-47527df4d3d0"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ette also"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "55d2dad9-772d-4e42-8c58-a8995194a830"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " has \""
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "504d2286-062c-4e54-85ee-b76b4cdb3754"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "Open debug log\","
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "08d823ae-a76c-48bc-b1f7-b715a1ca5920"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " which opens `"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "4c435832-60dc-43f7-acfe-e3357d6cd9bb"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "suspense.log` as the"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "54e31800-da9a-4add-8f78-17ca1c744b54"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": " OpenFileScope op"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "9f78f30b-5ef0-4535-9fed-83b61b720b43"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 1,
+        "delta": {
+          "type": "text_delta",
+          "text": "ens a file.\n```"
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "dd0c1fe9-f246-4756-a148-53c8cb4e755e"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CfqGL1sfxsDN1FQQrz2MH",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "That's a good idea, and the spec already has a model for it. SelfUpdateScope › Diagnostics keeps `updates.log` in Suspense's data directory: one timestamped line per step, every failure with its whole error, capped at 1,000 lines, with \"Show log\" and \"Copy\" buttons. Nothing like that exists for the rest of the app.\n\nWhat there is today:\n- **Task and question history records.** They keep the harness's output, but without timing for each step.\n- **`eprintln!` calls.** They're scattered across about ten modules. In a Windows release build they go nowhere, because there's no console.\n- **No panic log.** A crash leaves no trace.\n\n**What I'd log**\n- **Every child process:** the command, its working folder, how long it took, its exit status, and its stderr when it fails. Child processes all go through `crate::process::command` now, so this can be added in one place.\n- **Each task's phases, with timestamps:** queued, spec build, snapshot, preparing the container, harness started, first event, each tool call, result, and the after-snapshot. This would answer \"why is my prompt slow\" with numbers instead of guesses. The same timings belong in the task's history record.\n- **Container runs:** the mounts and the full `podman` command line.\n- **Background work:** git status refreshes, spec builds and LSP restarts, with how long each took, and a warning when the UI thread stalls.\n- **Panics:** with a backtrace, written before the app dies.\n- **Not logged:** environment variables or tokens. Prompt text belongs in the history, not the log.\n\nTo hand it to an agent, add a command that writes a single folder: the recent log, `updates.log`, the app's version and platform, the harness report, and the history records of the last few tasks. You'd point the debugging agent at that folder.\n\n```suspense-prompt chain\nSuspense keeps a debug log of what it does, so that a problem can be handed to an agent as files to investigate. It is `suspense.log` in Suspense's own data directory, beside `updates.log`, as the SelfUpdateScope keeps that one, one line per event, each with the time to the millisecond, the project it concerns, and what happened, keeping the last 20,000 lines across sessions.\n\nIt logs every child process the application starts, its command, working directory, how long it took, and its exit status, with its standard error when it failed; each task's and question's phases as they happen, queued, spec build, snapshot, preparing the container with its mounts and the podman command, harness started, its first event, each tool call, its result, and the closing snapshot, each with how long it took; each git status refresh, spec build, and language server start or restart, with how long it took; any time the window was unresponsive for more than 200 milliseconds; and every panic, with its backtrace, written before the application exits. It never logs environment variables, credentials, or prompt text. A task's history record also keeps the times of its phases.\n\nThe command palette has a \"Collect debug info\" command that writes a folder, named for the time, in Suspense's data directory and shows it in the file manager: the debug log, `updates.log`, the application's version, platform, and harness report, and the history records of the open project's last ten tasks and questions, with a short README saying what each file is. The palette also has \"Open debug log\", which opens `suspense.log` as the OpenFileScope opens a file.\n```"
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 525,
+          "cache_read_input_tokens": 77182,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 525
+          },
+          "output_tokens": 4,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "input_transformations": [
+          {
+            "type": "thinking_dropped",
+            "path": "messages.2.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.5.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.8.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.11.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.17.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.20.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.23.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.26.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.29.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.35.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.38.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.41.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.44.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.47.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.50.content.0",
+            "reason": "prefix_binding_mismatch"
+          }
+        ],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "uuid": "763d610a-13d1-4db6-825b-8b46f92fec11",
+      "timestamp": "2026-10-08T18:45:13.473Z",
+      "request_id": "req_011CfqGL1SdT2rzPdKomQXJG"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 1
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "dbabfccd-7b89-4568-aaa9-3a32c0a852af"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {}
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 525,
+          "cache_read_input_tokens": 77182,
+          "output_tokens": 1506,
+          "output_tokens_details": {
+            "thinking_tokens": 432
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 1506,
+              "cache_read_input_tokens": 77182,
+              "cache_creation_input_tokens": 525,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 525
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "2a6b7daa-15a8-421a-801e-0fc1d9b283d6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "parent_tool_use_id": null,
+      "uuid": "4ae376bb-6168-4a84-8b5f-8f4060e5ceec"
+    },
+    {
+      "duration_api_ms": 259616,
+      "stop_reason": "end_turn",
+      "session_id": "52234d20-88fa-44a1-8d15-e5ce7601c419",
+      "total_cost_usd": 2.6549439999999995,
+      "usage": {
+        "input_tokens": 6,
+        "cache_creation_input_tokens": 3980,
+        "cache_read_input_tokens": 226828,
+        "output_tokens": 1906,
+        "output_tokens_details": {
+          "thinking_tokens": 465
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 3980,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 1506,
+            "cache_read_input_tokens": 77182,
+            "cache_creation_input_tokens": 525,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 525
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "modelUsage": {
+        "claude-opus-5-5[1m]": {
+          "inputTokens": 82,
+          "outputTokens": 20436,
+          "thinkingTokens": 4646,
+          "cacheReadInputTokens": 1759720,
+          "cacheCreationInputTokens": 236744,
+          "webSearchRequests": 0,
+          "costUSD": 2.6549439999999995,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "is_error": false,
+      "num_turns": 3,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "That's a good idea, and the spec already has a model for it. SelfUpdateScope › Diagnostics keeps `updates.log` in Suspense's data directory: one timestamped line per step, every failure with its whole error, capped at 1,000 lines, with \"Show log\" and \"Copy\" buttons. Nothing like that exists for the rest of the app.\n\nWhat there is today:\n- **Task and question history records.** They keep the harness's output, but without timing for each step.\n- **`eprintln!` calls.** They're scattered across about ten modules. In a Windows release build they go nowhere, because there's no console.\n- **No panic log.** A crash leaves no trace.\n\n**What I'd log**\n- **Every child process:** the command, its working folder, how long it took, its exit status, and its stderr when it fails. Child processes all go through `crate::process::command` now, so this can be added in one place.\n- **Each task's phases, with timestamps:** queued, spec build, snapshot, preparing the container, harness started, first event, each tool call, result, and the after-snapshot. This would answer \"why is my prompt slow\" with numbers instead of guesses. The same timings belong in the task's history record.\n- **Container runs:** the mounts and the full `podman` command line.\n- **Background work:** git status refreshes, spec builds and LSP restarts, with how long each took, and a warning when the UI thread stalls.\n- **Panics:** with a backtrace, written before the app dies.\n- **Not logged:** environment variables or tokens. Prompt text belongs in the history, not the log.\n\nTo hand it to an agent, add a command that writes a single folder: the recent log, `updates.log`, the app's version and platform, the harness report, and the history records of the last few tasks. You'd point the debugging agent at that folder.\n\n```suspense-prompt chain\nSuspense keeps a debug log of what it does, so that a problem can be handed to an agent as files to investigate. It is `suspense.log` in Suspense's own data directory, beside `updates.log`, as the SelfUpdateScope keeps that one, one line per event, each with the time to the millisecond, the project it concerns, and what happened, keeping the last 20,000 lines across sessions.\n\nIt logs every child process the application starts, its command, working directory, how long it took, and its exit status, with its standard error when it failed; each task's and question's phases as they happen, queued, spec build, snapshot, preparing the container with its mounts and the podman command, harness started, its first event, each tool call, its result, and the closing snapshot, each with how long it took; each git status refresh, spec build, and language server start or restart, with how long it took; any time the window was unresponsive for more than 200 milliseconds; and every panic, with its backtrace, written before the application exits. It never logs environment variables, credentials, or prompt text. A task's history record also keeps the times of its phases.\n\nThe command palette has a \"Collect debug info\" command that writes a folder, named for the time, in Suspense's data directory and shows it in the file manager: the debug log, `updates.log`, the application's version, platform, and harness report, and the history records of the open project's last ten tasks and questions, with a short README saying what each file is. The palette also has \"Open debug log\", which opens `suspense.log` as the OpenFileScope opens a file.\n```",
+      "ttft_ms": 1855,
+      "type": "result",
+      "duration_ms": 22818,
+      "uuid": "7e770d08-f2c8-44a9-971c-90cefa7afbb4",
+      "ttft_stream_ms": 1214,
+      "time_to_request_ms": 90,
+      "first_content_frame_ms": 1214,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  ]
+}

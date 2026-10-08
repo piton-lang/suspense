@@ -1,0 +1,7 @@
+- [updates.log lives in Suspense's own data directory, beside its preferences](.claude/reference/scope/self-update/index.md#diagnostics)
+- [The palette's system commands each do what a toolbar control or shortcut does](.claude/reference/scope/palette/index.md#shape)
+- [Every child process the application starts is listed: git, piton, podman, the harness, run targets](.claude/reference/scope/application/index.md#child-processes)
+- [A task's history record holds its lines, messages, error, sent and ended times, and snapshots](.claude/reference/scope/project-data/index.md#contents)
+- [harness.json is the last report the harness gave of its skills and agents](.claude/reference/scope/project-data/index.md#contents)
+- [Questions are saved in asks/ the same way as tasks](.claude/reference/scope/project-data/index.md#contents)
+- [OpenFileScope opens a file in the editor](.claude/reference/scope/open-file/index.md#open-file-scope)

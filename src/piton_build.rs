@@ -1,5 +1,6 @@
 //! Runs `piton build` for a project directory.
 
+use crate::process::Logged as _;
 use std::path::{Path, PathBuf};
 
 use gpui_kit::*;
@@ -37,7 +38,13 @@ pub fn run(project_dir: PathBuf, cx: &App) -> Task<Result<BuildOutcome>> {
 /// the file keeps in step with the project's piton (see
 /// [`crate::piton_fluency`]).
 pub fn build(project_dir: &Path) -> Result<BuildOutcome> {
-    build_with("piton", project_dir)
+    let timed = crate::debug_log::Timed::begin(Some(project_dir), "spec build");
+    let built = build_with("piton", project_dir);
+    timed.end(match &built {
+        Ok(_) => "done".to_string(),
+        Err(err) => format!("failed: {}", format!("{err:#}").lines().next().unwrap_or_default()),
+    });
+    built
 }
 
 /// Builds as [`build`] does, with `program` in place of `piton`. A build
@@ -175,7 +182,7 @@ fn build_once(program: &str, project_dir: &Path) -> Result<BuildOutcome> {
         let output = crate::process::command(program)
             .arg("build")
             .current_dir(project_dir)
-            .output()?;
+            .output_logged()?;
         crate::piton_fluency::write_with(program, project_dir);
 
         // `piton build` prints each written file on stdout, as an absolute
@@ -216,7 +223,7 @@ fn relative_to(path: &Path, root: &Path) -> String {
 pub fn piton_missing() -> bool {
     let missing = crate::process::command("piton")
         .arg("--version")
-        .output()
+        .output_logged()
         .is_err();
     if missing {
         eprintln!("skipped: `piton` isn't installed");

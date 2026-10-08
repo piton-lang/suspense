@@ -8,6 +8,8 @@
 //! unsaved changes, when it asks what to do through [`ChangedOnDisk`], and
 //! can be merged in a [`DiffView`]; renamed there, the editor follows it.
 
+use crate::process::Logged as _;
+use std::cell::RefCell;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -117,6 +119,8 @@ pub struct FileView {
     /// The file as open in `piton lsp`, while it is a Piton file and the
     /// server is running.
     document: Option<Arc<Document>>,
+    /// A name's hover, waiting for the pointer to rest on it.
+    resting_hover: Rc<RefCell<Task<()>>>,
     /// What the server last published for the file.
     diagnostics: Vec<lsp_types::Diagnostic>,
     /// Where the popover for selected text shows, while it does: where the
@@ -333,6 +337,7 @@ impl FileView {
             saved: None,
             dirty: false,
             document: None,
+            resting_hover: Rc::new(RefCell::new(Task::ready(()))),
             diagnostics: Vec::new(),
             selection_popover: None,
             saving: false,
@@ -682,7 +687,9 @@ impl FileView {
         };
         let text = self.editor.read(cx).value();
         self.dirty = text.as_ref() != saved;
-        // What the pointer's hover showed goes as soon as the text changes.
+        // What the pointer's hover showed goes as soon as the text changes,
+        // and nothing hovered shows again until the pointer next moves.
+        *self.resting_hover.borrow_mut() = Task::ready(());
         self.editor.update(cx, |editor, cx| {
             editor.clear_hover_state(cx);
             editor.clear_diagnostic_popover(cx);
@@ -925,7 +932,13 @@ impl FileView {
         let file = self
             .document
             .clone()
-            .map(|document| Rc::new(PitonFile { document }));
+            .map(|document| {
+                Rc::new(PitonFile {
+                    document,
+                    editor: self.editor.downgrade(),
+                    resting: self.resting_hover.clone(),
+                })
+            });
         let this = cx.entity().downgrade();
         self.editor.update(cx, |editor, _| {
             let lsp = editor.lsp_mut();
@@ -1311,6 +1324,12 @@ impl Render for FileView {
                         // under the path in the header.
                         .child(
                             gpui_kit::TestSupportExt::test_support(div().id("file-text"))
+                                // Off the text, no hover is still to come.
+                                .on_hover(cx.listener(|this, hovered: &bool, _, _| {
+                                    if !hovered {
+                                        *this.resting_hover.borrow_mut() = Task::ready(());
+                                    }
+                                }))
                                 .absolute()
                                 .top_0()
                                 .bottom_0()
@@ -1478,6 +1497,44 @@ impl Drop for Document {
 /// Language support for the file open in the editor, from `piton lsp`.
 struct PitonFile {
     document: Arc<Document>,
+    /// The editor the file is open in, to show a hover once it is due.
+    editor: WeakEntity<EditorState>,
+    /// The hover waiting for the pointer to rest on a name, shared with the
+    /// view, which drops it once the pointer leaves the text or it changes.
+    resting: Rc<RefCell<Task<()>>>,
+}
+
+/// How long the pointer rests on a name before its hover shows.
+const HOVER_REST: Duration = Duration::from_millis(500);
+
+/// What `hover` says, as plain text.
+fn hover_text(hover: &Hover) -> String {
+    use lsp_types::{HoverContents, MarkedString};
+    let marked = |marked: &MarkedString| match marked {
+        MarkedString::String(text) => text.clone(),
+        MarkedString::LanguageString(code) => code.value.clone(),
+    };
+    match &hover.contents {
+        HoverContents::Scalar(scalar) => marked(scalar),
+        HoverContents::Array(all) => all.iter().map(marked).collect::<Vec<_>>().join("\n"),
+        HoverContents::Markup(markup) => markup.value.clone(),
+    }
+}
+
+/// Whether `hover` says more than `beneath`, the text it is over: one that
+/// is empty, or only gives the compiled value of what is written, the same
+/// words again, as "compiled to" them, says nothing more.
+fn says_more(hover: &Hover, beneath: &str) -> bool {
+    let words = |text: &str| {
+        text.split(|c: char| !c.is_alphanumeric())
+            .filter(|word| !word.is_empty())
+            .map(str::to_lowercase)
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let said = words(&hover_text(hover));
+    let said = said.strip_prefix("compiled to").unwrap_or(&said).trim_start();
+    !said.is_empty() && said != words(beneath)
 }
 
 impl CompletionProvider for PitonFile {
@@ -1530,22 +1587,62 @@ impl CompletionProvider for PitonFile {
 }
 
 impl HoverProvider for PitonFile {
+    /// Asked whenever the pointer moves off what is hovered, it clears that
+    /// at once, and only over a name asks the server, once the pointer has
+    /// rested there for [`HOVER_REST`], showing what it says only when that
+    /// says more than the name. Prose and the like are never hovered.
     fn hover(
         &self,
         text: &Rope,
         offset: usize,
-        _: &mut Window,
+        window: &mut Window,
         cx: &mut App,
     ) -> Task<Result<Option<Hover>>> {
         let text = text.to_string();
-        let document = self.document.clone();
-        document.sync(&text);
-        cx.background_spawn(async move {
-            let result = document
-                .client
-                .request("textDocument/hover", document.at(&text, offset))?;
-            Ok(serde_json::from_value(result)?)
-        })
+        // Moved, any hover still to come waits for it to rest again.
+        let mut resting = self.resting.borrow_mut();
+        *resting = Task::ready(());
+        if let Some(name) = crate::piton_syntax::hovered_name(&text, offset) {
+            let (document, editor) = (self.document.clone(), self.editor.clone());
+            *resting = window.spawn(cx, async move |cx| {
+                cx.background_executor().timer(HOVER_REST).await;
+                document.sync(&text);
+                let asked = cx.background_spawn({
+                    let text = text.clone();
+                    async move {
+                        let result = document
+                            .client
+                            .request("textDocument/hover", document.at(&text, offset))
+                            .ok()?;
+                        serde_json::from_value::<Option<Hover>>(result).ok()?
+                    }
+                });
+                let Some(hover) = asked.await else {
+                    return;
+                };
+                let range = match &hover.range {
+                    Some(range) => {
+                        piton_lsp::byte_offset(&text, range.start)
+                            ..piton_lsp::byte_offset(&text, range.end)
+                    }
+                    None => name,
+                };
+                let beneath = text.get(range.clone()).unwrap_or_default();
+                if range.is_empty() || !range.contains(&offset) || !says_more(&hover, beneath) {
+                    return;
+                }
+                editor
+                    .update(cx, |editor, cx| {
+                        // Changed meanwhile, nothing shows until it moves.
+                        if editor.value().as_ref() == text {
+                            editor.present_hover(range, hover, cx);
+                        }
+                    })
+                    .ok();
+            });
+        }
+        // Whatever showed goes, the pointer off it.
+        Task::ready(Ok(None))
     }
 }
 
@@ -1795,7 +1892,7 @@ pub(crate) fn format_piton(text: &str, project_dir: &Path) -> anyhow::Result<Str
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()?;
+        .spawn_logged()?;
     // Written from its own thread, so a large file can't fill both pipes.
     let mut stdin = child
         .stdin
@@ -2509,6 +2606,68 @@ mod tests {
                     .is_some_and(|set| !set.is_empty())
         })
         .await;
+    }
+
+    /// A hover shows only over a name, once the pointer has rested there for
+    /// half a second, never over prose, however the server answers.
+    #[gpui_kit::test]
+    async fn only_names_rested_on_are_hovered(cx: &mut TestAppContext) {
+        if crate::piton_build::piton_missing() {
+            return;
+        }
+        let (view, handle) = open_spec_file(cx, "support for Piton files.").await;
+        let editor = view.read_with(cx, |view, _| view.editor.clone());
+        type_keys(cx, handle, " See @{ApplicationScope}");
+        let hover_at = |cx: &mut TestAppContext, word: &str| {
+            cx.update_window(handle, |_, window, cx| {
+                let (text, provider) = editor.update(cx, |editor, _| {
+                    (editor.value().to_string(), editor.lsp_mut().hover_provider.clone().unwrap())
+                });
+                let offset = text.find(word).unwrap() + 2;
+                let rope = gpui_kit::component::input::Rope::from(text.as_str());
+                provider.hover(&rope, offset, window, cx).detach();
+            })
+            .unwrap();
+        };
+        let shown = |cx: &mut TestAppContext| editor.read_with(cx, |editor, _| editor.hover_popover().is_some());
+
+        // Over prose, nothing, however long it rests.
+        hover_at(cx, "See @{");
+        cx.executor().advance_clock(super::HOVER_REST * 2);
+        cx.run_until_parked();
+        assert!(!shown(cx));
+
+        // Over a name, nothing before it has rested, then its hover.
+        hover_at(cx, "ApplicationScope}");
+        cx.executor().advance_clock(super::HOVER_REST / 2);
+        cx.run_until_parked();
+        assert!(!shown(cx), "a hover showed before the pointer rested");
+        cx.executor().advance_clock(super::HOVER_REST);
+        cx.wait_for(handle, TIMEOUT, |_, cx| editor.read(cx).hover_popover().is_some())
+            .await;
+    }
+
+    /// A hover that is empty, or only gives the text beneath it again as
+    /// what it compiles to, says nothing more and isn't shown.
+    #[test]
+    fn hovers_that_say_nothing_more_are_left_out() {
+        use super::says_more;
+        let hover = |value: &str| lsp_types::Hover {
+            contents: lsp_types::HoverContents::Markup(lsp_types::MarkupContent {
+                kind: lsp_types::MarkupKind::Markdown,
+                value: value.into(),
+            }),
+            range: None,
+        };
+        assert!(!says_more(&hover(""), "pitch"));
+        assert!(!says_more(&hover("compiled to `hello world`"), "hello world"));
+        assert!(!says_more(&hover("Compiled to:\n- hello, world"), "Hello world"));
+        assert!(!says_more(&hover("`pitch`"), "pitch"));
+        assert!(says_more(&hover("`pitch` on `Thing`\n\nResolves to \"hi\""), "pitch"));
+        assert!(says_more(
+            &hover("Compiled to:\n- claude-code .claude/reference/scope/a/index.md"),
+            "export"
+        ));
     }
 
     /// Formatting on save moves the cursor with the text around it.

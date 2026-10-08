@@ -8,6 +8,7 @@
 //! been written. Without `piton`, or when it fails, nothing is written, and a
 //! file written before is left as it was.
 
+use crate::process::Logged as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -74,7 +75,7 @@ fn print_prompt(program: &str, project_dir: &Path) -> String {
     match crate::process::command(program)
         .args(["agent", "--print-fluency"])
         .current_dir(project_dir)
-        .output()
+        .output_logged()
     {
         Ok(output) if output.status.success() => String::from_utf8_lossy(&output.stdout)
             .trim_end()

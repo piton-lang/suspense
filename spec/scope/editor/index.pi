@@ -151,7 +151,23 @@ shape EditorShape:
             attaches to it.
 
         hover:
-            Hovering a name shows the server's `textDocument/hover`. Typing in
+            Hovering a name shows the server's `textDocument/hover`, and
+            nothing else is hovered: only something hovering tells more about
+            shows a popover. A name is a key or property name, an anchor's name
+            where it is declared or extended, a keyword, a name an import
+            brings in, or a name inside an expression, in braces, whether written plain or
+            after a dollar sign, a hash, or an at sign. Prose, the text of a value written as plain words, is
+            never hovered, however the server answers for it, nor are
+            numbers, punctuation, indentation, comments, or blank space, so
+            moving the pointer over a paragraph shows nothing. Even over a
+            name, a hover is shown only when it says more than the text
+            beneath it: one that only gives the compiled value of what is
+            written, the same words again, as "compiled to" a value that reads
+            as the text does, or that is empty, shows nothing. A hover shows
+            only once the pointer has rested on a name for 500 milliseconds,
+            never while it passes over the text, and goes as soon as the
+            pointer leaves the name. A diagnostic's message shows on hover over
+            its underline, as ever, wherever that is, prose included. Typing in
             the editor clears whatever the pointer's hover shows, the name's
             hover and a diagnostic's message alike, as soon as a key changes
             the text, and nothing hovered shows again until the pointer next

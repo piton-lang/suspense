@@ -2,6 +2,7 @@
 //! over it (completions, and auto-imports for the hidden anchor the input's
 //! text is typed into), and the helpers the editor shares with it.
 
+use crate::process::Logged as _;
 use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -65,7 +66,7 @@ impl LspClient {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .spawn()
+            .spawn_logged()
             .context("could not start `piton lsp`")?;
         let stdin: Stdin = Arc::new(Mutex::new(
             child

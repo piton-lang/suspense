@@ -9,6 +9,7 @@
 //! platform Suspense is published for has them, each started without a
 //! window (see [`crate::process`]).
 
+use crate::process::Logged as _;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -207,7 +208,7 @@ fn fetch_releases(repository: &str) -> Result<Value> {
         .args(["-w", "\n%{http_code}"])
         .arg(&url)
         .stdin(Stdio::null())
-        .output()
+        .output_logged()
         .context("couldn't run curl to ask GitHub for releases")?;
     let headers = std::fs::read_to_string(&headers_file).unwrap_or_default();
     std::fs::remove_file(&headers_file).ok();
@@ -381,7 +382,7 @@ pub fn download(release: &Release, exe: &Path, got: &AtomicU64) -> Result<()> {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
-            .spawn()
+            .spawn_logged()
             .context("couldn't run curl to download the update")?;
         // How much has come, as the file grows.
         let status = loop {
@@ -435,7 +436,7 @@ pub fn download(release: &Release, exe: &Path, got: &AtomicU64) -> Result<()> {
             .arg("-C")
             .arg(&unpacked)
             .stdin(Stdio::null())
-            .output()
+            .output_logged()
             .context("couldn't run tar to unpack the update")?;
         if !untar.status.success() {
             bail!(
@@ -1051,7 +1052,7 @@ pub fn restart_now() -> Result<()> {
     #[cfg(not(test))]
     {
         crate::process::command(&exe)
-            .spawn()
+            .spawn_logged()
             .with_context(|| format!("couldn't start {}", exe.display()))?;
         log::write(format!("restart: started {}", exe.display()));
         Ok(())

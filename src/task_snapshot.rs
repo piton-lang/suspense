@@ -11,6 +11,7 @@
 //! `refs/suspense/<task>/before` or `/after` so git's garbage collection
 //! keeps it.
 
+use crate::process::Logged as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -25,7 +26,7 @@ pub fn repo_top(project_dir: &Path) -> Option<PathBuf> {
     let output = crate::process::command("git")
         .args(["rev-parse", "--show-toplevel"])
         .current_dir(project_dir)
-        .output()
+        .output_logged()
         .ok()?;
     if !output.status.success() {
         return None;
@@ -45,7 +46,7 @@ fn git(top: &Path, project_dir: &Path) -> Command {
 
 fn run(mut command: Command, what: &str) -> Result<String> {
     let output = command
-        .output()
+        .output_logged()
         .with_context(|| format!("could not run git to {what}"))?;
     if !output.status.success() {
         bail!(
@@ -70,7 +71,7 @@ pub fn take(project_dir: &Path, task: &str, which: &str) -> Result<String> {
         .current_dir(&top)
         .args(["check-ignore", "-q", "--no-index"])
         .arg(&index)
-        .status()
+        .status_logged()
         .is_ok_and(|status| status.success());
     let index = index.strip_prefix(&top).unwrap_or(&index);
     let mut add = git(&top, project_dir);
@@ -212,7 +213,7 @@ pub fn contents(top: &Path, tree: &str, path: &Path) -> Option<Vec<u8>> {
         .arg("cat-file")
         .arg("blob")
         .arg(format!("{tree}:{}", path.to_string_lossy()))
-        .output()
+        .output_logged()
         .ok()?;
     output.status.success().then_some(output.stdout)
 }
@@ -260,7 +261,7 @@ mod tests {
         let status = Command::new("git")
             .args(args)
             .current_dir(dir)
-            .output()
+            .output_logged()
             .unwrap();
         assert!(status.status.success(), "git {args:?}: {status:?}");
     }

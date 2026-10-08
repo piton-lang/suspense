@@ -4,6 +4,7 @@
 //! commit everything, push, and pull. A message can be written by the harness
 //! from what has changed, quickly, with a small model and no tools.
 
+use crate::process::Logged as _;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -207,7 +208,7 @@ fn git(dir: &Path, args: &[&str]) -> Result<Vec<u8>> {
     let output = crate::process::command("git")
         .args(args)
         .current_dir(dir)
-        .output()
+        .output_logged()
         .context("could not run git")?;
     if !output.status.success() {
         let mut message = String::from_utf8_lossy(&output.stderr).trim().to_string();
@@ -232,7 +233,7 @@ pub fn commit(dir: &Path, message: &str) -> Result<()> {
         .args(["check-ignore", "--quiet", "--"])
         .arg(&notes)
         .current_dir(dir)
-        .status()
+        .status_logged()
         .is_ok_and(|status| status.success());
     if !ignored {
         add.push(&exclude);
@@ -299,7 +300,7 @@ pub fn pull(dir: &Path) -> Result<Pulled> {
             "@{upstream}",
         ])
         .current_dir(dir)
-        .output()
+        .output_logged()
         .context("could not run git")?;
     match trial.status.code() {
         Some(0) => {}

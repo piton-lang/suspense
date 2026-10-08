@@ -1,0 +1,75 @@
+
+export anchor ImplementDebugInfoCollection2:
+    userPrompt:
+        \\\
+        Suspense keeps a debug log of what it does, so that a problem can be handed to an agent as files to investigate. It is `suspense.log` in Suspense's own data directory, beside `updates.log`, as the SelfUpdateScope keeps that one, one line per event, each with the time to the millisecond, the project it concerns, and what happened, keeping the last 20,000 lines across sessions.
+
+        It logs every child process the application starts, its command, working directory, how long it took, and its exit status, with its standard error when it failed; each task's and question's phases as they happen, queued, spec build, snapshot, preparing the container with its mounts and the podman command, harness started, its first event, each tool call, its result, and the closing snapshot, each with how long it took; each git status refresh, spec build, and language server start or restart, with how long it took; any time the window was unresponsive for more than 200 milliseconds; and every panic, with its backtrace, written before the application exits. It never logs environment variables, credentials, or prompt text. A task's history record also keeps the times of its phases.
+
+        The command palette has a "Collect debug info" command that writes a folder, named for the time, in Suspense's data directory and shows it in the file manager: the debug log, `updates.log`, the application's version, platform, and harness report, and the history records of the open project's last ten tasks and questions, with a short README saying what each file is. The palette also has "Open debug log", which opens `suspense.log` as the OpenFileScope opens a file.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Suspense keeps a debug log of what it does, so that a problem can be handed to an agent as files to investigate. It is `suspense.log` in Suspense's own data directory, beside `updates.log`, as the SelfUpdateScope keeps that one, one line per event, each with the time to the millisecond, the project it concerns, and what happened, keeping the last 20,000 lines across sessions.
+
+            It logs every child process the application starts, its command, working directory, how long it took, and its exit status, with its standard error when it failed; each task's and question's phases as they happen, queued, spec build, snapshot, preparing the container with its mounts and the podman command, harness started, its first event, each tool call, its result, and the closing snapshot, each with how long it took; each git status refresh, spec build, and language server start or restart, with how long it took; any time the window was unresponsive for more than 200 milliseconds; and every panic, with its backtrace, written before the application exits. It never logs environment variables, credentials, or prompt text. A task's history record also keeps the times of its phases.
+
+            The command palette has a "Collect debug info" command that writes a folder, named for the time, in Suspense's data directory and shows it in the file manager: the debug log, `updates.log`, the application's version, platform, and harness report, and the history records of the open project's last ten tasks and questions, with a short README saying what each file is. The palette also has "Open debug log", which opens `suspense.log` as the OpenFileScope opens a file.
+            \\\
+        result:
+            \\\
+            I added a new `DebugLogScope` that covers the debug log, `suspense.log`, and the two palette commands, "Collect debug info" and "Open debug log". `piton check` reports no problems and `piton build` wrote 82 files.
+
+            **Changes in the spec:**
+            - **New scope** (`.claude/reference/scope/debug-log/index.md`): it describes the log's location and format, what gets logged, what is never logged, and what the "Collect debug info" folder holds.
+            - **Palette** (`.claude/reference/scope/palette/index.md`): both new commands are listed.
+            - **Application scope** (`.claude/reference/scope/application/index.md`): links to the new scope.
+            - **History record** (`.claude/reference/scope/project-data/index.md#contents`): a task's record now keeps when each phase began and ended, to the millisecond.
+
+            **Things I added that you didn't ask for:**
+            - **Folder name:** the collected folder is named like `debug-2026-10-08-14-03-22`.
+            - **No project open:** the folder holds only what doesn't need a project, and its README says no project was open.
+            - **What is never logged:** a command is logged with its arguments, but never the prompt on its standard input or its environment. A tool call is logged by its kind and the path or command it acted on, never by what the harness replied.
+
+            **Anchors the code should follow:**
+            - `DebugLogScope`: `#description`, `#logged`, `#never-logged`, `#phases`, `#collecting`.
+            - `PaletteScope`: its system commands.
+            - `ProjectDataScope`: `#contents`.
+            - `SelfUpdateScope`: `#diagnostics`, for where `updates.log` lives.
+            - `OpenFileScope`: for "Open debug log".
+            \\\
+
+    sentFrom: ImplementDebugInfoCollection

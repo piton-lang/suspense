@@ -1,0 +1,8 @@
+- [Only names are hovered: key/property names, declared or extended anchor names, keywords, imported names, names inside brace expressions ($, #, @ included)](.claude/reference/scope/editor/index.md#language-support)
+- [Prose in a value is never hovered, whatever the server answers](.claude/reference/scope/editor/index.md#language-support)
+- [Numbers, punctuation, indentation, comments, and blank space are never hovered](.claude/reference/scope/editor/index.md#language-support)
+- [A hover that is empty, or only gives a compiled value reading as the text beneath, shows nothing](.claude/reference/scope/editor/index.md#language-support)
+- [A hover shows only after the pointer rests on a name for 500 milliseconds, never while passing over](.claude/reference/scope/editor/index.md#language-support)
+- [A hover goes as soon as the pointer leaves the name](.claude/reference/scope/editor/index.md#language-support)
+- [A diagnostic's message still shows on hover over its underline, wherever it is, prose included](.claude/reference/scope/editor/index.md#language-support)
+- [Typing clears what the hover shows, and nothing shows again until the pointer next moves over the text](.claude/reference/scope/editor/index.md#language-support)

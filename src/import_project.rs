@@ -4,6 +4,7 @@
 //! aren't there, and opens it, never overwriting, moving, or deleting
 //! anything already in the folder, as the ImportProjectScope says.
 
+use crate::process::Logged as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
@@ -97,7 +98,7 @@ pub fn repo_top(folder: &Path) -> Option<PathBuf> {
     let output = crate::process::command("git")
         .args(["rev-parse", "--show-toplevel"])
         .current_dir(folder)
-        .output()
+        .output_logged()
         .ok()?;
     if !output.status.success() {
         return None;
@@ -208,7 +209,7 @@ fn git(folder: &Path, init: bool) -> Result<()> {
         let output = crate::process::command("git")
             .args(["init", "--quiet"])
             .current_dir(folder)
-            .output()
+            .output_logged()
             .context("git couldn't be run")?;
         if !output.status.success() {
             bail!("{}", String::from_utf8_lossy(&output.stderr).trim());

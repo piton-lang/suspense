@@ -1,0 +1,6 @@
+- [The defaults are the prompts in this repository's .suspense/system-prompts, baked in at build](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#defaults)
+- [The spec-reading default's last paragraph says to read only what the change depends on: the prompt's linked pages, then only pages they link to that the change depends on](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#defaults)
+- [The spec-reading default says not to survey, list, or search the spec first, never to re-read a page given as a slice, nor anything already read](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#defaults)
+- [Code, Chain, and Spec defaults end with the understanding paragraph: written once after reading and before the first change, rewritten only when a constraint is wrong](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#defaults)
+- [Code, Chain, Spec, and Ask defaults end with a paragraph asking for a reply of a few sentences saying what changed, or the answer, not a recap](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#defaults)
+- [Projects whose prompts were saved before keep them; defaults only seed and reset](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#defaults)

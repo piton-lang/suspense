@@ -1,0 +1,69 @@
+
+export anchor ShowPreviousTaskDurations2:
+    userPrompt:
+        \\\
+        In the previous tasks I should be able to see how long each thing took
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            In the previous tasks I should be able to see how long each thing took
+            \\\
+        result:
+            \\\
+            The spec already said each previous task shows how long it took, but no time appeared because the history record never saved when a task started or ended. I fixed the record and spelled out how durations look in the previous tasks list. `piton check` reports no problems and `piton build` wrote 81 files.
+
+            ## What changed in the spec
+
+            **History record** (`.claude/reference/scope/project-data/index.md#contents`)
+            - Each task's `.json` record now keeps when it was sent and when it ended, to the millisecond.
+
+            **Durations** (`.claude/reference/scope/prompt-mode/message-list/index.md#elapsed`)
+            - **Every previous task:** each heading shows how long the task took, whether it finished done, failed or cancelled. A task still running in the list counts up.
+            - **Chains:** a chain's parent row shows its total time, from when the first step was sent to when the last step ended. Each step shows its own time underneath.
+            - **Layout:** the times sit in their own right-aligned column just before each heading's buttons, so you can compare them at a glance and long ones stand out.
+            - **Older tasks:**
+              - Tasks recorded before times were kept show an estimate, from the second their history file is named by to when their record was written, such as "≈ 4:12".
+              - Their tooltip says the time is approximate.
+              - Tasks where neither time can be worked out show nothing.
+
+            The constraints are in `.suspense/history/1791479075-ShowPreviousTaskDurations.understanding.md`.
+
+            ## Anchors the code should follow
+            - `ProjectDataScope`: `#contents`, to save sent and ended times in each history record.
+            - `MessageList`: `#status` / `#elapsed`, for the duration column, chain totals and the "≈" estimate.
+            - `HistoryListScope`: `#list`, for where the column sits in each heading.
+            - `PromptEditor`: `#chained-tasks`, for the chain parent rows that show totals.
+            \\\
+
+    sentFrom: ShowPreviousTaskDurations

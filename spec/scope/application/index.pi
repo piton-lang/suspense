@@ -1,6 +1,7 @@
 use /lib
 from ./MainWindow import MainWindowScope
 from /scope/container-environment import ContainerEnvironmentScope
+from /scope/debug-log import DebugLogScope
 from /scope/edge-releases import EdgeReleasesScope
 from /scope/project-data import ProjectDataScope
 from /scope/self-update import SelfUpdateScope
@@ -46,6 +47,8 @@ shape ApplicationShape:
         view's command, run under a pseudo-terminal, still works as the
         @{ContainerEnvironmentScope} says. On macOS and Linux, nothing
         changes in how a program is started.
+
+    debugLog: @{DebugLogScope}
 
     fileOwnership:
         Every file and folder the application creates belongs to the user

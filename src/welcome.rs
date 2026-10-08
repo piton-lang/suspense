@@ -4,6 +4,7 @@
 //! Suspense can take one. It opens at launch while something needs
 //! attention, and from the Application tab's Welcome command at any time.
 
+use crate::process::Logged as _;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -268,7 +269,7 @@ fn version_of(program: impl AsRef<std::ffi::OsStr>) -> Result<String, String> {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .spawn()
+        .spawn_logged()
         .map_err(|err| err.to_string())?;
     let started = Instant::now();
     let status = loop {

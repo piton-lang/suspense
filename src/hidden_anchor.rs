@@ -14,6 +14,7 @@
 //! text around them is taken from the saved source. A reference to a name
 //! that isn't imported, such as a pasted `${HOME}`, is only text.
 
+use crate::process::Logged as _;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::fs;
@@ -1092,7 +1093,7 @@ pub fn compile(anchor: &HiddenAnchor, file: &Path, project_dir: &Path) -> Result
         .arg("compile")
         .arg(file)
         .current_dir(project_dir)
-        .output()
+        .output_logged()
         .context("could not run `piton compile`")?;
     if !output.status.success() {
         let mut message = String::from_utf8_lossy(&output.stdout).into_owned();
@@ -1223,7 +1224,7 @@ fn slice(target: &str, file_dir: &Path, project_dir: &Path) -> String {
         .arg("slice")
         .arg(format!("{}#{dotted}", module.display()))
         .current_dir(project_dir)
-        .output();
+        .output_logged();
     match output {
         Ok(output) if output.status.success() => {
             String::from_utf8_lossy(&output.stdout).into_owned()
@@ -1694,7 +1695,7 @@ mod tests {
         let second = project_system_prompt(&project_dir).unwrap().unwrap();
         assert_eq!(first, second);
         assert!(first.contains("./src") && first.contains("./spec"));
-        assert!(first.contains("Before executing anything, read the spec"));
+        assert!(first.contains("Read only what the change depends on"));
         assert!(first.contains("compiled reference under .claude/reference"));
         assert!(
             !first.contains("Fluency") && !first.contains("fluency.md"),

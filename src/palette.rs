@@ -199,6 +199,8 @@ pub enum SystemCommand {
     ToggleDarkMode,
     Settings,
     About,
+    CollectDebugInfo,
+    OpenDebugLog,
     Quit,
 }
 
@@ -220,6 +222,8 @@ impl SystemState {
             (SystemCommand::ToggleDarkMode, theme, true),
             (SystemCommand::Settings, "Settings…", true),
             (SystemCommand::About, "About Suspense", true),
+            (SystemCommand::CollectDebugInfo, "Collect debug info", true),
+            (SystemCommand::OpenDebugLog, "Open debug log", true),
             (SystemCommand::Quit, "Quit", true),
         ]
         .into_iter()

@@ -533,9 +533,15 @@ mod tests {
         let saved = fs::read_to_string(file(Prompt::SpecReading, manifest)).unwrap();
         assert_eq!(reading, saved.trim_end());
         assert!(
-            reading.contains("Before executing anything, read the spec it touches.")
+            reading.contains("Read only what the change depends on, and start the work as soon as you have.")
                 && reading.contains("Links to ${HARNESS_DIRECTORY}/reference/"),
             "the spec reading doesn't say to follow references: {reading}"
+        );
+        // Only what the change depends on: no survey, no slice read again.
+        assert!(
+            reading.contains("Don't survey the spec")
+                && reading.contains("A page the prompt already gives you as a slice is already read"),
+            "{reading}"
         );
         assert!(
             reading.starts_with("Read the spec from its compiled reference")
@@ -616,9 +622,25 @@ mod tests {
                 "{mode:?}: {template}"
             );
             assert!(!template.contains("index.pi)"), "{mode:?} cites the source");
-            let asks = mode == SendMode::Ask;
+            // The understanding file is written once, between the reading
+            // and the first change; every mode asks for a short reply.
             assert_eq!(
-                template.ends_with("rather than adding another."),
+                template.contains("before your first change, write the constraints")
+                    && template.contains("never after each page you read"),
+                mode != SendMode::Ask,
+                "{mode:?}: {template}"
+            );
+            assert!(
+                template.ends_with(
+                    "End with a reply of a few sentences saying what changed, or for a question, \
+                     the answer, not a recap of the work or of what you read."
+                ),
+                "{mode:?} asks for no short reply: {template}"
+            );
+            let asks = mode == SendMode::Ask;
+            // The understanding paragraph comes last but for the reply.
+            assert_eq!(
+                template.contains("rather than adding another.\n\nEnd with a reply"),
                 !asks,
                 "{mode:?} doesn't end as it should: {template}"
             );
@@ -646,7 +668,7 @@ mod tests {
             );
             assert!(!sent.contains("${"), "{mode:?} left a placeholder: {sent}");
             assert_eq!(
-                sent.contains("to .suspense/history/1-Prompt_a.understanding.md, and"),
+                sent.contains("to .suspense/history/1-Prompt_a.understanding.md, once."),
                 !asks,
                 "{mode:?}: {sent}"
             );

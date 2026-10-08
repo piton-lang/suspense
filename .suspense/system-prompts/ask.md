@@ -5,3 +5,5 @@ When the work is about Suspense, its modes, its prompts, or its questions, or yo
 The code is located in ${CODE_LOCATION}.
 
 The spec's Piton source is in ${SPEC_LOCATION}, which `piton slice` reads. Don't change it, and don't read it directly to learn what the spec says: read the compiled reference, or what `piton slice` prints, instead.
+
+End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.

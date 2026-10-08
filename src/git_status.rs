@@ -2,6 +2,7 @@
 //! for colouring the project tree. A folder takes the most pressing status
 //! among what it holds, so a change stays visible while it is collapsed.
 
+use crate::process::Logged as _;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -50,12 +51,22 @@ impl GitStatus {
     /// The status of the repository `project_dir` is in, or `None` outside of
     /// one or without git.
     pub fn read(project_dir: &Path) -> Option<Self> {
+        let timed = crate::debug_log::Timed::begin(Some(project_dir), "git status refresh");
+        let read = Self::read_untimed(project_dir);
+        timed.end(match &read {
+            Some(status) => format!("{} paths", status.paths.len()),
+            None => "not a repository".into(),
+        });
+        read
+    }
+
+    fn read_untimed(project_dir: &Path) -> Option<Self> {
         // The repository's top, reached from the project directory as given
         // (`../..`), so paths match the tree's even through a symlink.
         let up = crate::process::command("git")
             .args(["rev-parse", "--show-cdup"])
             .current_dir(project_dir)
-            .output()
+            .output_logged()
             .ok()
             .filter(|output| output.status.success())?;
         let mut top = project_dir.to_path_buf();
@@ -75,7 +86,7 @@ impl GitStatus {
                 "--ignored=matching",
             ])
             .current_dir(project_dir)
-            .output()
+            .output_logged()
             .ok()
             .filter(|output| output.status.success())?;
         Some(Self::parse(&top, &output.stdout))

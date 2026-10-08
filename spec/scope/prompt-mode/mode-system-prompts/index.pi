@@ -299,7 +299,7 @@ shape ModeSystemPromptsShape:
 
         Never read the .pi source under ${SPEC_LOCATION} to learn what the spec says; that is only where edits to the spec go.
 
-        Before executing anything, read the spec it touches. Links to ${HARNESS_DIRECTORY}/reference/... in the prompt are the spec for what they name. Read each one you need before changing anything it covers. Don't re-read something you've already read.
+        Read only what the change depends on, and start the work as soon as you have. Links to ${HARNESS_DIRECTORY}/reference/... in the prompt are the spec for what they name: read those, and then only the pages they link to that the change actually depends on. Don't survey the spec, list its folders, or search it before you start. A page the prompt already gives you as a slice is already read: never read it again. Don't re-read anything you've already read.
         \\
 
         The Spec and Chain defaults have, after what the mode is for, on a
@@ -319,8 +319,21 @@ shape ModeSystemPromptsShape:
         its own:
 
         \\
-        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](${HARNESS_DIRECTORY}/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](${HARNESS_DIRECTORY}/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
         \\
+
+        The Code, Chain, Spec, and Ask defaults end, on a paragraph of its
+        own, by asking for a short final reply:
+
+        \\
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+        \\
+
+        So a task spends as few turns as it can before doing the work: it
+        reads the pages the prompt links to and what the change depends on
+        through them, never a survey of the spec, never a page given to it as
+        a slice, and writes its understanding once, between its reading and
+        its first change.
 
         The Code, Chain, Spec, and Ask defaults each have, after what the
         mode is for, on a paragraph of its own:

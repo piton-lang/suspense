@@ -280,7 +280,7 @@ mod windows {
             // Without a job, the tree as Windows knows it now.
             crate::process::command("taskkill")
                 .args(["/T", "/F", "/PID", &pid.to_string()])
-                .status()
+                .status_logged()
                 .ok();
             wait_until(Instant::now() + GRACE, leader, &mut || false);
             return;

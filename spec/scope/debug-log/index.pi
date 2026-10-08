@@ -1,0 +1,64 @@
+use /lib
+from /scope/open-file import OpenFileScope
+from /scope/project-data import ProjectDataScope
+from /scope/self-update import SelfUpdateScope
+
+export scope DebugLogScope:
+    concept: {DebugLogConcept}
+
+concept DebugLogConcept:
+    pitch:
+        A debug log of what Suspense does, so that a problem can be handed to
+        an agent as files to investigate.
+
+    shape: {DebugLogShape}
+
+shape DebugLogShape:
+    description:
+        The log is `suspense.log` in Suspense's own data directory, beside
+        `updates.log`, as the @{SelfUpdateScope} keeps that one. It is one
+        line per event, each with the time to the millisecond, the project it
+        concerns, by its folder, or none for the application's own, and what
+        happened. It keeps the last 20,000 lines, across sessions: each launch
+        appends to it, and the oldest lines go once there are more.
+
+    logged:
+        It logs:
+
+        \\
+        - every child process the application starts: its command, its working directory, how long it took, and its exit status, with its standard error when it failed
+        - each task's and question's phases as they happen, each with how long it took: queued, spec build, snapshot, preparing the container, with its mounts and the podman command, harness started, the harness's first event, each tool call, its result, and the closing snapshot
+        - each git status refresh, spec build, and language server start or restart, with how long it took
+        - any time the window was unresponsive for more than 200 milliseconds, with how long
+        - every panic, with its backtrace, written to the log before the application exits
+        \\
+
+    neverLogged:
+        It never logs environment variables, credentials, or prompt text: a
+        command is logged with its arguments but never the prompt given on its
+        standard input, nor anything in its environment, and a tool call by
+        its kind and the path or command it acted on, never what the harness
+        replied.
+
+    phases:
+        A task's history record, as the @{ProjectDataScope} says, also keeps
+        the times of its phases, as the log names them, when each began and
+        ended, to the millisecond.
+
+    collecting:
+        The palette's "Collect debug info" writes a folder, named for the
+        time, as `debug-2026-10-08-14-03-22`, in Suspense's data directory,
+        and shows it in the file manager. It holds:
+
+        \\
+        - `suspense.log`, the debug log
+        - `updates.log`
+        - `about.txt`, the application's version and platform
+        - `harness.json`, the open project's harness report
+        - `history/`, the history records of the open project's last ten tasks and questions, each beside its hidden anchor's source
+        - `README.md`, a short note saying what each file is
+        \\
+
+        With no project open, it holds what doesn't need one, and its README
+        says no project was open. The palette's "Open debug log" opens
+        `suspense.log` as the @{OpenFileScope} opens a file.

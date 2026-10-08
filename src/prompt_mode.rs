@@ -325,6 +325,10 @@ struct PromptTask {
     /// record doesn't say.
     started: Option<std::time::SystemTime>,
     ended: Option<std::time::SystemTime>,
+    /// For a task from the history whose record doesn't say when it was sent
+    /// and ended, as well as can be told: from the second its history file
+    /// is named by to when its record was written.
+    estimated: Option<(std::time::SystemTime, std::time::SystemTime)>,
 }
 
 /// Asks for a file's changes while a task ran, between the snapshots taken
@@ -612,6 +616,7 @@ impl PromptTask {
             chain_stamp: None,
             started: None,
             ended: None,
+            estimated: None,
         }
     }
 
@@ -660,15 +665,20 @@ impl PromptTask {
             .as_ref()
             .map(|record| record.picked.clone())
             .unwrap_or_default();
+        let recorded_at = saved.recorded_at;
         let Some(record) = saved.record.filter(|record| !record.holds_only_the_mark()) else {
             task.reply.stop();
             task.status = TaskStatus::Unrecorded;
             return task;
         };
-        // Only a record holding both its start and its end says how long.
+        // Only a record holding both its start and its end says how long;
+        // one recorded before they were kept, as well as can be told.
         if let (Some(started), Some(ended)) = (record.started_at, record.ended_at) {
             task.started = Some(from_millis(started));
             task.ended = Some(from_millis(ended));
+        } else if let Some(recorded_at) = recorded_at.filter(|_| saved.sent_at > 0) {
+            let sent = std::time::UNIX_EPOCH + Duration::from_secs(saved.sent_at);
+            task.estimated = (recorded_at >= sent).then_some((sent, recorded_at));
         }
         task.given = record.harness().map(|harness| Given {
             harness,
@@ -716,15 +726,29 @@ impl PromptTask {
         }
     }
 
-    /// How long it has been under way, or took; none when that isn't known.
-    fn elapsed(&self) -> Option<Duration> {
-        let started = self.started?;
-        let until = match self.ended {
+    /// When it was sent and, once it is over, when it ended, and whether
+    /// that is only as well as can be told; none when neither is known.
+    fn span(&self) -> Option<(std::time::SystemTime, Option<std::time::SystemTime>, bool)> {
+        match (self.started, self.estimated) {
+            (Some(started), _) => Some((started, self.ended, false)),
+            (None, Some((sent, recorded))) => Some((sent, Some(recorded), true)),
+            (None, None) => None,
+        }
+    }
+
+    /// How long it has been under way, or took, and whether that is only
+    /// approximate; none when it can't be told.
+    fn took(&self) -> Option<Took> {
+        let (started, ended, approximate) = self.span()?;
+        let until = match ended {
             Some(ended) => ended,
             None if self.status.is_active() => std::time::SystemTime::now(),
             None => return None,
         };
-        Some(until.duration_since(started).unwrap_or_default())
+        Some(Took {
+            time: until.duration_since(started).unwrap_or_default(),
+            approximate,
+        })
     }
 
     /// Once its run is over, heads its final summary with what it did: the
@@ -1471,6 +1495,16 @@ impl HistoryList {
                             )),
                             None => heading.child(task_summary((item_id, item), task_ix, task, cx)),
                         })
+                        // How long it took, lined up in a column of its own.
+                        .child(duration_column(("history-took", task_ix), task.took(), cx))
+                        // Its buttons take the same room on every heading,
+                        // however many it has, so the times line up.
+                        .child(
+                            h_flex()
+                                .flex_none()
+                                .min_w(HEADING_BUTTONS)
+                                .justify_end()
+                                .gap_3()
                         .children(entity.read(cx).other_mode_state(task).map(|(to, state)| {
                             let this = this_for_resend.clone();
                             let menu = this_for_resend.clone();
@@ -1525,7 +1559,8 @@ impl HistoryList {
                                     .ok();
                                 },
                             )
-                        })
+                        }),
+                        )
                         .child(
                             Icon::new(if is_open {
                                 IconName::ChevronDown
@@ -2024,6 +2059,8 @@ struct AskLog {
     file: Option<PathBuf>,
     record: RunRecord,
     stopped: Arc<AtomicBool>,
+    /// Its phases, logged as they happen and kept in its record.
+    phases: Option<crate::debug_log::Phases>,
 }
 
 impl Drop for AskLog {
@@ -2033,6 +2070,9 @@ impl Drop for AskLog {
         };
         let mut record = std::mem::take(&mut self.record);
         record.cancelled |= self.stopped.load(Ordering::SeqCst);
+        if let Some(phases) = self.phases.take() {
+            record.phases = phases.close(if record.cancelled { "stopped" } else { "ended" });
+        }
         // Picked on its cards meanwhile, those are kept too.
         let picked = prompt_history::picked_in(&file);
         for (card, answer) in picked {
@@ -2495,6 +2535,16 @@ fn chain_parent(task_ix: usize, steps: &[&PromptTask], latest: bool, cx: &App) -
                     format!("{count} steps")
                 }),
         )
+        // How long its steps took together, in the column the steps' times
+        // are in, with the room their buttons and chevron take beside it.
+        .child(duration_column(("chain-took", task_ix), chain_took(steps), cx))
+        .child(div().flex_none().min_w(HEADING_BUTTONS))
+        .child(
+            Icon::new(IconName::ChevronRight)
+                .xsmall()
+                .flex_none()
+                .text_color(transparent_black()),
+        )
         .into_any_element()
 }
 
@@ -2522,9 +2572,84 @@ fn chain_step_summary(
                 .text_color(chat_input::mode_color(mode, cx))
                 .child(label),
         )
-        .child(div().min_w_0().child(task_title(ix, task, false, cx)));
+        .child(div().min_w_0().child(task_title(ix, task, false, false, cx)));
     // Lets UI tests find the task; inert in normal builds.
     gpui_kit::TestSupportExt::test_support(summary).into_any_element()
+}
+
+/// How long a task, or a chain's steps together, took.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Took {
+    time: Duration,
+    /// Told only as well as can be, from when its history file and record
+    /// were written.
+    approximate: bool,
+}
+
+/// How long a chain's steps took together: from when its first step was
+/// sent to when its last ended, counting up while any still runs. None
+/// when a step's times can't be told.
+fn chain_took(steps: &[&PromptTask]) -> Option<Took> {
+    let spans: Vec<_> = steps.iter().map(|task| task.span()).collect::<Option<_>>()?;
+    let started = spans.iter().map(|(started, _, _)| *started).min()?;
+    let until = if steps.iter().any(|task| task.status.is_active()) {
+        std::time::SystemTime::now()
+    } else {
+        spans
+            .iter()
+            .map(|(_, ended, _)| *ended)
+            .collect::<Option<Vec<_>>>()?
+            .into_iter()
+            .max()?
+    };
+    Some(Took {
+        time: until.duration_since(started).unwrap_or_default(),
+        approximate: spans.iter().any(|(_, _, approximate)| *approximate),
+    })
+}
+
+/// The room a previous task's heading gives its buttons, as many as it
+/// has, so the durations before them line up.
+const HEADING_BUTTONS: Pixels = px(84.);
+
+/// How wide the column of durations in the previous tasks' headings is.
+const DURATION_COLUMN: Pixels = px(64.);
+
+/// How long a task took, in small muted tabular figures, "≈" before it and
+/// a tooltip saying so when it is only approximate.
+fn took_label(id: (&'static str, usize), took: Took, cx: &App) -> AnyElement {
+    let time = crate::subagents::format_elapsed(took.time);
+    // Lets UI tests find it; inert in normal builds.
+    gpui_kit::TestSupportExt::test_support(div().id(id))
+        .flex_none()
+        .text_sm()
+        .text_color(cx.theme().muted_foreground)
+        .font_features(crate::subagents::tabular_figures())
+        .child(if took.approximate {
+            format!("≈ {time}")
+        } else {
+            time
+        })
+        .when(took.approximate, |label| {
+            label.tooltip(|window, cx| {
+                gpui_kit::component::tooltip::Tooltip::new(
+                    "Approximate: from when it was sent to when its record was written",
+                )
+                .build(window, cx)
+            })
+        })
+        .into_any_element()
+}
+
+/// A previous task's, or chain's, duration column: right-aligned, as wide
+/// for every heading, so the times line up; empty when it can't be told.
+fn duration_column(id: (&'static str, usize), took: Option<Took>, cx: &App) -> Div {
+    div()
+        .flex_none()
+        .w(DURATION_COLUMN)
+        .flex()
+        .justify_end()
+        .children(took.map(|took| took_label(id, took, cx)))
 }
 
 /// A chain's status as a whole: running while any step is, failed or
@@ -6784,6 +6909,12 @@ impl PromptMode {
         }
         .or_else(|| self.next_chain_stamp.take())
         .or_else(|| Some(prompt_queue::stamp()));
+        // How long it waited in the queue, for the debug log.
+        let queued_at = match &sending {
+            Sending::Queued(saved) => prompt_queue::queued_at(&saved.file)
+                .map(|nanos| std::time::UNIX_EPOCH + Duration::from_nanos(nanos as u64)),
+            Sending::Now(..) => None,
+        };
         self.tasks[task_ix].started = Some(std::time::SystemTime::now());
         // Sent, the Freeform chat goes to its bottom to follow it.
         self.lock_freeform_chat();
@@ -7004,6 +7135,14 @@ impl PromptMode {
         };
 
         self._pending[lane_slot(lanes)] = cx.spawn(async move |this, cx| {
+            // Its phases, logged as they happen and kept in its record.
+            let mut phases = crate::debug_log::Phases::new(&project_dir, known.clone());
+            if let Some(queued_at) = queued_at {
+                phases.since("queued", queued_at, "");
+            }
+            if build.is_some() {
+                phases.begin("spec build");
+            }
             // A build cancelled is abandoned: the task goes on without it.
             let build = match build {
                 Some(build) => {
@@ -7028,6 +7167,7 @@ impl PromptMode {
                     Ok(outcome) => Some(outcome.report),
                     Err(err) => Some(format!("could not run piton build: {err:#}")),
                 };
+                phases.end("spec build", if failure.is_some() { "failed" } else { "done" });
                 let updated = this.update(cx, |this, cx| {
                     this.in_project(&project_dir, cx, |this, cx| {
                         if let Some(task) = this.tasks.get_mut(task_ix) {
@@ -7064,6 +7204,7 @@ impl PromptMode {
                 None => None,
             };
             let name = name.unwrap_or(known);
+            phases.rename(name.clone());
             let named = this.update(cx, |this, cx| {
                 this.in_project(&project_dir, cx, |this, cx| {
                     if let Some(task) = this.tasks.get_mut(task_ix) {
@@ -7183,6 +7324,7 @@ impl PromptMode {
                     // In a git repository, the working tree as the harness
                     // starts the task, to compare with how its run leaves it.
                     let snapshot_name = anchor.clone();
+                    phases.begin("snapshot");
                     let snapshot_before = {
                         let (dir, name) = (project_dir.clone(), snapshot_name.clone());
                         cx.background_spawn(async move {
@@ -7192,6 +7334,10 @@ impl PromptMode {
                         .await
                     };
                     record.snapshot_before = snapshot_before.clone();
+                    phases.end(
+                        "snapshot",
+                        if snapshot_before.is_some() { "taken" } else { "none" },
+                    );
                     // What the build owns outside the reference, before a
                     // spec run's container builds with no code location.
                     let owned_before = crate::piton_build::owned_outside_reference(&project_dir);
@@ -7199,7 +7345,10 @@ impl PromptMode {
                         mut events,
                         feed,
                         stop,
-                    } = harness::send_task(
+                    } = {
+                        phases.begin("harness");
+                        phases.begin("first event");
+                        harness::send_task(
                         message,
                         sent_system.clone(),
                         compiled.images.clone(),
@@ -7211,7 +7360,8 @@ impl PromptMode {
                         }),
                         project_dir.clone(),
                         protected,
-                    );
+                    )
+                    };
                     if this
                         .update(cx, |this, cx| {
                             this.in_project(&project_dir, cx, |this, cx| {
@@ -7293,6 +7443,7 @@ impl PromptMode {
                             continue;
                         }
                         record.note(&event);
+                        phases.follow(&event);
                         if let HarnessEvent::Usage { context } = &event {
                             run_context = Some(*context);
                         }
@@ -7472,9 +7623,11 @@ impl PromptMode {
                     }
                     // What it last changed is kept by the guards beside it.
                     cx.background_spawn(async move { drop(writing) }).await;
+                    phases.end("harness", if is_cancelled() { "cancelled" } else { "ended" });
                     // And as its run leaves it, whatever was put back, with
                     // the files that changed between the two.
                     if let Some(before) = snapshot_before {
+                        phases.begin("closing snapshot");
                         let edited = this
                             .update(cx, |this, cx| {
                                 this.in_project(&project_dir, cx, |this, _| {
@@ -7503,6 +7656,10 @@ impl PromptMode {
                                 (after, changed)
                             })
                             .await;
+                        phases.end(
+                            "closing snapshot",
+                            if after.is_some() { "taken" } else { "failed" },
+                        );
                         record.snapshot_after = after;
                         this.update(cx, |this, cx| {
                             this.in_project(&project_dir, cx, |this, cx| {
@@ -7562,6 +7719,7 @@ impl PromptMode {
             }
 
             record.cancelled = is_cancelled();
+            record.phases = phases.close(if record.cancelled { "cancelled" } else { "ended" });
             // When it was sent and was over, so how long it took is kept.
             if let Some(Some((started, ended))) = this
                 .update(cx, |this, cx| {
@@ -7892,6 +8050,7 @@ impl PromptMode {
         // Stopping the question drops its run, which stops it.
         let task = cx.spawn(async move |this, cx| {
             let (name, file, compiled) = compile.await;
+            let phases = crate::debug_log::Phases::new(&project_dir, name.clone());
             // Known by its name, as resending it names the next after it.
             this.update(cx, |this, cx| {
                 this.in_project(&project_dir, cx, |this, cx| {
@@ -7907,6 +8066,7 @@ impl PromptMode {
                 file: file.as_ref().ok().cloned(),
                 record: RunRecord::default(),
                 stopped,
+                phases: Some(phases),
             };
             let compiled = match file {
                 Ok(_) => compiled,
@@ -7946,6 +8106,10 @@ impl PromptMode {
                         )),
                         ..harness::Protected::default()
                     };
+                    if let Some(phases) = &mut log.phases {
+                        phases.begin("harness");
+                        phases.begin("first event");
+                    }
                     let mut events = harness::send_kept_off(
                         message,
                         sent_system.clone(),
@@ -7980,6 +8144,9 @@ impl PromptMode {
                     let mut run_session = None;
                     while let Some(event) = events.next().await {
                         log.record.note(&event);
+                        if let Some(phases) = &mut log.phases {
+                            phases.follow(&event);
+                        }
                         if this
                             .update(cx, |this, cx| {
                                 let dir = project_dir.clone();
@@ -8374,14 +8541,7 @@ impl PromptMode {
             Some(mode) => mode.label().into(),
             None => "Mode not known".into(),
         };
-        let elapsed = task.elapsed().map(|elapsed| {
-            div()
-                .flex_none()
-                .text_sm()
-                .text_color(theme.muted_foreground)
-                .font_features(crate::subagents::tabular_figures())
-                .child(crate::subagents::format_elapsed(elapsed))
-        });
+        let elapsed = task.took().map(|took| took_label(("compact-took", ix), took, cx));
         let row = div()
             .id(("compact-task", ix))
             .flex_none()
@@ -8464,7 +8624,7 @@ impl PromptMode {
                 h_flex()
                     .justify_between()
                     .gap_2()
-                    .child(task_title(ix, task, true, cx))
+                    .child(task_title(ix, task, true, true, cx))
                     .child(
                         h_flex()
                             .flex_none()
@@ -10043,7 +10203,7 @@ fn waiting_on_commands(count: usize) -> SharedString {
 /// the name of the hidden anchor it was compiled from once it has compiled;
 /// with `origin`, as in the latest task's header, beneath the name, that a
 /// task sent to Spec from a Code task was sent from Code.
-fn task_title(ix: usize, task: &PromptTask, origin: bool, cx: &App) -> Div {
+fn task_title(ix: usize, task: &PromptTask, origin: bool, elapsed: bool, cx: &App) -> Div {
     let theme = cx.theme();
     // A Freeform prompt is sent as it is, with no hidden anchor to name.
     let named = task
@@ -10065,15 +10225,12 @@ fn task_title(ix: usize, task: &PromptTask, origin: bool, cx: &App) -> Div {
                 gpui_kit::component::tooltip::Tooltip::new(tip.clone()).build(window, cx)
             })
         });
-    // Beside it, how long it has been under way, or took.
-    let elapsed = task.elapsed().map(|elapsed| {
-        gpui_kit::TestSupportExt::test_support(div().id(("task-elapsed", ix)))
-            .flex_none()
-            .text_sm()
-            .text_color(theme.muted_foreground)
-            .font_features(crate::subagents::tabular_figures())
-            .child(crate::subagents::format_elapsed(elapsed))
-    });
+    // Beside it, how long it has been under way, or took, unless that is
+    // shown in a column of its own.
+    let elapsed = task
+        .took()
+        .filter(|_| elapsed)
+        .map(|took| took_label(("task-elapsed", ix), took, cx));
     h_flex()
         .min_w_0()
         .gap_2()
@@ -10333,7 +10490,7 @@ fn task_summary(id: (&'static str, usize), ix: usize, task: &PromptTask, cx: &Ap
         .flex_1()
         .min_w_0()
         .gap_3()
-        .child(div().flex_none().child(task_title(ix, task, false, cx)))
+        .child(div().flex_none().child(task_title(ix, task, false, false, cx)))
         .child(
             div()
                 .flex_1()
@@ -12903,6 +13060,7 @@ mod tests {
         let (dir, before, after) = changed_repo("changed-restore");
         let saved = || SavedPrompt {
             sent_at: 0,
+            recorded_at: None,
             anchor: HiddenAnchor::random(),
             text: "Do it".into(),
             record: Some(RunRecord {
@@ -13055,6 +13213,79 @@ mod tests {
             assert!(alone.left() < steps[0].left(), "a hand-sent task is set in");
         })
         .unwrap();
+
+        // Each previous task says how long it took, the chain its steps
+        // together, the times lined up in a column; one whose times aren't
+        // known says nothing.
+        prompt_mode.update(cx, |this, cx| {
+            for (ix, task) in this.tasks.iter_mut().enumerate().skip(1) {
+                let started = std::time::UNIX_EPOCH + Duration::from_secs(1000 + ix as u64 * 100);
+                task.started = Some(started);
+                task.ended = Some(started + Duration::from_secs(65));
+            }
+            cx.notify();
+        });
+        prompt_mode.read_with(cx, |this, _| {
+            let steps: Vec<_> = this.tasks[1..4].iter().collect();
+            assert_eq!(
+                super::chain_took(&steps),
+                Some(super::Took {
+                    time: Duration::from_secs(265),
+                    approximate: false
+                })
+            );
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.render_frame(cx);
+            assert!(window.try_find(("history-took", 0usize)).is_none());
+            let right = |id: (&'static str, usize)| window.find(id).bounds().right();
+            let column = right(("chain-took", 1));
+            for ix in [1usize, 2, 3, 4] {
+                assert!(
+                    (right(("history-took", ix)) - column).abs() <= gpui_kit::px(1.),
+                    "task {ix}'s time isn't in the column"
+                );
+            }
+        })
+        .unwrap();
+    }
+
+    /// A task from the history says how long it took from its record; one
+    /// recorded before that was kept, as well as can be told from when its
+    /// file and record were written, approximately; and with neither, says
+    /// nothing.
+    #[test]
+    fn previous_tasks_say_how_long_they_took() {
+        use super::Took;
+        let saved = |record: Option<RunRecord>, sent_at: u64, recorded: Option<u64>| SavedPrompt {
+            anchor: HiddenAnchor::random(),
+            text: "Do it".into(),
+            record,
+            sent_at,
+            recorded_at: recorded.map(|secs| std::time::UNIX_EPOCH + Duration::from_secs(secs)),
+        };
+        let record = |times: Option<(u64, u64)>| RunRecord {
+            user_prompt: Some("Do it".into()),
+            started_at: times.map(|(started, _)| started),
+            ended_at: times.map(|(_, ended)| ended),
+            ..RunRecord::default()
+        };
+        let recorded = PromptTask::restore(saved(Some(record(Some((1_000, 61_500)))), 1, Some(9_999)));
+        assert_eq!(
+            recorded.took(),
+            Some(Took { time: Duration::from_millis(60_500), approximate: false })
+        );
+        let estimated = PromptTask::restore(saved(Some(record(None)), 1_000, Some(1_252)));
+        assert_eq!(
+            estimated.took(),
+            Some(Took { time: Duration::from_secs(252), approximate: true })
+        );
+        // A chain with an estimated step is approximate as a whole.
+        assert!(super::chain_took(&[&recorded, &estimated]).unwrap().approximate);
+        assert_eq!(PromptTask::restore(saved(Some(record(None)), 0, Some(1_252))).took(), None);
+        assert_eq!(PromptTask::restore(saved(Some(record(None)), 1_000, None)).took(), None);
+        assert_eq!(PromptTask::restore(saved(None, 1_000, Some(1_252))).took(), None);
     }
 
     /// The previous tasks' filter bar hides the tasks matching no chip on:
@@ -13928,6 +14159,7 @@ mod tests {
         let name = anchor.name().to_string();
         let task = PromptTask::restore(SavedPrompt {
             sent_at: 0,
+            recorded_at: None,
             anchor,
             text: "Do it".into(),
             record: Some(record),
@@ -13941,6 +14173,7 @@ mod tests {
 
         let unrecorded = PromptTask::restore(SavedPrompt {
             sent_at: 0,
+            recorded_at: None,
             anchor: HiddenAnchor::random(),
             text: "Old".into(),
             record: None,
@@ -14059,6 +14292,7 @@ mod tests {
         }
         let failed = PromptTask::restore(SavedPrompt {
             sent_at: 0,
+            recorded_at: None,
             anchor: HiddenAnchor::random(),
             text: "Do it".into(),
             record: Some(failed),
@@ -14153,6 +14387,7 @@ mod tests {
             }
             SavedPrompt {
                 sent_at: 0,
+                recorded_at: None,
                 anchor: HiddenAnchor::random(),
                 text: "Do it".into(),
                 record: Some(record),
@@ -14168,6 +14403,7 @@ mod tests {
             saved(&["not json"]),
             SavedPrompt {
                 sent_at: 0,
+                recorded_at: None,
                 anchor: HiddenAnchor::random(),
                 text: "Old".into(),
                 record: None,
@@ -18818,7 +19054,7 @@ mod tests {
             // Spec's understanding file is filled in, and nothing else.
             assert!(
                 sent.contains(".suspense/history/")
-                    && sent.contains(".understanding.md, and keep it current"),
+                    && sent.contains(".understanding.md, once. Rewrite it only when a constraint"),
                 "{sent}"
             );
         };
@@ -19048,7 +19284,7 @@ mod tests {
             let instructions = instructions_in(message);
             assert!(
                 instructions.contains(".suspense/history/")
-                    && instructions.contains(".understanding.md, and keep it current"),
+                    && instructions.contains(".understanding.md, once. Rewrite it only when a constraint"),
                 "no understanding file: {instructions}"
             );
             instructions.to_string()
@@ -19079,7 +19315,7 @@ mod tests {
         assert!(fluency, "the spec builds wrote no fluency file");
         for (n, (message, _)) in runs_seen.iter().enumerate().take(5) {
             assert!(
-                !message.contains("Before executing anything, read the spec"),
+                !message.contains("Read only what the change depends on"),
                 "run {n} repeats the spec reading"
             );
             let points = instructions_in(message).contains(".suspense/fluency.md once");
@@ -20904,7 +21140,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         // The system prompt is the project's: the spec reading, and nothing
         // of the task's mode or what it was handed, nor the fluency.
         for injected in [
-            "Before executing anything, read the spec it touches",
+            "Read only what the change depends on",
             "Read the spec from its compiled reference",
         ] {
             assert!(

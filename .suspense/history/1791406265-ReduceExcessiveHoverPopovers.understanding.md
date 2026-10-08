@@ -1,0 +1,5 @@
+- [A Piton file is edited with the project's LSP server, shared with the chat input](.claude/reference/scope/editor/index.md#language-support)
+- [Hovering a name shows the server's textDocument/hover](.claude/reference/scope/editor/index.md#language-support)
+- [Typing clears whatever hover shows until the pointer next moves over the text](.claude/reference/scope/editor/index.md#language-support)
+- [Diagnostics are underlined, their message shown on hover](.claude/reference/scope/editor/index.md#language-support)
+- [Hover shows only over names, after 500ms, and only when it says more than the text; prose never shows one](.claude/reference/scope/editor/index.md#language-support)

@@ -3,6 +3,7 @@
 //! a piton.config.pi set up for Belay, creates the project's folders, and opens
 //! it.
 
+use crate::process::Logged as _;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
@@ -267,7 +268,7 @@ pub fn init_git(folder: &Path) -> Result<()> {
         let output = crate::process::command("git")
             .args(["init", "--quiet"])
             .current_dir(folder)
-            .output()
+            .output_logged()
             .context("git couldn't be run")?;
         if !output.status.success() {
             bail!("{}", String::from_utf8_lossy(&output.stderr).trim());

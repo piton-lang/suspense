@@ -80,6 +80,11 @@ pub struct RunRecord {
     /// When the task was over, in milliseconds since the Unix epoch.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ended_at: Option<u64>,
+    /// When each of its phases began and ended, as the debug log names
+    /// them, in the order they began; none for one saved before they were
+    /// kept.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub phases: Vec<Phase>,
     /// In a git repository, the tree the working tree was snapshotted as
     /// when the harness started the task, pinned under
     /// `refs/suspense/<task>/before`.
@@ -89,6 +94,16 @@ pub struct RunRecord {
     /// `refs/suspense/<task>/after`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub snapshot_after: Option<String>,
+}
+
+/// One of a task's phases, as the debug log names it, and when it began and
+/// ended, in milliseconds since the Unix epoch.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Phase {
+    pub name: String,
+    pub began_at: u64,
+    pub ended_at: u64,
 }
 
 impl RunRecord {
@@ -175,6 +190,8 @@ pub struct SavedPrompt {
     /// When it was sent, in seconds since the Unix epoch, from its file's
     /// name; zero when that doesn't say.
     pub sent_at: u64,
+    /// When its record was last written, when it has one.
+    pub recorded_at: Option<std::time::SystemTime>,
 }
 
 /// The record file saved beside `prompt_file`.
@@ -286,11 +303,15 @@ fn load_dir(dir: &Path) -> Vec<SavedPrompt> {
             let record = fs::read_to_string(record_path(&file))
                 .ok()
                 .and_then(|json| serde_json::from_str(&json).ok());
+            let recorded_at = fs::metadata(record_path(&file))
+                .and_then(|meta| meta.modified())
+                .ok();
             Some(SavedPrompt {
                 anchor,
                 text,
                 record,
                 sent_at,
+                recorded_at,
             })
         })
         .collect()

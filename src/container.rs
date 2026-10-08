@@ -9,6 +9,7 @@
 //! the volumes a harness keeps its login, sessions, and caches in, how a
 //! container's paths map back to the host's, and how a harness logs in.
 
+use crate::process::Logged as _;
 use std::collections::hash_map::DefaultHasher;
 use std::ffi::OsString;
 use std::hash::{Hash as _, Hasher as _};
@@ -477,7 +478,7 @@ pub fn podman_state(platform: Platform) -> PodmanState {
     let Ok(output) = podman_command()
         .arg("--version")
         .stdin(Stdio::null())
-        .output()
+        .output_logged()
     else {
         return PodmanState::Missing;
     };
@@ -495,7 +496,7 @@ pub fn podman_state(platform: Platform) -> PodmanState {
     let machines = podman_command()
         .args(["machine", "list", "--format", "json"])
         .stdin(Stdio::null())
-        .output();
+        .output_logged();
     match machines {
         Ok(output) if output.status.success() => {
             machine_state(&String::from_utf8_lossy(&output.stdout), version)
@@ -655,7 +656,7 @@ pub fn check_access() -> std::result::Result<(), String> {
     let output = podman_command()
         .args(["info", "--format", "{{.Host.Security.Rootless}}"])
         .stdin(Stdio::null())
-        .output()
+        .output_logged()
         .map_err(|err| err.to_string())?;
     if output.status.success() {
         return Ok(());
@@ -682,7 +683,7 @@ fn stream(command: &mut Command, on_line: &mut dyn FnMut(String)) -> Result<()> 
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()
+        .spawn_logged()
         .context("could not run podman")?;
     let stderr = child.stderr.take().context("no stderr")?;
     let (tx, rx) = std::sync::mpsc::channel();
@@ -732,7 +733,7 @@ fn host_version(command: &str) -> Option<String> {
     let output = crate::process::command(command)
         .arg("--version")
         .stdin(Stdio::null())
-        .output()
+        .output_logged()
         .ok()?;
     version_in(&String::from_utf8_lossy(&output.stdout))
 }
@@ -803,7 +804,7 @@ fn image_exists(image: &str) -> bool {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .status()
+        .status_logged()
         .is_ok_and(|status| status.success())
 }
 
@@ -1018,7 +1019,7 @@ fn build(
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .status()
+            .status_logged()
             .ok();
         return Err(err);
     }
@@ -1026,7 +1027,7 @@ fn build(
         let tagged = podman_command()
             .args(["tag", &id, tag])
             .stdin(Stdio::null())
-            .output()
+            .output_logged()
             .context("could not run podman")?;
         if !tagged.status.success() {
             bail!(
@@ -1127,7 +1128,7 @@ fn check_commands(image: &str, commands: &[&str], on_line: &mut dyn FnMut(String
         }
         let output = run
             .stdin(Stdio::null())
-            .output()
+            .output_logged()
             .context("could not run podman")?;
         let printed = format!(
             "{}{}",
@@ -1209,7 +1210,7 @@ pub fn ensure_volume(agent: Agent) -> Result<()> {
     let output = podman_command()
         .args(["volume", "create", "--ignore", &home_volume(agent)])
         .stdin(Stdio::null())
-        .output()
+        .output_logged()
         .context("could not run podman")?;
     if !output.status.success() {
         bail!(
@@ -1229,7 +1230,7 @@ pub fn logged_in(agent: Agent, image: &str, platform: Platform) -> Result<bool> 
     let output = podman_command()
         .args(plan.run_args(image, agent.command(), &args, false))
         .stdin(Stdio::null())
-        .output()
+        .output_logged()
         .context("could not run podman")?;
     // Podman failing to run the status check isn't the harness logged out.
     if output.stdout.is_empty()

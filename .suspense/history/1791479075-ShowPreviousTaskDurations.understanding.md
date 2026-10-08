@@ -1,0 +1,8 @@
+- [Beside its status label a task shows how long it took, wherever the status shows, previous tasks included](.claude/reference/scope/prompt-mode/message-list/index.md#elapsed)
+- [A task from the history whose record holds no start and end shows no time](.claude/reference/scope/prompt-mode/message-list/index.md#elapsed)
+- [Elapsed is written in small muted tabular figures, "0:42", "12:05", "1:02:33"](.claude/reference/scope/prompt-mode/message-list/index.md#elapsed)
+- [Each history list item is headed by its status and its prompt's first line](.claude/reference/ui/components/history-list/index.md#list)
+- [A task's history record is named by the second it was sent and written once its run is over](.claude/reference/scope/project-data/index.md#contents)
+- [A chain's steps are grouped under a parent row in the previous tasks](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A task's record keeps when it was sent and when it ended](.claude/reference/scope/project-data/index.md#contents)
+- [Previous tasks show durations in a right-aligned column, chains their total, older records an approximate "≈"](.claude/reference/scope/prompt-mode/message-list/index.md#elapsed)

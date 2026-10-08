@@ -9,6 +9,7 @@
 //! It can also merge: the file on disk against an editor's unsaved text, each
 //! change taken from either side, the result handed back to the editor.
 
+use crate::process::Logged as _;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -1018,7 +1019,7 @@ fn committed(path: &Path) -> Option<Vec<u8>> {
         .arg("show")
         .arg(format!("HEAD:./{name}"))
         .current_dir(dir)
-        .output()
+        .output_logged()
         .ok()?;
     output.status.success().then_some(output.stdout)
 }

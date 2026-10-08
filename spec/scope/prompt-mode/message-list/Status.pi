@@ -19,4 +19,18 @@ export shape MessageListStatusShape:
         at how long the task took. It shows wherever the status label does,
         the latest task's header and the heading of each previous task,
         including a task running in the other lane. A task from the history
-        whose record holds no start and end shows none.
+        whose record holds no start and end, as one recorded before they
+        were kept, shows how long it took as well as can be told, from the
+        second its history file is named by to when its record was written,
+        with "≈" before it, as "≈ 4:12", its tooltip saying it is
+        approximate; one where neither can be told shows none.
+
+        Among the previous tasks, every task's heading shows how long it
+        took, as the latest task's header does, though not beside its status: done,
+        failed, or cancelled alike, and a task still running there counting
+        up. A chain's parent row shows the time its steps took together,
+        from when its first step was sent to when its last ended, and each
+        step's heading beneath it its own. The times line up, right-aligned
+        in their own column of the heading, just before its buttons, so the
+        list reads as a column of durations that can be compared at a
+        glance, and a long one stands out.

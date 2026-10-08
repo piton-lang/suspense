@@ -2023,6 +2023,42 @@ impl MainWindow {
         self.palette = Some(palette);
     }
 
+    /// Collects debug info, as the DebugLogScope says, off the UI thread,
+    /// and shows the folder it wrote in the file manager; one that can't be
+    /// written says why.
+    fn collect_debug_info(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(data_dir) = crate::debug_log::data_dir() else {
+            return;
+        };
+        let project = ProjectDirectory::get(cx);
+        let collected = cx.background_spawn(async move {
+            crate::debug_log::collect(
+                &data_dir,
+                crate::debug_log::file().as_deref(),
+                crate::self_update::log::file().as_deref(),
+                project.as_deref(),
+                chrono::Local::now(),
+            )
+        });
+        cx.spawn_in(window, async move |_, cx| {
+            let collected = collected.await;
+            cx.update(|window, cx| match collected {
+                Ok(folder) => cx.open_with_system(&folder),
+                Err(err) => {
+                    let why = format!("{err:#}");
+                    crate::debug_log::log(None, format!("could not collect debug info: {why}"));
+                    window.push_notification(
+                        gpui_kit::component::notification::Notification::error(why)
+                            .title("Could not collect debug info"),
+                        cx,
+                    );
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
     fn run_picked(&mut self, picked: &Picked, window: &mut Window, cx: &mut Context<Self>) {
         match picked {
             Picked::File(path) => self.prompt_mode.update(cx, |prompt_mode, cx| {
@@ -2043,6 +2079,16 @@ impl MainWindow {
                 }
                 SystemCommand::Settings => self.open_settings(window, cx),
                 SystemCommand::About => self.open_about(window, cx),
+                SystemCommand::CollectDebugInfo => self.collect_debug_info(window, cx),
+                SystemCommand::OpenDebugLog => {
+                    // Opened as any file is, the panel making way for it.
+                    if let Some(file) = crate::debug_log::file().filter(|file| file.exists()) {
+                        self.close_panel(window, cx);
+                        self.prompt_mode.update(cx, |prompt_mode, cx| {
+                            prompt_mode.open_file(file, window, cx)
+                        });
+                    }
+                }
                 SystemCommand::Quit => self.quit(window, cx),
             },
         }

@@ -17,6 +17,8 @@ pub const APP_TITLE: &str = "Suspense";
 actions!(suspense, [Quit]);
 
 pub fn run() {
+    // Logged from the start, panics included.
+    crate::debug_log::init();
     // An update a quit left staged is put in place, and a binary an update
     // set aside is deleted, before anything else.
     let finished_update = crate::self_update::at_launch();
@@ -36,6 +38,7 @@ pub fn run() {
         }
 
         crate::self_update::Updates::init(finished_update, cx);
+        crate::debug_log::watch_stalls(cx);
 
         // Never from within the window the action came from.
         cx.on_action(|_: &Quit, cx| main_window::MainWindow::quit_later(false, cx));

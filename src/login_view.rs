@@ -4,6 +4,7 @@
 //! host's browser; a code it asks for is pasted into the field and goes to
 //! the command. The credentials stay in the harness's volume.
 
+use crate::process::Logged as _;
 use std::io::{Read as _, Write as _};
 use std::sync::mpsc;
 use std::time::Duration;
@@ -384,7 +385,7 @@ fn spawn(mut command: std::process::Command, tty: bool) -> anyhow::Result<Spawne
                 Ok(())
             });
         }
-        let child = command.spawn()?;
+        let child = command.spawn_logged()?;
         // Closed in this process, so the terminal ends with the command.
         drop(command);
         let reader = leader.try_clone()?;
@@ -395,7 +396,7 @@ fn spawn(mut command: std::process::Command, tty: bool) -> anyhow::Result<Spawne
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::inherit())
-        .spawn()?;
+        .spawn_logged()?;
     let output = child
         .stdout
         .take()

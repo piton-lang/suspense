@@ -57,6 +57,7 @@ impl ProjectLsp {
     fn restart(cx: &mut App) {
         // Dropping the old server stops it.
         let project = ProjectDirectory::get(cx);
+        crate::debug_log::log(project.as_deref(), "language server restart");
         cx.set_global(Self {
             client: None,
             project: project.clone(),
@@ -71,7 +72,20 @@ impl ProjectLsp {
     fn start(project_dir: PathBuf, quick_failures: usize, cx: &mut App) {
         let start = cx.background_spawn({
             let project_dir = project_dir.clone();
-            async move { LspClient::start(&project_dir) }
+            async move {
+                let what = if quick_failures > 0 {
+                    "language server restart"
+                } else {
+                    "language server start"
+                };
+                let timed = crate::debug_log::Timed::begin(Some(&project_dir), what);
+                let started = LspClient::start(&project_dir);
+                timed.end(match &started {
+                    Ok(_) => "running".to_string(),
+                    Err(err) => format!("failed: {err:#}"),
+                });
+                started
+            }
         });
         cx.spawn(async move |cx| {
             let client = match start.await {
@@ -118,6 +132,10 @@ impl ProjectLsp {
                 if current {
                     if let Some(client) = Self::get(cx) {
                         eprintln!("piton lsp stopped: {}", client.exit_report());
+                        crate::debug_log::log(
+                            Some(&project_dir),
+                            format!("language server stopped on its own: {}", client.exit_report()),
+                        );
                     }
                     cx.global_mut::<Self>().client = None;
                 }

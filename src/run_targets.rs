@@ -3,6 +3,7 @@
 //! project in `.suspense/run.json`, then run from the ribbon's Code tab with
 //! their output streamed into the Run panel.
 
+use crate::process::Logged as _;
 use std::io::{BufRead as _, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -211,7 +212,7 @@ impl Running {
         // The head of a tree of its own, so stopping it stops all it started.
         crate::process_tree::prepare(&mut shell);
         let mut child = shell
-            .spawn()
+            .spawn_logged()
             .with_context(|| format!("could not run {command}"))?;
         let tree = crate::process_tree::Tree::of(&child);
         let on_line = Arc::new(on_line);
@@ -262,6 +263,7 @@ impl Running {
     /// keeps its output open is given a second before it counts as ended.
     pub fn exited(&self) -> Option<Option<i32>> {
         let status = self.child.lock().unwrap().try_wait().ok()??;
+        crate::process::ended(self.child.lock().unwrap().id(), Some(status), None);
         let ended_at = *self
             .ended_at
             .lock()
@@ -287,6 +289,10 @@ impl Running {
     pub fn stop(&self) {
         self.stopping.store(true, std::sync::atomic::Ordering::SeqCst);
         self.tree.stop(&self.child);
+        let mut child = self.child.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let status = child.try_wait().ok().flatten();
+        crate::process::ended(child.id(), status, None);
+        drop(child);
         self.stopped.store(true, std::sync::atomic::Ordering::SeqCst);
     }
 

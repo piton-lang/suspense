@@ -7,6 +7,7 @@
 //! files, measures of each file, and a divergence score for the whole project,
 //! and each report is saved with the project, since analyses are costly.
 
+use crate::process::Logged as _;
 use std::collections::{BTreeMap, HashSet};
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
@@ -724,7 +725,7 @@ pub fn run_agent(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()
+        .spawn_logged()
         .with_context(|| format!("could not run {}", crate::agent::current().command()))?;
     let mut stdin = child
         .stdin

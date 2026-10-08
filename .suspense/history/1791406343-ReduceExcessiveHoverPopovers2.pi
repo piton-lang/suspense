@@ -1,0 +1,71 @@
+
+export anchor ReduceExcessiveHoverPopovers2:
+    userPrompt:
+        \\\
+        Hovering over every single word in the editor pops "compiled to XYZ" and it's really obnoxious.  We only wanter hover popovers for useful things.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Hovering over every single word in the editor pops "compiled to XYZ" and it's really obnoxious.  We only wanter hover popovers for useful things.
+            \\\
+        result:
+            \\\
+            The popover appears because the editor shows whatever the Piton language server returns for any word, and the server answers for plain text too, with "compiled to …". I changed the spec so the editor decides what's worth showing, rather than trusting every answer the server gives. `piton check` reports no problems and `piton build` wrote 81 files.
+
+            ## What changed in the spec
+
+            The `hover` rule in `spec/scope/editor/index.pi` (`.claude/reference/scope/editor/index.md#language-support`) now says:
+
+            - **Names only:** a hover popover only appears over names:
+              - a key or property name
+              - an anchor's name where it's declared or extended
+              - a keyword
+              - a name brought in by an import
+              - a name inside an expression in braces, including `$`, `#` and `@` expressions
+            - **Never prose:** plain text in a value is never hovered, whatever the server returns. Neither are numbers, punctuation, indentation, comments or blank space, so moving over a paragraph shows nothing.
+            - **Only if useful:** even over a name, a hover shows only when it adds something. One that just repeats the text as its compiled value ("compiled to" the same words), or is empty, shows nothing.
+            - **Delay:** a hover appears only after the pointer has rested on a name for 500ms, never while it passes over the text. It goes as soon as the pointer leaves the name.
+            - **Errors unchanged:** error and warning messages still show when you hover their underline, wherever it is, prose included.
+            - **Typing unchanged:** typing still clears any hover until the pointer moves again.
+
+            **My choice:** the 500ms delay is my own number, so change it if it feels slow.
+
+            The constraints are in `.suspense/history/1791406265-ReduceExcessiveHoverPopovers.understanding.md`.
+
+            ## Anchors the code should follow
+            - `EditorScope`: `#language-support`, its `hover` entry for which positions are hovered, dropping empty or repeat-the-text answers, and the 500ms delay. The `diagnostics` entry is unchanged.
+            - `LSP`: the hover request itself is unchanged; the filtering happens in the editor.
+            \\\
+
+    sentFrom: ReduceExcessiveHoverPopovers

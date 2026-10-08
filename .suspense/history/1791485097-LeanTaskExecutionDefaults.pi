@@ -1,0 +1,66 @@
+
+export anchor LeanTaskExecutionDefaults:
+    userPrompt:
+        \\\
+        Tasks spend as few turns as they can before doing the work. The spec-reading default tells a task to read only the compiled reference the prompt links to and what those pages link to that the change actually depends on, not to survey the spec first, and never to read a reference page already given to it as a slice in the prompt. The understanding file is written once, after the reading and before the first change, and rewritten only when a constraint in it turns out to be wrong, never after every page read. The defaults ask for a final reply of a few sentences saying what changed, not a recap of the work.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Before changing anything, write the constraints this task must meet to ${UNDERSTANDING_FILE}, and keep it current as you read more of the spec. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Tasks spend as few turns as they can before doing the work. The spec-reading default tells a task to read only the compiled reference the prompt links to and what those pages link to that the change actually depends on, not to survey the spec first, and never to read a reference page already given to it as a slice in the prompt. The understanding file is written once, after the reading and before the first change, and rewritten only when a constraint in it turns out to be wrong, never after every page read. The defaults ask for a final reply of a few sentences saying what changed, not a recap of the work.
+            \\\
+        result:
+            \\\
+            I rewrote the default prompts so tasks read less before they start, write their constraints once, and end with a short reply. `piton check` reports no problems and `piton build` wrote 81 files.
+
+            ## What changed in the spec
+
+            All edits are in `spec/scope/prompt-mode/mode-system-prompts/index.pi`, under `#defaults`.
+
+            - **Spec-reading default:** its last paragraph now tells a task to:
+              - read the reference pages the prompt links to, then only the pages those link to that the change depends on;
+              - not survey the spec, list its folders or search it first;
+              - never read a page the prompt already gives it as a slice, or anything it has already read.
+            - **Understanding-file paragraph** (Code, Chain and Spec defaults): the file is written once, after reading and before the first change, and rewritten only when a constraint in it turns out to be wrong, never after each page read. It used to say to write it before changing anything and keep it current while reading.
+            - **Short final reply (new):** the Code, Chain, Spec and Ask defaults end by asking for "a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read."
+            - **Summary sentence:** a sentence after the defaults states the goal: as few turns as possible before the work starts.
+
+            **Existing projects won't pick this up on their own.** The spec already says a project keeps its saved prompts when a default changes. Reset the prompts in Settings to get the new defaults; new projects get them automatically.
+
+            The constraints are in `.suspense/history/1791485035-Prompt_81f60e02b63f82e2.understanding.md`.
+
+            ## Anchors the code should follow
+            - `ModeSystemPromptsScope` `#defaults`: update `spec-reading.md`, `code.md`, `combined.md`, `spec.md` and `ask.md` in this repository's `.suspense/system-prompts`. The built-in defaults are taken from those files.
+            \\\
+
+    sentFrom: Prompt_81f60e02b63f82e2

@@ -3,6 +3,7 @@
 //! built, but for the version of piton on the machine, which `piton
 //! --version` says once the panel opens.
 
+use crate::process::Logged as _;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -66,7 +67,7 @@ pub fn platform() -> String {
 fn piton_version() -> Option<String> {
     let output = crate::process::command("piton")
         .arg("--version")
-        .output()
+        .output_logged()
         .ok()
         .filter(|output| output.status.success())?;
     let printed = String::from_utf8_lossy(&output.stdout).trim().to_string();

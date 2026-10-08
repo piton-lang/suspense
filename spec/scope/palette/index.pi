@@ -1,6 +1,7 @@
 use /lib
 use /ui
 from /scope/about import AboutScope
+from /scope/debug-log import DebugLogScope
 from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
 from /scope/harness-integration/catalog import HarnessCatalogScope
 from /scope/import-project import ImportProjectScope
@@ -104,7 +105,8 @@ shape PaletteShape:
             @{OpenProjectScope}, "Build", "Dark mode" or
             "Light mode" (whichever is not the current one), "Settings…", which
             opens the @{SettingsWindowScope}, "About Suspense", which opens the
-            @{AboutScope}, and "Quit". Build builds the spec
+            @{AboutScope}, "Collect debug info" and "Open debug log", as the
+            @{DebugLogScope} says, and "Quit". Build builds the spec
             on its own, as the @{SpecBuildScope} says.
 
         commands:
