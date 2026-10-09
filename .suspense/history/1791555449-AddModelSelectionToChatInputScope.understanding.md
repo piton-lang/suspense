@@ -1,0 +1,8 @@
+- [The tab bar's right end holds Slice, then the context figure, usage, and New conversation](.claude/reference/scope/prompt-mode/chat-input/index.md#slice)
+- [Slice is a small ghost toggle that applies to every tab and persists across sends, tabs, and projects](.claude/reference/scope/prompt-mode/chat-input/index.md#slice)
+- [The help text gives way to the session controls rather than cutting them off](.claude/reference/scope/prompt-mode/chat-input/index.md#session)
+- [Each harness is run its own way: claude -p, codex exec, opencode run](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [Notes, commit messages, and titles use a small model where the harness can be told one](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [The harness picked is remembered for the user, not the project](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [A prompt's hidden anchor records its mode, kept in the queue and history](.claude/reference/scope/prompt-mode/modes/index.md#freeform)
+- [A model picker left of Slice sends every prompt but Freeform to the model chosen, remembered per harness](.claude/reference/scope/prompt-mode/chat-input/index.md#model)

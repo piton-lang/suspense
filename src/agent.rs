@@ -14,7 +14,7 @@ const APP_DIR: &str = "suspense";
 const FILE_NAME: &str = "agent";
 
 /// A coding harness.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Agent {
     Claude,
     OpenCode,

@@ -25,7 +25,7 @@ use gpui_kit::component::input::{
     SelectToStartOfLine, ShowDocumentHandler, TabSize,
 };
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Selectable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
+    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
     v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
@@ -45,7 +45,7 @@ use crate::project_directory::ProjectDirectory;
 use crate::project_lsp::ProjectLsp;
 use crate::selection_popover::{SelectionAction, selection_popover};
 
-actions!(file_view, [SaveFile, ToggleWrap]);
+actions!(file_view, [SaveFile, WrapLines]);
 
 const CONTEXT: &str = "FileView";
 
@@ -60,70 +60,15 @@ const SAVE_SHORTCUT: &str = "⌘S";
 #[cfg(not(target_os = "macos"))]
 const SAVE_SHORTCUT: &str = "Ctrl+S";
 
-/// Whether the editor wraps long lines, as the EditorScope's wrap says: the
-/// user's, the same for every file and project, remembered across sessions.
-/// Off until turned on.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Wrap(pub bool);
-
-impl Global for Wrap {}
-
-impl Wrap {
-    /// Whether long lines wrap.
-    pub fn get(cx: &App) -> bool {
-        cx.try_global::<Self>().is_some_and(|wrap| wrap.0)
-    }
-
-    /// Wraps long lines, or not, in every file, and remembers so.
-    pub fn set(wrap: bool, cx: &mut App) {
-        cx.set_global(Self(wrap));
-        wrap_preference::save(wrap);
-    }
-}
-
-/// Where the wrap choice is kept, as the UserPreferencesScope says. Tests
-/// keep none.
-mod wrap_preference {
-    #[cfg(not(test))]
-    fn file() -> Option<std::path::PathBuf> {
-        Some(dirs::config_dir()?.join("suspense").join("editor-wrap"))
-    }
-
-    pub fn load() -> bool {
-        #[cfg(not(test))]
-        if let Some(file) = file() {
-            return std::fs::read_to_string(file).is_ok_and(|text| text.trim() == "wrap");
-        }
-        false
-    }
-
-    /// Saves the choice; it is only a convenience, so failing to is ignored.
-    pub fn save(wrap: bool) {
-        #[cfg(not(test))]
-        if let Some(file) = file() {
-            if let Some(dir) = file.parent() {
-                std::fs::create_dir_all(dir).ok();
-            }
-            std::fs::write(file, if wrap { "wrap" } else { "no-wrap" }).ok();
-        }
-        #[cfg(test)]
-        let _ = wrap;
-    }
-}
-
-/// The wrap toggle's shortcut, as its tooltip names it.
+/// The Wrap button's shortcut, as its tooltip names it.
 #[cfg(target_os = "macos")]
 const WRAP_SHORTCUT: &str = "⌥Z";
 #[cfg(not(target_os = "macos"))]
 const WRAP_SHORTCUT: &str = "Alt+Z";
 
 pub fn bind_keys(cx: &mut App) {
-    // The remembered choice, before any file opens.
-    if cx.try_global::<Wrap>().is_none() {
-        cx.set_global(Wrap(wrap_preference::load()));
-    }
     cx.bind_keys([
-        KeyBinding::new("alt-z", ToggleWrap, Some(CONTEXT)),
+        KeyBinding::new("alt-z", WrapLines, Some(CONTEXT)),
         #[cfg(target_os = "macos")]
         KeyBinding::new("cmd-s", SaveFile, Some(CONTEXT)),
         #[cfg(not(target_os = "macos"))]
@@ -342,7 +287,8 @@ impl FileView {
                     tab_size: TAB_SIZE,
                     hard_tabs: false,
                 })
-                .soft_wrap(Wrap::get(cx))
+                // Lines show as they are: Wrap changes the text itself.
+                .soft_wrap(false)
                 .placeholder("Loading…")
         });
 
@@ -359,8 +305,6 @@ impl FileView {
                 },
             ),
             cx.observe_global_in::<ProjectLsp>(window, |this, _, cx| this.attach_lsp(cx)),
-            // Wrapped or not as the user last chose, in every file at once.
-            cx.observe_global_in::<Wrap>(window, |this, window, cx| this.apply_wrap(window, cx)),
         ];
 
         let read = cx.background_spawn({
@@ -1149,17 +1093,6 @@ impl FileView {
         let cursor = editor.cursor();
         let row = text.offset_to_position(cursor).line as usize;
         let start = text.line_start_offset(row);
-        // Wrapped, on a row after the line's first, Home goes to that row's
-        // start, as the editor's own does; smart indentation applies only to
-        // the line's first row.
-        if Wrap::get(cx) {
-            let top = |offset: usize| editor.range_to_bounds(&(offset..offset)).map(|b| b.top());
-            if let (Some(line), Some(at)) = (top(start), top(cursor))
-                && at > line + px(1.)
-            {
-                return;
-            }
-        }
         let line = text.slice_line(row).to_string();
         let target = start + home_column(&line, cursor - start);
         let range = editor.selected_range();
@@ -1179,42 +1112,50 @@ impl FileView {
         cx.stop_propagation();
     }
 
-    /// Wraps its long lines, or not, as the user chose, keeping the cursor's
-    /// line where it was in view.
-    fn apply_wrap(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let wrap = Wrap::get(cx);
-        let before = self.cursor_line_top(cx);
-        self.editor
-            .update(cx, |editor, cx| editor.set_soft_wrap(wrap, window, cx));
-        cx.notify();
-        // Once laid out again, the cursor's line goes back where it was.
-        let (this, editor) = (cx.entity().downgrade(), self.editor.downgrade());
-        window.on_next_frame(move |window, cx| {
-            let (Some(this), Some(editor), Some(before)) = (this.upgrade(), editor.upgrade(), before)
-            else {
-                return;
-            };
-            let Some(after) = this.read(cx).cursor_line_top(cx) else {
-                return;
-            };
-            editor.update(cx, |editor, cx| {
-                let mut offset = editor.scroll_offset();
-                offset.y -= after - before;
-                offset.y = offset.y.min(px(0.));
-                editor.set_scroll_offset(offset, cx);
-            });
-            window.refresh();
-        });
+    /// Whether it is a Piton file, which Wrap hard wraps.
+    fn is_piton(&self) -> bool {
+        self.language == piton_syntax::LANGUAGE_NAME
     }
 
-    /// Where the top of the cursor's line is in the window, while it is laid
-    /// out in view.
-    fn cursor_line_top(&self, cx: &App) -> Option<Pixels> {
+    /// Hard wraps the lines the selection touches, or with nothing selected
+    /// the whole file, at 80 columns by Piton's rules, as the EditorScope's
+    /// wrap says: one edit, undone in one step, the cursor and selection
+    /// kept on the same text, and nothing saved.
+    fn wrap_lines(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.is_piton() || self.saved.is_none() {
+            return;
+        }
         let editor = self.editor.read(cx);
-        let text = editor.text();
-        let row = text.offset_to_position(editor.cursor()).line as usize;
-        let start = text.line_start_offset(row);
-        editor.range_to_bounds(&(start..start)).map(|bounds| bounds.top())
+        let text = editor.value().to_string();
+        let selected = editor.selected_range();
+        let rows = if selected.is_empty() {
+            0..usize::MAX
+        } else {
+            let row = |offset: usize| text[..offset].matches('\n').count();
+            let last = row(selected.end);
+            // A selection ending at a line's very start doesn't touch it.
+            let last = if last > row(selected.start) && text[..selected.end].ends_with('\n') {
+                last - 1
+            } else {
+                last
+            };
+            row(selected.start)..last + 1
+        };
+        let wrap = crate::piton_wrap::wrap(&text, rows);
+        let Some(span) = wrap.span() else {
+            return;
+        };
+        let wrapped = wrap.apply(&text);
+        // Only what changed is replaced, as one edit.
+        let new_span = wrap.offset(span.start)..wrap.offset(span.end);
+        let replacement = wrapped[new_span].to_string();
+        let kept = wrap.offset(selected.start)..wrap.offset(selected.end);
+        self.editor.update(cx, |editor, cx| {
+            editor.set_selected_range(span, cx);
+            editor.replace(replacement, window, cx);
+            editor.set_selected_range(kept, cx);
+        });
+        cx.notify();
     }
 
     /// Paints the ruler at [`RULER_COLUMN`], and the darker background past
@@ -1342,21 +1283,19 @@ impl Render for FileView {
                 )
             })
             .child(div().flex_1().min_w_2())
-            .child({
-                let wrapping = Wrap::get(cx);
-                Button::new("wrap-file")
-                    .ghost()
-                    .xsmall()
-                    .size(HEADER_BUTTON)
-                    .mr_1()
-                    .icon(IconName::TextWrap)
-                    .selected(wrapping)
-                    .tooltip(if wrapping {
-                        format!("Long lines wrap; click to let them run past the edge ({WRAP_SHORTCUT})")
-                    } else {
-                        format!("Long lines run past the edge; click to wrap them ({WRAP_SHORTCUT})")
-                    })
-                    .on_click(cx.listener(|_, _, _, cx| Wrap::set(!Wrap::get(cx), cx)))
+            // Only a Piton file is wrapped, once it can be edited.
+            .when(self.is_piton(), |header| {
+                header.child(
+                    Button::new("wrap-file")
+                        .ghost()
+                        .xsmall()
+                        .size(HEADER_BUTTON)
+                        .mr_1()
+                        .icon(IconName::TextWrap)
+                        .disabled(self.saved.is_none())
+                        .tooltip(format!("Wrap long lines at 80 columns ({WRAP_SHORTCUT})"))
+                        .on_click(cx.listener(|this, _, window, cx| this.wrap_lines(window, cx))),
+                )
             })
             .child(
                 Button::new("save-file")
@@ -1395,7 +1334,7 @@ impl Render for FileView {
             .size_full()
             .min_w(min_width)
             .on_action(cx.listener(|this, _: &SaveFile, window, cx| this.save(window, cx)))
-            .on_action(cx.listener(|_, _: &ToggleWrap, _, cx| Wrap::set(!Wrap::get(cx), cx)))
+            .on_action(cx.listener(|this, _: &WrapLines, window, cx| this.wrap_lines(window, cx)))
             .capture_action(cx.listener(Self::route_enter_to_menus))
             .capture_action(
                 cx.listener(|this, _: &Backspace, window, cx| {
@@ -2307,49 +2246,88 @@ mod tests {
         std::fs::remove_file(&file).ok();
     }
 
-    /// The Wrap button wraps long lines at the editor's edge, in every file,
-    /// and unwraps them again; the text is the same either way.
+    /// In a Piton file, Wrap hard wraps the long lines at 80 columns by
+    /// Piton's rules, as one edit undone in one step, the cursor kept on the
+    /// same text and nothing saved; with a selection, only the lines it
+    /// touches. Its button sits just before Save, 24 pixels square.
     #[gpui_kit::test]
-    async fn the_wrap_button_wraps_long_lines(cx: &mut TestAppContext) {
-        let long = format!("    {}\nshort\n", "word ".repeat(80));
-        let file = temp_file("file-view-wrap", &long);
+    async fn wrap_hard_wraps_a_piton_file(cx: &mut TestAppContext) {
+        use gpui_kit::px;
+        let long = |n: usize| {
+            (0..n)
+                .map(|word| format!("word{word}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
+        let text = format!(
+            "scope A:\n    pitch:\n        {}\n    more:\n        {}\n",
+            long(25),
+            long(25)
+        );
+        let file = std::env::temp_dir().join(format!("suspense-file-view-wrap-{}.pi", std::process::id()));
+        std::fs::write(&file, &text).unwrap();
         init(cx, None);
         let (view, handle) = open(cx, &file, None);
         cx.wait_for(handle, TIMEOUT, |_, cx| {
-            view.read(cx).editor.read(cx).value().as_ref() == long
+            view.read(cx).editor.read(cx).value().as_ref() == text
         })
         .await;
-        let tops = |cx: &mut TestAppContext| {
-            cx.update_window(handle, |_, window, cx| {
-                window.render_frame(cx);
-                window.render_frame(cx);
-                let editor = view.read(cx).editor.read(cx);
-                let end = long.find('\n').unwrap();
-                let top = |at: usize| editor.range_to_bounds(&(at..at)).unwrap().top();
-                (top(0), top(end))
-            })
-            .unwrap()
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let (wrap, save) = (
+                window.find("wrap-file").bounds(),
+                window.find("save-file").bounds(),
+            );
+            assert_eq!((wrap.size.width, wrap.size.height), (px(24.), px(24.)));
+            assert!((save.left() - wrap.right() - px(4.)).abs() <= px(0.5));
+        })
+        .unwrap();
+        let value = |cx: &mut TestAppContext| {
+            view.read_with(cx, |view, cx| view.editor.read(cx).value().to_string())
         };
-        assert!(!cx.update(|cx| super::Wrap::get(cx)), "it starts off");
-        let (start, end) = tops(cx);
-        assert_eq!(start, end, "a line ran onto another row unwrapped");
+
+        // With the first long line selected, only it wraps, the cursor on
+        // the same word.
+        let first = text.find("word20").unwrap();
+        view.update(cx, |view, cx| {
+            view.editor
+                .update(cx, |editor, cx| editor.set_selected_range(first..first + 6, cx))
+        });
         cx.update_window(handle, |_, window, cx| window.click("wrap-file", cx))
             .unwrap();
         cx.run_until_parked();
-        assert!(cx.update(|cx| super::Wrap::get(cx)));
-        let (start, end) = tops(cx);
-        assert!(end > start, "the long line didn't wrap");
-        assert_eq!(view.read_with(cx, |view, cx| view.editor.read(cx).value().to_string()), long);
-        // Alt+Z does the same, unwrapping it.
+        let once = value(cx);
+        let expected = crate::piton_wrap::wrap(&text, 2..3).apply(&text);
+        assert_eq!(once, expected);
+        assert!(once.ends_with(&format!("        {}\n", long(25))), "{once}");
+        let selected = view.read_with(cx, |view, cx| view.editor.read(cx).selected_range());
+        assert_eq!(&once[selected], "word20");
+        // Changed, not saved.
+        assert!(view.read_with(cx, |view, _| view.dirty));
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), text);
+
+        // Alt+Z, with nothing selected, wraps the whole file.
         cx.update_window(handle, |_, window, cx| {
-            view.read(cx).editor.read(cx).focus_handle(cx).focus(window, cx);
+            view.update(cx, |view, cx| {
+                view.editor.update(cx, |editor, cx| {
+                    editor.set_selected_range(0..0, cx);
+                    editor.focus_handle(cx).focus(window, cx);
+                })
+            });
             window.press("alt-z", cx);
         })
         .unwrap();
         cx.run_until_parked();
-        assert!(!cx.update(|cx| super::Wrap::get(cx)));
-        let (start, end) = tops(cx);
-        assert_eq!(start, end);
+        let whole = value(cx);
+        assert_eq!(whole, crate::piton_wrap::wrap(&once, 0..usize::MAX).apply(&once));
+        assert!(whole.lines().all(|line| line.chars().count() <= 80), "{whole}");
+
+        // Each wrap is undone in one step.
+        let undo = if cfg!(target_os = "macos") { "cmd-z" } else { "ctrl-z" };
+        cx.update_window(handle, |_, window, cx| window.press(undo, cx))
+            .unwrap();
+        cx.run_until_parked();
+        assert_eq!(value(cx), once);
         std::fs::remove_file(&file).ok();
     }
 
@@ -2448,9 +2426,8 @@ mod tests {
             let header = window.find("file-header").bounds();
             let save = window.find("save-file").bounds();
             let close = window.find("close-file").bounds();
-            let wrap = window.find("wrap-file").bounds();
-            assert_eq!((wrap.size.width, wrap.size.height), (px(24.), px(24.)));
-            assert!((save.left() - wrap.right() - px(4.)).abs() <= px(0.5));
+            // Wrap is only a Piton file's.
+            assert!(window.try_find("wrap-file").is_none());
             let text = view
                 .read(cx)
                 .editor

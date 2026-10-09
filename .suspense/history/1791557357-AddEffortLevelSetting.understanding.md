@@ -1,0 +1,6 @@
+- [The model picker sits just left of the Slice toggle, a small ghost button with a chevron, naming the model](.claude/reference/scope/prompt-mode/chat-input/index.md#model)
+- [The model choice is remembered per harness, starts at Default, and persists across sends, tabs, and projects](.claude/reference/scope/prompt-mode/chat-input/index.md#model)
+- [Freeform always uses the default and disables the model picker](.claude/reference/scope/prompt-mode/chat-input/index.md#model)
+- [A prompt's hidden anchor records the model it was sent with; queued and resent prompts keep theirs](.claude/reference/scope/prompt-mode/chat-input/index.md#model)
+- [Each harness is run its own way: claude -p, codex exec, opencode run](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [Notes, commit messages, and prompt titles use a small model where the harness can be told one](.claude/reference/scope/harness-integration/index.md#harnesses)

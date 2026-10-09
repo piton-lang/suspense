@@ -1,0 +1,6 @@
+- [The editor header has a Wrap icon button before Save, with the shortcut Alt+Z](.claude/reference/scope/editor/index.md#layout)
+- [The ruler marks the 80th column, the width a line should keep within](.claude/reference/scope/editor/index.md#ruler)
+- [Piton files are edited with the project's LSP server, kept current with full-text didChange](.claude/reference/scope/editor/index.md#language-support)
+- [Ctrl+S or the Save button writes the file to disk](.claude/reference/scope/editor/index.md#saving)
+- [The editor's wrap choice is remembered for the user](.claude/reference/scope/user-preferences/index.md#shape)
+- [Wrap hard wraps Piton files at 80 columns without changing what they compile to](.claude/reference/scope/editor/index.md#wrap)

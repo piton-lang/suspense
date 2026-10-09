@@ -139,6 +139,14 @@ pub struct HiddenAnchor {
     /// is followed by a post-build spec update, written as
     /// `postBuildSpecUpdate: true` after `sentFrom`.
     pub post_build_update: bool,
+    /// The model it is sent to, as its harness is told it, written as
+    /// `model: opus` after `postBuildSpecUpdate`; none for the harness's
+    /// default, or a prompt saved before this was kept.
+    pub model: Option<String>,
+    /// The reasoning effort it is sent with, as its harness is told it,
+    /// written as `effort: low` after `model`; none for the harness's
+    /// default, or a prompt saved before this was kept.
+    pub effort: Option<String>,
 }
 
 /// What is attached to a prompt: pieces of text, and images saved in the
@@ -180,6 +188,12 @@ pub struct CompiledPrompt {
     /// The images attached to it, to give the harness alongside the prompt,
     /// in the order they were attached; never part of the prompt's text.
     pub images: Vec<PathBuf>,
+    /// The model it goes to, as its harness is told it; none for the
+    /// harness's own.
+    pub model: Option<String>,
+    /// The reasoning effort it goes with, as its harness is told it; none
+    /// for the harness's own.
+    pub effort: Option<String>,
 }
 
 impl CompiledPrompt {
@@ -214,6 +228,8 @@ impl HiddenAnchor {
             code_task: None,
             sent_from: None,
             post_build_update: false,
+            model: None,
+            effort: None,
         }
     }
 
@@ -313,6 +329,14 @@ impl HiddenAnchor {
         if self.post_build_update {
             source.push('\n');
             writeln!(source, "{POST_BUILD_UPDATE_LINE}").ok();
+        }
+        if let Some(model) = &self.model {
+            source.push('\n');
+            writeln!(source, "{MODEL_PREFIX}{model}").ok();
+        }
+        if let Some(effort) = &self.effort {
+            source.push('\n');
+            writeln!(source, "{EFFORT_PREFIX}{effort}").ok();
         }
         let references = self.references(prompt);
         if !references.is_empty() {
@@ -542,6 +566,26 @@ impl HiddenAnchor {
         }
         // Saved only by versions that send a chain as its steps.
         let post_build_update = rest.first() == Some(&POST_BUILD_UPDATE_LINE);
+        if post_build_update {
+            rest = &rest[1..];
+            rest = rest.strip_prefix(&[""]).unwrap_or(rest);
+        }
+        // Saved only by versions that send a prompt to the model chosen.
+        let model = rest
+            .first()
+            .and_then(|line| line.strip_prefix(MODEL_PREFIX))
+            .map(|model| model.trim().to_string())
+            .filter(|model| !model.is_empty());
+        if model.is_some() {
+            rest = &rest[1..];
+            rest = rest.strip_prefix(&[""]).unwrap_or(rest);
+        }
+        // Saved only by versions that send a prompt with the effort chosen.
+        let effort = rest
+            .first()
+            .and_then(|line| line.strip_prefix(EFFORT_PREFIX))
+            .map(|effort| effort.trim().to_string())
+            .filter(|effort| !effort.is_empty());
         Some((
             Self {
                 name,
@@ -555,6 +599,8 @@ impl HiddenAnchor {
                 code_task,
                 sent_from,
                 post_build_update,
+                model,
+                effort,
             },
             prompt,
         ))
@@ -591,6 +637,12 @@ const SENT_FROM_PREFIX: &str = "    sentFrom: ";
 /// The line of [`HiddenAnchor::source`] saying a chain's code step is
 /// followed by a post-build spec update.
 const POST_BUILD_UPDATE_LINE: &str = "    postBuildSpecUpdate: true";
+
+/// The start of the `model` line of [`HiddenAnchor::source`].
+const MODEL_PREFIX: &str = "    model: ";
+
+/// The start of the `effort` line of [`HiddenAnchor::source`].
+const EFFORT_PREFIX: &str = "    effort: ";
 
 /// The line opening the `references` property of [`HiddenAnchor::source`].
 const REFERENCES_LINE: &str = "    references:";
@@ -695,6 +747,9 @@ pub fn freeform(prompt: &str, attached_text: &[String]) -> CompiledPrompt {
         system_prompt: None,
         code_task: None,
         images: Vec::new(),
+        // Freeform goes to the harness's own model and effort.
+        model: None,
+        effort: None,
     }
 }
 
@@ -1191,6 +1246,8 @@ pub fn compile(anchor: &HiddenAnchor, file: &Path, project_dir: &Path) -> Result
             .map(|text| saved.resolve(text, &resolved)),
         code_task: saved.code_task,
         images: image_files(&saved.attached_images, project_dir),
+        model: saved.model,
+        effort: saved.effort,
     })
 }
 
@@ -1501,6 +1558,8 @@ mod tests {
             code_task: None,
             sent_from: None,
             post_build_update: false,
+            model: None,
+            effort: None,
         };
         assert_eq!(
             anchor.source("hi"),
@@ -1982,6 +2041,33 @@ mod tests {
             assert_eq!(parsed.code_task, anchor.code_task);
             assert_eq!(parsed.source(&text), source);
 
+            anchor.post_build_update = false;
+            // The model and effort it goes to, with or without the line
+            // before them.
+            for post_build_update in [true, false] {
+                anchor.post_build_update = post_build_update;
+                anchor.model = Some("opus".into());
+                anchor.effort = Some("medium".into());
+                let source = anchor.source("Do it.");
+                let (parsed, _) = HiddenAnchor::parse(&source).unwrap();
+                assert_eq!(parsed.model.as_deref(), Some("opus"), "{source}");
+                assert_eq!(parsed.effort.as_deref(), Some("medium"), "{source}");
+                assert_eq!(parsed.post_build_update, post_build_update);
+            }
+            // A model without an effort chosen, and the reverse.
+            anchor.effort = None;
+            let source = anchor.source("Do it.");
+            let (parsed, _) = HiddenAnchor::parse(&source).unwrap();
+            assert_eq!(parsed.model.as_deref(), Some("opus"));
+            assert_eq!(parsed.effort, None);
+            anchor.model = None;
+            anchor.effort = Some("high".into());
+            let source = anchor.source("Do it.");
+            let (parsed, _) = HiddenAnchor::parse(&source).unwrap();
+            assert_eq!(parsed.model, None);
+            assert_eq!(parsed.effort.as_deref(), Some("high"));
+            anchor.model = None;
+            anchor.effort = None;
             anchor.post_build_update = false;
             let (parsed, _) = HiddenAnchor::parse(&anchor.source("Change it.")).unwrap();
             assert!(!parsed.post_build_update);

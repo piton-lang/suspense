@@ -1,0 +1,2 @@
+- [The chat input's syntax highlighting is supported via the Tree Sitter grammar at github.com/piton-lang/tree-sitter-piton](.claude/reference/scope/prompt-mode/chat-input/index.md#syntax-highlighting)
+- [Every file in the editor is highlighted in its language, Piton among the grammars it comes with](.claude/reference/scope/editor/index.md#syntax-highlighting)

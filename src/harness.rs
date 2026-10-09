@@ -202,6 +202,13 @@ pub struct Protected {
     /// The container the run goes in, if it runs in one rather than on the
     /// host.
     pub container: Option<container::Plan>,
+    /// The model the run goes to, as the harness is told it; none for its
+    /// own. Not kept off anything: only how the run is set up.
+    pub model: Option<String>,
+    /// The reasoning effort the run goes with, as the harness is told it,
+    /// Codex's only; none for its own. Not kept off anything: only how the
+    /// run is set up.
+    pub effort: Option<String>,
 }
 
 /// Runs the harness once as [`send`] does, giving it `images` alongside the
@@ -1173,6 +1180,10 @@ fn run(
                 "--system-prompt-snapshot",
                 "off",
             ]);
+            // The model chosen, as Claude Code's alias for it.
+            if let Some(model) = &protected.model {
+                command.args(["--model", model]);
+            }
             if let Some((session, fork)) = &resume {
                 command.args(["--resume", session]);
                 if *fork {
@@ -1201,6 +1212,13 @@ fn run(
         }
         Agent::Codex => {
             command.args(["exec", "--json", "--full-auto", "--skip-git-repo-check"]);
+            if let Some(model) = &protected.model {
+                command.args(["--model", model]);
+            }
+            // The reasoning effort chosen, which only Codex takes.
+            if let Some(effort) = &protected.effort {
+                command.args(["--model-reasoning-effort", effort]);
+            }
             if resume.is_some() {
                 command.arg("resume");
             }
@@ -1218,6 +1236,9 @@ fn run(
         }
         Agent::OpenCode => {
             command.args(["run", "--format", "json"]);
+            if let Some(model) = &protected.model {
+                command.args(["--model", model]);
+            }
             if let Some((session, _)) = &resume {
                 command.args(["--session", session]);
             }
@@ -2359,6 +2380,8 @@ pub(crate) mod tests {
         let rules = |root: Option<&str>, unread: Option<&str>| {
             super::denied_rules(&super::Protected {
                 root: root.map(PathBuf::from),
+                model: None,
+                effort: None,
                 unread: unread.map(PathBuf::from),
                 container: None,
             })
@@ -3071,6 +3094,124 @@ wait
         assert!(feed.stop_task("b1").is_err());
     }
 
+    /// A run given a model tells Claude Code it with `--model`; one given
+    /// none tells it nothing, so it uses its own.
+    #[cfg(unix)]
+    #[test]
+    fn a_run_is_told_its_model() {
+        let dir = std::env::temp_dir().join(format!("suspense-model-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).unwrap();
+        let args = dir.join("args");
+        let script = dir.join("harness.sh");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\n\
+                 echo \"$@\" > {args}\n\
+                 echo '{{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Done.\"}}'\n",
+                args = args.display()
+            ),
+        )
+        .unwrap();
+        crate::test_scripts::make_executable(&script);
+        for model in [Some("opus"), None] {
+            std::fs::remove_file(&args).ok();
+            super::use_program_for_test(Some(script.clone()));
+            let super::Run { mut events, .. } = super::send_task(
+                "Go.".into(),
+                None,
+                Vec::new(),
+                None,
+                dir.clone(),
+                super::Protected {
+                    model: model.map(str::to_string),
+                    ..Default::default()
+                },
+            );
+            super::use_program_for_test(None);
+            let start = std::time::Instant::now();
+            loop {
+                assert!(start.elapsed() < std::time::Duration::from_secs(10), "never finished");
+                match events.try_recv() {
+                    Ok(HarnessEvent::Finished { .. }) => break,
+                    Ok(_) => {}
+                    Err(futures::channel::mpsc::TryRecvError::Closed) => break,
+                    Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
+                }
+            }
+            let given = std::fs::read_to_string(&args).unwrap();
+            assert_eq!(given.contains("--model opus"), model.is_some(), "{given}");
+            assert!(model.is_some() || !given.contains("--model"), "{given}");
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A run given a reasoning effort tells Codex it with
+    /// `--model-reasoning-effort`; one given none tells it nothing, so it
+    /// uses its own. Only Codex is told, since it's the only harness that
+    /// takes one.
+    #[cfg(unix)]
+    #[test]
+    fn a_codex_run_is_told_its_effort() {
+        use crate::agent::{self, Agent};
+        let dir = std::env::temp_dir().join(format!("suspense-effort-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).unwrap();
+        let args = dir.join("args");
+        let script = dir.join("harness.sh");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\n\
+                 echo \"$@\" > {args}\n\
+                 echo '{{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Done.\"}}'\n",
+                args = args.display()
+            ),
+        )
+        .unwrap();
+        crate::test_scripts::make_executable(&script);
+        agent::set(Agent::Codex).unwrap();
+        for effort in [Some("medium"), None] {
+            std::fs::remove_file(&args).ok();
+            super::use_program_for_test(Some(script.clone()));
+            let super::Run { mut events, .. } = super::send_task(
+                "Go.".into(),
+                None,
+                Vec::new(),
+                None,
+                dir.clone(),
+                super::Protected {
+                    effort: effort.map(str::to_string),
+                    ..Default::default()
+                },
+            );
+            super::use_program_for_test(None);
+            let start = std::time::Instant::now();
+            loop {
+                assert!(start.elapsed() < std::time::Duration::from_secs(10), "never finished");
+                match events.try_recv() {
+                    Ok(HarnessEvent::Finished { .. }) => break,
+                    Ok(_) => {}
+                    Err(futures::channel::mpsc::TryRecvError::Closed) => break,
+                    Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
+                }
+            }
+            let given = std::fs::read_to_string(&args).unwrap();
+            assert_eq!(
+                given.contains("--model-reasoning-effort medium"),
+                effort.is_some(),
+                "{given}"
+            );
+            assert!(
+                effort.is_some() || !given.contains("--model-reasoning-effort"),
+                "{given}"
+            );
+        }
+        agent::set(Agent::Claude).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// A run whose last result has come doesn't finish until the harness's
     /// process has exited.
     #[cfg(unix)]
@@ -3771,6 +3912,8 @@ done
         );
         let protected = super::Protected {
             root: Some(dir.join("src")),
+            model: None,
+            effort: None,
             unread: Some(dir.join("src")),
             container: Some(plan),
         };

@@ -14,6 +14,11 @@ const LANGUAGE: LanguageFn = unsafe { LanguageFn::from_raw(tree_sitter_piton) };
 const HIGHLIGHTS: &str = include_str!("../vendor/tree-sitter-piton/queries/highlights.scm");
 const INJECTIONS: &str = include_str!("../vendor/tree-sitter-piton/queries/injections.scm");
 
+/// Piton's Tree-sitter language, for reading a file's structure.
+pub fn language() -> tree_sitter::Language {
+    LANGUAGE.into()
+}
+
 /// Registers Piton with the highlighter so editors can use [`LANGUAGE_NAME`].
 pub fn init() {
     let config = LanguageConfig::new(

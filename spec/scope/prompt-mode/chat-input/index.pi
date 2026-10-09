@@ -2,6 +2,7 @@ use /lib
 use /ui
 from /scope/application/MainWindow import MainWindowScope
 from /scope/harness-integration import HarnessIntegrationScope
+from /scope/user-preferences import UserPreferencesScope
 from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
 from /scope/harness-integration/catalog import HarnessCatalogScope
 from /scope/lsp import LSP
@@ -448,6 +449,69 @@ shape ChatInputShape:
             is across sends, tab switches, and project switches, as the prompt
             being written does, and the help text gives way to it as it does to
             the session controls.
+
+        model:
+            Just left of the Slice toggle sits the model picker: a small ghost
+            button reading the model the next prompt goes to, short, as
+            "Opus", "Sonnet", or "Default", with a chevron, extra small and
+            muted like the session controls. Clicking it opens a small menu
+            above it listing the models the harness in use can be told, as the
+            @{HarnessIntegrationScope} says, the one chosen ticked, each with
+            its full name muted beside it, and "Default" first, which tells the
+            harness no model, so it uses its own. Picking one closes the menu
+            and sends every prompt after it to that model, on every tab, Ask
+            included, but Freeform, which passes the prompt to the harness as
+            typed and is sent to the default; with Freeform selected the picker
+            is disabled, its tooltip saying why. Its tooltip otherwise names the
+            model chosen and says it applies to the next prompts sent.
+
+            The choice is remembered for the user, per harness, as the
+            @{UserPreferencesScope} says, and stays as it is across sends, tab
+            switches, and project switches, as the Slice toggle does; it
+            starts at Default. A prompt keeps the model it was sent with:
+            its hidden anchor records it, so a queued prompt goes to the model
+            chosen when it was queued, whatever is chosen when it is sent, and
+            a resend goes to the model it was first sent to. A Chain
+            prompt's steps all go to its model. A message sent to a running
+            task goes to the model the task runs with, whatever is chosen. The
+            help text gives way to it as it does to the session controls.
+
+            The models listed are those the harness can be told: for Claude
+            Code, "Opus", "Sonnet", and "Haiku", given to it as
+            `--model opus`, `--model sonnet`, or `--model haiku`; for Codex and
+            OpenCode, the models their own configuration lists, given with
+            `--model` or `-m` as each takes it. A model the harness refuses
+            fails the run, saying so in the harness's own words. The notes,
+            commit messages, and prompt titles keep their small model,
+            whatever is chosen.
+
+        effort:
+            Just left of the model picker sits the effort picker, laid out
+            and behaving the same way: a small ghost button reading the
+            reasoning effort the next prompt goes to, "Low", "Medium",
+            "High", or "Default", with a chevron, which opens a menu of the
+            levels the harness in use can be told, "Default" first, ticked
+            when chosen, which tells the harness no effort, so it uses its
+            own.
+
+            Only a harness that takes a reasoning effort offers it: Codex,
+            told with `--model-reasoning-effort low`, `medium`, or `high`.
+            Claude Code and OpenCode take no such setting, so with either in
+            use the picker is disabled, its tooltip saying the harness in use
+            has no effort levels to choose, and the next prompt goes without
+            one.
+
+            It applies, is remembered, and travels with a prompt the same
+            way the model picker does: on every tab but Freeform, which
+            always goes without one; remembered for the user per harness,
+            as the @{UserPreferencesScope} says, starting at Default; a
+            queued prompt, a resend, a Chain prompt's steps, and a message
+            sent to a running task each keeping the effort they were first
+            sent with; and the help text giving way to it as it does to the
+            model picker. A level the harness refuses fails the run, saying
+            so in the harness's own words. The notes, commit messages, and
+            prompt titles are sent without an effort level, whatever is
+            chosen.
 
         colour:
             The selected tab and the tab body holding the input are not tinted:

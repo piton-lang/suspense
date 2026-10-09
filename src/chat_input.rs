@@ -1564,8 +1564,137 @@ impl ChatInput {
         self.usage_open
     }
 
+    /// The effort picker, as the ChatInputScope's effort says: just left of
+    /// the model picker, laid out and behaving the same way, reading the
+    /// reasoning effort the next prompt goes to. Only Codex takes one, so
+    /// the picker is disabled for every other harness, and on Freeform,
+    /// which goes without one.
+    fn render_effort_picker(&self, cx: &mut Context<Self>) -> AnyElement {
+        use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
+        let agent = crate::agent::current();
+        let freeform = self.mode() == SendMode::Freeform;
+        let levels = crate::effort::available(agent);
+        let disabled = freeform || levels.is_empty();
+        let chosen = crate::effort::chosen(agent).filter(|_| !disabled);
+        let label = crate::effort::label(agent, chosen.as_deref());
+        let tooltip = if freeform {
+            "Freeform prompts are passed to the harness as typed, and go without an effort level"
+                .to_string()
+        } else if levels.is_empty() {
+            format!(
+                "{} has no effort levels to choose; the next prompts sent go without one",
+                agent.label()
+            )
+        } else {
+            match &chosen {
+                Some(_) => format!("The next prompts sent go with {label} effort"),
+                None => "The next prompts sent go without an effort level".to_string(),
+            }
+        };
+        let muted = cx.theme().muted_foreground;
+        let button = Button::new("effort-picker")
+            .ghost()
+            .xsmall()
+            .label(label)
+            .dropdown_caret(true)
+            .text_color(muted)
+            .disabled(disabled)
+            .tooltip(tooltip);
+        if disabled {
+            return button.into_any_element();
+        }
+        let this = cx.entity().downgrade();
+        button
+            .dropdown_menu_with_anchor(gpui_kit::Anchor::BottomLeft, move |menu, _, _| {
+                let chosen = crate::effort::chosen(agent);
+                let entries = std::iter::once((None, "Default".to_string())).chain(
+                    crate::effort::available(agent)
+                        .into_iter()
+                        .map(|level| (Some(level.id), level.label)),
+                );
+                let mut menu = menu.min_w(px(160.));
+                for (id, label) in entries {
+                    let this = this.clone();
+                    let picked = id.clone();
+                    let item = PopupMenuItem::new(label).checked(chosen == id).on_click(
+                        move |_, _, cx| {
+                            crate::effort::choose(agent, picked.clone());
+                            this.update(cx, |_, cx| cx.notify()).ok();
+                        },
+                    );
+                    menu = menu.item(item);
+                }
+                menu
+            })
+            .into_any_element()
+    }
+
     /// The usage's summary, muted like the context figure unless a plan
     /// limit is nearly or wholly used, with its popover above it.
+    /// The model picker, as the ChatInputScope's model says: the model the
+    /// next prompt goes to, which opens a menu above it of those the harness
+    /// in use can be told, Default first; disabled on Freeform, which goes
+    /// to the default.
+    fn render_model_picker(&self, cx: &mut Context<Self>) -> AnyElement {
+        use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
+        let agent = crate::agent::current();
+        let freeform = self.mode() == SendMode::Freeform;
+        let chosen = crate::models::chosen(agent).filter(|_| !freeform);
+        let label = crate::models::label(agent, chosen.as_deref());
+        let tooltip = if freeform {
+            "Freeform prompts are passed to the harness as typed, and go to its default model"
+                .to_string()
+        } else {
+            match &chosen {
+                Some(_) => format!("The next prompts sent go to {label}"),
+                None => "The next prompts sent go to the harness's default model".to_string(),
+            }
+        };
+        let muted = cx.theme().muted_foreground;
+        let button = Button::new("model-picker")
+            .ghost()
+            .xsmall()
+            .label(label)
+            .dropdown_caret(true)
+            .text_color(muted)
+            .disabled(freeform)
+            .tooltip(tooltip);
+        if freeform {
+            return button.into_any_element();
+        }
+        let this = cx.entity().downgrade();
+        button
+            .dropdown_menu_with_anchor(gpui_kit::Anchor::BottomLeft, move |menu, _, cx| {
+                let chosen = crate::models::chosen(agent);
+                let muted = cx.theme().muted_foreground;
+                let entries = std::iter::once((None, "Default".to_string(), "The harness's own".to_string()))
+                    .chain(
+                        crate::models::available(agent)
+                            .into_iter()
+                            .map(|model| (Some(model.id), model.label, model.full)),
+                    );
+                let mut menu = menu.min_w(px(220.));
+                for (id, label, full) in entries {
+                    let this = this.clone();
+                    let picked = id.clone();
+                    let item = PopupMenuItem::element(move |_, _| {
+                        h_flex()
+                            .gap_2()
+                            .child(label.clone())
+                            .child(div().text_xs().text_color(muted).child(full.clone()))
+                    })
+                    .checked(chosen == id)
+                    .on_click(move |_, _, cx| {
+                        crate::models::choose(agent, picked.clone());
+                        this.update(cx, |_, cx| cx.notify()).ok();
+                    });
+                    menu = menu.item(item);
+                }
+                menu
+            })
+            .into_any_element()
+    }
+
     fn render_usage(&self, viewport: Size<Pixels>, cx: &mut Context<Self>) -> AnyElement {
         let (text, level) = self.usage.summary();
         let color = level.color(cx).unwrap_or(cx.theme().muted_foreground);
@@ -2346,6 +2475,10 @@ impl Render for ChatInput {
                         })),
                 )
             })
+            // Just left of Slice, the model the next prompt goes to, with
+            // the effort it goes with just left of that.
+            .child(self.render_effort_picker(cx))
+            .child(self.render_model_picker(cx))
             .child(
                 Button::new("slice-toggle")
                     .ghost()
@@ -3465,8 +3598,9 @@ mod tests {
         cx.simulate_window_resize(
             handle,
             // As narrow as the five tabs leave room for the controls beside
-            // them, the Chain tab's Post-Build Spec Update toggle among them.
-            gpui_kit::size(gpui_kit::px(720.), gpui_kit::px(400.)),
+            // them, the Chain tab's Post-Build Spec Update toggle and the
+            // effort and model pickers among them.
+            gpui_kit::size(gpui_kit::px(860.), gpui_kit::px(400.)),
         );
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
@@ -3499,7 +3633,9 @@ mod tests {
         );
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
-            window.click("chat-usage", cx);
+            // So narrow, the bar's controls run past its edge: opened as its
+            // click does.
+            chat_input.update(cx, |input, cx| input.toggle_usage(window, cx));
             window.render_frame(cx);
             let (now, project) = (
                 window.find("usage-column-now").bounds(),

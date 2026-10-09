@@ -298,6 +298,12 @@ struct PromptTask {
     /// The send buttons pressed on the prompt cards of its answer, by the
     /// card and the mode, each pressed once for good.
     sent_prompts: std::collections::BTreeSet<String>,
+    /// The model it was sent to, as its anchor records it; none for the
+    /// harness's own.
+    model: Option<String>,
+    /// The reasoning effort it was sent with, as its anchor records it;
+    /// none for the harness's own.
+    effort: Option<String>,
     /// The conversation its run was in, once the harness has said.
     session: Option<SharedString>,
     /// In a git repository, the files that changed while it ran, once its
@@ -609,6 +615,8 @@ impl PromptTask {
             marked_done: false,
             picked: Default::default(),
             sent_prompts: Default::default(),
+            model: None,
+            effort: None,
             session: None,
             changed: None,
             changed_open: false,
@@ -659,6 +667,8 @@ impl PromptTask {
         task.mode = anchor_mode(&saved.anchor);
         task.sent = SentAs::of(&saved.anchor);
         task.new_conversation = saved.anchor.new_conversation.unwrap_or(false);
+        task.model = saved.anchor.model.clone();
+        task.effort = saved.anchor.effort.clone();
         task.asked_at = (saved.sent_at > 0).then_some(saved.sent_at);
         task.marked_done = saved
             .record
@@ -5108,6 +5118,32 @@ impl PromptMode {
         }
     }
 
+    /// The task named `named_after`, among the tasks, the answers, and the
+    /// questions still running, the one sent most recently if more than one
+    /// matches; none when it follows no task known.
+    fn task_named(&self, named_after: &str) -> Option<&PromptTask> {
+        self.tasks
+            .iter()
+            .chain(self.answers.iter())
+            .chain(self.asks.iter().map(|ask| &ask.task))
+            .rev()
+            .find(|task| task.name.as_ref() == named_after)
+    }
+
+    /// The model a prompt sent after the task `named_after`, a resend of it
+    /// or its chain's next step, goes to: that task's, whatever is chosen
+    /// now; none when it follows no task known.
+    fn model_after(&self, named_after: Option<&str>) -> Option<Option<String>> {
+        Some(self.task_named(named_after?)?.model.clone())
+    }
+
+    /// The reasoning effort a prompt sent after the task `named_after`, a
+    /// resend of it or its chain's next step, goes with: that task's,
+    /// whatever is chosen now; none when it follows no task known.
+    fn effort_after(&self, named_after: Option<&str>) -> Option<Option<String>> {
+        Some(self.task_named(named_after?)?.effort.clone())
+    }
+
     /// Sends the task at `ix` of `tasks_of` again, as it was sent. One of
     /// unknown mode goes from the selected tab.
     fn resend(
@@ -5806,11 +5842,19 @@ impl PromptMode {
         cx.notify();
 
         let lsp = self.chat_input.read(cx).lsp();
+        let model_after = self.model_after(named_after.as_deref());
+        let effort_after = self.effort_after(named_after.as_deref());
         let save = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
                 let mut anchor =
                     resolve_anchor(&text, mode, attached, sliced, code_task, lsp, &project_dir)?;
+                if let Some(model) = model_after {
+                    anchor.model = model;
+                }
+                if let Some(effort) = effort_after {
+                    anchor.effort = effort;
+                }
                 anchor.rename(naming.wait());
                 anchor.sent_from = sent_from;
                 anchor.post_build_update = post_build_update;
@@ -6070,6 +6114,10 @@ impl PromptMode {
                         anchor.sent_from = sent_from;
                         anchor.post_build_update = post_build_update;
                         anchor.new_conversation = old.anchor.new_conversation;
+                        // Edited, it still goes to the model and effort it
+                        // was queued for.
+                        anchor.model = old.anchor.model.clone();
+                        anchor.effort = old.anchor.effort.clone();
                         prompt_queue::replace(old.file.clone(), anchor, text)
                             .map_err(|err| (old, err))
                     }
@@ -6952,12 +7000,18 @@ impl PromptMode {
         // resolved, so a task sent to the other mode from it knows it by that.
         // One sent now is named once its title comes, while the spec builds,
         // and until then by the random name it would be given without one.
+        // A resend, or a chain's next step, goes to the model and effort of
+        // the task it follows.
+        let mut model_after = None;
+        let mut effort_after = None;
         let naming = match &sending {
             Sending::Queued(queued) => {
                 self.tasks[task_ix].name = queued.anchor.name().to_string().into();
                 None
             }
             Sending::Now(.., named_after) => {
+                model_after = self.model_after(named_after.as_deref());
+                effort_after = self.effort_after(named_after.as_deref());
                 let naming =
                     prompt_title::start(&project_dir, &text, named_after.as_deref(), self.titler);
                 Some(cx.background_spawn(async move { naming.wait() }))
@@ -7118,6 +7172,12 @@ impl PromptMode {
                         anchor.rename(name);
                         anchor.sent_from = sent_from;
                         anchor.post_build_update = post_build_update;
+                        if let Some(model) = model_after {
+                            anchor.model = model;
+                        }
+                        if let Some(effort) = effort_after {
+                            anchor.effort = effort;
+                        }
                         anchor
                     }
                 };
@@ -7257,6 +7317,18 @@ impl PromptMode {
                 Ok(Some((anchor, compiled, imported))) => {
                     let prompt = compiled.user_prompt.clone();
                     record.user_prompt = Some(prompt.clone());
+                    // The model and effort it goes to, kept with the task.
+                    let model = compiled.model.clone();
+                    let effort = compiled.effort.clone();
+                    this.update(cx, |this, cx| {
+                        this.in_project(&project_dir, cx, |this, _| {
+                            if let Some(task) = this.tasks.get_mut(task_ix) {
+                                task.model = model;
+                                task.effort = effort;
+                            }
+                        })
+                    })
+                    .ok();
                     // A Code, Chain, or Spec task keeps its understanding
                     // beside its history record; a question has none.
                     let understanding_file = prompt_file
@@ -7334,6 +7406,10 @@ impl PromptMode {
                         root: guard.as_ref().map(mode_guard::Guard::root),
                         unread,
                         container,
+                        // The model and effort it was sent to, recorded
+                        // with it.
+                        model: compiled.model.clone(),
+                        effort: compiled.effort.clone(),
                     };
                     // What it may change, the guard of a task running beside
                     // it keeps rather than putting back.
@@ -8034,6 +8110,10 @@ impl PromptMode {
             .map(|ask| ask.stopped.clone())
             .unwrap_or_default();
         let lsp = self.chat_input.read(cx).lsp();
+        // Asked again, it goes to the model and effort it was first asked
+        // with.
+        let model_after = self.model_after(named_after.as_deref());
+        let effort_after = self.effort_after(named_after.as_deref());
         let compile = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
@@ -8062,6 +8142,12 @@ impl PromptMode {
                 let mut anchor = anchor;
                 anchor.rename(naming.wait());
                 anchor.new_conversation = Some(new_conversation);
+                if let Some(model) = model_after {
+                    anchor.model = model;
+                }
+                if let Some(effort) = effort_after {
+                    anchor.effort = effort;
+                }
                 let file = hidden_anchor::save_ask(&anchor, &text, &project_dir);
                 let compiled = match (resolve_error, &file) {
                     (Some(err), _) => Err(err),
@@ -8121,6 +8207,22 @@ impl PromptMode {
                     log.record.resumed = resume.is_some();
                     log.record.resumed_from = resume.clone();
                     let mut usage_run = None;
+                    // The model and effort it goes to, kept with the question.
+                    let model = compiled.model.clone();
+                    let effort = compiled.effort.clone();
+                    this.update(cx, |this, cx| {
+                        this.in_project(&project_dir, cx, |this, cx| {
+                            this.update_ask(
+                                run,
+                                |ask| {
+                                    ask.model = model;
+                                    ask.effort = effort;
+                                },
+                                cx,
+                            )
+                        })
+                    })
+                    .ok();
                     // A question runs in a container holding the code and
                     // the compiled reference, read only, and no spec source,
                     // so it is kept off nothing else.
@@ -8133,6 +8235,8 @@ impl PromptMode {
                             None,
                             crate::container::Platform::current(),
                         )),
+                        model: compiled.model.clone(),
+                        effort: compiled.effort.clone(),
                         ..harness::Protected::default()
                     };
                     if let Some(phases) = &mut log.phases {
@@ -9836,6 +9940,9 @@ fn resolve_anchor(
     system_prompts::save_missing(project_dir).ok();
     anchor.mode = Some(mode);
     anchor.sliced = sliced;
+    // The model and effort chosen as it is sent or queued, which it keeps.
+    anchor.model = crate::models::chosen(crate::agent::current());
+    anchor.effort = crate::effort::chosen(crate::agent::current());
     anchor.attach(attached);
     // A Code task sent to Spec is also told what the code task did, and a
     // chain's code step what its spec step did; in any other mode, the task
@@ -13606,6 +13713,85 @@ mod tests {
 
     /// The gap a drag lands in: before an item over its first half, after it
     /// over its second; the gaps either side of the dragged item move nothing.
+    /// A prompt records the model chosen as it is sent, one sent to
+    /// Freeform none; a resend or a chain's next step goes to the model of
+    /// the task it follows, whatever is chosen since.
+    #[gpui_kit::test]
+    async fn prompts_keep_the_model_they_were_sent_to(cx: &mut TestAppContext) {
+        use crate::agent::Agent;
+        use crate::chat_input::SendMode;
+        let dir = std::env::temp_dir().join(format!("suspense-model-anchor-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("piton.config.pi"),
+            dir.join("piton.config.pi"),
+        )
+        .unwrap();
+        crate::models::choose(Agent::Claude, Some("opus".into()));
+        let resolve = |mode| {
+            super::resolve_anchor("Do it.", mode, super::Attached::default(), false, None, None, &dir).unwrap()
+        };
+        assert_eq!(resolve(SendMode::Code).model.as_deref(), Some("opus"));
+        assert_eq!(resolve(SendMode::Ask).model.as_deref(), Some("opus"));
+        assert_eq!(resolve(SendMode::Freeform).model, None);
+        crate::models::choose(Agent::Claude, None);
+        assert_eq!(resolve(SendMode::Code).model, None);
+
+        let (prompt_mode, _handle) = open(cx);
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("First".into(), cx);
+            this.tasks[ix].name = "First_1".into();
+            this.tasks[ix].model = Some("sonnet".into());
+            assert_eq!(this.model_after(Some("First_1")), Some(Some("sonnet".into())));
+            assert_eq!(this.model_after(Some("Unknown")), None);
+            assert_eq!(this.model_after(None), None);
+        });
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A prompt records the reasoning effort chosen as it is sent, one sent
+    /// to Freeform none; a resend or a chain's next step goes to the effort
+    /// of the task it follows, whatever is chosen since.
+    #[gpui_kit::test]
+    async fn prompts_keep_the_effort_they_were_sent_with(cx: &mut TestAppContext) {
+        use crate::agent::{self, Agent};
+        use crate::chat_input::SendMode;
+        let dir =
+            std::env::temp_dir().join(format!("suspense-effort-anchor-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("piton.config.pi"),
+            dir.join("piton.config.pi"),
+        )
+        .unwrap();
+        // Only Codex has effort levels to choose.
+        agent::set(Agent::Codex).unwrap();
+        crate::effort::choose(Agent::Codex, Some("high".into()));
+        let resolve = |mode| {
+            super::resolve_anchor("Do it.", mode, super::Attached::default(), false, None, None, &dir)
+                .unwrap()
+        };
+        assert_eq!(resolve(SendMode::Code).effort.as_deref(), Some("high"));
+        assert_eq!(resolve(SendMode::Ask).effort.as_deref(), Some("high"));
+        assert_eq!(resolve(SendMode::Freeform).effort, None);
+        crate::effort::choose(Agent::Codex, None);
+        assert_eq!(resolve(SendMode::Code).effort, None);
+        agent::set(Agent::Claude).unwrap();
+
+        let (prompt_mode, _handle) = open(cx);
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("First".into(), cx);
+            this.tasks[ix].name = "First_1".into();
+            this.tasks[ix].effort = Some("low".into());
+            assert_eq!(this.effort_after(Some("First_1")), Some(Some("low".into())));
+            assert_eq!(this.effort_after(Some("Unknown")), None);
+            assert_eq!(this.effort_after(None), None);
+        });
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     #[test]
     fn drag_scrolls_faster_nearer_and_past_the_edge() {
         use super::drag_scroll_speed;
