@@ -313,6 +313,8 @@ struct Containers {
     /// Whether each harness is logged in in its container, where that can
     /// be asked: Podman running and the image built.
     logins: Vec<(Agent, Option<bool>)>,
+    /// What runs another version in its container than on the host.
+    notes: Vec<(Agent, String)>,
 }
 
 pub struct SettingsWindow {
@@ -450,7 +452,12 @@ impl SettingsWindow {
                     (agent, logged_in)
                 })
                 .collect();
-            Containers { podman, logins }
+            // Which harness runs another version in its container than here.
+            let notes = Agent::RUNNABLE
+                .into_iter()
+                .filter_map(|agent| Some((agent, crate::container::version_note(agent)?)))
+                .collect();
+            Containers { podman, logins, notes }
         });
         self._containers_read = cx.spawn(async move |this, cx| {
             let containers = read.await;
@@ -563,6 +570,16 @@ impl SettingsWindow {
                                 Some(true) => "Logged in",
                                 Some(false) => "Not logged in",
                                 None => "Unknown",
+                            }),
+                    )
+                    .children(
+                        self.containers
+                            .as_ref()
+                            .and_then(|containers| {
+                                containers.notes.iter().find(|(known, _)| *known == agent)
+                            })
+                            .map(|(_, note)| {
+                                div().flex_1().min_w_0().text_xs().text_color(muted).child(note.clone())
                             }),
                     )
                     .child(

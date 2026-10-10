@@ -1,0 +1,77 @@
+
+export anchor Prompt_d7c6d599b1f1006b:
+    userPrompt:
+        \\\
+        Well, it's still failing .
+
+        It also warning me in the welcome screen that it's claude code.
+
+        We shouldn't see errors like this.  We should be guided to fix it.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    attachedImages:
+        image1:
+            \\\
+            .suspense/images/1791659395-5f650be1cacf.png
+            \\\
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Well, it's still failing .
+
+            It also warning me in the welcome screen that it's claude code.
+
+            We shouldn't see errors like this.  We should be guided to fix it.
+            \\\
+        result:
+            \\\
+            The build is failing because the image pins OpenCode to `opencode-ai@2.0.14`, the version read from your machine. npm doesn't have that version, so the whole install step fails, taking Claude Code and Codex down with it. I changed the spec so a bad version can't break the image, and so failures guide you instead of dumping Podman's output. `piton check` and `piton build` ran clean.
+
+            - **Versions are checked first:** each harness version taken from your machine is used only if npm confirms it exists. Otherwise that harness gets its latest version. Only a plain version number is read from the host's output.
+            - **One harness can't break the others:** each harness installs in its own step. One that can't install is left out and the image still builds; only runs that need it fail.
+            - **Version differences:** if a harness runs a different version in its container than on your machine, Welcome and Settings note it quietly, not as an error.
+            - **Guidance instead of walls of output:** a failure shows a short warning in plain words with fix buttons. Podman's output is collapsed under "Details" and kept in the debug log.
+              - "OpenCode 2.0.14 isn't available to install", with "Use the latest OpenCode"
+              - a network problem, with "Try again"
+              - Podman out of disk space, with "Free up space", which runs `podman system prune` after confirming
+              - anything else, with "Try again" and "Copy details"
+            - **Welcome uses the project's harness:** the Harness and Harness login rows name the open project's harness, so they won't say Claude Code when your project uses Codex. They re-check whenever you switch projects or change the harness.
+
+            **Anchors the code should follow:** `ContainerEnvironmentScope` `#image` and `#logging-in`; `WelcomeScope`'s Harness and Harness login checks and Check again; and `HarnessIntegrationScope` `#harnesses`.
+            \\\
+
+    sentFrom: Prompt_ac5d616696349d61
+
+    model: opus

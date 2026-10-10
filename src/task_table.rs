@@ -300,14 +300,18 @@ pub(crate) enum RunAction {
     Machine(crate::container::MachineAction),
     /// The harness the run needed, as named, logged in in its container.
     LogIn(crate::agent::Agent),
+    /// What the application can do itself about the container's image that
+    /// couldn't be built.
+    Build(crate::container::BuildFix),
 }
 
 impl RunAction {
-    pub(crate) fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> SharedString {
         match self {
-            RunAction::InstallPodman => "Install Podman",
-            RunAction::Machine(action) => action.label(),
-            RunAction::LogIn(_) => "Log in",
+            RunAction::InstallPodman => "Install Podman".into(),
+            RunAction::Machine(action) => action.label().into(),
+            RunAction::LogIn(_) => "Log in".into(),
+            RunAction::Build(fix) => fix.label().into(),
         }
     }
 }
@@ -848,6 +852,10 @@ impl Reply {
                 // Without a machine to see to, Podman isn't installed.
                 self.pending_action =
                     Some(action.map_or(RunAction::InstallPodman, RunAction::Machine));
+            }
+            HarnessEvent::BuildFailed(fix) => {
+                self.preparing = false;
+                self.pending_action = fix.map(RunAction::Build);
             }
             HarnessEvent::LoginNeeded(agent) => {
                 self.preparing = false;

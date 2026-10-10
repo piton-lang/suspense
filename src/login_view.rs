@@ -9,6 +9,7 @@ use std::io::{Read as _, Write as _};
 use std::sync::mpsc;
 use std::time::Duration;
 
+use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::{
@@ -40,7 +41,7 @@ enum State {
     Failed(String),
     /// Its image couldn't be built: no login was started, and it can be
     /// tried again.
-    BuildFailed(String),
+    BuildFailed(container::BuildFailed),
 }
 
 /// What the login's thread reports.
@@ -56,12 +57,14 @@ enum Report {
 /// Why a login didn't succeed: its image couldn't be built, or the login
 /// itself failed.
 enum Failure {
-    Build(String),
+    Build(container::BuildFailed),
     Login(String),
 }
 
 pub struct LoginView {
     agent: Agent,
+    /// A failed build's details are shown.
+    details_open: bool,
     project_dir: std::path::PathBuf,
     /// What the command printed, line by line, the last perhaps unfinished.
     lines: Vec<String>,
@@ -122,6 +125,7 @@ impl LoginView {
         let code = cx.new(|cx| InputState::new(window, cx).placeholder("Paste the code here"));
         let mut view = Self {
             agent,
+            details_open: false,
             project_dir,
             lines: vec![String::new()],
             state: State::Running,
@@ -137,9 +141,34 @@ impl LoginView {
         view
     }
 
+    /// Does `fix` for the image that couldn't be built, then builds again
+    /// and logs in: with the harness at its latest, after freeing Podman's
+    /// disk space once confirmed, or as it was; or copies the details.
+    fn fix(&mut self, fix: container::BuildFix, window: &mut Window, cx: &mut Context<Self>) {
+        match fix {
+            container::BuildFix::UseLatest(agent) => {
+                container::use_latest(agent);
+                self.start(window, cx);
+            }
+            container::BuildFix::TryAgain => self.start(window, cx),
+            container::BuildFix::CopyDetails => {
+                if let State::BuildFailed(failed) = &self.state {
+                    cx.write_to_clipboard(ClipboardItem::new_string(failed.details.clone()));
+                }
+            }
+            container::BuildFix::FreeSpace => {
+                let this = cx.entity().downgrade();
+                crate::prompt_mode::confirm_free_space(window, cx, move |window, cx| {
+                    this.update(cx, |this, cx| this.start(window, cx)).ok();
+                });
+            }
+        }
+    }
+
     /// Starts the login: its image built first where it isn't there or is
     /// out of date, then its command. Started again by Try again.
     fn start(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.details_open = false;
         self.lines = vec![String::new()];
         self.state = State::Running;
         self.input = None;
@@ -285,7 +314,11 @@ fn run_login(
     let platform = container::Platform::current();
     let state = container::podman_state(platform);
     if let Some(why) = container::unavailable(&state, platform) {
-        return Err(Failure::Build(why.message));
+        return Err(Failure::Build(container::BuildFailed {
+            message: why.message.clone(),
+            fixes: vec![container::BuildFix::TryAgain],
+            details: why.message,
+        }));
     }
     // The image first: a login needs it, as any run in a container does.
     let image = container::ensure_image(
@@ -299,7 +332,16 @@ fn run_login(
             tx.send(Report::Output(format!("{line}\n"))).ok();
         },
     )
-    .map_err(|err| Failure::Build(format!("{err:#}")))?;
+    .map_err(|err| {
+        Failure::Build(match err.downcast_ref::<container::BuildFailed>() {
+            Some(failed) => failed.clone(),
+            None => container::BuildFailed {
+                message: "The container couldn't be set up".into(),
+                fixes: vec![container::BuildFix::TryAgain, container::BuildFix::CopyDetails],
+                details: format!("{err:#}"),
+            },
+        })
+    })?;
     tx.send(Report::LoggingIn).ok();
     log_in(agent, &image, platform, tx, input_tx).map_err(|err| Failure::Login(format!("{err:#}")))
 }
@@ -443,9 +485,12 @@ impl Render for LoginView {
             State::Running => "Logging in…".to_string(),
             State::Succeeded => format!("{} is logged in.", self.agent.label()),
             State::Failed(err) => format!("Could not log in: {err}"),
-            State::BuildFailed(err) => err.clone(),
+            State::BuildFailed(failed) => failed.message.clone(),
         };
-        let build_failed = matches!(self.state, State::BuildFailed(_));
+        let build_failed = match &self.state {
+            State::BuildFailed(failed) => Some(failed.clone()),
+            _ => None,
+        };
         let output = v_flex()
             .id("login-output")
             .h(px(260.))
@@ -495,7 +540,9 @@ impl Render for LoginView {
                         self.agent.label()
                     )),
             )
-            .child(output)
+            // A build that failed shows no wall of output: its details are
+            // collapsed beneath its message.
+            .when(build_failed.is_none(), |view| view.child(output))
             .when(running && (self.asks_for_code() || self.input.is_some()), |view| {
                 view.child(
                     h_flex()
@@ -516,18 +563,51 @@ impl Render for LoginView {
                     .text_sm()
                     .font_medium()
                     .whitespace_normal()
-                    .when(build_failed, |this| this.text_color(theme.danger))
+                    .when(build_failed.is_some(), |this| this.text_color(theme.warning))
                     .child(status),
             )
-            // A build that failed can be tried again, as no login started.
-            .when(build_failed, |view| {
-                view.child(
-                    h_flex().child(
-                        Button::new("login-try-again")
-                            .small()
-                            .label("Try again")
-                            .on_click(cx.listener(|this, _, window, cx| this.start(window, cx))),
-                    ),
+            // A build that failed offers each fix the application can make,
+            // then its details, collapsed.
+            .when_some(build_failed, |view, failed| {
+                let fixes = failed.fixes.iter().enumerate().map(|(ix, fix)| {
+                    let fix = *fix;
+                    let button = Button::new(("login-fix", ix)).small().label(fix.label());
+                    let button = if ix == 0 { button.primary() } else { button };
+                    button
+                        .on_click(cx.listener(move |this, _, window, cx| this.fix(fix, window, cx)))
+                        .into_any_element()
+                });
+                let open = self.details_open;
+                view.child(h_flex().gap_2().children(fixes)).child(
+                    v_flex()
+                        .gap_1()
+                        .child(
+                            Button::new("login-details")
+                                .ghost()
+                                .xsmall()
+                                .icon(if open { IconName::ChevronDown } else { IconName::ChevronRight })
+                                .label("Details")
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.details_open = !this.details_open;
+                                    cx.notify();
+                                })),
+                        )
+                        .when(open, |details| {
+                            details.child(
+                                div()
+                                    .id("login-build-details")
+                                    .max_h(px(260.))
+                                    .overflow_y_scroll()
+                                    .p_2()
+                                    .rounded(theme.radius)
+                                    .bg(theme.muted)
+                                    .font_family(theme.mono_font_family.clone())
+                                    .text_xs()
+                                    .children(
+                                        failed.details.lines().map(|line| div().child(line.to_string())),
+                                    ),
+                            )
+                        }),
                 )
             });
         gpui_kit::TestSupportExt::test_support(view)

@@ -44,8 +44,8 @@ shape WelcomeShape:
         - "Piton", found by running `piton --version`, required, since the
             spec is built, sliced, and checked with it. Missing, its guidance
             links to https://github.com/piton-lang/piton-rs.
-        - "Harness", the harness in use, as the @{HarnessIntegrationScope}
-            says, found by running its command with `--version`, required,
+        - "Harness", the open project's harness, named in the row as "Codex" and the like, as the @{HarnessIntegrationScope}
+            says, never Claude Code unless that is the project's, and with no project open, the harness a new project starts with, its row saying so, found by running its command with `--version`, required,
             since Code tasks run it on the host. Missing, its guidance names the
             command and links to the harness's installation instructions,
             https://docs.claude.com/en/docs/claude-code/setup for Claude Code,
@@ -69,7 +69,7 @@ shape WelcomeShape:
             says Podman couldn't be accessed, with what Podman printed, as the
             @{ContainerEnvironmentScope} says. It is checked only once the
             checks above it pass.
-        - "Harness login", required, passing while the harness in use is
+        - "Harness login", required, named for the same harness as the row above, passing while that harness is
             logged in in its container, read from its volume. Not logged in,
             its guidance offers "Log in", which shows the login view, as the
             @{ContainerEnvironmentScope} says. It is checked only once
@@ -90,7 +90,10 @@ shape WelcomeShape:
         attention", and Get started is not shown, the close button closing
         the page all the same, since what passes still works.
 
-        "Check again" runs every check anew. A check whose action, as setting
+        "Check again" runs every check anew. The harness checks run anew by
+        themselves whenever another project is opened or the open project's
+        harness is changed, so they never speak of a harness the project
+        doesn't use. A check whose action, as setting
         up Podman or logging in, finishes runs again by itself, and so do the
         checks waiting on it. A link opened in the browser leaves the page as
         it is, until Check again.

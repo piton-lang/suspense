@@ -139,8 +139,21 @@ shape ContainerEnvironmentShape:
         Containerfile the application writes for it, in a build context of
         its own, a fresh temporary directory holding nothing else, never the
         project or the user's home, and needs nothing from the host but the
-        network. A version that can't be found on the host, or isn't
-        published for Linux, is installed at its latest.
+        network.
+
+        Each harness is installed in a step of its own, so one that can't be
+        installed never stops the others. A version taken from the host is
+        used only once the package registry is asked, before the build, and
+        has it, as `npm view <package>@<version> version` answering it; the
+        version a host's command prints is read only as a plain version
+        number, never with anything printed around it. A version the
+        registry doesn't have, one that can't be read, or one not published
+        for Linux, is installed at its latest instead, never failing the
+        build, and the welcome page and the Settings' Containers section say
+        which harness runs a different version in its container than on the
+        host, muted, never as an error. A harness that can't be installed at
+        all is left out of the image, which still builds, and only runs that
+        need it fail, as below.
 
         Only one build of an image runs at a time. A run, a login, or a
         welcome or settings check that needs an image already being built
@@ -150,10 +163,21 @@ shape ContainerEnvironmentShape:
         interrupted never leaves an image that is taken for a good one, and
         the next need of it builds it again.
 
-        A build that fails says why in Podman's own words: the step it
-        failed at and everything the build printed, as written, never only
-        that the image couldn't be created, and the same is kept in the log
-        the application writes for its builds, beside its preferences.
+        A build that fails, or a harness left out of it, is never shown as a
+        wall of Podman's output. The run, the login view, or the welcome
+        check shows a short message in plain words saying what went wrong and
+        what can be done, with a button for each fix the application can
+        make itself, then, collapsed beneath a "Details" disclosure, the step
+        it failed at and everything the build printed, as written, and the
+        same is kept in the debug log. So a package version that doesn't
+        exist reads "OpenCode 2.0.14 isn't available to install" with "Use
+        the latest OpenCode", which builds again with it at its latest; no
+        network reads "Couldn't download what the container needs: check
+        your internet connection" with "Try again"; Podman out of disk space
+        reads so, with "Free up space", which runs `podman system prune` once
+        confirmed; and anything else reads "The container couldn't be set
+        up" with "Try again" and "Copy details". The message is in the
+        theme's warning colour, not its error colour, while a fix is offered.
 
     mounts:
         What each run sees is what is mounted into its container, and nothing

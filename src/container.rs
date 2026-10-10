@@ -10,6 +10,7 @@
 //! container's paths map back to the host's, and how a harness logs in.
 
 use crate::process::Logged as _;
+use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::ffi::OsString;
 use std::hash::{Hash as _, Hasher as _};
@@ -897,18 +898,97 @@ fn host_version(command: &str) -> Option<String> {
     version_in(&String::from_utf8_lossy(&output.stdout))
 }
 
-/// The first version number in `text`, as `2.1.281` in
-/// `2.1.281 (Claude Code)`.
+/// The first plain version number in `text`, as `2.1.281` in
+/// `2.1.281 (Claude Code)` or `v0.41.0`: digits and dots alone, never
+/// anything printed around them.
 fn version_in(text: &str) -> Option<String> {
-    text.split(|c: char| c.is_whitespace() || c == 'v')
+    text.split(|c: char| !(c.is_ascii_digit() || c == '.'))
+        .map(|word| word.trim_matches('.'))
         .find(|word| {
-            word.contains('.')
-                && word
-                    .chars()
-                    .all(|c| c.is_ascii_digit() || c == '.' || c == '-' || c.is_ascii_alphabetic())
-                && word.starts_with(|c: char| c.is_ascii_digit())
+            let parts: Vec<&str> = word.split('.').collect();
+            parts.len() >= 2 && parts.iter().all(|part| !part.is_empty())
         })
         .map(str::to_string)
+}
+
+/// Whether npm's registry has `package` at `version`, as `npm view` on the
+/// host answers it, remembered once asked: Some(false) where it hasn't it,
+/// None where it can't be asked, as without npm or without the network.
+fn registry_has(package: &str, version: &str) -> Option<bool> {
+    static ASKED: std::sync::LazyLock<std::sync::Mutex<HashMap<String, Option<bool>>>> =
+        std::sync::LazyLock::new(Default::default);
+    // A test never asks npm.
+    if cfg!(test) {
+        return None;
+    }
+    let key = format!("{package}@{version}");
+    if let Some(known) = ASKED.lock().unwrap_or_else(|p| p.into_inner()).get(&key) {
+        return *known;
+    }
+    let output = crate::process::command("npm")
+        .args(["view", &key, "version"])
+        .stdin(Stdio::null())
+        .output_logged()
+        .ok()?;
+    let said = String::from_utf8_lossy(&output.stdout);
+    let err = String::from_utf8_lossy(&output.stderr);
+    let has = if said.lines().any(|line| line.trim().trim_matches('\'') == version) {
+        Some(true)
+    } else if (output.status.success() && said.trim().is_empty())
+        || ["E404", "ETARGET", "No matching version"].iter().any(|code| err.contains(code))
+    {
+        // npm answers a version it hasn't got with nothing, or says so.
+        Some(false)
+    } else {
+        None
+    };
+    ASKED.lock().unwrap_or_else(|p| p.into_inner()).insert(key, has);
+    has
+}
+
+/// The harnesses told to install at their latest whatever the host has, as
+/// "Use the latest" asks after a version couldn't be installed.
+static AT_LATEST: std::sync::Mutex<Vec<Agent>> = std::sync::Mutex::new(Vec::new());
+
+/// Installs `agent` at its latest in the image from now on.
+pub fn use_latest(agent: Agent) {
+    let mut latest = AT_LATEST.lock().unwrap_or_else(|p| p.into_inner());
+    if !latest.contains(&agent) {
+        latest.push(agent);
+    }
+}
+
+/// The version of `agent` the image installs: the host's, once the registry
+/// is known to have it; none, its latest, otherwise.
+fn image_version(agent: Agent) -> Option<String> {
+    if AT_LATEST.lock().unwrap_or_else(|p| p.into_inner()).contains(&agent) {
+        return None;
+    }
+    let version = host_version(agent.command())?;
+    match registry_has(package(agent), &version) {
+        Some(true) => Some(version),
+        // Not there, or without npm on the host to ask, it is the latest.
+        Some(false) => None,
+        None if crate::programs::find("npm").is_none() => None,
+        // The registry out of reach, the host's stands; the build needs the
+        // network all the same.
+        None => Some(version),
+    }
+}
+
+/// What the welcome page and the settings say, muted, of a harness running
+/// a different version in its container than on the host: none where they
+/// match, or the host has none.
+pub fn version_note(agent: Agent) -> Option<String> {
+    // A test never asks the host's harnesses or npm.
+    if cfg!(test) {
+        return None;
+    }
+    let host = host_version(agent.command())?;
+    match image_version(agent) {
+        Some(_) => None,
+        None => Some(format!("{host} on this computer; the latest in its container")),
+    }
 }
 
 /// Where piton's releases are published, its own Linux builds among them.
@@ -922,14 +1002,24 @@ const PITON_RELEASES: &str = "https://github.com/piton-lang/piton-rs/releases";
 /// falls back to the latest, or to no piton at all where Linux has no build
 /// for that architecture.
 pub fn default_containerfile(versions: &[(Agent, Option<String>)], piton: Option<&str>) -> String {
-    let packages = versions
+    // Each harness in a step of its own, at its version or else its latest,
+    // and left out where it can't be installed at all, so one never stops
+    // the others.
+    let installs: String = versions
         .iter()
-        .map(|(agent, version)| match version {
-            Some(version) => format!("{}@{version}", package(*agent)),
-            None => package(*agent).to_string(),
+        .map(|(agent, version)| {
+            let package = package(*agent);
+            let latest = format!("npm install -g {package}");
+            let first = match version {
+                Some(version) => format!("npm install -g {package}@{version} || {latest}"),
+                None => latest,
+            };
+            format!(
+                "RUN {first} || echo \"{} couldn't be installed; the image goes without it\"\n",
+                agent.label()
+            )
         })
-        .collect::<Vec<_>>()
-        .join(" ");
+        .collect();
     let mut file = String::from(
         "FROM docker.io/library/node:22-trixie-slim\n\
          RUN apt-get update \\\n \
@@ -937,7 +1027,7 @@ pub fn default_containerfile(versions: &[(Agent, Option<String>)], piton: Option
          && rm -rf /var/lib/apt/lists/*\n\
          RUN mkdir -p /workspace\n",
     );
-    file.push_str(&format!("RUN npm install -g {packages}\n"));
+    file.push_str(&installs);
     // piton's own installer picks the build for the machine's architecture.
     let version = piton.map(|v| format!("PITON_VERSION={v} ")).unwrap_or_default();
     file.push_str(&format!(
@@ -993,7 +1083,7 @@ impl Images {
         // The harnesses and piton as the host has them, where it can say.
         let versions: Vec<(Agent, Option<String>)> = Agent::RUNNABLE
             .iter()
-            .map(|agent| (*agent, host_version(agent.command())))
+            .map(|agent| (*agent, image_version(*agent)))
             .collect();
         let piton = host_version("piton");
         let containerfile = default_containerfile(&versions, piton.as_deref());
@@ -1032,7 +1122,7 @@ pub fn built_image(project_dir: &Path) -> Option<String> {
 /// Builds of images one at a time, and how the last of each ended, so a
 /// run, a login, or a check that needs an image already being built waits
 /// for that build and shares how it ended, rather than racing it.
-static BUILDING: std::sync::Mutex<Option<(String, u64, Result<(), String>)>> =
+static BUILDING: std::sync::Mutex<Option<(String, u64, Result<(), BuildFailed>)>> =
     std::sync::Mutex::new(None);
 
 /// Counts builds, so a wait can tell a build finished while it waited.
@@ -1095,7 +1185,7 @@ fn build_once(
         && *n > waited_from
         && let Err(why) = ended
     {
-        bail!("{why}");
+        return Err(why.clone().into());
     }
     on_build();
     build_log::begin(image);
@@ -1111,7 +1201,14 @@ fn build_once(
     *last = Some((
         image.to_string(),
         n,
-        result.as_ref().map(|_| ()).map_err(|err| format!("{err:#}")),
+        result.as_ref().map(|_| ()).map_err(|err| match err.downcast_ref::<BuildFailed>() {
+            Some(failed) => failed.clone(),
+            None => BuildFailed {
+                message: format!("{err:#}"),
+                fixes: vec![BuildFix::TryAgain, BuildFix::CopyDetails],
+                details: format!("{err:#}"),
+            },
+        }),
     ));
     result
 }
@@ -1164,7 +1261,7 @@ fn build(
     };
     let built = stream(command.arg("--iidfile").arg(&iid), &mut keep);
     if let Err(err) = built {
-        bail!("{}", build_failure(&printed, &format!("{err:#}")));
+        return Err(classify_build_failure(&printed, &format!("{err:#}")).into());
     }
     let id = std::fs::read_to_string(&iid)
         .context("podman built the image but didn't say which it is")?
@@ -1194,6 +1291,136 @@ fn build(
                 String::from_utf8_lossy(&tagged.stderr).trim()
             );
         }
+    }
+    Ok(())
+}
+
+/// What the application can do itself about a build that failed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BuildFix {
+    /// Build again with the harness at its latest.
+    UseLatest(Agent),
+    /// Build again as it was.
+    TryAgain,
+    /// `podman system prune`, once confirmed, then build again.
+    FreeSpace,
+    /// Copy what the build printed.
+    CopyDetails,
+}
+
+impl BuildFix {
+    pub fn label(self) -> String {
+        match self {
+            Self::UseLatest(agent) => format!("Use the latest {}", agent.label()),
+            Self::TryAgain => "Try again".into(),
+            Self::FreeSpace => "Free up space".into(),
+            Self::CopyDetails => "Copy details".into(),
+        }
+    }
+}
+
+/// A build that failed, as it is shown: a short message in plain words, the
+/// fixes the application can make itself, and the details, the step it
+/// failed at and everything the build printed, kept collapsed.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BuildFailed {
+    pub message: String,
+    pub fixes: Vec<BuildFix>,
+    pub details: String,
+}
+
+impl std::fmt::Display for BuildFailed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for BuildFailed {}
+
+/// What a build that printed `printed` and failed as `why` says went wrong,
+/// in plain words, and what can be done: a package version the registry
+/// hasn't got, no network, Podman out of disk space, or anything else.
+pub fn classify_build_failure(printed: &[String], why: &str) -> BuildFailed {
+    let details = build_failure(printed, why);
+    let all = format!("{}\n{why}", printed.join("\n"));
+    let lower = all.to_lowercase();
+    // "No matching version found for opencode-ai@2.0.14." or "No match
+    // found for version 2.0.14" after the package it was asked for.
+    let missing = Agent::RUNNABLE.iter().find_map(|agent| {
+        let at = format!("{}@", package(*agent));
+        let line = all.lines().find(|line| {
+            (line.contains("No matching version found for") || line.contains("notarget"))
+                && line.contains(&at)
+        })?;
+        let version = line
+            .split(&at)
+            .nth(1)?
+            .trim_end_matches(['.', ' ', '"', '\''])
+            .split_whitespace()
+            .next()?
+            .trim_end_matches('.')
+            .to_string();
+        Some((*agent, version))
+    });
+    let (message, fixes) = if let Some((agent, version)) = missing {
+        (
+            format!("{} {version} isn't available to install", agent.label()),
+            vec![BuildFix::UseLatest(agent)],
+        )
+    } else if lower.contains("no space left on device") {
+        (
+            "Podman is out of disk space, so the container couldn't be set up".to_string(),
+            vec![BuildFix::FreeSpace],
+        )
+    } else if [
+        "enotfound",
+        "eai_again",
+        "econnrefused",
+        "econnreset",
+        "etimedout",
+        "could not resolve",
+        "temporary failure resolving",
+        "temporary failure in name resolution",
+        "network is unreachable",
+        "i/o timeout",
+        "tls handshake timeout",
+        "no such host",
+    ]
+    .iter()
+    .any(|said| lower.contains(said))
+    {
+        (
+            "Couldn't download what the container needs: check your internet connection"
+                .to_string(),
+            vec![BuildFix::TryAgain],
+        )
+    } else {
+        (
+            "The container couldn't be set up".to_string(),
+            vec![BuildFix::TryAgain, BuildFix::CopyDetails],
+        )
+    };
+    crate::debug_log::log(None, format!("{message}\n{details}"));
+    BuildFailed {
+        message,
+        fixes,
+        details,
+    }
+}
+
+/// Frees Podman's disk space with `podman system prune`, as "Free up space"
+/// does once confirmed. Blocking.
+pub fn free_space() -> Result<()> {
+    let output = podman_command()
+        .args(["system", "prune", "-f"])
+        .stdin(Stdio::null())
+        .output_logged()
+        .context("could not run podman")?;
+    if !output.status.success() {
+        bail!(
+            "podman couldn't free up space: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
     }
     Ok(())
 }
@@ -1274,17 +1501,15 @@ fn check_commands(image: &str, commands: &[&str], on_line: &mut dyn FnMut(String
         on_line(format!("$ {command} --version"));
         let mut run = podman_command();
         run.args(["run", "--rm", image]);
-        if *command == "piton" {
-            // Left out where Linux has no build of it for the machine; one
-            // there has to run.
-            run.args([
-                "sh",
-                "-c",
-                "command -v piton >/dev/null || { echo 'piton is left out of this image'; exit 0; }; piton --version",
-            ]);
-        } else {
-            run.args([command, "--version"]);
-        }
+        // Left out where it couldn't be installed, as piton where Linux has
+        // no build of it for the machine; one there has to run.
+        run.args([
+            "sh".to_string(),
+            "-c".to_string(),
+            format!(
+                "command -v {command} >/dev/null || {{ echo '{command} is left out of this image'; exit 0; }}; {command} --version"
+            ),
+        ]);
         let output = run
             .stdin(Stdio::null())
             .output_logged()
@@ -1983,6 +2208,48 @@ mod tests {
             Some("2.1.281")
         );
         assert_eq!(version_in("codex-cli 0.41.0").as_deref(), Some("0.41.0"));
+    }
+
+    /// A failed build is said in plain words, with what can be done.
+    #[test]
+    fn failed_builds_say_what_can_be_done() {
+        let printed = |lines: &[&str]| lines.iter().map(|line| line.to_string()).collect::<Vec<_>>();
+        let failed = classify_build_failure(
+            &printed(&[
+                "STEP 4/5: RUN npm install -g opencode-ai@2.0.14",
+                "npm error notarget No matching version found for opencode-ai@2.0.14.",
+            ]),
+            "exit status 1",
+        );
+        assert_eq!(failed.message, "OpenCode 2.0.14 isn't available to install");
+        assert_eq!(failed.fixes, [BuildFix::UseLatest(Agent::OpenCode)]);
+        assert_eq!(BuildFix::UseLatest(Agent::OpenCode).label(), "Use the latest OpenCode");
+        assert!(failed.details.contains("STEP 4/5"), "{}", failed.details);
+        let offline = classify_build_failure(&printed(&["npm error code EAI_AGAIN"]), "exit 1");
+        assert!(offline.message.starts_with("Couldn't download"), "{}", offline.message);
+        assert_eq!(offline.fixes, [BuildFix::TryAgain]);
+        let full = classify_build_failure(&printed(&["write /var: no space left on device"]), "x");
+        assert_eq!(full.fixes, [BuildFix::FreeSpace]);
+        let other = classify_build_failure(&printed(&["something odd"]), "x");
+        assert_eq!(other.message, "The container couldn't be set up");
+        assert_eq!(other.fixes, [BuildFix::TryAgain, BuildFix::CopyDetails]);
+    }
+
+    /// Each harness installs in a step of its own, at its version or else
+    /// its latest, and is left out where it can't be installed at all; a
+    /// host's version is read only as a plain number.
+    #[test]
+    fn each_harness_installs_on_its_own() {
+        let file = default_containerfile(
+            &[(Agent::Claude, Some("2.1.0".into())), (Agent::OpenCode, None)],
+            None,
+        );
+        assert!(file.contains(
+            "RUN npm install -g @anthropic-ai/claude-code@2.1.0 || npm install -g @anthropic-ai/claude-code || echo"
+        ), "{file}");
+        assert!(file.contains("RUN npm install -g opencode-ai || echo \"OpenCode couldn't be installed"), "{file}");
+        assert_eq!(version_in("opencode v2.0.14-beta").as_deref(), Some("2.0.14"));
+        assert_eq!(version_in("no version here"), None);
     }
 
     #[test]

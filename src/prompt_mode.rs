@@ -1800,6 +1800,58 @@ fn queued_tooltip(text: &str) -> SharedString {
     lines.join("\n").into()
 }
 
+/// Asks before freeing Podman's disk space with `podman system prune`,
+/// then frees it in the background and calls `then`, as "Free up space"
+/// does; one that fails says why.
+pub(crate) fn confirm_free_space(
+    window: &mut Window,
+    cx: &mut App,
+    then: impl Fn(&mut Window, &mut App) + Clone + 'static,
+) {
+    window.open_alert_dialog(cx, move |alert, _, _| {
+        let then = then.clone();
+        alert
+            .title("Free up Podman's disk space?")
+            .description(
+                "This runs `podman system prune`, removing stopped containers, unused \
+                 networks, and images no container uses. Your harnesses' logins are kept.",
+            )
+            .footer(
+                DialogFooter::new()
+                    .child(
+                        Button::new("free-space-cancel")
+                            .outline()
+                            .label("Cancel")
+                            .on_click(|_, window, cx| window.close_dialog(cx)),
+                    )
+                    .child(
+                        Button::new("free-space-confirm")
+                            .primary()
+                            .label("Free up space")
+                            .on_click(move |_, window, cx| {
+                                window.close_dialog(cx);
+                                let then = then.clone();
+                                let freeing = cx.background_spawn(async { crate::container::free_space() });
+                                window
+                                    .spawn(cx, async move |cx| {
+                                        let freed = freeing.await;
+                                        cx.update(|window, cx| match freed {
+                                            Ok(()) => then(window, cx),
+                                            Err(err) => window.push_notification(
+                                                Notification::warning(format!("{err:#}"))
+                                                    .title("Couldn't free up space"),
+                                                cx,
+                                            ),
+                                        })
+                                        .ok();
+                                    })
+                                    .detach();
+                            }),
+                    ),
+            )
+    });
+}
+
 /// A task's tab's name: the first line of its prompt, cut off with an
 /// ellipsis at 24 characters.
 fn task_tab_name(text: &str) -> SharedString {
@@ -8630,6 +8682,27 @@ impl PromptMode {
         match action {
             task_table::RunAction::InstallPodman => {
                 cx.open_url(crate::container::Platform::current().install_url());
+            }
+            task_table::RunAction::Build(fix) => {
+                use crate::container::BuildFix;
+                let resend = move |window: &mut Window, cx: &mut App| {
+                    this.update(cx, |this, cx| this.resend_question(key, window, cx))
+                        .ok();
+                };
+                match fix {
+                    BuildFix::UseLatest(agent) => {
+                        crate::container::use_latest(agent);
+                        resend(window, cx);
+                    }
+                    BuildFix::TryAgain => resend(window, cx),
+                    BuildFix::CopyDetails => {
+                        let details = crate::container::build_log::file()
+                            .and_then(|file| std::fs::read_to_string(file).ok())
+                            .unwrap_or_default();
+                        cx.write_to_clipboard(ClipboardItem::new_string(details));
+                    }
+                    BuildFix::FreeSpace => confirm_free_space(window, cx, resend),
+                }
             }
             // The harness the run needed, never another.
             task_table::RunAction::LogIn(agent) => {

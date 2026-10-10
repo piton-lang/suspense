@@ -159,12 +159,20 @@ pub fn probe(check: Check, agent: Agent, platform: Platform, project_dir: Option
                 "https://github.com/piton-lang/piton-rs".into(),
             )],
         ),
-        Check::Harness => found_or(
+        Check::Harness => match found_or(
             agent.command(),
             agent.label(),
             "Suspense needs it, since Code tasks run it on the host. Install it, or choose another harness.",
             vec![Fix::Link("Install", agent::install_url(agent).into())],
-        ),
+        ) {
+            // Muted, never an error: it runs another version in its
+            // container.
+            Status::Passed(Some(found)) => Status::Passed(Some(match container::version_note(agent) {
+                Some(note) => format!("{found} · {note}"),
+                None => found,
+            })),
+            status => status,
+        },
         Check::Podman => found_or(
             &container::podman().to_string_lossy(),
             "Podman",
@@ -391,6 +399,9 @@ pub struct WelcomeView {
     machine_output: Vec<String>,
     machine_running: bool,
     show_at_launch: bool,
+    /// The project, if any, and its harness, the harness checks last ran
+    /// for: run again by themselves once either changes.
+    checked_for: Option<(Option<PathBuf>, Agent)>,
     focus_handle: FocusHandle,
     _tasks: Vec<Task<()>>,
 }
@@ -422,9 +433,13 @@ impl WelcomeView {
             machine_output: Vec::new(),
             machine_running: false,
             show_at_launch: preference::load(),
+            checked_for: None,
             focus_handle: cx.focus_handle(),
             _tasks: Vec::new(),
         };
+        // Another project opened, the harness checks follow it.
+        cx.observe_global::<ProjectDirectory>(|this, cx| this.follow_harness(cx))
+            .detach();
         this.check_again(cx);
         this
     }
@@ -459,6 +474,37 @@ impl WelcomeView {
             .map(|check| (check, Status::Waiting))
             .collect();
         self.advance(cx);
+    }
+
+    /// What `check`'s row is called: the harness checks named for the open
+    /// project's harness, or, with none open, the one a new project starts
+    /// with, saying so.
+    fn label(&self, check: Check, cx: &App) -> String {
+        let project_dir = ProjectDirectory::get(cx);
+        let agent = agent::of_project(project_dir.as_deref());
+        let harness = match project_dir {
+            Some(_) => agent.label().to_string(),
+            None => format!("{} (for new projects)", agent.label()),
+        };
+        match check {
+            Check::Harness => harness,
+            Check::HarnessLogin => format!("{} login", agent.label()),
+            check => check.name().to_string(),
+        }
+    }
+
+    /// Runs the harness checks again, and those waiting on them, once
+    /// another project is open, or its harness has changed, since they last
+    /// ran, so they never speak of a harness the project doesn't use.
+    fn follow_harness(&mut self, cx: &mut Context<Self>) {
+        let project_dir = ProjectDirectory::get(cx);
+        let now = (project_dir.clone(), agent::of_project(project_dir.as_deref()));
+        if self.checked_for.as_ref().is_some_and(|checked| *checked != now) {
+            self.checked_for = Some(now);
+            if self.statuses.iter().any(|(check, _)| *check == Check::Harness) {
+                self.check_from(Check::Harness, cx);
+            }
+        }
     }
 
     /// Runs `check` again, and the checks waiting on it.
@@ -511,6 +557,7 @@ impl WelcomeView {
             .collect();
         let project_dir = ProjectDirectory::get(cx);
         let agent = agent::of_project(project_dir.as_deref());
+        self.checked_for = Some((project_dir.clone(), agent));
         for check in ready {
             self.set(check, Status::Checking);
             let probe = self.probe.clone();
@@ -717,7 +764,7 @@ impl WelcomeView {
                 h_flex()
                     .gap_2()
                     .child(div().flex_none().size_4().child(icon))
-                    .child(div().font_medium().child(check.name()))
+                    .child(div().font_medium().child(self.label(check, cx)))
                     .children(found.map(|found| div().text_sm().text_color(muted).child(found))),
             )
             .children(guidance)
@@ -728,6 +775,7 @@ impl WelcomeView {
 
 impl Render for WelcomeView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.follow_harness(cx);
         let theme = cx.theme();
         let (background, foreground, muted, border) = (
             theme.background,

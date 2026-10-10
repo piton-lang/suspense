@@ -144,6 +144,10 @@ pub enum HarnessEvent {
     /// Podman can't run its container, and what can be done about it, as
     /// the ContainerEnvironmentScope says; the run then fails saying why.
     PodmanUnavailable(Option<container::MachineAction>),
+    /// The container's image couldn't be built; what the application can do
+    /// about it first, if anything. The run then fails saying why, in
+    /// plain words.
+    BuildFailed(Option<container::BuildFix>),
     /// The harness, as named, isn't logged in in its container, and must be
     /// before the run can go; the run then fails saying so.
     LoginNeeded(Agent),
@@ -1505,7 +1509,16 @@ fn prepare(
             tx.unbounded_send(HarnessEvent::Output(line)).ok();
         },
     )
-    .context("could not prepare the container's image")?;
+    .map_err(|err| match err.downcast_ref::<container::BuildFailed>() {
+        // In plain words, with what can be done: what the build printed
+        // went to the raw output, and is in the debug log.
+        Some(failed) => {
+            tx.unbounded_send(HarnessEvent::BuildFailed(failed.fixes.first().copied()))
+                .ok();
+            anyhow::anyhow!("{}", failed.message)
+        }
+        None => err.context("could not prepare the container's image"),
+    })?;
     if stop.is_stopped() {
         return Ok(None);
     }
