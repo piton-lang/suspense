@@ -1,0 +1,7 @@
+- [A Piton file is edited with the project's LSP server, kept current with full-text didChange](.claude/reference/scope/editor/index.md#language-support)
+- [Hovering a name, after 500ms, shows the server's textDocument/hover; prose, numbers, and comments never show one](.claude/reference/scope/editor/index.md#language-support)
+- [A hover that only repeats the text as its compiled value, or is empty, shows nothing](.claude/reference/scope/editor/index.md#language-support)
+- [A diagnostic's message shows on hover over its underline, prose included](.claude/reference/scope/editor/index.md#language-support)
+- [Typing clears any hover until the pointer next moves over the text](.claude/reference/scope/editor/index.md#language-support)
+- [Ctrl+. lists the server's code actions at the cursor](.claude/reference/scope/editor/index.md#language-support)
+- [Resting 500ms on a symbol or error opens the hover popover with the server hover, or the diagnostic first, and a Quick fix link](.claude/reference/scope/editor/index.md#language-support)

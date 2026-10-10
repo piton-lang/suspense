@@ -58,7 +58,7 @@ fn search_system_prompt(project_dir: &Path) -> String {
         spec.map(|spec| format!("the spec, in {spec}")),
         code.map(|code| format!("the code, in {code}")),
         Some(hidden_anchor::APP_DIR.to_string()),
-        Some(crate::harness::directory().to_string()),
+        Some(crate::harness::directory(Some(project_dir)).to_string()),
     ]
     .into_iter()
     .flatten()

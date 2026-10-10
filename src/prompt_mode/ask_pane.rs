@@ -824,7 +824,7 @@ impl PromptMode {
                     .bg(tint)
                     .child(div().min_w_0().child(task.text.clone()))
                     .children(attached_text)
-                    .children(task_images(id, task, cx)),
+                    .children(task_images(id, task, Some(self.file_opener(cx)), cx)),
             );
         // Lets UI tests find the question; inert in normal builds.
         let bubble = gpui_kit::TestSupportExt::test_support(bubble);
@@ -1534,68 +1534,6 @@ impl PromptMode {
                 cx,
             ))
             .into_any_element()
-    }
-
-    /// The Freeform task at `ix`'s prompt, as the Freeform chat shows it,
-    /// for it open among the previous tasks.
-    pub(super) fn freeform_prompt(&self, ix: usize, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let task = self.tasks.get(ix)?;
-        Some(self.question_row(Chat::Freeform, QuestionKey::Task(ix), task, true, false, cx))
-    }
-
-    /// The Freeform task at `ix`'s reply, as the Freeform chat shows it, all
-    /// at once, for it open among the previous tasks, where its changed files
-    /// follow of their own.
-    pub(super) fn freeform_reply(&self, ix: usize, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let key = QuestionKey::Task(ix);
-        let task = self.tasks.get(ix)?;
-        let answer = AnswerLayout {
-            segments: task
-                .reply
-                .chat_segments()
-                .into_iter()
-                .enumerate()
-                .map(|(seg, segment)| {
-                    let shown = self.chat_steps_shown.contains(&(key.id(), seg));
-                    (segment, shown)
-                })
-                .collect(),
-        };
-        let open = self.file_opener(cx);
-        let mut children = Vec::new();
-        for at in 1..answer.items() - 1 {
-            let element = match answer.row_at(0, at) {
-                PaneRow::Sent(_, row) => match task.reply.row(row) {
-                    Some(OutputRow::Sent(text)) => {
-                        Some(Self::sent_row(Chat::Freeform, key, row, text, cx))
-                    }
-                    _ => None,
-                },
-                PaneRow::Line(_, seg) => Some(self.answer_line(key, task, &answer, seg, cx)),
-                PaneRow::Step(_, row) => Self::piece_of(key, &task.reply, row, cx)
-                    .map(|piece| Self::answer_step(key, row, piece, &open, cx)),
-                PaneRow::Answer(_, row) => {
-                    let first =
-                        (0..answer.segments.len()).any(|seg| answer.first_answer(seg) == Some(row));
-                    Self::piece_of(key, &task.reply, row, cx)
-                        .map(|piece| Self::answer_piece(key, row, piece, first, &open, None, cx))
-                }
-                _ => None,
-            };
-            children.extend(element);
-        }
-        children.push(self.answer_end(key, task, &answer, false, cx));
-        let reply = v_flex()
-            .id(("freeform-reply", ix))
-            .w_full()
-            .children(children);
-        // Lets UI tests find the reply; inert in normal builds.
-        Some(gpui_kit::TestSupportExt::test_support(reply).into_any_element())
-    }
-
-    /// How far the Freeform chat has to scroll up to reach its top.
-    pub(super) fn freeform_to_top(&self) -> Pixels {
-        self.freeform_pane.rows.to_top()
     }
 
     /// Locks the Freeform chat to its bottom, as sending a prompt does.

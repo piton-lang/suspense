@@ -124,7 +124,11 @@ pub struct HiddenAnchor {
     /// directory once saved in its data, written as `attachedImages` after
     /// the attached text: each path an escape block, as attached text is.
     pub attached_images: Vec<String>,
-    /// The `systemPrompt` written after the attached images, if any.
+    /// Other files attached to the prompt, by their paths from the project
+    /// directory once saved in its data, written as `attachedFiles` after
+    /// the attached images, each path an escape block.
+    pub attached_files: Vec<String>,
+    /// The `systemPrompt` written after the attached files, if any.
     pub system_prompt: Option<String>,
     /// For a Code task sent to Spec, the code task it was sent from, and for
     /// a chain's code step, the chain's spec step, written as `codeTask` after
@@ -147,22 +151,80 @@ pub struct HiddenAnchor {
     /// written as `effort: low` after `model`; none for the harness's
     /// default, or a prompt saved before this was kept.
     pub effort: Option<String>,
+    /// For a step added to a chain, the chain it was added to, by its Chain
+    /// task's name, and its place among the steps added, written as
+    /// `addedStep: Name 0` after `effort`.
+    pub added_step: Option<(String, usize)>,
+    /// For a Chain task, the steps added to it beyond its own, in the order
+    /// they run, written as `addedSteps` after `addedStep`.
+    pub added_steps: Vec<AddedStep>,
 }
 
-/// What is attached to a prompt: pieces of text, and images saved in the
-/// project's data, by their paths from the project directory, each in the
+/// A step added to a chain beyond its own, as the TasksTabScope's chain
+/// steps say: a Code or a Spec step, with a prompt of its own, and its
+/// model and effort, those of the chain until changed.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AddedStep {
+    pub mode: SendMode,
+    pub prompt: String,
+    pub model: Option<String>,
+    pub effort: Option<String>,
+}
+
+impl AddedStep {
+    /// The step as its escape block holds it: a line each for its mode, and
+    /// its model and effort where it has them, a blank line, then its
+    /// prompt.
+    fn block(&self) -> String {
+        let mut block = format!("mode: {}", self.mode.key());
+        if let Some(model) = &self.model {
+            block.push_str(&format!("\nmodel: {model}"));
+        }
+        if let Some(effort) = &self.effort {
+            block.push_str(&format!("\neffort: {effort}"));
+        }
+        block.push_str("\n\n");
+        block.push_str(&self.prompt);
+        block
+    }
+
+    /// The step an escape block holds, as [`Self::block`] writes it.
+    fn of_block(block: &str) -> Option<Self> {
+        let (head, prompt) = block.split_once("\n\n").unwrap_or((block, ""));
+        let mut step = Self {
+            mode: SendMode::Code,
+            prompt: prompt.to_string(),
+            model: None,
+            effort: None,
+        };
+        for line in head.lines() {
+            let (key, value) = line.split_once(": ")?;
+            match key {
+                "mode" => step.mode = SendMode::from_key(value.trim())?,
+                "model" => step.model = Some(value.trim().to_string()),
+                "effort" => step.effort = Some(value.trim().to_string()),
+                _ => {}
+            }
+        }
+        Some(step)
+    }
+}
+
+/// What is attached to a prompt: pieces of text, and images and other files
+/// saved in the project's data, by their paths from the project directory, each in the
 /// order it was attached.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Attached {
     pub text: Vec<String>,
     pub images: Vec<String>,
+    pub files: Vec<String>,
 }
 
 impl From<Vec<String>> for Attached {
     fn from(text: Vec<String>) -> Self {
         Self {
             text,
-            images: Vec::new(),
+            ..Self::default()
         }
     }
 }
@@ -188,6 +250,9 @@ pub struct CompiledPrompt {
     /// The images attached to it, to give the harness alongside the prompt,
     /// in the order they were attached; never part of the prompt's text.
     pub images: Vec<PathBuf>,
+    /// The other files attached to it, on the host, which its text names
+    /// and a run in a container is given.
+    pub files: Vec<PathBuf>,
     /// The model it goes to, as its harness is told it; none for the
     /// harness's own.
     pub model: Option<String>,
@@ -224,21 +289,24 @@ impl HiddenAnchor {
             new_conversation: None,
             attached_text: Vec::new(),
             attached_images: Vec::new(),
+            attached_files: Vec::new(),
             system_prompt: None,
             code_task: None,
             sent_from: None,
             post_build_update: false,
             model: None,
             effort: None,
+            added_step: None,
+            added_steps: Vec::new(),
         }
     }
 
     /// What is attached to it.
-    #[cfg(test)]
     pub fn attached(&self) -> Attached {
         Attached {
             text: self.attached_text.clone(),
             images: self.attached_images.clone(),
+            files: self.attached_files.clone(),
         }
     }
 
@@ -246,6 +314,7 @@ impl HiddenAnchor {
     pub fn attach(&mut self, attached: Attached) {
         self.attached_text = attached.text;
         self.attached_images = attached.images;
+        self.attached_files = attached.files;
     }
 
     /// A fresh name for an anchor, as [`Self::random`] gives it, so a prompt
@@ -305,6 +374,15 @@ impl HiddenAnchor {
                 push_block(&mut source, ATTACHMENT_INDENT, path);
             }
         }
+        if !self.attached_files.is_empty() {
+            source.push('\n');
+            source.push_str(ATTACHED_FILES_LINE);
+            source.push('\n');
+            for (index, path) in self.attached_files.iter().enumerate() {
+                writeln!(source, "{PROMPT_INDENT}{FILE_KEY}{}:", index + 1).ok();
+                push_block(&mut source, ATTACHMENT_INDENT, path);
+            }
+        }
         if let Some(system_prompt) = &self.system_prompt {
             source.push('\n');
             source.push_str(SYSTEM_PROMPT_LINE);
@@ -337,6 +415,19 @@ impl HiddenAnchor {
         if let Some(effort) = &self.effort {
             source.push('\n');
             writeln!(source, "{EFFORT_PREFIX}{effort}").ok();
+        }
+        if let Some((chain, place)) = &self.added_step {
+            source.push('\n');
+            writeln!(source, "{ADDED_STEP_PREFIX}{chain} {place}").ok();
+        }
+        if !self.added_steps.is_empty() {
+            source.push('\n');
+            source.push_str(ADDED_STEPS_LINE);
+            source.push('\n');
+            for (index, step) in self.added_steps.iter().enumerate() {
+                writeln!(source, "{PROMPT_INDENT}{ADDED_STEP_KEY}{}:", index + 1).ok();
+                push_block(&mut source, ATTACHMENT_INDENT, &step.block());
+            }
         }
         let references = self.references(prompt);
         if !references.is_empty() {
@@ -511,6 +602,21 @@ impl HiddenAnchor {
             }
             rest = rest.strip_prefix(&[""]).unwrap_or(rest);
         }
+        // Saved only by versions that attach other files.
+        let mut attached_files = Vec::new();
+        if rest.first() == Some(&ATTACHED_FILES_LINE) {
+            rest = &rest[1..];
+            while rest.first().is_some_and(|line| {
+                line.strip_prefix(PROMPT_INDENT)
+                    .and_then(|key| key.strip_prefix(FILE_KEY))
+                    .is_some_and(|key| key.ends_with(':'))
+            }) {
+                let (path, after) = read_escaped(&rest[1..], ATTACHMENT_INDENT)?;
+                attached_files.push(path);
+                rest = after;
+            }
+            rest = rest.strip_prefix(&[""]).unwrap_or(rest);
+        }
         let system_prompt = match rest.first() {
             Some(&SYSTEM_PROMPT_LINE) => Some(match read_escaped(&rest[1..], PROMPT_INDENT) {
                 Some((text, after)) => {
@@ -586,6 +692,35 @@ impl HiddenAnchor {
             .and_then(|line| line.strip_prefix(EFFORT_PREFIX))
             .map(|effort| effort.trim().to_string())
             .filter(|effort| !effort.is_empty());
+        if effort.is_some() {
+            rest = &rest[1..];
+            rest = rest.strip_prefix(&[""]).unwrap_or(rest);
+        }
+        // Saved only by versions that add steps to a chain.
+        let added_step = rest
+            .first()
+            .and_then(|line| line.strip_prefix(ADDED_STEP_PREFIX))
+            .and_then(|value| {
+                let (chain, place) = value.trim().rsplit_once(' ')?;
+                Some((chain.to_string(), place.parse().ok()?))
+            });
+        if added_step.is_some() {
+            rest = &rest[1..];
+            rest = rest.strip_prefix(&[""]).unwrap_or(rest);
+        }
+        let mut added_steps = Vec::new();
+        if rest.first() == Some(&ADDED_STEPS_LINE) {
+            rest = &rest[1..];
+            while rest.first().is_some_and(|line| {
+                line.strip_prefix(PROMPT_INDENT)
+                    .and_then(|key| key.strip_prefix(ADDED_STEP_KEY))
+                    .is_some_and(|key| key.ends_with(':'))
+            }) {
+                let (block, after) = read_escaped(&rest[1..], ATTACHMENT_INDENT)?;
+                added_steps.extend(AddedStep::of_block(&block));
+                rest = after;
+            }
+        }
         Some((
             Self {
                 name,
@@ -595,12 +730,15 @@ impl HiddenAnchor {
                 new_conversation,
                 attached_text,
                 attached_images,
+                attached_files,
                 system_prompt,
                 code_task,
                 sent_from,
                 post_build_update,
                 model,
                 effort,
+                added_step,
+                added_steps,
             },
             prompt,
         ))
@@ -644,6 +782,14 @@ const MODEL_PREFIX: &str = "    model: ";
 /// The start of the `effort` line of [`HiddenAnchor::source`].
 const EFFORT_PREFIX: &str = "    effort: ";
 
+/// The start of the `addedStep` line of [`HiddenAnchor::source`].
+const ADDED_STEP_PREFIX: &str = "    addedStep: ";
+
+/// The line opening the `addedSteps` property of [`HiddenAnchor::source`],
+/// and what each step in it is keyed by, followed by its number.
+const ADDED_STEPS_LINE: &str = "    addedSteps:";
+const ADDED_STEP_KEY: &str = "step";
+
 /// The line opening the `references` property of [`HiddenAnchor::source`].
 const REFERENCES_LINE: &str = "    references:";
 
@@ -659,6 +805,11 @@ const ATTACHMENT_INDENT: &str = "            ";
 /// followed by its number; each path is an escape block, as attached text is.
 const ATTACHED_IMAGES_LINE: &str = "    attachedImages:";
 const IMAGE_KEY: &str = "image";
+
+/// The line opening the `attachedFiles` property of [`HiddenAnchor::source`],
+/// and what each file's path in it is keyed by, followed by its number.
+const ATTACHED_FILES_LINE: &str = "    attachedFiles:";
+const FILE_KEY: &str = "file";
 
 /// Adds `text` to `source` as a multi-line escape block at `indent`, which
 /// Piton keeps exactly as it is. Its fence is three backslashes, or one more
@@ -747,10 +898,22 @@ pub fn freeform(prompt: &str, attached_text: &[String]) -> CompiledPrompt {
         system_prompt: None,
         code_task: None,
         images: Vec::new(),
+        files: Vec::new(),
         // Freeform goes to the harness's own model and effort.
         model: None,
         effort: None,
     }
+}
+
+/// What the harness receives for a Freeform prompt with `attached`, saved
+/// in `project_dir`: as [`freeform`] gives it, with the images given
+/// alongside it and the "Attached files:" lines after its text.
+pub fn freeform_attached(prompt: &str, attached: &Attached, project_dir: &Path) -> CompiledPrompt {
+    let mut compiled = freeform(prompt, &attached.text);
+    compiled.user_prompt += &crate::attached_file::harness_lines(&attached.files, Some(project_dir));
+    compiled.images = image_files(&attached.images, project_dir);
+    compiled.files = crate::attached_file::files(&attached.files, project_dir);
+    compiled
 }
 
 /// The images at `paths`, from `project_dir`, as files for the harness.
@@ -1048,6 +1211,7 @@ fn filled_instructions(
         system_prompts::Fluency {
             piton: fluency_file.as_deref(),
             suspense: suspense_file.as_deref(),
+            harness_directory: Some(crate::harness::directory(Some(project_dir))),
         },
     );
     Ok((!filled.trim().is_empty()).then_some(filled))
@@ -1074,7 +1238,11 @@ pub fn project_system_prompt_for(
     let reading = system_prompts::load(system_prompts::Prompt::SpecReading, project_dir)?;
     let (code, spec) = locations_for(mode, project_dir)?;
     Ok(system_prompts::project_system_prompt(
-        &code, &spec, &template, &reading,
+        &code,
+        &spec,
+        &template,
+        &reading,
+        crate::harness::directory(Some(project_dir)),
     ))
 }
 
@@ -1239,13 +1407,15 @@ pub fn compile(anchor: &HiddenAnchor, file: &Path, project_dir: &Path) -> Result
         }
     }
     Ok(CompiledPrompt {
-        user_prompt: with_attached_text(&user_prompt, &saved.attached_text),
+        user_prompt: with_attached_text(&user_prompt, &saved.attached_text)
+            + &crate::attached_file::harness_lines(&saved.attached_files, Some(project_dir)),
         system_prompt: saved
             .system_prompt
             .as_deref()
             .map(|text| saved.resolve(text, &resolved)),
         code_task: saved.code_task,
         images: image_files(&saved.attached_images, project_dir),
+        files: crate::attached_file::files(&saved.attached_files, project_dir),
         model: saved.model,
         effort: saved.effort,
     })
@@ -1554,12 +1724,15 @@ mod tests {
             new_conversation: None,
             attached_text: Vec::new(),
             attached_images: Vec::new(),
+            attached_files: Vec::new(),
             system_prompt: None,
             code_task: None,
             sent_from: None,
             post_build_update: false,
             model: None,
             effort: None,
+            added_step: None,
+            added_steps: Vec::new(),
         };
         assert_eq!(
             anchor.source("hi"),
@@ -1568,6 +1741,37 @@ mod tests {
              \n\
              export anchor Prompt_test:\n    userPrompt:\n        \\\\\\\n        hi\n        \\\\\\\n"
         );
+    }
+
+    #[test]
+    fn added_steps_parse_back() {
+        let mut anchor = HiddenAnchor::random();
+        anchor.mode = Some(SendMode::Both);
+        anchor.model = Some("sonnet".into());
+        anchor.added_step = Some(("Prompt_chain".into(), 1));
+        anchor.added_steps = vec![
+            super::AddedStep {
+                mode: SendMode::Code,
+                prompt: "Then tidy it.\n\n    indented".into(),
+                model: Some("opus".into()),
+                effort: Some("high".into()),
+            },
+            super::AddedStep {
+                mode: SendMode::Spec,
+                prompt: "And write it down.".into(),
+                model: None,
+                effort: None,
+            },
+        ];
+        let source = anchor.source("Change it");
+
+        let (parsed, text) = HiddenAnchor::parse(&source).unwrap();
+        assert_eq!(text, "Change it");
+        assert_eq!(parsed.mode, Some(SendMode::Both));
+        assert_eq!(parsed.model.as_deref(), Some("sonnet"));
+        assert_eq!(parsed.added_step, anchor.added_step);
+        assert_eq!(parsed.added_steps, anchor.added_steps);
+        assert_eq!(parsed.source(&text), source);
     }
 
     #[test]
@@ -1674,6 +1878,7 @@ mod tests {
                 system_prompts::Fluency {
                     piton: Some(&fluency_file),
                     suspense: Some(&suspense_file),
+                    harness_directory: None,
                 },
             );
             // A question ends with the card format, on a paragraph of its
@@ -1843,7 +2048,7 @@ mod tests {
         let system = super::project_system_prompt_for(Some(SendMode::Spec), &project_dir).unwrap().unwrap();
         assert!(!system.contains("./src"), "{system}");
 
-        crate::project_settings::ProjectSettings { spec_reads_code: true, spec_reads_project: false }
+        crate::project_settings::ProjectSettings { spec_reads_code: true, spec_reads_project: false, ..Default::default() }
             .save(&project_dir)
             .unwrap();
         assert_eq!(super::seen_locations(Some(SendMode::Spec), &project_dir), (true, true));
@@ -1854,7 +2059,7 @@ mod tests {
         );
         assert!(super::code_read_only("./src", false).contains("read only"));
         // Let read the whole project too, it is told so as well.
-        crate::project_settings::ProjectSettings { spec_reads_code: true, spec_reads_project: true }
+        crate::project_settings::ProjectSettings { spec_reads_code: true, spec_reads_project: true, ..Default::default() }
             .save(&project_dir)
             .unwrap();
         let spec = instructions(SendMode::Spec, &project_dir).unwrap().unwrap();
@@ -2481,6 +2686,43 @@ mod tests {
     /// and anchors saved before images could be attached read back with
     /// none. The images reach the harness as files, never as text in the
     /// compiled prompt.
+    /// Attached files are kept as their paths, after the images, and the
+    /// harness is told where each is, after the attached text, never given
+    /// what it holds.
+    #[test]
+    fn attached_files_are_saved_as_their_paths() {
+        let mut anchor = HiddenAnchor::random();
+        anchor.mode = Some(SendMode::Freeform);
+        anchor.attached_images = vec![".suspense/images/1-aaaaaaaaaaaa.png".into()];
+        let files = vec![".suspense/attachments/1-bbbbbbbbbbbb/notes {x}.md".to_string()];
+        anchor.attached_files = files.clone();
+        anchor.system_prompt = Some("Be brief.".into());
+        let source = anchor.source("Read it");
+        assert!(
+            source.contains("    attachedFiles:\n        file1:\n"),
+            "{source}"
+        );
+        let (parsed, prompt) = HiddenAnchor::parse(&source).unwrap();
+        assert_eq!(prompt, "Read it");
+        assert_eq!(parsed.attached_files, files);
+        assert_eq!(parsed.attached_images.len(), 1);
+        assert_eq!(parsed.system_prompt.as_deref(), Some("Be brief."));
+
+        let dir = std::env::temp_dir().join(format!("suspense-anchor-files-{}", std::process::id()));
+        let compiled = super::freeform_attached(
+            "Read it",
+            &super::Attached { text: vec!["log".into()], images: Vec::new(), files: files.clone() },
+            &dir,
+        );
+        assert!(
+            compiled.user_prompt.ends_with(&format!("\n\nAttached files:\n- {} (notes {{x}}.md)", files[0])),
+            "{}",
+            compiled.user_prompt
+        );
+        assert!(compiled.user_prompt.contains("Attached text:"));
+        assert_eq!(compiled.files, [dir.join(&files[0])]);
+    }
+
     #[test]
     fn attached_images_are_saved_as_their_paths() {
         let mut anchor = HiddenAnchor::random();
@@ -2519,6 +2761,7 @@ mod tests {
             super::Attached {
                 text: vec!["log".into()],
                 images: images.clone(),
+                files: Vec::new(),
             }
         );
 

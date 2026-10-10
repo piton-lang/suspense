@@ -182,6 +182,7 @@ pub fn import(folder: &Path, settings: &Settings) -> Result<Option<String>> {
         std::fs::write(&opencode, opencode_json(&code_root))
             .with_context(|| format!("Couldn't write {}", opencode.display()))?;
     }
+    crate::agent::set_for_project(folder, settings.harness)?;
     let warning = git(folder, settings.init_git)
         .err()
         .map(|err| format!("Couldn't initialize a Git repository: {err:#}"));
@@ -248,6 +249,7 @@ pub struct ImportProjectForm {
     /// chosen only while it hasn't been typed over.
     code_root_default: String,
     agents: Vec<Agent>,
+    harness: Agent,
     init_git: bool,
     /// The key of the template chosen.
     template: String,
@@ -306,6 +308,7 @@ impl ImportProjectForm {
             state: None,
             code_root_default: "./src".into(),
             agents: vec![Agent::Claude],
+            harness: Agent::Claude,
             init_git: true,
             template: project_templates::all()
                 .first()
@@ -331,6 +334,7 @@ impl ImportProjectForm {
                 .unwrap_or_default(),
             location: folder.parent().map(Path::to_path_buf).unwrap_or_default(),
             agents: self.agents.clone(),
+            harness: crate::new_project::harness_among(&self.agents, self.harness),
             spec_root: self.spec_root.read(cx).value().to_string(),
             code_root: self.code_root.read(cx).value().to_string(),
             shape_root: self.shape_root.read(cx).value().to_string(),
@@ -398,6 +402,7 @@ impl ImportProjectForm {
         if on {
             self.agents.push(agent);
         }
+        self.harness = crate::new_project::harness_among(&self.agents, self.harness);
         cx.notify();
     }
 
@@ -708,7 +713,14 @@ impl ImportProjectForm {
                             .min_w_0()
                             .gap_5()
                             .child(templates)
-                            .child(agents),
+                            .child(agents)
+                            .child(crate::new_project::harness_group(
+                                "import-project-harness",
+                                &self.agents,
+                                self.harness,
+                                |this: &mut Self, agent| this.harness = agent,
+                                cx,
+                            )),
                     ),
             );
 
@@ -796,6 +808,7 @@ mod tests {
             name: folder.file_name().unwrap().to_string_lossy().into_owned(),
             location: folder.parent().unwrap().to_path_buf(),
             agents: vec![Agent::Claude, Agent::OpenCode],
+            harness: Agent::Claude,
             spec_root: "./spec".into(),
             code_root: code_root.into(),
             shape_root: "./spec/shape".into(),

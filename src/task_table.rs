@@ -676,6 +676,13 @@ impl Reply {
         self.row(self.rows.len().checked_sub(1)?)
     }
 
+    /// How many tool calls the output holds.
+    pub(crate) fn tool_calls(&self) -> usize {
+        (0..self.rows.len())
+            .filter(|&ix| matches!(self.row(ix), Some(OutputRow::Tool(_))))
+            .count()
+    }
+
     /// The rows of the output table, in the order they happened.
     #[cfg(test)]
     pub(crate) fn rows(&self) -> Vec<OutputRow<'_>> {
@@ -1393,10 +1400,6 @@ impl TableSync {
         self.layout = Some(layout);
     }
 
-    /// The table's layout, as the list was last told it.
-    pub(crate) fn layout(&self) -> Option<Layout> {
-        self.layout
-    }
 }
 
 /// Finds a table's reply as its rows are drawn, from wherever it is kept.
@@ -1447,6 +1450,7 @@ impl TaskTable {
         }
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn list(&self) -> &MeasuredList {
         &self.list
     }

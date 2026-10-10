@@ -1,6 +1,7 @@
 //! Images attached to a prompt: pasted into the chat input, dropped onto it,
-//! or chosen with its Attach images button. Only PNG, JPEG, GIF, and WebP
-//! images of up to 5 MB are attached. Once the prompt is sent or queued, each
+//! or chosen with its Attach files button. Only PNG, JPEG, GIF, and WebP
+//! images of up to 5 MB are attached as images; any other file is attached
+//! as a file (see [`crate::attached_file`]). Once the prompt is sent or queued, each
 //! is saved in the project's data, under `images/`, named by the second it
 //! was saved and a short hash of its content, so the same image attached
 //! twice is saved once; the hidden anchor keeps their paths, and the harness
@@ -43,7 +44,8 @@ pub struct AttachedImage {
     pub height: usize,
 }
 
-/// Why an image wasn't attached, as a notification says it.
+/// Why something couldn't be attached as an image, and is attached as a
+/// file instead.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Rejected {
     /// It isn't a PNG, JPEG, GIF, or WebP image.
@@ -55,7 +57,8 @@ pub enum Rejected {
 }
 
 impl Rejected {
-    /// What the notification says.
+    /// What it says.
+    #[cfg(test)]
     pub fn message(&self) -> String {
         match self {
             Self::NotAnImage(name) => format!(

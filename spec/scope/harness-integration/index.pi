@@ -1,4 +1,5 @@
 use /lib
+from /scope/project-data import ProjectDataScope
 from ../project-data import ProjectDataScope
 from ../project-directory import ProjectDirectoryScope
 from ../prompt-mode/ask-conversation import AskConversationScope
@@ -53,10 +54,18 @@ shape HarnessIntegrationShape:
         way the harness is run, prompted, and read just as this says.
 
     harnesses:
-        The harness in use is the one picked in the @{SettingsWindowScope}:
-        Claude Code, Codex, or OpenCode, Claude Code until another is picked.
-        It is remembered for the user, as the @{UserPreferencesScope} says, not
-        for a project. Every run the application starts goes to it, the tasks,
+        The harness in use is the project's: Claude Code, Codex, or OpenCode,
+        a setting of each project, saved with its data, as the
+        @{ProjectDataScope} says, picked when the project is created or
+        imported and changed in the @{SettingsWindowScope}. Each open project
+        runs with its own, so two projects open side by side can use different
+        harnesses. A project with no harness saved, as one made before this or
+        opened from elsewhere, uses the first harness its piton.config.pi
+        builds for, by its adapters in order, Claude Code for
+        ClaudeCodeAdapter, Codex for CodexAdapter, OpenCode for
+        OpenCodeAdapter, or Claude Code where it builds for none, and saves
+        that as its own the first time it is opened. Runs the application
+        makes outside any project, as with no project open, use Claude Code. Every run the application starts goes to it, the tasks,
         the questions, the palette's file search, the one-off runs, and the
         notes, commit messages, and prompt titles it writes, and everything
         else works the same whichever it is. A run already going when another is picked

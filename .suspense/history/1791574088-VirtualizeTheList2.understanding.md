@@ -1,0 +1,8 @@
+- [The Tasks tab lays out and draws only the rows in view and a few either side, never every row, whatever the number of tasks](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Every row is 28 pixels tall, group headings and a chain's expanded steps included, so a row's place is known from its index alone](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [The scrollbar's thumb is sized and placed from the whole list's height, as though every row were drawn](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [A row is drawn only from its mode, status, first line, and time; a record's output, lines, or snapshots are never read while scrolling](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Running rows update their time and spinner in place, redrawing only what is in view](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Scrolling to a row (opening on Running, a filter change, dragging a queued row past the edge) jumps to its place without drawing the rows between](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [A row scrolled out and back keeps its chain expanded or not, its selection, and its highlight](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [The timeline keeps its Previous, Running, and Queued groups, each headed with a label and count, empty ones saying so](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)

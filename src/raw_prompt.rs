@@ -141,6 +141,19 @@ impl RawPrompt {
         self
     }
 
+    /// With a section listing the other files attached to the prompt, by
+    /// their paths from the project directory, one a line, in order; none
+    /// without any.
+    pub fn with_files(mut self, files: &[String]) -> Self {
+        if !files.is_empty() {
+            self.sections.push(Section {
+                title: "Attached files",
+                text: Ok(files.join("\n").into()),
+            });
+        }
+        self
+    }
+
     /// The line beneath the title: the task's mode, its hidden anchor's name,
     /// and the harness it was sent to, as far as each is known.
     pub fn subtitle(&self) -> String {

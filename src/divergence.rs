@@ -726,7 +726,7 @@ pub fn run_agent(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn_logged()
-        .with_context(|| format!("could not run {}", crate::agent::current().command()))?;
+        .with_context(|| format!("could not run {}", crate::agent::of_project(Some(project_dir)).command()))?;
     let mut stdin = child
         .stdin
         .take()

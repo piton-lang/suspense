@@ -1,0 +1,7 @@
+- [The Previous group starts collapsed: only its heading, with its count and a right chevron, no rows](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Clicking the heading, anywhere but its filters and batch actions, expands it, the chevron turning down, and clicking again collapses it](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Expanded, its rows show above Running, oldest at the top and newest nearest Running](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [It is collapsed each time a project is opened, and otherwise stays as left while the app runs, each open project keeping its own](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [While collapsed, its filters and batch actions still work and its count follows them](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Opening a previous task from elsewhere, as the running activity list, expands it to show that task](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Expanded rows stay virtualized: every row and heading 28 pixels tall, only rows in view drawn](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)

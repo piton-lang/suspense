@@ -1,0 +1,130 @@
+use /lib
+use /ui
+from /scope/prompt-mode import PromptEditor
+from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/prompt-mode/message-list import MessageList
+from /scope/prompt-mode/modes import PromptModesScope
+from /scope/prompt-mode/queue-list import QueueListScope
+from /scope/prompt-mode/sending import PromptSendingScope
+from /ui/components/growing-text-input import GrowingTextInputScope
+from /ui/components/scrollbar import ScrollbarScope
+
+export ui-component TasksTabScope:
+    concept: {TasksTabConcept}
+
+concept TasksTabConcept:
+    pitch:
+        The right sidebar's Tasks tab: every task of the project at a glance,
+        what has run, what is running, and what is queued, where any of them
+        can be looked into, edited, and adjusted, and a chain given more
+        steps.
+
+    shape: {TasksTabShape}
+
+shape TasksTabShape:
+    description:
+        The tab is one scrolling column, with a @{ScrollbarScope}, read top to
+        bottom as a timeline, in three groups, each headed by a small muted
+        label with its count: "Previous", every task that has run, oldest at
+        the top, as the @{PromptEditor}'s previous tasks are, with their
+        filters and batch actions along the group's heading; "Running", every
+        task under way, in either lane; and "Queued", the queue, in its order,
+        as the @{QueueListScope} says, reordered by dragging, its auto-send
+        switch and "Send next" button along its heading. A group with nothing
+        in it shows its heading alone, muted, "No queued prompts" and the
+        like. Each time the tab is shown, it is scrolled so the Running
+        group, or the start of the Queued one when nothing runs, is in view.
+
+        The Previous group starts collapsed: its heading alone shows, with
+        its count and a right chevron, and none of its rows. Clicking the
+        heading, anywhere but its filter and batch actions, expands it, the
+        chevron turning down, its rows showing above Running, the newest
+        nearest it, and clicking again collapses it. It is collapsed each
+        time a project is opened, and otherwise stays as it was left while
+        the application runs, each open project keeping its own. While it is
+        collapsed, its filters and batch actions still work and its count
+        still follows them, and opening a previous task from elsewhere, as
+        from the running activity list, expands it to show that task.
+
+    rows:
+        Every task is one row, 28 pixels tall, as a queued prompt's is: a bar
+        2 pixels wide down its left edge in its mode's colour, as the
+        @{PromptModesScope} colours it, then its status, a spinner while it
+        is under way, a tick, cross, or dash once it has ended, or, queued,
+        its place in the queue, then the first line of its prompt, cut off
+        with an ellipsis, then, at its right, muted, how long it took, or has
+        been running, as the @{MessageList} writes it. A chain is one row,
+        its steps as rows indented beneath it, collapsed to start with, as
+        the previous tasks group a chain. Clicking a row opens it, as below,
+        and the row stays highlighted while it is open. Hovering a row shows
+        its prompt's first lines in its tooltip.
+
+    virtualized:
+        The list is virtualized: however many tasks the project has run, it
+        lays out and draws only the rows in view, and a few rows either side
+        of it, never every row, so opening the tab, scrolling it, resizing
+        the sidebar, filtering, and new tasks arriving cost the same with ten
+        thousand previous tasks as with ten. Every row is 28 pixels tall,
+        group headings and a chain's expanded steps included, so where each
+        row lies is known from its place in the list alone, without laying
+        out the rows before it, and the scrollbar's thumb is sized and placed
+        from the whole list's height, as though every row were drawn.
+
+        A row is drawn only from what its row shows, its mode, status, first
+        line, and time, read from each task's history record once and kept,
+        never by reading a record's output, lines, or snapshots while
+        scrolling; those are read only when a task is opened. Running rows
+        update their time and spinner in place, redrawing only what is in
+        view. Scrolling to a row, as when the tab opens on Running, a filter
+        changes, or a queued row is dragged past the edge, jumps straight to
+        its place without drawing the rows between. A row scrolled out of
+        view and back is the same as it was, its chain expanded or not, its
+        selection and highlight kept.
+
+    details:
+        An open task takes the tab's place, with a back arrow and the task's
+        mode and name along its top, the arrow and <Escape> going back to the
+        list as it was left. Opening a task that has run or is running also
+        shows its output in the @{MessageList}, as it shows the selected
+        task, with a bar above it reading "Back to the latest task" while it
+        isn't the latest. What the open task shows, top to bottom:
+
+        \\
+        - At a glance: its status and how long it took, its lane, its place in the queue while it waits, the conversation it carries on or that it starts a new one, its model and effort, and once it has run, how many tool calls it made, its errors, its tokens and their cost, and how many files it changed, each a labelled figure, those that don't apply left out
+        - Its prompt, as it was typed, in a GrowingTextInputScope, and beneath it what is attached to it
+        - Its parameters: its mode, its model and effort, its Slice toggle, and whether it starts a new conversation, each as the chat input shows it
+        - Its actions: Resend, Send to Spec or Send to Code, Cancel while it is under way or queued, and Open output, as the PromptSendingScope gives them
+        \\
+
+        A queued task is edited right there: its prompt can be typed in, its
+        attachments removed, and its parameters changed, its mode among
+        those of the tabs, a change of lane moving it to that lane's queue in
+        its place. Each change is saved with the project as it is made, as
+        saving a queued prompt's edit is, and while it is being changed the
+        task is held, never sent, as a queued prompt being edited is; going
+        back, or opening another, lets it go. A task that has run, or is
+        running, can't be changed: its prompt and parameters read as they
+        were sent, and "Edit and resend" puts them in the open task as a new
+        queued prompt, ready to change, sent once "Send" is clicked. The
+        chat input's own <Up> editing still works as the @{ChatInputScope}
+        says, and opens the same task here.
+
+    chainSteps:
+        An open Chain task lists its steps beneath its parameters, in the
+        order they run, each a row as in the list, with its status: its spec
+        step, its code step, and its spec follow-up when it has one. An "Add
+        step" button beneath them adds a step of its own after the last: a
+        Code or a Spec step, chosen from a small menu, with a prompt of its
+        own, typed in the step's row as it expands, its model and effort
+        those of the chain until changed. An added step runs once the step
+        before it finishes, in its own mode's lane and place, as every step
+        of a chain does, told its own prompt, the chain's prompt as typed,
+        and what the step before it replied, as the spec-to-code prompt
+        tells a code step, so a chain can be carried on, as a further code
+        change once the spec is built, or a spec tidy-up after the code. A
+        step not yet sent can be edited, moved among the others not yet
+        sent, or removed; one sent reads as it was. Steps are saved with the
+        chain, in its hidden anchor, as the @{PromptSendingScope} keeps a
+        queued prompt, so a chain keeps its added steps across restarts, and
+        a step whose step before it failed or was cancelled is never sent, as
+        none of a chain's are.

@@ -1,0 +1,5 @@
+- [The Tasks tab has Previous, Running, and Queued groups, each headed by a small muted label with its count](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Each time the tab is shown it scrolls so Running, or the start of Queued, is in view](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [The Previous group's heading holds its filter dropdown and batch actions](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)
+- [The list draws only the rows in view, every row 28px](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [The Previous group starts collapsed to its heading, expanding on click, per project](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)

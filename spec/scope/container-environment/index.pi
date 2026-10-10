@@ -1,4 +1,5 @@
 use /lib
+from /scope/prompt-mode/chat-input import ChatInputScope
 from /scope/application import ApplicationScope
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/project-data import ProjectDataScope
@@ -245,6 +246,10 @@ shape ContainerEnvironmentShape:
         before the run, and an empty understanding file is shown as one not
         written yet is.
 
+        The files attached to a run's prompt, as the @{ChatInputScope}
+        says, are mounted the same way, each on its own, read only, at its
+        path under `/workspace`, never the attachments folder they are in, so
+        a run sees the files attached to it and no other prompt's.
     paths:
         On every platform, every path a run reports from its container is
         mapped back to its host path, `/workspace` standing for the project

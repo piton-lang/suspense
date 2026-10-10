@@ -1,0 +1,7 @@
+- [Welcome finds the harness by running its command with --version, and says it's missing otherwise](.claude/reference/scope/welcome/index.md#shape)
+- [When the harness picked isn't installed, a run on the host fails saying it can't be run](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [Codex is run as codex exec with --full-auto and --json](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [The container image installs each harness at the version found on the host, or its latest](.claude/reference/scope/container-environment/index.md#image)
+- [Every child process on Windows starts without a console window](.claude/reference/scope/application/index.md#child-processes)
+- [A run that fails says what went wrong in the harness's own words](.claude/reference/scope/harness-integration/index.md#failures)
+- [Programs are found as the user's terminal would: login-shell PATH, user install dirs, and PATHEXT shims on Windows](.claude/reference/scope/application/index.md#finding-programs)

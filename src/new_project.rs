@@ -70,6 +70,8 @@ pub struct Settings {
     pub name: String,
     pub location: PathBuf,
     pub agents: Vec<Agent>,
+    /// The harness the project's runs go to, saved as its own.
+    pub harness: Agent,
     pub spec_root: String,
     pub code_root: String,
     /// Empty to go without one.
@@ -252,6 +254,7 @@ impl Settings {
             std::fs::write(&opencode, opencode_json(&code_root))
                 .with_context(|| format!("Couldn't write {}", opencode.display()))?;
         }
+        crate::agent::set_for_project(&folder, self.harness)?;
         let warning = self
             .init_git
             .then(|| init_git(&folder).err())
@@ -282,6 +285,60 @@ pub fn init_git(folder: &Path) -> Result<()> {
     Ok(())
 }
 
+/// The harness picked once `agents` are the agents checked: `picked` while
+/// it is still checked, else the first checked.
+pub fn harness_among(agents: &[Agent], picked: Agent) -> Agent {
+    if agents.contains(&picked) {
+        return picked;
+    }
+    Agent::ALL
+        .into_iter()
+        .find(|agent| agents.contains(agent))
+        .unwrap_or(picked)
+}
+
+/// The "Harness" group of radio buttons beneath the agents: one per agent
+/// checked, in their order, each with its command muted beside it and "Not
+/// installed" where it can't be found, `picked` picked.
+pub fn harness_group<T: 'static>(
+    id: &'static str,
+    agents: &[Agent],
+    picked: Agent,
+    pick: fn(&mut T, Agent),
+    cx: &mut Context<T>,
+) -> AnyElement {
+    let muted = cx.theme().muted_foreground;
+    let mono = cx.theme().mono_font_family.clone();
+    let rows: Vec<AnyElement> = Agent::ALL
+        .into_iter()
+        .filter(|agent| agents.contains(agent))
+        .map(|agent| {
+            h_flex()
+                .gap_2()
+                .child(
+                    Radio::new(SharedString::from(format!("{id}-{}", agent.command())))
+                        .label(agent.label())
+                        .checked(agent == picked)
+                        .on_click(cx.listener(move |this, _: &bool, _, cx| {
+                            pick(this, agent);
+                            cx.notify();
+                        })),
+                )
+                .child(div().text_sm().text_color(muted).font_family(mono.clone()).child(agent.command()))
+                .when(!agent.installed(), |row| {
+                    row.child(div().text_sm().text_color(muted).child("Not installed"))
+                })
+                .into_any_element()
+        })
+        .collect();
+    v_flex()
+        .id(id)
+        .gap_1p5()
+        .child(div().text_sm().font_medium().child("Harness"))
+        .children(rows)
+        .into_any_element()
+}
+
 pub struct NewProjectForm {
     name: Entity<InputState>,
     spec_root: Entity<InputState>,
@@ -289,6 +346,7 @@ pub struct NewProjectForm {
     shape_root: Entity<InputState>,
     location: PathBuf,
     agents: Vec<Agent>,
+    harness: Agent,
     init_git: bool,
     /// The key of the template chosen.
     template: String,
@@ -346,6 +404,7 @@ impl NewProjectForm {
             shape_root,
             location,
             agents: vec![Agent::Claude],
+            harness: Agent::Claude,
             init_git: true,
             template: project_templates::all()
                 .first()
@@ -364,6 +423,7 @@ impl NewProjectForm {
             name: self.name.read(cx).value().to_string(),
             location: self.location.clone(),
             agents: self.agents.clone(),
+            harness: harness_among(&self.agents, self.harness),
             spec_root: self.spec_root.read(cx).value().to_string(),
             code_root: self.code_root.read(cx).value().to_string(),
             shape_root: self.shape_root.read(cx).value().to_string(),
@@ -395,6 +455,7 @@ impl NewProjectForm {
         if on {
             self.agents.push(agent);
         }
+        self.harness = harness_among(&self.agents, self.harness);
         cx.notify();
     }
 
@@ -651,6 +712,13 @@ impl NewProjectForm {
                             .gap_5()
                             .child(templates)
                             .child(agents)
+                            .child(harness_group(
+                                "new-project-harness",
+                                &self.agents,
+                                self.harness,
+                                |this: &mut Self, agent| this.harness = agent,
+                                cx,
+                            ))
                             .map(gpui_kit::TestSupportExt::test_support),
                     ),
             );
@@ -726,6 +794,7 @@ mod tests {
         Settings {
             name: "my new project".into(),
             location: PathBuf::from("/tmp"),
+            harness: agents.first().copied().unwrap_or(Agent::Claude),
             agents,
             spec_root: "spec".into(),
             code_root: "./src/".into(),
@@ -762,6 +831,16 @@ mod tests {
 
     /// The config names the project, points at its roots, and lists the
     /// adapter @piton/belay exports for each agent.
+    /// The harness starts as the first agent checked, and moves to the
+    /// first still checked when the one picked is unchecked.
+    #[test]
+    fn harness_is_among_the_agents_checked() {
+        use super::harness_among;
+        assert_eq!(harness_among(&[Agent::Codex, Agent::OpenCode], Agent::Claude), Agent::OpenCode);
+        assert_eq!(harness_among(&[Agent::Claude, Agent::Codex], Agent::Codex), Agent::Codex);
+        assert_eq!(harness_among(&[Agent::Codex], Agent::Claude), Agent::Codex);
+    }
+
     #[test]
     fn config_sets_up_belay_for_the_chosen_agents() {
         let config = settings(vec![Agent::Codex, Agent::Claude]).config();

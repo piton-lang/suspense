@@ -1,0 +1,65 @@
+
+export anchor EnableLSPHoverPopover2:
+    userPrompt:
+        \\\
+        Hovering over errors and actual symbols in @{EditorScope} should invoke the LSP popover info stuff
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Hovering over errors and actual symbols in @{EditorScope} should invoke the LSP popover info stuff
+            \\\
+        result:
+            \\\
+            I rewrote the editor's hover rule so that resting on a symbol or an error opens a proper popover filled from the language server. `piton check` reports no problems and `piton build` wrote 82 files.
+
+            **How the popover behaves:**
+            - **When it opens:** after the pointer rests on a symbol or an error for 500ms. It sits just below the hovered text, or above it if there's no room below.
+            - **Size:** at most 480×320px, scrolling beyond that.
+            - **Staying open:** you can move the pointer into it to select text or click links. It closes when the pointer leaves both the popover and the text, on Escape, or when the editor scrolls.
+            - **Symbols:**
+              - Names, keys, keywords, imported names and names inside expressions send `textDocument/hover` to the server. The editor's unsaved text is sent first.
+              - The answer shows as markdown with Piton highlighting in its code blocks.
+              - An answer that arrives after the pointer has left is dropped. Prose, numbers, comments, and empty or repeat-the-text answers still open nothing.
+            - **Errors:** anywhere along an error's underline, the popover shows the message first: a severity icon and colour, the message, its code and any related notes as links. If the error is on a symbol, the symbol's hover follows. If the server offers fixes, a "Quick fix (Ctrl+.)" link lists them.
+            - **Underlines:** errors, warnings and info are wavy underlines in their severity's colour.
+            - **Typing:** typing closes the popover until the pointer moves again.
+
+            **Anchors the code should follow:** `EditorScope` `#language-support`, its `hover` and `diagnostics` entries, and `LSP` for the hover request and the published diagnostics.
+            \\\
+
+    sentFrom: EnableLSPHoverPopover
+
+    model: opus

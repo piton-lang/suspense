@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /scope/open-file import OpenFileScope
 from /scope/application/MainWindow import MainWindowScope
 from /scope/harness-integration import HarnessIntegrationScope
 from /scope/user-preferences import UserPreferencesScope
@@ -577,25 +578,29 @@ shape ChatInputShape:
         has, muted, and at the right end a small button with a cross, whose
         tooltip says it removes the attachment, which removes just that one.
 
-        Images can be attached too: pasted from the clipboard while the chat
-        input has focus, dropped onto the chat input from the file manager, or
-        chosen with a small ghost button with an image icon, whose tooltip says
-        "Attach images", on the tab row between the last tab and the help
-        text, which opens the platform's file picker for any files, several at
-        once, since the picker can't be limited to images. Pasting an image
-        attaches it rather than putting anything in the text, even when the
-        clipboard holds text as well; every image on the clipboard is
-        attached, and a clipboard with no image pastes its text as usual.
-        Several files dropped or chosen at once are attached in their order,
-        each on its own merits. An image is known by its content, not
-        its name, and only PNG, JPEG, GIF, and WebP are taken: anything else
-        pasted, dropped, or chosen, BMP, TIFF, and SVG included, is not
+        Images and other files can be attached too: pasted from the
+        clipboard while the chat input has focus, dropped onto the chat input
+        from the file manager, or chosen with a small ghost button with a
+        paperclip icon, whose tooltip says "Attach files", on the tab row
+        between the last tab and the help text, which opens the platform's
+        file picker for any files, several at once. Pasting an image, or
+        files copied in the file manager, attaches them rather than putting
+        anything in the text, even when the clipboard holds text as well;
+        every image and file on the clipboard is attached, and a clipboard
+        with neither pastes its text as usual. Several files dropped or
+        chosen at once are attached in their order, each on its own merits.
+
+        A file is attached as an image when its content is PNG, JPEG, GIF, or
+        WebP, known by its content, not its name, and it is 5 MB or less, so
+        the harness is given it as an image. Any other file is attached as a
+        file, whatever it holds, text, code, a PDF, an archive, or an image in
+        another format or larger than 5 MB, up to 25 MB; one larger is not
         attached, and a warning notification titled "Not attached" says it
-        isn't an image. An image larger than 5 MB is not attached either, and
-        the same notification says it is too large. A folder dropped or chosen
-        isn't an image either, and a file that can't be read is not attached,
-        the same notification saying it couldn't be read, and why. Each file
-        left out has its own notification, and the others are still attached.
+        is too large. A folder dropped or chosen is not attached, the same
+        notification saying folders can't be attached, and a file that can't
+        be read is not attached, the same notification saying it couldn't be
+        read, and why. Each file left out has its own notification, and the
+        others are still attached.
 
         Files can be dropped only on the chat input itself, its tabs, the
         attachments, and the text input; dropping them on the message list
@@ -607,11 +612,14 @@ shape ChatInputShape:
         image's row shows a small thumbnail, its file name, or "Pasted image"
         for one pasted, and its size in pixels, muted, with the same remove
         button; hovering the thumbnail shows the image larger, at most 320
-        pixels. Images and text are listed together in the order they were
-        attached while the prompt is written. A prompt taken back into the
+        pixels. An attached file's row shows an icon for its kind, a
+        document, code, or a generic file, its file name, and its size,
+        muted, as "14 KB" or "2.3 MB", with the same remove button. Images,
+        files, and text are listed together in the order they were attached
+        while the prompt is written. A prompt taken back into the
         input, as when a queued prompt is edited, lists its text first, then
-        its images, each image named by its saved file, a pasted one
-        included.
+        its images, then its files, each named by its saved file, a pasted
+        one included.
 
         Attachments belong to the prompt being written, not to a tab: switching
         tabs keeps them all, and they go with the prompt whichever tab it is
@@ -812,6 +820,41 @@ shape ChatInputShape:
             fenced code block, whose fence is longer than any run of backticks
             in the text itself. This is also the compiled prompt shown in the
             task's header.
+
+        attachedFiles:
+            Each attached file is saved in the project's data, as the
+            @{ProjectDataScope} says, in `.suspense/attachments/`, once the
+            prompt is sent or queued, under its own name, in a folder named by
+            the second it was saved and a short hash of its content, so the
+            same file attached twice is saved once and two files of the same
+            name never overwrite each other. A prompt with files gives the
+            hidden anchor an attachedFiles property: a list of the saved
+            files' paths, from the project directory, in the order they were
+            attached, keyed file1, file2, and so on, each written as an escape
+            block as attached text is. A file is saved as it was when
+            attached; changing or deleting the original afterwards changes
+            nothing.
+
+            The files themselves are never put into the compiled prompt. What
+            the harness receives ends, after any attached text, with a line
+            reading "Attached files:" and each file's path, from the project
+            directory, one per line, with its original name and size, so the
+            harness reads what it needs of them with its own tools. A run in a
+            container is given each attached file of its prompt read only, at
+            the same path under `/workspace`, mounted on its own, as a task's
+            understanding file is, and nothing else of `.suspense/attachments/`.
+            A saved file that can't be found when the run starts fails it,
+            saying so, before anything is run.
+
+            Wherever an attached prompt is shown, its files are listed
+            beneath its images, each as its row shows it, without the remove
+            button; clicking one opens it as the @{OpenFileScope} opens a file,
+            or, for a file it can't show, in the platform's default
+            application for it. A message sent to a running task, and a
+            question, can carry files the same way. Resending, sending to the
+            other mode, editing a queued prompt, and a chain's steps keep its
+            files, and a Freeform prompt is given the "Attached files:" lines
+            after its text as typed, since it is passed as typed otherwise.
 
         newConversation:
             The hidden anchor has a newConversation property, true or false,

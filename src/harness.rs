@@ -22,10 +22,11 @@ use crate::container;
 use crate::harness_mentions;
 use crate::usage::{PlanLimit, Spend, Tally};
 
-/// The directory the harness in use reads its agentic Markdown and reference
-/// files from, which a system prompt's `${HARNESS_DIRECTORY}` stands for.
-pub fn directory() -> &'static str {
-    agent::current().directory()
+/// The directory the harness of the project at `project_dir` reads its
+/// agentic Markdown and reference files from, which a system prompt's
+/// `${HARNESS_DIRECTORY}` stands for.
+pub fn directory(project_dir: Option<&Path>) -> &'static str {
+    agent::of_project(project_dir).directory()
 }
 
 /// Something the harness did, in the order it happened.
@@ -209,6 +210,9 @@ pub struct Protected {
     /// Codex's only; none for its own. Not kept off anything: only how the
     /// run is set up.
     pub effort: Option<String>,
+    /// The other files attached to the run's prompt, on the host, which
+    /// must be there before it runs. Not kept off anything.
+    pub files: Vec<PathBuf>,
 }
 
 /// Runs the harness once as [`send`] does, giving it `images` alongside the
@@ -294,7 +298,7 @@ fn start(
     protected: Protected,
     fed: bool,
 ) -> Run {
-    let agent = agent::current();
+    let agent = agent::of_project(Some(&project_dir));
     let program = program(agent);
     let (tx, rx) = mpsc::unbounded();
     let feed = (fed && agent.can_be_fed()).then(|| Feed::new(tx.clone()));
@@ -1143,6 +1147,10 @@ fn run(
             bail!("the attached image {} is missing", image.display());
         }
     }
+    // So is every other file attached, which the prompt names.
+    if let Some(missing) = crate::attached_file::missing(&protected.files) {
+        bail!("{missing}");
+    }
     // A run in a container needs Podman, its image, and the harness logged
     // in there, before anything is run.
     // What it mounts as the host now stands.
@@ -1575,7 +1583,7 @@ fn with_system_prompt(prompt: &str, system_prompt: &str) -> String {
 /// read, glob, and search files, keeps no session where the harness allows,
 /// streams its events as JSON, and reads its prompt from standard input.
 pub fn one_off_command(project_dir: &Path) -> Command {
-    let agent = agent::current();
+    let agent = agent::of_project(Some(project_dir));
     let mut command = crate::process::command(agent.command());
     command.envs(agent.env().iter().copied());
     match agent {
@@ -1608,7 +1616,7 @@ pub fn one_off_command(project_dir: &Path) -> Command {
 /// session: with a small model at low effort where it can be told one.
 /// Returns its reply, trimmed. Blocking.
 pub fn ask_quickly(project_dir: &Path, prompt: &str) -> Result<String> {
-    let agent = agent::current();
+    let agent = agent::of_project(Some(project_dir));
     let mut command = match agent {
         Agent::Claude => {
             let mut command = crate::process::command(agent.command());
@@ -2384,6 +2392,7 @@ pub(crate) mod tests {
                 effort: None,
                 unread: unread.map(PathBuf::from),
                 container: None,
+                files: Vec::new(),
             })
         };
         assert_eq!(
@@ -3067,7 +3076,7 @@ wait
             [("ENABLE_CLAUDEAI_MCP_SERVERS", "false")]
         );
         assert!(Agent::Codex.env().is_empty() && Agent::OpenCode.env().is_empty());
-        if crate::agent::current() == Agent::Claude {
+        if crate::agent::of_project(None) == Agent::Claude {
             let command = super::one_off_command(std::path::Path::new("."));
             assert!(command.get_envs().any(|(name, value)| {
                 name == "ENABLE_CLAUDEAI_MCP_SERVERS"
@@ -3916,6 +3925,7 @@ done
             effort: None,
             unread: Some(dir.join("src")),
             container: Some(plan),
+            files: Vec::new(),
         };
         let super::Run { mut events, .. } = super::send_task(
             "Go.".into(),

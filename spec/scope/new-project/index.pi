@@ -1,6 +1,7 @@
 use /lib
 use /ui
 from /scope/application import ApplicationScope
+from /scope/harness-integration import HarnessIntegrationScope
 from /scope/project-data import ProjectDataScope
 from /scope/project-directory import ProjectDirectoryScope
 from /scope/project/open-project import OpenProjectScope
@@ -78,6 +79,15 @@ shape NewProjectShape:
         Each checkbox's label is shown in full beside it, vertically centred on
         it, with room below its baseline so the bottoms of letters like p and y,
         and of the brackets, are never cut off.
+
+        Beneath the agents, a "Harness" group of radio buttons picks the
+        harness the project's runs go to, as the @{HarnessIntegrationScope}
+        says: one per agent checked, in their order, Claude Code, OpenCode,
+        and Codex, each with its command muted beside it and "Not installed"
+        after that where it can't be found. Only the agents checked are
+        offered, and the first checked is picked to start with; unchecking
+        the one picked picks the first still checked. Once created, the
+        project runs with the harness picked, saved as its own.
 
     folders:
         Three fields, each a path relative to the project folder: "Spec root",

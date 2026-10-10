@@ -2,6 +2,7 @@ use /lib
 use /ui
 from ./chat-input import ChatInputScope
 from ./message-list import MessageList
+from /ui/components/right-sidebar import TasksTabScope
 from ./queue-list import QueueListScope
 from /scope/container-environment import ContainerEnvironmentScope
 from /scope/harness-integration import HarnessIntegrationScope
@@ -12,7 +13,6 @@ from /scope/prompt-mode/ask-conversation import AskConversationScope
 from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
 from /scope/prompt-mode/modes import PromptModesScope
 from /scope/prompt-mode/sending import PromptSendingScope
-from /ui/components/history-list import HistoryListScope
 from /ui/components/scrollbar import ScrollbarScope
 
 export ui-component PromptEditor:
@@ -34,10 +34,11 @@ shape PromptEditorShape:
     basicDesignAndLayout:
         The @{MessageList} fills the body's Chat tab: all the space between
         the body's tab bar and the @{ChatInputScope} along the bottom. From top to bottom it holds the
-        previous tasks row, the header, holding the latest task and every
-        other task under way, one of them selected and shown in full and the
-        rest as compact rows, as the @{MessageList} says, the selected task's
-        output, and the queue.
+        header, holding the latest task and every other task under way, one
+        of them selected and shown in full and the rest as compact rows, as
+        the @{MessageList} says, and the selected task's output. The previous
+        tasks and the queue are in the right sidebar's Tasks tab, as the
+        @{TasksTabScope} says.
 
         Before any task has been sent, the space shows a hint instead, which
         wraps when the view is narrow. It reads
@@ -48,12 +49,14 @@ shape PromptEditorShape:
     chatHistory: @{MessageList}
 
     previousTasks:
-        Previous tasks are a @{HistoryListScope} along the top of the view,
-        listing every task sent. Its row counts every task but those the
-        header shows, the latest, which heads the view, and any other under
-        way: "No previous tasks", "1 previous task", or
-        "N previous tasks", and each offers Resend. Expanded, the list takes the place of the latest
-        task and its output, and the row reads "Back to the latest task".
+        Previous tasks are listed in the right sidebar's Tasks tab, in its
+        Previous group, as the @{TasksTabScope} says, every task sent but
+        those the header shows, each a row that opens it there, its output
+        shown in the message list in place of the selected task's, with a
+        "Back to the latest task" bar above it. Their heading counts them:
+        "No previous tasks", "1 previous task", or "N previous tasks". The
+        selection, filters, and batch actions below work there as they say,
+        along that group's heading.
 
         Every task in the list has a checkbox at the left of its heading,
         before its status, and clicking it selects or deselects the task
@@ -88,44 +91,46 @@ shape PromptEditorShape:
         is kept.
 
     previousTaskFilters:
-        While the previous tasks are expanded, a filter bar sits along the top
-        of the list, beneath their row and above the first item, on the tab
-        bar's background with the theme's line beneath it, and scrolls with
-        nothing: it stays put as the list scrolls. It holds two groups of
-        small toggle chips, the second set 12 pixels apart from the first,
-        wrapping onto another line when the bar is too narrow. Each chip
-        reads its label and, muted after it, how many previous tasks match
-        it on its own, whatever other chips are on; the latest task, heading
+        The filters are one dropdown, never a bar of chips: a small ghost
+        button with a filter icon at the right of the Previous group's
+        heading in the Tasks tab, shown while the group holds a task, reading
+        "Filter", or, while any filter is on, how many are, as "Filter · 2",
+        in the theme's accent. Clicking it opens a menu beneath it, one
+        column, never wider than the sidebar, holding two sections, each
+        headed by a small muted label, "Mode" and "Other mode", their
+        options one per line, each with a checkbox, and the menu stays open
+        while options are checked, closing on a click outside it or
+        <Escape>. Each option reads its label and, muted after it, how many previous tasks match
+        it on its own, whatever other options are checked; the latest task, heading
         the view, is never counted.
 
-        The first group filters by the mode each task was sent in, one chip
+        The Mode section filters by the mode each task was sent in, one option
         per task mode in the @{PromptModesScope}'s order, "Code", "Chain",
-        "Spec", and "Freeform", each tinted its mode's colour while on, its
-        border in that colour and its background a faint tint of it. The
-        second group's chips take the theme's accent the same way while on.
-        The second filters by where a task stands with the other mode, as the
+        "Spec", and "Freeform", each with a small dot in its mode's colour
+        before its label. The Other mode section filters by where a task stands with the other mode, as the
         @{PromptSendingScope} says, with "Can send to Spec" for tasks that
         offer Send to Spec, "Can send to Code" for those that offer Send to
         Code, "Sent" for those already sent to the other mode or being sent
         there, and "Marked done" for those marked done by hand.
 
-        With no chip on, which is how the list starts, every previous task
-        shows. Within a group, the chips on combine as either, so a task
-        shows when it matches any of them, and the two groups combine as
-        both, so with chips on in each, a task shows only when it matches one
-        in each. Clicking a chip turns it on or off, and a "Clear" button at
-        the bar's right end, shown only while any chip is on, turns them all
-        off. A chip that would show no tasks is still shown, its count 0, and
-        can still be turned on.
+        With no option checked, which is how the list starts, every previous
+        task shows. Within a section, the options checked combine as either, so a task
+        shows when it matches any of them, and the two sections combine as
+        both, so with options checked in each, a task shows only when it
+        matches one in each. Clicking an option checks or unchecks it, the
+        list filtering at once behind the open menu, and a "Clear filters"
+        line at the menu's foot, shown only while any option is checked,
+        unchecks them all. An option that would show no tasks is still
+        listed, its count 0, and can still be checked.
 
         Filtering only hides tasks from the list; it changes nothing about
         them. A chain whose steps are hidden in part keeps its parent row
         above the steps still shown, and is hidden with its parent only when
         none of its steps shows. Session dividers show only above a session
         with a task shown. The row's count still counts every previous task,
-        and while any chip is on, what the row reads, the count, or "Back to
-        the latest task" while the list is expanded, is followed by " · N
-        shown", N counting the previous tasks the filters show. A hidden task
+        and while any option is checked, the Previous group's heading, after
+        its count, reads " · N shown", N counting the previous tasks the
+        filters show. A hidden task
         stays selected if it was, and is still counted in "N selected" and
         sent by the batch actions; an open task that is filtered out closes.
         With every task filtered out, the list reads "No previous tasks match

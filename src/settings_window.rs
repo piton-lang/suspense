@@ -800,18 +800,30 @@ impl SettingsWindow {
             )
     }
 
-    /// Sends every run from the next on to `agent`, remembered for the user.
+    /// Sends every run of the open project from the next on to `agent`,
+    /// saved with the project.
     fn pick_agent(&mut self, agent: Agent, cx: &mut Context<Self>) {
+        let Some(project_dir) = ProjectDirectory::get(cx) else {
+            return;
+        };
         // A pick that can't be saved still holds for the session.
-        agent::set(agent).ok();
+        agent::set_for_project(&project_dir, agent).ok();
         cx.notify();
     }
 
-    /// A row for each harness, the one in use picked, each with the command
-    /// it runs and whether that is installed.
-    fn render_agents(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    /// A row for each harness, the open project's picked, each with the
+    /// command it runs and whether that is installed. With no project open,
+    /// none is offered: the harness is chosen for each project.
+    fn render_agents(&self, cx: &mut Context<Self>) -> AnyElement {
         let muted = cx.theme().muted_foreground;
-        let current = agent::current();
+        if ProjectDirectory::get(cx).is_none() {
+            return div()
+                .text_sm()
+                .text_color(muted)
+                .child("The harness is chosen for each project. Open a project to pick its harness.")
+                .into_any_element();
+        }
+        let current = agent::current(cx);
         v_flex()
             .gap_3()
             .children(Agent::RUNNABLE.into_iter().map(|agent| {
@@ -839,6 +851,7 @@ impl SettingsWindow {
                         row.child(div().text_sm().text_color(muted).child("Not installed"))
                     })
             }))
+            .into_any_element()
     }
 
     /// The sidebar of sections, the one picked marked with the accent.
@@ -913,7 +926,7 @@ impl Render for SettingsWindow {
                      placeholder is written: the spec reading at {SPEC_READING}. \
                      They are saved with the project as they are edited. \
                      {HARNESS_DIRECTORY} stands for the harness's directory, {}.",
-                    crate::harness::directory()
+                    crate::harness::directory(ProjectDirectory::get(cx).as_deref())
                 ),
                 "Open a project to edit its injected prompts.",
             ),
@@ -936,9 +949,10 @@ impl Render for SettingsWindow {
             ),
             Section::Agent => (
                 "Agent",
-                "Every run goes to the harness picked here: the tasks, the \
-                 questions, and the application's own. A conversation is only \
-                 carried on by the harness it began with."
+                "Every run of the open project goes to the harness picked \
+                 here: its tasks, its questions, and the application's own \
+                 for it. It is the project's own, saved with it. A \
+                 conversation is only carried on by the harness it began with."
                     .to_string(),
                 "",
             ),
@@ -1271,11 +1285,12 @@ mod tests {
         fs::remove_dir_all(&dir).ok();
     }
 
-    /// The Agent section offers each harness, the one in use picked; picking
-    /// another sends every run from then on to it, its directory standing in
-    /// for HARNESS_DIRECTORY, with or without a project open.
+    /// The Agent section offers each harness, the open project's picked;
+    /// picking another sends the project's runs from then on to it, saved
+    /// with the project, its directory standing in for HARNESS_DIRECTORY.
+    /// With no project open, none is offered.
     #[gpui_kit::test]
-    async fn picks_the_agent_runs_go_to(cx: &mut TestAppContext) {
+    async fn picks_the_projects_harness(cx: &mut TestAppContext) {
         use crate::agent::{self, Agent};
 
         cx.update(|cx| {
@@ -1293,9 +1308,14 @@ mod tests {
         let cx = &mut VisualTestContext::from_window(window.into(), cx);
         settings.update(cx, |this, cx| this.pick(Section::Agent, cx));
         cx.run_until_parked();
-        assert_eq!(agent::current(), Agent::Claude);
-        assert_eq!(crate::harness::directory(), ".claude");
+        // Runs outside any project go to Claude Code.
+        assert_eq!(cx.update(|_, cx| agent::current(cx)), Agent::Claude);
 
+        let dir = std::env::temp_dir().join(format!("suspense-settings-harness-{}", std::process::id()));
+        fs::remove_dir_all(&dir).ok();
+        fs::create_dir_all(&dir).unwrap();
+        cx.update(|_, cx| ProjectDirectory::set(dir.clone(), cx));
+        let project = cx.update(|_, cx| ProjectDirectory::get(cx).unwrap());
         let click = |id: &'static str, cx: &mut VisualTestContext| {
             cx.update(|window, cx| {
                 window.render_frame(cx);
@@ -1304,12 +1324,15 @@ mod tests {
             cx.run_until_parked();
         };
         click("settings-agent-codex", cx);
-        assert_eq!(agent::current(), Agent::Codex);
-        assert_eq!(crate::harness::directory(), ".codex");
+        assert_eq!(cx.update(|_, cx| agent::current(cx)), Agent::Codex);
+        assert_eq!(crate::harness::directory(Some(&project)), ".codex");
+        let saved = crate::project_settings::ProjectSettings::load(&project);
+        assert_eq!(saved.harness.as_deref(), Some("codex"));
         click("settings-agent-opencode", cx);
-        assert_eq!(agent::current(), Agent::OpenCode);
+        assert_eq!(agent::of_project(Some(&project)), Agent::OpenCode);
         click("settings-agent-claude", cx);
-        assert_eq!(agent::current(), Agent::Claude);
+        assert_eq!(agent::of_project(Some(&project)), Agent::Claude);
+        fs::remove_dir_all(&dir).ok();
     }
 
     /// Each prompt's editor is as tall as its prompt, growing as lines are

@@ -2,7 +2,6 @@ use /lib
 from /scope/open-projects import OpenProjectsScope
 from /scope/prompt-mode/chat-input import ChatInputScope
 from /scope/prompt-mode/modes import PromptModesScope
-from /ui/components/history-list import HistoryListScope
 
 export shape MessageListScrollingShape:
     description:
@@ -17,133 +16,11 @@ export shape MessageListScrollingShape:
         stay smooth.
 
     scrollingPast:
-        Scrolling carries on past either end of the latest task and the
-        previous tasks, from one to the other, through an elastic stretch at
-        that end. A scroll that reaches an end doesn't stop dead there: the
-        same scroll keeps going, with no pause needed, into the stretch, which
-        resists it, and it crosses over only once it has pushed far enough
-        into the stretch to get past a barrier at its far side. The only
-        scroll that stops at an end is a fling's momentum still running when
-        it gets there, and a scroll that has already crossed over is spent
-        (below).
-
-        How the view came to be at its end makes no difference. A scroll
-        begun with the view already resting there, scrolled there some time
-        before, opened there by clicking the previous tasks row, or left
-        there when a slide settled, pulls into the stretch from its very
-        first step, exactly as one that scrolls the view there and carries
-        on; it never has to move the view first, and nothing it does is
-        swallowed by the view before the stretch takes it.
-
-        The barrier is a distance to scroll past. The distance a scroll goes
-        past the end builds up, and it crosses over the moment that reaches
-        768 pixels, about twelve or thirteen notches of a mouse wheel or a firm swipe on a
-        trackpad, however quickly or slowly it gets there, so the end is felt
-        as a real resistance before the view gives way. The scroll that
-        brings the view to its end counts too: whatever of it goes past the
-        end starts the build-up, rather than being lost. Scrolling back the
-        other way takes the build-up down again, and scrolls the view once it
-        is gone.
-
-        The build-up never drains while the scroll goes on. A scroll goes on
-        for as long as the wheel or trackpad keeps scrolling, with less than
-        200 milliseconds between one step and the next, as between the
-        notches of a wheel spun steadily, however slowly; each step adds all
-        of itself to the build-up, so a steady scroll of any speed reaches the
-        barrier and crosses over without being stopped and started again.
-        Only once the scroll has stopped, 200 milliseconds after its last
-        step, does the build-up drain away on its own, back to nothing within
-        half a second of that last step, so a nudge into the stretch that
-        goes no further never crosses over later. Momentum, and any scroll
-        during a slide, add nothing to it.
-
-        The stretch is felt as well as seen. While anything has built up, the
-        view at that end is pulled past its end, following the scroll but by
-        less than it scrolled, and by less the further it is pulled, as a
-        rubber band gives: at the start it moves nearly as far as the scroll,
-        and by the barrier it has been pulled about 64 pixels, never more.
-        Scrolling up at the latest task's top, its header and output move down
-        together, leaving an empty band above them, in the body's colour;
-        scrolling down at the previous tasks' bottom, they move up, leaving
-        the band below them. The previous tasks row and the queue stay where
-        they are, and nothing is drawn outside the space between them. The
-        pull follows the build-up as it grows and drains, smoothly rather than
-        in steps, so as the build-up drains the view springs back to its end,
-        settling without bouncing. The view's own scroll position doesn't
-        change while it is pulled; it is still at its end once it springs
-        back.
-
-        While anything has built up against an end, a glow shows where the
-        crossing will happen: a soft radial glow, centred in the space between
-        the previous tasks row and the queue, fading from its middle to
-        nothing at its edge, in the colour of the mode selected in the
-        @{ChatInputScope}, as the @{PromptModesScope} colours it. It starts
-        small and faint and grows larger and slightly brighter as the build-up
-        nears the barrier, at its largest a little under the height of that
-        space and still only a subtle wash of colour, never hiding what is
-        beneath it. It follows the build-up as it grows and drains, smoothly
-        rather than in steps. It never takes a click or a scroll. As the view
-        crosses over, the glow fades out quickly while the slide begins; with
-        nothing built up, there is no glow at all.
-
-        With the latest task's output scrolled to its top, a scroll up
-        past the barrier expands the previous tasks, as clicking their row does, opening
-        scrolled to the bottom, on the tasks sent most recently, as the
-        @{HistoryListScope} says. Before any task has been sent, or with no previous
-        tasks, scrolling up does nothing more: the view stops at its top
-        without stretching, and no glow shows.
-
-        With the previous tasks expanded and scrolled to their bottom, a
-        scroll down past the barrier closes them, as clicking "Back to the latest task" does,
-        bringing back the latest task and its output as they were left.
-
-        However the previous tasks are closed, by a scroll or by clicking
-        "Back to the latest task", the latest task's output comes back
-        scrolled just where it was when they were opened, with its lock to the
-        bottom as it was. Locked, it comes back at its bottom and still
-        locked, showing whatever output arrived while the previous tasks were
-        open, and goes on following new output. Unlocked, it comes back at
-        the same place in its output, however much arrived meanwhile; if that
-        place no longer exists, as when the latest task has changed since, it
-        comes back at its top, unlocked.
-
-        A fling's momentum still running when an end is reached stops there,
-        never pulling into the stretch or crossing over. Momentum is only what
-        comes after the platform says the fingers have lifted from the
-        trackpad; where it never says, as on Linux, no scroll is taken for
-        momentum, and every one pulls into the stretch. Output or a
-        list too short to scroll is always at both its ends, so any scroll
-        over it that leads somewhere pulls into the stretch. Only the wheel or trackpad
-        crosses over. Scrolling sideways, dragging a scrollbar to an end, and
-        scrolling anything inside that scrolls on its own, such as an open
-        task's table in the list, never do.
-
-        Crossing over by scrolling is animated, starting from wherever the
-        stretch has pulled the view. Scrolling up, the previous
-        tasks slide down into view from above, already scrolled to their
-        bottom, pushing the latest task's header and output out below them, the
-        two moving together as one column. Scrolling down, the latest task's
-        header and output slide up into view from below, already scrolled where
-        they will settle,
-        pushing the previous tasks out above them. The slide is quick and
-        settles without bouncing, as the right sidebar's does. Only the space
-        between the previous tasks row and the queue moves, and nothing is
-        drawn outside it; the row and the queue stay where they are, the row reading what it will once the slide settles, from the
-        moment it starts.
-
-        The scroll that crosses over stops at the moment of the switch. The
-        step that takes it past the barrier is used up by the crossing, all of
-        it, however far past the barrier it reached, and none of it scrolls
-        the view beneath. Whatever more of that same scroll follows, as the
-        wheel keeps turning, the fingers keep moving, or a fling's momentum
-        runs on, is swallowed: during the slide and after it has settled, it
-        scrolls neither view, pulls into no stretch, and never crosses back,
-        so the view it switched to is left exactly as it arrived, scrolled
-        where the slide brought it. Only a new scroll moves anything again: one
-        begun once the wheel or trackpad has been still for 80 milliseconds,
-        counted from the last scroll step whether that came during the slide
-        or after, or once fingers are lifted from the trackpad and put back.
-        That new scroll behaves as any other, scrolling the view, or, with the
-        view at its end, pulling into the stretch from its first step.
-        Expanding or closing the previous tasks by clicking their row is not
-        animated.
+        The previous tasks are not above the latest task in the message list
+        but in the right sidebar's Tasks tab, so nothing lies past either end
+        of the selected task's output: scrolling stops at its top and its
+        bottom, with no stretch, glow, or crossing over. A task opened from
+        the Tasks tab shows its output in the selected task's place, with a
+        bar above it reading "Back to the latest task", which brings back the
+        selected task's output scrolled just where it was left, its lock to
+        the bottom as it was, as <Escape> in the message list does too.

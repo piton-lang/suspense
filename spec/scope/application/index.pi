@@ -48,6 +48,44 @@ shape ApplicationShape:
         @{ContainerEnvironmentScope} says. On macOS and Linux, nothing
         changes in how a program is started.
 
+    findingPrograms:
+        Every program the application runs on the host, git, piton, podman,
+        and each harness, Claude Code's `claude`, Codex's `codex`, and
+        OpenCode's `opencode`, is found where the user's own terminal would
+        find it, however Suspense was started. An application started from
+        the desktop, the dock, Finder, or the Start menu isn't given the
+        PATH the user's shell sets up, so the application never takes its
+        own PATH alone.
+
+        On macOS and Linux, it reads the PATH the user's login shell sets up,
+        running the shell named by SHELL as a login, interactive shell once
+        at launch and printing its PATH, with a timeout of 5 seconds, and
+        searches that, then its own, then the places programs installed
+        for the user are put, where they exist: `~/.local/bin`,
+        `~/.cargo/bin`, `~/.npm-global/bin`, npm's global prefix's `bin` as
+        `npm prefix -g` gives it, `~/.bun/bin`, `~/.volta/bin`, the
+        active Node version's `bin` of nvm, fnm, or asdf, `/opt/homebrew/bin`,
+        and `/usr/local/bin`. On Windows, it searches the PATH of the user and
+        of the machine as the registry holds them now, not only as they were
+        when Suspense started, then npm's global folder, `%APPDATA%\npm`, and
+        each name is tried with each extension PATHEXT lists, so a program
+        installed by npm as `codex.cmd`, or by a package manager as a `.bat`
+        or `.ps1` shim, is found. A `.cmd` or `.bat` is run through
+        `cmd.exe /d /s /c`, and a `.ps1` through PowerShell with no profile,
+        with its arguments quoted for them, never passed to the system as
+        though it were an executable, and still without a console window.
+
+        A program counts as installed once it is found this way and runs:
+        its `--version` exits with success. Where it is found but won't run,
+        the Welcome check and a failed run say so, with what it printed,
+        never that it isn't installed. Where it isn't found, they say it
+        couldn't be found and name every folder that was searched, so the
+        user can see why. The path each program was found at is shown in the
+        Welcome check's row, muted, and what is found is looked for again
+        each time the Welcome checks or Check again run, so a program
+        installed while Suspense runs is found without restarting it.
+
+
     debugLog: @{DebugLogScope}
 
     fileOwnership:

@@ -1,7 +1,9 @@
 //! Starts the programs the application runs, as the ApplicationScope says:
 //! on Windows, without a console window, since a release build there is a GUI
 //! application with no console, and Windows gives every console program it
-//! starts a window of its own unless told not to. Elsewhere, as ever.
+//! starts a window of its own unless told not to. Elsewhere, as ever. A
+//! program named, rather than given as a path, is found where the user's
+//! own terminal would find it, as [`crate::programs`] says.
 
 use std::ffi::OsStr;
 use std::process::Command;
@@ -11,10 +13,20 @@ use std::process::Command;
 pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// A command running `program`, which opens no window of its own: every
-/// child process the application starts is made here.
+/// child process the application starts is made here. A bare name is run
+/// from where it is found, and the program is given the PATH searched.
 pub fn command(program: impl AsRef<OsStr>) -> Command {
+    let program = program.as_ref();
+    let found = program
+        .to_str()
+        .filter(|name| crate::programs::is_bare(name))
+        .and_then(crate::programs::find);
     #[allow(unused_mut)]
-    let mut command = Command::new(program);
+    let mut command = match found {
+        Some(path) => crate::programs::command_for(&path),
+        None => Command::new(program),
+    };
+    command.env("PATH", crate::programs::path());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt as _;
@@ -114,10 +126,24 @@ pub trait Logged {
     fn spawn_logged(&mut self) -> std::io::Result<std::process::Child>;
 }
 
+/// Why `command` couldn't be run, saying, where its program couldn't be
+/// found, every folder searched, and where it was found but won't run, so.
+fn why_not_run(command: &Command, err: std::io::Error) -> std::io::Error {
+    if err.kind() != std::io::ErrorKind::NotFound {
+        return err;
+    }
+    let program = command.get_program().to_string_lossy();
+    let why = match crate::programs::find(&program) {
+        Some(path) => format!("`{}` was found, but it won't run: {err}", path.display()),
+        None => crate::programs::not_found(&program),
+    };
+    std::io::Error::new(err.kind(), why)
+}
+
 impl Logged for Command {
     fn output_logged(&mut self) -> std::io::Result<std::process::Output> {
         let started = std::time::Instant::now();
-        let output = self.output();
+        let output = self.output().map_err(|err| why_not_run(self, err));
         let (status, stderr) = match &output {
             Ok(output) => (Ok(output.status), Some(output.stderr.as_slice())),
             Err(err) => (Err(std::io::Error::new(err.kind(), err.to_string())), None),
@@ -128,7 +154,7 @@ impl Logged for Command {
 
     fn status_logged(&mut self) -> std::io::Result<std::process::ExitStatus> {
         let started = std::time::Instant::now();
-        let status = self.status();
+        let status = self.status().map_err(|err| why_not_run(self, err));
         let logged = match &status {
             Ok(status) => Ok(*status),
             Err(err) => Err(std::io::Error::new(err.kind(), err.to_string())),
@@ -139,7 +165,7 @@ impl Logged for Command {
 
     fn spawn_logged(&mut self) -> std::io::Result<std::process::Child> {
         let (described, dir) = (describe(self), directory(self));
-        let child = self.spawn();
+        let child = self.spawn().map_err(|err| why_not_run(self, err));
         match &child {
             Ok(child) => {
                 crate::debug_log::log(
@@ -211,7 +237,7 @@ mod tests {
     /// variable's value or a prompt.
     #[test]
     fn commands_are_described_without_secrets_or_prompts() {
-        let mut podman = command("podman");
+        let mut podman = Command::new("podman");
         podman.args(["run", "-e", "TOKEN=secret", "--env=KEY=hidden", "image", "claude"]);
         podman.args(["--append-system-prompt", "You are", "x".repeat(300).as_str(), "a\nb"]);
         let described = describe(&podman);

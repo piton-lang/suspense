@@ -3,6 +3,7 @@ use /ui
 use /ui/components/sidebar/Sidebar
 from ./referenced-files import ReferencedFilesPanel
 from ./subagents import SubagentsPanel
+from ./tasks import TasksTabScope
 from ./understanding import UnderstandingPanel
 from /scope/application/Body import BodyScope
 from /ui/components/scrollbar import ScrollbarScope
@@ -45,6 +46,18 @@ shape RightSidebarShape:
         fills what is left between them, until they are resized. While the
         run has started no subagent or background command, the understanding
         reaches the sidebar's bottom.
+
+    tabs:
+        Along its top, a row of two tabs, as the body's tab bar draws tabs,
+        32 pixels tall: "Run" and "Tasks". Run holds its panels, the
+        referenced files, the understanding, and the subagents, of the task
+        selected in the message list, as above. Tasks holds the
+        @{TasksTabScope}: the queue and the previous tasks, which no longer
+        sit in the message list. While a task runs, Run is selected as it
+        starts, unless Tasks was picked since the sidebar last slid out; while
+        none does, Run is disabled, its tooltip saying no task is running,
+        and Tasks is shown. The tab picked is kept while the application
+        runs, and each tab keeps its own scroll.
 
     resizingPanels:
         The panels themselves can be resized, as the sidebar can. The edge
@@ -102,9 +115,15 @@ shape RightSidebarShape:
         scrollbar shows for them.
 
     showing:
-        It is only there while a task is running: from the moment a task is
-        sent from the Code, Chain, or Spec tab until its run is over. Questions
-        from the Ask tab never show it, even when one is sent from the queue.
+        It is there while a task is running, from the moment a task is sent
+        from the Code, Chain, or Spec tab until its run is over, and while the
+        queue holds a prompt, and whenever it is opened by hand: a small
+        ghost button with a sidebar icon at the right end of the body's tab
+        bar, or Ctrl+Alt+B (Cmd+Alt+B on macOS), opens it on its Tasks tab,
+        and closes it again, its tooltip saying which. Opened by hand, it
+        stays until closed by hand, whatever runs; otherwise it slides back
+        once nothing runs and nothing is queued. Questions from the Ask tab
+        never show it, even when one is sent from the queue.
 
         When a task starts, it slides out from the right edge of the message
         list and the chat input, growing from nothing to its width, its
@@ -122,3 +141,5 @@ shape RightSidebarShape:
 export ReferencedFilesPanel
 export UnderstandingPanel
 export SubagentsPanel
+
+export TasksTabScope

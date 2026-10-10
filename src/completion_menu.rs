@@ -365,6 +365,20 @@ fn place_popover(
     (point(x, y), above)
 }
 
+/// A popover built by `build`, laid out over everything else beside
+/// `anchor`, a span of text: below it when it fits, otherwise above it,
+/// inside the window. `build` is told whether it sits above.
+pub fn placed_popover(
+    anchor: Bounds<Pixels>,
+    build: impl Fn(bool, &mut Window, &mut App) -> AnyElement + 'static,
+) -> AnyElement {
+    deferred(PlacedPopover {
+        cursor: anchor,
+        build: Box::new(build),
+    })
+    .into_any_element()
+}
+
 /// Lays out the popover at its measured size and places it with
 /// [`place_popover`], outside the layout of its parent.
 struct PlacedPopover {

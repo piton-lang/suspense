@@ -272,6 +272,23 @@ impl Plan {
         }
     }
 
+    /// This plan with each of `files`, the files attached to the run's
+    /// prompt, mounted read only on its own, at its path under the project,
+    /// and nothing else of the folder they are in.
+    pub fn with_files(mut self, files: &[PathBuf]) -> Self {
+        for file in files {
+            if !self.mounts.iter().any(|mount| mount.host == *file) {
+                self.mounts.push(Mount {
+                    host: file.clone(),
+                    writable: false,
+                });
+            }
+        }
+        // Parents first, so what they hold is mounted over them.
+        self.mounts.sort_by_key(|mount| mount.host.components().count());
+        self
+    }
+
     /// This plan, for a Spec run, as the project lets it read the code at
     /// `code`, or not: the code location mounted read only in place of its
     /// scratch folder, its guidance files alone covered by scratch, so the

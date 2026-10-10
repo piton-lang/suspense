@@ -8,6 +8,7 @@ mod agent;
 mod animations;
 mod answer_blocks;
 mod app;
+mod attached_file;
 mod attached_image;
 mod baked_prompts;
 mod chat_input;
@@ -58,6 +59,7 @@ mod piton_lsp;
 mod piton_syntax;
 mod piton_wrap;
 mod process;
+mod programs;
 mod process_tree;
 mod project;
 mod project_directory;
@@ -116,5 +118,7 @@ fn main() {
     // Run elevated all the same, what it and the programs it starts create
     // is still the user's.
     ownership::own_what_is_created();
+    // Programs are found where the user's terminal finds them.
+    programs::read_at_launch();
     app::run();
 }

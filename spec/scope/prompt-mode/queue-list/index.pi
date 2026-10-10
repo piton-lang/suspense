@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /ui/components/right-sidebar import TasksTabScope
 from /scope/project-data import ProjectDataScope
 from /scope/prompt-mode/chat-input import ChatInputScope
 from /scope/prompt-mode/modes import PromptModesScope
@@ -42,10 +43,10 @@ shape QueueListShape:
         follow-up", in that step's mode colour.
 
     placement:
-        The queue sits along the bottom of the view, below the output and
-        directly above the chat input, with a border along its top. It is not
-        part of the header. A row saying how many prompts are queued, with a
-        chevron, expands to list each queued prompt in order, one line each,
+        The queue sits in the right sidebar's Tasks tab, its Queued group,
+        as the @{TasksTabScope} says, never above the chat input or in the
+        message list. Its heading says how many prompts are queued, and
+        lists each queued prompt in order, one line each,
         with a button to cancel it. Each prompt in the list is numbered, with
         its number, text, and cancel button vertically centred in its row,
         and the list scrolls once it gets tall, with a @{ScrollbarScope}.

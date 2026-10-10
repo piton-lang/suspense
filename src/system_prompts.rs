@@ -259,6 +259,7 @@ fn fill_with(
     reading: &str,
     fluency: Fluency,
 ) -> String {
+    let harness_directory = fluency.harness_directory.unwrap_or(crate::harness::directory(None));
     let template = fill_paragraph(template, SPEC_READING, reading);
     // A location the run can't see is filled in with nothing, and the
     // paragraphs naming it go with it, so nothing names, or tells the
@@ -276,7 +277,7 @@ fn fill_with(
     let template = template
         .replace(CODE_LOCATION, code)
         .replace(SPEC_LOCATION, spec)
-        .replace(HARNESS_DIRECTORY, crate::harness::directory());
+        .replace(HARNESS_DIRECTORY, harness_directory);
     let template = without_paragraphs(&template, PITON_FLUENCY);
     let mut template = template;
     for (placeholder, file) in [
@@ -298,12 +299,17 @@ fn fill_with(
 pub struct Fluency<'a> {
     pub piton: Option<&'a str>,
     pub suspense: Option<&'a str>,
+    /// The directory of the project's harness, as
+    /// [`crate::harness::directory`] gives it; Claude Code's when none is
+    /// given, as outside any project.
+    pub harness_directory: Option<&'a str>,
 }
 
 /// `template` with the spec-reading prompt `reading` injected, then the code
 /// and spec locations and the harness's directory filled in, as the system
 /// template is. It never points at the fluency file, so the system prompt is
 /// the same whatever the mode: a paragraph that does is left out.
+#[cfg(test)]
 pub fn fill(template: &str, code: &str, spec: &str, reading: &str) -> String {
     fill_with(template, code, spec, reading, Fluency::default())
 }
@@ -328,14 +334,17 @@ pub fn fill_instructions(
 /// and spec locations and the spec-reading prompt. The same, byte for byte,
 /// on every prompt of every conversation, whatever the mode, until the
 /// templates change: nothing in it is particular to a prompt, and it holds no
-/// fluency. None when it is empty once filled in.
+/// fluency. None when it is empty once filled in. `harness_directory` is
+/// the directory of the project's harness.
 pub fn project_system_prompt(
     code: &str,
     spec: &str,
     template: &str,
     reading: &str,
+    harness_directory: &str,
 ) -> Option<String> {
-    let filled = fill(template, code, spec, reading);
+    let fluency = Fluency { harness_directory: Some(harness_directory), ..Fluency::default() };
+    let filled = fill_with(template, code, spec, reading, fluency);
     (!filled.trim().is_empty()).then_some(filled)
 }
 
@@ -567,7 +576,7 @@ mod tests {
             !system.contains(UNDERSTANDING_FILE),
             "the system prompt names a task's file"
         );
-        let filled = project_system_prompt("./src", "./spec", system, reading).unwrap();
+        let filled = project_system_prompt("./src", "./spec", system, reading, ".claude").unwrap();
         assert!(filled.contains("Links to .claude/reference/"), "{filled}");
         assert!(!filled.contains("${"), "{filled}");
 
@@ -606,6 +615,7 @@ mod tests {
                 super::Fluency {
                     piton: None,
                     suspense: Some(".suspense/suspense-fluency.md"),
+                    harness_directory: None,
                 },
             );
             assert!(
@@ -645,7 +655,7 @@ mod tests {
                 "{mode:?} doesn't end as it should: {template}"
             );
             let filled =
-                fill_instructions(template, "./src", "./spec", super::Fluency { piton: Some(".suspense/fluency.md"), suspense: None });
+                fill_instructions(template, "./src", "./spec", super::Fluency { piton: Some(".suspense/fluency.md"), suspense: None, harness_directory: None });
             assert_eq!(
                 filled.contains("read .suspense/fluency.md once in this conversation"),
                 writes_piton,
@@ -693,7 +703,7 @@ mod tests {
         assert_eq!(Prompt::CodeToSpec.key(), "code-to-spec");
         assert_eq!(Prompt::CodeToSpec.label(), "Code to spec");
         assert_eq!(Prompt::ALL[Prompt::ALL.len() - 2], Prompt::CodeToSpec);
-        let filled = fill_instructions(default, "./src", "./spec", super::Fluency { piton: Some(".suspense/fluency.md"), suspense: None });
+        let filled = fill_instructions(default, "./src", "./spec", super::Fluency { piton: Some(".suspense/fluency.md"), suspense: None, harness_directory: None });
         assert!(filled.contains("the spec at ./spec ") && filled.contains("./src."));
         assert!(
             !filled.contains("fluency"),
@@ -715,7 +725,7 @@ mod tests {
         assert_eq!(Prompt::SpecToCode.key(), "spec-to-code");
         assert_eq!(Prompt::SpecToCode.label(), "Spec to code");
         assert_eq!(Prompt::ALL.last(), Some(&Prompt::SpecToCode));
-        let filled = fill_instructions(default, "./src", "./spec", super::Fluency { piton: Some(".suspense/fluency.md"), suspense: None });
+        let filled = fill_instructions(default, "./src", "./spec", super::Fluency { piton: Some(".suspense/fluency.md"), suspense: None, harness_directory: None });
         assert!(filled.contains("./src") && filled.contains("./spec"));
         assert!(
             !filled.contains("fluency"),
@@ -789,7 +799,7 @@ mod tests {
     fn instructions_point_at_the_fluency_file_only_when_there_is_one() {
         let template = "Spec only.\n\nRead ${PITON_FLUENCY_FILE} first, once.\n\nThen edit.";
         assert_eq!(
-            fill_instructions(template, "./src", "./spec", super::Fluency { piton: Some(".suspense/fluency.md"), suspense: None }),
+            fill_instructions(template, "./src", "./spec", super::Fluency { piton: Some(".suspense/fluency.md"), suspense: None, harness_directory: None }),
             "Spec only.\n\nRead .suspense/fluency.md first, once.\n\nThen edit."
         );
         assert_eq!(

@@ -9,7 +9,6 @@
 //! can be merged in a [`DiffView`]; renamed there, the editor follows it.
 
 use crate::process::Logged as _;
-use std::cell::RefCell;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -21,9 +20,11 @@ use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::dialog::DialogButtonProps;
 use gpui_kit::component::input::{
     Backspace, CodeActionProvider, CompletionProvider, Copy, Cut, DefinitionProvider, Editor,
-    EditorState, Enter, HoverProvider, InputEvent, MoveHome, Paste, Rope, RopeExt as _,
-    SelectToStartOfLine, ShowDocumentHandler, TabSize,
+    EditorState, Enter, Escape, HoverProvider, InputEvent, MoveHome, Paste, Rope, RopeExt as _,
+    SelectToStartOfLine, ShowDocumentHandler, TabSize, ToggleCodeActions,
 };
+use gpui_kit::component::text::TextView;
+use gpui_kit::component::Icon;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
     v_flex,
@@ -126,8 +127,17 @@ pub struct FileView {
     /// The file as open in `piton lsp`, while it is a Piton file and the
     /// server is running.
     document: Option<Arc<Document>>,
-    /// A name's hover, waiting for the pointer to rest on it.
-    resting_hover: Rc<RefCell<Task<()>>>,
+    /// What the pointer is resting on, the symbol or error, until it has
+    /// rested long enough for its hover to be asked for.
+    resting_hover: Option<Range<usize>>,
+    _rest: Task<()>,
+    /// The hover popover, while it shows.
+    hover: Option<HoverCard>,
+    /// Whether the pointer is over the hover popover, which keeps it open.
+    over_hover: bool,
+    /// Closes the hover popover a moment after the pointer leaves it and
+    /// what it hovers, unless the pointer comes back first.
+    _close_hover: Task<()>,
     /// What the server last published for the file.
     diagnostics: Vec<lsp_types::Diagnostic>,
     /// Where the popover for selected text shows, while it does: where the
@@ -305,6 +315,13 @@ impl FileView {
                 },
             ),
             cx.observe_global_in::<ProjectLsp>(window, |this, _, cx| this.attach_lsp(cx)),
+            // Scrolling the editor closes the hover popover.
+            cx.observe(&editor, |this, editor, cx| {
+                let scroll = editor.read(cx).scroll_offset();
+                if this.hover.as_ref().is_some_and(|card| card.scroll != scroll) {
+                    this.close_hover(cx);
+                }
+            }),
         ];
 
         let read = cx.background_spawn({
@@ -345,7 +362,11 @@ impl FileView {
             saved: None,
             dirty: false,
             document: None,
-            resting_hover: Rc::new(RefCell::new(Task::ready(()))),
+            resting_hover: None,
+            _rest: Task::ready(()),
+            hover: None,
+            over_hover: false,
+            _close_hover: Task::ready(()),
             diagnostics: Vec::new(),
             selection_popover: None,
             saving: false,
@@ -521,6 +542,7 @@ impl FileView {
             editor.clear_hover_state(cx);
             editor.clear_diagnostic_popover(cx);
         });
+        self.close_hover(cx);
         if let Some(document) = &self.document {
             document.sync(&self.editor.read(cx).value());
         }
@@ -697,7 +719,7 @@ impl FileView {
         self.dirty = text.as_ref() != saved;
         // What the pointer's hover showed goes as soon as the text changes,
         // and nothing hovered shows again until the pointer next moves.
-        *self.resting_hover.borrow_mut() = Task::ready(());
+        self.close_hover(cx);
         self.editor.update(cx, |editor, cx| {
             editor.clear_hover_state(cx);
             editor.clear_diagnostic_popover(cx);
@@ -841,6 +863,215 @@ impl FileView {
 
     /// The popover by text selected in the editor: Cut, Copy, Paste, and Send
     /// to Prompt. Pressing the mouse anywhere else closes it.
+    /// The pointer moved over the text to `offset` of `text`, as the editor
+    /// says. Resting on a symbol or an error for [`HOVER_REST`] opens the
+    /// hover popover; moving off what it hovers closes it, unless the
+    /// pointer goes into it.
+    fn pointer_at(&mut self, text: String, offset: usize, cx: &mut Context<Self>) {
+        if self.hover.as_ref().is_some_and(|card| is_on(&card.range, offset)) {
+            self._close_hover = Task::ready(());
+            return;
+        }
+        if self.hover.is_some() {
+            self.close_hover_soon(cx);
+        }
+        let diagnostics = self.diagnostics_at(&text, offset);
+        // Without the server, symbols open nothing.
+        let name = self
+            .document
+            .as_ref()
+            .and_then(|_| piton_syntax::hovered_name(&text, offset));
+        let target = name
+            .clone()
+            .or_else(|| diagnostics.first().map(|(range, _)| range.clone()));
+        if target.is_none() {
+            self.resting_hover = None;
+            self._rest = Task::ready(());
+            return;
+        }
+        // Still resting on what it was.
+        if self.resting_hover == target {
+            return;
+        }
+        self.resting_hover = target;
+        let document = self.document.clone();
+        self._rest = cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(HOVER_REST).await;
+            let fixes_at = diagnostics
+                .iter()
+                .map(|(range, _)| range.clone())
+                .reduce(|a, b| a.start.min(b.start)..a.end.max(b.end));
+            // The server sees the editor's unsaved text first.
+            if let Some(document) = &document {
+                document.sync(&text);
+            }
+            let asked = cx.background_spawn({
+                let (text, name) = (text.clone(), name.clone());
+                async move {
+                    let Some(document) = document else {
+                        return (None, false);
+                    };
+                    let hover = name.and_then(|_| document.hover(&text, offset));
+                    let fixes = fixes_at.is_some_and(|range| {
+                        document.fixes(&text, range).is_ok_and(|fixes| !fixes.is_empty())
+                    });
+                    (hover, fixes)
+                }
+            });
+            let (hover, fixes) = asked.await;
+            this.update(cx, |this, cx| {
+                this.resting_hover = None;
+                // Changed meanwhile, nothing shows until the pointer moves.
+                if this.editor.read(cx).value().as_ref() != text {
+                    return;
+                }
+                let symbol = hover.zip(name).and_then(|(hover, name)| {
+                    let range = match &hover.range {
+                        Some(range) => {
+                            piton_lsp::byte_offset(&text, range.start)
+                                ..piton_lsp::byte_offset(&text, range.end)
+                        }
+                        None => name,
+                    };
+                    let beneath = text.get(range.clone()).unwrap_or_default();
+                    (!range.is_empty() && range.contains(&offset) && says_more(&hover, beneath))
+                        .then(|| (range, piton_fences(&hover_text(&hover))))
+                });
+                if diagnostics.is_empty() && symbol.is_none() {
+                    return;
+                }
+                let range = diagnostics
+                    .iter()
+                    .map(|(range, _)| range.clone())
+                    .chain(symbol.iter().map(|(range, _)| range.clone()))
+                    .reduce(|a, b| a.start.min(b.start)..a.end.max(b.end))
+                    .unwrap_or(offset..offset);
+                this.hover = Some(HoverCard {
+                    range,
+                    diagnostics: diagnostics.into_iter().map(|(_, diagnostic)| diagnostic).collect(),
+                    symbol: symbol.map(|(_, markdown)| markdown.into()),
+                    fixes,
+                    scroll: this.editor.read(cx).scroll_offset(),
+                    scroll_handle: ScrollHandle::new(),
+                });
+                this.over_hover = false;
+                this._close_hover = Task::ready(());
+                cx.notify();
+            })
+            .ok();
+        });
+    }
+
+    /// What the server published that is underlined at `offset` of `text`,
+    /// with where in `text` each is.
+    fn diagnostics_at(
+        &self,
+        text: &str,
+        offset: usize,
+    ) -> Vec<(Range<usize>, lsp_types::Diagnostic)> {
+        self.diagnostics
+            .iter()
+            .filter_map(|diagnostic| {
+                let range = piton_lsp::byte_offset(text, diagnostic.range.start)
+                    ..piton_lsp::byte_offset(text, diagnostic.range.end);
+                is_on(&range, offset).then(|| (range, diagnostic.clone()))
+            })
+            .collect()
+    }
+
+    /// Closes the hover popover, and drops any still to come.
+    fn close_hover(&mut self, cx: &mut Context<Self>) {
+        self.resting_hover = None;
+        self._rest = Task::ready(());
+        self._close_hover = Task::ready(());
+        self.over_hover = false;
+        if self.hover.take().is_some() {
+            cx.notify();
+        }
+    }
+
+    /// Closes the hover popover after [`HOVER_LEAVE`], unless the pointer is
+    /// in it or back on what it hovers by then.
+    fn close_hover_soon(&mut self, cx: &mut Context<Self>) {
+        self._close_hover = cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(HOVER_LEAVE).await;
+            this.update(cx, |this, cx| {
+                if !this.over_hover && this.hover.take().is_some() {
+                    cx.notify();
+                }
+            })
+            .ok();
+        });
+    }
+
+    /// Opens a link clicked in the hover popover as the editor opens links:
+    /// a place in this file moves the cursor there, one in another file
+    /// opens it, and a web link opens in the browser.
+    fn open_hover_link(&mut self, url: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let target = url.split('#').next().unwrap_or_default();
+        let path = piton_lsp::uri_path(target).or_else(|| {
+            crate::file_link::resolve(target, ProjectDirectory::get(cx).as_deref())
+        });
+        match path {
+            Some(path) => self.open_location(path, link_position(url), window, cx),
+            None if url.contains("://") || url.starts_with("mailto:") => cx.open_url(url),
+            None => {}
+        }
+    }
+
+    /// Moves the cursor to `position` in this file, or opens `path` there.
+    fn open_location(
+        &mut self,
+        path: PathBuf,
+        position: Position,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.close_hover(cx);
+        if piton_lsp::canonical(&path) == piton_lsp::canonical(&self.path) {
+            self.editor.update(cx, |editor, cx| {
+                editor.set_cursor_position(position, window, cx);
+                editor.focus(window, cx);
+            });
+        } else {
+            cx.emit(OpenDefinition { path, position });
+        }
+    }
+
+    /// Lists the server's fixes to the diagnostics the hover popover shows,
+    /// as Ctrl+. (Cmd+. on macOS) does with the cursor on them.
+    fn quick_fix(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(card) = self.hover.as_ref() else {
+            return;
+        };
+        let start = card.range.start;
+        self.close_hover(cx);
+        self.editor.update(cx, |editor, cx| {
+            editor.set_selected_range(start..start, cx);
+            editor.focus(window, cx);
+        });
+        window.dispatch_action(Box::new(ToggleCodeActions), cx);
+    }
+
+    /// The hover popover, set just below the text it hovers, or above it
+    /// where there is no room below.
+    fn render_hover(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let card = self.hover.clone()?;
+        let editor = self.editor.read(cx);
+        let start = editor.range_to_bounds(&(card.range.start..card.range.start))?;
+        let end = editor
+            .range_to_bounds(&(card.range.end..card.range.end))
+            .unwrap_or(start);
+        let anchor = Bounds::from_corners(
+            start.origin,
+            point(start.left().max(end.right()), end.bottom().max(start.bottom())),
+        );
+        let view = cx.entity().downgrade();
+        Some(crate::completion_menu::placed_popover(anchor, move |_, _, cx| {
+            hover_card(&card, view.clone(), cx)
+        }))
+    }
+
     fn render_selection_popover(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let position = self.selection_popover?;
         // Cut and Paste change the file, which can't be edited until it's in.
@@ -943,8 +1174,7 @@ impl FileView {
             .map(|document| {
                 Rc::new(PitonFile {
                     document,
-                    editor: self.editor.downgrade(),
-                    resting: self.resting_hover.clone(),
+                    view: cx.entity().downgrade(),
                 })
             });
         let this = cx.entity().downgrade();
@@ -1393,10 +1623,25 @@ impl Render for FileView {
                         // under the path in the header.
                         .child(
                             gpui_kit::TestSupportExt::test_support(div().id("file-text"))
-                                // Off the text, no hover is still to come.
-                                .on_hover(cx.listener(|this, hovered: &bool, _, _| {
+                                // Off the text, no hover is still to come, and
+                                // one showing goes unless the pointer is in it.
+                                .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
                                     if !hovered {
-                                        *this.resting_hover.borrow_mut() = Task::ready(());
+                                        this.resting_hover = None;
+                                        this._rest = Task::ready(());
+                                        if this.hover.is_some() {
+                                            this.close_hover_soon(cx);
+                                        }
+                                    }
+                                }))
+                                // The editor's own popover for a diagnostic
+                                // shows at once; the view's hover popover
+                                // shows it instead, once the pointer rests.
+                                .on_mouse_move(cx.listener(|this, _: &MouseMoveEvent, _, cx| {
+                                    if this.editor.read(cx).diagnostic_popover().is_some() {
+                                        this.editor.update(cx, |editor, cx| {
+                                            editor.clear_diagnostic_popover(cx)
+                                        });
                                     }
                                 }))
                                 .absolute()
@@ -1414,10 +1659,146 @@ impl Render for FileView {
                         ),
                 }
             }))
-            .children(self.render_selection_popover(cx));
+            .children(self.render_selection_popover(cx))
+            .children(self.render_hover(cx))
+            // Escape closes the hover popover before anything else.
+            .capture_action(cx.listener(|this, _: &Escape, _, cx| {
+                if this.hover.is_some() {
+                    this.close_hover(cx);
+                    cx.stop_propagation();
+                }
+            }));
         // Lets UI tests find the file; inert in normal builds.
         gpui_kit::TestSupportExt::test_support(view)
     }
+}
+
+/// The hover popover's box: each diagnostic where the pointer rested, its
+/// fixes, and the symbol's hover beneath a thin line.
+fn hover_card(card: &HoverCard, view: WeakEntity<FileView>, cx: &App) -> AnyElement {
+    use lsp_types::DiagnosticSeverity;
+    let theme = cx.theme();
+    let (muted, link, border) = (theme.muted_foreground, theme.link, theme.border);
+    let diagnostics = card.diagnostics.iter().enumerate().map(|(ix, diagnostic)| {
+        let (icon, color) = match diagnostic.severity {
+            Some(DiagnosticSeverity::WARNING) => (IconName::TriangleAlert, theme.warning),
+            Some(DiagnosticSeverity::INFORMATION | DiagnosticSeverity::HINT) => {
+                (IconName::Info, theme.info)
+            }
+            _ => (IconName::CircleX, theme.danger),
+        };
+        let code = diagnostic.code.as_ref().map(|code| match code {
+            lsp_types::NumberOrString::Number(n) => n.to_string(),
+            lsp_types::NumberOrString::String(code) => code.clone(),
+        });
+        let related = diagnostic.related_information.iter().flatten().enumerate().map(
+            |(jx, related)| {
+                let view = view.clone();
+                let location = related.location.clone();
+                div()
+                    .id(("hover-related", ix * 1000 + jx))
+                    .cursor_pointer()
+                    .text_color(link)
+                    .hover(|style| style.underline())
+                    .child(related.message.clone())
+                    .on_click(move |_, window, cx| {
+                        let Some(path) = piton_lsp::uri_path(location.uri.as_str()) else {
+                            return;
+                        };
+                        let position = location.range.start;
+                        view.update(cx, |view, cx| view.open_location(path, position, window, cx))
+                            .ok();
+                    })
+            },
+        );
+        h_flex()
+            .items_start()
+            .gap_1p5()
+            .child(
+                div()
+                    .flex_none()
+                    .pt(px(2.))
+                    .child(Icon::new(icon).small().text_color(color)),
+            )
+            .child(
+                v_flex()
+                    .min_w_0()
+                    .flex_1()
+                    .child(
+                        div()
+                            .child(diagnostic.message.clone())
+                            .when_some(code, |message, code| {
+                                message.child(
+                                    div().text_color(muted).child(code),
+                                )
+                            }),
+                    )
+                    .children(related),
+            )
+    });
+    let fixes = card.fixes.then(|| {
+        let view = view.clone();
+        let shortcut = if cfg!(target_os = "macos") { "Cmd+." } else { "Ctrl+." };
+        div()
+            .id("hover-quick-fix")
+            .cursor_pointer()
+            .text_color(link)
+            .hover(|style| style.underline())
+            .child(format!("Quick fix ({shortcut})"))
+            .on_click(move |_, window, cx| {
+                view.update(cx, |view, cx| view.quick_fix(window, cx)).ok();
+            })
+    });
+    let symbol = card.symbol.clone().map(|markdown| {
+        let view = view.clone();
+        TextView::markdown("hover-symbol", markdown)
+            .selectable(true)
+            .on_link_click(move |url, _, window, cx| {
+                let url = url.to_string();
+                view.update(cx, |view, cx| view.open_hover_link(&url, window, cx))
+                    .ok();
+            })
+    });
+    let line = (!card.diagnostics.is_empty() && symbol.is_some())
+        .then(|| div().h(px(1.)).my_1().bg(border));
+    let hovered = view.clone();
+    // Lets UI tests find the popover; inert in normal builds.
+    gpui_kit::TestSupportExt::test_support(div().id("hover-popover"))
+        .occlude()
+        .max_w(HOVER_MAX_WIDTH)
+        .max_h(HOVER_MAX_HEIGHT)
+        .overflow_y_scroll()
+        .track_scroll(&card.scroll_handle)
+        .px_2()
+        .py_1p5()
+        .text_xs()
+        .bg(crate::theme::color(crate::theme::palette(cx).raised))
+        .border_1()
+        .border_color(border)
+        .rounded(px(4.))
+        .shadow_md()
+        .on_hover(move |hovered_now: &bool, _, cx| {
+            let hovered_now = *hovered_now;
+            hovered
+                .update(cx, |view, cx| {
+                    view.over_hover = hovered_now;
+                    if hovered_now {
+                        view._close_hover = Task::ready(());
+                    } else {
+                        view.close_hover_soon(cx);
+                    }
+                })
+                .ok();
+        })
+        .child(
+            v_flex()
+                .gap_1()
+                .children(diagnostics)
+                .children(fixes)
+                .children(line)
+                .children(symbol),
+        )
+        .into_any_element()
 }
 
 /// A Piton file open in `piton lsp`; closed there when dropped.
@@ -1503,6 +1884,47 @@ impl Document {
         })
     }
 
+    /// The server's fixes for what is diagnosed over `range` of `text`,
+    /// which it already holds. Blocks until it answers.
+    fn fixes(&self, text: &str, range: Range<usize>) -> Result<Vec<CodeAction>> {
+        let start = piton_lsp::lsp_position(text, range.start);
+        let end = piton_lsp::lsp_position(text, range.end);
+        // What is diagnosed there, for the fixes to it.
+        let diagnostics: Vec<_> = self
+            .client
+            .diagnostics(&self.path)
+            .into_iter()
+            .filter(|diagnostic| diagnostic.range.start <= end && start <= diagnostic.range.end)
+            .collect();
+        let result = self.client.request(
+            "textDocument/codeAction",
+            json!({
+                "textDocument": { "uri": self.uri },
+                "range": { "start": start, "end": end },
+                "context": { "diagnostics": diagnostics },
+            }),
+        )?;
+        let actions: Option<Vec<CodeActionOrCommand>> = serde_json::from_value(result)?;
+        Ok(actions
+            .into_iter()
+            .flatten()
+            .filter_map(|action| match action {
+                CodeActionOrCommand::CodeAction(action) => Some(action),
+                CodeActionOrCommand::Command(_) => None,
+            })
+            .collect())
+    }
+
+    /// The server's hover at `offset` of `text`, which it already holds.
+    /// Blocks until it answers.
+    fn hover(&self, text: &str, offset: usize) -> Option<Hover> {
+        let result = self
+            .client
+            .request("textDocument/hover", self.at(text, offset))
+            .ok()?;
+        serde_json::from_value::<Option<Hover>>(result).ok()?
+    }
+
     /// The import edits of an offered completion now in `text` where it was
     /// offered, which the editor does not apply itself; last first, so each
     /// applies before the positions of the rest move.
@@ -1566,15 +1988,80 @@ impl Drop for Document {
 /// Language support for the file open in the editor, from `piton lsp`.
 struct PitonFile {
     document: Arc<Document>,
-    /// The editor the file is open in, to show a hover once it is due.
-    editor: WeakEntity<EditorState>,
-    /// The hover waiting for the pointer to rest on a name, shared with the
-    /// view, which drops it once the pointer leaves the text or it changes.
-    resting: Rc<RefCell<Task<()>>>,
+    /// The view the file is open in, told where the pointer is for its
+    /// hover popover.
+    view: WeakEntity<FileView>,
 }
 
-/// How long the pointer rests on a name before its hover shows.
+/// How long the pointer rests on a symbol or an error before its hover
+/// shows.
 const HOVER_REST: Duration = Duration::from_millis(500);
+
+/// How long the hover popover stays once the pointer has left it and what
+/// it hovers, for the pointer to cross from one to the other.
+const HOVER_LEAVE: Duration = Duration::from_millis(250);
+
+/// The most the hover popover takes up before it scrolls.
+const HOVER_MAX_WIDTH: Pixels = px(480.);
+const HOVER_MAX_HEIGHT: Pixels = px(320.);
+
+/// What the hover popover shows: the diagnostics where the pointer rested,
+/// and the server's hover for the symbol there.
+#[derive(Clone)]
+struct HoverCard {
+    /// The text hovered, the pointer over which keeps the popover open.
+    range: Range<usize>,
+    diagnostics: Vec<lsp_types::Diagnostic>,
+    /// The server's hover, as markdown.
+    symbol: Option<SharedString>,
+    /// Whether the server offers fixes to the diagnostics.
+    fixes: bool,
+    /// The editor's scroll as it opened, scrolling from which closes it.
+    scroll: Point<Pixels>,
+    scroll_handle: ScrollHandle,
+}
+
+/// Whether `offset` is on `range`: within it, or at an empty one.
+fn is_on(range: &Range<usize>, offset: usize) -> bool {
+    range.contains(&offset) || (range.is_empty() && range.start == offset)
+}
+
+/// `markdown` with its Piton code blocks named as the highlighter knows
+/// Piton.
+fn piton_fences(markdown: &str) -> String {
+    markdown
+        .lines()
+        .map(|line| {
+            let trimmed = line.trim_start();
+            let fence = trimmed.len() - trimmed.trim_start_matches('`').len();
+            if fence >= 3 && trimmed[fence..].trim() == "pi" {
+                format!("{}{}", &line[..line.len() - trimmed.len() + fence], piton_syntax::LANGUAGE_NAME)
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The position a link's `#L12` or `#L12:3` fragment names, counted from
+/// one; the file's start without one.
+fn link_position(url: &str) -> Position {
+    let Some((_, fragment)) = url.split_once('#') else {
+        return Position::default();
+    };
+    let fragment = fragment.trim_start_matches('L');
+    let mut parts = fragment.split([':', ',', 'C']);
+    let mut number = || {
+        parts
+            .next()
+            .and_then(|part| part.parse::<u32>().ok())
+            .map(|n| n.saturating_sub(1))
+    };
+    let line = number().unwrap_or(0);
+    let character = number().unwrap_or(0);
+    Position { line, character }
+}
 
 /// What `hover` says, as plain text.
 fn hover_text(hover: &Hover) -> String {
@@ -1656,61 +2143,19 @@ impl CompletionProvider for PitonFile {
 }
 
 impl HoverProvider for PitonFile {
-    /// Asked whenever the pointer moves off what is hovered, it clears that
-    /// at once, and only over a name asks the server, once the pointer has
-    /// rested there for [`HOVER_REST`], showing what it says only when that
-    /// says more than the name. Prose and the like are never hovered.
+    /// Asked whenever the pointer moves over the text, it tells the view,
+    /// which shows the hover popover itself; the editor's own shows nothing.
     fn hover(
         &self,
         text: &Rope,
         offset: usize,
-        window: &mut Window,
+        _: &mut Window,
         cx: &mut App,
     ) -> Task<Result<Option<Hover>>> {
         let text = text.to_string();
-        // Moved, any hover still to come waits for it to rest again.
-        let mut resting = self.resting.borrow_mut();
-        *resting = Task::ready(());
-        if let Some(name) = crate::piton_syntax::hovered_name(&text, offset) {
-            let (document, editor) = (self.document.clone(), self.editor.clone());
-            *resting = window.spawn(cx, async move |cx| {
-                cx.background_executor().timer(HOVER_REST).await;
-                document.sync(&text);
-                let asked = cx.background_spawn({
-                    let text = text.clone();
-                    async move {
-                        let result = document
-                            .client
-                            .request("textDocument/hover", document.at(&text, offset))
-                            .ok()?;
-                        serde_json::from_value::<Option<Hover>>(result).ok()?
-                    }
-                });
-                let Some(hover) = asked.await else {
-                    return;
-                };
-                let range = match &hover.range {
-                    Some(range) => {
-                        piton_lsp::byte_offset(&text, range.start)
-                            ..piton_lsp::byte_offset(&text, range.end)
-                    }
-                    None => name,
-                };
-                let beneath = text.get(range.clone()).unwrap_or_default();
-                if range.is_empty() || !range.contains(&offset) || !says_more(&hover, beneath) {
-                    return;
-                }
-                editor
-                    .update(cx, |editor, cx| {
-                        // Changed meanwhile, nothing shows until it moves.
-                        if editor.value().as_ref() == text {
-                            editor.present_hover(range, hover, cx);
-                        }
-                    })
-                    .ok();
-            });
-        }
-        // Whatever showed goes, the pointer off it.
+        self.view
+            .update(cx, |view, cx| view.pointer_at(text, offset, cx))
+            .ok();
         Task::ready(Ok(None))
     }
 }
@@ -1763,34 +2208,7 @@ impl CodeActionProvider for PitonFile {
         let text = state.read(cx).value().to_string();
         let document = self.document.clone();
         document.sync(&text);
-        let start = piton_lsp::lsp_position(&text, range.start);
-        let end = piton_lsp::lsp_position(&text, range.end);
-        cx.background_spawn(async move {
-            // What is diagnosed at the selection, for the fixes to it.
-            let diagnostics: Vec<_> = document
-                .client
-                .diagnostics(&document.path)
-                .into_iter()
-                .filter(|diagnostic| diagnostic.range.start <= end && start <= diagnostic.range.end)
-                .collect();
-            let result = document.client.request(
-                "textDocument/codeAction",
-                json!({
-                    "textDocument": { "uri": document.uri },
-                    "range": { "start": start, "end": end },
-                    "context": { "diagnostics": diagnostics },
-                }),
-            )?;
-            let actions: Option<Vec<CodeActionOrCommand>> = serde_json::from_value(result)?;
-            Ok(actions
-                .into_iter()
-                .flatten()
-                .filter_map(|action| match action {
-                    CodeActionOrCommand::CodeAction(action) => Some(action),
-                    CodeActionOrCommand::Command(_) => None,
-                })
-                .collect())
-        })
+        cx.background_spawn(async move { document.fixes(&text, range) })
     }
 
     fn perform_code_action(
@@ -2343,28 +2761,21 @@ mod tests {
         })
         .await;
         cx.update_window(handle, |_, window, cx| {
-            let editor = view.read(cx).editor.clone();
-            editor.update(cx, |editor, cx| {
-                editor.present_hover(
-                    0..6,
-                    lsp_types::Hover {
-                        contents: lsp_types::HoverContents::Markup(lsp_types::MarkupContent {
-                            kind: lsp_types::MarkupKind::PlainText,
-                            value: "An anchor".into(),
-                        }),
-                        range: None,
-                    },
-                    cx,
-                );
-                editor.focus_handle(cx).focus(window, cx);
+            view.update(cx, |view, cx| {
+                view.hover = Some(super::HoverCard {
+                    range: 0..6,
+                    diagnostics: Vec::new(),
+                    symbol: Some("An anchor".into()),
+                    fixes: false,
+                    scroll: view.editor.read(cx).scroll_offset(),
+                    scroll_handle: gpui_kit::ScrollHandle::new(),
+                });
+                view.editor.focus_handle(cx).focus(window, cx);
             });
-            assert!(editor.read(cx).hover_popover().is_some());
         })
         .unwrap();
         type_keys(cx, handle, "x");
-        cx.update(|cx| {
-            assert!(view.read(cx).editor.read(cx).hover_popover().is_none());
-        });
+        cx.update(|cx| assert!(view.read(cx).hover.is_none()));
         std::fs::remove_file(&file).ok();
     }
 
@@ -2762,6 +3173,26 @@ mod tests {
                     .is_some_and(|set| !set.is_empty())
         })
         .await;
+
+        // Resting on it opens the hover popover with what the server said.
+        cx.update_window(handle, |_, window, cx| {
+            let (text, provider) = editor.update(cx, |editor, _| {
+                (editor.value().to_string(), editor.lsp_mut().hover_provider.clone().unwrap())
+            });
+            let offset = text.find("NoSuchScope").unwrap() + 2;
+            let rope = gpui_kit::component::input::Rope::from(text.as_str());
+            provider.hover(&rope, offset, window, cx).detach();
+        })
+        .unwrap();
+        cx.executor().advance_clock(super::HOVER_REST * 2);
+        cx.wait_for(handle, TIMEOUT, |_, cx| {
+            view.read(cx).hover.as_ref().is_some_and(|card| {
+                card.diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.message.contains("NoSuchScope"))
+            })
+        })
+        .await;
     }
 
     /// A hover shows only over a name, once the pointer has rested there for
@@ -2785,7 +3216,7 @@ mod tests {
             })
             .unwrap();
         };
-        let shown = |cx: &mut TestAppContext| editor.read_with(cx, |editor, _| editor.hover_popover().is_some());
+        let shown = |cx: &mut TestAppContext| view.read_with(cx, |view, _| view.hover.is_some());
 
         // Over prose, nothing, however long it rests.
         hover_at(cx, "See @{");
@@ -2799,8 +3230,83 @@ mod tests {
         cx.run_until_parked();
         assert!(!shown(cx), "a hover showed before the pointer rested");
         cx.executor().advance_clock(super::HOVER_REST);
-        cx.wait_for(handle, TIMEOUT, |_, cx| editor.read(cx).hover_popover().is_some())
-            .await;
+        cx.wait_for(handle, TIMEOUT, |_, cx| {
+            view.read(cx).hover.as_ref().is_some_and(|card| card.symbol.is_some())
+        })
+        .await;
+    }
+
+    /// Resting on an error opens the hover popover with its message, its
+    /// code, and its severity, which moving off it closes after a moment,
+    /// and Escape at once.
+    #[gpui_kit::test]
+    async fn errors_rested_on_show_their_message(cx: &mut TestAppContext) {
+        const TEXT: &str = "anchor A:\n    size: big\n";
+        let file = temp_file("file-view-error-hover", TEXT);
+        init(cx, None);
+        let (view, handle) = open(cx, &file, None);
+        cx.wait_for(handle, TIMEOUT, |_, cx| {
+            view.read(cx).editor.read(cx).value().as_ref() == TEXT
+        })
+        .await;
+        let big = TEXT.find("big").unwrap();
+        view.update(cx, |view, cx| {
+            view.diagnostics = vec![lsp_types::Diagnostic {
+                range: lsp_types::Range::new(Position::new(1, 10), Position::new(1, 13)),
+                severity: Some(lsp_types::DiagnosticSeverity::ERROR),
+                code: Some(lsp_types::NumberOrString::String("type-mismatch".into())),
+                message: "Expected a number".into(),
+                ..Default::default()
+            }];
+            view.show_diagnostics(cx);
+        });
+        let point_at = |cx: &mut TestAppContext, offset: usize| {
+            view.update(cx, |view, cx| view.pointer_at(TEXT.into(), offset, cx));
+        };
+        let shown = |cx: &mut TestAppContext| view.read_with(cx, |view, _| view.hover.is_some());
+
+        // Passing over it shows nothing; resting on it, its message.
+        point_at(cx, big + 1);
+        cx.executor().advance_clock(super::HOVER_REST / 2);
+        cx.run_until_parked();
+        assert!(!shown(cx), "it showed before the pointer rested");
+        // Moving along the same error, it still rests there.
+        point_at(cx, big + 2);
+        cx.executor().advance_clock(super::HOVER_REST);
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| {
+            let card = view.hover.as_ref().expect("no hover");
+            assert_eq!(card.range, big..big + 3);
+            assert_eq!(card.diagnostics[0].message, "Expected a number");
+            assert!(card.symbol.is_none());
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("hover-popover").is_some(), "the popover isn't drawn");
+        })
+        .unwrap();
+
+        // Off it, it goes, after a moment to reach the popover.
+        point_at(cx, 0);
+        cx.run_until_parked();
+        assert!(shown(cx));
+        cx.executor().advance_clock(super::HOVER_LEAVE * 2);
+        cx.run_until_parked();
+        assert!(!shown(cx));
+
+        // Escape closes it at once.
+        point_at(cx, big);
+        cx.executor().advance_clock(super::HOVER_REST * 2);
+        cx.run_until_parked();
+        assert!(shown(cx));
+        cx.update_window(handle, |_, window, cx| {
+            view.read(cx).editor.focus_handle(cx).focus(window, cx);
+            window.press("escape", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(!shown(cx));
+        std::fs::remove_file(&file).ok();
     }
 
     /// A hover that is empty, or only gives the text beneath it again as

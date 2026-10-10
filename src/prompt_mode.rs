@@ -27,6 +27,7 @@
 //! input's tabs.
 
 mod ask_pane;
+mod tasks_tab;
 
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -60,6 +61,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::activity::{Job, JobKind};
+use crate::attached_file::{self, AttachedFile};
 use crate::attached_image::{self, AttachedImage};
 use crate::chat_input::{
     self, ChatInput, FocusActiveEditor, Lane, Lanes, NewConversation, PreviewPrompt, QueuedEdit, Recall,
@@ -70,7 +72,7 @@ use crate::conversations;
 use crate::file_link::OpenFile;
 use crate::file_view::{ChangedOnDisk, CloseFile, FileView, OpenDefinition, SendToPrompt};
 use crate::harness::{self, HarnessEvent};
-use crate::hidden_anchor::{self, Attached, CodeTask, HiddenAnchor};
+use crate::hidden_anchor::{self, AddedStep, Attached, CodeTask, HiddenAnchor};
 use crate::markdown;
 use crate::markdown::{MarkdownKey, MarkdownKind, MarkdownStates};
 use crate::measured_list::{MeasuredList, RenderRow};
@@ -90,13 +92,33 @@ use crate::subagents::Subagents;
 use crate::system_prompts;
 use crate::task_snapshot;
 use crate::task_table::{
-    self, KIND_WIDTH, Layout as TableLayout, OutputRow, Reply, STATUS_WIDTH, Steps, TableSync,
-    TableView, TaskTable, ToolKind, relative_to_project, row_status, shown_markdown_view,
+    self, KIND_WIDTH, OutputRow, Reply, STATUS_WIDTH, TableView, TaskTable, ToolKind,
+    relative_to_project, row_status, shown_markdown_view,
 };
 use crate::theme::Hue;
 use crate::understanding::{self, Understanding};
 use crate::usage::{self, Conversation, PlanLimits, ProjectUsage, RunKind, UsageReport};
 use ask_pane::{ASK_SPLIT_SHARE, AskPane, AskSplitResize};
+use tasks_tab::{SidebarTab, TasksTab};
+
+actions!(prompt_mode, [ToggleSidebar]);
+
+/// The shortcut opening and closing the right sidebar, as its button's
+/// tooltip names it.
+#[cfg(target_os = "macos")]
+const SIDEBAR_SHORTCUT: &str = "⌘⌥B";
+#[cfg(not(target_os = "macos"))]
+const SIDEBAR_SHORTCUT: &str = "Ctrl+Alt+B";
+
+/// Binds the shortcut opening and closing the right sidebar.
+pub fn bind_keys(cx: &mut App) {
+    cx.bind_keys([
+        #[cfg(target_os = "macos")]
+        KeyBinding::new("cmd-alt-b", ToggleSidebar, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-alt-b", ToggleSidebar, None),
+    ]);
+}
 
 /// How long the file pane takes to slide in from the sidebar, or back into it
 /// when closed, and how it moves: critically damped, so it settles without
@@ -165,6 +187,9 @@ struct QueueItem {
     /// The images attached to it, by their paths from the project directory,
     /// known from the moment it is queued.
     images: Vec<String>,
+    /// The other files attached to it, by their paths from the project
+    /// directory, known from the moment it is queued.
+    files: Vec<String>,
     /// It starts a new conversation rather than carrying on the tasks',
     /// as its hidden anchor records once saved.
     new_conversation: bool,
@@ -304,6 +329,9 @@ struct PromptTask {
     /// The reasoning effort it was sent with, as its anchor records it;
     /// none for the harness's own.
     effort: Option<String>,
+    /// For a Chain task, the steps added to it beyond its own, as its
+    /// anchor keeps them.
+    added_steps: Vec<AddedStep>,
     /// The conversation its run was in, once the harness has said.
     session: Option<SharedString>,
     /// In a git repository, the files that changed while it ran, once its
@@ -424,6 +452,8 @@ struct SentAs {
     attached_text: Vec<String>,
     /// Its attached images, by their paths from the project directory.
     attached_images: Vec<String>,
+    /// Its other attached files, by their paths from the project directory.
+    attached_files: Vec<String>,
     sliced: bool,
     /// Sent to Spec from a Code task, that code task, and for a chain's code
     /// step, the chain's spec step, told to it again whenever it is resent.
@@ -435,6 +465,9 @@ struct SentAs {
     sent_from: Option<String>,
     /// A chain, or its code step, followed by a post-build spec update.
     post_build_update: bool,
+    /// A step added to a chain: the chain's Chain task, by name, and its
+    /// place among the steps added.
+    added_step: Option<(String, usize)>,
 }
 
 impl SentAs {
@@ -443,10 +476,12 @@ impl SentAs {
             mode: anchor_mode(anchor),
             attached_text: anchor.attached_text.clone(),
             attached_images: anchor.attached_images.clone(),
+            attached_files: anchor.attached_files.clone(),
             sliced: anchor.sliced,
             code_task: anchor.code_task.clone(),
             sent_from: anchor.sent_from.clone(),
             post_build_update: anchor.post_build_update,
+            added_step: anchor.added_step.clone(),
         }
     }
 
@@ -455,6 +490,7 @@ impl SentAs {
         Attached {
             text: self.attached_text.clone(),
             images: self.attached_images.clone(),
+            files: self.attached_files.clone(),
         }
     }
 }
@@ -617,6 +653,7 @@ impl PromptTask {
             sent_prompts: Default::default(),
             model: None,
             effort: None,
+            added_steps: Vec::new(),
             session: None,
             changed: None,
             changed_open: false,
@@ -669,6 +706,7 @@ impl PromptTask {
         task.new_conversation = saved.anchor.new_conversation.unwrap_or(false);
         task.model = saved.anchor.model.clone();
         task.effort = saved.anchor.effort.clone();
+        task.added_steps = saved.anchor.added_steps.clone();
         task.asked_at = (saved.sent_at > 0).then_some(saved.sent_at);
         task.marked_done = saved
             .record
@@ -869,165 +907,28 @@ impl PromptTask {
     }
 }
 
-/// A row saying how many previous items there are, which expands into a
-/// scrollable accordion of every one of them, oldest first, each headed by
-/// its status and prompt and opening onto its prompt and output. Previous
-/// tasks are one of these.
-///
-/// The accordion is one virtualized list: each item's heading is a row of it,
-/// and so, while an item is open, are its prompt, its table's header, each of
-/// its table's rows, and its end. However long an open item's output, only
-/// the rows in view are laid out.
+/// The previous tasks' selection and filters, as the PromptEditor's
+/// previous tasks and their filters say, along the Tasks tab's Previous
+/// group: kept while the tab is closed and opened again, and with each open
+/// project, but not saved.
 struct HistoryList {
-    /// Element ids: the row's toggle, the accordion, and each item's heading.
-    toggle: &'static str,
-    list: &'static str,
-    item: &'static str,
-    /// The row's label, after its count.
-    singular: &'static str,
-    plural: &'static str,
-    /// What the row reads while expanded.
-    back: &'static str,
-    /// Where its items' task indices start in their element ids, so two lists
-    /// never share one.
-    id_base: usize,
-    expanded: bool,
-    /// The item opened in the accordion.
-    open: Option<usize>,
-    rows: MeasuredList,
-    /// What the list was last laid out for.
-    laid_out: RefCell<HistoryLaidOut>,
-    /// Counts the times it was expanded.
-    opened: usize,
-    /// Just expanded, so its next layout scrolls it to the latest items.
-    scroll_to_latest: Cell<bool>,
-    /// Its tables collapse the steps leading up to the answer.
-    collapse_steps: bool,
-    /// Its items can be selected, each by a checkbox in its heading, as
-    /// previous tasks can.
-    selectable: bool,
-    /// The items selected, by index, kept while the list is closed and opened
-    /// again until they are cleared or sent.
+    /// The tasks selected, by index, until they are cleared or sent.
     selected: BTreeSet<usize>,
-    /// The filter chips on, which hide the tasks matching none of them; kept
-    /// while the list is closed and opened again, not saved.
+    /// The filter chips on, which hide the tasks matching none of them.
     filters: Vec<TaskFilter>,
-    /// While any filter is on, how many items it shows, which the row reads.
-    shown: Cell<Option<usize>>,
-    /// The item whose checkbox was clicked last, the far end of a
+    /// The task whose checkbox was clicked last, the far end of a
     /// shift-click's range.
     last_selected: Option<usize>,
-    /// Its items are grouped by the conversation they ran in, each group
-    /// headed by a divider, as previous tasks are.
-    by_session: bool,
-}
-
-/// How many items a history list was laid out with, which was open, and what
-/// of the open one's prompt and table.
-#[derive(Default)]
-struct HistoryLaidOut {
-    count: usize,
-    open: Option<usize>,
-    compiled: bool,
-    /// Whether the open item's spec slices were shown.
-    slices_open: bool,
-    table: TableSync,
-    markdown: u64,
-    /// The items that began a conversation, each heading a group.
-    groups: Vec<usize>,
-    /// Each place's step in its chain, which sets it in and heads a chain.
-    chains: Vec<Option<ChainStep>>,
-    /// The item listed at each place.
-    order: Vec<usize>,
-    /// Which items the filters show, none while no filter is on.
-    visible: Option<Vec<bool>>,
-    /// The open item's changed files, how many and whether listed, which
-    /// its end shows.
-    changed: Option<(usize, bool)>,
-}
-
-/// What a row of a history list shows.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum HistoryRow {
-    /// An item's heading.
-    Heading(usize),
-    /// The open item's prompt.
-    Prompt(usize),
-    /// The open item's table header, or "No output." for a finished item
-    /// with none.
-    TableHeader(usize),
-    /// A row of the open item's table.
-    TableRow(usize, usize),
-    /// The margin ending the open item.
-    End(usize),
 }
 
 impl HistoryList {
-    fn new(
-        ids: (&'static str, &'static str, &'static str),
-        (singular, plural, back): (&'static str, &'static str, &'static str),
-        id_base: usize,
-        collapse_steps: bool,
-        selectable: bool,
-        by_session: bool,
-    ) -> Self {
+    /// The previous tasks', nothing selected and no filter on.
+    fn tasks() -> Self {
         Self {
-            toggle: ids.0,
-            list: ids.1,
-            item: ids.2,
-            singular,
-            plural,
-            back,
-            id_base,
-            expanded: false,
-            open: None,
-            rows: MeasuredList::new(task_table::OVERDRAW),
-            laid_out: RefCell::default(),
-            opened: 0,
-            scroll_to_latest: Cell::new(false),
-            collapse_steps,
-            selectable,
             selected: BTreeSet::new(),
             filters: Vec::new(),
-            shown: Cell::new(None),
             last_selected: None,
-            by_session,
         }
-    }
-
-    /// The previous tasks, whose tables show whole, which can be selected to
-    /// be sent to the other mode together, grouped by conversation.
-    fn tasks() -> Self {
-        Self::new(
-            ("history-toggle", "task-list", "history-task"),
-            ("previous task", "previous tasks", "Back to the latest task"),
-            0,
-            false,
-            true,
-            true,
-        )
-    }
-
-    /// Where the items of `tasks` that began a conversation are listed, as
-    /// `layout` lists them: the first, and each whose conversation isn't the
-    /// one listed before it. One whose conversation isn't known, as when it
-    /// had no record, stays in the group before it.
-    fn session_groups(tasks: &[PromptTask], layout: &ChainLayout) -> Vec<usize> {
-        let mut last = None;
-        (0..tasks.len())
-            .filter(|&place| match &tasks[layout.order[place]].session {
-                Some(session) if last != Some(session) => {
-                    last = Some(session);
-                    true
-                }
-                _ => place == 0,
-            })
-            // A divider never falls between a chain's steps: it goes above
-            // the chain.
-            .map(|place| layout.steps[place].map_or(place, |step| step.start))
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect()
     }
 
     /// The checkbox of `item` was clicked: it is selected or deselected, or,
@@ -1049,797 +950,6 @@ impl HistoryList {
     fn clear_selection(&mut self) {
         self.selected.clear();
         self.last_selected = None;
-    }
-
-    fn toggle(&mut self) {
-        self.expanded = !self.expanded;
-        if self.expanded {
-            self.opened += 1;
-            // The latest are the likeliest to be looked for. Scrolled once the
-            // list knows every item, which it may not have been told yet.
-            self.scroll_to_latest.set(true);
-        }
-    }
-
-    /// The row: "No …", "1 …", or "N …", which does nothing while `enabled`
-    /// is false, and expands the list when clicked.
-    /// At its right, `actions`, such as the batch actions on the selected
-    /// previous tasks, whose clicks are theirs and not the row's.
-    fn render_row(
-        &self,
-        count: usize,
-        enabled: bool,
-        select: fn(&mut PromptMode) -> &mut HistoryList,
-        actions: Vec<AnyElement>,
-        cx: &mut Context<PromptMode>,
-    ) -> AnyElement {
-        self.render_row_as(
-            self.toggle.into(),
-            self.expanded,
-            count,
-            enabled,
-            select,
-            actions,
-            cx,
-        )
-    }
-
-    /// The row as it reads while `expanded`, or not, whichever it is, its
-    /// toggle's element id `toggle`, with `actions` at its right.
-    #[allow(clippy::too_many_arguments)]
-    fn render_row_as(
-        &self,
-        toggle: ElementId,
-        expanded: bool,
-        count: usize,
-        enabled: bool,
-        select: fn(&mut PromptMode) -> &mut HistoryList,
-        actions: Vec<AnyElement>,
-        cx: &mut Context<PromptMode>,
-    ) -> AnyElement {
-        let theme = cx.theme();
-        let label = if expanded {
-            self.back.to_string()
-        } else {
-            match count {
-                0 => format!("No {}", self.plural),
-                1 => format!("1 {}", self.singular),
-                n => format!("{n} {}", self.plural),
-            }
-        };
-        let label = match self.shown.get() {
-            Some(shown) => format!("{label} · {shown} shown"),
-            None => label,
-        };
-        h_flex()
-            .flex_none()
-            .px_2()
-            .py_0p5()
-            .bg(theme.tab_bar)
-            .border_b_1()
-            .border_color(theme.border)
-            .child(
-                Button::new(toggle)
-                    .ghost()
-                    .xsmall()
-                    .icon(if expanded {
-                        IconName::ChevronDown
-                    } else {
-                        IconName::ChevronRight
-                    })
-                    .label(label)
-                    .disabled(!enabled)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        select(this).toggle();
-                        this.follow_task_history();
-                        cx.notify();
-                    })),
-            )
-            .when(!actions.is_empty(), |row| {
-                row.child(
-                    h_flex()
-                        .ml_auto()
-                        .flex_none()
-                        .gap_1()
-                        .items_center()
-                        .children(actions),
-                )
-            })
-            .into_any_element()
-    }
-
-    /// How many rows the open item's block takes: its prompt, table header,
-    /// table rows, and end.
-    fn block(table: usize) -> usize {
-        table + 3
-    }
-
-    /// What row `ix` of the list shows, with `open` open and its table `table`
-    /// rows long.
-    fn row_at(ix: usize, open: Option<(usize, usize)>) -> HistoryRow {
-        let Some((open, table)) = open else {
-            return HistoryRow::Heading(ix);
-        };
-        if ix <= open {
-            return HistoryRow::Heading(ix);
-        }
-        let at = ix - open - 1;
-        if at >= Self::block(table) {
-            return HistoryRow::Heading(ix - Self::block(table));
-        }
-        match at {
-            0 => HistoryRow::Prompt(open),
-            1 => HistoryRow::TableHeader(open),
-            at if at == table + 2 => HistoryRow::End(open),
-            at => HistoryRow::TableRow(open, at - 2),
-        }
-    }
-
-    /// Every item, oldest first, as an accordion that scrolls: each headed by
-    /// its status and prompt, and the one open showing its prompt and output.
-    #[allow(clippy::too_many_arguments)]
-    fn render_list(
-        &self,
-        tasks: &[PromptTask],
-        tasks_of: fn(&PromptMode) -> &Vec<PromptTask>,
-        tasks_of_mut: fn(&mut PromptMode) -> &mut Vec<PromptTask>,
-        select: fn(&mut PromptMode) -> &mut HistoryList,
-        steps_shown: &HashSet<usize>,
-        open_file: &OpenFile,
-        visible: Option<Vec<bool>>,
-        latest: Option<usize>,
-        cx: &mut Context<PromptMode>,
-    ) -> AnyElement {
-        let count = tasks.len();
-        let (id_base, collapse_steps) = (self.id_base, self.collapse_steps);
-        let shows = |item: usize| {
-            visible
-                .as_ref()
-                .is_none_or(|visible| visible.get(item) != Some(&false))
-        };
-        // A chain's steps are listed together beneath its parent row, where
-        // its first step was sent; rows are laid out by where each item is
-        // listed.
-        let layout = Rc::new(if self.by_session {
-            chain_layout(tasks)
-        } else {
-            ChainLayout::identity(count)
-        });
-        let shows_at = |place: usize| shows(layout.order[place]);
-        // An open item filtered out is closed.
-        let open = self.open.filter(|open| *open < count && shows(*open));
-        let open_at = open.map(|open| layout.place[open]);
-        if visible
-            .as_ref()
-            .is_some_and(|visible| !visible.contains(&true))
-        {
-            // Lets UI tests find it; inert in normal builds.
-            return gpui_kit::TestSupportExt::test_support(div().id("no-filtered-tasks"))
-                .size_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_color(cx.theme().muted_foreground)
-                .child("No previous tasks match these filters")
-                .into_any_element();
-        }
-        // An open Freeform task is shown as a chat, with no table.
-        let freeform_open =
-            id_base == 0 && open.is_some_and(|open| tasks[open].mode == Some(SendMode::Freeform));
-        let no_reply = Reply::default();
-        let table_layout = open.map(|open| {
-            let task_ix = id_base + open;
-            let reply = if freeform_open {
-                &no_reply
-            } else {
-                &tasks[open].reply
-            };
-            let steps = collapse_steps.then(|| steps_shown.contains(&task_ix));
-            (task_ix, reply, TableLayout::of(reply, steps))
-        });
-
-        // The list is told when items come or go, when an item opens or
-        // closes, and what of the open item's prompt and table changed.
-        {
-            let mut laid_out = self.laid_out.borrow_mut();
-            if laid_out.count != count {
-                self.rows.reset(count);
-                *laid_out = HistoryLaidOut {
-                    count,
-                    markdown: MarkdownStates::latest(cx),
-                    ..HistoryLaidOut::default()
-                };
-            }
-            if laid_out.open != open_at {
-                if let Some(was) = laid_out.open {
-                    let table = laid_out.table.layout().map_or(0, |layout| layout.items());
-                    self.rows.splice(was + 1..was + 1 + Self::block(table), 0);
-                    self.rows.remeasure(was..was + 1);
-                }
-                if let Some(open) = open_at {
-                    self.rows.splice(open + 1..open + 1, Self::block(0));
-                    self.rows.remeasure(open..open + 1);
-                }
-                laid_out.open = open_at;
-                laid_out.compiled = open.is_some_and(|open| tasks[open].compiled.is_some());
-                laid_out.slices_open = open.is_some_and(|open| tasks[open].slices_open);
-                laid_out.table = TableSync::default();
-            }
-            if let (Some(open), Some(at), Some((task_ix, reply, layout))) =
-                (open, open_at, table_layout)
-            {
-                let compiled = tasks[open].compiled.is_some();
-                let slices_open = tasks[open].slices_open;
-                let prompt_changed = MarkdownStates::changed_since(&mut laid_out.markdown, cx)
-                    .into_iter()
-                    .any(|key| {
-                        matches!(key.kind, MarkdownKind::Prompt | MarkdownKind::Slices)
-                            && key.table == task_ix
-                    });
-                if compiled != laid_out.compiled
-                    || slices_open != laid_out.slices_open
-                    || prompt_changed
-                {
-                    self.rows.remeasure(at + 1..at + 2);
-                    laid_out.compiled = compiled;
-                    laid_out.slices_open = slices_open;
-                }
-                // "No output." stands in the header's place, for as long as
-                // there is none.
-                let empty = reply.row_count() == 0;
-                // An open Freeform task's reply stands there, measured again
-                // each time, as its steps show and hide.
-                if freeform_open
-                    || laid_out.table.layout().is_some_and(|was| was.items() == 0) != empty
-                {
-                    self.rows.remeasure(at + 2..at + 3);
-                }
-                laid_out
-                    .table
-                    .update(&self.rows, at + 3, task_ix, reply, layout, cx);
-                let changed = tasks[open]
-                    .changed
-                    .as_ref()
-                    .map(|changed| (changed.files.len(), tasks[open].changed_open));
-                if laid_out.changed != changed {
-                    let end = at + 3 + laid_out.table.layout().map_or(0, |layout| layout.items());
-                    self.rows.remeasure(end..end + 1);
-                    laid_out.changed = changed;
-                }
-            }
-        }
-        // An item that begins a conversation is headed by a divider, so its
-        // heading is measured again whenever that changes, as when a running
-        // task reports a new one.
-        let groups = if self.by_session {
-            Self::session_groups(tasks, &layout)
-        } else {
-            Vec::new()
-        };
-        // A session's divider heads the first of its tasks shown; a session
-        // with none shown has none.
-        let groups: Vec<usize> = groups
-            .iter()
-            .enumerate()
-            .filter_map(|(ix, &start)| {
-                let end = groups.get(ix + 1).copied().unwrap_or(count);
-                (start..end).find(|&place| shows_at(place))
-            })
-            .collect();
-        {
-            let mut laid_out = self.laid_out.borrow_mut();
-            if laid_out.groups != groups {
-                let table = laid_out.table.layout().map_or(0, |layout| layout.items());
-                let row_of = |item: usize| match open_at {
-                    Some(open) if item > open => item + Self::block(table),
-                    _ => item,
-                };
-                let changed: BTreeSet<usize> = laid_out
-                    .groups
-                    .iter()
-                    .chain(&groups)
-                    .filter(|item| laid_out.groups.contains(item) != groups.contains(item))
-                    .copied()
-                    .collect();
-                for item in changed.into_iter().filter(|&item| item < count) {
-                    let row = row_of(item);
-                    self.rows.remeasure(row..row + 1);
-                }
-                laid_out.groups = groups.clone();
-            }
-        }
-        // A chain's steps are set in beneath its parent row, so when one
-        // gains a step, or a task becomes a step, every row is measured again.
-        let chains = Rc::new(layout.steps.clone());
-        {
-            let mut laid_out = self.laid_out.borrow_mut();
-            if laid_out.chains != *chains
-                || laid_out.order != layout.order
-                || laid_out.visible != visible
-            {
-                let rows = self.rows.count();
-                self.rows.remeasure(0..rows);
-                laid_out.chains = chains.to_vec();
-                laid_out.order = layout.order.clone();
-                laid_out.visible = visible.clone();
-            }
-        }
-        // Which places are hidden by the filters, laid out as nothing; and
-        // which head their chain, its first step shown carrying its parent.
-        let hidden: Rc<Vec<bool>> = Rc::new((0..count).map(|place| !shows_at(place)).collect());
-        let heads: Rc<Vec<bool>> = Rc::new(
-            (0..count)
-                .map(|place| {
-                    chains[place].is_some_and(|step| {
-                        !hidden[place] && (step.start..place).all(|earlier| hidden[earlier])
-                    })
-                })
-                .collect(),
-        );
-        if self.scroll_to_latest.take() {
-            self.rows.scroll_to_end();
-        }
-
-        let theme = cx.theme();
-        let (border, hover, muted) = (theme.border, theme.list_hover, theme.muted_foreground);
-        let (table_background, radius) = (theme.tokens.table, theme.radius);
-        let item_id = self.item;
-        // Which items are selected, when they can be.
-        let selected = self.selectable.then(|| self.selected.clone());
-        let this = cx.entity().downgrade();
-        let open_file = open_file.clone();
-        // Its table tightens as the list narrows, counting the list's padding.
-        let density = task_table::Density::of_list(&self.rows, px(32.));
-        let table = table_layout.map(|(task_ix, _, layout)| {
-            let reply_of = task_table::reply_of({
-                let this = this.clone();
-                move |cx| {
-                    let prompt_mode = this.upgrade()?.read(cx);
-                    tasks_of(prompt_mode)
-                        .get(task_ix - id_base)
-                        .map(|task| &task.reply)
-                }
-            });
-            let steps = collapse_steps.then(|| steps(task_ix, steps_shown, &cx.entity()));
-            let rows = task_table::table_rows(
-                task_ix,
-                reply_of,
-                layout,
-                Some(open_file.clone()),
-                steps,
-                density,
-                cx,
-            );
-            (layout.items(), rows)
-        });
-        let open_rows = open_at.zip(table.as_ref().map(|(items, _)| *items));
-        let chain_color = chat_input::mode_color(SendMode::Both, cx);
-        // Each group's steps are set in beneath a line in its colour.
-        let group_colors: Rc<Vec<Hsla>> = Rc::new(
-            layout
-                .steps
-                .iter()
-                .map(|step| match step {
-                    Some(step) => {
-                        let steps: Vec<&PromptTask> = layout
-                            .members(*step)
-                            .iter()
-                            .filter_map(|&ix| tasks.get(ix))
-                            .collect();
-                        chat_input::mode_color(group_mode(&steps), cx)
-                    }
-                    None => chain_color,
-                })
-                .collect(),
-        );
-        let heading_colors = group_colors.clone();
-        let render_chains = chains.clone();
-        let heading_chains = chains.clone();
-        let (heading_heads, render_heads) = (heads.clone(), heads.clone());
-        let heading_hidden = hidden.clone();
-        let render_layout = layout.clone();
-        let render_row = move |ix: usize, window: &mut Window, cx: &mut App| -> AnyElement {
-            let layout = &render_layout;
-            let Some(entity) = this.upgrade() else {
-                return div().into_any_element();
-            };
-            let row = Self::row_at(ix, open_rows);
-            // Everything an open item shows is set in from the list's edges,
-            // as wide as the list, however long its lines, so they wrap and it
-            // is laid out as tall as it is measured.
-            let room = density.inset(window.rem_size() * 0.75);
-            let inset = || div().w_full().px(room);
-            match row {
-                HistoryRow::Heading(place) => {
-                    let Some(&item) = layout.order.get(place) else {
-                        return div().into_any_element();
-                    };
-                    let Some(task) = tasks_of(entity.read(cx)).get(item) else {
-                        return div().into_any_element();
-                    };
-                    // Filtered out, it takes no room.
-                    if heading_hidden.get(place) == Some(&true) {
-                        return div().into_any_element();
-                    }
-                    let step = heading_chains.get(place).copied().flatten();
-                    let is_open = open == Some(item);
-                    let task_ix = id_base + item;
-                    let checkbox = selected.as_ref().map(|selected| {
-                        let this = this.clone();
-                        history_checkbox(task_ix, selected.contains(&item), move |window, cx| {
-                            // A shift-click selects the range from the one
-                            // clicked last.
-                            let range = window.modifiers().shift;
-                            this.update(cx, |this, cx| {
-                                select(this).click_checkbox(item, range);
-                                cx.notify();
-                            })
-                            .ok();
-                        })
-                    });
-                    let this_for_resend = this.clone();
-                    let this = this.clone();
-                    let trigger = h_flex()
-                        .id(("history-trigger", task_ix))
-                        .justify_between()
-                        .gap_3()
-                        .py_2()
-                        .px_3()
-                        .font_medium()
-                        .cursor_pointer()
-                        .hover(move |style| style.bg(hover))
-                        .on_click(move |_, _, cx| {
-                            this.update(cx, |this, cx| {
-                                let history = select(this);
-                                history.open = if history.open == Some(item) {
-                                    None
-                                } else {
-                                    Some(item)
-                                };
-                                cx.notify();
-                            })
-                            .ok();
-                        })
-                        .children(checkbox)
-                        .map(|heading| match step {
-                            // A step is labelled by what it did, in its
-                            // mode's colour; its prompt is its chain's, shown
-                            // on the parent row.
-                            Some(step) => heading.child(chain_step_summary(
-                                (item_id, item),
-                                task_ix,
-                                task,
-                                step,
-                                cx,
-                            )),
-                            None => heading.child(task_summary((item_id, item), task_ix, task, cx)),
-                        })
-                        // How long it took, lined up in a column of its own.
-                        .child(duration_column(("history-took", task_ix), task.took(), cx))
-                        // Its buttons take the same room on every heading,
-                        // however many it has, so the times line up.
-                        .child(
-                            h_flex()
-                                .flex_none()
-                                .min_w(HEADING_BUTTONS)
-                                .justify_end()
-                                .gap_3()
-                        .children(entity.read(cx).other_mode_state(task).map(|(to, state)| {
-                            let this = this_for_resend.clone();
-                            let menu = this_for_resend.clone();
-                            let name = task.name.clone();
-                            other_mode_button(
-                                ("send-to-other-previous", task_ix),
-                                to,
-                                state,
-                                move |_, window, cx| {
-                                    // The button's click isn't the heading's.
-                                    cx.stop_propagation();
-                                    this.update(cx, |this, cx| {
-                                        this.send_to_other_mode(tasks_of, item, window, cx)
-                                    })
-                                    .ok();
-                                },
-                                move |event, window, cx| {
-                                    menu.update(cx, |this, cx| {
-                                        this.open_mark_menu(
-                                            name.clone(),
-                                            event.position,
-                                            window,
-                                            cx,
-                                        )
-                                    })
-                                    .ok();
-                                },
-                                cx,
-                            )
-                        }))
-                        // A task running in the other lane, beside the latest,
-                        // can be cancelled from here.
-                        .when(id_base == 0 && task.can_cancel(), |heading| {
-                            let this = this_for_resend.clone();
-                            heading.child(cancel_button(("cancel-previous", task_ix)).on_click(
-                                move |_, _, cx| {
-                                    // The button's click isn't the heading's.
-                                    cx.stop_propagation();
-                                    this.update(cx, |this, cx| this.cancel_task(item, cx)).ok();
-                                },
-                            ))
-                        })
-                        .child({
-                            let this = this_for_resend.clone();
-                            resend_button(("resend-previous", task_ix)).on_click(
-                                move |_, window, cx| {
-                                    // The button's click isn't the heading's.
-                                    cx.stop_propagation();
-                                    this.update(cx, |this, cx| {
-                                        this.resend(tasks_of, item, window, cx)
-                                    })
-                                    .ok();
-                                },
-                            )
-                        }),
-                        )
-                        .child(
-                            Icon::new(if is_open {
-                                IconName::ChevronDown
-                            } else {
-                                IconName::ChevronRight
-                            })
-                            .xsmall()
-                            .flex_none()
-                            .text_color(muted),
-                        );
-                    let group = groups.binary_search(&place).ok();
-                    // Only touched by the colour of the mode it was sent in,
-                    // far fainter than the latest task's header; hovered, the
-                    // heading's own colour shows over it.
-                    let hint = task.mode.map(|mode| Hsla {
-                        a: HISTORY_MODE_HINT,
-                        ..chat_input::mode_color(mode, cx)
-                    });
-                    let trigger = div()
-                        .when_some(hint, |heading, hint| heading.bg(hint))
-                        .child(trigger);
-                    // An open item's line is below its end instead.
-                    div()
-                        .w_full()
-                        .when(!is_open, |item| item.border_b_1().border_color(border))
-                        .children(group.map(|group| {
-                            h_flex()
-                                .id(("history-session", task_ix))
-                                .gap_2()
-                                .px_3()
-                                .pt(if group == 0 { px(6.) } else { px(14.) })
-                                .pb_1()
-                                .border_b_1()
-                                .border_color(border)
-                                .text_xs()
-                                .text_color(muted)
-                                .child(format!("Session {}", group + 1))
-                        }))
-                        .map(|heading| match step.filter(|_| heading_heads[place]) {
-                            // A chain's first step heads it with its parent
-                            // row, then sits set in beneath it as the others do.
-                            Some(step) => {
-                                let members = layout.members(step);
-                                let all = tasks_of(entity.read(cx));
-                                let steps: Vec<&PromptTask> =
-                                    members.iter().filter_map(|&ix| all.get(ix)).collect();
-                                let task_ix = id_base + members[0];
-                                heading
-                                    .child(chain_parent(
-                                        task_ix,
-                                        &steps,
-                                        latest.is_some_and(|latest| members.contains(&latest)),
-                                        cx,
-                                    ))
-                                    .child(
-                                        div().w_full().pl(CHAIN_INDENT).child(
-                                            div()
-                                                .w_full()
-                                                .border_l_2()
-                                                .border_color(
-                                                    heading_colors
-                                                        .get(place)
-                                                        .copied()
-                                                        .unwrap_or(chain_color)
-                                                        .opacity(0.6),
-                                                )
-                                                .child(trigger),
-                                        ),
-                                    )
-                            }
-                            None => heading.child(trigger),
-                        })
-                        .into_any_element()
-                }
-                HistoryRow::Prompt(place) => {
-                    let item = layout.order[place];
-                    let task_ix = id_base + item;
-                    let (shown, slices) = tasks_of(entity.read(cx))
-                        .get(item)
-                        .and_then(|task| task.compiled.as_ref())
-                        .map(|compiled| {
-                            let task = &tasks_of(entity.read(cx))[item];
-                            let slices = compiled
-                                .slices()
-                                .filter(|_| task.slices_open)
-                                .map(|slices| slices.shown.clone());
-                            (Some(compiled.shown()), slices)
-                        })
-                        .unwrap_or_default();
-                    // Its markdown's state is kept, so it's parsed once.
-                    if let Some(shown) = shown {
-                        MarkdownStates::prepare(prompt_key(task_ix), &shown, cx);
-                    }
-                    if let Some(slices) = slices {
-                        MarkdownStates::prepare(slices_key(task_ix), &slices, cx);
-                    }
-                    let toggle: Rc<dyn Fn(&mut Window, &mut App)> = {
-                        let this = this.clone();
-                        Rc::new(move |_, cx| {
-                            this.update(cx, |this, cx| {
-                                if let Some(task) = tasks_of_mut(this).get_mut(item) {
-                                    task.slices_open = !task.slices_open;
-                                    cx.notify();
-                                }
-                            })
-                            .ok();
-                        })
-                    };
-                    let Some(task) = tasks_of(entity.read(cx)).get(item) else {
-                        return div().into_any_element();
-                    };
-                    // A Freeform task's prompt is a message, as in its chat.
-                    let prompt = if freeform_open {
-                        entity
-                            .update(cx, |this, cx| this.freeform_prompt(item, cx))
-                            .unwrap_or_else(|| div().into_any_element())
-                    } else {
-                        task_prompt(task_ix, task, &open_file, Some(toggle), cx)
-                    };
-                    // Lets UI tests find the panel; inert in normal builds.
-                    gpui_kit::TestSupportExt::test_support(
-                        inset()
-                            .id(("history-panel", task_ix))
-                            .pt_1()
-                            .pb_3()
-                            .child(prompt),
-                    )
-                    .into_any_element()
-                }
-                HistoryRow::TableHeader(place) => {
-                    let item = layout.order[place];
-                    // A Freeform task's reply, as in its chat.
-                    if freeform_open {
-                        return entity
-                            .update(cx, |this, cx| this.freeform_reply(item, cx))
-                            .unwrap_or_else(|| div().into_any_element());
-                    }
-                    let empty = tasks_of(entity.read(cx))
-                        .get(item)
-                        .is_none_or(|task| task.reply.row_count() == 0);
-                    if empty {
-                        return inset()
-                            .text_color(muted)
-                            .child("No output.")
-                            .into_any_element();
-                    }
-                    inset()
-                        .child(
-                            div()
-                                .overflow_hidden()
-                                .text_base()
-                                .line_height(relative(1.5))
-                                .rounded_t(radius)
-                                .border_t_1()
-                                .border_x_1()
-                                .border_color(border)
-                                .bg(table_background)
-                                .child(task_table::output_header(density, cx)),
-                        )
-                        .into_any_element()
-                }
-                HistoryRow::TableRow(_, row) => {
-                    let Some((_, rows)) = &table else {
-                        return div().into_any_element();
-                    };
-                    inset()
-                        .child(
-                            div()
-                                .text_base()
-                                .line_height(relative(1.5))
-                                .border_x_1()
-                                .border_color(border)
-                                .bg(table_background)
-                                .child(rows(row, window, cx)),
-                        )
-                        .into_any_element()
-                }
-                HistoryRow::End(place) => {
-                    let item = layout.order[place];
-                    let has_table = open_rows.is_some_and(|(_, rows)| rows > 0);
-                    // A previous task's changed files, beneath its table;
-                    // a question has none.
-                    let changed = (id_base == 0)
-                        .then(|| {
-                            entity.update(cx, |this, cx| this.changed_files_of(item, item, cx))
-                        })
-                        .flatten();
-                    // Lets UI tests find the end; inert in normal builds.
-                    gpui_kit::TestSupportExt::test_support(
-                        inset()
-                            .id(("history-panel-end", id_base + item))
-                            .pb_2()
-                            .border_b_1()
-                            .border_color(border)
-                            .when(has_table, |end| {
-                                end.child(
-                                    div()
-                                        .h(radius.max(px(1.)))
-                                        .rounded_b(radius)
-                                        .border_b_1()
-                                        .border_x_1()
-                                        .border_color(border)
-                                        .bg(table_background),
-                                )
-                            })
-                            .children(changed.map(|changed| div().pt_2().child(changed))),
-                    )
-                    .into_any_element()
-                }
-            }
-        };
-        // Every row of a chain's step is set in beneath its parent row, a
-        // line in the Chain colour down its left joining it to the chain.
-        let render: RenderRow = Rc::new(move |ix, window, cx| {
-            let element = render_row(ix, window, cx);
-            let item = match Self::row_at(ix, open_rows) {
-                HistoryRow::Heading(item)
-                | HistoryRow::Prompt(item)
-                | HistoryRow::TableHeader(item)
-                | HistoryRow::TableRow(item, _)
-                | HistoryRow::End(item) => item,
-            };
-            match render_chains.get(item).copied().flatten() {
-                // The first step's row starts with the parent, not set in.
-                Some(_)
-                    if render_heads[item]
-                        && matches!(Self::row_at(ix, open_rows), HistoryRow::Heading(_)) =>
-                {
-                    element
-                }
-                Some(_) => div()
-                    .w_full()
-                    .pl(CHAIN_INDENT)
-                    .child(
-                        div()
-                            .w_full()
-                            .border_l_2()
-                            .border_color(
-                                group_colors
-                                    .get(item)
-                                    .copied()
-                                    .unwrap_or(chain_color)
-                                    .opacity(0.6),
-                            )
-                            .child(element),
-                    )
-                    .into_any_element(),
-                None => element,
-            }
-        });
-        let items = self.rows.element(render);
-        let list = div()
-            .id(SharedString::from(format!("{}-scroll", self.list)))
-            .size_full()
-            .p_4()
-            .child(items)
-            .child(task_table::follow_density(&self.rows, density, px(32.)));
-        // Lets UI tests find the list; inert in normal builds.
-        let list = gpui_kit::TestSupportExt::test_support(list);
-        scrollbar::with_scrollbar(self.list, &self.rows, list, true, None, cx)
     }
 }
 
@@ -2245,6 +1355,8 @@ impl Session {
 /// The referenced spec sidebar, just closed, sliding back behind the task
 /// view's right edge.
 struct RefsClosing {
+    /// The tab it showed as it closed.
+    tab: SidebarTab,
     files: Vec<referenced_spec::Referenced>,
     subagents: Vec<referenced_spec::SubagentGroup>,
     understanding: Understanding,
@@ -2253,6 +1365,16 @@ struct RefsClosing {
     /// Which opening of the sidebar this closes, so each slide animates afresh.
     slide: usize,
     closed: Instant,
+}
+
+/// A step added to a chain, as it is sent.
+#[derive(Clone, Debug)]
+struct PendingStep {
+    /// The chain's Chain task, by name, and the step's place among those
+    /// added.
+    added: (String, usize),
+    model: Option<String>,
+    effort: Option<String>,
 }
 
 /// What was chosen for a file edited on disk while it had unsaved changes.
@@ -2267,14 +1389,6 @@ enum ConflictChoice {
 struct FileTab {
     view: Entity<FileView>,
     _subscriptions: Vec<Subscription>,
-}
-
-/// The latest task as the previous tasks were opened over it: which it was,
-/// among how many, and whether its output was locked to its bottom.
-struct OutputLeft {
-    task: Option<SharedString>,
-    tasks: usize,
-    locked: bool,
 }
 
 /// A filter chip of the previous tasks: the mode a task was sent in, or where
@@ -2338,6 +1452,8 @@ enum StepKind {
     FollowUp,
     /// The spec fix sent after the step before it.
     SpecFix,
+    /// A step added to the chain beyond its own, of its mode.
+    Added(SendMode),
 }
 
 impl StepKind {
@@ -2349,6 +1465,8 @@ impl StepKind {
             StepKind::Code => ("Code", SendMode::Code),
             StepKind::FollowUp => ("Spec follow-up", SendMode::Spec),
             StepKind::SpecFix => ("Spec fix", SendMode::Spec),
+            StepKind::Added(SendMode::Spec) => ("Added spec", SendMode::Spec),
+            StepKind::Added(_) => ("Added code", SendMode::Code),
         }
     }
 }
@@ -2367,15 +1485,6 @@ struct ChainLayout {
 }
 
 impl ChainLayout {
-    /// `count` items listed as they are, none of them chained.
-    fn identity(count: usize) -> Self {
-        Self {
-            order: (0..count).collect(),
-            place: (0..count).collect(),
-            steps: vec![None; count],
-        }
-    }
-
     /// The tasks of the chain listed from `step.start`, in the order they
     /// ran.
     fn members(&self, step: ChainStep) -> &[usize] {
@@ -2451,6 +1560,19 @@ fn chain_layout(tasks: &[PromptTask]) -> ChainLayout {
                 take(&mut claimed, &mut chain, update, StepKind::FollowUp);
             }
         }
+        // Then the steps added to it, in their order.
+        let mut added: Vec<(usize, usize)> = (ix + 1..count)
+            .filter(|&step| !claimed[step])
+            .filter_map(|step| {
+                let (chain, place) = tasks[step].sent.added_step.as_ref()?;
+                (chain.as_str() == tasks[ix].name.as_ref()).then_some((*place, step))
+            })
+            .collect();
+        added.sort();
+        for (_, step) in added {
+            let mode = tasks[step].sent.mode.unwrap_or(SendMode::Code);
+            take(&mut claimed, &mut chain, step, StepKind::Added(mode));
+        }
         // Heads its own steps, listed where it is.
         claimed[ix] = false;
         chains[ix] = Some(chain);
@@ -2496,108 +1618,6 @@ fn chain_layout(tasks: &[PromptTask]) -> ChainLayout {
     layout
 }
 
-/// The mode whose colour a group of steps reads in: Chain's for a chain,
-/// and Spec's for a Spec task with its spec fix.
-fn group_mode(steps: &[&PromptTask]) -> SendMode {
-    match steps.first().and_then(|task| task.sent.mode) {
-        Some(SendMode::Both) => SendMode::Both,
-        _ => SendMode::Spec,
-    }
-}
-
-/// A chain's parent row in the previous tasks, heading its `steps`: tinted
-/// the Chain colour, a joined chain icon, the prompt's first line, the
-/// chain's status as a whole, and how many steps it has; `latest` when a step
-/// of it is the latest task. It has nothing to click.
-fn chain_parent(task_ix: usize, steps: &[&PromptTask], latest: bool, cx: &App) -> AnyElement {
-    let theme = cx.theme();
-    let color = chat_input::mode_color(group_mode(steps), cx);
-    let text = steps
-        .first()
-        .map(|task| first_line(&task.text))
-        .unwrap_or_default();
-    let count = steps.len();
-    // Lets UI tests find the parent; inert in normal builds.
-    gpui_kit::TestSupportExt::test_support(h_flex().id(("history-chain", task_ix)))
-        .w_full()
-        .gap_3()
-        .py_2()
-        .px_3()
-        .font_medium()
-        .bg(Hsla {
-            a: CHAIN_HINT,
-            ..color
-        })
-        .child(
-            Icon::new(IconName::Link)
-                .small()
-                .flex_none()
-                .text_color(color),
-        )
-        .child(div().flex_none().child(chain_status(steps).tag(cx)))
-        .child(div().flex_1().min_w_0().truncate().child(text))
-        .when(latest, |row| {
-            row.child(
-                div()
-                    .flex_none()
-                    .text_sm()
-                    .text_color(theme.muted_foreground)
-                    .child("Latest"),
-            )
-        })
-        .child(
-            div()
-                .flex_none()
-                .text_sm()
-                .text_color(theme.muted_foreground)
-                .child(if count == 1 {
-                    "1 step".to_string()
-                } else {
-                    format!("{count} steps")
-                }),
-        )
-        // How long its steps took together, in the column the steps' times
-        // are in, with the room their buttons and chevron take beside it.
-        .child(duration_column(("chain-took", task_ix), chain_took(steps), cx))
-        .child(div().flex_none().min_w(HEADING_BUTTONS))
-        .child(
-            Icon::new(IconName::ChevronRight)
-                .xsmall()
-                .flex_none()
-                .text_color(transparent_black()),
-        )
-        .into_any_element()
-}
-
-/// A chain step's summary in its heading: what it did, "Spec", "Code",
-/// "Spec follow-up", or "Spec fix", in that step's mode colour, then its
-/// status, with no prompt, which its parent row shows.
-fn chain_step_summary(
-    id: (&'static str, usize),
-    ix: usize,
-    task: &PromptTask,
-    step: ChainStep,
-    cx: &App,
-) -> AnyElement {
-    let (label, mode) = step.kind.label();
-    let summary = h_flex()
-        .id(id)
-        .flex_1()
-        .min_w_0()
-        .gap_3()
-        .child(
-            div()
-                .flex_none()
-                .text_sm()
-                .font_semibold()
-                .text_color(chat_input::mode_color(mode, cx))
-                .child(label),
-        )
-        .child(div().min_w_0().child(task_title(ix, task, false, false, cx)));
-    // Lets UI tests find the task; inert in normal builds.
-    gpui_kit::TestSupportExt::test_support(summary).into_any_element()
-}
-
 /// How long a task, or a chain's steps together, took.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Took {
@@ -2629,13 +1649,6 @@ fn chain_took(steps: &[&PromptTask]) -> Option<Took> {
     })
 }
 
-/// The room a previous task's heading gives its buttons, as many as it
-/// has, so the durations before them line up.
-const HEADING_BUTTONS: Pixels = px(84.);
-
-/// How wide the column of durations in the previous tasks' headings is.
-const DURATION_COLUMN: Pixels = px(64.);
-
 /// How long a task took, in small muted tabular figures, "≈" before it and
 /// a tooltip saying so when it is only approximate.
 fn took_label(id: (&'static str, usize), took: Took, cx: &App) -> AnyElement {
@@ -2662,17 +1675,6 @@ fn took_label(id: (&'static str, usize), took: Took, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-/// A previous task's, or chain's, duration column: right-aligned, as wide
-/// for every heading, so the times line up; empty when it can't be told.
-fn duration_column(id: (&'static str, usize), took: Option<Took>, cx: &App) -> Div {
-    div()
-        .flex_none()
-        .w(DURATION_COLUMN)
-        .flex()
-        .justify_end()
-        .children(took.map(|took| took_label(id, took, cx)))
-}
-
 /// A chain's status as a whole: running while any step is, failed or
 /// cancelled if any step was, and otherwise its last step's.
 fn chain_status(steps: &[&PromptTask]) -> TaskStatus {
@@ -2690,140 +1692,10 @@ fn chain_status(steps: &[&PromptTask]) -> TaskStatus {
         .map_or(TaskStatus::Unrecorded, |task| task.status)
 }
 
-/// How strongly a chain's parent row is tinted with the Chain colour, a
-/// little more than a single task's heading.
-const CHAIN_HINT: f32 = 0.12;
-
-/// How far a chain's steps are set in beneath its parent row.
-const CHAIN_INDENT: Pixels = px(14.);
-
 /// How strongly a previous task's heading is tinted with its mode's colour:
 /// only a hint of it.
 const HISTORY_MODE_HINT: f32 = 0.07;
 
-/// Scrolling past an end of the latest task, `up` into the previous tasks,
-/// or of the previous tasks back down to it, sliding one in for the other.
-struct ScrollSlide {
-    /// Counts the slides, so each springs from its start.
-    n: usize,
-    up: bool,
-    started: Instant,
-    /// How far toward the barrier the glow had grown as it crossed over,
-    /// fading out as the slide begins; none for a slide it didn't start.
-    glow: f32,
-    /// How far the stretch had pulled the view as it crossed over, down
-    /// for up, the slide starting from there.
-    pull: Pixels,
-}
-
-/// The time a scroll past an end goes by: the system's, or, in a test that
-/// has frozen it, a clock of the test's own that moves only as the test
-/// moves it, so a slow machine never turns one gesture into two.
-fn scroll_now() -> Instant {
-    #[cfg(test)]
-    if let Some(now) = TEST_CLOCK.get() {
-        return now;
-    }
-    Instant::now()
-}
-
-#[cfg(test)]
-thread_local! {
-    static TEST_CLOCK: std::cell::Cell<Option<Instant>> = const { std::cell::Cell::new(None) };
-}
-
-/// Freezes the time scrolls go by, on this test's thread.
-#[cfg(test)]
-fn freeze_clock() {
-    TEST_CLOCK.set(Some(Instant::now()));
-}
-
-/// Moves the frozen time scrolls go by on by `by`.
-#[cfg(test)]
-fn advance_clock(by: Duration) {
-    TEST_CLOCK.set(TEST_CLOCK.get().map(|now| now + by));
-}
-
-/// A scroll pushing into the stretch at an end: which way, and how far past
-/// it, as of `at`, draining away once the scrolling pauses.
-#[derive(Clone, Copy)]
-struct ScrollPush {
-    up: bool,
-    amount: f32,
-    at: Instant,
-}
-
-impl Default for ScrollPush {
-    fn default() -> Self {
-        Self {
-            up: false,
-            amount: 0.,
-            at: scroll_now(),
-        }
-    }
-}
-
-impl ScrollPush {
-    /// How far it has built up at `now`: all of it while the scroll goes
-    /// on, draining only once it has stopped, [`SCROLL_HOLD`] after its last
-    /// step, to nothing by [`SCROLL_DRAIN`] after it.
-    fn held(&self, now: Instant) -> f32 {
-        let since = now.duration_since(self.at);
-        if since <= SCROLL_HOLD {
-            return self.amount;
-        }
-        let drained =
-            (since - SCROLL_HOLD).as_secs_f32() / (SCROLL_DRAIN - SCROLL_HOLD).as_secs_f32();
-        self.amount * (1. - drained).max(0.)
-    }
-
-    /// How far the stretch pulls the view past its end at `now`, down while
-    /// scrolling up: nearly as far as it built up at first, less the further
-    /// it goes, as a rubber band gives, and about [`STRETCH_PULL`] by the
-    /// barrier.
-    fn pull(&self, now: Instant) -> Pixels {
-        let held = self.held(now);
-        if held <= 0. {
-            return px(0.);
-        }
-        let pull = (STRETCH_GIVE * held / (STRETCH_GIVE + held)).min(STRETCH_PULL);
-        px(if self.up { pull } else { -pull })
-    }
-}
-
-/// Whether each wheel event over the latest task or the previous tasks is
-/// written to standard error with what came of it, for seeing how a
-/// platform's scrolling reaches the stretch: set `SUSPENSE_SCROLL_LOG`.
-static SCROLL_LOG: std::sync::LazyLock<bool> =
-    std::sync::LazyLock::new(|| std::env::var_os("SUSPENSE_SCROLL_LOG").is_some());
-
-/// How far the stretch pulls the view by the barrier, and never more.
-const STRETCH_PULL: f32 = 64.;
-
-/// How quickly the stretch stiffens, as a rubber band does: it gives all of
-/// a scroll at first, less and less the further it goes, and still gives a
-/// little right up to the barrier, reaching [`STRETCH_PULL`] just as the
-/// build-up reaches [`SCROLL_BARRIER`].
-const STRETCH_GIVE: f32 = STRETCH_PULL * SCROLL_BARRIER / (SCROLL_BARRIER - STRETCH_PULL);
-
-/// How far a scroll must push past an end to cross over.
-const SCROLL_BARRIER: f32 = 768.;
-
-/// How long a scroll's steps may be apart and it still goes on: until then,
-/// nothing it built up against an end drains.
-const SCROLL_HOLD: Duration = Duration::from_millis(200);
-
-/// How long after a scroll's last step what it built up against an end has
-/// drained away.
-const SCROLL_DRAIN: Duration = Duration::from_millis(500);
-
-/// How quickly the glow fades as the view crosses over.
-const GLOW_FADE: Duration = Duration::from_millis(150);
-
-/// How long the wheel must rest before a scroll counts as a new one, after a
-/// slide or a fling, which then pulls into the stretch at an end again:
-/// barely a pause. A trackpad touch starting is a new scroll at once.
-const SCROLL_REST: Duration = Duration::from_millis(80);
 
 /// The gap an item dragged over the item at `ix`, whose bounds are
 /// `bounds`, would be dropped into, the pointer at `at`: the gap before it
@@ -3113,6 +1985,7 @@ struct ProjectSession {
     history_stale: bool,
     _history_load: Task<()>,
     task_history: HistoryList,
+    tasks_tab: TasksTab,
     queue: Vec<QueueItem>,
     queue_expanded: bool,
     auto_send: bool,
@@ -3141,9 +2014,6 @@ struct ProjectSession {
     // How the project was left on screen, kept for when it's back.
     output_table: TaskTable,
     output_locked: bool,
-    /// The latest task, and whether its output was locked, as the previous
-    /// tasks were opened over it, for it to come back as it was left.
-    output_left: Option<OutputLeft>,
     header_prompt: HeaderPrompt,
     queue_scroll: ScrollHandle,
     ask_rows: MeasuredList,
@@ -3166,7 +2036,7 @@ fn ask_rows() -> MeasuredList {
 }
 
 impl ProjectSession {
-    fn new(project_dir: Option<PathBuf>, _cx: &mut App) -> Self {
+    fn new(project_dir: Option<PathBuf>, cx: &mut App) -> Self {
         Self {
             project_dir,
             tasks: Vec::new(),
@@ -3174,6 +2044,7 @@ impl ProjectSession {
             history_stale: false,
             _history_load: Task::ready(()),
             task_history: HistoryList::tasks(),
+            tasks_tab: TasksTab::new(cx),
             queue: Vec::new(),
             queue_expanded: false,
             auto_send: true,
@@ -3196,7 +2067,6 @@ impl ProjectSession {
             usage: ProjectUsage::default(),
             output_table: TaskTable::new(),
             output_locked: false,
-            output_left: None,
             header_prompt: HeaderPrompt::default(),
             queue_scroll: ScrollHandle::new(),
             ask_rows: ask_rows(),
@@ -3237,16 +2107,6 @@ pub struct PromptMode {
     /// The latest task's output, which follows new rows while scrolled to
     /// the bottom, or always while locked there.
     output_table: TaskTable,
-    /// When the wheel last scrolled the latest task or the previous tasks,
-    /// telling a new scroll from one carried on.
-    last_wheel: Rc<Cell<Option<Instant>>>,
-    /// Whether the scroll going on is carried on from a slide, or is a
-    /// fling's momentum, stopping at an end rather than pulling into the
-    /// stretch, until a new scroll.
-    scroll_held_back: Rc<Cell<bool>>,
-    /// Whether the scroll going on has crossed over, and is spent: all of it
-    /// that follows is swallowed, scrolling neither view, until a new scroll.
-    scroll_spent: Rc<Cell<bool>>,
     /// While a queued prompt is dragged: which, and the gap between prompts
     /// it would be dropped into, if any.
     queue_gap: Rc<Cell<Option<(usize, Option<usize>)>>>,
@@ -3257,13 +2117,7 @@ pub struct PromptMode {
     queue_drag_scroll: DragScroll,
     /// Scrolls the tab bar while a file's tab is dragged near its edge.
     tabs_drag_scroll: DragScroll,
-    /// How far a scroll has pushed into the stretch at an end, toward the
-    /// barrier it must get past to cross over.
-    scroll_push: Rc<Cell<ScrollPush>>,
     output_locked: bool,
-    /// The latest task, and whether its output was locked, as the previous
-    /// tasks were opened over it, for it to come back as it was left.
-    output_left: Option<OutputLeft>,
     queue_scroll: ScrollHandle,
     chat_input: Entity<ChatInput>,
     /// The queued prompt being edited in the chat input, by its id.
@@ -3283,6 +2137,22 @@ pub struct PromptMode {
     _history_load: Task<()>,
     /// The row of previous tasks, expanding into every task.
     task_history: HistoryList,
+    /// The right sidebar's Tasks tab, as the TasksTabScope says.
+    tasks_tab: TasksTab,
+    /// The right sidebar was opened by hand, from its button or shortcut,
+    /// and stays out until closed by hand.
+    sidebar_by_hand: bool,
+    /// It was closed by hand while something else kept it out, until the
+    /// next task starts.
+    sidebar_closed_by_hand: bool,
+    /// The sidebar tab picked, kept while the application runs.
+    sidebar_tab: SidebarTab,
+    /// Tasks was picked since the sidebar last slid out, so a task starting
+    /// leaves it picked.
+    tasks_picked: bool,
+    /// A step added to a chain, as it is sent: its place in the chain, and
+    /// its model and effort, which the anchor sent takes.
+    pending_step: Option<PendingStep>,
     /// Prompts waiting for the harness, in the order they were sent.
     queue: Vec<QueueItem>,
     next_queue_id: usize,
@@ -3328,12 +2198,6 @@ pub struct PromptMode {
     refs_opened: Option<(usize, Instant)>,
     /// The referenced spec sidebar, just closed, sliding back in.
     refs_closing: Option<RefsClosing>,
-    /// Scrolling past an end of the latest task or the previous tasks, the
-    /// one sliding in for the other, until it settles.
-    scroll_slide: Option<ScrollSlide>,
-    /// How tall the space between the previous tasks row and the queue was
-    /// last laid out, which a scroll's slide moves across.
-    slide_height: Rc<Cell<Pixels>>,
     /// The referenced spec sidebar's width, as last laid out once settled, so
     /// it opens at the width it was dragged to.
     refs_width: Rc<Cell<Pixels>>,
@@ -3456,6 +2320,7 @@ impl PromptMode {
                         &text,
                         submit.attached_text.clone(),
                         &submit.attached_images,
+                        &submit.attached_files,
                         window,
                         cx,
                     ) else {
@@ -3525,16 +2390,11 @@ impl PromptMode {
             in_background: false,
             tasks: Vec::new(),
             output_table: TaskTable::new(),
-            last_wheel: Rc::default(),
-            scroll_held_back: Rc::default(),
-            scroll_spent: Rc::default(),
             queue_gap: Rc::default(),
             tab_gap: Rc::default(),
             queue_drag_scroll: DragScroll::default(),
             tabs_drag_scroll: DragScroll::default(),
-            scroll_push: Rc::default(),
             output_locked: false,
-            output_left: None,
             queue_scroll: ScrollHandle::new(),
             chat_input,
             editing_queued: None,
@@ -3544,6 +2404,7 @@ impl PromptMode {
             history_stale: false,
             _history_load: Task::ready(()),
             task_history: HistoryList::tasks(),
+            tasks_tab: TasksTab::new(cx),
             queue: Vec::new(),
             next_queue_id: 0,
             queue_expanded: false,
@@ -3559,11 +2420,14 @@ impl PromptMode {
             disk_conflicts: Vec::new(),
             conflict_asked: None,
             tabs_scroll: ScrollHandle::new(),
+            sidebar_by_hand: false,
+            sidebar_closed_by_hand: false,
+            sidebar_tab: SidebarTab::default(),
+            tasks_picked: false,
+            pending_step: None,
             refs_shown: false,
             refs_opened: None,
             refs_closing: None,
-            scroll_slide: None,
-            slide_height: Rc::default(),
             refs_width: Rc::new(Cell::new(referenced_spec::WIDTH)),
             refs_panels: referenced_spec::PanelHeights::default(),
             _elapsed_tick: Task::ready(()),
@@ -3648,7 +2512,6 @@ impl PromptMode {
         swap(&mut self.usage, &mut other.usage);
         swap(&mut self.output_table, &mut other.output_table);
         swap(&mut self.output_locked, &mut other.output_locked);
-        swap(&mut self.output_left, &mut other.output_left);
         swap(&mut self.header_prompt, &mut other.header_prompt);
         swap(&mut self.queue_scroll, &mut other.queue_scroll);
         swap(&mut self.ask_rows, &mut other.ask_rows);
@@ -3659,6 +2522,7 @@ impl PromptMode {
         swap(&mut self.selected_task, &mut other.selected_task);
         swap(&mut self.parked_outputs, &mut other.parked_outputs);
         swap(&mut self.mode_tab, &mut other.mode_tab);
+        swap(&mut self.tasks_tab, &mut other.tasks_tab);
     }
 
     /// Follows the project on screen: the work of the one left keeps running
@@ -3692,7 +2556,6 @@ impl PromptMode {
         self.refs_shown = self.refs_wanted();
         self.refs_opened = None;
         self.refs_closing = None;
-        self.scroll_slide = None;
         self.selection_popover = None;
         let working = self.working;
         let mode_tab = self.mode_tab;
@@ -3847,8 +2710,6 @@ impl PromptMode {
     /// Brings the latest task's output into view: out from behind the
     /// previous tasks, scrolled to its end.
     pub fn reveal_task(&mut self, cx: &mut Context<Self>) {
-        self.task_history.expanded = false;
-        self.output_left = None;
         self.output_table.scroll_to_end();
         cx.notify();
     }
@@ -4373,7 +3234,27 @@ impl PromptMode {
                         }),
                 ),
             )
-            .children(file_tabs);
+            .children(file_tabs)
+            // At its right end, the button opening and closing the right
+            // sidebar.
+            .suffix(
+                div().flex().items_center().px_1().child(
+                    Button::new("sidebar-toggle")
+                        .ghost()
+                        .xsmall()
+                        .icon(if self.refs_shown {
+                            IconName::PanelRightClose
+                        } else {
+                            IconName::PanelRightOpen
+                        })
+                        .tooltip(if self.refs_shown {
+                            format!("Hide the sidebar ({SIDEBAR_SHORTCUT})")
+                        } else {
+                            format!("Show the tasks ({SIDEBAR_SHORTCUT})")
+                        })
+                        .on_click(cx.listener(|this, _, _, cx| this.toggle_sidebar(cx))),
+                ),
+            );
         // Scrolled near its ends while a file's tab is dragged, the gap
         // shown chosen anew each frame from the tabs now under the pointer.
         let drag_scroll = {
@@ -4428,6 +3309,8 @@ impl PromptMode {
         let ix = self.tasks.len() - 1;
         self.output_locked = false;
         self.selected_task = Some(ix);
+        // Shown, it is the latest, not one opened from the Tasks tab.
+        self.tasks_tab.viewing = false;
         // A new task's output starts at its top.
         self.scroll_output_to_top();
         self.settle_latest();
@@ -4563,9 +3446,7 @@ impl PromptMode {
         // The Freeform chat's status line shows the latest raw line too.
         let freeform = self.tasks[ix].mode == Some(SendMode::Freeform);
         let unseen = matches!(event, HarnessEvent::Output(_))
-            && (!latest
-                || self.task_history.expanded
-                || (!freeform && !self.output_table.end_in_view()));
+            && (!latest || (!freeform && !self.output_table.end_in_view()));
         // Follows new output only while already scrolled to the bottom.
         let scroll = self.output_table.scroll();
         let following = scroll.offset().y <= -scroll.max_offset().y + px(1.);
@@ -4579,312 +3460,6 @@ impl PromptMode {
             self.output_table.scroll_to_end();
         }
         cx.notify();
-    }
-
-    /// A wheel scroll `up`, or down, carries on past the latest task's
-    /// top into the previous tasks, opening them on the latest, or past their
-    /// bottom back to the latest task, shown as it was left. Returns whether
-    /// it did.
-    fn scroll_past(&mut self, up: bool, cx: &mut Context<Self>) -> bool {
-        if !self.can_scroll_past(up) {
-            return false;
-        }
-        self.task_history.toggle();
-        self.follow_task_history();
-        let n = self.scroll_slide.as_ref().map_or(0, |slide| slide.n + 1);
-        self.scroll_slide = Some(ScrollSlide {
-            n,
-            up,
-            started: scroll_now(),
-            glow: 0.,
-            pull: px(0.),
-        });
-        cx.notify();
-        true
-    }
-
-    /// Keeps the latest task's place as the previous tasks open over it, and
-    /// puts it back as they close: locked, at its bottom and still following
-    /// its output; unlocked, where it was in its output. Its place is gone
-    /// once another task is the latest, and it comes back at its top,
-    /// unlocked.
-    fn follow_task_history(&mut self) {
-        let latest = self.latest_task().map(|task| task.name.clone());
-        if self.task_history.expanded {
-            if self.output_left.is_none() {
-                self.output_left = Some(OutputLeft {
-                    task: latest,
-                    tasks: self.tasks.len(),
-                    locked: self.output_locked,
-                });
-            }
-            return;
-        }
-        let Some(left) = self.output_left.take() else {
-            return;
-        };
-        if left.task != latest || left.tasks != self.tasks.len() {
-            self.output_locked = false;
-            self.scroll_output_to_top();
-        } else if left.locked {
-            self.output_locked = true;
-            self.output_table.scroll_to_end();
-        } else {
-            // Its list kept its place while hidden.
-            self.output_locked = false;
-        }
-    }
-
-    /// Whether a scroll `up`, or down, is at the end it would cross over
-    /// from: the latest task's top, with previous tasks to open, or the
-    /// previous tasks' bottom.
-    fn can_scroll_past(&self, up: bool) -> bool {
-        self.to_end(up).is_some_and(|to_end| to_end <= 1.)
-    }
-
-    /// How far a scroll `up`, or down, has to go to reach the end it would
-    /// cross over from, as [`Self::can_scroll_past`] says; none when there
-    /// is nothing to cross over to that way.
-    ///
-    /// It goes by where the list laid its end row out, not by the heights it
-    /// has guessed for rows not yet measured, so a view resting at its end
-    /// is always at it, however it got there.
-    fn to_end(&self, up: bool) -> Option<f32> {
-        if self.task_history.expanded {
-            (!up).then(|| f32::from(self.task_history.rows.to_bottom()))
-        } else {
-            let latest_freeform = self
-                .latest_task()
-                .is_some_and(|task| task.mode == Some(SendMode::Freeform));
-            (up && self.tasks.len() >= 2).then(|| {
-                f32::from(if latest_freeform {
-                    self.freeform_to_top()
-                } else {
-                    self.output_table.list().to_top()
-                })
-            })
-        }
-    }
-
-    /// Whether a scroll's crossing over is still sliding.
-    fn scroll_sliding(&self) -> bool {
-        self.scroll_slide
-            .as_ref()
-            .is_some_and(|slide| scroll_now().duration_since(slide.started) < PANE_SLIDE_TIME)
-    }
-
-    /// A soft radial glow in the middle of the space between the previous
-    /// tasks row and the queue, in the selected mode's colour, growing
-    /// larger and slightly brighter as a scroll's build-up nears the
-    /// barrier, and fading out quickly as the view crosses over. None while
-    /// nothing is built up. It takes no clicks or scrolls.
-    fn render_scroll_glow(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        let building = self.scroll_push.get().held(scroll_now()) / SCROLL_BARRIER;
-        let fading = self
-            .scroll_slide
-            .as_ref()
-            .map(|slide| {
-                let faded = scroll_now().duration_since(slide.started).as_secs_f32()
-                    / GLOW_FADE.as_secs_f32();
-                slide.glow * (1. - faded).max(0.)
-            })
-            .unwrap_or(0.);
-        let (progress, strength) = if building > 0. {
-            (building.min(1.), 1.)
-        } else if fading > 0. {
-            (fading, fading)
-        } else {
-            return None;
-        };
-        // It drains, or fades, on its own.
-        window.request_animation_frame();
-        let height = self.slide_height.get().max(px(1.));
-        let radius = height * (0.12 + 0.3 * progress);
-        let color = chat_input::mode_color(self.chat_input.read(cx).mode(), cx);
-        let glow = Hsla {
-            a: (0.05 + 0.1 * progress) * strength,
-            ..color
-        };
-        // Lets UI tests find the glow; inert in normal builds.
-        Some(
-            gpui_kit::TestSupportExt::test_support(div().id("scroll-glow"))
-                .absolute()
-                .size_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(
-                    div()
-                        .size(px(2.))
-                        .rounded_full()
-                        .bg(glow)
-                        .shadow(vec![BoxShadow {
-                            color: glow,
-                            offset: point(px(0.), px(0.)),
-                            blur_radius: radius,
-                            spread_radius: radius * 0.45,
-                            inset: false,
-                        }]),
-                )
-                .into_any_element(),
-        )
-    }
-
-    /// Over the latest task's output or the previous tasks, hears the wheel
-    /// before they do, so a scroll reaching an end carries on into the
-    /// stretch there and past it, as [`Self::scroll_past`] says. A fling's
-    /// momentum, a scroll carried on from a slide, and a sideways one never
-    /// do.
-    fn scroll_past_ends(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let this = cx.entity().downgrade();
-        let last = self.last_wheel.clone();
-        let held_back = self.scroll_held_back.clone();
-        let spent = self.scroll_spent.clone();
-        let push = self.scroll_push.clone();
-        canvas(
-            |bounds, window, _| window.insert_hitbox(bounds, HitboxBehavior::Normal),
-            move |_, hitbox, window, _| {
-                window.on_mouse_event(move |event: &ScrollWheelEvent, phase, window, cx| {
-                    if phase != DispatchPhase::Capture || !hitbox.should_handle_scroll(window) {
-                        return;
-                    }
-                    let now = scroll_now();
-                    // While it slides, the wheel scrolls neither view, and a
-                    // scroll then is carried on rather than new.
-                    if this
-                        .upgrade()
-                        .is_some_and(|this| this.read(cx).scroll_sliding())
-                    {
-                        last.set(Some(now));
-                        held_back.set(true);
-                        spent.set(true);
-                        push.set(ScrollPush::default());
-                        cx.stop_propagation();
-                        return;
-                    }
-                    // A new scroll pulls into the stretch again; once the
-                    // fingers lift, what follows is a fling's momentum.
-                    if event.touch_phase == TouchPhase::Started
-                        || last
-                            .get()
-                            .is_none_or(|at| now.duration_since(at) >= SCROLL_REST)
-                    {
-                        held_back.set(false);
-                        spent.set(false);
-                    }
-                    if event.touch_phase == TouchPhase::Ended {
-                        held_back.set(true);
-                    }
-                    last.set(Some(now));
-                    // A scroll that has crossed over is spent: what more of it
-                    // follows scrolls neither view, until a new scroll.
-                    if spent.get() {
-                        if *SCROLL_LOG {
-                            eprintln!("scroll: {:?} spent, swallowed", event.delta);
-                        }
-                        push.set(ScrollPush::default());
-                        cx.stop_propagation();
-                        return;
-                    }
-                    let delta = event.delta.pixel_delta(window.line_height());
-                    if delta.y.abs() <= delta.x.abs() {
-                        return;
-                    }
-                    let up = delta.y > px(0.);
-                    let distance = f32::from(delta.y.abs());
-                    let mut held = push.get();
-                    held.amount = held.held(now);
-                    let before = held.amount;
-                    let mut reaching = false;
-                    let pushing = if held.amount > 0. {
-                        if held.up != up {
-                            // Scrolling back takes it down, and scrolls the
-                            // view once it is gone.
-                            held.amount -= distance;
-                            held.amount > 0.
-                        } else {
-                            // Momentum adds nothing, but the end still holds.
-                            if !held_back.get() {
-                                held.amount += distance;
-                            }
-                            true
-                        }
-                    } else if let Some(to_end) = this
-                        .upgrade()
-                        .filter(|_| !held_back.get())
-                        .and_then(|this| this.read(cx).to_end(up))
-                        .filter(|to_end| *to_end < distance || *to_end <= 1.)
-                    {
-                        // A scroll at an end starts pulling into the stretch;
-                        // one reaching it, with whatever of it goes past,
-                        // the view scrolling to its end first.
-                        reaching = to_end > 1.;
-                        held = ScrollPush {
-                            up,
-                            amount: if reaching {
-                                distance - to_end
-                            } else {
-                                distance
-                            },
-                            at: now,
-                        };
-                        true
-                    } else {
-                        false
-                    };
-                    if *SCROLL_LOG {
-                        let to_end = this.upgrade().and_then(|this| this.read(cx).to_end(up));
-                        eprintln!(
-                            "scroll: {:?} {} {distance:.0}px phase={:?} held_back={} \
-                             to_end={to_end:?} built_up={before:.0}->{:.0} pushing={pushing} \
-                             reaching={reaching}",
-                            event.delta,
-                            if up { "up" } else { "down" },
-                            event.touch_phase,
-                            held_back.get(),
-                            if pushing { held.amount } else { 0. },
-                        );
-                    }
-                    if !pushing {
-                        push.set(ScrollPush::default());
-                        return;
-                    }
-                    held.at = now;
-                    // The view's own scroll holds at its end while it is
-                    // pulled.
-                    if !reaching {
-                        cx.stop_propagation();
-                    }
-                    if held.amount >= SCROLL_BARRIER {
-                        // The step that crosses over is used up by it, all of
-                        // it, and the rest of its scroll is spent.
-                        cx.stop_propagation();
-                        let pull = held.pull(now);
-                        push.set(ScrollPush::default());
-                        held_back.set(true);
-                        spent.set(true);
-                        this.update(cx, |this, cx| {
-                            if this.scroll_past(held.up, cx) {
-                                if let Some(slide) = this.scroll_slide.as_mut() {
-                                    slide.glow = 1.;
-                                    slide.pull = pull;
-                                }
-                            }
-                        })
-                        .ok();
-                        return;
-                    }
-                    push.set(held);
-                    this.update(cx, |_, cx| cx.notify()).ok();
-                });
-            },
-        )
-        .absolute()
-        .size_full()
     }
 
     fn scroll_output_to_top(&self) {
@@ -4907,7 +3482,8 @@ impl PromptMode {
             &compiled.markdown,
             task.given.as_ref(),
         )
-        .with_images(&task.sent.attached_images);
+        .with_images(&task.sent.attached_images)
+        .with_files(&task.sent.attached_files);
         RawPromptView::open(prompt, window, cx);
     }
 
@@ -5024,34 +3600,43 @@ impl PromptMode {
     }
 
     /// What is attached to a prompt as it is sent or queued: `attached_text`,
-    /// and `images`, each saved in the project's data unless it already is.
-    /// None, the prompt put back in the chat input as it was, when an image
-    /// couldn't be saved.
+    /// `images`, and `files`, each saved in the project's data unless it
+    /// already is. None, the prompt put back in the chat input as it was,
+    /// when one couldn't be saved.
     fn save_attached(
         &mut self,
         text: &str,
         attached_text: Vec<String>,
         images: &[AttachedImage],
+        files: &[AttachedFile],
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Attached> {
-        let Some(project_dir) = self.project_dir.clone().filter(|_| !images.is_empty()) else {
+        let Some(project_dir) = self
+            .project_dir
+            .clone()
+            .filter(|_| !images.is_empty() || !files.is_empty())
+        else {
             // With no project open, sending says so.
             return Some(attached_text.into());
         };
-        match attached_image::save_all(images, &project_dir) {
-            Ok(images) => Some(Attached {
+        let saved = attached_image::save_all(images, &project_dir).and_then(|images| {
+            Ok((images, attached_file::save_all(files, &project_dir)?))
+        });
+        match saved {
+            Ok((images, files)) => Some(Attached {
                 text: attached_text,
                 images,
+                files,
             }),
             Err(err) => {
                 window.push_notification(
-                    Notification::error(format!("{err:#}")).title("Could not attach the images"),
+                    Notification::error(format!("{err:#}")).title("Could not attach the files"),
                     cx,
                 );
-                let (text, images) = (text.to_string(), images.to_vec());
+                let (text, images, files) = (text.to_string(), images.to_vec(), files.to_vec());
                 self.chat_input.update(cx, |input, cx| {
-                    input.take_back(text, attached_text, images, window, cx)
+                    input.take_back(text, attached_text, images, files, window, cx)
                 });
                 None
             }
@@ -5442,8 +4027,9 @@ impl PromptMode {
             let button = Button::new("send-selected")
                 .ghost()
                 .xsmall()
+                // An icon alone, so the actions fit along the heading.
                 .icon(Icon::new(IconName::ArrowRightLeft).text_color(color))
-                .label(format!("Send {sending} to {}", to.label()))
+                .tooltip(format!("Send {sending} to {}", to.label()))
                 .text_color(color)
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.send_selected_to(to, window, cx);
@@ -5457,7 +4043,8 @@ impl PromptMode {
         let clear = Button::new("clear-selected")
             .ghost()
             .xsmall()
-            .label("Clear")
+            .icon(IconName::X)
+            .tooltip("Clear the selection")
             .on_click(cx.listener(|this, _, _, cx| {
                 this.task_history.clear_selection();
                 cx.notify();
@@ -5532,10 +4119,9 @@ impl PromptMode {
     /// Whether the latest task is running with a harness that can be fed
     /// more, its output shown rather than the previous tasks.
     fn can_send_to_task(&self) -> bool {
-        !self.task_history.expanded
-            && self.latest_task().is_some_and(|task| {
-                task.status.is_active() && task.feed.as_ref().is_some_and(harness::Feed::is_open)
-            })
+        self.latest_task().is_some_and(|task| {
+            task.status.is_active() && task.feed.as_ref().is_some_and(harness::Feed::is_open)
+        })
     }
 
     /// Sends `text`, with the text attached to it, to the task running, as
@@ -5581,9 +4167,7 @@ impl PromptMode {
                 let _turn = feeding.lock().await;
                 // From the Freeform tab it goes just as it was typed.
                 let compiled = if mode == SendMode::Freeform {
-                    let mut compiled = hidden_anchor::freeform(&text, &attached.text);
-                    compiled.images = hidden_anchor::image_files(&attached.images, &project_dir);
-                    Ok(compiled)
+                    Ok(hidden_anchor::freeform_attached(&text, &attached, &project_dir))
                 } else {
                     message_anchor(&text, attached, sliced, lsp)
                         .and_then(|anchor| hidden_anchor::preview(&anchor, &text, &project_dir))
@@ -5615,8 +4199,9 @@ impl PromptMode {
                         cx,
                     );
                     let images = attached_image::load_saved(&attached.images, Some(&project_dir));
+                    let files = attached_file::load_saved(&attached.files, Some(&project_dir));
                     this.chat_input.update(cx, |input, cx| {
-                        input.take_back(text, attached.text, images, window, cx)
+                        input.take_back(text, attached.text, images, files, window, cx)
                     });
                 }
             })
@@ -5643,6 +4228,7 @@ impl PromptMode {
                     wait: false,
                     sent_from: saved.anchor.sent_from.clone(),
                     images: saved.anchor.attached_images.clone(),
+                    files: saved.anchor.attached_files.clone(),
                     new_conversation: saved.anchor.new_conversation == Some(true),
                     mode: anchor_mode(&saved.anchor),
                     queued_at: prompt_queue::queued_at(&saved.file).unwrap_or_default(),
@@ -5717,7 +4303,6 @@ impl PromptMode {
                             *this.session.of_mut(lane) = session.of(lane).clone();
                         }
                     }
-                    this.task_history.open = None;
                     this.scroll_output_to_top();
                     cx.notify();
                 });
@@ -5827,6 +4412,7 @@ impl PromptMode {
             saved: None,
             sent_from: sent_from.clone(),
             images: attached.images.clone(),
+            files: attached.files.clone(),
             new_conversation,
             mode: Some(mode),
             queued_at,
@@ -5844,6 +4430,7 @@ impl PromptMode {
         let lsp = self.chat_input.read(cx).lsp();
         let model_after = self.model_after(named_after.as_deref());
         let effort_after = self.effort_after(named_after.as_deref());
+        let pending_step = self.pending_step.take();
         let save = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
@@ -5854,6 +4441,11 @@ impl PromptMode {
                 }
                 if let Some(effort) = effort_after {
                     anchor.effort = effort;
+                }
+                if let Some(step) = pending_step {
+                    anchor.added_step = Some(step.added);
+                    anchor.model = step.model;
+                    anchor.effort = step.effort;
                 }
                 anchor.rename(naming.wait());
                 anchor.sent_from = sent_from;
@@ -5922,12 +4514,14 @@ impl PromptMode {
         // sent again.
         let images =
             attached_image::load_saved(&saved.anchor.attached_images, self.project_dir.as_deref());
+        let files =
+            attached_file::load_saved(&saved.anchor.attached_files, self.project_dir.as_deref());
         let mode = anchor_mode(&saved.anchor).unwrap_or(SendMode::Both);
         // Another edit in progress simply gives way: the chat input puts back
         // what it set aside before setting it aside again.
         self.editing_queued = Some(id);
         self.chat_input.update(cx, |input, cx| {
-            input.begin_editing(ix + 1, text, mode, attached_text, images, window, cx)
+            input.begin_editing(ix + 1, text, mode, attached_text, images, files, window, cx)
         });
         cx.notify();
     }
@@ -5999,11 +4593,14 @@ impl PromptMode {
                 &task.sent.attached_images,
                 self.project_dir.as_deref(),
             );
+            let files =
+                attached_file::load_saved(&task.sent.attached_files, self.project_dir.as_deref());
             (
                 task.text.to_string(),
                 task.sent.mode.unwrap_or(mode),
                 task.sent.attached_text.clone(),
                 images,
+                files,
             )
         });
         if prompt.is_none() && recall.back {
@@ -6045,6 +4642,7 @@ impl PromptMode {
             mode,
             attached_text,
             attached_images,
+            attached_files,
         } = edit
         else {
             self.auto_send_next(cx);
@@ -6058,9 +4656,12 @@ impl PromptMode {
         else {
             return;
         };
-        // Its images are saved as it is, the same image once.
-        let images = match attached_image::save_all(attached_images, &project_dir) {
-            Ok(images) => images,
+        // Its images and files are saved as it is, the same one once.
+        let saved = attached_image::save_all(attached_images, &project_dir).and_then(|images| {
+            Ok((images, attached_file::save_all(attached_files, &project_dir)?))
+        });
+        let (images, files) = match saved {
+            Ok(saved) => saved,
             Err(err) => {
                 window.push_notification(
                     Notification::error(format!("{err:#}"))
@@ -6080,6 +4681,7 @@ impl PromptMode {
         };
         let old_text = std::mem::replace(&mut item.text, text.clone().into());
         let old_images = std::mem::replace(&mut item.images, images.clone());
+        let old_files = std::mem::replace(&mut item.files, files.clone());
         cx.notify();
         let lsp = self.chat_input.read(cx).lsp();
         let sliced = self.chat_input.read(cx).slices();
@@ -6087,6 +4689,7 @@ impl PromptMode {
         let attached = Attached {
             text: attached_text.clone(),
             images,
+            files,
         };
         // Sent to the other mode, it is still sent from its task while it
         // stays in the mode it was sent to.
@@ -6149,6 +4752,7 @@ impl PromptMode {
                             // It stays as it was.
                             item.text = old_text;
                             item.images = old_images;
+                            item.files = old_files;
                             item.sent_from = old.anchor.sent_from.clone();
                             item.mode = old_mode;
                             item.saved = Some(old);
@@ -6189,13 +4793,15 @@ impl PromptMode {
     /// come in `lanes`, holds them: nothing sent after the chain comes
     /// between its steps.
     fn chain_holds(&self, lanes: Lanes, stamp: u128) -> bool {
-        self.tasks.iter().any(|task| {
+        self.tasks.iter().enumerate().any(|(ix, task)| {
             (task.status.is_active() || task.held_for_fix)
                 && task.chain_stamp.is_some_and(|chain| chain < stamp)
-                && matches!(
+                && (matches!(
                     chain_next(task),
                     Some((_, Sending::Now(mode, ..))) if Lanes::of(Some(mode)).overlaps(lanes)
-                )
+                ) || self.next_added_step(ix).is_some_and(|(head, place)| {
+                    Lanes::of(Some(self.tasks[head].added_steps[place].mode)).overlaps(lanes)
+                }))
         })
     }
 
@@ -6207,6 +4813,8 @@ impl PromptMode {
             let lanes = Lanes::of(item.mode);
             let ready = item.saved.is_some()
                 && (self.in_background || Some(item.id) != self.editing_queued)
+                // Open in the Tasks tab, or waiting for its Send there.
+                && !self.tasks_tab.holds(item.id)
                 // Sent after a chain whose next step is still to come in its
                 // lane, it waits for that step.
                 && !self.chain_holds(lanes, item.queued_at);
@@ -6454,23 +5062,56 @@ impl PromptMode {
     /// Code, Chain, or Spec tab runs, once it has anything to show. A
     /// Freeform prompt references nothing.
     fn refs_wanted(&self) -> bool {
-        self.sidebar_task().is_some_and(|task| {
-            self.working.any()
-                && task.status.is_active()
-                && !matches!(task.mode, Some(SendMode::Ask | SendMode::Freeform))
-        })
-            // It waits for something to show, and once out stays out until
-            // the run is over.
-            && (self.refs_shown || self.refs_have_contents())
+        self.sidebar_by_hand
+            || (!self.sidebar_closed_by_hand
+                && (self.sidebar_task_running() || !self.queue.is_empty()))
     }
 
-    /// Whether the running task has anything for the sidebar to show: a
-    /// spec file referenced, a constraint understood, or a subagent or
-    /// command the subagents panel shows.
-    fn refs_have_contents(&self) -> bool {
-        self.sidebar_task().is_some_and(|task| {
-            !task.understanding.rows.is_empty() || task.subagents.shown().next().is_some()
-        }) || !self.referenced_files().is_empty()
+    /// Whether a task sent from the Code, Chain, or Spec tab is running,
+    /// which shows the sidebar, and its Run tab.
+    fn sidebar_task_running(&self) -> bool {
+        self.working.any()
+            && self.tasks.iter().any(|task| {
+                task.status.is_active()
+                    && !matches!(task.mode, Some(SendMode::Ask | SendMode::Freeform))
+            })
+    }
+
+    /// The sidebar tab shown: the one picked while a task runs; Tasks while
+    /// none does, Run having nothing to show.
+    fn sidebar_shown_tab(&self) -> SidebarTab {
+        if self.sidebar_task_running() {
+            self.sidebar_tab
+        } else {
+            SidebarTab::Tasks
+        }
+    }
+
+    /// Picks the sidebar tab `tab`.
+    fn pick_sidebar_tab(&mut self, tab: SidebarTab, cx: &mut Context<Self>) {
+        if tab == SidebarTab::Run && !self.sidebar_task_running() {
+            return;
+        }
+        self.sidebar_tab = tab;
+        if tab == SidebarTab::Tasks {
+            self.tasks_picked = true;
+        }
+        cx.notify();
+    }
+
+    /// Opens the sidebar by hand, on its Tasks tab, or closes it, from its
+    /// button or Ctrl+Alt+B.
+    pub fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
+        if self.refs_wanted() {
+            self.sidebar_by_hand = false;
+            self.sidebar_closed_by_hand = true;
+        } else {
+            self.sidebar_by_hand = true;
+            self.sidebar_closed_by_hand = false;
+            self.sidebar_tab = SidebarTab::Tasks;
+            self.tasks_picked = true;
+        }
+        cx.notify();
     }
 
     /// The spec files the running task references.
@@ -6676,6 +5317,7 @@ impl PromptMode {
                 self.refs_split = cx.new(|_| ResizableState::default());
             } else {
                 self.refs_closing = Some(RefsClosing {
+                    tab: self.sidebar_shown_tab(),
                     files: self.referenced_files(),
                     subagents: self.running_subagents(cx),
                     understanding: self.running_understanding(),
@@ -6683,6 +5325,9 @@ impl PromptMode {
                     slide,
                     closed: Instant::now(),
                 });
+                // Slid back, a task starting next selects Run.
+                self.tasks_picked = false;
+                self.tasks_tab.shown.set(false);
             }
         }
         if self
@@ -6693,55 +5338,28 @@ impl PromptMode {
             self.refs_closing = None;
         }
         let host = div().relative().size_full();
-        let contents = |files: &[referenced_spec::Referenced],
-                        subagents: &[referenced_spec::SubagentGroup],
-                        understanding: &Understanding,
-                        this: &Self,
-                        cx: &mut Context<Self>| {
-            referenced_spec::render(
-                files,
-                subagents,
-                understanding,
-                referenced_spec::Layout {
-                    files_scroll: &this.refs_scroll,
-                    subagents_scroll: &this.subagents_scroll,
-                    understanding_scroll: &this.understanding_scroll,
-                    heights: &this.refs_panels,
-                },
-                this.file_opener(cx),
-                cx,
-            )
-        };
         let sliding = self
             .refs_opened
             .filter(|(_, opened)| opened.elapsed() < PANE_SLIDE_TIME)
             .map(|(n, _)| n);
         if shown {
-            let files = self.referenced_files();
-            let subagents = self.running_subagents(cx);
-            let understanding = self.running_understanding();
-            // Rows just added or changed fade back.
-            if understanding.fading() {
+            let understanding_fading = self.running_understanding().fading();
+            if understanding_fading {
                 window.request_animation_frame();
             }
             let width = self.refs_width.get();
+            let contents = self.render_sidebar(None, window, cx);
             if let Some(n) = sliding {
                 window.request_animation_frame();
                 let grow = SpringAnimation::new(PANE_SPRING).to(width).from(px(0.));
-                let pane = slide_pane(
-                    ("refs-slide", n),
-                    ("refs-grow", n),
-                    grow,
-                    width,
-                    contents(&files, &subagents, &understanding, self, cx),
-                );
+                let pane = slide_pane(("refs-slide", n), ("refs-grow", n), grow, width, contents);
                 return host.child(pushed_by(history, pane, cx));
             }
             let refs_width = self.refs_width.clone();
             let sidebar = div()
                 .size_full()
                 .on_prepaint(move |bounds, _, _| refs_width.set(bounds.size.width))
-                .child(contents(&files, &subagents, &understanding, self, cx));
+                .child(contents);
             return host.child(
                 h_resizable("refs-split")
                     .with_state(&self.refs_split)
@@ -6757,23 +5375,95 @@ impl PromptMode {
                     ]),
             );
         }
-        if let Some(closing) = &self.refs_closing {
+        if self.refs_closing.is_some() {
             window.request_animation_frame();
-            let (width, n) = (closing.width, closing.slide);
+            let closing = self.refs_closing.take();
+            let (width, n) = closing
+                .as_ref()
+                .map_or((px(0.), 0), |closing| (closing.width, closing.slide));
             let shrink = SpringAnimation::new(PANE_SPRING).to(px(0.)).from(width);
-            let files = closing.files.clone();
-            let subagents = closing.subagents.clone();
-            let understanding = closing.understanding.clone();
-            let pane = slide_pane(
-                ("refs-slide-out", n),
-                ("refs-shrink", n),
-                shrink,
-                width,
-                contents(&files, &subagents, &understanding, self, cx),
-            );
+            let contents = self.render_sidebar(closing.as_ref(), window, cx);
+            self.refs_closing = closing;
+            let pane = slide_pane(("refs-slide-out", n), ("refs-shrink", n), shrink, width, contents);
             return host.child(pushed_by(history, pane, cx));
         }
         host.child(history)
+    }
+
+    /// The right sidebar: its Run and Tasks tabs along its top, and the one
+    /// shown beneath them, as it was as it closed while `closing`.
+    fn render_sidebar(
+        &self,
+        closing: Option<&RefsClosing>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let tab = closing.map_or_else(|| self.sidebar_shown_tab(), |closing| closing.tab);
+        if tab != SidebarTab::Tasks {
+            self.tasks_tab.shown.set(false);
+        }
+        let run_available = self.sidebar_task_running();
+        let bar = TabBar::new("sidebar-tabs")
+            .selected_index(match tab {
+                SidebarTab::Run => 0,
+                SidebarTab::Tasks => 1,
+            })
+            .on_click(cx.listener(|this, ix: &usize, _, cx| {
+                let tab = if *ix == 0 {
+                    SidebarTab::Run
+                } else {
+                    SidebarTab::Tasks
+                };
+                this.pick_sidebar_tab(tab, cx);
+            }))
+            .child(
+                Tab::new()
+                    .label("Run")
+                    .disabled(!run_available)
+                    .when(!run_available, |tab| {
+                        tab.tooltip(|window, cx| {
+                            gpui_kit::component::tooltip::Tooltip::new("No task is running")
+                                .build(window, cx)
+                        })
+                    }),
+            )
+            .child(Tab::new().label("Tasks"));
+        let body = match tab {
+            SidebarTab::Run => {
+                let (files, subagents, understanding) = match closing {
+                    Some(closing) => (
+                        closing.files.clone(),
+                        closing.subagents.clone(),
+                        closing.understanding.clone(),
+                    ),
+                    None => (
+                        self.referenced_files(),
+                        self.running_subagents(cx),
+                        self.running_understanding(),
+                    ),
+                };
+                referenced_spec::render(
+                    &files,
+                    &subagents,
+                    &understanding,
+                    referenced_spec::Layout {
+                        files_scroll: &self.refs_scroll,
+                        subagents_scroll: &self.subagents_scroll,
+                        understanding_scroll: &self.understanding_scroll,
+                        heights: &self.refs_panels,
+                    },
+                    self.file_opener(cx),
+                    cx,
+                )
+            }
+            SidebarTab::Tasks => self.render_tasks_tab(window, cx),
+        };
+        // Lets UI tests find the sidebar; inert in normal builds.
+        gpui_kit::TestSupportExt::test_support(v_flex().id("right-sidebar"))
+            .size_full()
+            .child(gpui_kit::TestSupportExt::test_support(div().id("sidebar-tabs-row")).flex_none().child(bar))
+            .child(div().flex_1().min_h_0().relative().child(div().absolute().inset_0().child(body)))
+            .into_any_element()
     }
 
     /// Whether any run the Chat tab shows is under way: a task on Code,
@@ -6850,7 +5540,7 @@ impl PromptMode {
     /// harness picked, the selected tab's conversation, and the project.
     fn usage_report(&self) -> UsageReport {
         let now = usage::now();
-        let agent = crate::agent::current();
+        let agent = crate::agent::of_project(self.project_dir.as_deref());
         let (conversation, epoch, session) = self.shown_conversation();
         let (limits, limits_reported) = self.limits.of(agent, now);
         let project_dir = self.project_dir.as_deref();
@@ -6963,6 +5653,12 @@ impl PromptMode {
         let Some(project_dir) = self.project_dir.clone() else {
             return;
         };
+        // As a task starts, the sidebar comes out on Run, unless Tasks was
+        // picked since it last slid out.
+        if !self.tasks_picked {
+            self.sidebar_tab = SidebarTab::Run;
+        }
+        self.sidebar_closed_by_hand = false;
         let task_ix = self.push_task(text.clone().into(), cx);
         // When its chain was sent: a queued prompt's queue stamp, which a
         // chain's step queued takes from its chain, or else now.
@@ -6981,17 +5677,24 @@ impl PromptMode {
         self.tasks[task_ix].started = Some(std::time::SystemTime::now());
         // Sent, the Freeform chat goes to its bottom to follow it.
         self.lock_freeform_chat();
+        // A step added to a chain, sent now.
+        let pending_step = match &sending {
+            Sending::Now(..) => self.pending_step.take(),
+            Sending::Queued(_) => None,
+        };
         self.tasks[task_ix].sent = match &sending {
             Sending::Now(mode, attached, sliced, code_task, sent_from, post_build_update, _) => {
                 SentAs {
                     mode: Some(*mode),
                     attached_text: attached.text.clone(),
                     attached_images: attached.images.clone(),
+                    attached_files: attached.files.clone(),
                     // A Freeform prompt is never sliced, whatever the toggle says.
                     sliced: *sliced && *mode != SendMode::Freeform,
                     code_task: code_task.clone().filter(|_| hands_on(*mode)),
                     sent_from: sent_from.clone(),
                     post_build_update: *post_build_update,
+                    added_step: pending_step.as_ref().map(|step| step.added.clone()),
                 }
             }
             Sending::Queued(queued) => SentAs::of(&queued.anchor),
@@ -7178,6 +5881,13 @@ impl PromptMode {
                         if let Some(effort) = effort_after {
                             anchor.effort = effort;
                         }
+                        // A step added to a chain: its place, and its own
+                        // model and effort.
+                        if let Some(step) = pending_step {
+                            anchor.added_step = Some(step.added);
+                            anchor.model = step.model;
+                            anchor.effort = step.effort;
+                        }
                         anchor
                     }
                 };
@@ -7191,9 +5901,11 @@ impl PromptMode {
                     return Ok((anchor.name().to_string(), file, None));
                 }
                 if freeform {
-                    let mut compiled = hidden_anchor::freeform(&text, &anchor.attached_text);
-                    compiled.images =
-                        hidden_anchor::image_files(&anchor.attached_images, &project_dir);
+                    let compiled = hidden_anchor::freeform_attached(
+                        &text,
+                        &anchor.attached(),
+                        &project_dir,
+                    );
                     return anyhow::Ok((
                         anchor.name().to_string(),
                         file,
@@ -7348,7 +6060,7 @@ impl PromptMode {
                         system_prompts::with_instructions(instructions.as_deref(), &prompt);
                     let sent_system = system.await;
                     // The harness the run goes to, which its usage came from.
-                    let agent = crate::agent::current();
+                    let agent = crate::agent::of_project(Some(&project_dir));
                     // What else the harness is given, kept for the raw
                     // prompt, with the task and in its record.
                     record.sent_to(agent, sent_system.as_deref());
@@ -7401,6 +6113,8 @@ impl PromptMode {
                             crate::project_settings::spec_reads_project(&project_dir),
                             &locations,
                         )
+                        // Its attached files, each on its own.
+                        .with_files(&compiled.files)
                     });
                     let protected = harness::Protected {
                         root: guard.as_ref().map(mode_guard::Guard::root),
@@ -7410,6 +6124,7 @@ impl PromptMode {
                         // with it.
                         model: compiled.model.clone(),
                         effort: compiled.effort.clone(),
+                        files: compiled.files.clone(),
                     };
                     // What it may change, the guard of a task running beside
                     // it keeps rather than putting back.
@@ -7943,6 +6658,11 @@ impl PromptMode {
                         _ => None,
                     },
                 };
+                // Its own steps over, a chain goes on to the steps added to
+                // it, each once the one before it finished as Done.
+                let added_next = (done && next.is_none() && !this.tasks[task_ix].held_for_fix)
+                    .then(|| this.next_added_step(task_ix))
+                    .flatten();
                 // Deferred: starting the next run replaces this task. Only this
                 // project's queues send, whichever project is on screen.
                 let prompt_mode = cx.entity();
@@ -7952,6 +6672,9 @@ impl PromptMode {
                         this.in_project(&dir, cx, |this, cx| {
                             if let Some((text, sending, chain_stamp)) = next {
                                 this.chain_on(text, sending, chain_stamp, cx);
+                            }
+                            if let Some((head, place)) = added_next {
+                                this.send_added_step(head, place, task_ix, cx);
                             }
                             this.auto_send_next(cx)
                         });
@@ -8069,10 +6792,12 @@ impl PromptMode {
                 mode: Some(SendMode::Ask),
                 attached_text: attached.text.clone(),
                 attached_images: attached.images.clone(),
+                attached_files: attached.files.clone(),
                 sliced,
                 code_task: None,
                 sent_from: None,
                 post_build_update: false,
+                added_step: None,
             };
         }
         // Questions run at once. One that starts while another carries on the
@@ -8201,7 +6926,7 @@ impl PromptMode {
                     let sent_system = system.await;
                     // The harness the question goes to, which its usage came
                     // from.
-                    let agent = crate::agent::current();
+                    let agent = crate::agent::of_project(Some(&project_dir));
                     log.record.sent_to(agent, sent_system.as_deref());
                     log.record.instructions = instructions;
                     log.record.resumed = resume.is_some();
@@ -8234,9 +6959,11 @@ impl PromptMode {
                             &crate::project_tree::Locations::read(&project_dir),
                             None,
                             crate::container::Platform::current(),
-                        )),
+                        )
+                        .with_files(&compiled.files)),
                         model: compiled.model.clone(),
                         effort: compiled.effort.clone(),
+                        files: compiled.files.clone(),
                         ..harness::Protected::default()
                     };
                     if let Some(phases) = &mut log.phases {
@@ -8613,9 +7340,6 @@ impl PromptMode {
     /// The header pinned above the output: the latest task, unless the
     /// history is expanded, where it is listed.
     fn render_header(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if self.task_history.expanded {
-            return None;
-        }
         let compact = self.render_compact_rows(cx);
         let full = self.render_latest_header(cx);
         match (compact, full) {
@@ -8817,6 +7541,7 @@ impl PromptMode {
                         })
                         .ok();
                     });
+                    let files_open = open.clone();
                     let prompt = self.header_prompt.element(
                         ix,
                         compiled,
@@ -8825,15 +7550,16 @@ impl PromptMode {
                         open,
                         cx,
                     );
-                    // Its images beneath it.
+                    // Its images and files beneath it.
                     v_flex()
                         .gap_2()
                         .child(prompt)
-                        .children(attached_image::prompt_thumbnails(
+                        .children(attached(
                             ("header-images", ix),
-                            &task.sent.attached_images,
+                            ("header-files", ix),
+                            &task.sent,
                             self.project_dir.as_deref(),
-                            attached_image::PROMPT_THUMBNAIL,
+                            Some(files_open),
                             cx,
                         ))
                         .into_any_element()
@@ -8882,389 +7608,39 @@ impl PromptMode {
         })
     }
 
-    /// The queue along the bottom of the message list, as an expanding list
-    /// with its controls. It only shows while something is queued.
-    fn render_queue(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let count = self.queue.len();
-        if count == 0 {
+    /// Whether the message list shows a task opened from the Tasks tab
+    /// that isn't the latest.
+    fn showing_other_than_latest(&self) -> bool {
+        self.tasks_tab.viewing && self.latest_ix() != self.true_latest_ix()
+    }
+
+    /// Above a task opened from the Tasks tab, while it isn't the latest, a
+    /// bar back to the latest task's output.
+    fn render_back_to_latest(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.showing_other_than_latest() {
             return None;
         }
         let theme = cx.theme();
-        let (border, muted, background) = (theme.border, theme.muted_foreground, theme.tab_bar);
-        let expanded = self.queue_expanded;
-        // A prompt waits for "Send next" once its lane is free.
-        let lane_free = self
-            .queue
-            .iter()
-            .any(|item| !self.working.overlaps(Lanes::of(item.mode)));
-        let next_ready = self.next_sendable().is_some();
-        let controls = {
-            h_flex()
-                .gap_3()
-                .px_4()
-                .py_1p5()
-                .child(
-                    Button::new("queue-toggle")
-                        .ghost()
-                        .small()
-                        .icon(if expanded {
-                            IconName::ChevronDown
-                        } else {
-                            IconName::ChevronRight
-                        })
-                        .label(format!("{count} queued"))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.queue_expanded = !this.queue_expanded;
-                            // Expanded or collapsed by hand, it stays so.
-                            this.queue_expanded_by_up = false;
-                            // It opens on the prompts queued last.
-                            if this.queue_expanded {
-                                this.queue_scroll.scroll_to_bottom();
-                            }
-                            cx.notify();
-                        })),
-                )
-                .child(div().flex_1())
-                .when(lane_free, |row| {
-                    row.child(
-                        Button::new("send-next")
-                            .primary()
-                            .small()
-                            .label("Send next")
-                            .disabled(!next_ready)
-                            .on_click(cx.listener(|this, _, _, cx| this.send_next_clicked(cx))),
-                    )
-                })
-                .child(
-                    Switch::new("auto-send")
-                        .label("Send next automatically")
-                        .checked(self.auto_send)
-                        .on_click(cx.listener(|this, auto_send: &bool, _, cx| {
-                            this.set_auto_send(*auto_send, cx)
-                        })),
-                )
-        };
-
-        // Where each prompt is and whether it is saved, for telling where a
-        // dragged prompt may be dropped: it moves only past saved prompts.
-        let saved: Rc<Vec<(usize, bool)>> = Rc::new(
-            self.queue
-                .iter()
-                .map(|item| (item.id, item.saved.is_some()))
-                .collect(),
-        );
-        let droppable = |saved: &[(usize, bool)], dragged: usize, to: usize| {
-            saved
-                .iter()
-                .position(|&(id, _)| id == dragged)
-                .is_some_and(|from| {
-                    from != to && saved[from.min(to)..=from.max(to)].iter().all(|&(_, ok)| ok)
-                })
-        };
-        // While a prompt is dragged: which, and the gap it would land in,
-        // shown as a line there; nothing once no drag is under way.
-        if !cx.has_active_drag() {
-            self.queue_gap.set(None);
-        }
-        let (dragging, gap) = match self.queue_gap.get() {
-            Some((id, gap)) => (Some(id), gap),
-            None => (None, None),
-        };
-        let queue_len = count;
-        // Scrolled near its edges while a prompt is dragged, the gap shown
-        // chosen anew each frame from the prompts now under the pointer.
-        let drag_scroll = expanded.then(|| {
-            let (queue_gap, saved) = (self.queue_gap.clone(), saved.clone());
-            self.queue_drag_scroll.driver(
-                &self.queue_scroll,
-                true,
-                QUEUED_ROW_HEIGHT,
-                cx.entity_id(),
-                move |at, area, item| {
-                    let Some((dragged, shown)) = queue_gap.get() else {
-                        return false;
-                    };
-                    let from = saved.iter().position(|&(id, _)| id == dragged);
-                    let gap = area
-                        .contains(&at)
-                        .then(|| (0..queue_len).find_map(|ix| drag_gap(ix, item(ix)?, at, true)))
-                        .flatten()
-                        .filter(|&gap| {
-                            from.and_then(|from| gap_target(from, gap))
-                                .is_some_and(|to| droppable(&saved, dragged, to))
-                        });
-                    queue_gap.set(Some((dragged, gap)));
-                    gap != shown
-                },
-            )
-        });
-        let list = expanded.then(|| {
-            let (queue_gap, drag_scroll) = (self.queue_gap.clone(), self.queue_drag_scroll.clone());
-            v_flex()
-                .id("queue-list")
-                // Off the list, no gap is shown.
-                .on_drag_move(move |event: &DragMoveEvent<QueuedDrag>, window, cx| {
-                    drag_scroll.follow(event.event.position);
-                    if !event.bounds.contains(&event.event.position)
-                        && let Some((id, Some(_))) = queue_gap.get()
-                    {
-                        queue_gap.set(Some((id, None)));
-                        window.refresh();
-                        let _ = cx;
-                    }
-                })
-                .max_h(MAX_QUEUE_HEIGHT)
-                .overflow_y_scroll()
-                .track_scroll(&self.queue_scroll)
-                .px_4()
-                .pb_2()
-                .children(self.queue.iter().enumerate().map(|(ix, item)| {
-                    let id = item.id;
-                    let editing = self.editing_queued == Some(id);
-                    // Prompts sharing a context are joined by a line between
-                    // their switches: one that carries on joins the one
-                    // above it, the first never does.
-                    let joins_above = ix > 0 && !item.new_conversation;
-                    let joins_below = self.queue.get(ix + 1).is_some_and(|next| !next.new_conversation);
-                    let segment = |joined: bool| {
-                        div()
-                            .flex_1()
-                            .w(px(1.))
-                            .when(joined, |line| line.bg(border))
-                    };
-                    // As tall as the row, so the line meets the next row's
-                    // across the gap between them. A press on it never edits
-                    // the prompt.
-                    let new_conversation = v_flex()
-                        .id(("new-conversation-queued-box", ix))
-                        .flex_none()
-                        .self_stretch()
-                        .items_center()
-                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                        .child(segment(joins_above))
-                        .child(
-                            Switch::new(("new-conversation-queued", ix))
-                                .xsmall()
-                                .checked(item.new_conversation)
-                                .tooltip(if item.new_conversation {
-                                    "Starts a new conversation; click to carry on the conversation instead"
-                                } else {
-                                    "Carries on the conversation; click to start a new one instead"
-                                })
-                                .on_click(cx.listener(move |this, _: &bool, _, cx| {
-                                    this.toggle_queued_new_conversation(id, cx)
-                                })),
-                        )
-                        .child(segment(joins_below));
-                    let tip = queued_tooltip(&item.text);
-                    let row = h_flex()
-                        .id(("queued-prompt", ix))
-                        .h(QUEUED_ROW_HEIGHT)
-                        .gap_2()
-                        .relative()
-                        .tooltip(move |window, cx| {
-                            gpui_kit::component::tooltip::Tooltip::new(tip.clone()).build(window, cx)
-                        })
-                        // Clicked anywhere but its grip, switch, and buttons,
-                        // it is edited, as its pencil button does.
-                        .when(item.saved.is_some(), |row| {
-                            row.cursor_pointer().on_click(cx.listener(move |this, _, window, cx| {
-                                this.edit_queued(id, window, cx)
-                            }))
-                        })
-                        .when(editing, |row| row.bg(theme.list_active))
-                        // The one dragged stays in its place, dimmed.
-                        .when(dragging == Some(id), |row| row.opacity(0.5))
-                        // Over its first half, the gap before it; over its
-                        // second, the one after, where the prompt may go.
-                        .on_drag_move({
-                            let (queue_gap, saved) = (self.queue_gap.clone(), saved.clone());
-                            move |event: &DragMoveEvent<QueuedDrag>, window, cx| {
-                                let Some(at) =
-                                    drag_gap(ix, event.bounds, event.event.position, true)
-                                else {
-                                    return;
-                                };
-                                let dragged = event.drag(cx).id;
-                                let from = saved.iter().position(|&(id, _)| id == dragged);
-                                let gap = from
-                                    .and_then(|from| gap_target(from, at))
-                                    .filter(|&to| droppable(&saved, dragged, to))
-                                    .map(|_| at);
-                                if queue_gap.get() != Some((dragged, gap)) {
-                                    queue_gap.set(Some((dragged, gap)));
-                                    window.refresh();
-                                }
-                            }
-                        })
-                        .on_drop(cx.listener(move |this, drag: &QueuedDrag, window, cx| {
-                            let gap = this.queue_gap.take().and_then(|(_, gap)| gap);
-                            let from = this.queue.iter().position(|item| item.id == drag.id);
-                            if let Some(to) = from.zip(gap).and_then(|(from, gap)| gap_target(from, gap)) {
-                                this.move_queued(drag.id, to, window, cx);
-                            }
-                            cx.notify();
-                        }))
-                        .when(gap == Some(ix), |row| row.child(drop_indicator(false, false, cx)))
-                        .when(ix + 1 == queue_len && gap == Some(queue_len), |row| {
-                            row.child(drop_indicator(false, true, cx))
-                        })
-                        // Dragged by its grip, which never edits it.
-                        .child(
-                            div()
-                                .id(("queued-grip-box", ix))
-                                .flex_none()
-                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                                .child(
-                                    // Lets UI tests find the grip; inert in
-                                    // normal builds.
-                                    gpui_kit::TestSupportExt::test_support(div().id(("queued-grip", ix)))
-                                        .when(item.saved.is_some(), |grip| {
-                                            let queue_gap = self.queue_gap.clone();
-                                            grip.cursor_grab().on_drag(
-                                                QueuedDrag {
-                                                    id,
-                                                    text: first_line(&item.text),
-                                                },
-                                                move |drag, _, _, cx| {
-                                                    queue_gap.set(Some((drag.id, None)));
-                                                    cx.new(|_| drag.clone())
-                                                },
-                                            )
-                                        })
-                                        .child(
-                                            Icon::new(IconName::GripVertical)
-                                                .xsmall()
-                                                .text_color(if item.saved.is_some() {
-                                                    muted
-                                                } else {
-                                                    transparent_black()
-                                                }),
-                                        ),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex_none()
-                                .min_w_6()
-                                .text_color(muted)
-                                .child(format!("{}.", ix + 1)),
-                        )
-                        // Which lane it waits for, in its mode's colour.
-                        .children(self.queued_label(item).map(|(label, mode)| {
-                            div()
-                                .id(("queued-lane", ix))
-                                .flex_none()
-                                .text_sm()
-                                .font_semibold()
-                                .text_color(chat_input::mode_color(mode, cx))
-                                .child(label)
-                        }))
-                        // Its first line only, cut off where it doesn't fit.
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .text_sm()
-                                .truncate()
-                                .child(first_line(&item.text)),
-                        )
-                        // How many images it has, never the images.
-                        .when(!item.images.is_empty(), |row| {
-                            // Lets UI tests find it; inert in normal builds.
-                            row.child(
-                                gpui_kit::TestSupportExt::test_support(
-                                    h_flex().id(("queued-images", ix)),
-                                )
-                                    .flex_none()
-                                    .gap_1()
-                                    .text_xs()
-                                    .text_color(muted)
-                                    .child(Icon::new(IconName::Image).xsmall().text_color(muted))
-                                    .child(item.images.len().to_string()),
-                            )
-                        })
-                        .when(item.saved.is_none(), |row| {
-                            row.child(div().flex_none().child(Spinner::new().small()))
-                        })
-                        .child(new_conversation)
-                        .child(
-                            h_flex()
-                                .id(("queued-buttons", ix))
-                                .flex_none()
-                                .gap_2()
-                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                                .child(
-                            Button::new(("edit-queued", ix))
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::Pencil)
-                                .tooltip("Edit this prompt")
-                                .selected(editing)
-                                .disabled(item.saved.is_none())
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.edit_queued(id, window, cx)
-                                })),
-                        )
-                        .child(
-                            Button::new(("cancel-queued", ix))
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::X)
-                                .tooltip("Cancel this prompt")
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.cancel(id, window, cx)
-                                })),
-                                ),
-                        );
-                    // Lets UI tests find the row; inert in normal builds.
-                    gpui_kit::TestSupportExt::test_support(row)
-                }))
-        });
-
         Some(
-            v_flex()
+            h_flex()
                 .flex_none()
-                .bg(background)
-                .border_t_1()
-                .border_color(border)
-                .child(controls)
-                .children(list.map(|list| {
-                    scrollbar::with_scrollbar(
-                        "queue-list",
-                        &self.queue_scroll,
-                        // Lets UI tests find the list; inert in normal builds.
-                        gpui_kit::TestSupportExt::test_support(list),
-                        false,
-                        None,
-                        cx,
-                    )
-                }))
-                .children(drag_scroll)
+                .w_full()
+                .px_2()
+                .py_0p5()
+                .bg(theme.tab_bar)
+                .border_b_1()
+                .border_color(theme.border)
+                .child(
+                    Button::new("back-to-latest")
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::ArrowLeft)
+                        .label("Back to the latest task")
+                        .tooltip("Show the latest task's output again (Esc)")
+                        .on_click(cx.listener(|this, _, _, cx| this.back_to_latest(cx))),
+                )
                 .into_any_element(),
         )
-    }
-
-    /// The previous tasks, expanded in place of the latest task.
-    fn render_task_list(&self, cx: &mut Context<Self>) -> AnyElement {
-        let open_file = self.file_opener(cx);
-        let list = self.task_history.render_list(
-            &self.tasks,
-            |this| &this.tasks,
-            |this| &mut this.tasks,
-            |this| &mut this.task_history,
-            &self.steps_shown,
-            &open_file,
-            self.task_visibility(),
-            self.latest_ix(),
-            cx,
-        );
-        // The filters stay put above the list as it scrolls.
-        v_flex()
-            .size_full()
-            .child(self.render_task_filters(cx))
-            .child(div().flex_1().min_h_0().child(list))
-            .into_any_element()
     }
 
     /// Whether `task` matches the filter chip `filter`.
@@ -9327,127 +7703,182 @@ impl PromptMode {
         cx.notify();
     }
 
+    /// A task open in the Tasks tab that the filters now hide closes.
     fn close_filtered_out(&mut self) {
-        if let (Some(open), Some(visible)) = (self.task_history.open, self.task_visibility())
+        if let (Some(tasks_tab::Opened::Task(open)), Some(visible)) =
+            (self.tasks_tab.open, self.task_visibility())
             && visible.get(open) == Some(&false)
         {
-            self.task_history.open = None;
+            self.tasks_tab.open = None;
         }
     }
 
-    /// The filter bar along the top of the expanded previous tasks: a chip
-    /// for each mode, then for where a task stands with the other mode,
-    /// each counting the tasks it would show, and Clear while any is on.
-    fn render_task_filters(&self, cx: &mut Context<Self>) -> AnyElement {
-        let theme = cx.theme();
-        let (muted, border, bar, accent) = (
-            theme.muted_foreground,
-            theme.border,
-            theme.tab_bar,
-            theme.accent,
-        );
-        let chips = TaskFilter::ALL.iter().enumerate().map(|(ix, &filter)| {
-            let on = self.task_history.filters.contains(&filter);
-            let count = self.filter_count(filter);
-            let color = match filter {
-                TaskFilter::Mode(mode) => chat_input::mode_color(mode, cx),
-                _ => accent,
-            };
-            // Lets UI tests find the chip; inert in normal builds.
-            gpui_kit::TestSupportExt::test_support(h_flex().id(("task-filter", ix)))
-                .flex_none()
-                .gap_1()
-                .px_2()
-                .py_0p5()
-                .rounded_md()
-                .border_1()
-                .text_xs()
-                .cursor_pointer()
-                .border_color(if on { color } else { border })
-                .when(on, |chip| chip.bg(color.opacity(0.18)))
-                .hover(|chip| chip.bg(theme.list_hover))
-                // A gap between the two groups.
-                .when(ix == 4, |chip| chip.ml_3())
-                .child(filter.label())
-                .child(div().text_color(muted).child(count.to_string()))
-                .on_click(cx.listener(move |this, _, _, cx| this.toggle_task_filter(filter, cx)))
-        });
-        // Lets UI tests find the bar; inert in normal builds.
-        gpui_kit::TestSupportExt::test_support(h_flex().id("task-filters"))
-            .flex_none()
-            .w_full()
-            .flex_wrap()
-            .gap_1()
-            .px_3()
-            .py_1p5()
-            .bg(bar)
-            .border_b_1()
-            .border_color(border)
-            .children(chips)
-            .when(!self.task_history.filters.is_empty(), |row| {
-                row.child(
-                    div().ml_auto().child(
-                        Button::new("clear-task-filters")
-                            .ghost()
-                            .xsmall()
-                            .label("Clear")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.task_history.filters.clear();
-                                cx.notify();
-                            })),
-                    ),
-                )
+    /// The previous tasks' filters' button: "Filter", or how many filters
+    /// are on, in the accent, opening their menu beneath it.
+    fn render_filter_button(&self, cx: &mut Context<Self>) -> AnyElement {
+        let on = self.task_history.filters.len();
+        let accent = cx.theme().accent;
+        let bounds = self.tasks_tab.filter_button.clone();
+        let button = Button::new("task-filter-button")
+            .ghost()
+            .xsmall()
+            .icon(IconName::Funnel)
+            .label(if on == 0 {
+                "Filter".to_string()
+            } else {
+                format!("Filter · {on}")
             })
+            .when(on > 0, |button| button.text_color(accent))
+            .on_click(cx.listener(|this, _, window, cx| {
+                this.tasks_tab.filter_menu = !this.tasks_tab.filter_menu;
+                // Escape reaches the tab, closing the menu.
+                this.tasks_tab.focus.focus(window, cx);
+                cx.notify();
+            }));
+        // Lets UI tests find the button; inert in normal builds.
+        gpui_kit::TestSupportExt::test_support(div().id("task-filters"))
+            .flex_none()
+            .on_prepaint(move |drawn, _, _| bounds.set(Some(drawn)))
+            .child(button)
             .into_any_element()
     }
 
-    /// A scroll's crossing over as it slides: the previous tasks stacked
-    /// above the latest task's header and output, one column as tall as two
-    /// of the space they share, moving down to bring the previous tasks in,
-    /// or up to bring the latest task back, clipped to that space.
-    fn render_scroll_slide(
-        &self,
-        slide: &ScrollSlide,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let height = self.slide_height.get();
-        // From wherever the stretch had pulled the view.
-        let (from, to) = if slide.up {
-            (-height + slide.pull, px(0.))
-        } else {
-            (slide.pull, -height)
+    /// The filters' menu, while open: beneath its button, one column no
+    /// wider than the sidebar, a "Mode" and an "Other mode" section of
+    /// options, each with its checkbox and how many previous tasks it
+    /// matches, and "Clear filters" at its foot while any is on. It stays
+    /// open while options are checked; a click outside it closes it.
+    fn render_filter_menu(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.tasks_tab.filter_menu {
+            return None;
+        }
+        let anchor = self.tasks_tab.filter_button.get()?;
+        let theme = cx.theme();
+        let (muted, border, hover, raised) = (
+            theme.muted_foreground,
+            theme.border,
+            theme.list_hover,
+            crate::theme::color(crate::theme::palette(cx).raised),
+        );
+        let heading = |label: &'static str| {
+            div()
+                .px_2()
+                .pt_1p5()
+                .pb_0p5()
+                .text_xs()
+                .text_color(muted)
+                .child(label)
         };
-        let spring = SpringAnimation::new(PANE_SPRING).to(to).from(from);
-        let column = v_flex()
-            .absolute()
-            .left_0()
-            .right_0()
-            .h(height * 2.)
-            .child(
-                v_flex()
-                    .h(height)
-                    .flex_none()
-                    .child(self.render_task_list(cx)),
+        let option = |ix: usize, filter: TaskFilter, cx: &mut Context<Self>| {
+            let on = self.task_history.filters.contains(&filter);
+            let count = self.filter_count(filter);
+            let dot = match filter {
+                TaskFilter::Mode(mode) => Some(
+                    div()
+                        .flex_none()
+                        .size(px(6.))
+                        .rounded_full()
+                        .bg(chat_input::mode_color(mode, cx)),
+                ),
+                _ => None,
+            };
+            // Lets UI tests find and click the option; inert in normal builds.
+            gpui_kit::TestSupportExt::test_support(h_flex().id(("task-filter", ix)))
+                .gap_2()
+                .px_2()
+                .py_1()
+                .rounded_sm()
+                .text_sm()
+                .cursor_pointer()
+                .hover(|row| row.bg(hover))
+                .child(Checkbox::new(("task-filter-check", ix)).checked(on))
+                .children(dot)
+                .child(div().flex_1().min_w_0().truncate().child(filter.label()))
+                .child(div().flex_none().text_color(muted).child(count.to_string()))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.toggle_task_filter(filter, cx);
+                }))
+                .into_any_element()
+        };
+        let modes: Vec<AnyElement> = TaskFilter::ALL
+            .iter()
+            .enumerate()
+            .filter(|(_, filter)| filter.is_mode())
+            .map(|(ix, &filter)| option(ix, filter, cx))
+            .collect();
+        let others: Vec<AnyElement> = TaskFilter::ALL
+            .iter()
+            .enumerate()
+            .filter(|(_, filter)| !filter.is_mode())
+            .map(|(ix, &filter)| option(ix, filter, cx))
+            .collect();
+        let clear = (!self.task_history.filters.is_empty()).then(|| {
+            // Lets UI tests find and click it; inert in normal builds.
+            gpui_kit::TestSupportExt::test_support(div().id("clear-task-filters"))
+                .mt_1()
+                .px_2()
+                .py_1()
+                .border_t_1()
+                .border_color(border)
+                .text_sm()
+                .cursor_pointer()
+                .hover(|row| row.bg(hover))
+                .child("Clear filters")
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.task_history.filters.clear();
+                    cx.notify();
+                }))
+        });
+        let width = self.refs_width.get();
+        let menu = cx.entity().downgrade();
+        let menu_content = v_flex()
+            .child(heading("Mode"))
+            .children(modes)
+            .child(heading("Other mode"))
+            .children(others)
+            .children(clear)
+            .into_any_element();
+        // Lets UI tests find the menu; inert in normal builds.
+        let menu = gpui_kit::TestSupportExt::test_support(div().id("task-filter-menu"))
+            .occlude()
+            .max_w(width)
+            .min_w(px(180.).min(width))
+            .p_1()
+            .bg(raised)
+            .border_1()
+            .border_color(border)
+            .rounded(px(4.))
+            .shadow_md()
+            .child(menu_content)
+            .on_mouse_down_out(move |event, _, cx| {
+                // A click on its button toggles it itself.
+                menu.update(cx, |this, cx| {
+                    let on_button = this
+                        .tasks_tab
+                        .filter_button
+                        .get()
+                        .is_some_and(|button| button.contains(&event.position));
+                    if !on_button {
+                        this.tasks_tab.filter_menu = false;
+                        cx.notify();
+                    }
+                })
+                .ok();
+            });
+        // Beneath the button, its right edge at the button's, kept inside
+        // the window.
+        Some(
+            deferred(
+                anchored()
+                    .anchor(Anchor::TopRight)
+                    .position(point(anchor.right(), anchor.bottom() + px(2.)))
+                    .snap_to_window_with_margin(px(8.))
+                    .child(menu),
             )
-            .child(
-                v_flex()
-                    .h(height)
-                    .flex_none()
-                    .children(self.render_latest_header(cx))
-                    .child(v_flex().flex_1().min_h_0().child(self.render_output(cx))),
-            )
-            .with_spring(("scroll-slide", slide.n), spring, |this, top| this.top(top));
-        // Lets UI tests find the slide; inert in normal builds.
-        gpui_kit::TestSupportExt::test_support(div().id(("scroll-slide-view", slide.n)))
-            .relative()
-            .flex_1()
-            .min_h_0()
-            .overflow_hidden()
-            .child(column)
-            .children(self.render_scroll_glow(window, cx))
-            .child(self.scroll_past_ends(cx))
-            .into_any_element()
+            .with_priority(1)
+            .into_any_element(),
+        )
     }
 
     /// The latest task's output, filling the space under the header.
@@ -9742,17 +8173,6 @@ impl Render for PromptMode {
             "Open a project to start prompting."
         };
 
-        // While any filter is on, the row says how many tasks show: the
-        // previous tasks shown, those the header shows not among them.
-        let header = self.header_ixs();
-        self.task_history.shown.set(self.task_visibility().map(|visible| {
-            visible
-                .iter()
-                .enumerate()
-                .filter(|(ix, shows)| **shows && !header.contains(ix))
-                .count()
-        }));
-        let previous_count = self.tasks.len() - header.len();
         let content = if self.tasks.is_empty() {
             // The hint may shrink below one line, so it wraps in a narrow view
             // instead of running past its edges.
@@ -9770,65 +8190,34 @@ impl Render for PromptMode {
                 // Lets UI tests find the hint; inert in normal builds.
                 .child(gpui_kit::TestSupportExt::test_support(hint))
                 .into_any_element()
-        } else if let Some(slide) = self
-            .scroll_slide
-            .as_ref()
-            .filter(|_| self.scroll_sliding() && self.slide_height.get() > px(0.))
-        {
-            window.request_animation_frame();
-            self.render_scroll_slide(slide, window, cx)
         } else {
-            let view = if self.task_history.expanded {
-                self.render_task_list(cx)
-            } else {
-                self.render_output(cx)
-            };
-            // Pulled past its end by the stretch, the header and the view
-            // together, leaving an empty band, clipped to the space.
-            let pull = self.scroll_push.get().pull(scroll_now());
+            // The header and the selected task's output, and nothing past
+            // either end of it: the previous tasks are in the sidebar.
             v_flex()
                 .relative()
                 .flex_1()
                 .min_h_0()
                 .overflow_hidden()
-                .child(
-                    v_flex()
-                        .relative()
-                        .top(pull)
-                        .flex_1()
-                        .min_h_0()
-                        .children(self.render_header(cx))
-                        .child(v_flex().relative().flex_1().min_h_0().child(view)),
-                )
-                .children(self.render_scroll_glow(window, cx))
-                .child(self.scroll_past_ends(cx))
+                .children(self.render_back_to_latest(cx))
+                .children(self.render_header(cx))
+                .child(v_flex().relative().flex_1().min_h_0().child(self.render_output(cx)))
                 .into_any_element()
         };
-        // Measured each frame, for a scroll's slide to move across.
-        let content = div()
-            .flex_1()
-            .min_h_0()
-            .flex()
-            .flex_col()
-            .on_prepaint({
-                let slide_height = self.slide_height.clone();
-                move |bounds, _, _| slide_height.set(bounds.size.height)
-            })
-            .child(content);
+        let content = div().flex_1().min_h_0().flex().flex_col().child(content);
 
         let history = v_flex()
             .id("history")
             .size_full()
-            .child(self.task_history.render_row(
-                // The tasks the header shows aren't counted.
-                previous_count,
-                !self.tasks.is_empty(),
-                |this| &mut this.task_history,
-                self.render_selection_actions(cx),
-                cx,
-            ))
-            .child(content)
-            .children(self.render_queue(cx));
+            // Esc in the message list goes back to the latest task, as its
+            // bar does.
+            .on_action(cx.listener(|this, _: &crate::main_window::Dismiss, _, cx| {
+                if this.showing_other_than_latest() {
+                    this.back_to_latest(cx);
+                } else {
+                    cx.propagate();
+                }
+            }))
+            .child(content);
         // Lets UI tests find the history; inert in normal builds.
         let history = gpui_kit::TestSupportExt::test_support(history);
         let history = div().relative().size_full().child(history);
@@ -9941,8 +8330,9 @@ fn resolve_anchor(
     anchor.mode = Some(mode);
     anchor.sliced = sliced;
     // The model and effort chosen as it is sent or queued, which it keeps.
-    anchor.model = crate::models::chosen(crate::agent::current());
-    anchor.effort = crate::effort::chosen(crate::agent::current());
+    let agent = crate::agent::of_project(Some(project_dir));
+    anchor.model = crate::models::chosen(agent);
+    anchor.effort = crate::effort::chosen(agent);
     anchor.attach(attached);
     // A Code task sent to Spec is also told what the code task did, and a
     // chain's code step what its spec step did; in any other mode, the task
@@ -10021,7 +8411,7 @@ impl PromptMode {
             }
             task_table::RunAction::LogIn => {
                 crate::login_view::LoginView::open(
-                    crate::agent::current(),
+                    crate::agent::of_project(Some(&project_dir)),
                     project_dir,
                     window,
                     cx,
@@ -10591,8 +8981,9 @@ fn task_prompt(
                     Some(open),
                     cx,
                 ))
-                // Its images beneath the prompt as typed, then its slices.
-                .children(task_images(ix, task, cx))
+                // Its images and files beneath the prompt as typed, then its
+                // slices.
+                .children(task_images(ix, task, Some(open.clone()), cx))
                 .children(slices);
             // Lets UI tests find the compiled prompt; inert in normal builds.
             gpui_kit::TestSupportExt::test_support(prompt).into_any_element()
@@ -10601,61 +8992,48 @@ fn task_prompt(
             .min_w_0()
             .text_color(cx.theme().muted_foreground)
             .child(task.text.clone())
-            .children(task_images(ix, task, cx))
+            .children(task_images(ix, task, Some(open.clone()), cx))
             .into_any_element(),
     }
 }
 
-/// The images attached to task `ix`, as thumbnails beneath its prompt.
-fn task_images(ix: usize, task: &PromptTask, cx: &App) -> Option<AnyElement> {
+/// The images attached to task `ix`, as thumbnails beneath its prompt, and
+/// its other files listed beneath them, each opened by `open` where it can
+/// be shown in the editor.
+fn task_images(ix: usize, task: &PromptTask, open: Option<OpenFile>, cx: &App) -> Option<AnyElement> {
     let project_dir = ProjectDirectory::get(cx);
-    attached_image::prompt_thumbnails(
+    attached(
         ("prompt-images", ix),
-        &task.sent.attached_images,
+        ("prompt-files", ix),
+        &task.sent,
         project_dir.as_deref(),
-        attached_image::PROMPT_THUMBNAIL,
+        open,
         cx,
     )
     .map(|row| div().pt_2().child(row).into_any_element())
 }
 
-/// A task in the expanded list, on one line: its title, then the start of its
-/// prompt as typed.
-fn task_summary(id: (&'static str, usize), ix: usize, task: &PromptTask, cx: &App) -> AnyElement {
-    let summary = h_flex()
-        .id(id)
-        .flex_1()
-        .min_w_0()
-        .gap_3()
-        .child(div().flex_none().child(task_title(ix, task, false, false, cx)))
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .child(first_line(&task.text)),
-        );
-    // Lets UI tests find the task; inert in normal builds.
-    gpui_kit::TestSupportExt::test_support(summary).into_any_element()
-}
-
-/// The steps of prompt mode's table for `task_ix`, which a click shows or
-/// hides.
-fn steps(task_ix: usize, shown: &HashSet<usize>, entity: &Entity<PromptMode>) -> Steps {
-    let this = entity.downgrade();
-    let shown = shown.contains(&task_ix);
-    Steps {
-        shown,
-        toggle: Rc::new(move |_, cx| {
-            this.update(cx, |this, cx| {
-                if !this.steps_shown.remove(&task_ix) {
-                    this.steps_shown.insert(task_ix);
-                }
-                cx.notify();
-            })
-            .ok();
-        }),
-    }
+/// The images `sent` was attached, as thumbnails, and its other files
+/// beneath them, each opened by `open` where it can be shown in the editor;
+/// none without any.
+fn attached(
+    images_id: impl Into<ElementId>,
+    files_id: impl Into<ElementId>,
+    sent: &SentAs,
+    project_dir: Option<&Path>,
+    open: Option<OpenFile>,
+    cx: &App,
+) -> Option<AnyElement> {
+    let images = attached_image::prompt_thumbnails(
+        images_id,
+        &sent.attached_images,
+        project_dir,
+        attached_image::PROMPT_THUMBNAIL,
+        cx,
+    );
+    let files = attached_file::prompt_files(files_id, &sent.attached_files, project_dir, open, cx);
+    (images.is_some() || files.is_some())
+        .then(|| v_flex().gap_2().children(images).children(files).into_any_element())
 }
 
 /// A reply's latest row, the thing the harness is doing now, as the only row
@@ -10782,6 +9160,25 @@ fn latest_row(id: usize, reply: &Reply, cx: &App) -> AnyElement {
 
 #[cfg(test)]
 mod tests {
+    /// Shows the right sidebar on its Tasks tab, as opening it by hand
+    /// does.
+    fn show_tasks(this: &mut super::PromptMode) {
+        this.sidebar_by_hand = true;
+        this.sidebar_tab = super::SidebarTab::Tasks;
+        this.tasks_picked = true;
+        // Already out, sliding nothing in.
+        this.refs_shown = true;
+        this.refs_opened = None;
+        this.refs_closing = None;
+    }
+
+    /// Shows the Tasks tab, as [`show_tasks`] does, with the Previous group
+    /// expanded.
+    fn show_previous_tasks(this: &mut super::PromptMode) {
+        show_tasks(this);
+        this.tasks_tab.previous_expanded = true;
+    }
+
     // Explicit imports: globbing `gpui_kit::*` would bring in GPUI's `test`
     // macro and shadow Rust's `#[test]`.
     use std::time::Duration;
@@ -10815,12 +9212,57 @@ mod tests {
         id: (&'static str, usize),
         cx: &mut TestAppContext,
     ) -> Option<String> {
+        reveal_button(handle, id, cx);
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             let button = window.try_find(id)?;
             Some(button.label().expect("the button has a label").to_string())
         })
         .unwrap()
+    }
+
+    thread_local! {
+        /// The prompt mode this test opened.
+        static OPENED: std::cell::RefCell<Option<gpui_kit::WeakEntity<PromptMode>>> =
+            const { std::cell::RefCell::new(None) };
+    }
+
+    /// Brings the button `id` into view: a previous task's, in its details
+    /// open in the Tasks tab; the latest task's, in the message list.
+    fn reveal_button(handle: AnyWindowHandle, id: (&'static str, usize), cx: &mut TestAppContext) {
+        let Some(prompt_mode) = OPENED.with_borrow(Clone::clone).and_then(|weak| weak.upgrade()) else {
+            return;
+        };
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                if id.0.ends_with("-previous") {
+                    show_tasks(this);
+                    if this.tasks_tab.open != Some(super::tasks_tab::Opened::Task(id.1)) {
+                        this.open_in_tab(super::tasks_tab::Opened::Task(id.1), window, cx);
+                    }
+                } else if id.0.ends_with("-latest") && this.tasks_tab.viewing {
+                    this.close_task_in_tab(window, cx);
+                    this.back_to_latest(cx);
+                }
+            })
+        })
+        .unwrap();
+    }
+
+    /// Goes back from a task open in the Tasks tab to its timeline, where
+    /// the batch actions are.
+    fn show_timeline(handle: AnyWindowHandle, cx: &mut TestAppContext) {
+        let Some(prompt_mode) = OPENED.with_borrow(Clone::clone).and_then(|weak| weak.upgrade()) else {
+            return;
+        };
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                if this.tasks_tab.open.is_some() {
+                    this.close_task_in_tab(window, cx);
+                }
+            })
+        })
+        .unwrap();
     }
 
     /// Opens prompt mode in a window.
@@ -10836,6 +9278,7 @@ mod tests {
             prompt_mode = Some(view.clone());
             Root::new(view, window, cx)
         });
+        OPENED.set(prompt_mode.as_ref().map(Entity::downgrade));
         (prompt_mode.unwrap(), window.into())
     }
 
@@ -10883,12 +9326,12 @@ mod tests {
                 .unwrap();
         };
         settle(cx);
-        // With nothing to show yet, it stays in.
-        cx.update_window(handle, |_, window, _| {
-            assert!(window.try_find("referenced-files").is_none());
-        })
-        .unwrap();
-        prompt_mode.read_with(cx, |this, _| assert!(!this.refs_shown));
+        // With a task running, it is out, on Run, before there is anything
+        // to show.
+        prompt_mode.read_with(cx, |this, _| {
+            assert!(this.refs_shown);
+            assert_eq!(this.sidebar_shown_tab(), super::SidebarTab::Run);
+        });
 
         std::fs::create_dir_all(file.parent().unwrap()).unwrap();
         std::fs::write(
@@ -11567,6 +10010,9 @@ mod tests {
 
         // Once the run is over, it slides back and is gone.
         prompt_mode.update(cx, |this, cx| {
+            for task in &mut this.tasks {
+                task.status = TaskStatus::Done;
+            }
             this.set_working(false);
             cx.notify();
         });
@@ -12228,459 +10674,6 @@ mod tests {
         ));
     }
 
-    /// The stretch gives nearly all of a scroll at first, less the further
-    /// it goes, and reaches its most only as the build-up nears the barrier.
-    #[test]
-    fn the_stretch_stiffens_up_to_the_barrier() {
-        use super::{SCROLL_BARRIER, STRETCH_PULL, ScrollPush};
-        let now = std::time::Instant::now();
-        let pull = |amount: f32| {
-            f32::from(
-                ScrollPush {
-                    up: true,
-                    amount,
-                    at: now,
-                }
-                .pull(now),
-            )
-        };
-        assert!(pull(5.) > 4.5, "it resists from the start");
-        // Still giving, however far it has gone, up to the barrier.
-        assert!(pull(SCROLL_BARRIER * 0.5) + 1. < pull(SCROLL_BARRIER * 0.75));
-        assert!(pull(SCROLL_BARRIER * 0.75) < STRETCH_PULL - 0.5);
-        assert!(pull(SCROLL_BARRIER) >= STRETCH_PULL - 0.5);
-        assert!(pull(SCROLL_BARRIER * 2.) <= STRETCH_PULL);
-    }
-
-    /// A task from the history replays its recorded output into the task it
-    /// was; one with no record is shown as not recorded, with nothing pending.
-    /// A wheel scroll up from the top of the latest task's output pulls it
-    /// into the stretch there, with no pause, and past the barrier expands
-    /// the previous tasks, and a scroll down from their bottom brings the
-    /// latest task back; a fling's momentum, a scroll carried on from a
-    /// slide, or a sideways one never crosses over.
-    #[gpui_kit::test]
-    async fn scrolling_past_an_end_crosses_over(cx: &mut TestAppContext) {
-        // The scrolls go by a clock of the test's own, so however slow the
-        // machine, a gesture is never broken up by the time between steps.
-        super::freeze_clock();
-        use super::SCROLL_REST;
-        use gpui_kit::{ScrollDelta, ScrollWheelEvent, point, px};
-        let (prompt_mode, handle) = open(cx);
-        prompt_mode.update(cx, |this, cx| {
-            for text in ["first", "second"] {
-                let ix = this.push_task(text.into(), cx);
-                this.tasks[ix].status = TaskStatus::Done;
-            }
-            cx.notify();
-        });
-        let wheel_in = |cx: &mut TestAppContext, x: f32, y: f32, touch_phase| {
-            let at = cx
-                .update_window(handle, |_, window, cx| {
-                    window.render_frame(cx);
-                    window.viewport_size()
-                })
-                .unwrap();
-            let mut visual = gpui_kit::VisualTestContext::from_window(handle, cx);
-            visual.simulate_event(ScrollWheelEvent {
-                position: point(at.width / 2., at.height / 3.),
-                delta: ScrollDelta::Pixels(point(px(x), px(y))),
-                touch_phase,
-                ..Default::default()
-            });
-            cx.run_until_parked();
-        };
-        let wheel = |cx: &mut TestAppContext, x: f32, y: f32| {
-            wheel_in(cx, x, y, gpui_kit::TouchPhase::Moved)
-        };
-        let header_top = |cx: &mut TestAppContext| {
-            cx.update_window(handle, |_, window, cx| {
-                window.render_frame(cx);
-                window.find("task-header").bounds().top()
-            })
-            .unwrap()
-        };
-        // Long enough for a slide to settle and the wheel to rest after it.
-        let rest =
-            || super::advance_clock(super::PANE_SLIDE_TIME + SCROLL_REST + Duration::from_millis(50));
-        let sliding = |cx: &mut TestAppContext, n: usize| {
-            cx.update_window(handle, |_, window, cx| {
-                window.render_frame(cx);
-                window.try_find(("scroll-slide-view", n)).is_some()
-            })
-            .unwrap()
-        };
-        let click_row = |cx: &mut TestAppContext| {
-            cx.update_window(handle, |_, window, cx| {
-                window.render_frame(cx);
-                window.click("history-toggle", cx)
-            })
-            .unwrap();
-            cx.run_until_parked();
-        };
-        let expanded = |cx: &mut TestAppContext| {
-            prompt_mode.read_with(cx, |this, _| this.task_history.expanded)
-        };
-
-        let glowing = |cx: &mut TestAppContext| {
-            cx.update_window(handle, |_, window, cx| {
-                window.render_frame(cx);
-                window.try_find("scroll-glow").is_some()
-            })
-            .unwrap()
-        };
-
-        let resting = header_top(cx);
-        // Sideways, it stays.
-        wheel(cx, 40., 5.);
-        assert!(!expanded(cx));
-        assert!(!glowing(cx));
-        // Carried straight on, with no pause, short of the barrier, it
-        // builds up and glows, pulling the view down by less than it
-        // scrolled.
-        wheel(cx, 0., 120.);
-        assert!(!expanded(cx), "it crossed over before the barrier");
-        assert!(glowing(cx), "no glow as it built up");
-        let pulled = header_top(cx) - resting;
-        assert!(
-            pulled > px(0.) && pulled < px(super::STRETCH_PULL),
-            "the stretch pulled the view {pulled:?}"
-        );
-        // Left there, it drains away and springs back, and a new scroll
-        // starts again.
-        super::advance_clock(super::SCROLL_DRAIN + Duration::from_millis(50));
-        assert!(!glowing(cx), "the glow didn't drain away");
-        assert_eq!(header_top(cx), resting, "the view didn't spring back");
-        // A fling's momentum, once the fingers lift, stops at the end.
-        wheel_in(cx, 0., 0., gpui_kit::TouchPhase::Ended);
-        wheel(cx, 0., 240.);
-        assert!(!expanded(cx), "momentum crossed over");
-        assert!(!glowing(cx), "momentum pulled into the stretch");
-        super::advance_clock(SCROLL_REST + Duration::from_millis(20));
-        wheel(cx, 0., 120.);
-        assert!(!expanded(cx), "what drained away still counted");
-        // Scrolled back, it goes down; scrolled on, past the barrier, it
-        // crosses over.
-        wheel(cx, 0., -60.);
-        wheel(cx, 0., 680.);
-        assert!(!expanded(cx), "scrolling back didn't take it down");
-        wheel(cx, 0., 60.);
-        assert!(
-            expanded(cx),
-            "a new scroll up past the barrier didn't open the previous tasks"
-        );
-        assert!(sliding(cx, 0), "crossing over didn't slide");
-        // While it slides, the wheel doesn't cross back.
-        wheel(cx, 0., -40.);
-        assert!(expanded(cx), "a scroll while sliding crossed back");
-        rest();
-        assert!(!sliding(cx, 0), "the slide didn't settle");
-        assert!(!glowing(cx), "the glow didn't fade");
-        for _ in 0..6 {
-            wheel(cx, 0., -120.);
-        }
-        assert!(expanded(cx), "it crossed back short of the barrier");
-        wheel(cx, 0., -120.);
-        assert!(
-            !expanded(cx),
-            "a new scroll down past the barrier didn't bring back the latest task"
-        );
-        assert!(sliding(cx, 1), "crossing back didn't slide");
-        rest();
-        assert!(!sliding(cx, 1));
-
-        // A steady scroll, a wheel's notches a little apart, never drains,
-        // and crosses over without stopping, each way.
-        let steady = |cx: &mut TestAppContext, y: f32| {
-            for _ in 0..13 {
-                wheel(cx, 0., y);
-                super::advance_clock(Duration::from_millis(150));
-            }
-        };
-        steady(cx, 60.);
-        assert!(expanded(cx), "a steady scroll up didn't cross over");
-        rest();
-        steady(cx, -60.);
-        assert!(!expanded(cx), "a steady scroll down didn't cross back");
-        rest();
-
-        // Clicking the row isn't animated.
-        click_row(cx);
-        assert!(expanded(cx));
-        assert!(!sliding(cx, 4), "clicking the row slid");
-        click_row(cx);
-        assert!(!expanded(cx));
-
-        // With no previous tasks, nothing opens.
-        prompt_mode.update(cx, |this, cx| {
-            this.tasks.truncate(1);
-            cx.notify();
-        });
-        rest();
-        let resting = header_top(cx);
-        wheel(cx, 0., 240.);
-        assert!(!expanded(cx));
-        assert!(!glowing(cx), "it glows with nowhere to cross to");
-        assert_eq!(
-            header_top(cx),
-            resting,
-            "it stretches with nowhere to cross to"
-        );
-    }
-
-    /// The scroll that crosses over stops there: neither the step that
-    /// crosses nor any more of the same scroll moves the view it switched
-    /// to, during the slide or after; only a new scroll, after the wheel has
-    /// been still a moment, moves it. So each way.
-    #[gpui_kit::test]
-    async fn a_scroll_that_crosses_over_stops_there(cx: &mut TestAppContext) {
-        // The scrolls go by a clock of the test's own, so however slow the
-        // machine, a gesture is never broken up by the time between steps.
-        super::freeze_clock();
-        use gpui_kit::{ScrollDelta, ScrollWheelEvent, point, px};
-        let (prompt_mode, handle) = open(cx);
-        let long: String = (0..200).map(|n| format!("Line {n}\n\n")).collect();
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                for n in 0..60 {
-                    let ix = this.push_task(format!("Task {n}").into(), cx);
-                    this.tasks[ix].status = TaskStatus::Done;
-                }
-                let ix = this.push_task("Write a lot".into(), cx);
-                this.show_compiled(ix, "Prompt_0".into(), "Write a lot".into(), cx);
-                this.apply_event(ix, HarnessEvent::TextStarted, cx);
-                this.apply_event(ix, HarnessEvent::TextDelta(long.clone()), cx);
-            });
-        })
-        .unwrap();
-        cx.wait_for(handle, Duration::from_secs(2), |window, _| {
-            window.try_find("task-output-scroll-column").is_some()
-        })
-        .await;
-        let wheel = |cx: &mut TestAppContext, y: f32| {
-            let at = cx
-                .update_window(handle, |_, window, cx| {
-                    window.render_frame(cx);
-                    window.viewport_size()
-                })
-                .unwrap();
-            let mut visual = gpui_kit::VisualTestContext::from_window(handle, cx);
-            visual.simulate_event(ScrollWheelEvent {
-                position: point(at.width / 2., at.height / 2.),
-                delta: ScrollDelta::Pixels(point(px(0.), px(y))),
-                ..Default::default()
-            });
-            cx.run_until_parked();
-        };
-        let expanded = |cx: &mut TestAppContext| {
-            prompt_mode.read_with(cx, |this, _| this.task_history.expanded)
-        };
-        // How far the view shown is from the end it arrived at.
-        let from_end = |cx: &mut TestAppContext| {
-            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
-                .unwrap();
-            prompt_mode.read_with(cx, |this, _| {
-                if this.task_history.expanded {
-                    f32::from(this.task_history.rows.to_bottom())
-                } else {
-                    f32::from(this.output_table.list().to_top())
-                }
-            })
-        };
-        // Scrolling on, a step every 40 milliseconds, until the slide has
-        // settled and a little after.
-        let carry_on = |cx: &mut TestAppContext, y: f32| {
-            let mut left = super::PANE_SLIDE_TIME + Duration::from_millis(150);
-            while !left.is_zero() {
-                left = left.saturating_sub(Duration::from_millis(40));
-                wheel(cx, y);
-                super::advance_clock(Duration::from_millis(40));
-            }
-        };
-        let pause = || super::advance_clock(super::SCROLL_DRAIN + Duration::from_millis(50));
-
-        for up in [true, false] {
-            let y = if up { 200. } else { -200. };
-            if up {
-                prompt_mode.update(cx, |this, _| this.output_table.scroll_to_top());
-            }
-            from_end(cx);
-            pause();
-            for _ in 0..4 {
-                wheel(cx, y);
-            }
-            assert_eq!(expanded(cx), up, "it didn't cross over");
-            carry_on(cx, y);
-            assert_eq!(expanded(cx), up, "the rest of the scroll crossed back");
-            assert!(
-                from_end(cx) <= 1.,
-                "the rest of the scroll moved the view it switched to, {} from its end",
-                from_end(cx)
-            );
-            // A new scroll the same way moves it on, away from the end it
-            // arrived at.
-            super::advance_clock(super::SCROLL_REST + Duration::from_millis(20));
-            wheel(cx, y);
-            assert!(from_end(cx) > 100., "a new scroll didn't move the view");
-            // Back at its end, for the crossing back.
-            wheel(cx, -y);
-            pause();
-        }
-    }
-
-    /// A scroll begun with the view already resting at its end pulls into
-    /// the stretch from its first step, however the view got there: the
-    /// previous tasks opened on their bottom by a click, however many there
-    /// are and however few of their rows have been measured, and the latest
-    /// task's long output scrolled to its top.
-    #[gpui_kit::test]
-    async fn a_scroll_begun_at_an_end_stretches_at_once(cx: &mut TestAppContext) {
-        // The scrolls go by a clock of the test's own, so however slow the
-        // machine, a gesture is never broken up by the time between steps.
-        super::freeze_clock();
-        use gpui_kit::{ScrollDelta, ScrollWheelEvent, point, px};
-        let (prompt_mode, handle) = open(cx);
-        let long: String = (0..200).map(|n| format!("Line {n}\n\n")).collect();
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                for n in 0..60 {
-                    let text = if n % 3 == 0 {
-                        format!("Task {n}\n\nwith\n\nseveral\n\nlines")
-                    } else {
-                        format!("Task {n}")
-                    };
-                    let ix = this.push_task(text.into(), cx);
-                    this.tasks[ix].status = TaskStatus::Done;
-                }
-                let ix = this.push_task("Write a lot".into(), cx);
-                this.show_compiled(ix, "Prompt_0".into(), "Write a lot".into(), cx);
-                this.apply_event(ix, HarnessEvent::TextStarted, cx);
-                this.apply_event(ix, HarnessEvent::TextDelta(long.clone()), cx);
-            });
-        })
-        .unwrap();
-        cx.wait_for(handle, Duration::from_secs(2), |window, _| {
-            window.try_find("task-output-scroll-column").is_some()
-        })
-        .await;
-        let frame = |cx: &mut TestAppContext| {
-            cx.run_until_parked();
-            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
-                .unwrap();
-        };
-        let wheel = |cx: &mut TestAppContext, y: f32| {
-            let at = cx
-                .update_window(handle, |_, window, cx| {
-                    window.render_frame(cx);
-                    window.viewport_size()
-                })
-                .unwrap();
-            let mut visual = gpui_kit::VisualTestContext::from_window(handle, cx);
-            visual.simulate_event(ScrollWheelEvent {
-                position: point(at.width / 2., at.height / 2.),
-                delta: ScrollDelta::Pixels(point(px(0.), px(y))),
-                ..Default::default()
-            });
-            cx.run_until_parked();
-        };
-        let built_up = |cx: &mut TestAppContext| {
-            prompt_mode.read_with(cx, |this, _| this.scroll_push.get().amount)
-        };
-        // A new scroll, the wheel having been still a while.
-        let still = || super::advance_clock(super::SCROLL_DRAIN + Duration::from_millis(50));
-
-        // The latest task's output, resting at its top.
-        prompt_mode.update(cx, |this, _| this.output_table.scroll_to_top());
-        frame(cx);
-        frame(cx);
-        still();
-        wheel(cx, 40.);
-        assert_eq!(
-            built_up(cx),
-            40.,
-            "a scroll from the output's top didn't stretch"
-        );
-        still();
-
-        // The previous tasks, opened on their bottom by clicking their row.
-        cx.update_window(handle, |_, window, cx| {
-            window.render_frame(cx);
-            window.click("history-toggle", cx)
-        })
-        .unwrap();
-        frame(cx);
-        frame(cx);
-        assert!(prompt_mode.read_with(cx, |this, _| this.task_history.expanded));
-        still();
-        wheel(cx, -40.);
-        assert_eq!(
-            built_up(cx),
-            40.,
-            "a scroll from the previous tasks' bottom didn't stretch"
-        );
-    }
-
-    /// A scroll step that brings the output to its top counts whatever of it
-    /// goes past the top toward the barrier.
-    #[gpui_kit::test]
-    async fn a_step_reaching_the_top_builds_up_what_goes_past(cx: &mut TestAppContext) {
-        // The scrolls go by a clock of the test's own, so however slow the
-        // machine, a gesture is never broken up by the time between steps.
-        super::freeze_clock();
-        use gpui_kit::{ScrollDelta, ScrollWheelEvent, point, px};
-        let (prompt_mode, handle) = open(cx);
-        let long: String = (0..200).map(|n| format!("Line {n}\n\n")).collect();
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                let first = this.push_task("First".into(), cx);
-                this.tasks[first].status = TaskStatus::Done;
-                let ix = this.push_task("Write a lot".into(), cx);
-                this.show_compiled(ix, "Prompt_0".into(), "Write a lot".into(), cx);
-                this.apply_event(ix, HarnessEvent::TextStarted, cx);
-                this.apply_event(ix, HarnessEvent::TextDelta(long.clone()), cx);
-            });
-        })
-        .unwrap();
-        cx.wait_for(handle, Duration::from_secs(2), |window, _| {
-            window.try_find("task-output-scroll-column").is_some()
-        })
-        .await;
-        let wheel = |cx: &mut TestAppContext, y: f32| {
-            let at = cx
-                .update_window(handle, |_, window, cx| {
-                    window.render_frame(cx);
-                    window.viewport_size()
-                })
-                .unwrap();
-            let mut visual = gpui_kit::VisualTestContext::from_window(handle, cx);
-            visual.simulate_event(ScrollWheelEvent {
-                position: point(at.width / 2., at.height / 3.),
-                delta: ScrollDelta::Pixels(point(px(0.), px(y))),
-                ..Default::default()
-            });
-            cx.run_until_parked();
-        };
-        let expanded = |cx: &mut TestAppContext| {
-            prompt_mode.read_with(cx, |this, _| this.task_history.expanded)
-        };
-        prompt_mode.update(cx, |this, _| {
-            this.output_table
-                .scroll()
-                .set_offset(point(px(0.), px(-100.)))
-        });
-        cx.update_window(handle, |_, window, cx| window.render_frame(cx))
-            .unwrap();
-        // 100 pixels to the top, then 150 past it.
-        wheel(cx, 250.);
-        assert!(!expanded(cx), "it crossed over before the barrier");
-        let top = prompt_mode.read_with(cx, |this, _| this.output_table.scroll().offset().y);
-        assert!(top >= px(-1.), "the step didn't take the output to its top");
-        wheel(cx, 500.);
-        assert!(!expanded(cx), "it crossed over before the barrier");
-        wheel(cx, 150.);
-        assert!(expanded(cx), "what went past the top didn't build up");
-    }
-
     /// Closed, by a click or a scroll, the previous tasks give back the
     /// latest task's output as it was left: where it was scrolled, or locked
     /// to its bottom and following what arrived meanwhile; with another task
@@ -12713,10 +10706,24 @@ mod tests {
             })
             .unwrap();
         };
+        // Opens the first task from the Tasks tab, or, with it open, goes
+        // back to the latest.
         let click_row = |cx: &mut TestAppContext| {
+            let viewing = prompt_mode.update(cx, |this, cx| {
+                show_previous_tasks(this);
+                cx.notify();
+                this.tasks_tab.viewing
+            });
+            if !viewing {
+                show_timeline(handle, cx);
+            }
             cx.update_window(handle, |_, window, cx| {
                 window.render_frame(cx);
-                window.click("history-toggle", cx)
+                if viewing {
+                    window.click("back-to-latest", cx)
+                } else {
+                    window.click(("tasks-tab-task", 0usize), cx)
+                }
             })
             .unwrap();
             frames(cx);
@@ -12766,61 +10773,17 @@ mod tests {
             "locked, it isn't at its bottom: {offset:?} of {max:?}"
         );
 
-        // With another task the latest since, it starts at its top.
+        // Another task sent while an older one is open is shown at once,
+        // from its top.
         click_row(cx);
         prompt_mode.update(cx, |this, cx| {
             this.push_task("Another".into(), cx);
         });
-        click_row(cx);
+        frames(cx);
+        assert!(!prompt_mode.read_with(cx, |this, _| this.showing_other_than_latest()));
         let (offset, _, locked) = scrolled(cx);
         assert_eq!(offset, px(0.));
         assert!(!locked);
-    }
-
-    /// Each previous task's heading is faintly tinted with its mode's colour;
-    /// one whose mode isn't known isn't.
-    #[gpui_kit::test]
-    async fn previous_tasks_hint_at_their_mode(cx: &mut TestAppContext) {
-        use super::HISTORY_MODE_HINT;
-        use crate::chat_input::SendMode;
-        use gpui_kit::Hsla;
-        let (prompt_mode, handle) = open(cx);
-        prompt_mode.update(cx, |this, cx| {
-            for mode in [Some(SendMode::Code), None, Some(SendMode::Spec), None] {
-                let ix = this.push_task("Do it".into(), cx);
-                this.tasks[ix].mode = mode;
-                this.tasks[ix].status = TaskStatus::Done;
-            }
-            this.task_history.expanded = true;
-            cx.notify();
-        });
-        cx.update_window(handle, |_, window, cx| {
-            window.render_frame(cx);
-            window.render_frame(cx);
-            let hint = |mode| Hsla {
-                a: HISTORY_MODE_HINT,
-                ..crate::chat_input::mode_color(mode, cx)
-            };
-            let painted = |color: Hsla| {
-                window
-                    .painted_quads()
-                    .into_iter()
-                    .filter(|quad| quad.background.as_solid() == Some(color))
-                    .count()
-            };
-            assert_eq!(
-                painted(hint(SendMode::Code)),
-                1,
-                "Code's heading isn't tinted"
-            );
-            assert_eq!(
-                painted(hint(SendMode::Spec)),
-                1,
-                "Spec's heading isn't tinted"
-            );
-            assert_eq!(painted(hint(SendMode::Both)), 0);
-        })
-        .unwrap();
     }
 
     /// A git repository with `kept.txt` and `other.txt` snapshotted before
@@ -13291,7 +11254,8 @@ mod tests {
                 "b",
                 cx,
             );
-            this.task_history.expanded = true;
+            show_previous_tasks(this);
+            this.tasks_tab.expanded_chains.insert(1);
             cx.notify();
         });
         prompt_mode.read_with(cx, |this, _| {
@@ -13319,35 +11283,30 @@ mod tests {
             );
             let steps: Vec<_> = this.tasks[1..4].iter().collect();
             assert_eq!(super::chain_status(&steps), TaskStatus::Failed);
-            // The session changed at the code step, but the divider goes
-            // above the chain.
-            assert_eq!(
-                super::HistoryList::session_groups(&this.tasks, &layout),
-                [0, 1]
-            );
         });
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             window.render_frame(cx);
+            // In the Tasks tab, the chain is one row, its steps rows of their
+            // own beneath it once shown.
             assert!(
-                window.try_find(("history-chain", 1usize)).is_some(),
-                "no parent row"
+                window.try_find(("tasks-tab-chain", 1usize)).is_some(),
+                "no chain row"
             );
-            assert!(window.try_find(("history-chain", 2usize)).is_none());
-            assert!(window.try_find(("history-chain", 4usize)).is_none());
-            // Each step is still an item of its own, set in beneath it.
-            let parent = window.find(("history-chain", 1usize)).bounds();
+            assert!(window.try_find(("tasks-tab-chain", 2usize)).is_none());
+            assert!(window.try_find(("tasks-tab-chain", 4usize)).is_none());
+            let parent = window.find(("tasks-tab-chain", 1usize)).bounds();
             let steps: Vec<_> = (1..4usize)
-                .map(|ix| window.find(("history-task", ix)).bounds())
+                .map(|ix| window.find(("tasks-tab-task", ix)).bounds())
                 .collect();
-            let alone = window.find(("history-task", 4usize)).bounds();
-            assert!(
-                steps
-                    .iter()
-                    .all(|step| step.left() > parent.left() + gpui_kit::px(1.))
-            );
+            let alone = window.find(("tasks-tab-task", 4usize)).bounds();
             assert!(steps[0].top() >= parent.bottom() - gpui_kit::px(1.));
-            assert!(alone.left() < steps[0].left(), "a hand-sent task is set in");
+            assert!(steps.windows(2).all(|pair| pair[1].top() >= pair[0].bottom() - gpui_kit::px(1.)));
+            // A task sent by hand from a step is listed after the chain.
+            assert!(alone.top() >= steps[2].bottom() - gpui_kit::px(1.));
+            for row in steps.iter().chain([&parent, &alone]) {
+                assert!((row.size.height - super::QUEUED_ROW_HEIGHT).abs() < gpui_kit::px(0.5));
+            }
         })
         .unwrap();
 
@@ -13375,12 +11334,12 @@ mod tests {
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             window.render_frame(cx);
-            assert!(window.try_find(("history-took", 0usize)).is_none());
+            assert!(window.try_find(("tasks-tab-took", 0usize)).is_none());
             let right = |id: (&'static str, usize)| window.find(id).bounds().right();
-            let column = right(("chain-took", 1));
+            let column = right(("tasks-tab-chain-took", 1));
             for ix in [1usize, 2, 3, 4] {
                 assert!(
-                    (right(("history-took", ix)) - column).abs() <= gpui_kit::px(1.),
+                    (right(("tasks-tab-took", ix)) - column).abs() <= gpui_kit::px(1.),
                     "task {ix}'s time isn't in the column"
                 );
             }
@@ -13425,6 +11384,44 @@ mod tests {
         assert_eq!(PromptTask::restore(saved(None, 1_000, Some(1_252))).took(), None);
     }
 
+    /// The Previous group starts collapsed, its heading alone; clicking the
+    /// heading expands it and clicking again collapses it, and its filter
+    /// button still shows while it is collapsed.
+    #[gpui_kit::test]
+    async fn previous_tasks_start_collapsed(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        let (prompt_mode, handle) = open(cx);
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("Do it".into(), cx);
+            this.tasks[ix].mode = Some(SendMode::Code);
+            this.tasks[ix].status = TaskStatus::Done;
+            show_tasks(this);
+            cx.notify();
+        });
+        let click = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.click("tasks-previous", cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        };
+        let row_shown = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.render_frame(cx);
+                assert!(window.try_find("task-filters").is_some(), "no filter button");
+                window.try_find(("tasks-tab-task", 0usize)).is_some()
+            })
+            .unwrap()
+        };
+        assert!(!row_shown(cx), "the group starts expanded");
+        click(cx);
+        assert!(row_shown(cx), "the heading didn't expand it");
+        click(cx);
+        assert!(!row_shown(cx), "the heading didn't collapse it");
+    }
+
     /// The previous tasks' filter bar hides the tasks matching no chip on:
     /// chips in a group combine as either, the groups as both. The row says
     /// how many show, an open task filtered out closes, and with none left
@@ -13448,8 +11445,7 @@ mod tests {
                 task.status = TaskStatus::Done;
                 task.marked_done = marked;
             }
-            this.task_history.expanded = true;
-            this.task_history.open = Some(1);
+            show_previous_tasks(this);
             cx.notify();
         });
         let render = |cx: &mut TestAppContext| {
@@ -13464,19 +11460,56 @@ mod tests {
         render(cx);
         assert!(visible(cx).is_none());
         cx.update_window(handle, |_, window, _| {
-            assert!(window.try_find("task-filters").is_some(), "no filter bar")
+            assert!(window.try_find("task-filters").is_some(), "no filter button");
+            assert!(window.try_find("task-filter-menu").is_none());
         })
         .unwrap();
 
-        // Code, clicked: only Code tasks show, the open Spec task closes.
+        // Its button opens the menu; checking an option filters the list
+        // behind it, the menu staying open, the button counting it.
+        let click = |id: gpui_kit::ElementId, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.click(id, cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+            render(cx);
+        };
+        click("task-filters".into(), cx);
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find("task-filter-menu").is_some(), "no menu");
+            assert!(window.try_find("clear-task-filters").is_none());
+        })
+        .unwrap();
+        click(("task-filter", 2usize).into(), cx);
+        assert_eq!(visible(cx), Some(vec![false, true, false, false]));
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find("task-filter-menu").is_some(), "the menu closed");
+        })
+        .unwrap();
+        // "Clear filters", and Escape closes it.
+        click("clear-task-filters".into(), cx);
+        assert!(visible(cx).is_none());
+        // Escape, as the window binds it.
         cx.update_window(handle, |_, window, cx| {
-            window.click(("task-filter", 0usize), cx)
+            window.dispatch_action(Box::new(crate::main_window::Dismiss), cx)
         })
         .unwrap();
         cx.run_until_parked();
+        assert!(!prompt_mode.read_with(cx, |this, _| this.tasks_tab.filter_menu));
+
+        // Code, clicked: only Code tasks show, the Spec task open in the
+        // tab closes.
+        prompt_mode.update(cx, |this, _| {
+            this.tasks_tab.open = Some(super::tasks_tab::Opened::Task(1))
+        });
+        prompt_mode.update(cx, |this, cx| {
+            this.toggle_task_filter(TaskFilter::Mode(SendMode::Code), cx)
+        });
         assert_eq!(visible(cx), Some(vec![true, false, false, true]));
         prompt_mode.read_with(cx, |this, _| {
-            assert_eq!(this.task_history.open, None);
+            assert_eq!(this.tasks_tab.open, None);
         });
         // With Spec as well, either; with Marked done, both.
         prompt_mode.update(cx, |this, cx| {
@@ -13488,10 +11521,6 @@ mod tests {
         });
         assert_eq!(visible(cx), Some(vec![false, true, false, true]));
         render(cx);
-        // Of those, the latest task, heading the view, isn't counted.
-        prompt_mode.read_with(cx, |this, _| {
-            assert_eq!(this.task_history.shown.get(), Some(1))
-        });
         // Each chip counts the previous tasks it matches alone: of the two
         // Code tasks, the latest isn't one of the previous.
         prompt_mode.read_with(cx, |this, _| {
@@ -13509,11 +11538,11 @@ mod tests {
             assert!(window.try_find("no-filtered-tasks").is_some())
         })
         .unwrap();
-        cx.update_window(handle, |_, window, cx| {
-            window.click("clear-task-filters", cx)
-        })
-        .unwrap();
-        cx.run_until_parked();
+        prompt_mode.update(cx, |this, cx| {
+            this.tasks_tab.filter_menu = true;
+            cx.notify();
+        });
+        click("clear-task-filters".into(), cx);
         assert!(visible(cx).is_none());
     }
 
@@ -14117,8 +12146,6 @@ mod tests {
                 None
             ]
         );
-        let steps: Vec<_> = tasks[3..5].iter().collect();
-        assert_eq!(super::group_mode(&steps), SendMode::Spec);
     }
 
     /// A chain's next step takes its place in its lane's queue by when its
@@ -14142,6 +12169,7 @@ mod tests {
             wait: false,
             sent_from: None,
             images: Vec::new(),
+            files: Vec::new(),
             new_conversation: false,
             mode: Some(SendMode::Code),
             queued_at,
@@ -14260,6 +12288,7 @@ mod tests {
                 wait: false,
                 sent_from: None,
                 images: Vec::new(),
+                files: Vec::new(),
                 new_conversation: false,
                 mode: Some(mode),
                 queued_at: id as u128,
@@ -14327,34 +12356,6 @@ mod tests {
             this.working = Lanes::NONE;
             this.project_dir = None;
         });
-    }
-
-    /// Previous tasks are grouped by the conversation they ran in: a group
-    /// starts wherever the conversation changes, and a task whose
-    /// conversation isn't known stays with the group before it.
-    #[test]
-    fn previous_tasks_group_by_session() {
-        let task = |session: Option<&str>| {
-            let mut task = PromptTask::new("Do it".into());
-            if let Some(session) = session {
-                task.apply(HarnessEvent::Session(session.into()));
-            }
-            task
-        };
-        let tasks = [
-            task(None),
-            task(Some("a")),
-            task(Some("a")),
-            task(None),
-            task(Some("b")),
-            task(Some("a")),
-        ];
-        let groups = |tasks: &[PromptTask]| {
-            super::HistoryList::session_groups(tasks, &super::chain_layout(tasks))
-        };
-        assert_eq!(groups(&tasks), [0, 1, 4, 5]);
-        assert_eq!(groups(&tasks[1..]), [0, 3, 4]);
-        assert!(groups(&[]).is_empty());
     }
 
     #[test]
@@ -14550,12 +12551,6 @@ mod tests {
         prompt_mode.update(cx, |this, _| {
             this.tasks.last_mut().unwrap().feed = Some(feed.clone())
         });
-        assert!(offered(cx));
-
-        // Not while the previous tasks are expanded over its output.
-        prompt_mode.update(cx, |this, _| this.task_history.expanded = true);
-        assert!(!offered(cx));
-        prompt_mode.update(cx, |this, _| this.task_history.expanded = false);
         assert!(offered(cx));
 
         feed.send("Also b.".into(), "Also b, compiled.".into(), &[])
@@ -15385,9 +13380,20 @@ mod tests {
         prompt_mode.read_with(cx, |this, _| assert_eq!(this.editing_queued, None));
         click(cx, "queued-grip", 1);
         prompt_mode.read_with(cx, |this, _| assert_eq!(this.editing_queued, None));
-        // Clicked anywhere else, it is edited, as its pencil does.
+        // Clicked anywhere else, it opens in the Tasks tab, held there; its
+        // pencil edits it in the chat input instead.
         click(cx, "queued-prompt", 1);
         let first = prompt_mode.read_with(cx, |this, _| this.queue[1].id);
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.tasks_tab.open, Some(super::tasks_tab::Opened::Queued(first)));
+            assert!(this.tasks_tab.holds(first));
+            assert_eq!(this.editing_queued, None);
+        });
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| this.close_task_in_tab(window, cx))
+        })
+        .unwrap();
+        click(cx, "edit-queued", 1);
         prompt_mode.read_with(cx, |this, _| assert_eq!(this.editing_queued, Some(first)));
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -15401,15 +13407,15 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let dir = dunce::canonicalize(&dir).unwrap();
-        for ix in 0..30 {
+        for ix in 0..80 {
             prompt_queue::add(HiddenAnchor::random(), format!("prompt {ix}\nmore of it"), &dir).unwrap();
         }
         let (prompt_mode, handle) = open(cx);
         cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
         cx.run_until_parked();
+        cx.simulate_window_resize(handle, gpui_kit::size(gpui_kit::px(1200.), gpui_kit::px(800.)));
         prompt_mode.update(cx, |this, cx| {
-            this.queue_expanded = true;
-            this.queue_scroll.set_offset(gpui_kit::Point::default());
+            show_tasks(this);
             cx.notify();
         });
         let frame = |cx: &mut TestAppContext| {
@@ -15417,17 +13423,24 @@ mod tests {
                 .unwrap();
         };
         frame(cx);
+        // From the top of the tab, its first queued prompt in view.
+        prompt_mode.update(cx, |this, cx| {
+            this.tasks_tab.scroll.set_offset(gpui_kit::Point::default());
+            cx.notify();
+        });
+        frame(cx);
         let (start, list) = cx
             .update_window(handle, |_, window, _| {
                 (
                     window.find(("queued-grip", 0usize)).bounds().center(),
-                    window.find("queue-list").bounds(),
+                    window.find("tasks-tab-list").bounds(),
                 )
             })
             .unwrap();
         let offset = |cx: &mut TestAppContext| {
-            prompt_mode.read_with(cx, |this, _| this.queue_scroll.offset().y)
+            prompt_mode.read_with(cx, |this, _| this.tasks_tab.scroll.offset().y)
         };
+
         assert_eq!(offset(cx), gpui_kit::px(0.));
         let mut visual = gpui_kit::VisualTestContext::from_window(handle, cx);
         visual.simulate_mouse_move(start, None, Default::default());
@@ -15454,7 +13467,7 @@ mod tests {
         let gap = prompt_mode.read_with(cx, |this, _| this.queue_gap.get().and_then(|(_, gap)| gap));
         let under = cx
             .update_window(handle, |_, window, _| {
-                (0..30usize)
+                (0..80usize)
                     .find(|&ix| window.find(("queued-prompt", ix)).bounds().contains(&near))
                     .unwrap()
             })
@@ -15715,13 +13728,67 @@ mod tests {
         .unwrap();
     }
 
-    /// The row above the header is shown even before anything is sent, and
-    /// stays shown with a single task.
+    /// However many previous tasks there are, the Tasks tab draws only the
+    /// rows in view and a few either side, each 28 pixels tall, while it
+    /// scrolls as far as though every row were drawn.
     #[gpui_kit::test]
-    async fn history_row_is_always_shown(cx: &mut TestAppContext) {
+    async fn the_tasks_tab_draws_only_the_rows_in_view(cx: &mut TestAppContext) {
+        use gpui_kit::{point, px};
+        const TASKS: usize = 2000;
+        let (prompt_mode, handle) = open(cx);
+        prompt_mode.update(cx, |this, cx| {
+            for n in 0..TASKS {
+                let ix = this.push_task(format!("Task {n}").into(), cx);
+                this.tasks[ix].mode = Some(crate::chat_input::SendMode::Code);
+                this.tasks[ix].status = TaskStatus::Done;
+            }
+            show_previous_tasks(this);
+            cx.notify();
+        });
+        let drawn = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.render_frame(cx);
+                (0..TASKS)
+                    .filter(|&ix| window.try_find(("tasks-tab-task", ix)).is_some())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap()
+        };
+        let scroll = prompt_mode.read_with(cx, |this, _| this.tasks_tab.scroll.clone());
+
+        let shown = drawn(cx);
+        let height = scroll.bounds().size.height;
+        assert!(!shown.is_empty(), "no rows drawn");
+        assert!(
+            shown.len() <= (height / px(28.)).ceil() as usize + 2 * super::tasks_tab::OVERSCAN_ROWS + 1,
+            "{} rows drawn in {height:?}",
+            shown.len()
+        );
+        // Headings, Running and Queued with their empty rows: five rows
+        // besides the tasks, each as tall as a task's.
+        let whole = px(28.) * (TASKS + 5) as f32;
+        assert_eq!(scroll.max_offset().y, whole - height);
+        let row = cx
+            .update_window(handle, |_, window, _| window.find(("tasks-tab-task", shown[0])).bounds())
+            .unwrap();
+        assert_eq!(row.size.height, px(28.));
+
+        // Scrolled to its end, the last rows are drawn, and the first gone.
+        scroll.set_offset(point(px(0.), -scroll.max_offset().y));
+        let shown = drawn(cx);
+        assert!(shown.contains(&(TASKS - 1)), "the last task isn't drawn: {shown:?}");
+        assert!(!shown.contains(&0));
+    }
+
+    /// The button opening the right sidebar, at the body tab bar's right
+    /// end, is shown even before anything is sent, and stays shown with a
+    /// single task.
+    #[gpui_kit::test]
+    async fn sidebar_button_is_always_shown(cx: &mut TestAppContext) {
         let (prompt_mode, handle) = open(cx);
         cx.wait_for(handle, Duration::from_secs(1), |window, _| {
-            window.try_find("history-toggle").is_some()
+            window.try_find("sidebar-toggle").is_some()
         })
         .await;
 
@@ -15733,164 +13800,9 @@ mod tests {
         })
         .unwrap();
         cx.wait_for(handle, Duration::from_secs(1), |window, _| {
-            window.try_find("task-header").is_some() && window.try_find("history-toggle").is_some()
+            window.try_find("task-header").is_some() && window.try_find("sidebar-toggle").is_some()
         })
         .await;
-    }
-
-    /// The row above the header expands it into a list of every task; opening
-    /// an earlier one shows its output.
-    #[gpui_kit::test]
-    async fn history_row_expands_into_every_task(cx: &mut TestAppContext) {
-        let (prompt_mode, handle) = open(cx);
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                for text in ["first task", "second task"] {
-                    let ix = this.push_task(text.into(), cx);
-                    this.show_compiled(ix, format!("Prompt_{ix}"), text.into(), cx);
-                    this.apply_event(ix, HarnessEvent::TextDelta(format!("Output {ix}")), cx);
-                }
-            });
-        })
-        .unwrap();
-
-        cx.wait_for(handle, Duration::from_secs(1), |window, _| {
-            window.try_find("history-toggle").is_some()
-        })
-        .await;
-        cx.update_window(handle, |_, window, cx| window.click("history-toggle", cx))
-            .unwrap();
-        cx.wait_for(handle, Duration::from_secs(1), |window, _| {
-            window.try_find(("history-task", 0usize)).is_some()
-                && window.try_find(("history-task", 1usize)).is_some()
-                && window.try_find("task-output").is_none()
-        })
-        .await;
-
-        cx.update_window(handle, |_, window, cx| {
-            window.click(("history-task", 0usize), cx)
-        })
-        .unwrap();
-        cx.wait_for(handle, Duration::from_secs(1), |window, _| {
-            window.try_find(("output-row", 0usize)).is_some()
-        })
-        .await;
-        assert_eq!(
-            prompt_mode.read_with(cx, |this, _| this.task_history.open),
-            Some(0)
-        );
-    }
-
-    /// Each list that expands opens scrolled to its most recent items: the
-    /// previous tasks and the queue, each time it is opened, however it was
-    /// scrolled before.
-    #[gpui_kit::test]
-    async fn expanded_lists_open_on_their_latest_items(cx: &mut TestAppContext) {
-        const COUNT: usize = 40;
-        let dir = std::env::temp_dir().join(format!("suspense-latest-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        for n in 0..12 {
-            prompt_queue::add(HiddenAnchor::random(), format!("queued {n}"), &dir).unwrap();
-        }
-        let (prompt_mode, handle) = open(cx);
-        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
-        // The project's saved history loads first, so it doesn't replace
-        // what's added here.
-        for _ in 0..20 {
-            cx.run_until_parked();
-            std::thread::sleep(Duration::from_millis(20));
-        }
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                for n in 0..COUNT {
-                    let ix = this.push_task(format!("task {n}").into(), cx);
-                    this.show_compiled(ix, format!("Prompt_{ix}"), format!("task {n}").into(), cx);
-                    this.apply_event(ix, HarnessEvent::TextDelta(format!("Output {n}")), cx);
-                    this.apply_event(
-                        ix,
-                        HarnessEvent::Finished {
-                            is_error: false,
-                            result: String::new(),
-                        },
-                        cx,
-                    );
-                }
-                this.working = crate::chat_input::Lanes::ALL;
-                assert_eq!(this.queue.len(), 12);
-            });
-        })
-        .unwrap();
-
-        // Renders until whatever slides has settled.
-        let settle = |cx: &mut TestAppContext| {
-            for _ in 0..8 {
-                cx.update_window(handle, |_, window, cx| window.render_frame(cx))
-                    .unwrap();
-                cx.run_until_parked();
-                std::thread::sleep(Duration::from_millis(40));
-            }
-        };
-        // Whether the row `id` is shown, and in view within `list`.
-        let in_view = |cx: &mut TestAppContext, list: &'static str, id: gpui_kit::ElementId| {
-            cx.update_window(handle, |_, window, cx| {
-                window.render_frame(cx);
-                let list = window.find(list).bounds();
-                window.try_find(id).is_some_and(|row| {
-                    let row = row.bounds();
-                    row.top() >= list.top() - gpui_kit::px(1.)
-                        && row.bottom() <= list.bottom() + gpui_kit::px(1.)
-                })
-            })
-            .unwrap()
-        };
-
-        {
-            let (toggle, list, item) = ("history-toggle", "task-list-scroll", "history-task");
-            for opening in 0..2 {
-                settle(cx);
-                cx.update_window(handle, |_, window, cx| window.click(toggle, cx))
-                    .unwrap();
-                settle(cx);
-                assert!(
-                    in_view(cx, list, (item, COUNT - 1).into()),
-                    "{list} didn't open on its latest item, opening {opening}"
-                );
-                assert!(!in_view(cx, list, (item, 0usize).into()));
-                // Scrolled away to the top before it is closed.
-                prompt_mode.update(cx, |this, _| {
-                    this.task_history
-                        .rows
-                        .state()
-                        .scroll_to(gpui_kit::ListOffset {
-                            item_ix: 0,
-                            offset_in_item: gpui_kit::px(0.),
-                        });
-                });
-                settle(cx);
-                assert!(in_view(cx, list, (item, 0usize).into()));
-                cx.update_window(handle, |_, window, cx| window.click(toggle, cx))
-                    .unwrap();
-            }
-        }
-
-        for opening in 0..2 {
-            settle(cx);
-            cx.update_window(handle, |_, window, cx| window.click("queue-toggle", cx))
-                .unwrap();
-            settle(cx);
-            assert!(
-                in_view(cx, "queue-list", ("queued-prompt", 11usize).into()),
-                "the queue didn't open on its latest prompt, opening {opening}"
-            );
-            prompt_mode.update(cx, |this, _| {
-                this.queue_scroll
-                    .set_offset(gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(0.)))
-            });
-            settle(cx);
-            cx.update_window(handle, |_, window, cx| window.click("queue-toggle", cx))
-                .unwrap();
-        }
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// Finishes the question `id` with `answer` as its reply.
@@ -16461,12 +14373,11 @@ mod tests {
         })
         .unwrap();
 
-        // Opened among the previous tasks, a Freeform task is a chat too.
+        // Opened from the Tasks tab, a Freeform task shows as a chat too,
+        // with a bar back to the latest task.
         prompt_mode.update(cx, |this, cx| {
             let ix = push(this, SendMode::Code, "Back to code", cx);
             this.tasks[ix].status = TaskStatus::Done;
-            this.task_history.toggle();
-            this.task_history.open = Some(1);
             cx.notify();
         });
         frames(handle, cx);
@@ -16475,18 +14386,26 @@ mod tests {
                 window.try_find("freeform-chat").is_none(),
                 "the chat outlived Freeform"
             );
-            assert!(
-                window.try_find(("history-panel", 1usize)).is_some(),
-                "not opened"
-            );
-            assert!(
-                window.try_find(("freeform-reply", 1usize)).is_some(),
-                "no chat reply opened"
-            );
-            assert!(
-                window.try_find(("question", 1usize)).is_some(),
-                "no message opened"
-            );
+        })
+        .unwrap();
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.open_in_tab(super::tasks_tab::Opened::Task(1), window, cx)
+            })
+        })
+        .unwrap();
+        frames(handle, cx);
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find("freeform-chat").is_some(), "no chat opened");
+            assert!(window.try_find("back-to-latest").is_some(), "no way back");
+        })
+        .unwrap();
+        cx.update_window(handle, |_, window, cx| window.click("back-to-latest", cx))
+            .unwrap();
+        frames(handle, cx);
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find("freeform-chat").is_none());
+            assert!(window.try_find("back-to-latest").is_none());
         })
         .unwrap();
     }
@@ -16714,7 +14633,7 @@ mod tests {
     /// cancelling one removes its file. Once the harness is free with
     /// auto-send off, the queue waits.
     #[gpui_kit::test]
-    async fn queue_is_below_the_output_and_can_be_cancelled(cx: &mut TestAppContext) {
+    async fn queue_is_in_the_tasks_tab_and_can_be_cancelled(cx: &mut TestAppContext) {
         let dir = std::env::temp_dir().join(format!("suspense-queue-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         for text in ["first queued", "second queued"] {
@@ -16736,13 +14655,13 @@ mod tests {
             window.try_find("task-header").is_some() && window.try_find("task-output").is_some()
         })
         .await;
-        // The referenced spec sidebar slides out over the queue's right end
-        // as the task runs; let it settle beside it.
+        // The sidebar slides out as the task runs, on Run; the queue is on
+        // its Tasks tab.
         std::thread::sleep(super::PANE_SLIDE_TIME);
         cx.update_window(handle, |_, window, cx| window.render_frame(cx))
             .unwrap();
-        cx.update_window(handle, |_, window, cx| window.click("queue-toggle", cx))
-            .unwrap();
+        assert!(cx.update_window(handle, |_, window, _| window.try_find(("queued-prompt", 0usize)).is_none()).unwrap());
+        prompt_mode.update(cx, |this, cx| this.pick_sidebar_tab(super::SidebarTab::Tasks, cx));
         cx.wait_for(handle, Duration::from_secs(1), |window, _| {
             window.try_find(("queued-prompt", 1usize)).is_some()
         })
@@ -16751,13 +14670,16 @@ mod tests {
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             crate::double_borders::assert_none(window);
-            let task = window.find("task-header").bounds();
             let queued = window.find(("queued-prompt", 0usize)).bounds();
             let output = window.find("task-output").bounds();
+            let input = window.find("prompt-box").bounds();
+            // Beside the output, never beneath it or above the chat input.
             assert!(
-                task.bottom() <= output.top() && output.bottom() <= queued.top(),
-                "queue is not below the output: task {task:?}, output {output:?}, queued {queued:?}"
+                queued.left() >= output.right() - gpui_kit::px(1.),
+                "the queue isn't beside the output: output {output:?}, queued {queued:?}"
             );
+            assert!(queued.bottom() <= input.top() || queued.left() >= input.right() - gpui_kit::px(1.));
+            assert!((queued.size.height - super::QUEUED_ROW_HEIGHT).abs() < gpui_kit::px(0.5));
         })
         .unwrap();
 
@@ -16960,83 +14882,6 @@ mod tests {
         .unwrap();
         cx.run_until_parked();
         assert!(notified.get() > 0, "a raw line in view didn't redraw");
-    }
-
-    /// The previous tasks, with one open whose text is parsed in the
-    /// background, scroll without their height jumping, and keeping that
-    /// text's state never has the view draw itself over and over.
-    #[gpui_kit::test]
-    async fn history_scrollbar_holds_still_while_scrolling(cx: &mut TestAppContext) {
-        let (prompt_mode, handle) = open(cx);
-        cx.run_until_parked();
-        cx.update_window(handle, |_, _, cx| {
-            prompt_mode.update(cx, |this, cx| {
-                for t in 0..20 {
-                    let ix = this.push_task(format!("task {t}").into(), cx);
-                    for n in 0..6 {
-                        this.apply_event(ix, HarnessEvent::TextStarted, cx);
-                        let words =
-                            "Long words wrap here. ".repeat(if n % 2 == 0 { 300 } else { 5 });
-                        this.apply_event(ix, HarnessEvent::TextDelta(format!("P{n}. {words}")), cx);
-                    }
-                    this.apply_event(
-                        ix,
-                        HarnessEvent::Finished {
-                            is_error: false,
-                            result: String::new(),
-                        },
-                        cx,
-                    );
-                }
-                this.task_history.toggle();
-                this.task_history.open = Some(17);
-                cx.notify();
-            });
-        })
-        .unwrap();
-        let scroll = prompt_mode.read_with(cx, |this, _| this.task_history.rows.scroll());
-        let rows = prompt_mode.read_with(cx, |this, _| this.task_history.rows.clone());
-        // Draws, letting background parses land and the rows they're in be
-        // measured again, until every row's height is known.
-        let frame = |cx: &mut TestAppContext| {
-            for n in 0.. {
-                cx.update_window(handle, |_, window, cx| window.render_frame(cx))
-                    .unwrap();
-                cx.executor().advance_clock(crate::markdown::POLL_INTERVAL);
-                cx.run_until_parked();
-                if n >= 3 && rows.is_settled() {
-                    break;
-                }
-                assert!(n < 1000, "the rows were never all measured");
-            }
-        };
-        frame(cx);
-        prompt_mode.update(cx, |this, _| {
-            this.task_history
-                .rows
-                .state()
-                .scroll_to(gpui_kit::ListOffset {
-                    item_ix: 0,
-                    offset_in_item: gpui_kit::px(0.),
-                })
-        });
-        frame(cx);
-        let max = scroll.max_offset().y;
-        assert!(max > gpui_kit::px(2000.), "{max:?}");
-        let mut last = gpui_kit::px(0.);
-        for _ in 0..8 {
-            cx.update_window(handle, |_, window, cx| {
-                let delta = gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(-300.));
-                window.scroll("task-list-scroll", gpui_kit::ScrollDelta::Pixels(delta), cx);
-            })
-            .unwrap();
-            frame(cx);
-            let now = scroll.max_offset().y;
-            assert!((now - max).abs() < gpui_kit::px(1.), "{now:?}, not {max:?}");
-            let offset = -scroll.offset().y;
-            assert!(offset >= last, "scrolled back from {last:?} to {offset:?}");
-            last = offset;
-        }
     }
 
     /// Scrolling through long output of rows of differing heights, rows not yet
@@ -17558,20 +15403,24 @@ mod tests {
                     mode: Some(SendMode::Spec),
                     attached_text: vec!["note".into()],
                     attached_images: Vec::new(),
+                    attached_files: Vec::new(),
                     sliced: false,
                     code_task: None,
                     sent_from: None,
                     post_build_update: false,
+                    added_step: None,
                 };
                 let mut answer = PromptTask::new("Why?".into());
                 answer.sent = super::SentAs {
                     mode: Some(SendMode::Ask),
                     attached_text: vec!["context".into()],
                     attached_images: Vec::new(),
+                    attached_files: Vec::new(),
                     sliced: true,
                     code_task: None,
                     sent_from: None,
                     post_build_update: false,
+                    added_step: None,
                 };
                 this.answers.push(answer);
                 this.working = crate::chat_input::Lanes::ALL;
@@ -17615,10 +15464,12 @@ mod tests {
                     mode,
                     attached_text: vec!["note".into()],
                     attached_images: Vec::new(),
+                    attached_files: Vec::new(),
                     sliced: true,
                     code_task: None,
                     sent_from: None,
                     post_build_update: false,
+                    added_step: None,
                 };
                 this.tasks[ix].mode = mode;
                 // Over, so the next heads the view in its place.
@@ -17626,6 +15477,7 @@ mod tests {
             })
         };
         let offered = |id: (&'static str, usize), cx: &mut TestAppContext| {
+            reveal_button(handle, id, cx);
             cx.update_window(handle, |_, window, cx| {
                 window.render_frame(cx);
                 window.try_find(id).is_some()
@@ -17674,7 +15526,7 @@ mod tests {
         .unwrap();
 
         prompt_mode.update(cx, |this, cx| {
-            this.task_history.expanded = true;
+            show_tasks(this);
             cx.notify();
         });
         for (item, mode) in modes.into_iter().enumerate() {
@@ -17686,12 +15538,12 @@ mod tests {
         }
 
         // A Code task goes to Spec, as it was otherwise sent.
+        reveal_button(handle, ("send-to-other-previous", 0usize), cx);
         cx.update_window(handle, |_, window, cx| {
             window.click(("send-to-other-previous", 0usize), cx)
         })
         .unwrap();
         prompt_mode.read_with(cx, |this, _| {
-            assert_eq!(this.task_history.open, None, "the click opened the heading");
             assert_eq!(this.tasks.len(), 6);
             assert_eq!(this.tasks[0].sent.mode, Some(SendMode::Code));
             let sent = &this.tasks[5];
@@ -17702,6 +15554,7 @@ mod tests {
                     mode: Some(SendMode::Spec),
                     attached_text: vec!["note".into()],
                     attached_images: Vec::new(),
+                    attached_files: Vec::new(),
                     sliced: true,
                     // Told of the code task, which never finished.
                     code_task: Some(crate::hidden_anchor::CodeTask {
@@ -17711,6 +15564,7 @@ mod tests {
                     // Knowing the task it was sent from.
                     sent_from: Some(this.tasks[0].name.to_string()),
                     post_build_update: false,
+                    added_step: None,
                 }
             );
         });
@@ -17719,7 +15573,7 @@ mod tests {
         // The latest, now that Spec task, sent from Code, is complete: it
         // isn't offered, and clicked, it sends nothing back.
         prompt_mode.update(cx, |this, cx| {
-            this.task_history.expanded = false;
+            this.tasks_tab.open = None;
             cx.notify();
         });
         // The referenced spec sidebar, over the header's right while the
@@ -17741,9 +15595,10 @@ mod tests {
 
         // A Spec task goes to Code.
         prompt_mode.update(cx, |this, cx| {
-            this.task_history.expanded = true;
+            show_tasks(this);
             cx.notify();
         });
+        reveal_button(handle, ("send-to-other-previous", 4usize), cx);
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             window.click(("send-to-other-previous", 4usize), cx)
@@ -17797,10 +15652,12 @@ mod tests {
                         mode: Some(mode),
                         attached_text: Vec::new(),
                         attached_images: Vec::new(),
+                        attached_files: Vec::new(),
                         sliced: false,
                         code_task: None,
                         sent_from,
                         post_build_update: false,
+                        added_step: None,
                     };
                     this.tasks[ix].mode = Some(mode);
                     this.tasks[ix].status = status;
@@ -17808,6 +15665,7 @@ mod tests {
                 })
             };
         let shown = |id: (&'static str, usize), cx: &mut TestAppContext| {
+            reveal_button(handle, id, cx);
             cx.update_window(handle, |_, window, cx| {
                 window.render_frame(cx);
                 window.try_find(id).is_some()
@@ -17826,7 +15684,11 @@ mod tests {
         };
         let expand = |expanded: bool, cx: &mut TestAppContext| {
             prompt_mode.update(cx, |this, cx| {
-                this.task_history.expanded = expanded;
+                if expanded {
+                    show_tasks(this);
+                } else {
+                    this.tasks_tab.open = None;
+                }
                 cx.notify();
             })
         };
@@ -17846,6 +15708,7 @@ mod tests {
                     wait: true,
                     sent_from,
                     images: Vec::new(),
+                    files: Vec::new(),
                     new_conversation: false,
                     mode: Some(crate::chat_input::SendMode::Spec),
                     queued_at: 0,
@@ -17945,6 +15808,7 @@ mod tests {
 
         // Batch actions neither count nor send them, but they stay selected.
         set_status(to_spec, TaskStatus::Done, cx);
+        show_timeline(handle, cx);
         prompt_mode.update(cx, |this, cx| {
             this.task_history.click_checkbox(code, false);
             this.task_history.click_checkbox(spec, false);
@@ -18055,6 +15919,7 @@ mod tests {
             })
         };
         let shown = |id: (&'static str, usize), cx: &mut TestAppContext| {
+            reveal_button(handle, id, cx);
             cx.update_window(handle, |_, window, cx| {
                 window.render_frame(cx);
                 window.try_find(id).is_some()
@@ -18177,7 +16042,9 @@ mod tests {
         let button = |ix: usize, cx: &mut TestAppContext| {
             let latest = prompt_mode.update(cx, |this, cx| {
                 let latest = ix + 1 == this.tasks.len();
-                this.task_history.expanded = !latest;
+                if !latest {
+                    show_tasks(this);
+                }
                 cx.notify();
                 latest
             });
@@ -18280,10 +16147,12 @@ mod tests {
                         mode: Some(mode),
                         attached_text: Vec::new(),
                         attached_images: Vec::new(),
+                        attached_files: Vec::new(),
                         sliced: false,
                         code_task: None,
                         sent_from,
                         post_build_update: false,
+                        added_step: None,
                     };
                     this.tasks[ix].mode = Some(mode);
                     this.tasks[ix].status = status;
@@ -18310,6 +16179,7 @@ mod tests {
         };
         // Right-clicks `id`, and says whether a menu opened.
         let menu_opens = |id: (&'static str, usize), cx: &mut TestAppContext| {
+            reveal_button(handle, id, cx);
             cx.update_window(handle, |_, window, cx| {
                 window.render_frame(cx);
                 window.right_click(id, cx);
@@ -18328,8 +16198,6 @@ mod tests {
             );
             opened
         };
-        let open_item =
-            |cx: &mut TestAppContext| prompt_mode.read_with(cx, |this, _| this.task_history.open);
 
         let code = push(SendMode::Code, TaskStatus::Done, None, cx);
         let spec = push(SendMode::Spec, TaskStatus::Done, None, cx);
@@ -18355,7 +16223,7 @@ mod tests {
         // A previous task, a Spec task sent from Code, the same; and
         // right-clicked, it neither opens nor closes the item.
         prompt_mode.update(cx, |this, cx| {
-            this.task_history.expanded = true;
+            show_tasks(this);
             cx.notify();
         });
         let previous = ("send-to-other-previous", to_spec);
@@ -18363,23 +16231,8 @@ mod tests {
         assert_eq!(offered(to_spec, cx), None);
         click(previous, cx);
         assert_eq!(sent(cx), (4, 0), "a complete task was sent back to Code");
-        assert_eq!(open_item(cx), None, "clicking opened the item");
         assert!(!menu_opens(previous, cx), "a complete task opened its menu");
-        assert_eq!(open_item(cx), None, "right-clicking opened the item");
-        prompt_mode.update(cx, |this, cx| {
-            this.task_history.open = Some(to_spec);
-            cx.notify();
-        });
         assert!(!menu_opens(previous, cx));
-        assert_eq!(
-            open_item(cx),
-            Some(to_spec),
-            "right-clicking closed the item"
-        );
-        prompt_mode.update(cx, |this, cx| {
-            this.task_history.open = None;
-            cx.notify();
-        });
         // The tasks they were sent from, not complete, still open theirs.
         assert!(menu_opens(("send-to-other-previous", code), cx));
         prompt_mode.update(cx, |this, cx| {
@@ -18398,6 +16251,7 @@ mod tests {
 
         // Batch actions neither count nor send them, though they stay
         // selected.
+        show_timeline(handle, cx);
         prompt_mode.update(cx, |this, cx| {
             this.task_history.click_checkbox(to_spec, false);
             this.task_history.click_checkbox(to_code, false);
@@ -18457,7 +16311,7 @@ mod tests {
         .unwrap();
         let resent = push(SendMode::Spec, TaskStatus::Done, Some(code), cx);
         prompt_mode.update(cx, |this, cx| {
-            this.task_history.expanded = false;
+            this.tasks_tab.open = None;
             cx.notify();
         });
         assert_eq!(
@@ -18470,7 +16324,7 @@ mod tests {
         // from it (as one could be before tasks sent over were complete).
         prompt_mode.update(cx, |this, cx| {
             this.tasks[to_spec].marked_done = true;
-            this.task_history.expanded = true;
+            show_tasks(this);
             cx.notify();
         });
         assert_eq!(tooltip(previous, cx), "Complete, sent here from Code");
@@ -18512,10 +16366,12 @@ mod tests {
                         mode: Some(mode),
                         attached_text: Vec::new(),
                         attached_images: Vec::new(),
+                        attached_files: Vec::new(),
                         sliced: false,
                         code_task: None,
                         sent_from,
                         post_build_update: false,
+                        added_step: None,
                     };
                     this.tasks[ix].mode = Some(mode);
                     this.tasks[ix].status = status;
@@ -18527,6 +16383,7 @@ mod tests {
         };
         // Right-clicks `id`, and says what the menu that opened offers.
         let right_click = |id: (&'static str, usize), cx: &mut TestAppContext| -> String {
+            reveal_button(handle, id, cx);
             cx.update_window(handle, |_, window, cx| {
                 window.render_frame(cx);
                 window.right_click(id, cx);
@@ -18614,35 +16471,22 @@ mod tests {
         // Among the previous tasks, right-clicking neither opens nor closes
         // the item, enabled or not.
         prompt_mode.update(cx, |this, cx| {
-            this.task_history.expanded = true;
+            show_tasks(this);
             cx.notify();
         });
         let previous = ("send-to-other-previous", code);
-        let open_item =
-            |cx: &mut TestAppContext| prompt_mode.read_with(cx, |this, _| this.task_history.open);
         assert_eq!(right_click(previous, cx), "Mark as done");
-        assert_eq!(open_item(cx), None, "right-clicking opened the item");
         choose(cx);
         assert_eq!(tooltip(previous, cx), "Marked as done");
-        assert_eq!(open_item(cx), None);
-        prompt_mode.update(cx, |this, cx| {
-            this.task_history.open = Some(code);
-            cx.notify();
-        });
         assert_eq!(right_click(previous, cx), "Mark as not done");
-        assert_eq!(open_item(cx), Some(code), "right-clicking closed the item");
         choose(cx);
         assert_eq!(tooltip(previous, cx), "Send to Spec");
-        assert_eq!(open_item(cx), Some(code));
-        prompt_mode.update(cx, |this, cx| {
-            this.task_history.open = None;
-            cx.notify();
-        });
 
         // Batch actions treat tasks marked done as sent: neither counted nor
         // sent, though still selected.
         set_marked(code, true, cx);
         set_marked(spec, true, cx);
+        show_timeline(handle, cx);
         prompt_mode.update(cx, |this, cx| {
             this.task_history.click_checkbox(code, false);
             this.task_history.click_checkbox(spec, false);
@@ -18790,7 +16634,7 @@ mod tests {
         assert_eq!(task(&names[0], cx), (true, TaskStatus::Done));
         assert_eq!(task(&names[1], cx), (true, TaskStatus::Unrecorded));
         prompt_mode.update(cx, |this, cx| {
-            this.task_history.expanded = true;
+            show_tasks(this);
             cx.notify();
         });
         for name in &names {
@@ -18910,14 +16754,17 @@ mod tests {
                     mode,
                     attached_text: vec!["note".into()],
                     attached_images: Vec::new(),
+                    attached_files: Vec::new(),
                     sliced: true,
                     code_task: None,
                     sent_from: None,
                     post_build_update: false,
+                    added_step: None,
                 };
                 this.tasks[ix].mode = mode;
+                this.tasks[ix].status = super::TaskStatus::Done;
             }
-            this.task_history.expanded = true;
+            show_previous_tasks(this);
             cx.notify();
         });
         let shown = |id: &'static str, cx: &mut TestAppContext| {
@@ -18987,8 +16834,7 @@ mod tests {
         };
         let still = |cx: &mut TestAppContext| {
             prompt_mode.read_with(cx, |this, _| {
-                assert!(this.task_history.expanded, "the list closed");
-                assert_eq!(this.task_history.open, None, "a heading opened");
+                assert_eq!(this.tasks_tab.open, None, "a task opened");
             })
         };
 
@@ -19023,9 +16869,25 @@ mod tests {
 
         // Kept while the list is closed and opened again, with the row's
         // toggle, and while another project is on screen.
-        click("history-toggle".into(), cx);
-        assert!(!prompt_mode.read_with(cx, |this, _| this.task_history.expanded));
-        click("history-toggle".into(), cx);
+        click("sidebar-toggle".into(), cx);
+        assert!(!prompt_mode.read_with(cx, |this, _| this.sidebar_by_hand));
+        // Slid back, rather than sliding, so the button stays put.
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            prompt_mode.update(cx, |this, cx| {
+                this.refs_closing = None;
+                cx.notify();
+            });
+            window.render_frame(cx);
+        })
+        .unwrap();
+        click("sidebar-toggle".into(), cx);
+        assert!(prompt_mode.read_with(cx, |this, _| this.sidebar_by_hand));
+        // Out already, rather than sliding.
+        prompt_mode.update(cx, |this, cx| {
+            show_tasks(this);
+            cx.notify();
+        });
         assert_eq!(selected(cx), [0, 1, 3]);
         cx.update(|cx| {
             let mut other = super::ProjectSession::new(None, cx);
@@ -19135,10 +16997,12 @@ mod tests {
                         mode,
                         attached_text: Vec::new(),
                         attached_images: Vec::new(),
+                        attached_files: Vec::new(),
                         sliced: false,
                         code_task: None,
                         sent_from: None,
                         post_build_update: false,
+                        added_step: None,
                     };
                     this.tasks[ix].mode = mode;
                     this.tasks[ix].status = TaskStatus::Done;
@@ -19257,10 +17121,12 @@ mod tests {
                         mode: Some(mode),
                         attached_text: vec!["note".into()],
                         attached_images: Vec::new(),
+                        attached_files: Vec::new(),
                         sliced: false,
                         code_task: None,
                         sent_from: None,
                         post_build_update: false,
+                        added_step: None,
                     };
                     this.tasks[ix].mode = Some(mode);
                     for event in events {
@@ -19371,10 +17237,12 @@ mod tests {
                     mode: Some(SendMode::Spec),
                     attached_text: vec!["note".into()],
                     attached_images: Vec::new(),
+                    attached_files: Vec::new(),
                     sliced: false,
                     code_task: Some(told.clone()),
                     sent_from: Some(this.tasks[0].name.to_string()),
                     post_build_update: false,
+                    added_step: None,
                 }
             );
             assert!(
@@ -20600,6 +18468,12 @@ mod tests {
                 assert_eq!(this.tasks[0].status, TaskStatus::Building);
             });
             window.render_frame(cx);
+            // The sidebar out already, rather than sliding the button along.
+            prompt_mode.update(cx, |this, cx| {
+                this.refs_opened = None;
+                cx.notify();
+            });
+            window.render_frame(cx);
             window.click(("cancel-latest", 0usize), cx);
         })
         .unwrap();
@@ -20849,6 +18723,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
                     crate::chat_input::Attaching::Image(image) => {
                         format!("{:?}", image.image.bytes.len())
                     }
+                    crate::chat_input::Attaching::File(file) => file.name.clone(),
                 })
                 .collect::<Vec<_>>()
         });
@@ -20890,6 +18765,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
                 this.tasks[ix].sent = super::SentAs {
                     mode: Some(SendMode::Code),
                     attached_images: paths.clone(),
+                    attached_files: Vec::new(),
                     ..Default::default()
                 };
                 this.tasks[ix].mode = Some(SendMode::Code);
@@ -20938,6 +18814,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
                     crate::hidden_anchor::Attached {
                         text: Vec::new(),
                         images: vec![paths[1].clone()],
+                        files: Vec::new(),
                     },
                     window,
                     cx,
@@ -20983,6 +18860,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
                     crate::hidden_anchor::Attached {
                         text: Vec::new(),
                         images: paths.clone(),
+                        files: Vec::new(),
                     },
                     window,
                     cx,
@@ -21207,6 +19085,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         let window = cx.add_window(|window, cx| {
             let view = cx.new(|cx| PromptMode::new(window, cx));
             prompt_mode = Some(view.clone());
+            OPENED.set(Some(view.downgrade()));
             let shown = cx.new(|_| WithDialogs(view));
             Root::new(shown, window, cx)
         });
@@ -21308,7 +19187,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
             this.show_compiled(0, "Prompt_a".into(), sliced.into(), cx);
         });
         let before = prompt_mode.read_with(cx, |this, _| {
-            (this.tasks[0].slices_open, this.task_history.expanded)
+            (this.tasks[0].slices_open, this.tasks_tab.open.is_some())
         });
         let prompt = raw_prompt_of_latest(cx, handle, &prompt_mode);
         let sections: Vec<_> = prompt
@@ -21326,7 +19205,7 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
         assert_eq!(prompt.subtitle(), "Code · Prompt_a · Claude Code");
         prompt_mode.read_with(cx, |this, _| {
             assert_eq!(
-                (this.tasks[0].slices_open, this.task_history.expanded),
+                (this.tasks[0].slices_open, this.tasks_tab.open.is_some()),
                 before,
                 "opening it changed the header"
             );
@@ -21432,10 +19311,12 @@ echo '{{"type":"result","subtype":"success","is_error":false,"result":"Done."}}'
                     mode: Some(SendMode::Code),
                     attached_text: Vec::new(),
                     attached_images: Vec::new(),
+                    attached_files: Vec::new(),
                     sliced: false,
                     code_task: None,
                     sent_from: None,
                     post_build_update: false,
+                    added_step: None,
                 };
                 this.tasks[ix].mode = Some(SendMode::Code);
                 for event in [

@@ -195,36 +195,54 @@ shape EditorShape:
             attaches to it.
 
         hover:
-            Hovering a name shows the server's `textDocument/hover`, and
-            nothing else is hovered: only something hovering tells more about
-            shows a popover. A name is a key or property name, an anchor's name
-            where it is declared or extended, a keyword, a name an import
-            brings in, or a name inside an expression, in braces, whether written plain or
-            after a dollar sign, a hash, or an at sign. Prose, the text of a value written as plain words, is
-            never hovered, however the server answers for it, nor are
-            numbers, punctuation, indentation, comments, or blank space, so
-            moving the pointer over a paragraph shows nothing. Even over a
-            name, a hover is shown only when it says more than the text
-            beneath it: one that only gives the compiled value of what is
-            written, the same words again, as "compiled to" a value that reads
-            as the text does, or that is empty, shows nothing. A hover shows
-            only once the pointer has rested on a name for 500 milliseconds,
-            never while it passes over the text, and goes as soon as the
-            pointer leaves the name. A diagnostic's message shows on hover over
-            its underline, as ever, wherever that is, prose included. Typing in
-            the editor clears whatever the pointer's hover shows, the name's
-            hover and a diagnostic's message alike, as soon as a key changes
-            the text, and nothing hovered shows again until the pointer next
-            moves over the text.
+            Resting the pointer on a symbol or an error for 500 milliseconds
+            opens the hover popover: a small box on the theme's raised surface,
+            with a soft shadow and corners rounded 4 pixels, at most 480 pixels
+            wide and 320 tall, scrolling beyond that, set just below the text
+            hovered, or above it where there is no room below. Moving the
+            pointer into it keeps it open, so its text can be selected and its
+            links clicked; it closes once the pointer leaves both it and what
+            was hovered, on <Escape>, or when the editor scrolls. Passing over
+            the text without resting shows nothing.
 
-        definitions:
-            Ctrl-clicking (Cmd-clicking on macOS) a name goes to its
-            `textDocument/definition`. A definition in another file opens that
-            file at the definition, as the @{OpenFileScope} says.
+            A symbol is a key or property name, an anchor's name where it is
+            declared, extended, or used, a keyword, a name an import brings in,
+            or a name inside an expression in braces, whether written plain or
+            after a dollar sign, a hash, or an at sign. Resting on one sends the
+            server `textDocument/hover` for the position under the pointer, as
+            the server counts positions, with the editor's unsaved text sent
+            first, and the popover shows what the server answers, rendered as
+            markdown, its code blocks syntax highlighted as the editor
+            highlights Piton, its links opening as the editor opens links: the
+            symbol's type, where it is defined, its inheritance, its
+            documentation, and what it compiles to, as the server gives them.
+            An answer that comes after the pointer has left the symbol is
+            dropped. Prose, the text of a value written as plain words, is
+            never hovered, however the server answers for it, nor are numbers,
+            punctuation, indentation, comments, or blank space, and an answer
+            that is empty, or only gives the compiled value of what is written
+            as the same words again, opens nothing.
+
+            Resting on an error, anywhere along a diagnostic's underline, prose
+            included, opens the popover with the diagnostic first: its
+            severity's icon, in the theme's error, warning, or info colour, its
+            message, and muted after it its code, as `type-mismatch`, then any
+            related notes it gives, each a link to where it points. Several
+            diagnostics there are listed one after another. Where the error is
+            on a symbol, the server's hover for it follows beneath a thin line;
+            and where the server offers fixes there, a "Quick fix" link with
+            its shortcut, Ctrl+. (Cmd+. on macOS), lists them, as the shortcut
+            does.
+
+            Typing in the editor closes the popover as soon as a key changes
+            the text, and nothing opens again until the pointer next moves over
+            the text. While the server isn't running, symbols open nothing, and
+            errors already published still show their message.
 
         diagnostics:
-            What the server publishes for the file is underlined, with the
-            message shown on hover, and kept while the text is edited until the
+            What the server publishes for the file is underlined, a wavy line
+            in its severity's colour, error, warning, or info, with the
+            message shown in the hover popover, as the hover says, and kept while the text is edited until the
             server publishes again.
 
         quickFixes:

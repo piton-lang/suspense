@@ -1,0 +1,8 @@
+- [Today the harness in use is picked in Settings and remembered for the user, not for a project](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [A run already going finishes with its harness; a conversation is only carried on by the harness it began with](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [Settings' Agent section lists Claude Code, Codex, and OpenCode as radio buttons with their commands](.claude/reference/scope/settings-window/index.md#agent)
+- [New Project's Agents checkboxes pick the Belay adapters; only Claude Code starts checked, at least one](.claude/reference/scope/new-project/index.md#agents)
+- [Import Project's template and agents start as a new project's do](.claude/reference/scope/import-project/index.md#defaults)
+- [The model and effort chosen are remembered per harness for the user](.claude/reference/scope/user-preferences/index.md#shape)
+- [The project's own settings are kept in .suspense/settings.json](.claude/reference/scope/project-data/index.md#contents)
+- [The harness is a per-project setting, picked in New or Import Project from the agents checked, saved in settings.json](.claude/reference/scope/harness-integration/index.md#harnesses)

@@ -1,6 +1,7 @@
 //! The project's own settings, in `.suspense/settings.json`, as the
-//! ProjectDataScope says: whether its Spec runs may read the code, as the
-//! ContainerEnvironmentScope says. A project without the file, or with one
+//! ProjectDataScope says: the harness its runs go to, as the
+//! HarnessIntegrationScope says, and whether its Spec runs may read the
+//! code, as the ContainerEnvironmentScope says. A project without the file, or with one
 //! that doesn't read back, has every setting off.
 
 use std::path::{Path, PathBuf};
@@ -13,6 +14,10 @@ use crate::hidden_anchor::APP_DIR;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ProjectSettings {
+    /// The command of the harness its runs go to, until one is saved the
+    /// first its config builds for.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub harness: Option<String>,
     /// A Spec task, or a Chain prompt's spec step, is given the code
     /// location, read only.
     pub spec_reads_code: bool,
@@ -68,12 +73,12 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("suspense-settings-{}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
         assert!(!spec_reads_code(&dir));
-        ProjectSettings { spec_reads_code: true, spec_reads_project: false }.save(&dir).unwrap();
+        ProjectSettings { spec_reads_code: true, spec_reads_project: false, ..Default::default() }.save(&dir).unwrap();
         assert!(spec_reads_code(&dir) && !spec_reads_project(&dir));
         // The whole project only ever with the code.
-        ProjectSettings { spec_reads_code: false, spec_reads_project: true }.save(&dir).unwrap();
+        ProjectSettings { spec_reads_code: false, spec_reads_project: true, ..Default::default() }.save(&dir).unwrap();
         assert!(!spec_reads_project(&dir));
-        ProjectSettings { spec_reads_code: true, spec_reads_project: true }.save(&dir).unwrap();
+        ProjectSettings { spec_reads_code: true, spec_reads_project: true, ..Default::default() }.save(&dir).unwrap();
         assert!(spec_reads_project(&dir));
         let saved = std::fs::read_to_string(file(&dir)).unwrap();
         assert!(saved.contains("\"specReadsCode\": true"), "{saved}");

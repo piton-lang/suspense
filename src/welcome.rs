@@ -145,30 +145,30 @@ pub type Probe = Arc<dyn Fn(Check, Agent, Platform, Option<PathBuf>) -> Status +
 pub fn probe(check: Check, agent: Agent, platform: Platform, project_dir: Option<PathBuf>) -> Status {
     match check {
         Check::Git => found_or(
-            version_of("git"),
-            "Git isn't installed, or isn't on the PATH. Suspense needs it, since projects are git repositories. Install it, then check again.",
+            "git",
+            "Git",
+            "Suspense needs it, since projects are git repositories. Install it, then check again.",
             vec![Fix::Link("Download Git", "https://git-scm.com/downloads".into())],
         ),
         Check::Piton => found_or(
-            version_of("piton"),
-            "Piton isn't installed, or isn't on the PATH. Suspense needs it to build, slice, and check the spec. Install it, then check again.",
+            "piton",
+            "Piton",
+            "Suspense needs it to build, slice, and check the spec. Install it, then check again.",
             vec![Fix::Link(
                 "Install Piton",
                 "https://github.com/piton-lang/piton-rs".into(),
             )],
         ),
         Check::Harness => found_or(
-            version_of(agent.command()),
-            &format!(
-                "{} isn't installed: `{}` couldn't be run. Suspense needs it, since Code tasks run it on the host. Install it, or choose another harness.",
-                agent.label(),
-                agent.command()
-            ),
+            agent.command(),
+            agent.label(),
+            "Suspense needs it, since Code tasks run it on the host. Install it, or choose another harness.",
             vec![Fix::Link("Install", agent::install_url(agent).into())],
         ),
         Check::Podman => found_or(
-            version_of(container::podman()),
-            "Podman isn't installed, or isn't on the PATH. Suspense needs it, since Spec tasks, a Chain prompt's spec steps, and questions run in a container. Install it, then check again.",
+            &container::podman().to_string_lossy(),
+            "Podman",
+            "Suspense needs it, since Spec tasks, a Chain prompt's spec steps, and questions run in a container. Install it, then check again.",
             vec![Fix::Link("Install Podman", platform.install_url().into())],
         ),
         Check::PodmanMachine => match within(move || container::podman_state(platform)) {
@@ -238,12 +238,26 @@ fn failed(why: String, fixes: Vec<Fix>) -> Status {
     }
 }
 
-/// Passed with the version found, or failed as `why` says.
-fn found_or(version: Result<String, String>, why: &str, fixes: Vec<Fix>) -> Status {
-    match version {
-        Ok(version) => Status::Passed(Some(version)),
-        Err(err) if err.contains("didn't answer") => failed(err, fixes),
-        Err(_) => failed(why.to_string(), fixes),
+/// Passed with the version `program` reports and where it was found, or
+/// failed saying it couldn't be found, naming every folder searched, or
+/// that it was found but won't run, with what it printed, then `needs`.
+/// `program` is looked for again, so one installed since is found.
+fn found_or(program: &str, name: &str, needs: &str, fixes: Vec<Fix>) -> Status {
+    crate::programs::forget();
+    let Some(path) = crate::programs::find(program) else {
+        return failed(
+            format!("{} {needs}", crate::programs::not_found(program)),
+            fixes,
+        );
+    };
+    let at = path.display().to_string();
+    match version_of(program) {
+        Ok(version) => Status::Passed(Some(format!("{version} · {at}"))),
+        Err(said) => Status::Failed {
+            found: Some(at.clone()),
+            why: format!("{name} was found at `{at}`, but it won't run: {said} {needs}"),
+            fixes,
+        },
     }
 }
 
@@ -262,15 +276,28 @@ fn didnt_answer() -> String {
 }
 
 /// The version `program --version` reports, without a console window, and
-/// stopped once it has taken longer than [`TIMEOUT`].
+/// stopped once it has taken longer than [`TIMEOUT`]; else what went wrong,
+/// with what it printed.
 fn version_of(program: impl AsRef<std::ffi::OsStr>) -> Result<String, String> {
     let mut child = crate::process::command(program)
         .arg("--version")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn_logged()
         .map_err(|err| err.to_string())?;
+    // Read as it runs, so a full pipe never holds it up.
+    let read = |pipe: Option<Box<dyn std::io::Read + Send>>| {
+        std::thread::spawn(move || {
+            let mut out = String::new();
+            if let Some(mut pipe) = pipe {
+                pipe.read_to_string(&mut out).ok();
+            }
+            out
+        })
+    };
+    let stdout = read(child.stdout.take().map(|pipe| Box::new(pipe) as _));
+    let stderr = read(child.stderr.take().map(|pipe| Box::new(pipe) as _));
     let started = Instant::now();
     let status = loop {
         if let Some(status) = child.try_wait().map_err(|err| err.to_string())? {
@@ -283,12 +310,19 @@ fn version_of(program: impl AsRef<std::ffi::OsStr>) -> Result<String, String> {
         }
         std::thread::sleep(Duration::from_millis(25));
     };
-    let mut out = String::new();
-    if let Some(mut stdout) = child.stdout.take() {
-        std::io::Read::read_to_string(&mut stdout, &mut out).ok();
-    }
+    let out = stdout.join().unwrap_or_default();
+    let err = stderr.join().unwrap_or_default();
     if !status.success() {
-        return Err(format!("it ended with {status}"));
+        let printed = [err.trim(), out.trim()]
+            .into_iter()
+            .filter(|printed| !printed.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+        return Err(if printed.is_empty() {
+            format!("`--version` ended with {status}, printing nothing.")
+        } else {
+            format!("`--version` ended with {status}, printing: {printed}")
+        });
     }
     Ok(version_in(&out))
 }
@@ -475,8 +509,8 @@ impl WelcomeView {
             })
             .map(|(check, _)| *check)
             .collect();
-        let agent = agent::current();
         let project_dir = ProjectDirectory::get(cx);
+        let agent = agent::of_project(project_dir.as_deref());
         for check in ready {
             self.set(check, Status::Checking);
             let probe = self.probe.clone();
@@ -560,7 +594,7 @@ impl WelcomeView {
     /// Logs the harness in, in the login view, checking its login again,
     /// and what waits on it, once it is.
     fn log_in(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let agent = agent::current();
+        let agent = agent::current(cx);
         crate::harness::forget_login(agent);
         let this = cx.entity().downgrade();
         crate::login_view::LoginView::open(

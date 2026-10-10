@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /scope/project-data import ProjectDataScope
 from ../container-environment import ContainerEnvironmentScope
 from ../harness-integration import HarnessIntegrationScope
 from ../no-project import NoProjectStateScope
@@ -103,9 +104,10 @@ shape SettingsWindowShape:
 
     agent:
         The "Agent" section is headed "Agent", with a muted line beneath
-        saying that every run, the tasks, the questions, and the application's
-        own, goes to the harness picked here, and that a conversation is only
-        carried on by the harness it began with.
+        saying that every run of the open project, its tasks, its questions,
+        and the application's own for it, goes to the harness picked here, that
+        it is the project's, and that a conversation is only carried on by the
+        harness it began with.
 
         Then a row for each harness, in order: Claude Code, Codex, and
         OpenCode, each a radio button reading its name, with the command it
@@ -113,9 +115,9 @@ shape SettingsWindowShape:
         installed" muted after that when the command can't be found. Exactly
         one is picked, the harness in use, as the @{HarnessIntegrationScope}
         says. Clicking one picks it; it is used from the next run on, and
-        remembered for the user straight away, as the @{UserPreferencesScope}
-        says, not saved with a project, so the section is the same with or
-        without a project open. One that isn't installed can still be picked,
+        saved with the project straight away, as the @{ProjectDataScope}
+        says. With no project open, the section says the harness is chosen
+        for each project, and offers none to pick. One that isn't installed can still be picked,
         and its runs fail saying why.
 
     containers:

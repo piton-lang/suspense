@@ -211,12 +211,12 @@ fn discover_in(project_dir: Option<&Path>, claude_dir: Option<&Path>) -> Vec<Inv
     let mut found = Vec::new();
     if let Some(project_dir) = project_dir {
         scan(
-            &project_dir.join(crate::harness::directory()),
+            &project_dir.join(crate::harness::directory(Some(project_dir))),
             None,
             &mut found,
         );
         // Codex finds a project's skills in .agents.
-        if crate::agent::current() == crate::agent::Agent::Codex {
+        if crate::agent::of_project(Some(project_dir)) == crate::agent::Agent::Codex {
             scan(&project_dir.join(".agents"), None, &mut found);
         }
     }

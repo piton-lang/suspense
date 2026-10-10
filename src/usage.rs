@@ -633,6 +633,23 @@ impl ProjectUsage {
         models
     }
 
+    /// What the runs of the task or question named `name` spent: their
+    /// tokens, and what they cost where every model they used is priced;
+    /// none while nothing it ran reported any.
+    pub fn spent_by(&self, name: &str) -> Option<(u64, Option<f64>)> {
+        let mut models = BTreeMap::new();
+        for (run, own) in self.figures() {
+            if run.name.as_deref() == Some(name) {
+                merge(&mut models, own);
+            }
+        }
+        let tokens: u64 = models.values().filter_map(Spend::tokens).sum();
+        (tokens > 0).then(|| {
+            let cost = Cost::of(models.iter().map(|(model, spend)| (model.as_str(), spend)));
+            (tokens, cost.map(|cost| cost.total()))
+        })
+    }
+
     /// Every run the project has made that is over, and what they spent.
     pub fn project(&self) -> ProjectReport {
         let mut report = ProjectReport::default();

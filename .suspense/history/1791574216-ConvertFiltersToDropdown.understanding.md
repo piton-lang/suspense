@@ -1,0 +1,7 @@
+- [Previous tasks filter by mode (Code, Chain, Spec, Freeform) and by standing with the other mode](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)
+- [Each filter shows how many previous tasks match it on its own](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)
+- [Within a group filters combine as either; across groups as both; none on shows every task](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)
+- [Filtering only hides tasks; hidden selected tasks stay selected and counted](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)
+- [Filters are kept per open project while the app runs, never saved with the project](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)
+- [Previous tasks live in the Tasks tab's Previous group, under its heading](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Filters are one dropdown at the Previous heading with Mode and Other mode sections of checkboxes](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)

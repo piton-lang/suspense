@@ -80,6 +80,7 @@ pub fn bind_keys(cx: &mut App) {
     ribbon::bind_keys(cx);
     crate::diff_view::bind_keys(cx);
     crate::chat_input::bind_keys(cx);
+    crate::prompt_mode::bind_keys(cx);
     crate::fs_browser::bind_keys(cx);
     crate::project_indicator::bind_keys(cx);
 }
@@ -2191,6 +2192,12 @@ impl Render for MainWindow {
             // Painted first: what overlapping hit areas are, afresh.
             .child(crate::hit_areas::frame_start())
             .child(crate::walkthrough::frame_start())
+            // Ctrl+Alt+B opens and closes the right sidebar wherever the
+            // keyboard is.
+            .on_action(cx.listener(|this, _: &crate::prompt_mode::ToggleSidebar, _, cx| {
+                this.prompt_mode
+                    .update(cx, |prompt_mode, cx| prompt_mode.toggle_sidebar(cx));
+            }))
             .on_action(cx.listener(|this, _: &Dismiss, window, cx| {
                 // The context-less Esc binding outranks the palette's own, so
                 // the palette's Esc is handled here.

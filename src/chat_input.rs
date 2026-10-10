@@ -26,6 +26,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use lsp_types::{CompletionContext, CompletionResponse};
 
+use crate::attached_file::{self, AttachedFile};
 use crate::attached_image::{self, AttachedImage};
 use crate::completion_menu::CompletionMenu;
 use crate::growing_input::GrowToFit;
@@ -170,6 +171,8 @@ pub enum QueuedEdit {
         attached_text: Vec<String>,
         /// The images attached to it, not yet saved.
         attached_images: Vec<AttachedImage>,
+        /// The other files attached to it, not yet saved.
+        attached_files: Vec<AttachedFile>,
     },
     Cancelled,
 }
@@ -613,12 +616,19 @@ pub struct Submit {
     /// The images attached to the prompt, in the order they were attached,
     /// saved in the project's data as the prompt is sent or queued.
     pub attached_images: Vec<AttachedImage>,
+    /// The other files attached to the prompt, in the order they were
+    /// attached, saved in the project's data as the prompt is sent or queued.
+    pub attached_files: Vec<AttachedFile>,
     /// Queued on purpose, rather than sent if the harness is free.
     pub queue: bool,
     /// Sent to the task running, as more for it to do, rather than as a task
     /// of its own.
     pub to_task: bool,
 }
+
+/// A prompt brought back into the input: its text as typed, its mode, and
+/// its attached text, images, and other files.
+pub type Recalled = (String, SendMode, Vec<String>, Vec<AttachedImage>, Vec<AttachedFile>);
 
 /// Something attached to the prompt being written, sent along with it.
 #[derive(Clone, Debug, PartialEq)]
@@ -627,11 +637,12 @@ pub struct Attachment {
     pub attached: Attaching,
 }
 
-/// What an attachment is: a piece of text, or an image.
+/// What an attachment is: a piece of text, an image, or another file.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Attaching {
     Text(String),
     Image(AttachedImage),
+    File(AttachedFile),
 }
 
 impl Attachment {
@@ -639,7 +650,7 @@ impl Attachment {
     pub fn text(&self) -> Option<&str> {
         match &self.attached {
             Attaching::Text(text) => Some(text),
-            Attaching::Image(_) => None,
+            _ => None,
         }
     }
 
@@ -647,22 +658,35 @@ impl Attachment {
     pub fn image(&self) -> Option<&AttachedImage> {
         match &self.attached {
             Attaching::Image(image) => Some(image),
-            Attaching::Text(_) => None,
+            _ => None,
+        }
+    }
+
+    /// Its file, for another attached file.
+    pub fn file(&self) -> Option<&AttachedFile> {
+        match &self.attached {
+            Attaching::File(file) => Some(file),
+            _ => None,
         }
     }
 }
 
-/// The text and the images of `attachments`, each in the order attached.
-fn split_attachments(attachments: Vec<Attachment>) -> (Vec<String>, Vec<AttachedImage>) {
+/// The text, the images, and the other files of `attachments`, each in the
+/// order attached.
+fn split_attachments(
+    attachments: Vec<Attachment>,
+) -> (Vec<String>, Vec<AttachedImage>, Vec<AttachedFile>) {
     let mut text = Vec::new();
     let mut images = Vec::new();
+    let mut files = Vec::new();
     for attachment in attachments {
         match attachment.attached {
             Attaching::Text(piece) => text.push(piece),
             Attaching::Image(image) => images.push(image),
+            Attaching::File(file) => files.push(file),
         }
     }
-    (text, images)
+    (text, images, files)
 }
 
 /// The side of an attached image's thumbnail in its row.
@@ -880,6 +904,11 @@ impl ChatInput {
         self.attach(Attaching::Image(image), cx);
     }
 
+    /// Attaches `file` to the prompt, after anything already attached.
+    pub fn attach_file(&mut self, file: AttachedFile, cx: &mut Context<Self>) {
+        self.attach(Attaching::File(file), cx);
+    }
+
     fn attach(&mut self, attached: Attaching, cx: &mut Context<Self>) {
         self.next_attachment_id += 1;
         self.attachments.push(Attachment {
@@ -889,9 +918,11 @@ impl ChatInput {
         cx.notify();
     }
 
-    /// Attaches the image files at `paths`, dropped onto the chat input or
-    /// chosen with its Attach images button, in order. Each that isn't an
-    /// image, or is too large, is left out, a notification saying why.
+    /// Attaches the files at `paths`, dropped onto the chat input, chosen
+    /// with its Attach files button, or copied in the file manager, in
+    /// order: each as an image where it is one the harness takes, else as a
+    /// file. A folder, a file too large, or one that can't be read is left
+    /// out, a notification saying why.
     pub fn attach_paths(
         &mut self,
         paths: &[std::path::PathBuf],
@@ -899,47 +930,73 @@ impl ChatInput {
         cx: &mut Context<Self>,
     ) {
         for path in paths {
-            match AttachedImage::load(path) {
-                Ok(image) => self.attach_image(image, cx),
-                Err(rejected) => Self::not_attached(&rejected, window, cx),
+            match attached_file::load(path) {
+                Ok(attached_file::Loaded::Image(image)) => self.attach_image(image, cx),
+                Ok(attached_file::Loaded::File(file)) => self.attach_file(file, cx),
+                Err(rejected) => Self::not_attached(&rejected.message(), window, cx),
             }
         }
     }
 
-    /// Attaches the images on the clipboard, pasted into the text input;
-    /// whether there were any, in which case nothing is put in the text.
+    /// Attaches the images and files on the clipboard, pasted into the text
+    /// input; whether there were any, in which case nothing is put in the
+    /// text.
     fn paste_images(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let Some(item) = cx.read_from_clipboard() else {
             return false;
         };
-        let images: Vec<Image> = item
-            .entries()
-            .iter()
-            .filter_map(|entry| match entry {
-                ClipboardEntry::Image(image) => Some(image.clone()),
-                _ => None,
-            })
-            .collect();
-        for image in &images {
-            match AttachedImage::pasted(image) {
-                Ok(image) => self.attach_image(image, cx),
-                Err(rejected) => Self::not_attached(&rejected, window, cx),
+        let mut any = false;
+        for entry in item.entries() {
+            match entry {
+                ClipboardEntry::Image(image) => {
+                    any = true;
+                    match AttachedImage::pasted(image) {
+                        Ok(image) => self.attach_image(image, cx),
+                        // One the harness can't be given as an image is
+                        // attached as a file, up to the files' limit.
+                        Err(_) if image.bytes.len() as u64 <= attached_file::MAX_BYTES => {
+                            let name = format!(
+                                "{}.{}",
+                                attached_image::PASTED,
+                                image.format.extension()
+                            );
+                            self.attach_file(
+                                AttachedFile {
+                                    name,
+                                    bytes: Arc::new(image.bytes.clone()),
+                                },
+                                cx,
+                            );
+                        }
+                        Err(_) => Self::not_attached(
+                            &attached_file::Rejected::TooLarge(attached_image::PASTED.into())
+                                .message(),
+                            window,
+                            cx,
+                        ),
+                    }
+                }
+                ClipboardEntry::ExternalPaths(paths) => {
+                    any = true;
+                    self.attach_paths(paths.paths(), window, cx);
+                }
+                ClipboardEntry::String(_) => {}
             }
         }
-        !images.is_empty()
+        any
     }
 
-    /// Says why an image wasn't attached.
-    fn not_attached(rejected: &attached_image::Rejected, window: &mut Window, cx: &mut App) {
+    /// Says why something wasn't attached.
+    fn not_attached(message: &str, window: &mut Window, cx: &mut App) {
         window.push_notification(
-            Notification::warning(rejected.message()).title("Not attached"),
+            Notification::warning(message.to_string()).title("Not attached"),
             cx,
         );
     }
 
-    /// Opens the platform's file picker for images to attach, several at
+    /// Opens the platform's file picker for any files to attach, several at
     /// once, and attaches those chosen.
-    fn pick_images(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn pick_files(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let picked = cx.prompt_for_paths(PathPromptOptions {
             files: true,
             directories: false,
@@ -1005,6 +1062,33 @@ impl ChatInput {
         Some(gpui_kit::TestSupportExt::test_support(row).into_any_element())
     }
 
+    /// The other files attached, listed beneath the images for the preview,
+    /// each with its kind's icon, its name, and its size; none without any.
+    fn attached_file_list(&self, cx: &App) -> Option<AnyElement> {
+        let files: Vec<&AttachedFile> = self.attachments.iter().filter_map(Attachment::file).collect();
+        if files.is_empty() {
+            return None;
+        }
+        let theme = cx.theme();
+        let (border, radius, muted) = (theme.border, theme.radius, theme.muted_foreground);
+        let rows = files.into_iter().map(|file| {
+            h_flex()
+                .gap_2()
+                .px_2()
+                .py_1()
+                .rounded(radius)
+                .border_1()
+                .border_color(border)
+                .text_sm()
+                .child(Icon::new(attached_file::icon(&file.name)).small().text_color(muted))
+                .child(div().flex_1().min_w_0().truncate().child(file.name.clone()))
+                .child(div().flex_none().text_xs().text_color(muted).child(file.size_label()))
+        });
+        let list = v_flex().id("preview-files").pt_2().gap_1().children(rows);
+        // Lets UI tests find the list; inert in normal builds.
+        Some(gpui_kit::TestSupportExt::test_support(list).into_any_element())
+    }
+
     /// The attachments listed above the input, one row each.
     fn render_attachments(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         if self.attachments.is_empty() {
@@ -1021,6 +1105,9 @@ impl ChatInput {
             let id = attachment.id;
             if let Some(image) = attachment.image() {
                 return self.render_image_row(id, image, cx);
+            }
+            if let Some(file) = attachment.file() {
+                return self.render_file_row(id, file, cx);
             }
             let text = attachment.text().unwrap_or_default();
             let lines = text.lines().count().max(1);
@@ -1067,6 +1154,45 @@ impl ChatInput {
         let list = v_flex().id("attachments").gap_1().children(rows);
         // Lets UI tests find the list; inert in normal builds.
         Some(gpui_kit::TestSupportExt::test_support(list).into_any_element())
+    }
+
+    /// An attached file's row: an icon for its kind, its name, its size,
+    /// muted, and the button removing it.
+    fn render_file_row(&self, id: usize, file: &AttachedFile, cx: &mut Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let row = h_flex()
+            .id(("attachment", id))
+            .gap_2()
+            .px_2()
+            .py_1()
+            .rounded(theme.radius)
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.background)
+            .text_sm()
+            .child(
+                Icon::new(attached_file::icon(&file.name))
+                    .small()
+                    .text_color(theme.muted_foreground),
+            )
+            .child(div().flex_1().min_w_0().truncate().child(file.name.clone()))
+            .child(
+                div()
+                    .flex_none()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(file.size_label()),
+            )
+            .child(
+                Button::new(("remove-attachment", id))
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::X)
+                    .tooltip("Remove this attachment")
+                    .on_click(cx.listener(move |this, _, _, cx| this.remove_attachment(id, cx))),
+            );
+        // Lets UI tests find the row; inert in normal builds.
+        gpui_kit::TestSupportExt::test_support(row).into_any_element()
     }
 
     /// An attached image's row: a small thumbnail, which shows the image
@@ -1453,6 +1579,7 @@ impl ChatInput {
                             cx,
                         ))
                         .children(self.attached_thumbnails(cx))
+                        .children(self.attached_file_list(cx))
                         .children(slices)
                         .into_any_element(),
                 )
@@ -1571,7 +1698,7 @@ impl ChatInput {
     /// which goes without one.
     fn render_effort_picker(&self, cx: &mut Context<Self>) -> AnyElement {
         use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
-        let agent = crate::agent::current();
+        let agent = crate::agent::current(cx);
         let freeform = self.mode() == SendMode::Freeform;
         let levels = crate::effort::available(agent);
         let disabled = freeform || levels.is_empty();
@@ -1637,7 +1764,7 @@ impl ChatInput {
     /// to the default.
     fn render_model_picker(&self, cx: &mut Context<Self>) -> AnyElement {
         use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
-        let agent = crate::agent::current();
+        let agent = crate::agent::current(cx);
         let freeform = self.mode() == SendMode::Freeform;
         let chosen = crate::models::chosen(agent).filter(|_| !freeform);
         let label = crate::models::label(agent, chosen.as_deref());
@@ -1830,6 +1957,7 @@ impl ChatInput {
         text: String,
         attached_text: Vec<String>,
         attached_images: Vec<AttachedImage>,
+        attached_files: Vec<AttachedFile>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1838,6 +1966,9 @@ impl ChatInput {
         }
         for image in attached_images {
             self.attach_image(image, cx);
+        }
+        for file in attached_files {
+            self.attach_file(file, cx);
         }
         let written = self.editor.read(cx).value().to_string();
         let text = if written.trim().is_empty() {
@@ -1886,6 +2017,7 @@ impl ChatInput {
         mode: SendMode,
         attached_text: Vec<String>,
         attached_images: Vec<AttachedImage>,
+        attached_files: Vec<AttachedFile>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1902,6 +2034,9 @@ impl ChatInput {
         }
         for image in attached_images {
             self.attach_image(image, cx);
+        }
+        for file in attached_files {
+            self.attach_file(file, cx);
         }
         let tab = TABS
             .iter()
@@ -1922,12 +2057,12 @@ impl ChatInput {
     /// selected, the cursor at the end; or, with none, empties the input.
     pub fn recall(
         &mut self,
-        prompt: Option<(String, SendMode, Vec<String>, Vec<AttachedImage>)>,
+        prompt: Option<Recalled>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.attachments.clear();
-        let Some((text, mode, attached_text, attached_images)) = prompt else {
+        let Some((text, mode, attached_text, attached_images, attached_files)) = prompt else {
             self.recalled = None;
             let tab = self.selected_tab;
             self.put_back(String::new(), tab, window, cx);
@@ -1939,6 +2074,9 @@ impl ChatInput {
         }
         for image in attached_images {
             self.attach_image(image, cx);
+        }
+        for file in attached_files {
+            self.attach_file(file, cx);
         }
         let tab = TABS
             .iter()
@@ -2045,7 +2183,7 @@ impl ChatInput {
             return;
         }
         if self.editing.is_some() {
-            let (attached_text, attached_images) =
+            let (attached_text, attached_images, attached_files) =
                 split_attachments(std::mem::take(&mut self.attachments));
             let mode = TABS[self.selected_tab];
             self.end_editing(window, cx);
@@ -2054,6 +2192,7 @@ impl ChatInput {
                 mode,
                 attached_text,
                 attached_images,
+                attached_files,
             });
             return;
         }
@@ -2066,13 +2205,14 @@ impl ChatInput {
             .update(cx, |editor, cx| editor.set_value("", window, cx));
         self.recalled = None;
         // The attachments go with the prompt.
-        let (attached_text, attached_images) =
+        let (attached_text, attached_images, attached_files) =
             split_attachments(std::mem::take(&mut self.attachments));
         cx.emit(Submit {
             text,
             mode: TABS[self.selected_tab],
             attached_text,
             attached_images,
+            attached_files,
             queue: how == Sent::Queued,
             to_task: how == Sent::ToTask,
         });
@@ -2542,9 +2682,9 @@ impl Render for ChatInput {
                 Button::new("attach-images")
                     .ghost()
                     .xsmall()
-                    .icon(IconName::Image)
-                    .tooltip("Attach images")
-                    .on_click(cx.listener(|this, _, window, cx| this.pick_images(window, cx))),
+                    .icon(IconName::Paperclip)
+                    .tooltip("Attach files")
+                    .on_click(cx.listener(|this, _, window, cx| this.pick_files(window, cx))),
             );
         let tabs = gpui_kit::TestSupportExt::test_support(
             div()
@@ -2797,14 +2937,14 @@ impl Render for ChatInput {
                     this.submit(window, cx);
                 }
             }))
-            // Pasting an image attaches it rather than putting anything in
-            // the text.
+            // Pasting an image, or files copied in the file manager,
+            // attaches them rather than putting anything in the text.
             .capture_action(cx.listener(|this, _: &Paste, window, cx| {
                 if this.paste_images(window, cx) {
                     cx.stop_propagation();
                 }
             }))
-            // Image files dropped from the file manager are attached.
+            // Files dropped from the file manager are attached.
             .drag_over::<ExternalPaths>(|style, _, _, cx| style.bg(cx.theme().drop_target))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
                 this.attach_paths(paths.paths(), window, cx)
@@ -4182,6 +4322,7 @@ mod tests {
                     SendMode::Code,
                     vec!["theirs".into()],
                     Vec::new(),
+                    Vec::new(),
                     window,
                     cx,
                 )
@@ -4217,6 +4358,7 @@ mod tests {
                     1,
                     "Queued".into(),
                     SendMode::Spec,
+                    Vec::new(),
                     Vec::new(),
                     Vec::new(),
                     window,
@@ -4366,6 +4508,7 @@ mod tests {
                 input.take_back(
                     "Also this".into(),
                     vec!["the log".into()],
+                    Vec::new(),
                     Vec::new(),
                     window,
                     cx,
@@ -4547,6 +4690,9 @@ mod tests {
                         super::Attaching::Image(image) => {
                             format!("image {} {}", image.label(), image.size_label())
                         }
+                        super::Attaching::File(file) => {
+                            format!("file {} {}", file.name, file.size_label())
+                        }
                     })
                     .collect::<Vec<_>>()
             })
@@ -4587,12 +4733,16 @@ mod tests {
         );
         assert_eq!(labels(cx).len(), 2);
 
-        // Dropped: only the image up to 5 MB is attached, a notification
-        // saying why each other wasn't.
+        // Dropped: the image up to 5 MB is attached as one, any other file
+        // as a file, and a folder not at all, a notification saying why.
         assert_eq!(notifications(cx), 0);
         cx.update_window(handle, |_, window, cx| {
             chat_input.update(cx, |input, cx| {
-                input.attach_paths(&[notes.clone(), shot.clone(), large.clone()], window, cx)
+                input.attach_paths(
+                    &[notes.clone(), shot.clone(), large.clone(), dir.clone()],
+                    window,
+                    cx,
+                )
             })
         })
         .unwrap();
@@ -4602,10 +4752,12 @@ mod tests {
             [
                 "text before",
                 "image Pasted image 4 × 3",
-                "image shot.png 800 × 600"
+                "file notes.txt 12 B",
+                "image shot.png 800 × 600",
+                "file large.png 5.0 MB"
             ]
         );
-        assert_eq!(notifications(cx), 2);
+        assert_eq!(notifications(cx), 1);
 
         // Chosen with the button, at the left of the bar's bottom line, from
         // a picker for several files at once.
@@ -4631,8 +4783,11 @@ mod tests {
             Some(vec![other.clone(), notes.clone()])
         });
         cx.run_until_parked();
-        assert_eq!(labels(cx).last().unwrap(), "image other.png 1 × 2");
-        assert_eq!(notifications(cx), 3);
+        assert_eq!(
+            labels(cx)[5..],
+            ["image other.png 1 × 2", "file notes.txt 12 B"]
+        );
+        assert_eq!(notifications(cx), 1);
         chat_input.update(cx, |input, cx| input.attach_text("after".into(), cx));
 
         // Each image's row: its thumbnail, name, and size; removable.
@@ -4643,6 +4798,8 @@ mod tests {
             window.render_frame(cx);
             assert!(window.try_find(("attachment-thumbnail", ids[1])).is_some());
             assert!(window.try_find(("attachment-thumbnail", ids[0])).is_none());
+            assert!(window.try_find(("attachment-thumbnail", ids[2])).is_none());
+            assert!(window.try_find(("attachment", ids[2])).is_some());
             window.click(("remove-attachment", ids[3]), cx);
         })
         .unwrap();
@@ -4661,7 +4818,7 @@ mod tests {
             *submitted.borrow(),
             [(
                 vec!["before".to_string(), "after".to_string()],
-                vec!["Pasted image".to_string(), "shot.png".to_string()]
+                vec!["Pasted image".to_string(), "other.png".to_string()]
             )]
         );
         assert!(labels(cx).is_empty(), "sending left the attachments behind");

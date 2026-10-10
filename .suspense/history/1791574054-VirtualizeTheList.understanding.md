@@ -1,0 +1,6 @@
+- [The Tasks tab is one scrolling column of Previous, Running, and Queued groups](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Every task is a 28px row; a chain's steps are indented rows beneath it, collapsed to start](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [Each time the tab is shown it scrolls so Running, or the start of Queued, is in view](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Previous tasks have filters, a selection, and batch actions along their group's heading](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)
+- [However long the previous tasks grow, drawing them costs no more than drawing those in view](.claude/reference/scope/prompt-mode/message-list/index.md#scrolling)
+- [The Tasks tab draws only the rows in view, every row 28px, from data read once](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
