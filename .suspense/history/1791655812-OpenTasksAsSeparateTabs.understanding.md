@@ -1,0 +1,7 @@
+- [The body's tab bar holds Chat, always first and fixed, then a tab per open file, reorderable by drag](.claude/reference/scope/application/Body.md#tabs)
+- [A file tab shows its name, unsaved dot, and a 16px close button; its tooltip gives its path](.claude/reference/scope/application/Body.md#tabs)
+- [A file not open yet gets a tab just after the selected one; opening one already open selects it](.claude/reference/scope/application/Body.md#open-file)
+- [The header shows every task under way, one selected in full, the rest compact](.claude/reference/scope/prompt-mode/message-list/index.md#running-tasks)
+- [Today opening a task from the Tasks tab shows its output in the message list with a "Back to the latest task" bar](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [The latest task heads the view: the most recent task under way, or the one that finished last](.claude/reference/scope/prompt-mode/index.md#header)
+- [Chat shows only the running tasks, or the last finished; any other task opens in a body tab of its own, like a file](.claude/reference/scope/application/Body.md#task-tabs)

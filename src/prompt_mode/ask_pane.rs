@@ -505,10 +505,18 @@ impl PromptMode {
     /// another mode, or to the first that started a new conversation. None
     /// while the latest task isn't Freeform.
     pub(super) fn freeform_keys(&self) -> Vec<QuestionKey> {
+        self.latest_ix()
+            .map(|latest| self.freeform_keys_to(latest))
+            .unwrap_or_default()
+    }
+
+    /// The Freeform chat ending with the task at `latest`, as
+    /// [`Self::freeform_keys`] gives the latest's.
+    pub(super) fn freeform_keys_to(&self, latest: usize) -> Vec<QuestionKey> {
         let mut keys = Vec::new();
-        let Some(latest) = self.latest_ix() else {
+        if latest >= self.tasks.len() {
             return keys;
-        };
+        }
         for (ix, task) in self.tasks[..=latest].iter().enumerate().rev() {
             if task.mode != Some(SendMode::Freeform) {
                 break;
@@ -1369,6 +1377,13 @@ impl PromptMode {
     /// Ask conversation is. None while the latest task isn't Freeform.
     pub(super) fn render_freeform_chat(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let keys = self.freeform_keys();
+        (!keys.is_empty()).then(|| self.render_chat(Chat::Freeform, &keys, cx))
+    }
+
+    /// The Freeform chat ending with the task at `ix`, as a task's tab shows
+    /// it; none for a task not sent in Freeform.
+    pub(super) fn render_freeform_chat_to(&self, ix: usize, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let keys = self.freeform_keys_to(ix);
         (!keys.is_empty()).then(|| self.render_chat(Chat::Freeform, &keys, cx))
     }
 

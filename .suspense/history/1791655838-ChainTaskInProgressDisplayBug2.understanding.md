@@ -1,0 +1,7 @@
+- [A chain's status is the chain's as a whole, never only its latest step's](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A chain reads Running, spinner and time counting, while any step is building, compiling, or running](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A chain reads Running while one of its steps waits in its lane's queue](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A chain reads Running while a step finished Done and a code step, spec follow-up, or added step is still to be sent](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [Only once nothing is under way, queued, or still to send is it over: Failed or Cancelled if a step was, else Done](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [While in progress the chain is listed in the Tasks tab's Running group with all its steps beneath it, never among Previous](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A chain is one row, its steps as rows indented beneath it, collapsed to start with](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)

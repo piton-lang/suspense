@@ -1391,6 +1391,54 @@ struct FileTab {
     _subscriptions: Vec<Subscription>,
 }
 
+/// A task open in a tab of its own in the body, as the BodyScope's task
+/// tabs say: its header, output, and changed files, scrolled as it was
+/// left.
+struct TaskTab {
+    /// What the tab is known by among the body's tabs, as a file's is by
+    /// its editor.
+    key: Entity<()>,
+    /// The task, by its name, which stays its own however the tasks around
+    /// it change.
+    name: SharedString,
+    table: TaskTable,
+    /// Its output is locked to the bottom.
+    locked: bool,
+    header: HeaderPrompt,
+}
+
+/// A tab of the body after Chat: a file's, or a task's.
+enum BodyTab {
+    File(FileTab),
+    Task(TaskTab),
+}
+
+impl BodyTab {
+    /// What the tab is known by while dragged, closed, or selected.
+    fn id(&self) -> EntityId {
+        match self {
+            Self::File(tab) => tab.view.entity_id(),
+            Self::Task(tab) => tab.key.entity_id(),
+        }
+    }
+
+    /// The file it shows, for a file's tab.
+    fn file(&self) -> Option<&Entity<FileView>> {
+        match self {
+            Self::File(tab) => Some(&tab.view),
+            Self::Task(_) => None,
+        }
+    }
+
+    /// The task it shows, for a task's tab.
+    fn task(&self) -> Option<&TaskTab> {
+        match self {
+            Self::Task(tab) => Some(tab),
+            Self::File(_) => None,
+        }
+    }
+}
+
 /// A filter chip of the previous tasks: the mode a task was sent in, or where
 /// it stands with the other mode.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1628,12 +1676,22 @@ struct Took {
 }
 
 /// How long a chain's steps took together: from when its first step was
-/// sent to when its last ended, counting up while any still runs. None
-/// when a step's times can't be told.
-fn chain_took(steps: &[&PromptTask]) -> Option<Took> {
-    let spans: Vec<_> = steps.iter().map(|task| task.span()).collect::<Option<_>>()?;
+/// sent to when its last ended, counting up while the chain is
+/// `in_progress`. None when a step's times can't be told.
+fn chain_took(steps: &[&PromptTask], in_progress: bool) -> Option<Took> {
+    let in_progress = in_progress || steps.iter().any(|task| task.status.is_active());
+    // A step still to come has no span yet; those sent tell when it began.
+    let spans: Vec<_> = steps
+        .iter()
+        .map(|task| task.span())
+        .collect::<Option<Vec<_>>>()
+        .or_else(|| {
+            in_progress
+                .then(|| steps.iter().filter_map(|task| task.span()).collect::<Vec<_>>())
+                .filter(|spans| !spans.is_empty())
+        })?;
     let started = spans.iter().map(|(started, _, _)| *started).min()?;
-    let until = if steps.iter().any(|task| task.status.is_active()) {
+    let until = if in_progress {
         std::time::SystemTime::now()
     } else {
         spans
@@ -1675,12 +1733,17 @@ fn took_label(id: (&'static str, usize), took: Took, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-/// A chain's status as a whole: running while any step is, failed or
-/// cancelled if any step was, and otherwise its last step's.
-fn chain_status(steps: &[&PromptTask]) -> TaskStatus {
+/// A chain's status as a whole: a step's while one is under way, Running
+/// while the chain is otherwise `in_progress`, a step queued or still to be
+/// sent; once over, failed or cancelled if any step was, and otherwise its
+/// last step's.
+fn chain_status(steps: &[&PromptTask], in_progress: bool) -> TaskStatus {
     let statuses = steps.iter().map(|task| task.status);
     if let Some(active) = statuses.clone().find(|status| status.is_active()) {
         return active;
+    }
+    if in_progress {
+        return TaskStatus::Running;
     }
     for ended in [TaskStatus::Failed, TaskStatus::Cancelled] {
         if statuses.clone().any(|status| status == ended) {
@@ -1735,6 +1798,52 @@ fn queued_tooltip(text: &str) -> SharedString {
         lines.push("…");
     }
     lines.join("\n").into()
+}
+
+/// A task's tab's name: the first line of its prompt, cut off with an
+/// ellipsis at 24 characters.
+fn task_tab_name(text: &str) -> SharedString {
+    let line = first_line(text);
+    if line.chars().count() <= TASK_TAB_NAME {
+        return line;
+    }
+    let cut: String = line.chars().take(TASK_TAB_NAME).collect();
+    format!("{}…", cut.trim_end()).into()
+}
+
+/// How many characters of its prompt's first line a task's tab shows.
+const TASK_TAB_NAME: usize = 24;
+
+/// A tab's close button: a 16 pixel square, drawn 6 pixels into the tab's
+/// right padding, so the icon sits as far from its right edge as the name
+/// does from its left. The press closing it neither selects the tab nor
+/// drags it.
+fn close_tab_button(
+    ix: usize,
+    tooltip: &'static str,
+    close: impl Fn(&mut Window, &mut App) + 'static,
+) -> AnyElement {
+    gpui_kit::TestSupportExt::test_support(div().id(("close-file-tab-box", ix)))
+        .flex_none()
+        .relative()
+        .w(CLOSE_TAB_SIZE - CLOSE_TAB_PULL)
+        .h(CLOSE_TAB_SIZE)
+        .child(
+            div().absolute().top_0().left_0().child(
+                Button::new(("close-file-tab", ix))
+                    .ghost()
+                    .xsmall()
+                    .size(CLOSE_TAB_SIZE)
+                    .icon(IconName::X)
+                    .tooltip(tooltip)
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_click(move |_, window, cx| {
+                        cx.stop_propagation();
+                        close(window, cx);
+                    }),
+            ),
+        )
+        .into_any_element()
 }
 
 /// How near an edge of a scrolling area an item dragged over it scrolls it.
@@ -2018,7 +2127,7 @@ struct ProjectSession {
     queue_scroll: ScrollHandle,
     ask_rows: MeasuredList,
     ask_row_ids: RefCell<Vec<usize>>,
-    files: Vec<FileTab>,
+    files: Vec<BodyTab>,
     selected_file: Option<usize>,
     latest_settled: Option<(usize, SharedString)>,
     selected_task: Option<usize>,
@@ -2164,7 +2273,7 @@ pub struct PromptMode {
     queue_held: bool,
     /// The files open in the body's tabs, after Chat, in the order they
     /// were opened.
-    files: Vec<FileTab>,
+    files: Vec<BodyTab>,
     /// The file whose tab is selected, or none while Chat is.
     selected_file: Option<usize>,
     /// The task last seen heading the view while under way, by its index and
@@ -2761,13 +2870,13 @@ impl PromptMode {
     pub fn open_file_view(&self) -> Option<Entity<FileView>> {
         self.selected_file
             .and_then(|ix| self.files.get(ix))
-            .map(|tab| tab.view.clone())
+            .and_then(|tab| tab.file().cloned())
     }
 
     /// Every file open in a tab, in the tabs' order.
     #[cfg(test)]
     pub fn open_file_views(&self) -> Vec<Entity<FileView>> {
-        self.files.iter().map(|tab| tab.view.clone()).collect()
+        self.files.iter().filter_map(|tab| tab.file().cloned()).collect()
     }
 
     pub fn chat_input_view(&self) -> Entity<ChatInput> {
@@ -2801,18 +2910,16 @@ impl PromptMode {
         if let Some(ix) = self
             .files
             .iter()
-            .position(|tab| tab.view.read(cx).path() == path)
+            .position(|tab| tab.file().is_some_and(|view| view.read(cx).path() == path))
         {
-            if let Some(position) = position {
-                self.files[ix]
-                    .view
-                    .update(cx, |view, cx| view.go_to(position, window, cx));
+            if let (Some(position), Some(view)) = (position, self.files[ix].file().cloned()) {
+                view.update(cx, |view, cx| view.go_to(position, window, cx));
             }
             return self.select_tab(Some(ix), cx);
         }
         let ix = self.selected_file.map_or(0, |ix| ix + 1);
         let tab = self.file_tab(path, position, window, cx);
-        self.files.insert(ix, tab);
+        self.files.insert(ix, BodyTab::File(tab));
         self.select_tab(Some(ix), cx);
     }
 
@@ -2872,7 +2979,11 @@ impl PromptMode {
         if self.conflict_asked.is_some() {
             return;
         }
-        let on_screen: Vec<EntityId> = self.files.iter().map(|tab| tab.view.entity_id()).collect();
+        let on_screen: Vec<EntityId> = self
+            .files
+            .iter()
+            .filter_map(|tab| tab.file().map(Entity::entity_id))
+            .collect();
         self.disk_conflicts.retain(|view| {
             view.upgrade()
                 .is_some_and(|view| view.read(cx).has_conflict())
@@ -2948,8 +3059,10 @@ impl PromptMode {
         }
         self.conflict_asked = None;
         window.close_dialog(cx);
-        if let Some(ix) = self.file_tab_index(id) {
-            let view = self.files[ix].view.clone();
+        if let Some((ix, view)) = self
+            .file_tab_index(id)
+            .and_then(|ix| Some((ix, self.files[ix].file()?.clone())))
+        {
             match choice {
                 ConflictChoice::KeepMine => view.update(cx, |view, cx| view.keep_mine(cx)),
                 ConflictChoice::Reload => {
@@ -2974,11 +3087,10 @@ impl PromptMode {
         cx.notify();
     }
 
-    /// Where the tab of the file `view` is among the file tabs.
+    /// Where the tab known by `view`, a file's or a task's, is among the
+    /// tabs after Chat.
     fn file_tab_index(&self, view: EntityId) -> Option<usize> {
-        self.files
-            .iter()
-            .position(|tab| tab.view.entity_id() == view)
+        self.files.iter().position(|tab| tab.id() == view)
     }
 
     /// Moves the tab of the file `view` to place `to` among the file tabs,
@@ -2991,7 +3103,7 @@ impl PromptMode {
         if from == to || to >= self.files.len() {
             return;
         }
-        let selected = self.selected_file.map(|ix| self.files[ix].view.entity_id());
+        let selected = self.selected_file.map(|ix| self.files[ix].id());
         let tab = self.files.remove(from);
         self.files.insert(to, tab);
         let selected = selected.and_then(|view| self.file_tab_index(view));
@@ -3001,11 +3113,7 @@ impl PromptMode {
     /// Closes the tab of the file `view`, with nothing asked. Closing the
     /// selected tab selects the one to its right, else the one to its left.
     fn close_file_tab(&mut self, view: EntityId, cx: &mut Context<Self>) {
-        let Some(ix) = self
-            .files
-            .iter()
-            .position(|tab| tab.view.entity_id() == view)
-        else {
+        let Some(ix) = self.file_tab_index(view) else {
             return;
         };
         self.files.remove(ix);
@@ -3038,30 +3146,116 @@ impl PromptMode {
             .files
             .iter()
             .filter_map(|tab| {
-                let view = tab.view.read(cx);
+                let view = tab.file()?.read(cx);
                 let within = view.path().strip_prefix(from).ok()?;
                 let moved = match to {
                     Some(to) if within.as_os_str().is_empty() => to.to_path_buf(),
                     Some(to) => to.join(within),
                     None => PathBuf::new(),
                 };
-                Some((tab.view.entity_id(), moved))
+                Some((tab.id(), moved))
             })
             .collect();
         for (view, moved) in moved {
             match to {
                 Some(_) => {
-                    let Some(ix) = self.file_tab_index(view) else {
+                    let Some(file) = self
+                        .file_tab_index(view)
+                        .and_then(|ix| self.files[ix].file().cloned())
+                    else {
                         continue;
                     };
-                    self.files[ix]
-                        .view
-                        .update(cx, |view, cx| view.follow_rename(moved, window, cx));
+                    file.update(cx, |view, cx| view.follow_rename(moved, window, cx));
                     cx.notify();
                 }
                 None => self.close_file_tab(view, cx),
             }
         }
+    }
+
+    /// A file's tab's name, tooltip, and contents: its name, a dot while
+    /// it has unsaved changes, and the button closing it.
+    fn file_tab_contents(
+        &self,
+        ix: usize,
+        tab: &FileTab,
+        muted: Hsla,
+        cx: &mut Context<Self>,
+    ) -> (SharedString, SharedString, AnyElement) {
+        let file = tab.view.read(cx);
+        let name: SharedString = file
+            .path()
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default()
+            .into();
+        let title = file.title();
+        let dirty = file.is_dirty();
+        let view = tab.view.clone();
+        let close = close_tab_button(ix, "Close file", move |window, cx| {
+            view.update(cx, |view, cx| view.close(window, cx));
+        });
+        // The close button sits just after the name, or its unsaved dot,
+        // rather than across the tab's own padding.
+        // Lets UI tests find the tab's contents; inert in normal builds.
+        let contents = gpui_kit::TestSupportExt::test_support(h_flex().id(("file-tab", ix)))
+            .flex_none()
+            .gap_1()
+            .child(
+                gpui_kit::TestSupportExt::test_support(div().id(("file-tab-name", ix)))
+                    .child(name.clone()),
+            )
+            .when(dirty, |this| {
+                this.child(
+                    div()
+                        .id(("file-tab-unsaved", ix))
+                        .flex_none()
+                        .size_2()
+                        .rounded_full()
+                        .bg(muted),
+                )
+            })
+            .child(close)
+            .into_any_element();
+        (name, title, contents)
+    }
+
+    /// A task's tab's name, tooltip, and contents, as the BodyScope's task
+    /// tabs say: a bar in its mode's colour down its left, its status, the
+    /// first line of its prompt cut off at 24 characters, and the button
+    /// closing it; its tooltip its prompt's first lines and its mode.
+    fn task_tab_contents(
+        &self,
+        ix: usize,
+        tab: &TaskTab,
+        key: EntityId,
+        cx: &mut Context<Self>,
+    ) -> (SharedString, SharedString, AnyElement) {
+        let task = self.tasks.iter().find(|task| task.name == tab.name);
+        let (text, mode, status) = task.map_or((SharedString::default(), None, TaskStatus::Unrecorded), |task| {
+            (task.text.clone(), task.mode, task.status)
+        });
+        let name = task_tab_name(&text);
+        let title: SharedString = match mode {
+            Some(mode) => format!("{}\n\n{}", queued_tooltip(&text), mode.label()).into(),
+            None => queued_tooltip(&text),
+        };
+        let this = cx.entity().downgrade();
+        let close = close_tab_button(ix, "Close task", move |_, cx| {
+            this.update(cx, |this, cx| this.close_file_tab(key, cx)).ok();
+        });
+        let contents = gpui_kit::TestSupportExt::test_support(h_flex().id(("task-tab", ix)))
+            .flex_none()
+            .gap_1p5()
+            .child(tasks_tab::mode_bar(mode, cx))
+            .child(div().flex_none().child(tasks_tab::status_mark(status, cx)))
+            .child(
+                gpui_kit::TestSupportExt::test_support(div().id(("task-tab-name", ix)))
+                    .child(name.clone()),
+            )
+            .child(close)
+            .into_any_element();
+        (name, title, contents)
     }
 
     /// The body's tab bar: Chat, with a spinner while a task or question
@@ -3079,43 +3273,16 @@ impl PromptMode {
             None => (None, None),
         };
         let files_len = self.files.len();
-        let views: Rc<Vec<EntityId>> =
-            Rc::new(self.files.iter().map(|tab| tab.view.entity_id()).collect());
+        let views: Rc<Vec<EntityId>> = Rc::new(self.files.iter().map(BodyTab::id).collect());
         let select = this.clone();
         let file_tabs = self.files.iter().enumerate().map(|(ix, tab)| {
-            let file = tab.view.read(cx);
-            let name: SharedString = file
-                .path()
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default()
-                .into();
-            let title = file.title();
-            let view = tab.view.clone();
-            let dragged = view.entity_id();
-            let close =
-                // A 16 pixel square, drawn 6 pixels into the tab's right
-                // padding, so the icon sits as far from its right edge as the
-                // name does from its left.
-                gpui_kit::TestSupportExt::test_support(div().id(("close-file-tab-box", ix)))
-                    .flex_none()
-                    .relative()
-                    .w(CLOSE_TAB_SIZE - CLOSE_TAB_PULL)
-                    .h(CLOSE_TAB_SIZE)
-                    .child(div().absolute().top_0().left_0().child(
-                    Button::new(("close-file-tab", ix))
-                        .ghost()
-                        .xsmall()
-                        .size(CLOSE_TAB_SIZE)
-                        .icon(IconName::X)
-                        .tooltip("Close file")
-                        // The press closing it neither selects the tab nor drags it.
-                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                        .on_click(move |_, window, cx| {
-                            cx.stop_propagation();
-                            view.update(cx, |view, cx| view.close(window, cx));
-                        }),
-                ));
+            let dragged = tab.id();
+            // What differs between a file's tab and a task's: its name, as
+            // dragged, its tooltip, and what it shows.
+            let (name, title, contents) = match tab {
+                BodyTab::File(tab) => self.file_tab_contents(ix, tab, muted, cx),
+                BodyTab::Task(tab) => self.task_tab_contents(ix, tab, dragged, cx),
+            };
             Tab::new()
                 .tooltip(move |window, cx| {
                     gpui_kit::component::tooltip::Tooltip::new(title.clone()).build(window, cx)
@@ -3189,31 +3356,8 @@ impl PromptMode {
                 .when(ix + 1 == files_len && tab_gap == Some(files_len), |tab| {
                     tab.child(drop_indicator(true, true, cx))
                 })
-                // The close button sits just after the name, or its unsaved
-                // dot, rather than across the tab's own padding.
-                // Lets UI tests find the tab's contents; inert in normal
-                // builds.
-                .child(
-                    gpui_kit::TestSupportExt::test_support(h_flex().id(("file-tab", ix)))
-                        .flex_none()
-                        .gap_1()
-                        .child(
-                            gpui_kit::TestSupportExt::test_support(div().id(("file-tab-name", ix)))
-                                .child(name),
-                        )
-                        .when(file.is_dirty(), |this| {
-                            this.child(
-                                div()
-                                    .id(("file-tab-unsaved", ix))
-                                    .flex_none()
-                                    .size_2()
-                                    .rounded_full()
-                                    .bg(muted),
-                            )
-                        })
-                        .child(close),
-                )
-        });
+                .child(contents)
+        }).collect::<Vec<_>>();
         let bar = TabBar::new("body-tabs")
             .track_scroll(&self.tabs_scroll)
             .selected_index(self.selected_file.map_or(0, |ix| ix + 1))
@@ -3309,8 +3453,6 @@ impl PromptMode {
         let ix = self.tasks.len() - 1;
         self.output_locked = false;
         self.selected_task = Some(ix);
-        // Shown, it is the latest, not one opened from the Tasks tab.
-        self.tasks_tab.viewing = false;
         // A new task's output starts at its top.
         self.scroll_output_to_top();
         self.settle_latest();
@@ -3441,6 +3583,21 @@ impl PromptMode {
             return;
         }
         let latest = Some(ix) == self.latest_ix();
+        // Its own tabs follow its output while scrolled to their bottom, or
+        // locked there; the one selected shows it.
+        let name = self.tasks[ix].name.clone();
+        let mut in_selected_tab = false;
+        for (at, tab) in self.files.iter().enumerate() {
+            if let BodyTab::Task(tab) = tab
+                && tab.name == name
+            {
+                let scroll = tab.table.scroll();
+                if tab.locked || scroll.offset().y <= -scroll.max_offset().y + px(1.) {
+                    tab.table.scroll_to_end();
+                }
+                in_selected_tab |= self.selected_file == Some(at);
+            }
+        }
         // A raw output line only changes the raw tail at the end of the
         // output, so there is nothing to redraw while that is out of sight.
         // The Freeform chat's status line shows the latest raw line too.
@@ -3453,7 +3610,7 @@ impl PromptMode {
         self.tasks[ix].apply(event);
         // A task finishing may leave another heading the view.
         self.settle_latest();
-        if unseen {
+        if unseen && !in_selected_tab {
             return;
         }
         if (following || self.output_locked) && latest {
@@ -5578,6 +5735,85 @@ impl PromptMode {
     }
 
     /// Locks the latest task's output to the bottom, or unlocks it.
+    /// Locks the output of the task in the tab known by `key` to its bottom,
+    /// or not.
+    fn set_task_tab_lock(&mut self, key: EntityId, locked: bool, cx: &mut Context<Self>) {
+        let Some(BodyTab::Task(tab)) = self.files.iter_mut().find(|tab| tab.id() == key) else {
+            return;
+        };
+        tab.locked = locked;
+        if locked {
+            tab.table.scroll_to_end();
+        }
+        cx.notify();
+    }
+
+    /// Opens the task at `ix` as the BodyScope's task tabs say: one the
+    /// Chat tab shows selects Chat, with the task selected in its header;
+    /// any other opens in a tab of its own just after the one selected, or
+    /// selects the tab it already has. Chat is left as it was.
+    pub(super) fn open_task(&mut self, ix: usize, cx: &mut Context<Self>) {
+        let Some(task) = self.tasks.get(ix) else {
+            return;
+        };
+        if self.header_ixs().contains(&ix) {
+            self.select_task(ix, cx);
+            return self.select_tab(None, cx);
+        }
+        let name = task.name.clone();
+        if let Some(at) = self
+            .files
+            .iter()
+            .position(|tab| tab.task().is_some_and(|tab| tab.name == name))
+        {
+            return self.select_tab(Some(at), cx);
+        }
+        let table = TaskTable::new();
+        // Shown the first time at its top.
+        table.scroll_to_top();
+        let tab = TaskTab {
+            key: cx.new(|_| ()),
+            name,
+            table,
+            locked: false,
+            header: HeaderPrompt::default(),
+        };
+        let at = self.selected_file.map_or(0, |ix| ix + 1);
+        self.files.insert(at, BodyTab::Task(tab));
+        self.select_tab(Some(at), cx);
+    }
+
+    /// The task in the selected tab, if a task's tab is selected: its
+    /// header, its output, and the files it changed.
+    fn render_task_tab_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let tab = self.selected_file.and_then(|ix| self.files.get(ix))?.task()?;
+        let ix = self.tasks.iter().position(|task| task.name == tab.name)?;
+        let key = self.files.iter().find(|t| t.task().is_some_and(|t| t.name == tab.name))?.id();
+        // A Freeform task is a chat, as in Chat.
+        if let Some(chat) = self.render_freeform_chat_to(ix, cx) {
+            return Some(
+                gpui_kit::TestSupportExt::test_support(v_flex().id("task-tab-view"))
+                    .size_full()
+                    .child(chat)
+                    .into_any_element(),
+            );
+        }
+        Some(
+            gpui_kit::TestSupportExt::test_support(v_flex().id("task-tab-view"))
+                .size_full()
+                .overflow_hidden()
+                .children(self.render_task_header(ix, &tab.header, cx))
+                .child(
+                    v_flex()
+                        .relative()
+                        .flex_1()
+                        .min_h_0()
+                        .child(self.render_task_output(ix, &tab.table, tab.locked, Some(key), cx)),
+                )
+                .into_any_element(),
+        )
+    }
+
     pub(crate) fn set_output_lock(&mut self, locked: bool, cx: &mut Context<Self>) {
         if self.output_locked == locked {
             return;
@@ -7456,7 +7692,18 @@ impl PromptMode {
     /// as while they slide in over it or away from it.
     fn render_latest_header(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let ix = self.latest_ix()?;
-        let task = &self.tasks[ix];
+        self.render_task_header(ix, &self.header_prompt, cx)
+    }
+
+    /// The header of the task at `ix`, its compiled prompt laid out by
+    /// `header_prompt`: as the latest task's, or in a tab of its own.
+    fn render_task_header(
+        &self,
+        ix: usize,
+        header_prompt: &HeaderPrompt,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let task = self.tasks.get(ix)?;
         // A Freeform task is a chat, with no header.
         if task.mode == Some(SendMode::Freeform) {
             return None;
@@ -7542,7 +7789,7 @@ impl PromptMode {
                         .ok();
                     });
                     let files_open = open.clone();
-                    let prompt = self.header_prompt.element(
+                    let prompt = header_prompt.element(
                         ix,
                         compiled,
                         task.slices_open,
@@ -7606,41 +7853,6 @@ impl PromptMode {
             }
             mode => (mode.label(), mode),
         })
-    }
-
-    /// Whether the message list shows a task opened from the Tasks tab
-    /// that isn't the latest.
-    fn showing_other_than_latest(&self) -> bool {
-        self.tasks_tab.viewing && self.latest_ix() != self.true_latest_ix()
-    }
-
-    /// Above a task opened from the Tasks tab, while it isn't the latest, a
-    /// bar back to the latest task's output.
-    fn render_back_to_latest(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if !self.showing_other_than_latest() {
-            return None;
-        }
-        let theme = cx.theme();
-        Some(
-            h_flex()
-                .flex_none()
-                .w_full()
-                .px_2()
-                .py_0p5()
-                .bg(theme.tab_bar)
-                .border_b_1()
-                .border_color(theme.border)
-                .child(
-                    Button::new("back-to-latest")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::ArrowLeft)
-                        .label("Back to the latest task")
-                        .tooltip("Show the latest task's output again (Esc)")
-                        .on_click(cx.listener(|this, _, _, cx| this.back_to_latest(cx))),
-                )
-                .into_any_element(),
-        )
     }
 
     /// Whether `task` matches the filter chip `filter`.
@@ -7890,7 +8102,24 @@ impl PromptMode {
         let Some(task_ix) = self.latest_ix() else {
             return div().into_any_element();
         };
-        let task = &self.tasks[task_ix];
+        self.render_task_output(task_ix, &self.output_table, self.output_locked, None, cx)
+    }
+
+    /// The output table of the task at `task_ix`, scrolled by `table`,
+    /// locked to its bottom or not, then the files it changed: as the latest
+    /// task's, or in the task tab known by `tab`.
+    fn render_task_output(
+        &self,
+        task_ix: usize,
+        table: &TaskTable,
+        locked: bool,
+        tab: Option<EntityId>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let Some(task) = self.tasks.get(task_ix) else {
+            return div().into_any_element();
+        };
+        let output_table = table;
         let this = cx.entity().downgrade();
         let reply_of = task_table::reply_of({
             let this = this.clone();
@@ -7901,19 +8130,23 @@ impl PromptMode {
         });
         let open = self.file_opener(cx);
         let toggle: SetLock = Rc::new(move |locked, _, cx| {
-            this.update(cx, |this, cx| this.set_output_lock(locked, cx))
-                .ok();
+            this.update(cx, |this, cx| match tab {
+                Some(tab) => this.set_task_tab_lock(tab, locked, cx),
+                None => this.set_output_lock(locked, cx),
+            })
+            .ok();
         });
-        let table = self.output_table.render(
+        let id = if tab.is_some() { "task-tab-output" } else { "task-output" };
+        let table = output_table.render(
             &task.reply,
             reply_of,
             TableView {
-                id: "task-output".into(),
-                scrollbar: "task-output".into(),
+                id: id.into(),
+                scrollbar: id.into(),
                 table: task_ix,
                 open: Some(&open),
                 steps: None,
-                lock: Some((self.output_locked, toggle)),
+                lock: Some((locked, toggle)),
                 padding: Edges::all(px(16.)),
                 max_height: None,
             },
@@ -8198,38 +8431,27 @@ impl Render for PromptMode {
                 .flex_1()
                 .min_h_0()
                 .overflow_hidden()
-                .children(self.render_back_to_latest(cx))
                 .children(self.render_header(cx))
                 .child(v_flex().relative().flex_1().min_h_0().child(self.render_output(cx)))
                 .into_any_element()
         };
         let content = div().flex_1().min_h_0().flex().flex_col().child(content);
 
-        let history = v_flex()
-            .id("history")
-            .size_full()
-            // Esc in the message list goes back to the latest task, as its
-            // bar does.
-            .on_action(cx.listener(|this, _: &crate::main_window::Dismiss, _, cx| {
-                if this.showing_other_than_latest() {
-                    this.back_to_latest(cx);
-                } else {
-                    cx.propagate();
-                }
-            }))
-            .child(content);
+        let history = v_flex().id("history").size_full().child(content);
         // Lets UI tests find the history; inert in normal builds.
         let history = gpui_kit::TestSupportExt::test_support(history);
         let history = div().relative().size_full().child(history);
 
-        // The selected tab's contents: the task view, or a file.
-        let shown = match self.open_file_view() {
-            Some(file) => div()
+        // The selected tab's contents: the task view, a file, or a task of
+        // its own.
+        let shown = match (self.open_file_view(), self.render_task_tab_view(cx)) {
+            (Some(file), _) => div()
                 .size_full()
                 .overflow_hidden()
                 .child(file)
                 .into_any_element(),
-            None => history.into_any_element(),
+            (None, Some(task)) => task,
+            (None, None) => history.into_any_element(),
         };
         let body = div().relative().flex_1().min_h_0().child(shown);
         // Above the chat input: the task view, pushed up by the stack of
@@ -9240,9 +9462,8 @@ mod tests {
                     if this.tasks_tab.open != Some(super::tasks_tab::Opened::Task(id.1)) {
                         this.open_in_tab(super::tasks_tab::Opened::Task(id.1), window, cx);
                     }
-                } else if id.0.ends_with("-latest") && this.tasks_tab.viewing {
-                    this.close_task_in_tab(window, cx);
-                    this.back_to_latest(cx);
+                } else if id.0.ends_with("-latest") {
+                    this.select_tab(None, cx);
                 }
             })
         })
@@ -10674,18 +10895,18 @@ mod tests {
         ));
     }
 
-    /// Closed, by a click or a scroll, the previous tasks give back the
-    /// latest task's output as it was left: where it was scrolled, or locked
-    /// to its bottom and following what arrived meanwhile; with another task
-    /// the latest since, at its top, unlocked.
+    /// A task opened from the Tasks tab opens in a tab of its own, after
+    /// the one selected, leaving Chat's output just as it was; opened
+    /// again, its tab is selected. A task Chat shows selects Chat instead.
+    /// Closing a task's tab changes nothing about the task.
     #[gpui_kit::test]
-    async fn the_latest_task_comes_back_as_it_was_left(cx: &mut TestAppContext) {
+    async fn tasks_open_in_tabs_of_their_own(cx: &mut TestAppContext) {
         use gpui_kit::{point, px};
         let (prompt_mode, handle) = open(cx);
         let long: String = (0..200).map(|n| format!("Line {n}\n\n")).collect();
         cx.update_window(handle, |_, _, cx| {
             prompt_mode.update(cx, |this, cx| {
-                let first = this.push_task("First".into(), cx);
+                let first = this.push_task("First of all, a long first line here".into(), cx);
                 this.tasks[first].status = TaskStatus::Done;
                 let ix = this.push_task("Write a lot".into(), cx);
                 this.show_compiled(ix, "Prompt_0".into(), "Write a lot".into(), cx);
@@ -10706,84 +10927,67 @@ mod tests {
             })
             .unwrap();
         };
-        // Opens the first task from the Tasks tab, or, with it open, goes
-        // back to the latest.
-        let click_row = |cx: &mut TestAppContext| {
-            let viewing = prompt_mode.update(cx, |this, cx| {
-                show_previous_tasks(this);
-                cx.notify();
-                this.tasks_tab.viewing
-            });
-            if !viewing {
-                show_timeline(handle, cx);
-            }
-            cx.update_window(handle, |_, window, cx| {
-                window.render_frame(cx);
-                if viewing {
-                    window.click("back-to-latest", cx)
-                } else {
-                    window.click(("tasks-tab-task", 0usize), cx)
-                }
-            })
-            .unwrap();
-            frames(cx);
-        };
-        let more = |cx: &mut TestAppContext| {
-            prompt_mode.update(cx, |this, cx| {
-                this.apply_event(1, HarnessEvent::TextDelta(long.clone()), cx)
-            });
-        };
-        let scrolled = |cx: &mut TestAppContext| {
-            prompt_mode.read_with(cx, |this, _| {
-                let scroll = this.output_table.scroll();
-                (scroll.offset().y, scroll.max_offset().y, this.output_locked)
-            })
-        };
         frames(cx);
-
-        // Unlocked, partway down, it comes back just there.
         prompt_mode.update(cx, |this, _| {
-            this.output_table
-                .scroll()
-                .set_offset(point(px(0.), px(-300.)))
+            this.output_table.scroll().set_offset(point(px(0.), px(-300.)))
         });
         frames(cx);
-        let (left, _, _) = scrolled(cx);
+        let scrolled = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| this.output_table.scroll().offset().y)
+        };
+        let left = scrolled(cx);
         assert!(left < px(-1.), "the output didn't scroll");
-        click_row(cx);
-        more(cx);
-        click_row(cx);
-        assert_eq!(
-            scrolled(cx).0,
-            left,
-            "the output didn't come back where it was"
-        );
-        assert!(!scrolled(cx).2);
 
-        // Locked, it comes back locked at its bottom, with what arrived.
-        prompt_mode.update(cx, |this, cx| this.set_output_lock(true, cx));
+        // The first task, finished and not in Chat, opens in a tab.
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                show_previous_tasks(this);
+                this.open_in_tab(super::tasks_tab::Opened::Task(0), window, cx)
+            })
+        })
+        .unwrap();
         frames(cx);
-        click_row(cx);
-        more(cx);
-        click_row(cx);
-        let (offset, max, locked) = scrolled(cx);
-        assert!(locked, "the lock didn't come back");
-        assert!(
-            (offset + max).abs() <= px(1.),
-            "locked, it isn't at its bottom: {offset:?} of {max:?}"
-        );
-
-        // Another task sent while an older one is open is shown at once,
-        // from its top.
-        click_row(cx);
-        prompt_mode.update(cx, |this, cx| {
-            this.push_task("Another".into(), cx);
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.files.len(), 1);
+            assert_eq!(this.selected_file, Some(0));
+            assert_eq!(this.latest_ix(), Some(1), "Chat changed what it shows");
         });
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find("task-tab-view").is_some(), "no task view");
+            assert!(window.try_find(("task-tab-name", 0usize)).is_some(), "no task tab");
+        })
+        .unwrap();
+
+        assert_eq!(
+            super::task_tab_name("First of all, a long first line here"),
+            "First of all, a long fir…"
+        );
+        assert_eq!(super::task_tab_name("Short"), "Short");
+
+        // Opened again, its tab is selected, and no other opens.
+        prompt_mode.update(cx, |this, cx| {
+            this.select_tab(None, cx);
+            this.open_task(0, cx);
+        });
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!((this.files.len(), this.selected_file), (1, Some(0)));
+        });
+
+        // The running task Chat shows selects Chat.
+        prompt_mode.update(cx, |this, cx| this.open_task(1, cx));
         frames(cx);
-        assert!(!prompt_mode.read_with(cx, |this, _| this.showing_other_than_latest()));
-        let (offset, _, locked) = scrolled(cx);
-        assert_eq!(offset, px(0.));
-        assert!(!locked);
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!((this.files.len(), this.selected_file), (1, None));
+        });
+        assert_eq!(scrolled(cx), left, "Chat's output moved");
+
+        // Closed, the task is as it was.
+        let key = prompt_mode.read_with(cx, |this, _| this.files[0].id());
+        prompt_mode.update(cx, |this, cx| this.close_file_tab(key, cx));
+        prompt_mode.read_with(cx, |this, _| {
+            assert!(this.files.is_empty());
+            assert_eq!(this.tasks[0].status, TaskStatus::Done);
+        });
     }
 
     /// A git repository with `kept.txt` and `other.txt` snapshotted before
@@ -11190,6 +11394,57 @@ mod tests {
     /// previous tasks, the chain is headed by one parent row, its status the
     /// chain's, with each step still an item beneath it, and a session
     /// divider never falls inside it.
+    /// A chain is in progress from when it is sent until its last step is
+    /// over: its spec step done, with its code step still to come, it reads
+    /// Running and is listed with what runs, never as Done among the
+    /// previous tasks; once its last step is over, it is.
+    #[gpui_kit::test]
+    async fn a_chain_between_steps_is_still_running(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        use crate::hidden_anchor::CodeTask;
+        let (prompt_mode, handle) = open(cx);
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("Build it".into(), cx);
+            let task = &mut this.tasks[ix];
+            task.sent.mode = Some(SendMode::Both);
+            task.mode = Some(SendMode::Both);
+            task.status = TaskStatus::Done;
+            show_previous_tasks(this);
+            cx.notify();
+        });
+        let state = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| {
+                let steps: Vec<&PromptTask> = this.tasks.iter().collect();
+                let members: Vec<usize> = (0..this.tasks.len()).collect();
+                let running = this.chain_in_progress(&members);
+                (super::chain_status(&steps, running), this.previous_ixs().len())
+            })
+        };
+        // Its code step is still to be sent.
+        assert_eq!(state(cx), (TaskStatus::Running, 0));
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.render_frame(cx);
+            assert!(window.try_find(("tasks-tab-chain", 0usize)).is_some(), "no chain row");
+        })
+        .unwrap();
+
+        // Its code step sent and running, then done: over, and Done.
+        prompt_mode.update(cx, |this, cx| {
+            let from = this.tasks[0].name.to_string();
+            let ix = this.push_task("Build it".into(), cx);
+            let task = &mut this.tasks[ix];
+            task.sent.mode = Some(SendMode::Code);
+            task.mode = Some(SendMode::Code);
+            task.sent.code_task = Some(CodeTask::default());
+            task.sent.sent_from = Some(from);
+            task.status = TaskStatus::Running;
+        });
+        assert_eq!(state(cx), (TaskStatus::Running, 0));
+        prompt_mode.update(cx, |this, _| this.tasks[1].status = TaskStatus::Done);
+        assert_eq!(state(cx), (TaskStatus::Done, 2));
+    }
+
     #[gpui_kit::test]
     async fn chained_tasks_are_grouped_under_one_parent(cx: &mut TestAppContext) {
         use crate::chat_input::SendMode;
@@ -11282,7 +11537,7 @@ mod tests {
                 ]
             );
             let steps: Vec<_> = this.tasks[1..4].iter().collect();
-            assert_eq!(super::chain_status(&steps), TaskStatus::Failed);
+            assert_eq!(super::chain_status(&steps, false), TaskStatus::Failed);
         });
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
@@ -11324,7 +11579,7 @@ mod tests {
         prompt_mode.read_with(cx, |this, _| {
             let steps: Vec<_> = this.tasks[1..4].iter().collect();
             assert_eq!(
-                super::chain_took(&steps),
+                super::chain_took(&steps, false),
                 Some(super::Took {
                     time: Duration::from_secs(265),
                     approximate: false
@@ -11378,7 +11633,7 @@ mod tests {
             Some(Took { time: Duration::from_secs(252), approximate: true })
         );
         // A chain with an estimated step is approximate as a whole.
-        assert!(super::chain_took(&[&recorded, &estimated]).unwrap().approximate);
+        assert!(super::chain_took(&[&recorded, &estimated], false).unwrap().approximate);
         assert_eq!(PromptTask::restore(saved(Some(record(None)), 0, Some(1_252))).took(), None);
         assert_eq!(PromptTask::restore(saved(Some(record(None)), 1_000, None)).took(), None);
         assert_eq!(PromptTask::restore(saved(None, 1_000, Some(1_252))).took(), None);
@@ -14373,8 +14628,8 @@ mod tests {
         })
         .unwrap();
 
-        // Opened from the Tasks tab, a Freeform task shows as a chat too,
-        // with a bar back to the latest task.
+        // Opened from the Tasks tab, a Freeform task shows as a chat too, in
+        // a tab of its own.
         prompt_mode.update(cx, |this, cx| {
             let ix = push(this, SendMode::Code, "Back to code", cx);
             this.tasks[ix].status = TaskStatus::Done;
@@ -14397,15 +14652,13 @@ mod tests {
         frames(handle, cx);
         cx.update_window(handle, |_, window, _| {
             assert!(window.try_find("freeform-chat").is_some(), "no chat opened");
-            assert!(window.try_find("back-to-latest").is_some(), "no way back");
+            assert!(window.try_find("task-tab-view").is_some(), "not in a tab");
         })
         .unwrap();
-        cx.update_window(handle, |_, window, cx| window.click("back-to-latest", cx))
-            .unwrap();
+        prompt_mode.update(cx, |this, cx| this.select_tab(None, cx));
         frames(handle, cx);
         cx.update_window(handle, |_, window, _| {
             assert!(window.try_find("freeform-chat").is_none());
-            assert!(window.try_find("back-to-latest").is_none());
         })
         .unwrap();
     }

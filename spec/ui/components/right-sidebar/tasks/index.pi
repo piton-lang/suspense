@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /scope/application/Body import BodyScope
 from /scope/prompt-mode import PromptEditor
 from /scope/prompt-mode/chat-input import ChatInputScope
 from /scope/prompt-mode/message-list import MessageList
@@ -81,13 +82,30 @@ shape TasksTabShape:
         view and back is the same as it was, its chain expanded or not, its
         selection and highlight kept.
 
+        Scrolling past either end does nothing: with the list at its top or
+        its bottom, a wheel, trackpad, or drag that goes further leaves every
+        row exactly where it is, frame after frame, with no stretch, bounce,
+        or nudge of even a pixel and back, and draws nothing anew, since
+        nothing moved. Its scroll position is clamped to its ends before a
+        frame is drawn, never drawn past an end and corrected the frame
+        after, and kept in whole device pixels, so a row never shimmers
+        between two places. What lies at an end stays at it: a running row's
+        time ticking, a task finishing, a row added or removed elsewhere in
+        the list, or the tab being resized never makes the rows in view jump
+        and settle. A list scrolled to its bottom stays at its bottom as rows
+        are added, and one at its top stays at its top. The list counts as
+        taller than the tab only once it overflows it by a whole pixel, as
+        the right sidebar's panels do, so a list that fits never scrolls
+        at all.
     details:
         An open task takes the tab's place, with a back arrow and the task's
         mode and name along its top, the arrow and <Escape> going back to the
         list as it was left. Opening a task that has run or is running also
-        shows its output in the @{MessageList}, as it shows the selected
-        task, with a bar above it reading "Back to the latest task" while it
-        isn't the latest. What the open task shows, top to bottom:
+        opens it in a tab of its own in the body, as a file opens, as the
+        @{BodyScope} says, showing its header and output there, unless it is
+        a task the Chat tab shows, one running or the one it shows while
+        none runs, when Chat is selected instead, with that task selected in
+        its header. What the open task shows, top to bottom:
 
         \\
         - At a glance: its status and how long it took, its lane, its place in the queue while it waits, the conversation it carries on or that it starts a new one, its model and effort, and once it has run, how many tool calls it made, its errors, its tokens and their cost, and how many files it changed, each a labelled figure, those that don't apply left out

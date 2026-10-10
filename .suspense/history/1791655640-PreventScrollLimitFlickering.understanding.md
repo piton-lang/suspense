@@ -1,0 +1,5 @@
+- [The Tasks tab is one scrolling column with a ScrollbarScope](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [It draws only the rows in view, every row 28px, positions known from row counts alone](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Running rows update their time and spinner in place, redrawing only what is in view](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [A sidebar panel whose contents fit never scrolls, overflow counted only past a whole pixel](.claude/reference/ui/components/right-sidebar/index.md#look)
+- [Scrolling past either end of the Tasks tab moves nothing, clamped before drawing, in whole pixels](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)

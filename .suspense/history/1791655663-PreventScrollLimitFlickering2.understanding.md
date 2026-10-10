@@ -1,0 +1,7 @@
+- [Scrolling past either end leaves every row exactly where it is, with no stretch, bounce, or one-pixel nudge](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Scrolling past an end draws nothing anew, since nothing moved](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [The scroll position is clamped to its ends before a frame is drawn, never drawn past and corrected a frame later](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [The scroll position is kept in whole device pixels](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Ticking times, tasks finishing, rows added or removed, and resizing never make the rows in view jump](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [A list at its bottom stays at its bottom as rows are added; one at its top stays at its top](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [The list counts as taller than the tab only once it overflows by a whole pixel; a list that fits never scrolls](.claude/reference/ui/components/right-sidebar/index.md#look)

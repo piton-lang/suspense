@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /scope/application/Body import BodyScope
 from ./chat-input import ChatInputScope
 from ./message-list import MessageList
 from /ui/components/right-sidebar import TasksTabScope
@@ -51,9 +52,9 @@ shape PromptEditorShape:
     previousTasks:
         Previous tasks are listed in the right sidebar's Tasks tab, in its
         Previous group, as the @{TasksTabScope} says, every task sent but
-        those the header shows, each a row that opens it there, its output
-        shown in the message list in place of the selected task's, with a
-        "Back to the latest task" bar above it. Their heading counts them:
+        those the header shows, each a row that opens it there, and its
+        output in a tab of its own in the body, as the @{BodyScope} says,
+        never in the Chat tab. Their heading counts them:
         "No previous tasks", "1 previous task", or "N previous tasks". The
         selection, filters, and batch actions below work there as they say,
         along that group's heading.
@@ -185,8 +186,20 @@ shape PromptEditorShape:
         @{PromptModesScope} colours it, a little more strongly than a single
         task's tint: a joined chain icon, the first line of the prompt, and at
         its right how many steps it has, "2 steps" or "3 steps". Its status is
-        the chain's as a whole: Running while any step runs, Failed or
-        Cancelled if a step was, and otherwise that of its last step. It has
+        the chain's as a whole, never only that of its latest step: a chain
+        is in progress from when it is sent until its last step is over, so
+        it reads Running, with its spinner and its time counting, while any
+        step is building, compiling, or running, while a step waits in its
+        lane's queue, and while a step has finished Done and the chain has a
+        step still to send, its code step, a spec follow-up it asks for, or a
+        step added to it, between the one finishing and the next being sent.
+        A step finishing Done never shows the chain as Done while another is
+        still to come. Only once no step is under way, queued, or still to be
+        sent is it over: Failed or Cancelled if a step was, and Done
+        otherwise. While it is in progress, it is listed with the running
+        tasks, in the Running group of the right sidebar's Tasks tab, with
+        all its steps, done and to come, beneath it, never among the
+        previous tasks, and it goes among them only once it is over. It has
         no checkbox, Resend, or Send to the other mode of its own, and
         clicking it doesn't open anything.
 

@@ -1,0 +1,6 @@
+- [A Chain prompt runs as a spec step, a code step, and maybe a spec follow-up, each a task of its own](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A step is sent once the step before it finishes, waiting in its lane's queue meanwhile](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A chain's parent row shows its status as a whole: Running while any step runs, else its last step's](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [The Tasks tab groups tasks into Previous, Running, and Queued; a chain is one row with its steps beneath](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [Task statuses are Building, Compiling, Running, Done, Failed, Cancelled, Not recorded](.claude/reference/scope/prompt-mode/message-list/index.md#status)
+- [A chain reads Running until its last step is over, including between steps, and sits in the Running group meanwhile](.claude/reference/scope/prompt-mode/index.md#chained-tasks)

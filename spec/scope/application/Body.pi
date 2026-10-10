@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /ui/components/right-sidebar import TasksTabScope
 from ../editor import EditorScope
 from ../no-project import NoProjectStateScope
 from ../open-file import OpenFileScope
@@ -67,6 +68,7 @@ shape BodyShape:
         - the @{MessageList}, the chat history, shown beneath the tab bar while the Chat tab is selected
         - the hint shown in the message list's place before any task has been sent, or while no project is open, as the @{PromptEditor} and the @{NoProjectStateScope} say
         - an @{EditorScope} for each open file, shown beneath the tab bar while its tab is selected
+        - a task view for each task opened in a tab of its own, as its task tabs say, shown beneath the tab bar while its tab is selected
         - the @{AskConversationScope}, beside the tab bar and the selected tab's contents, while the chat input's Ask tab is selected
         - the @{ChatInputScope}, along the bottom beneath whichever tab is selected, and beneath the Ask conversation too
         - the @{RightSidebarScope}, at the right of all of these, the tab bar and the chat input included, while a task runs
@@ -97,7 +99,8 @@ shape BodyShape:
         window's right edge otherwise, or, while the body is split for Ask, to
         the edge between it and the Ask conversation. Its first tab, Chat, shows the message
         list, and is always there: it can't be closed or moved. After it comes
-        a tab for each open file, in the order they were opened unless they
+        a tab for each open file and each task opened in a tab of its own,
+        files and tasks together, in the order they were opened unless they
         have been dragged since, scrolling sideways once there are more than
         fit.
 
@@ -139,6 +142,42 @@ shape BodyShape:
         changes. A press on a tab's close button closes it rather than
         starting a drag. A file opened afterwards still gets its new tab just
         after the one selected.
+
+    taskTabs:
+        The Chat tab shows only the task the harness is working on now, and
+        those running beside it, as the @{MessageList}'s header shows them,
+        or, while none runs, the task that finished last, until the next is
+        sent. It never shows any other task: a task opened from the right
+        sidebar's Tasks tab, as the @{TasksTabScope} says, or from anywhere
+        else that opens a task, opens in a tab of its own in the body's tab
+        bar, as a file does: a task not open yet gets a new tab just after
+        the one selected, and is selected; opening one that already has a
+        tab selects that tab; and opening the task Chat is showing selects
+        Chat instead.
+
+        A task's tab is laid out as a file's is: a bar 2 pixels wide down
+        its left in its mode's colour, its status, a spinner while it is
+        under way, a tick, cross, or dash once it has ended, then its name,
+        the first line of its prompt cut off with an ellipsis at 24
+        characters, then its close button. Hovering it shows its prompt's
+        first lines and its mode as its tooltip. It can be dragged among the
+        files' tabs, and closed as they are, closing it changing nothing
+        about the task.
+
+        Beneath it, the task shows as it would at the head of the Chat tab,
+        on its own: its header, with its status, time, compiled prompt, and
+        buttons, then its output table, then the files it changed, scrolled
+        to its top the first time it is shown, and as it was left after. A
+        task still running shows its output as it comes, its table locked to
+        the bottom while scrolled there, as the latest task's is, and
+        carries on in its tab whether or not the tab is selected. Its tab
+        stays open once it finishes. Opening a task in a tab doesn't select
+        it in the Chat tab or change what Chat shows, and Chat's running
+        tasks are never opened in tabs of their own unless asked for, a
+        running task opened from the Tasks tab selecting it in Chat's
+        header instead. Each open project keeps its own task tabs, as its
+        file tabs are kept, and none is reopened when the project is
+        opened again.
 
     openFile:
         A file opened, from the @{FileTreeScope} or anywhere else the

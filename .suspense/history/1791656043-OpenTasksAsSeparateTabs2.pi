@@ -1,0 +1,62 @@
+
+export anchor OpenTasksAsSeparateTabs2:
+    userPrompt:
+        \\\
+        Only the currently running task should display in the Chat tab.  If you open other tasks from the @{TasksTabScope} they should actually open as additional tabs like file editors do.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Only the currently running task should display in the Chat tab.  If you open other tasks from the @{TasksTabScope} they should actually open as additional tabs like file editors do.
+            \\\
+        result:
+            \\\
+            The Chat tab now shows only running tasks, and any other task you open from the Tasks tab opens in its own body tab, like a file. `piton check` reports no problems and `piton build` wrote 82 files.
+
+            - **Chat tab:** shows only the tasks running now. When nothing is running, it keeps the last finished task until the next one is sent. That keep-until-next choice is mine, and I can make Chat empty instead.
+            - **Task tabs:** opening a task from the Tasks tab, or anywhere else, opens a tab just after the selected one, and opening it again selects that tab.
+              - **Look:** a mode-coloured bar on the left, a status icon or spinner, the prompt's first line cut at 24 characters, and a close button.
+              - **Contents:** the task's header, output table and changed files.
+              - **Running tasks:** a running task in a tab keeps updating, with its output locked to the bottom while you're scrolled there.
+              - **Behaviour:** task tabs drag and close like file tabs. Closing one doesn't affect the task. They aren't reopened when the project is reopened.
+            - **Running tasks from the Tasks tab:** opening a running task selects it in Chat's header instead of opening a new tab.
+            - **Removed:** the "Back to the latest task" bar is gone from the message list and from the previous tasks.
+
+            **Anchors the code should follow:** `BodyScope` `#task-tabs`, `#tabs` and `#contents`; `TasksTabScope` `#details`; `PromptEditor` `#previous-tasks`; and `MessageList` `#scrolling-past`.
+            \\\
+
+    sentFrom: OpenTasksAsSeparateTabs
+
+    model: opus

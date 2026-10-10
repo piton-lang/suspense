@@ -101,12 +101,12 @@ pub(super) struct TasksTab {
     /// Whether the Previous group shows its rows; collapsed as the project
     /// opens, then kept as it is left.
     pub(super) previous_expanded: bool,
-    /// A task opened here shows its output in the message list, with a bar
-    /// back to the latest task.
-    pub(super) viewing: bool,
     /// The tab was on screen last frame; shown afresh, it scrolls to what
     /// runs.
     pub(super) shown: Cell<bool>,
+    /// Where the list was left scrolled last frame, and whether that was its
+    /// bottom, so a list left at its bottom stays there as it grows.
+    pub(super) left_at: Cell<Option<(Pixels, bool)>>,
     /// Queued prompts put there by "Edit and resend", held until "Send" is
     /// clicked.
     pub(super) drafts: HashSet<usize>,
@@ -126,8 +126,8 @@ impl TasksTab {
             scroll: ScrollHandle::new(),
             expanded_chains: HashSet::new(),
             previous_expanded: false,
-            viewing: false,
             shown: Cell::new(false),
+            left_at: Cell::new(None),
             drafts: HashSet::new(),
             editor: None,
             step_editor: None,
@@ -157,7 +157,7 @@ pub(super) struct QueuedFields {
 
 /// A task's status as a row shows it: a spinner while it is under way, then
 /// a tick, a cross, or a dash.
-fn status_mark(status: TaskStatus, cx: &App) -> AnyElement {
+pub(super) fn status_mark(status: TaskStatus, cx: &App) -> AnyElement {
     let theme = cx.theme();
     if status.is_active() {
         return Spinner::new().xsmall().into_any_element();
@@ -171,7 +171,7 @@ fn status_mark(status: TaskStatus, cx: &App) -> AnyElement {
 }
 
 /// The bar down a row's left edge, in `mode`'s colour.
-fn mode_bar(mode: Option<SendMode>, cx: &App) -> Div {
+pub(super) fn mode_bar(mode: Option<SendMode>, cx: &App) -> Div {
     let color = mode.map_or(cx.theme().muted_foreground, |mode| {
         chat_input::mode_color(mode, cx)
     });
@@ -209,6 +209,37 @@ fn group_heading_in(heading: Stateful<Div>, label: String, actions: Vec<AnyEleme
         .child(div().flex_1().min_w_0().truncate().child(label))
         .children(actions.into_iter().map(|action| div().flex_none().child(action)))
         .into_any_element()
+}
+
+/// Where a list `content` tall in a view `height` tall shows from, its
+/// offset from the top `offset`: clamped to its ends, and rounded to whole
+/// device pixels at `scale`. It scrolls only once it overflows the view by a
+/// whole pixel. A list `left_at` its bottom last frame, and not scrolled
+/// since, stays at its bottom, however it has grown or the view has changed.
+/// With whether it is at its top and at its bottom.
+fn clamped_top(
+    offset: Pixels,
+    content: Pixels,
+    height: Pixels,
+    scale: f32,
+    left_at: Option<(Pixels, bool)>,
+) -> (Pixels, bool, (bool, bool)) {
+    let scale = if scale > 0. { scale } else { 1. };
+    let overflow = content - height;
+    // Its end, at a whole device pixel no further than the content goes.
+    let max = if overflow >= px(1.) {
+        px((f32::from(overflow) * scale).floor() / scale)
+    } else {
+        px(0.)
+    };
+    let kept_at_bottom = left_at.is_some_and(|(left, bottom)| bottom && left == offset);
+    let top = if kept_at_bottom {
+        max
+    } else {
+        px((f32::from(-offset) * scale).round() / scale).clamp(px(0.), max)
+    };
+    let at_bottom = max > px(0.) && top >= max;
+    (top, at_bottom, (top <= px(0.), max <= px(0.) || at_bottom))
 }
 
 /// A muted line standing in for a group with nothing in it.
@@ -267,11 +298,55 @@ fn section(label: &'static str, cx: &App) -> Div {
 
 impl PromptMode {
     /// The tasks the Previous group lists: every task that has run, none
-    /// under way.
-    fn previous_ixs(&self) -> Vec<usize> {
+    /// under way, nor any step of a chain still in progress.
+    pub(super) fn previous_ixs(&self) -> Vec<usize> {
+        let in_progress = self.chains_in_progress();
         (0..self.tasks.len())
-            .filter(|&ix| !self.tasks[ix].status.is_active())
+            .filter(|&ix| {
+                !self.tasks[ix].status.is_active()
+                    && !in_progress.iter().any(|(_, members)| members.contains(&ix))
+            })
             .collect()
+    }
+
+    /// Every chain still in progress, by its first step, with its steps.
+    fn chains_in_progress(&self) -> Vec<(usize, Vec<usize>)> {
+        let layout = chain_layout(&self.tasks);
+        (0..layout.order.len())
+            .filter_map(|place| {
+                let step = layout.steps[place].filter(|step| step.pos == 0)?;
+                let members = layout.members(step);
+                self.chain_in_progress(members)
+                    .then(|| (layout.order[place], members.to_vec()))
+            })
+            .collect()
+    }
+
+    /// Whether the chain of `members`, its steps in the order they ran, is
+    /// in progress, as the PromptEditor says: from when it is sent until its
+    /// last step is over. So while any step is building, compiling, or
+    /// running, while a step waits in its lane's queue, and while a step
+    /// finished Done and another, its own or one added, is still to be sent.
+    pub(super) fn chain_in_progress(&self, members: &[usize]) -> bool {
+        let steps: Vec<&PromptTask> = members.iter().filter_map(|&ix| self.tasks.get(ix)).collect();
+        if steps.iter().any(|task| task.status.is_active() || task.held_for_fix) {
+            return true;
+        }
+        // A step waiting in its lane's queue, sent on from one of these.
+        let queued = self.queue.iter().any(|item| {
+            steps.iter().any(|task| {
+                item.sent_from.as_deref() == Some(task.name.as_ref())
+                    && task.chain_stamp.is_none_or(|stamp| stamp == item.queued_at)
+            })
+        });
+        if queued {
+            return true;
+        }
+        let Some(&last) = members.last() else {
+            return false;
+        };
+        self.tasks[last].status == TaskStatus::Done
+            && (chain_next(&self.tasks[last]).is_some() || self.next_added_step(last).is_some())
     }
 
     /// The tab, as the TasksTabScope says: the timeline, or the task open in
@@ -325,8 +400,9 @@ impl PromptMode {
                 if self.tasks.get(ix).is_some_and(|task| !task.status.is_active()) {
                     self.tasks_tab.previous_expanded = true;
                 }
-                self.tasks_tab.viewing = true;
-                self.select_task(ix, cx);
+                // Its output opens in the body: in Chat while Chat shows it,
+                // else in a tab of its own.
+                self.open_task(ix, cx);
             }
             Opened::Queued(id) => {
                 let text = self
@@ -374,17 +450,6 @@ impl PromptMode {
         self.tasks_tab.open = None;
         // Let go, it goes on as the queue does.
         self.auto_send_next(cx);
-        cx.notify();
-    }
-
-    /// The selected task's output back to the latest task's, scrolled where
-    /// it was left.
-    pub(super) fn back_to_latest(&mut self, cx: &mut Context<Self>) {
-        self.tasks_tab.viewing = false;
-        if let Some(latest) = self.true_latest_ix() {
-            self.select_task(latest, cx);
-        }
-        self.selected_task = None;
         cx.notify();
     }
 
@@ -622,9 +687,13 @@ impl PromptMode {
             for place in 0..layout.order.len() {
                 let ix = layout.order[place];
                 match layout.steps[place] {
-                    // A chain: its row, then its steps while shown.
+                    // A chain: its row, then its steps while shown; one still
+                    // in progress is listed with what runs.
                     Some(step) if step.pos == 0 => {
                         let all = layout.members(step);
+                        if self.chain_in_progress(all) {
+                            continue;
+                        }
                         let shown_member = |member: usize| {
                             !self.tasks[member].status.is_active() && visible(member)
                         };
@@ -658,19 +727,43 @@ impl PromptMode {
                 ));
             }
         }
-        // Running, in either lane.
+        // Running, in either lane: every task under way, a chain still in
+        // progress as one row, all its steps, done and to come, beneath it.
+        let chains = self.chains_in_progress();
         let running: Vec<usize> = (0..self.tasks.len())
-            .filter(|&ix| self.tasks[ix].status.is_active())
+            .filter(|&ix| {
+                self.tasks[ix].status.is_active()
+                    && !chains.iter().any(|(_, members)| members.contains(&ix))
+            })
             .collect();
         let running_at = rows.len();
         rows.push(TimelineRow::Heading(
             Group::Running,
-            format!("Running · {}", running.len()),
+            format!("Running · {}", running.len() + chains.len()),
         ));
-        if running.is_empty() {
+        if running.is_empty() && chains.is_empty() {
             rows.push(TimelineRow::Empty("tasks-running-empty", "Nothing running"));
         }
-        rows.extend(running.into_iter().map(|ix| TimelineRow::Task(ix, None, false)));
+        // In the order they were sent, a chain by its first step.
+        let mut items: Vec<(usize, Option<Vec<usize>>)> = running.into_iter().map(|ix| (ix, None)).collect();
+        items.extend(chains.into_iter().map(|(head, members)| (head, Some(members))));
+        items.sort_by_key(|(ix, _)| *ix);
+        let layout = (!items.iter().all(|(_, members)| members.is_none())).then(|| chain_layout(&self.tasks));
+        for (ix, members) in items {
+            match members {
+                None => rows.push(TimelineRow::Task(ix, None, false)),
+                Some(members) => {
+                    let expanded = self.tasks_tab.expanded_chains.contains(&ix);
+                    rows.push(TimelineRow::Chain(ix, members.clone()));
+                    if expanded && let Some(layout) = &layout {
+                        for member in members {
+                            let kind = layout.step_of(member).map(|step| step.kind);
+                            rows.push(TimelineRow::Task(member, kind, false));
+                        }
+                    }
+                }
+            }
+        }
         // Queued, in its order, reordered by dragging.
         let queued_at = rows.len();
         rows.push(TimelineRow::Heading(
@@ -708,7 +801,21 @@ impl PromptMode {
             height if height > px(0.) => height,
             _ => window.viewport_size().height,
         };
-        let top = (-scroll.offset().y).max(px(0.));
+        // Clamped to its ends, in whole device pixels, before anything is
+        // drawn, so nothing is ever drawn past an end and put back after.
+        let top = clamped_top(
+            scroll.offset().y,
+            ROW_HEIGHT * rows.len() as f32,
+            height,
+            window.scale_factor(),
+            self.tasks_tab.left_at.get(),
+        );
+        if scroll.offset().y != -top.0 {
+            scroll.set_offset(point(scroll.offset().x, -top.0));
+        }
+        self.tasks_tab.left_at.set(Some((-top.0, top.1)));
+        let at_end = top.2;
+        let top = top.0;
         let first = ((top / ROW_HEIGHT).floor() as usize).saturating_sub(OVERSCAN_ROWS);
         let last = (((top + height) / ROW_HEIGHT).ceil() as usize + OVERSCAN_ROWS).min(rows.len());
         let first = first.min(last);
@@ -772,7 +879,21 @@ impl PromptMode {
                     window.refresh();
                 }
             })
-            .children(rows);
+            .child(
+                // Scrolling further at an end goes no further, nor is anything
+                // drawn anew: the list never takes it.
+                v_flex()
+                    .w_full()
+                    .flex_none()
+                    .on_scroll_wheel(move |event, window, cx| {
+                        let delta = event.delta.pixel_delta(window.line_height()).y;
+                        let (at_top, at_bottom) = at_end;
+                        if (delta > px(0.) && at_top) || (delta < px(0.) && at_bottom) {
+                            cx.stop_propagation();
+                        }
+                    })
+                    .children(rows),
+            );
         v_flex()
             .relative()
             .size_full()
@@ -975,7 +1096,10 @@ impl PromptMode {
                         cx.notify();
                     })),
             )
-            .child(div().flex_none().child(status_mark(chain_status(&steps), cx)))
+            .child(div().flex_none().child(status_mark(
+                chain_status(&steps, self.chain_in_progress(members)),
+                cx,
+            )))
             .child(div().flex_1().min_w_0().truncate().child(text))
             .child(
                 div()
@@ -988,7 +1112,10 @@ impl PromptMode {
                         format!("{count} steps")
                     }),
             )
-            .children(chain_took(&steps).map(|took| took_label(("tasks-tab-chain-took", head), took, cx)));
+            .children(
+                chain_took(&steps, self.chain_in_progress(members))
+                    .map(|took| took_label(("tasks-tab-chain-took", head), took, cx)),
+            );
         gpui_kit::TestSupportExt::test_support(row).into_any_element()
     }
 
@@ -1496,11 +1623,9 @@ impl PromptMode {
                     .xsmall()
                     .icon(IconName::PanelLeft)
                     .label("Open output")
-                    .tooltip("Show its output in the message list")
+                    .tooltip("Show its output in the body")
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.tasks_tab.viewing = true;
-                        this.select_task(ix, cx);
-                        this.select_tab(None, cx);
+                        this.open_task(ix, cx);
                         cx.notify();
                     })),
             )
@@ -2352,4 +2477,35 @@ fn step_model_menu(head: usize, place: usize, chosen: Option<String>, cx: &mut C
             menu
         })
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui_kit::px;
+
+    use super::clamped_top;
+
+    /// The list is clamped to its ends in whole device pixels, scrolls only
+    /// once it overflows by a whole pixel, and stays at its bottom as it
+    /// grows once left there.
+    #[test]
+    fn the_list_stays_within_its_ends() {
+        // Past the top, or past the bottom, it is at that end.
+        assert_eq!(clamped_top(px(40.), px(280.), px(100.), 2., None), (px(0.), false, (true, false)));
+        assert_eq!(clamped_top(px(-500.), px(280.), px(100.), 2., None), (px(180.), true, (false, true)));
+        // Whole device pixels: halves at a scale of 2, wholes at 1.
+        assert_eq!(clamped_top(px(-10.3), px(280.), px(100.), 2., None).0, px(10.5));
+        assert_eq!(clamped_top(px(-10.3), px(280.), px(100.), 1., None).0, px(10.));
+        // An end short of a whole device pixel stops at the pixel before.
+        assert_eq!(clamped_top(px(-500.), px(280.4), px(100.), 1., None).0, px(180.));
+        // Overflowing by less than a pixel, it doesn't scroll at all.
+        assert_eq!(clamped_top(px(-0.6), px(100.6), px(100.), 2., None), (px(0.), false, (true, true)));
+        // Left at its bottom, it stays there as rows are added; scrolled
+        // since, it stays where it was scrolled to.
+        let left = Some((px(-180.), true));
+        assert_eq!(clamped_top(px(-180.), px(336.), px(100.), 2., left).0, px(236.));
+        assert_eq!(clamped_top(px(-150.), px(336.), px(100.), 2., left).0, px(150.));
+        // At its top, it stays at its top.
+        assert_eq!(clamped_top(px(0.), px(336.), px(100.), 2., Some((px(0.), false))).0, px(0.));
+    }
 }
