@@ -334,6 +334,31 @@ shape ContainerEnvironmentShape:
         owns, as is the volume, so the login command
         can write its credentials there on the first login as on any other.
 
+        Which harness is logged in is always the one the run needs: the
+        harness of the run's project, as the @{HarnessIntegrationScope} says,
+        never Claude Code by default, and never another project's. A run, a
+        Welcome check, or a login asked for checks that harness's own volume
+        alone, by its own credentials file: Claude Code's
+        `~/.claude/.credentials.json`, Codex's `~/.codex/auth.json`, and
+        OpenCode's `~/.local/share/opencode/auth.json`, each counting as
+        logged in only where the file is there and not empty. Its login view
+        is titled for it, "Log in to Codex" and the like, and runs its own
+        login command, `claude /login` for Claude Code, `codex login` for
+        Codex, and `opencode auth login` for OpenCode, in a container with
+        that harness's volume mounted, so its credentials land where its
+        runs read them. A run never asks for one harness's login while it
+        is about to run another.
+
+        A run that fails because its harness isn't logged in says so, naming
+        the harness, "Codex isn't logged in", with a "Log in" button that
+        shows its login view, rather than the harness's raw error alone. A
+        login that fails says why in the command's own words, its exit
+        status, and which harness it was for, and the run waiting on it
+        fails saying the same. The login view, the Welcome check, and the
+        Settings rows all read the same volume for a harness, so a harness
+        that is logged in shows as logged in everywhere, and one that isn't
+        never shows as logged in anywhere.
+
         The credentials stay in the harness's volume, and are refreshed
         there, so a harness is logged in once on a machine, not for every
         run. The @{SettingsWindowScope} shows whether each harness is logged

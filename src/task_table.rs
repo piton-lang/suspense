@@ -298,8 +298,8 @@ pub(crate) enum RunAction {
     InstallPodman,
     /// Podman's machine set up or started.
     Machine(crate::container::MachineAction),
-    /// The harness in use logged in in its container.
-    LogIn,
+    /// The harness the run needed, as named, logged in in its container.
+    LogIn(crate::agent::Agent),
 }
 
 impl RunAction {
@@ -307,7 +307,7 @@ impl RunAction {
         match self {
             RunAction::InstallPodman => "Install Podman",
             RunAction::Machine(action) => action.label(),
-            RunAction::LogIn => "Log in",
+            RunAction::LogIn(_) => "Log in",
         }
     }
 }
@@ -849,9 +849,9 @@ impl Reply {
                 self.pending_action =
                     Some(action.map_or(RunAction::InstallPodman, RunAction::Machine));
             }
-            HarnessEvent::LoginNeeded => {
+            HarnessEvent::LoginNeeded(agent) => {
                 self.preparing = false;
-                self.pending_action = Some(RunAction::LogIn);
+                self.pending_action = Some(RunAction::LogIn(agent));
             }
             HarnessEvent::TextStarted => self
                 .parts

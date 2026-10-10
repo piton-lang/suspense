@@ -1,0 +1,66 @@
+
+export anchor ClaudeCodeLoginFailure2:
+    userPrompt:
+        \\\
+        I'm being prompted to login with claude code, but I think the issue is that I'm not logged in with codex, I'm not sure.  Either way it fails.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            I'm being prompted to login with claude code, but I think the issue is that I'm not logged in with codex, I'm not sure.  Either way it fails.
+            \\\
+        result:
+            \\\
+            Your hunch is probably right. The harness just became a per-project setting, but the login check and login view most likely still assume Claude Code. So a project set to Codex shows a Claude Code login, and the run still fails because Codex isn't logged in. I can't see the code from this step, so that's the likely cause rather than a confirmed one. The spec now ties login to the project's harness. `piton check` and `piton build` ran clean.
+
+            - **Right harness:** login always follows the project's harness, never Claude Code by default and never another project's.
+            - **How "logged in" is checked:** only that harness's own volume is read, by its own credentials file:
+              - Claude Code: `~/.claude/.credentials.json`
+              - Codex: `~/.codex/auth.json`
+              - OpenCode: `~/.local/share/opencode/auth.json`
+            - **The login view:** it's titled for that harness ("Log in to Codex") and runs its own login command: `claude /login`, `codex login` or `opencode auth login`. That harness's volume is mounted, so the credentials land where its runs read them.
+            - **Clearer failures:**
+              - A run that fails for lack of login says which harness isn't logged in, such as "Codex isn't logged in", with a Log in button.
+              - A login that fails shows the command's own error, its exit status and which harness it was for.
+            - **Consistent everywhere:** the login view, the Welcome check and Settings all read the same volume, so they always agree.
+
+            The exact credentials file paths and login commands are my best understanding of each tool; the code step should check them against the installed versions.
+
+            **Anchors the code should follow:** `ContainerEnvironmentScope` `#logging-in` and `#volumes`, `HarnessIntegrationScope` `#harnesses`, `WelcomeScope`'s Harness login check, and `SettingsWindowScope` `#containers`.
+            \\\
+
+    sentFrom: ClaudeCodeLoginFailure
+
+    model: opus

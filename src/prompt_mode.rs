@@ -8631,9 +8631,10 @@ impl PromptMode {
             task_table::RunAction::InstallPodman => {
                 cx.open_url(crate::container::Platform::current().install_url());
             }
-            task_table::RunAction::LogIn => {
+            // The harness the run needed, never another.
+            task_table::RunAction::LogIn(agent) => {
                 crate::login_view::LoginView::open(
-                    crate::agent::of_project(Some(&project_dir)),
+                    agent,
                     project_dir,
                     window,
                     cx,

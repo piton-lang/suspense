@@ -1,0 +1,8 @@
+- [The harness in use is the project's own, saved with its data](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [When the harness isn't logged in in its volume, its login command runs in a container, in a login view titled for it](.claude/reference/scope/container-environment/index.md#logging-in)
+- [Each harness has its own volume for its login and settings: ~/.claude, ~/.codex, or OpenCode's data directory](.claude/reference/scope/container-environment/index.md#volumes)
+- [The run waiting on the login is sent once it succeeds, and fails saying so if it fails](.claude/reference/scope/container-environment/index.md#logging-in)
+- [Welcome's Harness login check passes while the harness in use is logged in, read from its volume](.claude/reference/scope/welcome/index.md#shape)
+- [Settings shows each harness's login state in its container and can log it in again](.claude/reference/scope/settings-window/index.md#containers)
+- [A failed run says what went wrong in the harness's own words](.claude/reference/scope/harness-integration/index.md#failures)
+- [Login, checks, and the login view always use the project's harness, its own credentials file and login command](.claude/reference/scope/container-environment/index.md#logging-in)

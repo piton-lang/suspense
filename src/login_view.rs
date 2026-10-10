@@ -320,25 +320,52 @@ fn log_in(
     let (mut child, mut output, input) = spawn(command, tty)?;
     input_tx.send(input).ok();
     let mut buffer = [0u8; 4096];
+    // What it printed, its last lines kept to say why should it fail.
+    let mut printed = String::new();
     loop {
         match output.read(&mut buffer) {
             Ok(0) | Err(_) => break,
             Ok(read) => {
-                tx.send(Report::Output(
-                    String::from_utf8_lossy(&buffer[..read]).replace('\r', ""),
-                ))
-                .ok();
+                let text = String::from_utf8_lossy(&buffer[..read]).replace('\r', "");
+                printed.push_str(&text);
+                tx.send(Report::Output(text)).ok();
             }
         }
     }
     let status = child.wait()?;
+    let command = container::login_command(agent);
+    let said = last_lines(&printed);
     if !status.success() {
-        anyhow::bail!("the login ended with {status}");
+        anyhow::bail!(
+            "Logging in to {} failed: `{command}` ended with {status}.{said}",
+            agent.label()
+        );
     }
     if !container::logged_in(agent, image, platform)? {
-        anyhow::bail!("{} still isn't logged in", agent.label());
+        anyhow::bail!(
+            "{} still isn't logged in: `{command}` ended with {status}, but wrote no credentials to {}.{said}",
+            agent.label(),
+            container::credentials_file(agent)
+        );
     }
     Ok(())
+}
+
+/// The last lines `printed` holds, as a failed login's own words, after a
+/// line break; nothing when it printed nothing.
+fn last_lines(printed: &str) -> String {
+    // As the terminal shows them, without its escapes.
+    let lines: Vec<String> = printed
+        .lines()
+        .map(|line| crate::console_text::ConsoleLine::parse(line).text.to_string())
+        .filter(|line| !line.trim().is_empty())
+        .collect();
+    let tail = &lines[lines.len().saturating_sub(12)..];
+    if tail.is_empty() {
+        String::new()
+    } else {
+        format!(" It said:\n{}", tail.join("\n"))
+    }
 }
 
 type Spawned = (

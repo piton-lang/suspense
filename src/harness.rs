@@ -144,9 +144,9 @@ pub enum HarnessEvent {
     /// Podman can't run its container, and what can be done about it, as
     /// the ContainerEnvironmentScope says; the run then fails saying why.
     PodmanUnavailable(Option<container::MachineAction>),
-    /// The harness isn't logged in in its container, and must be before the
-    /// run can go; the run then fails saying so.
-    LoginNeeded,
+    /// The harness, as named, isn't logged in in its container, and must be
+    /// before the run can go; the run then fails saying so.
+    LoginNeeded(Agent),
 }
 
 /// What started a background task: an Agent or Task tool call, or a shell
@@ -1510,11 +1510,8 @@ fn prepare(
         return Ok(None);
     }
     if !logged_in(plan.agent, &image, plan.platform)? {
-        tx.unbounded_send(HarnessEvent::LoginNeeded).ok();
-        bail!(
-            "{} isn't logged in in its container. Log in to run this.",
-            plan.agent.label()
-        );
+        tx.unbounded_send(HarnessEvent::LoginNeeded(plan.agent)).ok();
+        bail!("{} isn't logged in. Log in to run this.", plan.agent.label());
     }
     tx.unbounded_send(HarnessEvent::Prepared).ok();
     Ok(Some(image))

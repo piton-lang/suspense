@@ -1307,15 +1307,17 @@ fn check_commands(image: &str, commands: &[&str], on_line: &mut dyn FnMut(String
     Ok(())
 }
 
-/// How a harness says whether it is logged in, and logs in, in a container.
-fn status_args(agent: Agent) -> &'static [&'static str] {
+/// Where, under its home, a harness keeps the credentials its login writes,
+/// whose being there, and not empty, is its being logged in.
+pub fn credentials_file(agent: Agent) -> &'static str {
     match agent {
-        Agent::Claude => &["auth", "status", "--json"],
-        Agent::Codex => &["login", "status"],
-        Agent::OpenCode => &["auth", "list"],
+        Agent::Claude => ".claude/.credentials.json",
+        Agent::Codex => ".codex/auth.json",
+        Agent::OpenCode => ".local/share/opencode/auth.json",
     }
 }
 
+/// How a harness logs in, in a container.
 fn login_args(agent: Agent) -> &'static [&'static str] {
     match agent {
         Agent::Claude => &["auth", "login"],
@@ -1325,25 +1327,20 @@ fn login_args(agent: Agent) -> &'static [&'static str] {
     }
 }
 
+/// `agent`'s login command, as a failed login names it.
+pub fn login_command(agent: Agent) -> String {
+    std::iter::once(agent.command())
+        .chain(login_args(agent).iter().copied())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// The localhost port a harness waits on for its login's callback, which
 /// the login run publishes.
 fn callback_port(agent: Agent) -> Option<u16> {
     match agent {
         Agent::Codex => Some(1455),
         _ => None,
-    }
-}
-
-/// Whether `agent`'s status, as `output` printed with `success`, says it is
-/// logged in.
-fn read_status(agent: Agent, success: bool, output: &str) -> bool {
-    match agent {
-        Agent::Claude => serde_json::from_str::<Value>(output.trim())
-            .ok()
-            .and_then(|status| status.get("loggedIn").and_then(Value::as_bool))
-            .unwrap_or(false),
-        Agent::Codex => success && !output.to_lowercase().contains("not logged in"),
-        Agent::OpenCode => success && !output.contains("0 credentials"),
     }
 }
 
@@ -1382,27 +1379,32 @@ pub fn ensure_volume(agent: Agent) -> Result<()> {
     Ok(())
 }
 
-/// Whether `agent` is logged in, in its volume, using `image`. Blocking.
+/// Whether `agent` is logged in, in its own volume, using `image`: its
+/// credentials file there and not empty, as the login view, the Welcome
+/// check, and the settings all read it. Blocking.
 pub fn logged_in(agent: Agent, image: &str, platform: Platform) -> Result<bool> {
     ensure_volume(agent)?;
-    let args: Vec<OsString> = status_args(agent).iter().map(Into::into).collect();
+    let file = format!("{HOME}/{}", credentials_file(agent));
+    let args: Vec<OsString> = vec!["-s".into(), file.into()];
     let plan = bare(agent, RunKind::Question, platform);
     let output = podman_command()
-        .args(plan.run_args(image, agent.command(), &args, false))
+        .args(plan.run_args(image, "test", &args, false))
         .stdin(Stdio::null())
         .output_logged()
         .context("could not run podman")?;
-    // Podman failing to run the status check isn't the harness logged out.
-    if output.stdout.is_empty()
-        && let Some(why) = run_failure(
-            output.status.code(),
-            &String::from_utf8_lossy(&output.stderr),
-        )
-    {
-        bail!("{why}");
+    match output.status.code() {
+        Some(0) => Ok(true),
+        Some(1) => Ok(false),
+        // Podman failing to run the check isn't the harness logged out.
+        code => match run_failure(code, &String::from_utf8_lossy(&output.stderr)) {
+            Some(why) => bail!("{why}"),
+            None => bail!(
+                "couldn't read whether {} is logged in: {}",
+                agent.label(),
+                String::from_utf8_lossy(&output.stderr).trim()
+            ),
+        },
     }
-    let text = String::from_utf8_lossy(&output.stdout);
-    Ok(read_status(agent, output.status.success(), &text))
 }
 
 /// The `podman` arguments that log `agent` in, in its volume, using
@@ -1959,8 +1961,9 @@ mod tests {
 
     #[test]
     fn logins_are_read_and_their_urls_found() {
-        assert!(read_status(Agent::Claude, true, r#"{"loggedIn": true}"#));
-        assert!(!read_status(Agent::Claude, false, r#"{"loggedIn": false}"#));
+        assert_eq!(credentials_file(Agent::Claude), ".claude/.credentials.json");
+        assert_eq!(credentials_file(Agent::Codex), ".codex/auth.json");
+        assert_eq!(credentials_file(Agent::OpenCode), ".local/share/opencode/auth.json");
         assert_eq!(
             url_in("Visit https://claude.ai/oauth/authorize?code=1 to log in."),
             Some("https://claude.ai/oauth/authorize?code=1".into())
