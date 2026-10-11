@@ -1,0 +1,5 @@
+- [Only a run on the host has protected locations; a container run has none](.claude/reference/scope/harness-integration/index.md#protected-locations)
+- [Spec tasks, Chain spec steps, and questions run in a container; Code tasks and Chain code steps on the host](.claude/reference/scope/harness-integration/index.md#description)
+- [A Code task is told by --disallowedTools it may not edit or read the spec location](.claude/reference/scope/harness-integration/index.md#protected-locations)
+- [Notices are passive rows in the task's output, never errors](.claude/reference/ui/components/task-table/index.md#notices)
+- [Nothing is ever put back; host runs are only nudged, and a Code task's spec changes are left with a notice](.claude/reference/scope/harness-integration/index.md#protected-locations)

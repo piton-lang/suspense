@@ -268,7 +268,7 @@ pub(crate) enum ReplyPart {
     Tool(ToolCall),
     Error(String),
     /// Something the application tells the reader about the run, such as
-    /// what it put back: passive, never an error.
+    /// the spec files a Code task changed: passive, never an error.
     Notice(Notice),
     /// A message sent to the run while it works, as typed.
     Sent(String),
@@ -329,7 +329,18 @@ impl Global for RunActions {}
 pub(crate) struct Notice {
     pub summary: String,
     pub details: String,
+    /// Files it names, by their paths in the project, each listed beneath
+    /// its details, opening its diff.
+    pub files: Vec<std::path::PathBuf>,
 }
+
+/// Opens the diff of a file a notice names, of the run of a table, through
+/// whatever owns the runs.
+pub(crate) struct OpenNoticeFile(
+    pub std::rc::Rc<dyn Fn(usize, std::path::PathBuf, &mut Window, &mut App)>,
+);
+
+impl Global for OpenNoticeFile {}
 
 /// Which notices are open, by their reply and their place in it, kept for as
 /// long as the application runs.
@@ -1022,8 +1033,18 @@ impl Reply {
     /// Adds a notice to the end of the output: passive, never an error, so
     /// it fails nothing and isn't among the run's errors.
     pub(crate) fn push_notice(&mut self, summary: String, details: String) {
+        self.push_notice_of_files(summary, details, Vec::new());
+    }
+
+    /// Adds a notice naming `files`, each opening its diff.
+    pub(crate) fn push_notice_of_files(
+        &mut self,
+        summary: String,
+        details: String,
+        files: Vec<std::path::PathBuf>,
+    ) {
         self.parts
-            .push(ReplyPart::Notice(Notice { summary, details }));
+            .push(ReplyPart::Notice(Notice { summary, details, files }));
         self.refresh();
     }
 
@@ -2157,7 +2178,21 @@ pub(crate) fn notice_view(
             .gap_0p5()
             .text_sm()
             .text_color(muted)
-            .children(notice.details.lines().map(|line| line.to_string()));
+            .children(notice.details.lines().map(|line| line.to_string().into_any_element()))
+            .children(notice.files.iter().enumerate().map(|(ix, file)| {
+                let file = file.clone();
+                div()
+                    .id(("notice-file", ix))
+                    .cursor_pointer()
+                    .text_color(cx.theme().link)
+                    .child(file.display().to_string())
+                    .on_click(move |_, window, cx| {
+                        if let Some(open) = cx.try_global::<OpenNoticeFile>().map(|open| open.0.clone()) {
+                            open(table, file.clone(), window, cx);
+                        }
+                    })
+                    .into_any_element()
+            }));
         gpui_kit::TestSupportExt::test_support(details)
     });
     // Lets UI tests find the notice; inert in normal builds.
@@ -2464,12 +2499,12 @@ mod tests {
         let mut reply = Reply::default();
         reply.apply(HarnessEvent::TextStarted);
         reply.apply(HarnessEvent::TextDelta("Done it.".into()));
-        reply.push_notice("Put back 1 spec file".into(), "Why.\n- spec/a.pi".into());
+        reply.push_notice("This Code task changed 1 spec file".into(), "Why.\n- spec/a.pi".into());
         reply.stop();
         assert!(reply.errors().is_empty());
         assert!(matches!(
             reply.rows().last(),
-            Some(OutputRow::Notice(notice)) if notice.summary == "Put back 1 spec file"
+            Some(OutputRow::Notice(notice)) if notice.summary == "This Code task changed 1 spec file"
         ));
         let segments = reply.chat_segments();
         assert_eq!(segments[0].rows.answer, [0]);

@@ -48,6 +48,36 @@ shape ApplicationShape:
         @{ContainerEnvironmentScope} says. On macOS and Linux, nothing
         changes in how a program is started.
 
+    memoryPressure:
+        When the machine runs out of memory, the operating system ends the
+        program using it rather than Suspense. Every child process the
+        application starts, and everything those start in turn, a run
+        target's build, a task's harness and the commands it runs on the
+        host, piton, git, and each container, is marked as the one to end
+        first, and Suspense itself is never marked so, so a heavy build that
+        uses up memory is what the system ends, never the window holding the
+        user's work.
+
+        On Linux, each child process is started with its `oom_score_adj` set
+        to 1000, written to `/proc/self/oom_score_adj` in the child just
+        before it runs its program, so it and all it starts inherit it, and
+        each container is run with `--oom-score-adj=1000`; Suspense keeps its
+        own as it was given, never raising it. Where the system runs
+        systemd, each run target and each task on the host also runs in a
+        transient user scope of its own, as `systemd-run --user --scope`
+        gives, so the system's out-of-memory handling ends that scope and
+        not Suspense's. On macOS and Windows, which give no such control,
+        each child runs in a process group or job object of its own, as a
+        run target already does, so a child ended for its memory takes
+        nothing with it, and Suspense keeps running.
+
+        A child ended for running out of memory says so: a run target reads
+        "Ran out of memory" in its error colour, and a task or a spec build
+        fails saying the process was ended because the machine ran out of
+        memory, naming the program, as its exit by SIGKILL with the system
+        recording an out-of-memory kill shows, rather than only its exit
+        status. The debug log records it the same way.
+
     findingPrograms:
         Every program the application runs on the host, git, piton, podman,
         and each harness, Claude Code's `claude`, Codex's `codex`, and

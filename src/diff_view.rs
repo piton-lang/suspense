@@ -1078,7 +1078,7 @@ mod tests {
     const TIMEOUT: Duration = Duration::from_secs(10);
 
     fn git(dir: &Path, args: &[&str]) {
-        let ok = std::process::Command::new("git")
+        let ok = crate::process::command("git")
             .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
             .args(args)
             .current_dir(dir)

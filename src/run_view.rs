@@ -53,6 +53,8 @@ pub enum RunStatus {
     Stopped,
     /// Couldn't be started.
     Failed,
+    /// Ended by the system because the machine ran out of memory.
+    OutOfMemory,
 }
 
 // The panel holds one of these at a time, so the difference in size costs
@@ -402,12 +404,17 @@ impl RunView {
                         };
                         // Ended by itself: what it left running in its tree
                         // is stopped too.
+                        let out_of_memory = running.ran_out_of_memory();
                         running.stop_later();
                         this.running = None;
                         if let Holding::Running { status, .. } = &mut this.holding
                             && *status == RunStatus::Running
                         {
-                            *status = RunStatus::Exited(code);
+                            *status = if out_of_memory {
+                                RunStatus::OutOfMemory
+                            } else {
+                                RunStatus::Exited(code)
+                            };
                         }
                         cx.notify();
                         false
@@ -478,6 +485,9 @@ impl RunView {
                     h_flex().text_color(theme.muted_foreground).child("Stopped")
                 }
                 RunStatus::Failed => h_flex().text_color(theme.danger).child("Couldn't start"),
+                RunStatus::OutOfMemory => {
+                    h_flex().text_color(theme.danger).child("Ran out of memory")
+                }
             }),
             Holding::Finding { .. } => None,
         };

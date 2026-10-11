@@ -1,0 +1,6 @@
+- [Every step a chain will run is listed from the moment it is sent, while its spec step is still building or running](.claude/reference/ui/components/right-sidebar/tasks/index.md#chain-steps)
+- [A step not yet sent shows a muted "Next" if it follows the step running, a muted "Waiting" for any after it](.claude/reference/ui/components/right-sidebar/tasks/index.md#chain-steps)
+- [A step not yet sent shows the chain's prompt and a blank time until it starts](.claude/reference/ui/components/right-sidebar/tasks/index.md#chain-steps)
+- [Each step's row changes in place as it is sent, queued, runs, and ends; the list grows only when a step is added or a spec follow-up asked for, at its end](.claude/reference/ui/components/right-sidebar/tasks/index.md#chain-steps)
+- [The same holds for the opened chain's Steps section and its expanded rows in the Running group, and any multi-step task](.claude/reference/ui/components/right-sidebar/tasks/index.md#chain-steps)
+- [Steps are listed in run order: spec step, code step, spec follow-up when it has one, then added steps](.claude/reference/ui/components/right-sidebar/tasks/index.md#chain-steps)

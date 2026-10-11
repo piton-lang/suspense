@@ -1,0 +1,6 @@
+- [A chain's status comes only from its steps as they truly are, never from what it might do](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A chain reads Running while a step runs, or once a step has run and a later one waits in the queue](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A chain from history whose later step was never sent is over and never reads Running for it](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [Once a spec step is over, the spec is built again on the host before the next step is sent](.claude/reference/scope/prompt-mode/sending/index.md#description)
+- [A running chain lists every step it will run from when it is sent, unsent ones as Next or Waiting](.claude/reference/ui/components/right-sidebar/tasks/index.md#chain-steps)
+- [A multi-step task is Done only once every step is Done; between steps it stays Running; one that stopped short reads Stopped](.claude/reference/scope/prompt-mode/index.md#chained-tasks)

@@ -382,7 +382,7 @@ mod tests {
         )
         .unwrap();
         let build = |dir: &Path| {
-            let out = std::process::Command::new("piton")
+            let out = crate::process::command("piton")
                 .arg("build")
                 .current_dir(dir)
                 .output()

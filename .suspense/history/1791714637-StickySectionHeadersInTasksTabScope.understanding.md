@@ -1,0 +1,7 @@
+- [Previous, Running, and Queued are collapsible accordion sections, each heading a 28px raised row](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Each heading holds its own controls: Previous's filter and batch actions, Queued's auto-send and Send next](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Previous's day dividers stick just below its heading](.claude/reference/ui/components/right-sidebar/tasks/index.md#days)
+- [Sticky headings sit over the list without moving any row](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [The last row shows whole at the bottom, never hidden beneath a heading](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [While any task is selected, "N selected", Send N to Spec/Code, and Clear show as batch actions](.claude/reference/scope/prompt-mode/index.md#previous-tasks)
+- [All three headings stay in view, pinned at top or bottom in order, each always carrying its controls](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)

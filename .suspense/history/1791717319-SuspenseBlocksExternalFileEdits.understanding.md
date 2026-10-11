@@ -1,0 +1,6 @@
+- [A Code task on the host may not edit the spec location; the application puts back whatever changes there](.claude/reference/scope/harness-integration/index.md#protected-locations)
+- [Putting changes back is a passive notice in the task's output, never an error](.claude/reference/ui/components/task-table/index.md#notices)
+- [Task snapshots catch everything that changed while a task ran, the user's own edits included](.claude/reference/scope/prompt-mode/message-list/index.md#who-changed)
+- [A file the agent's tool calls reported writing counts as the agent's; any other changed during the task](.claude/reference/scope/prompt-mode/message-list/index.md#who-changed)
+- [The editor reloads a file changed on disk, asking only when it has unsaved changes](.claude/reference/scope/editor/index.md#changes-on-disk)
+- [Guards put back only what the task's own tool calls changed, once it is over; user and external changes are never reverted](.claude/reference/scope/harness-integration/index.md#protected-locations)

@@ -6,6 +6,7 @@
 //! own terminal would find it, as [`crate::programs`] says.
 
 use std::ffi::OsStr;
+use std::path::Path;
 use std::process::Command;
 
 /// Windows' `CREATE_NO_WINDOW` process creation flag.
@@ -33,6 +34,131 @@ pub fn command(program: impl AsRef<OsStr>) -> Command {
         command.creation_flags(CREATE_NO_WINDOW);
     }
     command
+}
+
+/// Marks `command`'s process, and all it starts, as the one the system ends
+/// first when it runs out of memory, as the ApplicationScope's memory
+/// pressure says: on Linux, its `oom_score_adj` set to 1000 in the child
+/// just before it runs its program, which everything it starts inherits.
+/// Suspense's own is left as it was given.
+pub fn mark_first_to_end(command: &mut Command) {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::process::CommandExt as _;
+        // SAFETY: only async-signal-safe calls between fork and exec, on a
+        // path and contents made before the fork.
+        unsafe {
+            command.pre_exec(|| {
+                const PATH: &[u8] = b"/proc/self/oom_score_adj\0";
+                const SCORE: &[u8] = b"1000";
+                let fd = libc::open(PATH.as_ptr().cast(), libc::O_WRONLY);
+                if fd >= 0 {
+                    libc::write(fd, SCORE.as_ptr().cast(), SCORE.len());
+                    libc::close(fd);
+                }
+                // Never a reason not to run it.
+                Ok(())
+            });
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = command;
+}
+
+/// Marks the running child `pid` as the one the system ends first when it
+/// runs out of memory, from Suspense, just after it starts, as a child
+/// started without [`mark_first_to_end`] is, so starting it stays cheap.
+pub fn mark_started(pid: u32) {
+    #[cfg(target_os = "linux")]
+    std::fs::write(format!("/proc/{pid}/oom_score_adj"), "1000").ok();
+    #[cfg(not(target_os = "linux"))]
+    let _ = pid;
+}
+
+/// How many processes the system has ended for running out of memory, as
+/// Linux counts them; none counted elsewhere.
+pub fn oom_kills() -> u64 {
+    #[cfg(target_os = "linux")]
+    {
+        std::fs::read_to_string("/proc/vmstat")
+            .ok()
+            .and_then(|stat| {
+                stat.lines()
+                    .find_map(|line| line.strip_prefix("oom_kill ")?.trim().parse().ok())
+            })
+            .unwrap_or(0)
+    }
+    #[cfg(not(target_os = "linux"))]
+    0
+}
+
+/// Whether a process that ended with `status` was ended for the machine
+/// running out of memory: killed by SIGKILL with the system recording an
+/// out-of-memory kill since `kills_before`, counted as it started.
+pub fn out_of_memory(status: std::process::ExitStatus, kills_before: u64) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt as _;
+        status.signal() == Some(libc::SIGKILL) && oom_kills() > kills_before
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (status, kills_before);
+        false
+    }
+}
+
+/// What a run says of `program` ended for the machine running out of
+/// memory.
+pub fn out_of_memory_message(program: &str) -> String {
+    format!("`{program}` was ended because the machine ran out of memory")
+}
+
+/// Whether systemd's user manager can give a run a transient scope of its
+/// own, asked once.
+fn user_scopes() -> bool {
+    static ABLE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ABLE.get_or_init(|| {
+        if cfg!(test) || !cfg!(target_os = "linux") || !Path::new("/run/systemd/system").exists() {
+            return false;
+        }
+        let Some(systemd_run) = crate::programs::find("systemd-run") else {
+            return false;
+        };
+        Command::new(systemd_run)
+            .args(["--user", "--scope", "--quiet", "--collect", "true"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+    })
+}
+
+/// `program` with `args`, run in a transient user scope of its own where
+/// the system runs systemd, so its out-of-memory handling ends that scope
+/// and not Suspense's; elsewhere run as it is. Made as [`command`] makes a
+/// command, its working directory and environment still to be given.
+pub fn command_in_own_scope(program: impl AsRef<OsStr>, args: &[&OsStr]) -> Command {
+    if user_scopes() {
+        let mut command = self::command("systemd-run");
+        command.args(["--user", "--scope", "--quiet", "--collect", "--"]);
+        let found = program
+            .as_ref()
+            .to_str()
+            .filter(|name| crate::programs::is_bare(name))
+            .and_then(crate::programs::find);
+        match found {
+            Some(path) => command.arg(path),
+            None => command.arg(program.as_ref()),
+        };
+        command.args(args);
+        command
+    } else {
+        let mut command = self::command(program);
+        command.args(args);
+        command
+    }
 }
 
 /// The arguments of `command` as the debug log gives them: never the value
@@ -89,8 +215,12 @@ fn log_ended(
     took: std::time::Duration,
     status: std::io::Result<std::process::ExitStatus>,
     stderr: Option<&[u8]>,
+    kills_before: u64,
 ) {
     let how = match &status {
+        Ok(status) if out_of_memory(*status, kills_before) => {
+            "ended because the machine ran out of memory".to_string()
+        }
         Ok(status) if status.success() => "exited 0".to_string(),
         Ok(status) => match status.code() {
             Some(code) => format!("exited {code}"),
@@ -143,23 +273,25 @@ fn why_not_run(command: &Command, err: std::io::Error) -> std::io::Error {
 impl Logged for Command {
     fn output_logged(&mut self) -> std::io::Result<std::process::Output> {
         let started = std::time::Instant::now();
+        let kills_before = oom_kills();
         let output = self.output().map_err(|err| why_not_run(self, err));
         let (status, stderr) = match &output {
             Ok(output) => (Ok(output.status), Some(output.stderr.as_slice())),
             Err(err) => (Err(std::io::Error::new(err.kind(), err.to_string())), None),
         };
-        log_ended(&describe(self), &directory(self), started.elapsed(), status, stderr);
+        log_ended(&describe(self), &directory(self), started.elapsed(), status, stderr, kills_before);
         output
     }
 
     fn status_logged(&mut self) -> std::io::Result<std::process::ExitStatus> {
         let started = std::time::Instant::now();
+        let kills_before = oom_kills();
         let status = self.status().map_err(|err| why_not_run(self, err));
         let logged = match &status {
             Ok(status) => Ok(*status),
             Err(err) => Err(std::io::Error::new(err.kind(), err.to_string())),
         };
-        log_ended(&describe(self), &directory(self), started.elapsed(), logged, None);
+        log_ended(&describe(self), &directory(self), started.elapsed(), logged, None, kills_before);
         status
     }
 
@@ -168,6 +300,7 @@ impl Logged for Command {
         let child = self.spawn().map_err(|err| why_not_run(self, err));
         match &child {
             Ok(child) => {
+                mark_started(child.id());
                 crate::debug_log::log(
                     None,
                     format!("started {described} in {dir} as {}", child.id()),
@@ -182,6 +315,7 @@ impl Logged for Command {
                     described,
                     dir,
                     started: std::time::Instant::now(),
+                    kills_before: oom_kills(),
                 });
             }
             Err(err) => crate::debug_log::log(
@@ -200,6 +334,8 @@ struct Spawned {
     described: String,
     dir: String,
     started: std::time::Instant,
+    /// The system's out-of-memory kills as it started.
+    kills_before: u64,
 }
 
 fn spawned() -> std::sync::MutexGuard<'static, Vec<Spawned>> {
@@ -226,12 +362,28 @@ pub fn ended(pid: u32, status: Option<std::process::ExitStatus>, stderr: Option<
         spawned.started.elapsed(),
         status,
         stderr.map(str::as_bytes),
+        spawned.kills_before,
     );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every child it starts is marked as the one the system ends first
+    /// when it runs out of memory, and Suspense itself is not.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn children_are_ended_first_when_memory_runs_out() {
+        let mut marked = command("sh");
+        marked.args(["-c", "cat /proc/self/oom_score_adj"]);
+        mark_first_to_end(&mut marked);
+        let output = marked.output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "1000");
+        let own = std::fs::read_to_string("/proc/self/oom_score_adj").unwrap();
+        assert_ne!(own.trim(), "1000", "Suspense marked itself");
+        assert!(out_of_memory_message("cargo").contains("ran out of memory"));
+    }
 
     /// A command is logged with its arguments, but never an environment
     /// variable's value or a prompt.

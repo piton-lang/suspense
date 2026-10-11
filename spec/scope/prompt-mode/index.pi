@@ -201,16 +201,28 @@ shape PromptEditorShape:
         while one of its steps waits in a lane's queue after an earlier step
         of it has run, as its code step queued behind another task once its
         spec step is done: the chain is under way, though that step is
-        queued. It reads Queued, in the theme's muted colour, only while it
+        queued. It reads Running too between its steps, while a step of it
+        has ended Done and the application is still to send the next, in
+        this session: building the spec on the host after its spec step,
+        compiling the next step, or waiting for that step's name, so it
+        never reads Done for even a moment while a step it will run is still
+        to come. A multi-step task is Done only once every step it was to
+        run is Done; until then, a step of it Done is only that step's
+        status, never the chain's. It reads Queued, in the theme's muted colour, only while it
         hasn't started, its first step still waiting in the queue and none
-        of its steps run yet. Otherwise it is over, whether or
-        not it ever sent every step it might have: Failed or Cancelled if a
-        step was, and otherwise its last step's own status, Done, or Not
-        recorded for one with no record of its run. A chain whose later
+        of its steps run yet. Otherwise it is over: Failed or Cancelled if
+        a step was; Done only where every step it was to run is Done; Not
+        recorded where a step has no record of its run; and, where it
+        stopped short of a step it was to run, with no step failed or
+        cancelled, as when the application closed between its steps,
+        Stopped, in the theme's muted colour, never Done. A chain whose later
         step was never sent, as one from before chains sent them or one
-        whose application closed between its steps, is over, its parent
-        saying muted after its step count that its code step was never sent,
-        and never reads Running for it.
+        whose application closed between its steps, is over, reading
+        Stopped, its parent saying muted after its step count that its code
+        step was never sent, and never reads Running or Done for it. What the
+        application is still to send is known only in the session that sent
+        the chain: after a restart, a chain whose next step wasn't sent or
+        queued has stopped.
 
         Each step's state is read from where it truly is: a step is running
         only while the application has its run under way, which no step
@@ -243,9 +255,12 @@ shape PromptEditorShape:
         of the other lane run between its steps, are never listed within it,
         and are listed after the chain, in the order they were sent. A chain's
         steps are found by which step each was sent from, not by being next to
-        each other in the history. A chain still running, or one whose later
-        steps haven't been sent yet, shows as many steps as have been, and
-        a step still running shows as it would anywhere. When the latest
+        each other in the history. A chain still running shows every step it
+        will run from the moment it is sent, not only those sent so far: its
+        spec step and its code step, and any step added to it, those not
+        sent yet as steps to come, and a spec follow-up once the chain asks
+        for one. A chain that is over shows the steps it sent, and a step
+        still running shows as it would anywhere. When the latest
         task, heading the view, is a step of a chain, that chain's earlier
         steps are still grouped under its parent in the list, the parent
         saying the rest is the latest task. A chain is listed under the day its first

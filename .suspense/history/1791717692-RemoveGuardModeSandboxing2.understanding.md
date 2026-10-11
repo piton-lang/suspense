@@ -1,0 +1,8 @@
+- [The container is the only enforcement; nothing is guarded by watching files](.claude/reference/scope/harness-integration/index.md#protected-locations)
+- [The application never reverts, restores, or deletes any file a run changed, on the host or in a container](.claude/reference/scope/harness-integration/index.md#protected-locations)
+- [A Code task on the host is only nudged: told via --disallowedTools not to edit, nor read, the spec location](.claude/reference/scope/harness-integration/index.md#protected-locations)
+- [Where a Code task's tool calls report changing spec files, its output shows a passive notice naming them, left as the task left them](.claude/reference/scope/harness-integration/index.md#protected-locations)
+- [A notice is never an error, never fails the task or changes its status](.claude/reference/ui/components/task-table/index.md#notices)
+- [The notice's line reads like "This Code task changed 3 spec files"](.claude/reference/ui/components/task-table/index.md#row)
+- [Its details say a Code task is told not to change the spec, that the files were left as it left them, then list each file by its project path, each opening its diff](.claude/reference/ui/components/task-table/index.md#details)
+- [A question from the Ask tab runs in a container and is given no such rule](.claude/reference/scope/harness-integration/index.md#protected-locations)

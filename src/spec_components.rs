@@ -372,7 +372,6 @@ impl Request {
 
 #[cfg(test)]
 mod tests {
-    use std::process::Command;
 
     use super::*;
 
@@ -504,7 +503,7 @@ mod tests {
         // Only exports compile, so the concept and shape added to index.pi
         // are only checked; the scope's copy of its concept holds the text.
         for (file, exported) in [(scope, true), (dir.join("index.pi"), false)] {
-            let out = Command::new("piton")
+            let out = crate::process::command("piton")
                 .arg("compile")
                 .arg(&file)
                 .current_dir(&project)

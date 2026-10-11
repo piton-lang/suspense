@@ -1,0 +1,7 @@
+- [Every child process the application starts is listed: git, piton, podman, the harness, a run target's shell](.claude/reference/scope/application/index.md#child-processes)
+- [On Windows every child process starts without a console window](.claude/reference/scope/application/index.md#child-processes)
+- [A run target starts in its own process group on macOS and Linux, and in a job object on Windows](.claude/reference/scope/run-targets/index.md#stopping)
+- [Each container run is one podman run --rm of the harness's command, as a child of the application](.claude/reference/scope/container-environment/index.md#description)
+- [A failed run says what went wrong in the harness's own words, with its exit status](.claude/reference/scope/harness-integration/index.md#failures)
+- [The debug log records every child process with its exit status](.claude/reference/scope/debug-log/index.md#logged)
+- [Children are marked first to be ended on out of memory (oom_score_adj 1000, own scope), Suspense never, and OOM kills are reported](.claude/reference/scope/application/index.md#memory-pressure)

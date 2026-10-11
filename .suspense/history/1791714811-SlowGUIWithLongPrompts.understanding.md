@@ -1,0 +1,7 @@
+- [The chat input is a GrowingTextInputScope up to 12 rows, scrolling beyond](.claude/reference/scope/prompt-mode/chat-input/index.md#grow-to-fit)
+- [The chat input is highlighted with the Piton tree-sitter grammar and served by the LSP](.claude/reference/scope/prompt-mode/chat-input/index.md#syntax-highlighting)
+- [It grows or shrinks in the frame its text changes, rows counted as laid out](.claude/reference/ui/components/growing-text-input/index.md#steadiness)
+- [The task header shows the compiled markdown the harness received, which scrolls once tall](.claude/reference/scope/prompt-mode/index.md#header)
+- [A long prompt in the Tasks tab details is clipped at 8 lines with Read more](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [Queued rows show only the prompt's first line](.claude/reference/scope/prompt-mode/queue-list/index.md#placement)
+- [Long prompts cost no more than short ones: rope text, incremental layout and highlighting, only what is in view drawn](.claude/reference/ui/components/growing-text-input/index.md#long-text)

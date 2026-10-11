@@ -1,0 +1,7 @@
+- [The application puts back only files the task's own tool calls, a subagent's included, report writing, editing, moving, or deleting in the guarded location](.claude/reference/scope/harness-integration/index.md#protected-locations)
+- [A file changed there by anything else while the task runs is never put back, deleted, or reverted](.claude/reference/scope/harness-integration/index.md#protected-locations)
+- [It puts back once, when the task is over, never while it runs; nothing is watched and undone as it happens](.claude/reference/scope/harness-integration/index.md#protected-locations)
+- [A file the task changed that was also changed by something else since is left as it is, the notice saying so](.claude/reference/scope/harness-integration/index.md#protected-locations)
+- [No location is guarded while no Code or Spec task runs on the host](.claude/reference/scope/harness-integration/index.md#protected-locations)
+- [Nothing the application does deletes a user's file in the spec or code location, outside what piton build writes and owns by its manifest](.claude/reference/scope/harness-integration/index.md#protected-locations)
+- [What was put back is told in a passive notice, never an error, listing each file put back](.claude/reference/ui/components/task-table/index.md#notices)

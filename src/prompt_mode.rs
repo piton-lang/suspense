@@ -351,6 +351,10 @@ struct PromptTask {
     spec_fix_due: Option<String>,
     /// A chain step whose next step waits for the spec fix sent after it.
     held_for_fix: bool,
+    /// Run in this session, the application is still to go on from it:
+    /// from when it starts until whatever it sends next has been sent, or
+    /// it ends without sending anything. Never so for one from the history.
+    goes_on: bool,
     /// When its chain was sent, as a queue stamp (see
     /// [`prompt_queue::stamp`]): a chain's next step takes its place in its
     /// lane's queue by it, behind every prompt sent before the chain and
@@ -585,6 +589,9 @@ enum TaskStatus {
     Cancelled,
     /// From the history, with no record of what came of it.
     Unrecorded,
+    /// A chain that stopped short of a step it was to run, none failed or
+    /// cancelled, as when the application closed between its steps.
+    Stopped,
 }
 
 impl TaskStatus {
@@ -598,6 +605,7 @@ impl TaskStatus {
             Self::Failed => "Failed",
             Self::Cancelled => "Cancelled",
             Self::Unrecorded => "Not recorded",
+            Self::Stopped => "Stopped",
         }
     }
 
@@ -620,7 +628,7 @@ impl TaskStatus {
                 Self::Done => Hue::Green,
                 Self::Failed => Hue::Red,
                 Self::Cancelled => Hue::Orange,
-                Self::Unrecorded => Hue::Grey,
+                Self::Unrecorded | Self::Stopped => Hue::Grey,
             },
             cx,
         )
@@ -662,6 +670,7 @@ impl PromptTask {
             feed: None,
             spec_fix_due: None,
             held_for_fix: false,
+            goes_on: false,
             chain_stamp: None,
             started: None,
             ended: None,
@@ -1734,21 +1743,23 @@ fn took_label(id: (&'static str, usize), took: Took, cx: &App) -> AnyElement {
 }
 
 /// A chain's status as a whole, from its steps as they are: a step's while
-/// one is under way; otherwise failed or cancelled if any step was, and
-/// otherwise its last step's own, Done or Not recorded.
-fn chain_status(steps: &[&PromptTask]) -> TaskStatus {
+/// one is under way; once over, Failed or Cancelled if a step was, Not
+/// recorded where one has no record, Stopped where it `stopped_short` of a
+/// step it was to run, and Done only where every step it was to run is.
+fn chain_status(steps: &[&PromptTask], stopped_short: bool) -> TaskStatus {
     let statuses = steps.iter().map(|task| task.status);
     if let Some(active) = statuses.clone().find(|status| status.is_active()) {
         return active;
     }
-    for ended in [TaskStatus::Failed, TaskStatus::Cancelled] {
+    for ended in [TaskStatus::Failed, TaskStatus::Cancelled, TaskStatus::Unrecorded] {
         if statuses.clone().any(|status| status == ended) {
             return ended;
         }
     }
-    steps
-        .last()
-        .map_or(TaskStatus::Unrecorded, |task| task.status)
+    if stopped_short || steps.is_empty() {
+        return TaskStatus::Stopped;
+    }
+    TaskStatus::Done
 }
 
 /// How strongly the accent tints the filters' button behind it while any
@@ -2466,6 +2477,14 @@ impl PromptMode {
         cx.set_global(task_table::RunActions(Rc::new(
             move |action, table, window, cx| {
                 this.update(cx, |this, cx| this.run_action(action, table, window, cx))
+                    .ok();
+            },
+        )));
+        // A file a notice names opens its diff, as the task's changed files do.
+        let this = cx.entity().downgrade();
+        cx.set_global(task_table::OpenNoticeFile(Rc::new(
+            move |table, file, window, cx| {
+                this.update(cx, |this, cx| this.open_notice_file(table, file, window, cx))
                     .ok();
             },
         )));
@@ -5787,6 +5806,30 @@ impl PromptMode {
     }
 
     /// Locks the latest task's output to the bottom, or unlocks it.
+    /// Opens the diff of `file`, by its path in the project, that a notice of
+    /// the task of `table` names: as its changed files open it, between the
+    /// snapshots of its run, or else the file itself.
+    fn open_notice_file(&mut self, table: usize, file: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(project_dir) = self.project_dir.clone() else {
+            return;
+        };
+        let path = project_dir.join(&file);
+        let diff = self.tasks.get(table).and_then(|task| task.changed.clone()).and_then(|changed| {
+            let (change, _) = changed.files.iter().find(|(change, _)| changed.top.join(&change.path) == path)?;
+            Some(OpenSnapshotDiff {
+                top: changed.top.clone(),
+                path: change.path.clone(),
+                from: change.from.clone(),
+                before: changed.before.clone(),
+                after: changed.after.clone(),
+            })
+        });
+        match diff {
+            Some(diff) => cx.emit(diff),
+            None => self.open_file(path, window, cx),
+        }
+    }
+
     /// Locks the output of the task in the tab known by `key` to its bottom,
     /// or not.
     fn set_task_tab_lock(&mut self, key: EntityId, locked: bool, cx: &mut Context<Self>) {
@@ -5948,6 +5991,8 @@ impl PromptMode {
         }
         self.sidebar_closed_by_hand = false;
         let task_ix = self.push_task(text.clone().into(), cx);
+        // Until what it sends next has been sent, its chain goes on.
+        self.tasks[task_ix].goes_on = true;
         // When its chain was sent: a queued prompt's queue stamp, which a
         // chain's step queued takes from its chain, or else now.
         self.tasks[task_ix].chain_stamp = match &sending {
@@ -6058,10 +6103,8 @@ impl PromptMode {
             .mode
             .is_none_or(|mode| mode != SendMode::Ask);
         let builds = is_task && !freeform;
-        // What it may change, which a guard beside it keeps.
-        let writes = self.tasks[task_ix].mode;
-        // On the host, Code may not change the spec, nor Spec the code; in a
-        // container, nothing it mustn't touch is there to guard.
+        // On the host, a Code task is told not to change the spec; in a
+        // container, nothing it mustn't touch is there.
         let guarded = mode_guard::guarded(self.tasks[task_ix].mode, container_kind.is_some());
         if builds {
             self.tasks[task_ix].status = TaskStatus::Building;
@@ -6093,12 +6136,7 @@ impl PromptMode {
         };
         let build = builds.then(|| {
             let project_dir = project_dir.clone();
-            cx.background_spawn(async move {
-                // What the build writes is kept by the guard of a task
-                // running beside it.
-                let _writing = mode_guard::Writing::start(None, &project_dir);
-                piton_build::build(&project_dir)
-            })
+            cx.background_spawn(async move { piton_build::build(&project_dir) })
         });
         // The system prompt it is sent with: the project's, the same for
         // every prompt of the conversation whatever the mode, so the
@@ -6362,16 +6400,11 @@ impl PromptMode {
                         resumed: resume.is_some(),
                     };
                     let mut usage_run = None;
-                    // Whatever the harness does, what the task's mode may
-                    // not change is put back.
-                    let guard = match guarded {
-                        Some(mode) => {
-                            let dir = project_dir.clone();
-                            cx.background_spawn(async move { mode_guard::Guard::start(mode, &dir) })
-                                .await
-                        }
-                        None => None,
-                    };
+                    // Told, as a Code task on the host, not to edit the spec:
+                    // only a nudge, nothing put back.
+                    let told_off = guarded.and_then(|mode| {
+                        mode_guard::protected(mode, &crate::project_tree::Locations::read(&project_dir))
+                    });
                     // Told, too, not to read the spec's source, as a Code
                     // task, so it reads the compiled reference instead.
                     let unread = guarded.and_then(|mode| {
@@ -6405,7 +6438,7 @@ impl PromptMode {
                         .with_files(&compiled.files)
                     });
                     let protected = harness::Protected {
-                        root: guard.as_ref().map(mode_guard::Guard::root),
+                        root: told_off.clone(),
                         unread,
                         container,
                         // The model and effort it was sent to, recorded
@@ -6413,15 +6446,6 @@ impl PromptMode {
                         model: compiled.model.clone(),
                         effort: compiled.effort.clone(),
                         files: compiled.files.clone(),
-                    };
-                    // What it may change, the guard of a task running beside
-                    // it keeps rather than putting back.
-                    let writing = {
-                        let dir = project_dir.clone();
-                        cx.background_spawn(async move {
-                            mode_guard::Writing::start(writes, &dir)
-                        })
-                        .await
                     };
                     // In a git repository, the working tree as the harness
                     // starts the task, to compare with how its run leaves it.
@@ -6641,7 +6665,6 @@ impl PromptMode {
                         let built = {
                             let dir = project_dir.clone();
                             cx.background_spawn(async move {
-                                let _writing = mode_guard::Writing::start(None, &dir);
                                 piton_build::build(&dir)
                             })
                             .await
@@ -6692,41 +6715,37 @@ impl PromptMode {
                         })
                         .ok();
                     }
-                    if let Some(guard) = guard {
-                        let what = guard.what;
-                        let put_back = cx.background_spawn(async move { guard.finish() }).await;
-                        if !put_back.is_empty() {
-                            let files = put_back
-                                .iter()
-                                .map(|file| format!("- {}", file.display()))
-                                .collect::<Vec<_>>()
-                                .join("\n");
-                            let mode = guarded.map_or("", SendMode::label);
-                            // Passive: it fails nothing, and opens onto
-                            // the files put back.
-                            let summary = format!(
-                                "Put back {} {what} {} this {mode} task changed",
-                                put_back.len(),
-                                if put_back.len() == 1 { "file" } else { "files" },
-                            );
-                            let details = format!(
-                                "A {mode} task may not change the {what}, so what it changed there was put back as it was:\n{files}"
-                            );
-                            this.update(cx, |this, cx| {
-                                this.in_project(&project_dir, cx, |this, cx| {
-                                    if let Some(task) = this.tasks.get_mut(task_ix) {
-                                        task.reply.push_notice(summary, details);
-                                    }
-                                    cx.notify();
-                                });
-                            })
-                            .ok();
-                        }
+                    // Spec files a Code task's tool calls report changing all
+                    // the same are named in a passive notice, left as it left
+                    // them, each opening its diff.
+                    if let Some(root) = told_off.clone() {
+                        this.update(cx, |this, cx| {
+                            this.in_project(&project_dir, cx, |this, cx| {
+                                let Some(task) = this.tasks.get_mut(task_ix) else {
+                                    return;
+                                };
+                                let changed = mode_guard::changed_in(
+                                    &root,
+                                    &task.references.edited_paths(),
+                                    &project_dir,
+                                );
+                                if changed.is_empty() {
+                                    return;
+                                }
+                                let summary = format!(
+                                    "This Code task changed {} spec {}",
+                                    changed.len(),
+                                    if changed.len() == 1 { "file" } else { "files" },
+                                );
+                                let details = "A Code task is told not to change the spec. These files were left as it left them, to keep or undo:".to_string();
+                                task.reply.push_notice_of_files(summary, details, changed);
+                                cx.notify();
+                            });
+                        })
+                        .ok();
                     }
-                    // What it last changed is kept by the guards beside it.
-                    cx.background_spawn(async move { drop(writing) }).await;
                     phases.end("harness", if is_cancelled() { "cancelled" } else { "ended" });
-                    // And as its run leaves it, whatever was put back, with
+                    // And as its run leaves it, with
                     // the files that changed between the two.
                     if let Some(before) = snapshot_before {
                         phases.begin("closing snapshot");
@@ -6964,7 +6983,12 @@ impl PromptMode {
                             if let Some((head, place)) = added_next {
                                 this.send_added_step(head, place, task_ix, cx);
                             }
-                            this.auto_send_next(cx)
+                            // Its next step sent or queued, or none to send.
+                            if let Some(task) = this.tasks.get_mut(task_ix) {
+                                task.goes_on = false;
+                            }
+                            this.auto_send_next(cx);
+                            cx.notify()
                         });
                     })
                 });
@@ -9467,6 +9491,8 @@ mod tests {
     /// Shows the right sidebar on its Tasks tab, as opening it by hand
     /// does.
     fn show_tasks(this: &mut super::PromptMode) {
+        // Wide enough for Previous's batch actions unfolded.
+        this.refs_width.set(gpui_kit::px(420.));
         this.sidebar_by_hand = true;
         this.sidebar_tab = super::SidebarTab::Tasks;
         this.tasks_picked = true;
@@ -11088,7 +11114,7 @@ mod tests {
         let dir = dunce::canonicalize(&dir).unwrap();
         let git = |args: &[&str]| {
             assert!(
-                std::process::Command::new("git")
+                crate::process::command("git")
                     .args(args)
                     .current_dir(&dir)
                     .output()
@@ -11193,12 +11219,12 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// What a Code task changed in the spec is put back, and said so in a
-    /// passive notice, not an error: the task is done, and the notice opens
-    /// onto the files put back and closes again.
+    /// What a Code task changed in the spec is left as it left it, and said
+    /// so in a passive notice, not an error: the task is done, and the notice
+    /// opens onto the files it changed and closes again.
     #[cfg(unix)]
     #[gpui_kit::test]
-    async fn changes_put_back_are_a_notice(cx: &mut TestAppContext) {
+    async fn spec_changes_are_a_notice(cx: &mut TestAppContext) {
         use crate::chat_input::SendMode;
         if crate::piton_build::piton_missing() {
             return;
@@ -11206,15 +11232,17 @@ mod tests {
         cx.executor().allow_parking();
         let (prompt_mode, handle) = open(cx);
         let dir = cancel_project("put-back-notice", &prompt_mode, cx);
-        // A harness that writes into the spec, then is done.
+        // A harness whose tool call writes into the spec, then is done.
         let script = dir.join("spec-writing-harness.sh");
         std::fs::write(
             &script,
             "#!/bin/sh\n\
              IFS= read -r line\n\
-             echo stray > spec/stray.pi\n\
-             sleep 0.7\n\
              echo '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"s1\"}'\n\
+             echo '{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"t1\",\"name\":\"Bash\",\"input\":{\"command\":\"echo stray > spec/stray.pi\"}}]}}'\n\
+             echo stray > spec/stray.pi\n\
+             echo '{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"t1\",\"content\":\"\"}]}}'\n\
+             sleep 0.7\n\
              echo '{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Done.\"}'\n",
         )
         .unwrap();
@@ -11242,7 +11270,8 @@ mod tests {
                 })
         });
         crate::harness::use_program_for_test(None);
-        assert!(!dir.join("spec/stray.pi").exists(), "the spec file stayed");
+        // Never put back: left as the task left it.
+        assert!(dir.join("spec/stray.pi").exists(), "the spec file was removed");
         let notice_row = prompt_mode.read_with(cx, |this, _| {
             let task = &this.tasks[0];
             assert_eq!(task.status, TaskStatus::Done, "the notice failed the task");
@@ -11252,9 +11281,9 @@ mod tests {
                 .iter()
                 .position(|row| {
                     matches!(row, OutputRow::Notice(notice)
-                    if notice.summary == "Put back 1 spec file this Code task changed")
+                    if notice.summary == "This Code task changed 1 spec file")
                 })
-                .expect("no notice of the file put back")
+                .expect("no notice of the spec file changed")
         });
         let find = |id: (&'static str, usize), cx: &mut TestAppContext| {
             cx.update_window(handle, |_, window, cx| {
@@ -11366,7 +11395,7 @@ mod tests {
         let (prompt_mode, handle) = open(cx);
         let dir = cancel_project("snapshot-run", &prompt_mode, cx);
         let git = |args: &[&str]| {
-            let output = std::process::Command::new("git")
+            let output = crate::process::command("git")
                 .args(args)
                 .current_dir(&dir)
                 .output()
@@ -11542,7 +11571,7 @@ mod tests {
                 let members: Vec<usize> = (0..this.tasks.len()).collect();
                 (
                     this.chain_state(&members),
-                    super::chain_status(&steps),
+                    super::chain_status(&steps, false),
                     this.previous_ixs().len(),
                 )
             })
@@ -11564,6 +11593,78 @@ mod tests {
         assert_eq!(state(cx), (ChainState::Running, TaskStatus::Running, 0));
         prompt_mode.update(cx, |this, _| this.tasks[1].status = TaskStatus::Failed);
         assert_eq!(state(cx), (ChainState::Over, TaskStatus::Failed, 2));
+    }
+
+    /// Between its steps, while this session is still to send its next, a
+    /// chain is running, never Done; one that stopped short of a step it
+    /// was to run, none failed, reads Stopped, never Done.
+    #[gpui_kit::test]
+    async fn a_chain_is_done_only_once_every_step_is(cx: &mut TestAppContext) {
+        use super::tasks_tab::ChainState;
+        use crate::chat_input::SendMode;
+        let (prompt_mode, _handle) = open(cx);
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("Build it".into(), cx);
+            let task = &mut this.tasks[ix];
+            task.sent.mode = Some(SendMode::Both);
+            task.mode = Some(SendMode::Both);
+            task.status = TaskStatus::Done;
+            task.goes_on = true;
+        });
+        let state = |cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| this.chain_state(&[0]))
+        };
+        // Its spec step done, its code step still to be sent.
+        assert_eq!(state(cx), ChainState::Running);
+        // Its application closed between its steps.
+        prompt_mode.update(cx, |this, _| this.tasks[0].goes_on = false);
+        assert_eq!(state(cx), ChainState::Over);
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(super::chain_status(&[&this.tasks[0]], true), TaskStatus::Stopped);
+            assert_eq!(super::chain_status(&[&this.tasks[0]], false), TaskStatus::Done);
+        });
+    }
+
+    /// A chain just sent lists every step it will run: with its spec step
+    /// building, its code step "Next" and its spec follow-up "Waiting",
+    /// both in the Running group and in the opened chain.
+    #[gpui_kit::test]
+    async fn a_chain_lists_every_step_from_the_moment_it_is_sent(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        let (prompt_mode, handle) = open(cx);
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("Build it".into(), cx);
+            let task = &mut this.tasks[ix];
+            task.sent.mode = Some(SendMode::Both);
+            task.mode = Some(SendMode::Both);
+            task.sent.post_build_update = true;
+            task.status = TaskStatus::Building;
+            show_tasks(this);
+            cx.notify();
+        });
+        let texts = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.render_frame(cx);
+                let mut ids: Vec<usize> = Vec::new();
+                for id in [usize::MAX / 2 + 4 * 2 + 1, usize::MAX / 2 + "Spec follow-up".len() * 2] {
+                    if window.try_find(("tasks-tab-step", id)).is_some() {
+                        ids.push(id);
+                    }
+                }
+                ids.len()
+            })
+            .unwrap()
+        };
+        // Its code step, next, and its follow-up, waiting, beneath it.
+        assert_eq!(texts(cx), 2, "the steps to come aren't listed");
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| {
+                this.open_in_tab(super::tasks_tab::Opened::Task(0), window, cx)
+            })
+        })
+        .unwrap();
+        assert_eq!(texts(cx), 2, "the opened chain doesn't list its steps to come");
     }
 
     /// A chain whose spec step is done and whose code step waits in the
@@ -11701,7 +11802,7 @@ mod tests {
                 ]
             );
             let steps: Vec<_> = this.tasks[1..4].iter().collect();
-            assert_eq!(super::chain_status(&steps), TaskStatus::Failed);
+            assert_eq!(super::chain_status(&steps, false), TaskStatus::Failed);
         });
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
@@ -14151,6 +14252,48 @@ mod tests {
     /// However many previous tasks there are, the Tasks tab draws only the
     /// rows in view and a few either side, each 28 pixels tall, while it
     /// scrolls as far as though every row were drawn.
+    /// Every section heading is always in view: scrolled into Previous,
+    /// its heading is pinned at the top and Running's and Queued's at the
+    /// bottom, in order, none pushing another out.
+    #[gpui_kit::test]
+    async fn section_headings_stack_at_the_top_and_bottom(cx: &mut TestAppContext) {
+        use gpui_kit::{point, px};
+        let (prompt_mode, handle) = open(cx);
+        prompt_mode.update(cx, |this, cx| {
+            for n in 0..200 {
+                let ix = this.push_task(format!("Task {n}").into(), cx);
+                this.tasks[ix].status = TaskStatus::Done;
+            }
+            show_previous_tasks(this);
+            cx.notify();
+        });
+        let frames = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.render_frame(cx);
+                window.render_frame(cx);
+            })
+            .unwrap();
+        };
+        frames(cx);
+        let scroll = prompt_mode.read_with(cx, |this, _| this.tasks_tab.scroll.clone());
+        scroll.set_offset(point(px(0.), px(-28. * 50.)));
+        prompt_mode.update(cx, |_, cx| cx.notify());
+        frames(cx);
+        cx.update_window(handle, |_, window, _| {
+            let bounds = |id: &'static str| window.find(id).bounds();
+            let (previous, running, queued) = (
+                bounds("tasks-previous-pinned"),
+                bounds("tasks-running-pinned"),
+                bounds("tasks-queued-pinned"),
+            );
+            let list = scroll.bounds();
+            assert!((previous.top() - list.top()).abs() <= px(1.), "{previous:?} isn't at the top of {list:?}");
+            assert!((queued.bottom() - list.bottom()).abs() <= px(1.), "{queued:?} isn't at the bottom of {list:?}");
+            assert!((running.bottom() - queued.top()).abs() <= px(1.), "Running isn't stacked above Queued");
+        })
+        .unwrap();
+    }
+
     #[gpui_kit::test]
     async fn the_tasks_tab_draws_only_the_rows_in_view(cx: &mut TestAppContext) {
         use gpui_kit::{point, px};

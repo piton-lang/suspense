@@ -212,7 +212,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
         std::fs::create_dir_all(dir.join("src")).unwrap();
         let git = |args: &[&str]| {
-            let ok = std::process::Command::new("git")
+            let ok = crate::process::command("git")
                 .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
                 .args(args)
                 .current_dir(&dir)

@@ -116,22 +116,26 @@ shape HarnessIntegrationShape:
         Only a run on the host has protected locations. A run in a container
         has none, since nothing it mustn't touch is mounted there, as the
         @{ContainerEnvironmentScope} says: it isn't guarded, and its harness is
-        given no rule against reading or editing anything.
+        given no rule against reading or editing anything. The container is
+        the only enforcement there is; nothing is guarded by watching files.
 
-        Where the harness takes rules for what its tools may do, as Claude
-        Code does with `--disallowedTools`, a run on the host is told what its
-        mode keeps it off. A Code task is told it may not edit the spec location, and a
-        Spec task the code location; the application puts back whatever
-        changes there all the same, and says so in the task's output as a
-        passive notice, never an error, as the @{TaskTableScope} says. A Code
-        task is also told it may not read the spec location, alongside that,
-        so it reads the compiled reference instead, as the
-        @{ModeSystemPromptsScope} says. A question from the Ask tab always
-        runs in a container, so it is never given this rule, nor any other
-        telling it to keep off the spec location. This rule is only a nudge, and
-        doesn't enforce anything, since a shell command can still read the
-        files, and nothing puts anything back or stops the run when one does. A harness that
-        takes no such rules is told nothing of either.
+        A run on the host, a Code task or a Chain prompt's code step, is
+        only nudged. Where the harness takes rules for what its tools may do,
+        as Claude Code does with `--disallowedTools`, a Code task is told it
+        may not edit the spec location, and may not read it, so it reads the
+        compiled reference instead, as the @{ModeSystemPromptsScope} says.
+        This rule doesn't enforce anything, since a shell command can still
+        reach the files. Nothing is put back: the application never reverts,
+        restores, or deletes any file a run changed, on the host or in a
+        container, and never watches a location to undo what happens in it.
+        Where a Code task's tool calls report changing a file in the spec
+        location all the same, its output says so as a passive notice, never
+        an error, as the @{TaskTableScope} says, naming the files, which are
+        left as the task left them, so the user can keep or undo them, as
+        from the files it changed. A harness that takes no such rules is
+        told nothing. A question from the Ask tab always runs in a container,
+        so it is never given this rule, nor any other telling it to keep off
+        the spec location.
 
     feeding:
         A task's run is given its prompt as a stream of messages: Claude Code

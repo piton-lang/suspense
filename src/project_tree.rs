@@ -2273,7 +2273,7 @@ mod tests {
         fs::write(dir.join("same.txt"), "same\n").unwrap();
         let git = |args: &[&str]| {
             assert!(
-                std::process::Command::new("git")
+                crate::process::command("git")
                     .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
                     .args(args)
                     .current_dir(&dir)

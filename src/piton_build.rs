@@ -179,10 +179,13 @@ fn unowned_reference_files(report: &str) -> Option<Vec<PathBuf>> {
 /// Runs `piton build` once.
 fn build_once(program: &str, project_dir: &Path) -> Result<BuildOutcome> {
     {
-        let output = crate::process::command(program)
-            .arg("build")
-            .current_dir(project_dir)
-            .output_logged()?;
+        let kills_before = crate::process::oom_kills();
+        let mut build = crate::process::command(program);
+        build.arg("build").current_dir(project_dir);
+        // Ended first, with all it starts, should memory run out.
+        crate::process::mark_first_to_end(&mut build);
+        let output = build.output_logged()?;
+        let out_of_memory = crate::process::out_of_memory(output.status, kills_before);
         crate::piton_fluency::write_with(program, project_dir);
 
         // `piton build` prints each written file on stdout, as an absolute
@@ -200,7 +203,10 @@ fn build_once(program: &str, project_dir: &Path) -> Result<BuildOutcome> {
         Ok(BuildOutcome {
             success: output.status.success(),
             files,
-            report: if report.is_empty() && !output.status.success() {
+            report: if out_of_memory {
+                // Said so, naming it, rather than only how it exited.
+                crate::process::out_of_memory_message("piton build")
+            } else if report.is_empty() && !output.status.success() {
                 format!("piton build exited with {}", output.status)
             } else {
                 report

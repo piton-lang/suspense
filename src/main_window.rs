@@ -6636,7 +6636,7 @@ mod tests {
         std::fs::write(dir.join("piton.config.pi"), "root: ./spec\n").unwrap();
         std::fs::write(dir.join("spec/index.pi"), "a: 1\n").unwrap();
         let git = |args: &[&str]| {
-            let output = std::process::Command::new("git")
+            let output = crate::process::command("git")
                 .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
                 .args(args)
                 .current_dir(&dir)
@@ -6788,7 +6788,7 @@ mod tests {
         std::fs::write(dir.join("piton.config.pi"), "root: ./spec\n").unwrap();
         std::fs::write(dir.join("spec/index.pi"), "a: 1\n").unwrap();
         let git = |args: &[&str]| {
-            let output = std::process::Command::new("git")
+            let output = crate::process::command("git")
                 .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
                 .args(args)
                 .current_dir(&dir)
@@ -6875,7 +6875,7 @@ mod tests {
             std::fs::write(dir.join(file), text).unwrap();
         }
         let git = |args: &[&str]| {
-            let output = std::process::Command::new("git")
+            let output = crate::process::command("git")
                 .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
                 .args(args)
                 .current_dir(&dir)
@@ -7616,7 +7616,7 @@ mod tests {
             std::fs::write(dir.join(format!("file-{ix:02}.txt")), "\n").unwrap();
         }
         let git = |args: &[&str]| {
-            let output = std::process::Command::new("git")
+            let output = crate::process::command("git")
                 .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
                 .args(args)
                 .current_dir(&dir)

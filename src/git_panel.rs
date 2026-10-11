@@ -1034,7 +1034,7 @@ mod tests {
     use crate::project_directory::ProjectDirectory;
 
     fn git(dir: &Path, args: &[&str]) -> String {
-        let output = std::process::Command::new("git")
+        let output = crate::process::command("git")
             .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
             .args(args)
             .current_dir(dir)

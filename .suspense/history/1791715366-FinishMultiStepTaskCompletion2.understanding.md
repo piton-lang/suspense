@@ -1,0 +1,7 @@
+- [A chain reads Running between its steps while, in this session, a step ended Done and the next is still to be sent: building the spec, compiling, or naming it](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A chain never reads Done for even a moment while a step it will run is still to come](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A multi-step task is Done only once every step it was to run is Done](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [Over: Failed or Cancelled if a step was; Done only where every step was Done; Not recorded where a step has no record](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A chain that stopped short of a step with none failed or cancelled reads Stopped, muted, never Done](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [What is still to send is known only in the session that sent the chain; after a restart, a chain whose next step wasn't sent or queued has stopped](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [The status label "Stopped" is grey](.claude/reference/scope/prompt-mode/message-list/index.md#status)

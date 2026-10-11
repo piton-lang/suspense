@@ -52,15 +52,37 @@ shape TasksTabShape:
         one of its tasks from elsewhere, as from the running activity list,
         expands it to show that task.
 
-        Each heading is sticky: while its section's rows are scrolled
-        through, the heading stays pinned at the top of the tab, over the
-        rows scrolling beneath it, until the next section's heading reaches
-        it and pushes it up and out of view, the next one taking its place.
-        So the heading of the section in view is always showing, with its
-        count and controls in reach, however far down it is scrolled. A
-        pinned heading draws over the rows with its own surface, never
+        All three headings are always in view, however far the tab is
+        scrolled, so each section's controls are always in reach. A heading
+        whose section starts above the visible rows is pinned at the top of
+        the tab, and one whose section starts below them is pinned at its
+        bottom, in their order: scrolled down into Running, the Previous
+        heading is pinned at the top, the Running heading beneath it, and the
+        Queued heading at the bottom; scrolled into Queued, Previous and
+        Running are pinned at the top, one beneath the other. A heading never
+        pushes another out of view; they stack, each 28 pixels, so the rows
+        scroll in the space left between the headings pinned above and
+        below. A heading in its place among the rows sits there as any row
+        does, and is pinned only once its place leaves the visible rows.
+        Clicking a pinned heading, anywhere but its chevron and controls,
+        scrolls the list to that section's start; clicking its chevron
+        expands or collapses it, as clicking a heading in its place does.
+
+        Each heading carries its section's controls, whichever place it is
+        pinned in: Previous's selection, its "N selected", its batch
+        actions, "Send N to Spec", "Send N to Code", and "Clear", while any
+        task is selected, and its filter dropdown; Running's "Cancel all",
+        while more than one task runs; and Queued's auto-send switch and
+        "Send next". Where a heading is too narrow for all of them, its
+        title gives way first, cut off with an ellipsis, and then its count,
+        never its controls, the batch actions folding into a "N selected"
+        menu once even that isn't enough.
+
+        A pinned heading draws over the rows with its own surface, never
         letting them show through, and is drawn once, never twice where it
-        is pinned and where it lies.
+        is pinned and where it lies. Previous's day divider sticks just
+        below the Previous heading only while Previous's rows are what is in
+        view beneath it.
 
     days:
         Within Previous, tasks are grouped by the day they were sent, in the
@@ -118,7 +140,9 @@ shape TasksTabShape:
         status: a tick, cross, or dash for one that has ended, a spinner for
         the one running, "Queued" with its place in its lane's queue for
         one waiting there, and a muted "Next" for one that will be sent once
-        the step before it finishes, each with its own time. A step being
+        the step before it finishes, and "Waiting" for any after that, every
+        step listed from the moment the chain is sent, as its chain steps
+        say, each with its own time. A step being
         queued shows here, as part of its chain, rather than among the
         queued prompts, though it keeps its place in its lane's queue. The
         steps can't be collapsed, and once the chain is over they go with it
@@ -177,9 +201,10 @@ shape TasksTabShape:
         the height of the area it is drawn in: the area beneath the right
         sidebar's tab row, never the sidebar's whole height, nor an area that
         still counts the tab row, a sticky heading, the open task's back bar,
-        or the scrollbar's own room as part of the list. A sticky heading
-        covers the top of the list, never its bottom, so the bottom row is
-        never hidden beneath one. However the tab is resized, by the window,
+        or the scrollbar's own room as part of the list. Headings pinned at the
+        bottom take room from the list's visible area, as those at the top
+        do, so scrolled to the bottom, the last row still shows whole above
+        any heading pinned there, and none ever hides a row. However the tab is resized, by the window,
         the sidebar's panels, or the sidebar's width, the bottom is worked
         out anew in that frame, so a list scrolled to its bottom still shows
         its last row whole.
@@ -232,7 +257,18 @@ shape TasksTabShape:
         An open Chain task lists its steps in its Steps section, beneath its
         prompt and above its details, in the
         order they run, each a row as in the list, with its status: its spec
-        step, its code step, and its spec follow-up when it has one. An "Add
+        step, its code step, and its spec follow-up when it has one. Every
+        step it will run is listed from the moment the chain is sent, while
+        its spec step is still building or running, before any later step
+        has been sent: a step not yet sent is listed all the same, its status
+        a muted "Next" for the one that follows the step running and a
+        muted "Waiting" for any after it, its prompt the chain's, and its
+        time blank until it starts. Each step's row changes in place as the
+        step is sent, queued, runs, and ends, and the list never grows or
+        reorders as a step is sent, only once a step is added, or a spec
+        follow-up is asked for, when it is added at its end. The same holds
+        for the chain's expanded rows in the Running group, and for any task
+        of more than one step. An "Add
         step" button beneath them adds a step of its own after the last: a
         Code or a Spec step, chosen from a small menu, with a prompt of its
         own, typed in the step's row as it expands, its model and effort

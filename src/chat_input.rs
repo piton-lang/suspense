@@ -839,7 +839,7 @@ impl ChatInput {
                     if matches!(event, InputEvent::Change) {
                         // A prompt from an answer's card cleared away, what was
                         // set aside for it comes back.
-                        if editor.read(cx).value().is_empty()
+                        if editor.read(cx).text().len() == 0
                             && let Some(text) = this.set_aside_text.take()
                         {
                             let tab = this.selected_tab;
@@ -1998,7 +1998,10 @@ impl ChatInput {
     }
 
     fn set_completions(&mut self, lsp: Option<Arc<PitonSession>>, cx: &mut Context<Self>) {
-        let completions = Rc::new(PromptCompletions { lsp });
+        let completions = Rc::new(PromptCompletions {
+            lsp,
+            asked: Arc::default(),
+        });
         self.completion
             .update(cx, |menu, cx| menu.set_provider(completions, cx));
     }
@@ -2385,12 +2388,12 @@ impl ChatInput {
 
 impl Render for ChatInput {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let text = self.editor.read(cx).value();
         let (height, one_row) = self.fit.heights(&self.editor, window, cx);
         // Before the editor lays out this frame, so it scrolls only once its
         // text takes more than its most rows.
         self.fit.keep_cursor_in_view(&self.editor, window, cx);
-        let empty = text.is_empty();
+        // Without copying the text, however long it is.
+        let empty = self.editor.read(cx).text().len() == 0;
         // A task queues only behind one of its own lane; a question is asked
         // straight away, beside whatever the harness is working on, so it
         // never queues.
@@ -3023,7 +3026,14 @@ impl Render for ChatInput {
 /// Piton from `piton lsp`, when it is running, everywhere else.
 struct PromptCompletions {
     lsp: Option<Arc<PitonSession>>,
+    /// Counts the edits asked about, so only the last of a burst of typing
+    /// reaches the language server.
+    asked: Arc<std::sync::atomic::AtomicU64>,
 }
+
+/// How long typing must pause before the language server hears of an edit,
+/// so it never holds up what is typed.
+const LSP_PAUSE: std::time::Duration = std::time::Duration::from_millis(150);
 
 impl CompletionProvider for PromptCompletions {
     fn completions(
@@ -3037,7 +3047,15 @@ impl CompletionProvider for PromptCompletions {
         let lsp = self.lsp.clone();
         let prompt = text.to_string();
         let project_dir = ProjectDirectory::get(cx);
+        let asked = self.asked.clone();
+        let this_ask = asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+        let executor = cx.background_executor().clone();
         cx.background_spawn(async move {
+            // Only once typing pauses: an edit typed over since is left.
+            executor.timer(LSP_PAUSE).await;
+            if asked.load(std::sync::atomic::Ordering::SeqCst) != this_ask {
+                return Ok(CompletionResponse::Array(Vec::new()));
+            }
             if harness_mentions::mention_at(&prompt, offset).is_some() {
                 let invocables = harness_mentions::discover(project_dir.as_deref());
                 let items = harness_mentions::complete(&prompt, offset, &invocables);

@@ -786,7 +786,6 @@ impl Render for NewProjectForm {
 #[cfg(test)]
 mod tests {
     use std::path::{Path, PathBuf};
-    use std::process::Command;
 
     use super::{Agent, Settings, anchor_name, name_problem, project_path};
 
@@ -892,7 +891,7 @@ belay-config BelayConfiguration:
         for path in ["piton.config.pi", "spec/index.pi", "src", "spec/shape"] {
             assert!(folder.join(path).exists(), "{path} was not created");
         }
-        let build = Command::new("piton")
+        let build = crate::process::command("piton")
             .arg("build")
             .current_dir(&folder)
             .output()
@@ -928,7 +927,7 @@ belay-config BelayConfiguration:
         ] {
             assert!(folder.join(path).exists(), "{path} was not written");
         }
-        let build = Command::new("piton")
+        let build = crate::process::command("piton")
             .arg("build")
             .current_dir(&folder)
             .output()
@@ -961,7 +960,7 @@ belay-config BelayConfiguration:
                 "{ignored} isn't ignored: {ignore}"
             );
         }
-        let log = Command::new("git")
+        let log = crate::process::command("git")
             .args(["rev-list", "--all"])
             .current_dir(&folder)
             .output()

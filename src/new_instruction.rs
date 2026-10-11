@@ -607,7 +607,7 @@ mod tests {
         );
         let file = project.join("spec/shape/ribbon/SpecTab.pi");
         std::fs::write(&file, &text).unwrap();
-        let out = std::process::Command::new("piton")
+        let out = crate::process::command("piton")
             .arg("check")
             .arg(&file)
             .current_dir(&project)
@@ -641,7 +641,7 @@ mod tests {
             "from ./shape/ribbon/SpecTab export *\n",
         )
         .unwrap();
-        let build = std::process::Command::new("piton")
+        let build = crate::process::command("piton")
             .arg("build")
             .current_dir(&project)
             .output()

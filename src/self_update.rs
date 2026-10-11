@@ -1504,7 +1504,7 @@ mod tests {
         std::fs::write(dir.join("pack/suspense"), "the new binary").unwrap();
         let archive = dir.join("suspense-0.1.5-test.tar.gz");
         assert!(
-            std::process::Command::new("tar")
+            crate::process::command("tar")
                 .arg("-czf")
                 .arg(&archive)
                 .arg("-C")

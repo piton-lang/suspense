@@ -787,7 +787,6 @@ impl Render for ImportProjectForm {
 #[cfg(test)]
 mod tests {
     use std::path::{Path, PathBuf};
-    use std::process::Command;
 
     use super::{FolderState, default_code_root, import, merged_gitignore, repo_top};
     use crate::new_project::{Agent, GITIGNORE, Settings};
@@ -818,7 +817,7 @@ mod tests {
     }
 
     fn git(folder: &Path, args: &[&str]) {
-        let status = Command::new("git")
+        let status = crate::process::command("git")
             .args(args)
             .current_dir(folder)
             .status()

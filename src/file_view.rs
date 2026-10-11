@@ -769,7 +769,6 @@ impl FileView {
                 }
                 // Saved here, it is kept even where a running task may not
                 // change it.
-                crate::mode_guard::saving(&path, text.as_bytes());
                 std::fs::write(path, &text).map(|()| text)
             }
         });

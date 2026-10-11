@@ -72,9 +72,10 @@ enum StepRow {
     Sent(usize, StepKind),
     /// Waiting in its lane's queue, by its place there.
     Queued(usize),
-    /// To be sent once the step before it finishes: what it does, and the
-    /// mode whose colour it reads in.
-    Next(&'static str, SendMode),
+    /// To be sent once the step before it finishes: what it does, the mode
+    /// whose colour it reads in, and whether it follows the step running,
+    /// "Next", rather than one after that, "Waiting".
+    Next(&'static str, SendMode, bool),
 }
 
 /// Where a chain stands as a whole.
@@ -155,6 +156,13 @@ fn new_conversation_mark(id: (&'static str, usize), cx: &App) -> AnyElement {
         .into_any_element()
 }
 
+/// What a heading takes besides its controls once its title and count
+/// have given way: its padding, chevron and status columns, and gaps.
+const HEADING_FIXED: Pixels = px(96.);
+
+/// Room kept for the filters' button when measuring the batch actions.
+const FILTER_WIDTH: Pixels = px(72.);
+
 /// The list's own room beneath its last row.
 const BOTTOM_PADDING: Pixels = px(8.);
 
@@ -168,6 +176,21 @@ fn ordinal(n: usize) -> String {
         _ => "th",
     };
     format!("{n}{suffix}")
+}
+
+/// The start of `text`, as much as a clipped prompt can show and one line
+/// more: its first lines, each cut where it would wrap past them all.
+fn first_lines(text: &SharedString) -> SharedString {
+    const LINES: usize = CLIPPED_LINES as usize + 1;
+    const LINE_CHARS: usize = 120 * LINES;
+    let lines: Vec<&str> = text.split('\n').take(LINES).collect();
+    let cut = |line: &str| match line.char_indices().nth(LINE_CHARS) {
+        Some((at, _)) => line[..at].to_string(),
+        None => line.to_string(),
+    };
+    let start: Vec<String> = lines.iter().map(|line| cut(line)).collect();
+    let start = start.join("\n");
+    if start.len() == text.len() { text.clone() } else { start.into() }
 }
 
 /// The timeline's groups.
@@ -236,6 +259,8 @@ pub(super) struct TasksTab {
     /// Where the list was left scrolled last frame, and whether that was its
     /// bottom, so a list left at its bottom stays there as it grows.
     pub(super) left_at: Cell<Option<(Pixels, bool)>>,
+    /// How wide Previous's batch actions were last laid out unfolded.
+    batch_width: Rc<Cell<Pixels>>,
     /// The open task's prompt shows whole, past its 8 lines; and, for a
     /// queued one, it is being edited, shown whole as it is typed in.
     prompt_expanded: bool,
@@ -272,6 +297,7 @@ impl TasksTab {
             queued_expanded: true,
             shown: Cell::new(false),
             left_at: Cell::new(None),
+            batch_width: Rc::new(Cell::new(px(0.))),
             prompt_expanded: false,
             prompt_editing: false,
             prompt_height: Rc::new(Cell::new(px(0.))),
@@ -352,18 +378,21 @@ fn row_bar(mode: Option<SendMode>, cx: &App) -> Div {
         .bg(color)
 }
 
-/// A group's heading: its label, muted, then what goes along it.
 /// A section's heading, as the TasksTabScope says: a row on the raised
 /// surface, a chevron, right while `expanded` is off and down while on, in
-/// the lead column, its title and count set in to line up with the rows'
-/// text, then its `actions` at its right. Clicking it anywhere but its
-/// actions calls `toggle`.
+/// the lead column, its `title` and `count` set in to line up with the
+/// rows' text, the title giving way first where it is narrow, then its
+/// `actions` at its right, never giving way. Its chevron calls `toggle`;
+/// a click anywhere else but its actions calls `clicked`.
+#[allow(clippy::too_many_arguments)]
 fn section_heading(
     id: &'static str,
-    label: String,
+    title: &'static str,
+    count: String,
     expanded: bool,
     actions: Vec<AnyElement>,
     toggle: impl Fn(&mut Window, &mut App) + 'static,
+    clicked: impl Fn(&mut Window, &mut App) + 'static,
     cx: &App,
 ) -> AnyElement {
     let theme = cx.theme();
@@ -376,6 +405,21 @@ fn section_heading(
             .on_click(|_, _, cx| cx.stop_propagation())
             .child(action)
     });
+    let chevron = div()
+        .id((id, 1000usize))
+        .flex_none()
+        .w(LEAD_COLUMN)
+        .flex()
+        .justify_center()
+        .on_click(move |_, window, cx| {
+            cx.stop_propagation();
+            toggle(window, cx)
+        })
+        .child(
+            Icon::new(if expanded { IconName::ChevronDown } else { IconName::ChevronRight })
+                .xsmall()
+                .text_color(muted),
+        );
     // Lets UI tests find it; inert in normal builds.
     gpui_kit::TestSupportExt::test_support(h_flex().id(id))
         .flex_none()
@@ -391,19 +435,13 @@ fn section_heading(
         .text_xs()
         .text_color(muted)
         .cursor_pointer()
-        .on_click(move |_, window, cx| toggle(window, cx))
-        .child(column(
-            LEAD_COLUMN,
-            Some(
-                Icon::new(if expanded { IconName::ChevronDown } else { IconName::ChevronRight })
-                    .xsmall()
-                    .text_color(muted)
-                    .into_any_element(),
-            ),
-        ))
+        .on_click(move |_, window, cx| clicked(window, cx))
+        .child(chevron)
         .child(column(STATUS_COLUMN, None))
-        // Cut short where its actions need the room.
-        .child(div().flex_1().min_w_0().truncate().child(label))
+        // The title gives way first, then the count; never the actions.
+        .child(div().flex_shrink(100.).min_w_0().truncate().font_semibold().child(title))
+        .child(div().flex_shrink(1.).min_w_0().truncate().child(count))
+        .child(div().flex_1())
         .children(actions)
         .into_any_element()
 }
@@ -564,7 +602,9 @@ impl PromptMode {
     /// else Queued while one of its steps waits in the queue; else over.
     pub(super) fn chain_state(&self, members: &[usize]) -> ChainState {
         let steps: Vec<&PromptTask> = members.iter().filter_map(|&ix| self.tasks.get(ix)).collect();
-        if steps.iter().any(|task| task.status.is_active()) {
+        // Under way, or between its steps while this session is still to
+        // send the next: never over while a step it will run is to come.
+        if steps.iter().any(|task| task.status.is_active() || task.goes_on || task.held_for_fix) {
             return ChainState::Running;
         }
         // A step of it waiting in the queue, its first step having run: the
@@ -597,41 +637,22 @@ impl PromptMode {
     }
 
     /// The rows of a running chain's steps, in the order they run: those
-    /// sent, the one waiting in the queue, then those still to send.
+    /// sent, then its own still to come, the one waiting in the queue and
+    /// those not yet sent, then the steps added to it not yet sent; every
+    /// step it will run, from the moment it is sent.
     fn chain_step_rows(&self, head: usize, members: &[usize]) -> Vec<StepRow> {
         let layout = chain_layout(&self.tasks);
         let mut rows: Vec<StepRow> = members
             .iter()
             .map(|&ix| StepRow::Sent(ix, layout.step_of(ix).map_or(StepKind::Spec, |step| step.kind)))
             .collect();
-        let queued = self.chain_queued_step(members);
-        let queued_anchor = queued
+        rows.extend(self.chain_pending_steps(head, members));
+        // Then the steps added to it, not yet sent or queued.
+        let queued_place = self
+            .chain_queued_step(members)
             .and_then(|at| self.queue.get(at))
             .and_then(|item| item.saved.as_ref())
-            .map(|saved| &saved.anchor);
-        // Its own steps still to come: after the last sent, or after the one
-        // queued.
-        let next_own = match (queued, members.last().and_then(|&ix| self.tasks.get(ix))) {
-            (Some(at), _) => {
-                rows.push(StepRow::Queued(at));
-                // A code step queued with a post-build update has its
-                // follow-up still to come.
-                let item = &self.queue[at];
-                (item.mode == Some(SendMode::Code)
-                    && queued_anchor.is_some_and(|anchor| anchor.post_build_update))
-                .then_some(("Spec follow-up", SendMode::Spec))
-            }
-            (None, Some(last)) => match chain_next(last).map(|(_, sending)| sending) {
-                Some(Sending::Now(SendMode::Code, ..)) => Some(("Code", SendMode::Code)),
-                Some(Sending::Now(SendMode::Spec, ..)) => Some(("Spec follow-up", SendMode::Spec)),
-                _ => None,
-            },
-            _ => None,
-        };
-        rows.extend(next_own.map(|(label, mode)| StepRow::Next(label, mode)));
-        // Then the steps added to it, not yet sent or queued.
-        let queued_place = queued_anchor
-            .and_then(|anchor| anchor.added_step.as_ref())
+            .and_then(|saved| saved.anchor.added_step.as_ref())
             .map(|(_, place)| *place);
         if let Some(chain) = self.tasks.get(head) {
             for (place, step) in chain.added_steps.iter().enumerate() {
@@ -640,9 +661,60 @@ impl PromptMode {
                     && !step.prompt.trim().is_empty()
                 {
                     let label = if step.mode == SendMode::Spec { "Added spec" } else { "Added code" };
-                    rows.push(StepRow::Next(label, step.mode));
+                    let next = Self::follows_running(&rows, members, &self.tasks);
+                    rows.push(StepRow::Next(label, step.mode, next));
                 }
             }
+        }
+        rows
+    }
+
+    /// Whether a step not yet sent, after `rows`, follows the step running:
+    /// the last sent is under way, and nothing waits between them.
+    fn follows_running(rows: &[StepRow], members: &[usize], tasks: &[PromptTask]) -> bool {
+        matches!(rows.last(), Some(StepRow::Sent(..)))
+            && members
+                .last()
+                .and_then(|&ix| tasks.get(ix))
+                .is_some_and(|task| task.status.is_active())
+    }
+
+    /// A running chain's own steps still to come: the one waiting in the
+    /// queue, then those not yet sent, its code step and its spec follow-up
+    /// when it asks for one, each "Next" while it follows the step running
+    /// and "Waiting" after that.
+    fn chain_pending_steps(&self, head: usize, members: &[usize]) -> Vec<StepRow> {
+        let sent: Vec<StepRow> = members.iter().map(|&ix| StepRow::Sent(ix, StepKind::Spec)).collect();
+        let mut rows = Vec::new();
+        let post_build = self.tasks.get(head).is_some_and(|chain| chain.sent.post_build_update);
+        let last = members.last().and_then(|&ix| self.tasks.get(ix));
+        let own: Vec<(&'static str, SendMode)> = match self.chain_queued_step(members) {
+            Some(at) => {
+                rows.push(StepRow::Queued(at));
+                // A code step queued with a post-build update has its
+                // follow-up still to come.
+                let item = &self.queue[at];
+                let follow = item.mode == Some(SendMode::Code)
+                    && item.saved.as_ref().map_or(post_build, |saved| saved.anchor.post_build_update);
+                if follow { vec![("Spec follow-up", SendMode::Spec)] } else { Vec::new() }
+            }
+            None => match last.and_then(|last| chain_next(last)).map(|(_, sending)| sending) {
+                Some(Sending::Now(SendMode::Code, _, _, _, _, follow, _)) => {
+                    let mut own = vec![("Code", SendMode::Code)];
+                    if follow {
+                        own.push(("Spec follow-up", SendMode::Spec));
+                    }
+                    own
+                }
+                Some(Sending::Now(SendMode::Spec, ..)) => vec![("Spec follow-up", SendMode::Spec)],
+                _ => Vec::new(),
+            },
+        };
+        for (label, mode) in own {
+            let mut all = sent.clone();
+            all.extend(rows.iter().copied());
+            let next = Self::follows_running(&all, members, &self.tasks);
+            rows.push(StepRow::Next(label, mode, next));
         }
         rows
     }
@@ -655,7 +727,11 @@ impl PromptMode {
         if task.status != TaskStatus::Done {
             return None;
         }
-        match chain_next(task)?.1 {
+        let Some((_, next)) = chain_next(task) else {
+            // Its own steps sent, a step added to it still to send.
+            return self.next_added_step(last).map(|_| "added step never sent");
+        };
+        match next {
             Sending::Now(SendMode::Code, ..) => Some("code step never sent"),
             Sending::Now(SendMode::Spec, ..) => Some("spec follow-up never sent"),
             _ => Some("next step never sent"),
@@ -987,11 +1063,7 @@ impl PromptMode {
         // Previous, with its batch actions along its heading and its
         // filters beneath it.
         let count = previous.len();
-        let mut label = match count {
-            0 => "No previous tasks".to_string(),
-            1 => "1 previous task".to_string(),
-            n => format!("{n} previous tasks"),
-        };
+        let mut label = count.to_string();
         if shown.is_some() {
             let showing = previous.iter().filter(|&&ix| visible(ix)).count();
             label.push_str(&format!(" · {showing} shown"));
@@ -1069,7 +1141,7 @@ impl PromptMode {
         let running_at = rows.len();
         rows.push(TimelineRow::Heading(
             Group::Running,
-            format!("Running · {}", running.len() + chains.len()),
+            (running.len() + chains.len()).to_string(),
         ));
         let running_shown = self.tasks_tab.running_expanded;
         if running_shown && running.is_empty() && chains.is_empty() {
@@ -1105,7 +1177,7 @@ impl PromptMode {
         let queued_at = rows.len();
         rows.push(TimelineRow::Heading(
             Group::Queued,
-            format!("Queued · {}", listed.len()),
+            listed.len().to_string(),
         ));
         let queued_shown = self.tasks_tab.queued_expanded;
         if queued_shown && listed.is_empty() {
@@ -1178,43 +1250,52 @@ impl PromptMode {
         let last = (((top + height) / ROW_HEIGHT).ceil() as usize + OVERSCAN_ROWS).min(rows.len());
         let first = first.min(last);
 
-        // The heading of the section the top of the view is in, pinned at
-        // the top while its own row has scrolled past it, until the next
-        // heading pushes it up and out; drawn there in its row's place.
-        let top_row = (top / ROW_HEIGHT).floor() as usize;
-        let heading_at = |row: usize| matches!(rows.get(row), Some(TimelineRow::Heading(..)));
-        let pinned = (0..=top_row.min(rows.len().saturating_sub(1)))
-            .rev()
-            .find(|&row| heading_at(row))
-            .filter(|&row| ROW_HEIGHT * (row as f32) < top)
-            .map(|row| {
-                let next = (row + 1..rows.len()).find(|&next| heading_at(next));
-                let pushed = next.map_or(px(0.), |next| {
-                    (ROW_HEIGHT * next as f32 - top - ROW_HEIGHT).min(px(0.))
-                });
-                (row, pushed)
-            });
+        // Every heading always in view: one whose place has left the
+        // visible rows above, beneath the headings stacked above it, is
+        // pinned at the top, in order; one whose place lies below the
+        // visible rows, above those stacked beneath it, at the bottom. None
+        // pushes another out.
+        let headings: Vec<usize> = (0..rows.len())
+            .filter(|&row| matches!(rows.get(row), Some(TimelineRow::Heading(..))))
+            .collect();
+        let n = headings.len();
+        let place = |row: usize| ROW_HEIGHT * row as f32;
+        let mut pins: Vec<(usize, Pixels)> = Vec::new();
+        for (k, &row) in headings.iter().enumerate() {
+            let at_top = top + ROW_HEIGHT * k as f32;
+            let at_bottom = top + height - ROW_HEIGHT * (n - k) as f32;
+            if place(row) < at_top {
+                pins.push((row, at_top));
+            } else if place(row) > at_bottom {
+                pins.push((row, at_bottom));
+            }
+        }
+        let pinned_at = |row: usize| pins.iter().find(|(pinned, _)| *pinned == row).map(|(_, y)| *y);
         // The day of the Previous rows in view, pinned just below Previous's
-        // heading, until the next day's divider, or the next section's
-        // heading, pushes it out.
+        // heading while Previous's rows are what is in view beneath it,
+        // until the next day's divider, or the next heading, pushes it out.
         let boundary = |row: usize| {
             matches!(rows.get(row), Some(TimelineRow::Heading(..) | TimelineRow::Day(..)))
         };
-        let pinned_day = pinned
-            .filter(|(row, _)| matches!(rows.get(*row), Some(TimelineRow::Heading(Group::Previous, _))))
-            .and_then(|(heading, _)| {
+        let below_previous = top + ROW_HEIGHT;
+        let pinned_day = headings
+            .first()
+            .filter(|&&row| matches!(rows.get(row), Some(TimelineRow::Heading(Group::Previous, _))))
+            .filter(|&&row| pinned_at(row).is_some_and(|y| y == top))
+            .and_then(|&heading| {
                 (heading + 1..rows.len())
-                    .take_while(|&row| ROW_HEIGHT * (row as f32) < top + ROW_HEIGHT)
+                    .take_while(|&row| place(row) < below_previous)
                     .filter(|&row| matches!(rows.get(row), Some(TimelineRow::Day(..))))
                     .last()
             })
             .map(|row| {
                 let next = (row + 1..rows.len()).find(|&next| boundary(next));
                 let pushed = next.map_or(px(0.), |next| {
-                    (ROW_HEIGHT * next as f32 - top - ROW_HEIGHT * 2.).min(px(0.))
+                    (place(next) - below_previous - ROW_HEIGHT).min(px(0.))
                 });
                 (row, pushed)
-            });
+            })
+            .filter(|(_, pushed)| *pushed > -ROW_HEIGHT);
         self.follow_midnight(cx);
         let queued: Vec<usize> = rows[first..last]
             .iter()
@@ -1226,7 +1307,7 @@ impl PromptMode {
         let mut queued_rows = self.render_queued_rows(&queued, cx).into_iter();
         let mut drawn: Vec<AnyElement> = Vec::with_capacity(last - first + 2);
         drawn.push(div().flex_none().h(ROW_HEIGHT * first as f32).into_any_element());
-        let mut pinned_heading = None;
+        let mut pinned_headings: Vec<(Pixels, AnyElement)> = Vec::new();
         let mut pinned_divider = None;
         for (at, row) in rows[first..last].iter().enumerate() {
             drawn.push(match row {
@@ -1236,12 +1317,11 @@ impl PromptMode {
                 }
                 TimelineRow::Day(label, count) => day_divider(label.clone(), *count, cx),
                 // Pinned, it is drawn there alone, an empty row in its place.
-                TimelineRow::Heading(group, label) if pinned.is_some_and(|(row, _)| row == first + at) => {
-                    pinned_heading = Some(self.render_section_heading(*group, label.clone(), cx));
+                TimelineRow::Heading(..) if pinned_at(first + at).is_some() => {
                     div().flex_none().h(ROW_HEIGHT).into_any_element()
                 }
                 TimelineRow::Heading(group, label) => {
-                    self.render_section_heading(*group, label.clone(), cx)
+                    self.render_section_heading(*group, label.clone(), None, cx)
                 }
                 TimelineRow::Empty(id, text) => group_empty(id, text, cx),
                 TimelineRow::Chain(head, all) => self.render_chain_row(*head, all, cx),
@@ -1261,6 +1341,18 @@ impl PromptMode {
                 .h(ROW_HEIGHT * (rows.len() - last) as f32 + BOTTOM_PADDING)
                 .into_any_element(),
         );
+        // Pinned, each heading is drawn there alone, whether or not its row
+        // is among those drawn, its place in the list kept empty.
+        for &(row, y) in &pins {
+            if let Some(TimelineRow::Heading(group, label)) = rows.get(row) {
+                let section_start = place(row)
+                    - ROW_HEIGHT * headings.iter().position(|&h| h == row).unwrap_or(0) as f32;
+                pinned_headings.push((
+                    y,
+                    self.render_section_heading(*group, label.clone(), Some(section_start), cx),
+                ));
+            }
+        }
         let listed: Rc<Vec<usize>> = Rc::new(
             rows.iter()
                 .filter_map(|row| match row {
@@ -1311,13 +1403,8 @@ impl PromptMode {
                             .top(top + ROW_HEIGHT + pushed)
                             .child(divider)
                     }))
-                    .children(pinned.zip(pinned_heading).map(|((_, pushed), heading)| {
-                        div()
-                            .absolute()
-                            .left_0()
-                            .right_0()
-                            .top(top + pushed)
-                            .child(heading)
+                    .children(pinned_headings.into_iter().map(|(y, heading)| {
+                        div().absolute().left_0().right_0().top(y).child(heading)
                     })),
             );
         v_flex()
@@ -1336,29 +1423,62 @@ impl PromptMode {
             .into_any_element()
     }
 
-    /// A section's heading, with its own controls: Previous's batch actions
-    /// and filters, Queued's "Send next" and auto-send switch. Clicking it
-    /// anywhere else expands or collapses that section alone.
-    fn render_section_heading(&self, group: Group, label: String, cx: &mut Context<Self>) -> AnyElement {
-        let (id, expanded, actions) = match group {
+    /// A section's heading, with its own controls, wherever it is pinned:
+    /// Previous's selection, batch actions, and filters, Running's "Cancel
+    /// all" while more than one task runs, Queued's "Send next" and
+    /// auto-send switch. Its chevron expands or collapses that section
+    /// alone; a click elsewhere on it does too in its place, and, pinned,
+    /// scrolls to `pinned`, where its section starts.
+    fn render_section_heading(
+        &self,
+        group: Group,
+        count: String,
+        pinned: Option<Pixels>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let (id, title, expanded, actions) = match group {
             Group::Previous => {
                 let mut actions = self.render_selection_actions(cx);
                 // The filters' button, while there is a task to filter.
-                if !self.previous_ixs().is_empty() {
-                    actions.push(self.render_filter_button(cx));
+                let filter = (!self.previous_ixs().is_empty()).then(|| self.render_filter_button(cx));
+                // Where even the title and count giving way leaves too
+                // little room, as they were last laid out, the batch
+                // actions fold into an "N selected" menu.
+                let room = self.tasks_tab.scroll.bounds().size.width
+                    - HEADING_FIXED
+                    - if filter.is_some() { FILTER_WIDTH } else { px(0.) };
+                let fold = actions.len() > 1
+                    && self.tasks_tab.batch_width.get() > px(0.)
+                    && self.tasks_tab.batch_width.get() > room;
+                if fold {
+                    actions = vec![self.render_selection_menu(cx)];
+                } else if !actions.is_empty() {
+                    let width = self.tasks_tab.batch_width.clone();
+                    let all = h_flex()
+                        .flex_none()
+                        .gap_2()
+                        .on_prepaint(move |bounds, _, _| width.set(bounds.size.width))
+                        .children(std::mem::take(&mut actions));
+                    actions = vec![all.into_any_element()];
                 }
-                ("tasks-previous", self.tasks_tab.previous_expanded, actions)
+                actions.extend(filter);
+                ("tasks-previous", "Previous", self.tasks_tab.previous_expanded, actions)
             }
-            Group::Running => ("tasks-running", self.tasks_tab.running_expanded, Vec::new()),
-            Group::Queued => ("tasks-queued", self.tasks_tab.queued_expanded, self.queue_controls(cx)),
+            Group::Running => ("tasks-running", "Running", self.tasks_tab.running_expanded, self.running_controls(cx)),
+            Group::Queued => ("tasks-queued", "Queued", self.tasks_tab.queued_expanded, self.queue_controls(cx)),
         };
-        let this = cx.entity().downgrade();
-        section_heading(
-            id,
-            label,
-            expanded,
-            actions,
-            move |_, cx| {
+        // Pinned twice over, at the top and bottom, ids stay apart.
+        let id = match pinned {
+            Some(_) => match group {
+                Group::Previous => "tasks-previous-pinned",
+                Group::Running => "tasks-running-pinned",
+                Group::Queued => "tasks-queued-pinned",
+            },
+            None => id,
+        };
+        let toggle = {
+            let this = cx.entity().downgrade();
+            move |_: &mut Window, cx: &mut App| {
                 this.update(cx, |this, cx| {
                     let open = match group {
                         Group::Previous => &mut this.tasks_tab.previous_expanded,
@@ -1369,9 +1489,83 @@ impl PromptMode {
                     cx.notify();
                 })
                 .ok();
-            },
-            cx,
-        )
+            }
+        };
+        let clicked: Box<dyn Fn(&mut Window, &mut App)> = match pinned {
+            Some(start) => {
+                let this = cx.entity().downgrade();
+                Box::new(move |_, cx| {
+                    this.update(cx, |this, cx| {
+                        let scroll = &this.tasks_tab.scroll;
+                        scroll.set_offset(point(scroll.offset().x, -start.max(px(0.))));
+                        this.tasks_tab.left_at.set(None);
+                        cx.notify();
+                    })
+                    .ok();
+                })
+            }
+            None => Box::new(toggle.clone()),
+        };
+        section_heading(id, title, count, expanded, actions, toggle, clicked, cx)
+    }
+
+    /// Along the Running heading: "Cancel all", while more than one task
+    /// runs.
+    fn running_controls(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let running = self.tasks.iter().filter(|task| task.can_cancel()).count();
+        if running < 2 {
+            return Vec::new();
+        }
+        vec![Button::new("cancel-all-running")
+            .ghost()
+            .xsmall()
+            .label("Cancel all")
+            .tooltip(format!("Cancel all {running} running tasks"))
+            .on_click(cx.listener(|this, _, _, cx| {
+                let running: Vec<usize> = (0..this.tasks.len())
+                    .filter(|&ix| this.tasks[ix].can_cancel())
+                    .collect();
+                for ix in running {
+                    this.cancel_task(ix, cx);
+                }
+            }))
+            .into_any_element()]
+    }
+
+    /// The batch actions folded into one "N selected" menu, as a narrow
+    /// Previous heading shows them.
+    fn render_selection_menu(&self, cx: &mut Context<Self>) -> AnyElement {
+        let count = self.task_history.selected.iter().filter(|&&ix| ix < self.tasks.len()).count();
+        let sends: Vec<(SendMode, usize)> = [SendMode::Spec, SendMode::Code]
+            .into_iter()
+            .map(|to| (to, self.selected_for(to).len()))
+            .filter(|(_, n)| *n > 0)
+            .collect();
+        let this = cx.entity().downgrade();
+        Button::new("history-selection-menu")
+            .ghost()
+            .xsmall()
+            .label(format!("{count} selected"))
+            .dropdown_caret(true)
+            .dropdown_menu_with_anchor(gpui_kit::Anchor::TopRight, move |mut menu, _, _| {
+                for &(to, n) in &sends {
+                    let this = this.clone();
+                    menu = menu.item(PopupMenuItem::new(format!("Send {n} to {}", to.label())).on_click(
+                        move |_, window, cx| {
+                            this.update(cx, |this, cx| this.send_selected_to(to, window, cx)).ok();
+                        },
+                    ));
+                }
+                let this = this.clone();
+                menu.item(PopupMenuItem::new("Clear").on_click(move |_, _, cx| {
+                    this.update(cx, |this, cx| {
+                        this.task_history.clear_selection();
+                        cx.notify();
+                    })
+                    .ok();
+                }))
+            })
+            .into_any_element()
     }
 
     /// Along the Queued heading: "Send next" while a lane is free, and the
@@ -1543,7 +1737,7 @@ impl PromptMode {
                 Some(match state {
                     // Under way, though its step now is queued.
                     ChainState::Running => status_mark(TaskStatus::Running, cx),
-                    ChainState::Over => status_mark(chain_status(&steps), cx),
+                    ChainState::Over => status_mark(chain_status(&steps, never_sent.is_some()), cx),
                 }),
             ))
             .child(div().flex_1().min_w_0().truncate().child(text))
@@ -1612,13 +1806,13 @@ impl PromptMode {
                     None,
                 )
             }
-            StepRow::Next(label, mode) => (
-                usize::MAX / 2 + head * 64 + label.len(),
+            StepRow::Next(label, mode, next) => (
+                usize::MAX / 2 + head * 64 + label.len() * 2 + usize::from(next),
                 label,
                 mode,
                 None,
                 first_line(&self.tasks[head].text),
-                Some("Next".to_string()),
+                Some(if next { "Next" } else { "Waiting" }.to_string()),
                 None,
             ),
         };
@@ -2051,7 +2245,11 @@ impl PromptMode {
         let expanded = self.tasks_tab.prompt_expanded;
         let clipped = long && !expanded;
         let height = self.tasks_tab.prompt_height.clone();
-        // Laid out whole, its height measured, then clipped to 8 lines.
+        // While clipped, only its first lines are laid out, however long it
+        // is: one more than it shows, each no longer than can fill them,
+        // enough to tell that it runs past them.
+        let text = if expanded { text } else { first_lines(&text) };
+        // Laid out, its height measured, then clipped to 8 lines.
         let whole = div()
             .w_full()
             .line_height(PROMPT_LINE)
@@ -2924,8 +3122,26 @@ impl PromptMode {
     pub(super) fn render_chain_steps(&self, head: usize, cx: &mut Context<Self>) -> AnyElement {
         let (muted, hover) = (cx.theme().muted_foreground, cx.theme().list_hover);
         let mut steps = section("Steps", cx);
-        for (ix, kind) in self.chain_step_ixs(head) {
+        let sent = self.chain_step_ixs(head);
+        for &(ix, kind) in &sent {
             steps = steps.child(self.render_task_row(ix, Some(kind), false, cx));
+        }
+        // Running, every step it will run is listed from the moment it is
+        // sent: its own still to come, each changing in place as it is sent.
+        let members: Vec<usize> = sent.iter().map(|(ix, _)| *ix).collect();
+        let running = self.chain_state(&members) == ChainState::Running;
+        let pending = if running { self.chain_pending_steps(head, &members) } else { Vec::new() };
+        // The first added step still to send follows the step running only
+        // while none of the chain's own waits between them.
+        let added_follows = running
+            && pending.is_empty()
+            && Self::follows_running(
+                &members.iter().map(|&ix| StepRow::Sent(ix, StepKind::Spec)).collect::<Vec<_>>(),
+                &members,
+                &self.tasks,
+            );
+        for step in pending {
+            steps = steps.child(self.render_step_row(head, step, cx));
         }
         let chain = &self.tasks[head];
         let unsent: Vec<usize> = (0..chain.added_steps.len())
@@ -2992,6 +3208,17 @@ impl PromptMode {
                                 .text_color(color)
                                 .child(label),
                         )
+                        // While the chain runs, whether it follows the step
+                        // running or waits behind another.
+                        .when(running, |row| {
+                            row.child(
+                                div()
+                                    .flex_none()
+                                    .text_xs()
+                                    .text_color(muted)
+                                    .child(if nth == 0 && added_follows { "Next" } else { "Waiting" }),
+                            )
+                        })
                         .child(
                             div()
                                 .flex_1()

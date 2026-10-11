@@ -1,0 +1,5 @@
+- [A running chain is expanded in Running with a row for each step, sent or still to send, each with its own status](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [An open Chain task lists its steps in its Steps section, each with its status, with Add step](.claude/reference/ui/components/right-sidebar/tasks/index.md#chain-steps)
+- [A Chain prompt runs as a spec step, then a code step, then a spec follow-up when it asks for one](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [Added steps are saved in the chain's hidden anchor](.claude/reference/ui/components/right-sidebar/tasks/index.md#chain-steps)
+- [Every step a chain will run is listed from the moment it is sent, unsent ones as Next or Waiting, rows changing in place](.claude/reference/ui/components/right-sidebar/tasks/index.md#chain-steps)

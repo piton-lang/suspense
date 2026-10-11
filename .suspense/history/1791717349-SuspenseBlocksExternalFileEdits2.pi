@@ -1,0 +1,60 @@
+
+export anchor SuspenseBlocksExternalFileEdits2:
+    userPrompt:
+        \\\
+        There seems to be something going on with suspense that blocks files from being edited from outside suspense.  I'm copying a new folder into spec and it automatically deletes
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            There seems to be something going on with suspense that blocks files from being edited from outside suspense.  I'm copying a new folder into spec and it automatically deletes
+            \\\
+        result:
+            \\\
+            The likely cause is the guard that protects the spec while a Code task runs. The spec said Suspense "puts back whatever changes there", which also covers a folder you copy in yourself, so it gets deleted. I can't see the code from this step, so the coding agent should confirm that's what is happening. I changed the spec so only the task's own changes are ever undone. `piton check` reports no problems and `piton build` wrote 82 files.
+
+            - **Only the task's changes:** Suspense puts back only files the task's own tool calls, or its subagents', reported writing, editing, moving or deleting there.
+            - **Your changes are left alone:** anything changed by you, the editor, git or another program is never reverted or deleted.
+            - **Once, at the end:** the put-back happens once, when the task finishes, never while it runs.
+            - **No overwriting:** if a file the task changed was changed again by something else since, it's left as it is and the notice says so.
+            - **No guard while idle:** nothing is guarded when no Code or Spec task is running on the host.
+            - **Nothing else deletes:** the only files Suspense ever deletes from the spec or code locations are ones `piton build` wrote and owns through its manifest.
+
+            **Anchors the code should follow:** `HarnessIntegrationScope` `#protected-locations`, and `TaskTableScope` `#notices` for the notice.
+            \\\
+
+    sentFrom: SuspenseBlocksExternalFileEdits
+
+    model: opus

@@ -258,7 +258,7 @@ mod tests {
     }
 
     fn git_in(dir: &Path, args: &[&str]) {
-        let status = Command::new("git")
+        let status = crate::process::command("git")
             .args(args)
             .current_dir(dir)
             .output_logged()
@@ -320,15 +320,15 @@ mod tests {
 
         // The repository's own index and history are as they were: only
         // kept.txt is staged or committed, and there is still one commit.
-        let mut status = Command::new("git");
+        let mut status = crate::process::command("git");
         status
             .current_dir(&dir)
             .args(["diff", "--cached", "--name-only"]);
         assert_eq!(run(status, "diff").unwrap(), "");
-        let mut log = Command::new("git");
+        let mut log = crate::process::command("git");
         log.current_dir(&dir).args(["rev-list", "--count", "HEAD"]);
         assert_eq!(run(log, "log").unwrap().trim(), "1");
-        let mut refs = Command::new("git");
+        let mut refs = crate::process::command("git");
         refs.current_dir(&dir)
             .args(["for-each-ref", "--format=%(refname)", "refs/suspense/"]);
         assert_eq!(

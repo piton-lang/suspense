@@ -1,7 +1,6 @@
 //! Scripts tests write to stand in for the programs the application runs.
 
 use std::path::Path;
-use std::process::Command;
 
 /// Makes the script at `path` executable. Written in this process, it can be
 /// held open for writing by a child another test's thread forks meanwhile,
@@ -13,7 +12,7 @@ pub fn make_executable(path: &Path) {
     let mut name = path.file_name().unwrap().to_os_string();
     name.push(".copy");
     let copy = path.with_file_name(name);
-    let copied = Command::new("cp").arg("-p").arg(path).arg(&copy).status();
+    let copied = crate::process::command("cp").arg("-p").arg(path).arg(&copy).status();
     assert!(
         copied.is_ok_and(|status| status.success()),
         "couldn't copy {path:?}"

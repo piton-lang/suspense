@@ -461,6 +461,8 @@ impl Plan {
         // from the host is the user's.
         out.push("--userns=keep-id".into());
         out.extend(["--label".into(), "suspense=run".into()]);
+        // Ended first should the machine run out of memory, never Suspense.
+        out.push("--oom-score-adj=1000".into());
         out.extend(["-e".into(), format!("HOME={HOME}").into()]);
         // What the harness is given on the host too, as the claude.ai
         // account's connectors turned off.

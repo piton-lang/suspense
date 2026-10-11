@@ -128,10 +128,14 @@ impl GrowToFit {
     }
 
     /// The rows `text` takes in the editor: one per line, plus one for every
-    /// soft wrap, wrapped the way the editor wraps it, in its font.
+    /// soft wrap, wrapped the way the editor wraps it, in its font. Counted
+    /// only as far as one past its most rows, which is all its fit needs to
+    /// know, so a long text costs no more to count than a short one: only
+    /// its first lines are ever wrapped.
     fn visual_rows(&self, text: &str, window: &Window, cx: &App) -> usize {
+        let enough = self.max_rows.saturating_add(1);
         let Some(wrap_width) = self.text_width.map(|width| width - WRAP_RIGHT_MARGIN) else {
-            return text.split('\n').count();
+            return text.split('\n').take(enough).count();
         };
         let theme = cx.theme();
         let font = self
@@ -141,13 +145,19 @@ impl GrowToFit {
         let mut wrapper = window
             .text_system()
             .line_wrapper(font, theme.mono_font_size);
-        text.split('\n')
-            .map(|line| {
-                1 + wrapper
-                    .wrap_line(&[LineFragment::text(line)], wrap_width)
-                    .count()
-            })
-            .sum()
+        let mut rows = 0;
+        for line in text.split('\n') {
+            if rows >= enough {
+                break;
+            }
+            // Only as much of a long line as can fill the rows left.
+            let left = enough - rows;
+            rows += 1 + wrapper
+                .wrap_line(&[LineFragment::text(line)], wrap_width)
+                .take(left)
+                .count();
+        }
+        rows.min(enough)
     }
 
     /// Laid over the editor: once the editor has painted, checks how it was
@@ -306,6 +316,26 @@ mod tests {
     };
 
     use super::GrowToFit;
+
+    /// However long the text, only as many rows as it can show and one more
+    /// are counted, wrapped or not, so a long prompt costs no more to fit
+    /// than a short one.
+    #[gpui_kit::test]
+    async fn long_text_is_counted_only_as_far_as_it_fits(cx: &mut TestAppContext) {
+        let long: String = (0..50_000).map(|n| format!("line {n} of a very long prompt\n")).collect();
+        cx.update(gpui_kit::init);
+        let window = cx.add_window(|_, _| gpui_kit::Empty);
+        cx.update_window(window.into(), |_, window, cx| {
+            let mut fit = GrowToFit::new(10);
+            let started = std::time::Instant::now();
+            assert_eq!(fit.visual_rows(&long, window, cx), 11);
+            fit.text_width = Some(gpui_kit::px(200.));
+            assert_eq!(fit.visual_rows(&long, window, cx), 11);
+            assert_eq!(fit.visual_rows("one\ntwo", window, cx), 2);
+            assert!(started.elapsed() < std::time::Duration::from_millis(50), "{:?}", started.elapsed());
+        })
+        .unwrap();
+    }
 
     struct Fitted {
         editor: Entity<EditorState>,

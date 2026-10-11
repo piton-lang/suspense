@@ -456,7 +456,6 @@ pub fn fixture(name: &str) -> (std::path::PathBuf, Vec<String>) {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-    use std::process::Command;
 
     use super::{Ranked, candidates, fixture, map, module_of, parse_reply, references, skill_name};
 
@@ -537,7 +536,7 @@ mod tests {
         assert!(map(&dir, "spec", &files).scopes["AScope"].has_skill);
 
         if !crate::piton_build::piton_missing() {
-            let build = Command::new("piton")
+            let build = crate::process::command("piton")
                 .arg("build")
                 .current_dir(&dir)
                 .output()

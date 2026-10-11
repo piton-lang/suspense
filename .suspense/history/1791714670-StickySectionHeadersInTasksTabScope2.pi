@@ -1,0 +1,66 @@
+from /ui/components/right-sidebar import TasksTabScope
+from /ui/components/right-sidebar/tasks import TasksTabScope
+
+export anchor StickySectionHeadersInTasksTabScope2:
+    userPrompt:
+        \\\
+        Looks like you missed the mark on section header being sticky in the @{TasksTabScope} I want to be able to see previous/selection/filters/batch actions etc for each of the three main sections.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Looks like you missed the mark on section header being sticky in the @{TasksTabScope} I want to be able to see previous/selection/filters/batch actions etc for each of the three main sections.
+            \\\
+        result:
+            \\\
+            All three section headings in the Tasks tab now stay in view at all times, each with its controls, instead of pushing each other out. `piton check` reports no problems and `piton build` wrote 82 files.
+
+            - **Stacking:** a heading whose section is above the visible rows pins to the top, and one whose section is below pins to the bottom, in order. Scrolled into Running, for example, Previous and Running sit at the top and Queued at the bottom. Rows scroll in the space between, and nothing gets hidden, including the last row at the bottom.
+            - **Controls always on the heading:**
+              - Previous: the selection count, batch actions (Send N to Spec, Send N to Code, Clear) and the filter dropdown.
+              - Running: a new "Cancel all", shown while more than one task runs. That one is my addition.
+              - Queued: auto-send and Send next.
+            - **Narrow headings:** the title shortens first, then the count. The batch actions fold into an "N selected" menu, so controls are never lost.
+            - **Clicking:** clicking a pinned heading jumps to its section. The chevron still expands and collapses it.
+
+            **Anchors the code should follow:** `TasksTabScope` `#description`, `#days` and `#virtualized`, plus `PromptEditor` `#previous-tasks` for the batch actions.
+            \\\
+
+    sentFrom: StickySectionHeadersInTasksTabScope
+
+    model: opus
+
+    references:
+        - @{TasksTabScope}

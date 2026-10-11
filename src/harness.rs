@@ -190,13 +190,10 @@ pub fn send(
     send_with_images(prompt, system_prompt, Vec::new(), resume, project_dir)
 }
 
-/// What a run is kept off: `root`, where it may not change anything, which
-/// Claude Code is told it may not edit, so the harness knows at once, the
-/// application putting back whatever changes there all the same, as
-/// [`crate::mode_guard`] says; and `unread`, which Claude Code is told it may
-/// not read, so it reads the compiled reference instead. That is only a
-/// nudge: a shell command can still read it, and nothing stops the run when
-/// one does.
+/// What a run is told to keep off: `root`, where it may not edit, and
+/// `unread`, where it may not read, which Claude Code is told so the
+/// harness knows at once. That is only a nudge: a shell command can still
+/// reach them, and nothing is put back or stops the run when one does.
 ///
 /// A run in a container, as `container` says, is kept off nothing this way:
 /// it sees only what is mounted into it.
@@ -1116,6 +1113,10 @@ fn no_conversation(said: &str) -> bool {
 /// its error output, and how it exited.
 fn in_its_own_words(stderr: &str, name: &str, status: std::process::ExitStatus) -> String {
     let stderr = stderr.trim();
+    // Ended for the machine running out of memory: said so, naming it.
+    if crate::process::out_of_memory(status, KILLS_BEFORE.with(std::cell::Cell::get)) {
+        return crate::process::out_of_memory_message(name);
+    }
     if stderr.is_empty() {
         format!("`{name}` exited with {status}, saying nothing about why")
     } else {
@@ -1277,9 +1278,36 @@ fn run(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    // On the host, in a scope of its own where systemd runs, so the system's
+    // out-of-memory handling ends it rather than Suspense.
+    if contained.is_none() {
+        let program = command.get_program().to_owned();
+        let args: Vec<std::ffi::OsString> = command.get_args().map(ToOwned::to_owned).collect();
+        let envs: Vec<(std::ffi::OsString, Option<std::ffi::OsString>)> = command
+            .get_envs()
+            .map(|(key, value)| (key.to_owned(), value.map(ToOwned::to_owned)))
+            .collect();
+        let refs: Vec<&std::ffi::OsStr> = args.iter().map(|arg| arg.as_os_str()).collect();
+        let mut scoped = crate::process::command_in_own_scope(&program, &refs);
+        for (key, value) in envs {
+            match value {
+                Some(value) => scoped.env(key, value),
+                None => scoped.env_remove(key),
+            };
+        }
+        scoped
+            .current_dir(project_dir)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        command = scoped;
+    }
     // Its own process group, so stopping it ends everything it started too.
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut command, 0);
+    // Ended first, with all it starts, should memory run out.
+    crate::process::mark_first_to_end(&mut command);
+    KILLS_BEFORE.with(|kills| kills.set(crate::process::oom_kills()));
     let mut child = command
         .spawn_logged()
         .with_context(|| format!("could not run `{name}`"))?;
@@ -1551,6 +1579,13 @@ pub fn forget_login(agent: Agent) {
 
 /// The harnesses known to be logged in in their containers.
 static KNOWN: Mutex<Vec<Agent>> = Mutex::new(Vec::new());
+
+thread_local! {
+    /// The system's out-of-memory kills as this thread's run of the harness
+    /// started, to tell whether it was ended for the machine running out
+    /// of memory.
+    static KILLS_BEFORE: std::cell::Cell<u64> = const { std::cell::Cell::new(u64::MAX) };
+}
 
 /// How `agent` is run, as an error names it.
 fn invocation(agent: Agent) -> &'static str {

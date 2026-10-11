@@ -181,6 +181,8 @@ pub struct Running {
     open_pipes: Arc<std::sync::atomic::AtomicUsize>,
     /// When it was first seen to have ended.
     ended_at: Mutex<Option<std::time::Instant>>,
+    /// The system's out-of-memory kills as it started.
+    kills_before: u64,
 }
 
 impl Running {
@@ -211,6 +213,9 @@ impl Running {
             .stderr(Stdio::piped());
         // The head of a tree of its own, so stopping it stops all it started.
         crate::process_tree::prepare(&mut shell);
+        // Ended first, with all it starts, should memory run out.
+        crate::process::mark_first_to_end(&mut shell);
+        let kills_before = crate::process::oom_kills();
         let mut child = shell
             .spawn_logged()
             .with_context(|| format!("could not run {command}"))?;
@@ -247,6 +252,7 @@ impl Running {
             tree,
             stopping: Default::default(),
             stopped: Default::default(),
+            kills_before,
             printed,
             open_pipes,
             ended_at: Mutex::new(None),
@@ -271,6 +277,17 @@ impl Running {
             .get_or_insert_with(std::time::Instant::now);
         let read = self.open_pipes.load(std::sync::atomic::Ordering::SeqCst) == 0;
         (read || ended_at.elapsed() > std::time::Duration::from_secs(1)).then_some(status.code())
+    }
+
+    /// Whether it was ended because the machine ran out of memory.
+    pub fn ran_out_of_memory(&self) -> bool {
+        self.child
+            .lock()
+            .unwrap()
+            .try_wait()
+            .ok()
+            .flatten()
+            .is_some_and(|status| crate::process::out_of_memory(status, self.kills_before))
     }
 
     /// Waits for it to end; its exit code, or `None` when a signal ended it.
@@ -355,9 +372,9 @@ fn shell(command: &str) -> Command {
         shell.args(["/C", command]);
         shell
     } else {
-        let mut shell = crate::process::command("sh");
-        shell.args(["-c", command]);
-        shell
+        // In a scope of its own where systemd runs, so the system's
+        // out-of-memory handling ends it rather than Suspense.
+        crate::process::command_in_own_scope("sh", &["-c".as_ref(), command.as_ref()])
     }
 }
 
