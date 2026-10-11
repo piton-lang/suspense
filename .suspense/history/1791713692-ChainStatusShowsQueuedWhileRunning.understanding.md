@@ -1,0 +1,7 @@
+- [A chain's status comes only from its steps as they actually are, never from what it might still do](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A chain whose later step was never sent is over and never reads Running for it](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A step is running only while its run is under way; queued only while its prompt is in the queue](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A chain is one row in the Tasks tab, its steps shown once it is opened](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [Every row is 28px, so positions come from row counts alone](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Rows share aligned columns: mode bar, lead column, status column, text, time](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [A chain reads Running once a step has run and another runs or waits; while Running it shows expanded with each step's status](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)

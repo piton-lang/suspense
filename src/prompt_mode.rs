@@ -1676,10 +1676,10 @@ struct Took {
 }
 
 /// How long a chain's steps took together: from when its first step was
-/// sent to when its last ended, counting up while the chain is
-/// `in_progress`. None when a step's times can't be told.
-fn chain_took(steps: &[&PromptTask], in_progress: bool) -> Option<Took> {
-    let in_progress = in_progress || steps.iter().any(|task| task.status.is_active());
+/// sent to when its last ended, counting up while it is `running`. None
+/// when a step's times can't be told.
+fn chain_took(steps: &[&PromptTask], running: bool) -> Option<Took> {
+    let in_progress = running || steps.iter().any(|task| task.status.is_active());
     // A step still to come has no span yet; those sent tell when it began.
     let spans: Vec<_> = steps
         .iter()
@@ -1733,17 +1733,13 @@ fn took_label(id: (&'static str, usize), took: Took, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-/// A chain's status as a whole: a step's while one is under way, Running
-/// while the chain is otherwise `in_progress`, a step queued or still to be
-/// sent; once over, failed or cancelled if any step was, and otherwise its
-/// last step's.
-fn chain_status(steps: &[&PromptTask], in_progress: bool) -> TaskStatus {
+/// A chain's status as a whole, from its steps as they are: a step's while
+/// one is under way; otherwise failed or cancelled if any step was, and
+/// otherwise its last step's own, Done or Not recorded.
+fn chain_status(steps: &[&PromptTask]) -> TaskStatus {
     let statuses = steps.iter().map(|task| task.status);
     if let Some(active) = statuses.clone().find(|status| status.is_active()) {
         return active;
-    }
-    if in_progress {
-        return TaskStatus::Running;
     }
     for ended in [TaskStatus::Failed, TaskStatus::Cancelled] {
         if statuses.clone().any(|status| status == ended) {
@@ -1754,6 +1750,10 @@ fn chain_status(steps: &[&PromptTask], in_progress: bool) -> TaskStatus {
         .last()
         .map_or(TaskStatus::Unrecorded, |task| task.status)
 }
+
+/// How strongly the accent tints the filters' button behind it while any
+/// filter is on: about a sixth of its strength.
+const ACTIVE_FILTER_TINT: f32 = 0.16;
 
 /// How strongly a previous task's heading is tinted with its mode's colour:
 /// only a hint of it.
@@ -7981,7 +7981,8 @@ impl PromptMode {
     /// are on, in the accent, opening their menu beneath it.
     fn render_filter_button(&self, cx: &mut Context<Self>) -> AnyElement {
         let on = self.task_history.filters.len();
-        let accent = cx.theme().accent;
+        let (accent, foreground, radius) =
+            (cx.theme().accent, cx.theme().foreground, cx.theme().radius);
         let bounds = self.tasks_tab.filter_button.clone();
         let button = Button::new("task-filter-button")
             .ghost()
@@ -7992,7 +7993,9 @@ impl PromptMode {
             } else {
                 format!("Filter · {on}")
             })
-            .when(on > 0, |button| button.text_color(accent))
+            // Active, the accent at full strength, icon and label alike;
+            // otherwise the ordinary text colour, never the heading's muted.
+            .text_color(if on > 0 { accent } else { foreground })
             .on_click(cx.listener(|this, _, window, cx| {
                 this.tasks_tab.filter_menu = !this.tasks_tab.filter_menu;
                 // Escape reaches the tab, closing the menu.
@@ -8002,6 +8005,11 @@ impl PromptMode {
         // Lets UI tests find the button; inert in normal builds.
         gpui_kit::TestSupportExt::test_support(div().id("task-filters"))
             .flex_none()
+            .rounded(radius)
+            // As a selected ghost button: a faint tint of the accent behind
+            // it, its text and icon never inheriting the heading's muted.
+            .text_color(if on > 0 { accent } else { foreground })
+            .when(on > 0, |wrap| wrap.bg(accent.opacity(ACTIVE_FILTER_TINT)))
             .on_prepaint(move |drawn, _, _| bounds.set(Some(drawn)))
             .child(button)
             .into_any_element()
@@ -11468,42 +11476,81 @@ mod tests {
     /// previous tasks, the chain is headed by one parent row, its status the
     /// chain's, with each step still an item beneath it, and a session
     /// divider never falls inside it.
-    /// A chain is in progress from when it is sent until its last step is
-    /// over: its spec step done, with its code step still to come, it reads
-    /// Running and is listed with what runs, never as Done among the
-    /// previous tasks; once its last step is over, it is.
+    /// An open task's long prompt is clipped at 8 lines with "Read more",
+    /// which shows it whole; a short one shows whole with no link.
     #[gpui_kit::test]
-    async fn a_chain_between_steps_is_still_running(cx: &mut TestAppContext) {
+    async fn long_prompts_are_clipped_in_the_tasks_tab(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        let long: String = (0..40).map(|n| format!("Line {n}\n")).collect();
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task(long.into(), cx);
+            this.tasks[ix].status = TaskStatus::Done;
+            let ix = this.push_task("Short".into(), cx);
+            this.tasks[ix].status = TaskStatus::Done;
+            show_previous_tasks(this);
+        });
+        let open_task = |ix: usize, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                prompt_mode.update(cx, |this, cx| {
+                    this.open_in_tab(super::tasks_tab::Opened::Task(ix), window, cx)
+                });
+                window.render_frame(cx);
+                window.render_frame(cx);
+            })
+            .unwrap();
+        };
+        let height = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, _| window.find("tasks-tab-prompt").bounds().size.height)
+                .unwrap()
+        };
+        open_task(0, cx);
+        let clipped = height(cx);
+        cx.update_window(handle, |_, window, cx| {
+            assert!(window.try_find("tasks-tab-read-more").is_some(), "no Read more");
+            window.click("tasks-tab-read-more", cx);
+            window.render_frame(cx);
+            window.render_frame(cx);
+        })
+        .unwrap();
+        assert!(height(cx) > clipped + gpui_kit::px(100.), "it didn't show whole");
+        open_task(1, cx);
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find("tasks-tab-read-more").is_none(), "a short prompt has a link");
+        })
+        .unwrap();
+    }
+
+    /// A chain reads Running only while one of its steps runs now: a spec
+    /// step done whose code step was never sent is over, Done, among the
+    /// previous tasks, never Running; with its code step running, Running.
+    #[gpui_kit::test]
+    async fn a_chain_runs_only_while_a_step_does(cx: &mut TestAppContext) {
+        use super::tasks_tab::ChainState;
         use crate::chat_input::SendMode;
         use crate::hidden_anchor::CodeTask;
-        let (prompt_mode, handle) = open(cx);
+        let (prompt_mode, _handle) = open(cx);
         prompt_mode.update(cx, |this, cx| {
             let ix = this.push_task("Build it".into(), cx);
             let task = &mut this.tasks[ix];
             task.sent.mode = Some(SendMode::Both);
             task.mode = Some(SendMode::Both);
             task.status = TaskStatus::Done;
-            show_previous_tasks(this);
-            cx.notify();
         });
         let state = |cx: &mut TestAppContext| {
             prompt_mode.read_with(cx, |this, _| {
                 let steps: Vec<&PromptTask> = this.tasks.iter().collect();
                 let members: Vec<usize> = (0..this.tasks.len()).collect();
-                let running = this.chain_in_progress(&members);
-                (super::chain_status(&steps, running), this.previous_ixs().len())
+                (
+                    this.chain_state(&members),
+                    super::chain_status(&steps),
+                    this.previous_ixs().len(),
+                )
             })
         };
-        // Its code step is still to be sent.
-        assert_eq!(state(cx), (TaskStatus::Running, 0));
-        cx.update_window(handle, |_, window, cx| {
-            window.render_frame(cx);
-            window.render_frame(cx);
-            assert!(window.try_find(("tasks-tab-chain", 0usize)).is_some(), "no chain row");
-        })
-        .unwrap();
+        // Its code step never sent: over, as its spec step ended.
+        assert_eq!(state(cx), (ChainState::Over, TaskStatus::Done, 1));
 
-        // Its code step sent and running, then done: over, and Done.
+        // Its code step running: Running, listed with what runs.
         prompt_mode.update(cx, |this, cx| {
             let from = this.tasks[0].name.to_string();
             let ix = this.push_task("Build it".into(), cx);
@@ -11514,9 +11561,53 @@ mod tests {
             task.sent.sent_from = Some(from);
             task.status = TaskStatus::Running;
         });
-        assert_eq!(state(cx), (TaskStatus::Running, 0));
-        prompt_mode.update(cx, |this, _| this.tasks[1].status = TaskStatus::Done);
-        assert_eq!(state(cx), (TaskStatus::Done, 2));
+        assert_eq!(state(cx), (ChainState::Running, TaskStatus::Running, 0));
+        prompt_mode.update(cx, |this, _| this.tasks[1].status = TaskStatus::Failed);
+        assert_eq!(state(cx), (ChainState::Over, TaskStatus::Failed, 2));
+    }
+
+    /// A chain whose spec step is done and whose code step waits in the
+    /// queue is running, expanded in the Running group with its steps, its
+    /// queued step listed there rather than among the queued prompts.
+    #[gpui_kit::test]
+    async fn a_chain_with_a_queued_step_is_running_and_expanded(cx: &mut TestAppContext) {
+        use super::tasks_tab::ChainState;
+        use crate::chat_input::SendMode;
+        let (prompt_mode, handle) = open(cx);
+        prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("Build it".into(), cx);
+            let task = &mut this.tasks[ix];
+            task.sent.mode = Some(SendMode::Both);
+            task.mode = Some(SendMode::Both);
+            task.status = TaskStatus::Done;
+            let from = this.tasks[ix].name.to_string();
+            this.queue.push(super::QueueItem {
+                id: 1,
+                text: "Build it".into(),
+                saved: None,
+                wait: true,
+                sent_from: Some(from),
+                images: Vec::new(),
+                files: Vec::new(),
+                new_conversation: false,
+                mode: Some(SendMode::Code),
+                queued_at: 0,
+            });
+            show_tasks(this);
+            cx.notify();
+        });
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(this.chain_state(&[0]), ChainState::Running);
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            window.render_frame(cx);
+            assert!(window.try_find(("tasks-tab-chain", 0usize)).is_some(), "no chain row");
+            assert!(window.try_find(("tasks-tab-step", 0usize)).is_some(), "its spec step isn't listed");
+            assert!(window.try_find(("tasks-tab-step", 1usize)).is_some(), "its queued step isn't listed");
+            assert!(window.try_find(("queued-prompt", 0usize)).is_none(), "its step is among the queued");
+        })
+        .unwrap();
     }
 
     #[gpui_kit::test]
@@ -11584,7 +11675,6 @@ mod tests {
                 cx,
             );
             show_previous_tasks(this);
-            this.tasks_tab.expanded_chains.insert(1);
             cx.notify();
         });
         prompt_mode.read_with(cx, |this, _| {
@@ -11611,29 +11701,30 @@ mod tests {
                 ]
             );
             let steps: Vec<_> = this.tasks[1..4].iter().collect();
-            assert_eq!(super::chain_status(&steps, false), TaskStatus::Failed);
+            assert_eq!(super::chain_status(&steps), TaskStatus::Failed);
         });
         cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             window.render_frame(cx);
-            // In the Tasks tab, the chain is one row, its steps rows of their
-            // own beneath it once shown.
+            // In the Tasks tab, the chain is one row, its steps never listed
+            // in the list.
             assert!(
                 window.try_find(("tasks-tab-chain", 1usize)).is_some(),
                 "no chain row"
             );
             assert!(window.try_find(("tasks-tab-chain", 2usize)).is_none());
             assert!(window.try_find(("tasks-tab-chain", 4usize)).is_none());
+            for ix in 1..4usize {
+                assert!(window.try_find(("tasks-tab-task", ix)).is_none(), "step {ix} listed");
+            }
             let parent = window.find(("tasks-tab-chain", 1usize)).bounds();
-            let steps: Vec<_> = (1..4usize)
-                .map(|ix| window.find(("tasks-tab-task", ix)).bounds())
-                .collect();
             let alone = window.find(("tasks-tab-task", 4usize)).bounds();
-            assert!(steps[0].top() >= parent.bottom() - gpui_kit::px(1.));
-            assert!(steps.windows(2).all(|pair| pair[1].top() >= pair[0].bottom() - gpui_kit::px(1.)));
             // A task sent by hand from a step is listed after the chain.
-            assert!(alone.top() >= steps[2].bottom() - gpui_kit::px(1.));
-            for row in steps.iter().chain([&parent, &alone]) {
+            assert!(alone.top() >= parent.bottom() - gpui_kit::px(1.));
+            // Their checkboxes, and so all after them, in the same column.
+            let left = |id: (&'static str, usize)| window.find(id).bounds().left();
+            assert!((left(("history-select", 1)) - left(("history-select", 4))).abs() <= gpui_kit::px(0.5));
+            for row in [&parent, &alone] {
                 assert!((row.size.height - super::QUEUED_ROW_HEIGHT).abs() < gpui_kit::px(0.5));
             }
         })
@@ -11666,7 +11757,7 @@ mod tests {
             assert!(window.try_find(("tasks-tab-took", 0usize)).is_none());
             let right = |id: (&'static str, usize)| window.find(id).bounds().right();
             let column = right(("tasks-tab-chain-took", 1));
-            for ix in [1usize, 2, 3, 4] {
+            for ix in [4usize] {
                 assert!(
                     (right(("tasks-tab-took", ix)) - column).abs() <= gpui_kit::px(1.),
                     "task {ix}'s time isn't in the column"
@@ -14094,9 +14185,10 @@ mod tests {
             "{} rows drawn in {height:?}",
             shown.len()
         );
-        // Headings, Running and Queued with their empty rows: five rows
-        // besides the tasks, each as tall as a task's.
-        let whole = px(28.) * (TASKS + 5) as f32;
+        // Headings, Running and Queued with their empty rows, and the one
+        // day's divider: six rows besides the tasks, each as tall as a
+        // task's.
+        let whole = px(28.) * (TASKS + 6) as f32 + px(8.);
         assert_eq!(scroll.max_offset().y, whole - height);
         let row = cx
             .update_window(handle, |_, window, _| window.find(("tasks-tab-task", shown[0])).bounds())
@@ -14108,6 +14200,16 @@ mod tests {
         let shown = drawn(cx);
         assert!(shown.contains(&(TASKS - 1)), "the last task isn't drawn: {shown:?}");
         assert!(!shown.contains(&0));
+        // Its last row shows whole, its bottom padding beneath it.
+        let (last, list) = cx
+            .update_window(handle, |_, window, _| {
+                (window.find("tasks-queued-empty").bounds(), scroll.bounds())
+            })
+            .unwrap();
+        assert!(
+            last.bottom() <= list.bottom() - px(8.) + px(0.5),
+            "the last row is cut off: {last:?} in {list:?}"
+        );
     }
 
     /// The button opening the right sidebar, at the body tab bar's right

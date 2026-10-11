@@ -1,0 +1,4 @@
+- [An open task shows Status, then Prompt, then Steps, Details, Parameters, and Actions](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [The Prompt section shows the prompt as typed in a GrowingTextInputScope, with its attachments beneath](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [A queued task's prompt can be typed in right there; one that has run reads as it was sent](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [Prompts past 8 lines are clipped with a fade and a Read more / Show less link](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)

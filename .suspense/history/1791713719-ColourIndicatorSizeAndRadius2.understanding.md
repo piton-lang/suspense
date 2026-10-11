@@ -1,0 +1,3 @@
+- [Each Tasks tab row's mode bar is 4 pixels wide with corners rounded 2 pixels](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [The bar is inset 4 pixels from the row's left and 6 from its top and bottom, so bars of adjacent rows never touch](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [The bar is in the row's mode's colour](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)

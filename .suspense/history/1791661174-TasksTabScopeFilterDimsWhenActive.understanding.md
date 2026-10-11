@@ -1,0 +1,4 @@
+- [The filters are one dropdown: a small ghost Filter button at the right of the Previous group's heading](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)
+- [While any filter is on, the button reads how many, as "Filter · 2", in the theme's accent](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)
+- [Group headings in the Tasks tab are small muted labels](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [The active Filter button is accent at full strength on a faint accent tint, never dimmed or muted](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)

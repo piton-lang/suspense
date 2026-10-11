@@ -1,0 +1,8 @@
+- [A chain reads Running, spinner and time counting, exactly while one of its steps is building, compiling, or running now, and at no other time](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [Otherwise, while one of its steps waits in a lane's queue, it reads Queued, muted, listed with the queued prompts](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [Otherwise it is over: Failed or Cancelled if a step was, else its last step's own status, Done or Not recorded](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A chain whose later step was never sent is over, its parent saying muted after its step count that its code step was never sent](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A step is running only while the app has its run under way, never after a restart; queued only while its prompt is in the queue; else read from its own history record](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [Steps join a chain only by which step each was sent from](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [Running chains sit in the Tasks tab's Running group, Queued ones in Queued, over ones among Previous](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A task from the history with no record of its run reads "Not recorded"](.claude/reference/scope/prompt-mode/message-list/index.md#status)

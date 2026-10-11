@@ -1512,8 +1512,12 @@ impl MainWindow {
     }
 
     /// Sends focus back into the open inset panel: to what was last focused
-    /// there, or what it holds.
+    /// there, or what it holds. A dialog open over it keeps the focus it
+    /// takes: the dialog layer lies outside the panel.
     fn refocus_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if window.has_active_dialog(cx) {
+            return;
+        }
         let content = if let Some(diff) = &self.diff {
             diff.read(cx).focus_handle(cx)
         } else if let Some(form) = &self.new_project {

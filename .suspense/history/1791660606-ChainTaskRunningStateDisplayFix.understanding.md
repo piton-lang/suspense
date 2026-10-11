@@ -1,0 +1,6 @@
+- [A Chain prompt runs as steps, each saved in the history as a task of its own](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A step is sent once the step before it finishes; one whose step before failed or was cancelled is never sent](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A chain's steps are found by which step each was sent from, not by adjacency in the history](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A task from the history with no record of its run reads "Not recorded"](.claude/reference/scope/prompt-mode/message-list/index.md#status)
+- [The Tasks tab groups tasks into Previous, Running, and Queued](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [A chain is Running only while a step runs now; Queued while a step is queued; else over, never stuck on unsent steps](.claude/reference/scope/prompt-mode/index.md#chained-tasks)

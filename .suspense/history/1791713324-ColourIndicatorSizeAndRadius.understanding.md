@@ -1,0 +1,3 @@
+- [Every Tasks tab row is 28px, starting with a bar down its left edge in its mode's colour](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [Every row in every section shares the same columns so their parts line up](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [The mode bar is 4px wide, 2px radius, inset 4px left and 6px top and bottom](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)

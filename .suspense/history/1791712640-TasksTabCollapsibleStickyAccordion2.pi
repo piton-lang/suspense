@@ -1,0 +1,73 @@
+from /ui/components/right-sidebar import TasksTabScope
+from /ui/components/right-sidebar/tasks import TasksTabScope
+
+export anchor TasksTabCollapsibleStickyAccordion2:
+    userPrompt:
+        \\\
+        Ok the @{TasksTabScope} is kind of a mess.  Previous, Running, and Queues should all be collapsible.  They're accordion sections.  And each header should be sticky as we scrolling that section.  We don't need to be able to inline expand multi-step tasks in the list.  That's why we can click into it.  Checkboxes or not, everything should be aligned.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Ok the @{TasksTabScope} is kind of a mess.  Previous, Running, and Queues should all be collapsible.  They're accordion sections.  And each header should be sticky as we scrolling that section.  We don't need to be able to inline expand multi-step tasks in the list.  That's why we can click into it.  Checkboxes or not, everything should be aligned.
+            \\\
+        result:
+            \\\
+            The Tasks tab is now three collapsible accordion sections with sticky headings, every row lines up in the same columns, and chains no longer expand inline. `piton check` reports no problems and `piton build` wrote 82 files.
+
+            - **Accordion sections:** Previous, Running and Queued each collapse on their own.
+              - Each heading is a 28px raised row: a chevron, the title and count, then its controls at the right.
+              - Clicking a heading toggles only that section, and any number can be open at once.
+              - Previous starts collapsed and the other two expanded whenever a project opens. Otherwise each project keeps them as you left them.
+            - **Sticky headings:** a section's heading stays pinned at the top while you scroll its rows, until the next section's heading pushes it out. Pinned headings never let rows show through and never move any row.
+            - **Aligned columns:** every row in every section uses the same columns:
+              - the mode bar;
+              - a 20px lead column: a checkbox in Previous, a drag grip in Queued, kept empty in Running;
+              - a 20px status column;
+              - the prompt;
+              - a right-aligned time.
+
+              So status and text start at the same place whatever the row has, and the headings' titles line up with the rows' text.
+            - **Chains:** a chain is one row with its overall status and its step count. Its steps show only once you open it, and selecting the row selects its steps for batch actions.
+
+            **Anchors the code should follow:** `TasksTabScope` `#description`, `#rows`, `#virtualized` and `#chain-steps`, and `PromptEditor` `#chained-tasks`.
+            \\\
+
+    sentFrom: TasksTabCollapsibleStickyAccordion
+
+    model: opus
+
+    references:
+        - @{TasksTabScope}

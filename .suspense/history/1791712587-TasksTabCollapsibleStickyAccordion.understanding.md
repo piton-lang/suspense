@@ -1,0 +1,8 @@
+- [The Tasks tab has Previous, Running, and Queued groups, each headed by a small muted label with its count](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Previous carries filters and batch actions on its heading; Queued its auto-send switch and Send next](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Every row is 28px: mode bar, status, first line, time at right](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [Clicking a row opens the task, a chain showing its steps in its details](.claude/reference/ui/components/right-sidebar/tasks/index.md#chain-steps)
+- [The list draws only the rows in view, positions known from row counts alone](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Previous tasks have checkboxes for selection and batch actions](.claude/reference/scope/prompt-mode/index.md#previous-tasks)
+- [Queued rows reorder by dragging from a grip](.claude/reference/scope/prompt-mode/queue-list/index.md#reorder)
+- [The groups are collapsible accordion sections with sticky headings; rows share aligned columns; chains never expand inline](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)

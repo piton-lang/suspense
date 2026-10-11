@@ -1,0 +1,62 @@
+
+export anchor ChainTaskRunningStateDisplayFix2:
+    userPrompt:
+        \\\
+        Well, now I'm afraid a whole bunch of things aren't being displayed correctly.  There are chains that only seem to have a spec prompt -- not sure if that's an issue or what but that means they're all left in a "running" state.  My point is that if any task has a currently running step, it's running.  Whether it's missing something in theory or not, who knows... Doesn't matter.  But also make sure you're reading shit correctly.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Well, now I'm afraid a whole bunch of things aren't being displayed correctly.  There are chains that only seem to have a spec prompt -- not sure if that's an issue or what but that means they're all left in a "running" state.  My point is that if any task has a currently running step, it's running.  Whether it's missing something in theory or not, who knows... Doesn't matter.  But also make sure you're reading shit correctly.
+            \\\
+        result:
+            \\\
+            You're right, and the earlier rule was mine. I wrote that a chain stays "Running" until every step it might send is done. So any chain whose code step was never sent, like old ones or ones interrupted by closing the app, was stuck Running for good. I replaced that rule. `piton check` and `piton build` ran clean.
+
+            - **Running only when a step is running now:** a chain reads Running exactly while one of its steps is building, compiling or running in the app at that moment, never otherwise.
+            - **Queued:** if no step is running but one is waiting in the queue, the chain reads Queued and sits in the Queued group.
+            - **Otherwise it's over:**
+              - It reads Failed or Cancelled if a step was. Otherwise it takes its last step's own status: Done, or Not recorded if that step has no record of its run.
+              - A chain whose code step was never sent shows that as a muted note on its parent row, never as Running.
+            - **Reading state correctly:**
+              - Each step's state comes from where it actually is. It's running only while the app has its run going, which no step from the history can be after a restart. It's queued only while its prompt is in the queue. Otherwise it comes from its own history record.
+              - Steps are joined to a chain only by which step each was sent from, so a task never picks up another chain's state.
+
+            **Anchors the code should follow:** `PromptEditor` `#chained-tasks`, `TasksTabScope` `#description` and `#rows` for which group a chain sits in, and `MessageList` `#status`.
+            \\\
+
+    sentFrom: ChainTaskRunningStateDisplayFix
+
+    model: opus

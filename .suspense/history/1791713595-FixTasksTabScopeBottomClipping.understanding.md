@@ -1,0 +1,6 @@
+- [The Tasks tab is one scrolling column with a ScrollbarScope](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Every row is 28px, so positions and the scrollbar come from row counts alone](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Scroll position is clamped to its ends before drawing, in whole device pixels](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Sticky headings sit over the list without moving any row](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [The right sidebar has a 32px tab row along its top](.claude/reference/ui/components/right-sidebar/index.md#tabs)
+- [At the bottom the last row shows whole above 8px padding; scroll height measured against the area under the tab row](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)

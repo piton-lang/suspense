@@ -1,0 +1,6 @@
+- [With filters on, the Filter button reads "Filter · N", its icon and label the accent at full strength](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)
+- [Active, it sits on a faint accent tint, about a sixth of its strength, as a selected ghost button](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)
+- [It is never dimmed, faded, drawn as disabled, or given the heading's muted colour](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)
+- [With no filter on, it reads "Filter" in the theme's ordinary text colour](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)
+- [Hovering it shows the usual hover, filters on or off](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)
+- [It sits in the Previous group's heading, a small muted label](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)

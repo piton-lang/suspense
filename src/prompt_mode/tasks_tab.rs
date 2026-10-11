@@ -15,8 +15,17 @@ use gpui_kit::component::menu::DropdownMenu as _;
 /// How tall a row of the tab is, as a queued prompt's is.
 const ROW_HEIGHT: Pixels = QUEUED_ROW_HEIGHT;
 
-/// How wide the bar down a row's left edge is, in its mode's colour.
+/// How wide the bar down a body task tab's left edge is, in its mode's
+/// colour.
 const MODE_BAR: Pixels = px(2.);
+
+/// The bar in a Tasks tab row's mode's colour, as the TasksTabScope's rows
+/// say: a pill this wide, its corners rounded this much, set in from the
+/// row's left and from its top and bottom by these.
+const ROW_BAR: Pixels = px(4.);
+const ROW_BAR_RADIUS: Pixels = px(2.);
+const ROW_BAR_LEFT: Pixels = px(4.);
+const ROW_BAR_INSET: Pixels = px(6.);
 
 /// How far a chain's steps are set in beneath its row.
 const STEP_INDENT: Pixels = px(16.);
@@ -25,14 +34,23 @@ const STEP_INDENT: Pixels = px(16.);
 /// it is saved.
 const SAVE_REST: Duration = Duration::from_millis(500);
 
-/// The most rows an open queued task's prompt grows to before it scrolls.
-const PROMPT_MAX_ROWS: usize = 12;
+/// The most rows an open queued task's prompt grows to: all of it, since
+/// it is shown whole while it is edited.
+const PROMPT_MAX_ROWS: usize = 100_000;
+
+/// How many lines, as they wrap, an open task's prompt shows while clipped,
+/// and how tall each is.
+const CLIPPED_LINES: f32 = 8.;
+const PROMPT_LINE: Pixels = px(20.);
 
 /// One of the Tasks tab's rows, as what it shows, each [`ROW_HEIGHT`]
 /// tall.
 enum TimelineRow {
     /// A group's heading, with its label.
     Heading(Group, String),
+    /// A day's divider within Previous: its label and how many tasks it
+    /// shows.
+    Day(String, usize),
     /// A group with nothing in it, as its id and what it says.
     Empty(&'static str, &'static str),
     /// A chain's row, as its head and all its steps.
@@ -40,11 +58,120 @@ enum TimelineRow {
     /// A task's, as its index, its step's kind in a chain, and whether it is
     /// one of the previous tasks.
     Task(usize, Option<StepKind>, bool),
-    /// A queued prompt's, the next in the queue.
-    Queued,
+    /// A queued prompt's, by its place in the queue.
+    Queued(usize),
+    /// A step of a running chain, beneath the chain's row, by the chain's
+    /// first step.
+    Step(usize, StepRow),
+}
+
+/// A running chain's step, as its row beneath the chain shows it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum StepRow {
+    /// Sent: the task, and what it does in the chain.
+    Sent(usize, StepKind),
+    /// Waiting in its lane's queue, by its place there.
+    Queued(usize),
+    /// To be sent once the step before it finishes: what it does, and the
+    /// mode whose colour it reads in.
+    Next(&'static str, SendMode),
+}
+
+/// Where a chain stands as a whole.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ChainState {
+    /// One of its steps is under way now, or, an earlier step of it having
+    /// run, one waits in the queue.
+    Running,
+    /// Neither: it reads as its steps ended.
+    Over,
+}
+
+/// The width of a row's lead column, holding a Previous row's checkbox
+/// or a Queued row's grip, and of its status column after it, as the
+/// TasksTabScope's rows say: kept whether or not anything is in them, so
+/// every row's parts line up.
+const LEAD_COLUMN: Pixels = px(20.);
+const STATUS_COLUMN: Pixels = px(20.);
+
+/// A column of a row `width` wide, holding `child`, centred, if anything.
+fn column(width: Pixels, child: Option<AnyElement>) -> Div {
+    h_flex()
+        .flex_none()
+        .w(width)
+        .justify_center()
+        .children(child)
+}
+
+/// What a day's divider reads, `date` seen from `today`: "Today",
+/// "Yesterday", the weekday for the rest of the past week, else the date,
+/// with the year once it isn't this one.
+fn day_label(date: chrono::NaiveDate, today: chrono::NaiveDate) -> String {
+    use chrono::Datelike as _;
+    match (today - date).num_days() {
+        0 => "Today".into(),
+        1 => "Yesterday".into(),
+        2..=6 => date.format("%A").to_string(),
+        _ if date.year() == today.year() => date.format("%-d %B").to_string(),
+        _ => date.format("%-d %B %Y").to_string(),
+    }
+}
+
+/// A day's divider within Previous: its label, small and muted, set in to
+/// line up with the rows' text, then, muted, how many tasks it shows.
+fn day_divider(label: String, count: usize, cx: &App) -> AnyElement {
+    let theme = cx.theme();
+    gpui_kit::TestSupportExt::test_support(h_flex().id(SharedString::from(format!("tasks-day-{label}"))))
+        .flex_none()
+        .w_full()
+        .h(ROW_HEIGHT)
+        .gap_2()
+        .pl(px(10.))
+        .pr_3()
+        .bg(theme.background)
+        .text_xs()
+        .text_color(theme.muted_foreground)
+        .child(column(LEAD_COLUMN, None))
+        .child(column(STATUS_COLUMN, None))
+        .child(div().font_semibold().child(label))
+        .child(div().child(count.to_string()))
+        .into_any_element()
+}
+
+/// The small muted mark at the right of a session's first row, where it
+/// started a new conversation.
+fn new_conversation_mark(id: (&'static str, usize), cx: &App) -> AnyElement {
+    div()
+        .id(id)
+        .flex_none()
+        .child(
+            Icon::new(IconName::MessageSquare)
+                .xsmall()
+                .text_color(cx.theme().muted_foreground),
+        )
+        .tooltip(|window, cx| {
+            gpui_kit::component::tooltip::Tooltip::new("Started a new conversation").build(window, cx)
+        })
+        .into_any_element()
+}
+
+/// The list's own room beneath its last row.
+const BOTTOM_PADDING: Pixels = px(8.);
+
+/// `n` as "1st", "2nd", "3rd", "4th".
+fn ordinal(n: usize) -> String {
+    let suffix = match (n % 10, n % 100) {
+        (_, 11..=13) => "th",
+        (1, _) => "st",
+        (2, _) => "nd",
+        (3, _) => "rd",
+        _ => "th",
+    };
+    format!("{n}{suffix}")
 }
 
 /// The timeline's groups.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Group {
     Previous,
     Running,
@@ -96,17 +223,33 @@ pub(super) struct TasksTab {
     /// The task open in the tab, in the list's place.
     pub(super) open: Option<Opened>,
     pub(super) scroll: ScrollHandle,
-    /// The chains whose steps are shown beneath them, by their first step.
-    pub(super) expanded_chains: HashSet<usize>,
     /// Whether the Previous group shows its rows; collapsed as the project
     /// opens, then kept as it is left.
     pub(super) previous_expanded: bool,
+    /// Whether the Running and the Queued groups show their rows; expanded
+    /// as the project opens, then kept as they are left.
+    pub(super) running_expanded: bool,
+    pub(super) queued_expanded: bool,
     /// The tab was on screen last frame; shown afresh, it scrolls to what
     /// runs.
     pub(super) shown: Cell<bool>,
     /// Where the list was left scrolled last frame, and whether that was its
     /// bottom, so a list left at its bottom stays there as it grows.
     pub(super) left_at: Cell<Option<(Pixels, bool)>>,
+    /// The open task's prompt shows whole, past its 8 lines; and, for a
+    /// queued one, it is being edited, shown whole as it is typed in.
+    prompt_expanded: bool,
+    prompt_editing: bool,
+    /// How tall the open task's prompt is laid out whole, and where its
+    /// Prompt section was drawn, to scroll back to it as it is clipped.
+    prompt_height: Rc<Cell<Pixels>>,
+    prompt_top: Rc<Cell<Option<Pixels>>>,
+    /// The open task's details, scrolled.
+    details_scroll: ScrollHandle,
+    /// The day the day dividers were last labelled on, and what redraws
+    /// them once midnight passes.
+    labelled_on: Cell<Option<chrono::NaiveDate>>,
+    midnight: RefCell<Task<()>>,
     /// Queued prompts put there by "Edit and resend", held until "Send" is
     /// clicked.
     pub(super) drafts: HashSet<usize>,
@@ -124,10 +267,18 @@ impl TasksTab {
         Self {
             open: None,
             scroll: ScrollHandle::new(),
-            expanded_chains: HashSet::new(),
             previous_expanded: false,
+            running_expanded: true,
+            queued_expanded: true,
             shown: Cell::new(false),
             left_at: Cell::new(None),
+            prompt_expanded: false,
+            prompt_editing: false,
+            prompt_height: Rc::new(Cell::new(px(0.))),
+            prompt_top: Rc::new(Cell::new(None)),
+            details_scroll: ScrollHandle::new(),
+            labelled_on: Cell::new(None),
+            midnight: RefCell::new(Task::ready(())),
             drafts: HashSet::new(),
             editor: None,
             step_editor: None,
@@ -184,30 +335,76 @@ pub(super) fn mode_bar(mode: Option<SendMode>, cx: &App) -> Div {
         .bg(color)
 }
 
-/// A group's heading: its label, muted, then what goes along it.
-fn group_heading(id: &'static str, label: String, actions: Vec<AnyElement>, cx: &App) -> AnyElement {
-    group_heading_in(h_flex().id(id), label, actions, cx)
+/// The bar in `mode`'s colour at a Tasks tab row's left: a short rounded
+/// pill, inset from the row's edges, so the bars of rows one above another
+/// never touch.
+fn row_bar(mode: Option<SendMode>, cx: &App) -> Div {
+    let color = mode.map_or(cx.theme().muted_foreground, |mode| {
+        chat_input::mode_color(mode, cx)
+    });
+    div()
+        .absolute()
+        .left(ROW_BAR_LEFT)
+        .top(ROW_BAR_INSET)
+        .bottom(ROW_BAR_INSET)
+        .w(ROW_BAR)
+        .rounded(ROW_BAR_RADIUS)
+        .bg(color)
 }
 
-/// A group's heading, as [`group_heading`], drawn in `heading`.
-fn group_heading_in(heading: Stateful<Div>, label: String, actions: Vec<AnyElement>, cx: &App) -> AnyElement {
+/// A group's heading: its label, muted, then what goes along it.
+/// A section's heading, as the TasksTabScope says: a row on the raised
+/// surface, a chevron, right while `expanded` is off and down while on, in
+/// the lead column, its title and count set in to line up with the rows'
+/// text, then its `actions` at its right. Clicking it anywhere but its
+/// actions calls `toggle`.
+fn section_heading(
+    id: &'static str,
+    label: String,
+    expanded: bool,
+    actions: Vec<AnyElement>,
+    toggle: impl Fn(&mut Window, &mut App) + 'static,
+    cx: &App,
+) -> AnyElement {
     let theme = cx.theme();
+    let muted = theme.muted_foreground;
+    // Clicks on the actions are theirs alone.
+    let actions = actions.into_iter().enumerate().map(|(ix, action)| {
+        div()
+            .id((id, ix))
+            .flex_none()
+            .on_click(|_, _, cx| cx.stop_propagation())
+            .child(action)
+    });
     // Lets UI tests find it; inert in normal builds.
-    gpui_kit::TestSupportExt::test_support(heading)
+    gpui_kit::TestSupportExt::test_support(h_flex().id(id))
         .flex_none()
         .w_full()
         .h(ROW_HEIGHT)
         .overflow_hidden()
         .gap_2()
-        .px_3()
+        .pl(px(10.))
+        .pr_3()
         .bg(theme.tab_bar)
         .border_b_1()
         .border_color(theme.border)
         .text_xs()
-        .text_color(theme.muted_foreground)
+        .text_color(muted)
+        .cursor_pointer()
+        .on_click(move |_, window, cx| toggle(window, cx))
+        .child(column(
+            LEAD_COLUMN,
+            Some(
+                Icon::new(if expanded { IconName::ChevronDown } else { IconName::ChevronRight })
+                    .xsmall()
+                    .text_color(muted)
+                    .into_any_element(),
+            ),
+        ))
+        .child(column(STATUS_COLUMN, None))
         // Cut short where its actions need the room.
         .child(div().flex_1().min_w_0().truncate().child(label))
-        .children(actions.into_iter().map(|action| div().flex_none().child(action)))
+        .children(actions)
         .into_any_element()
 }
 
@@ -223,6 +420,7 @@ fn clamped_top(
     height: Pixels,
     scale: f32,
     left_at: Option<(Pixels, bool)>,
+    at_laid_out_bottom: bool,
 ) -> (Pixels, bool, (bool, bool)) {
     let scale = if scale > 0. { scale } else { 1. };
     let overflow = content - height;
@@ -232,7 +430,10 @@ fn clamped_top(
     } else {
         px(0.)
     };
-    let kept_at_bottom = left_at.is_some_and(|(left, bottom)| bottom && left == offset);
+    // Left at its bottom and not scrolled since: as it was left, or as the
+    // layout put it at its bottom.
+    let kept_at_bottom =
+        left_at.is_some_and(|(left, bottom)| bottom && (left == offset || at_laid_out_bottom));
     let top = if kept_at_bottom {
         max
     } else {
@@ -297,56 +498,168 @@ fn section(label: &'static str, cx: &App) -> Div {
 }
 
 impl PromptMode {
+    /// Redraws the day dividers once midnight passes, so "Today" reads
+    /// "Yesterday" without the tab being opened again.
+    fn follow_midnight(&self, cx: &mut Context<Self>) {
+        let now = chrono::Local::now();
+        let today = now.date_naive();
+        if self.tasks_tab.labelled_on.replace(Some(today)) == Some(today) {
+            return;
+        }
+        let midnight = today
+            .succ_opt()
+            .and_then(|day| day.and_hms_opt(0, 0, 1))
+            .and_then(|at| at.and_local_timezone(chrono::Local).earliest());
+        let wait = midnight
+            .and_then(|at| (at - now).to_std().ok())
+            .unwrap_or(Duration::from_secs(3600));
+        *self.tasks_tab.midnight.borrow_mut() = cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(wait).await;
+            this.update(cx, |_, cx| cx.notify()).ok();
+        });
+    }
+
+    /// The day, in local time, the task at `ix` was sent, where it can be
+    /// told.
+    fn sent_on(&self, ix: usize) -> Option<chrono::NaiveDate> {
+        let task = self.tasks.get(ix)?;
+        let at = match task.asked_at {
+            Some(secs) => std::time::UNIX_EPOCH + Duration::from_secs(secs),
+            None => task.span()?.0,
+        };
+        Some(chrono::DateTime::<chrono::Local>::from(at).date_naive())
+    }
+
     /// The tasks the Previous group lists: every task that has run, none
-    /// under way, nor any step of a chain still in progress.
+    /// under way, nor any step of a chain running or queued.
     pub(super) fn previous_ixs(&self) -> Vec<usize> {
-        let in_progress = self.chains_in_progress();
+        let held: Vec<usize> = self
+            .chains_where(|this, members| this.chain_state(members) != ChainState::Over)
+            .into_iter()
+            .flat_map(|(_, members)| members)
+            .collect();
         (0..self.tasks.len())
-            .filter(|&ix| {
-                !self.tasks[ix].status.is_active()
-                    && !in_progress.iter().any(|(_, members)| members.contains(&ix))
-            })
+            .filter(|&ix| !self.tasks[ix].status.is_active() && !held.contains(&ix))
             .collect()
     }
 
-    /// Every chain still in progress, by its first step, with its steps.
-    fn chains_in_progress(&self) -> Vec<(usize, Vec<usize>)> {
+    /// Every chain, by its first step, with its steps, whose state `keep`
+    /// keeps.
+    fn chains_where(&self, keep: impl Fn(&Self, &[usize]) -> bool) -> Vec<(usize, Vec<usize>)> {
         let layout = chain_layout(&self.tasks);
         (0..layout.order.len())
             .filter_map(|place| {
                 let step = layout.steps[place].filter(|step| step.pos == 0)?;
                 let members = layout.members(step);
-                self.chain_in_progress(members)
-                    .then(|| (layout.order[place], members.to_vec()))
+                keep(self, members).then(|| (layout.order[place], members.to_vec()))
             })
             .collect()
     }
 
-    /// Whether the chain of `members`, its steps in the order they ran, is
-    /// in progress, as the PromptEditor says: from when it is sent until its
-    /// last step is over. So while any step is building, compiling, or
-    /// running, while a step waits in its lane's queue, and while a step
-    /// finished Done and another, its own or one added, is still to be sent.
-    pub(super) fn chain_in_progress(&self, members: &[usize]) -> bool {
+    /// Where the chain of `members`, its steps joined by which each was sent
+    /// from, stands, as the PromptEditor's chained tasks say: read only from
+    /// its steps as they truly are, never from what it might still do.
+    /// Running exactly while one of its steps is under way in this
+    /// application now, which no step from the history is after a restart;
+    /// else Queued while one of its steps waits in the queue; else over.
+    pub(super) fn chain_state(&self, members: &[usize]) -> ChainState {
         let steps: Vec<&PromptTask> = members.iter().filter_map(|&ix| self.tasks.get(ix)).collect();
-        if steps.iter().any(|task| task.status.is_active() || task.held_for_fix) {
-            return true;
+        if steps.iter().any(|task| task.status.is_active()) {
+            return ChainState::Running;
         }
-        // A step waiting in its lane's queue, sent on from one of these.
-        let queued = self.queue.iter().any(|item| {
-            steps.iter().any(|task| {
-                item.sent_from.as_deref() == Some(task.name.as_ref())
-                    && task.chain_stamp.is_none_or(|stamp| stamp == item.queued_at)
-            })
-        });
-        if queued {
-            return true;
+        // A step of it waiting in the queue, its first step having run: the
+        // chain is under way, though that step is queued. A chain whose
+        // first step still waits is a queued prompt, not yet a chain.
+        if self.chain_queued_step(members).is_some() {
+            ChainState::Running
+        } else {
+            ChainState::Over
         }
-        let Some(&last) = members.last() else {
-            return false;
+    }
+
+    /// Where in the queue a step of the chain of `members` waits, if one
+    /// does: sent on from one of its steps, told what that did, or added
+    /// to it.
+    fn chain_queued_step(&self, members: &[usize]) -> Option<usize> {
+        let steps: Vec<&PromptTask> = members.iter().filter_map(|&ix| self.tasks.get(ix)).collect();
+        let head = members.first().and_then(|&ix| self.tasks.get(ix));
+        self.queue.iter().position(|item| {
+            let anchor = item.saved.as_ref().map(|saved| &saved.anchor);
+            let added = anchor
+                .and_then(|anchor| anchor.added_step.as_ref())
+                .zip(head)
+                .is_some_and(|((chain, _), head)| chain.as_str() == head.name.as_ref());
+            let sent_on = item.sent_from.as_deref().is_some_and(|from| {
+                steps.iter().any(|task| task.name.as_ref() == from)
+            }) && anchor.is_none_or(|anchor| anchor.code_task.is_some());
+            added || sent_on
+        })
+    }
+
+    /// The rows of a running chain's steps, in the order they run: those
+    /// sent, the one waiting in the queue, then those still to send.
+    fn chain_step_rows(&self, head: usize, members: &[usize]) -> Vec<StepRow> {
+        let layout = chain_layout(&self.tasks);
+        let mut rows: Vec<StepRow> = members
+            .iter()
+            .map(|&ix| StepRow::Sent(ix, layout.step_of(ix).map_or(StepKind::Spec, |step| step.kind)))
+            .collect();
+        let queued = self.chain_queued_step(members);
+        let queued_anchor = queued
+            .and_then(|at| self.queue.get(at))
+            .and_then(|item| item.saved.as_ref())
+            .map(|saved| &saved.anchor);
+        // Its own steps still to come: after the last sent, or after the one
+        // queued.
+        let next_own = match (queued, members.last().and_then(|&ix| self.tasks.get(ix))) {
+            (Some(at), _) => {
+                rows.push(StepRow::Queued(at));
+                // A code step queued with a post-build update has its
+                // follow-up still to come.
+                let item = &self.queue[at];
+                (item.mode == Some(SendMode::Code)
+                    && queued_anchor.is_some_and(|anchor| anchor.post_build_update))
+                .then_some(("Spec follow-up", SendMode::Spec))
+            }
+            (None, Some(last)) => match chain_next(last).map(|(_, sending)| sending) {
+                Some(Sending::Now(SendMode::Code, ..)) => Some(("Code", SendMode::Code)),
+                Some(Sending::Now(SendMode::Spec, ..)) => Some(("Spec follow-up", SendMode::Spec)),
+                _ => None,
+            },
+            _ => None,
         };
-        self.tasks[last].status == TaskStatus::Done
-            && (chain_next(&self.tasks[last]).is_some() || self.next_added_step(last).is_some())
+        rows.extend(next_own.map(|(label, mode)| StepRow::Next(label, mode)));
+        // Then the steps added to it, not yet sent or queued.
+        let queued_place = queued_anchor
+            .and_then(|anchor| anchor.added_step.as_ref())
+            .map(|(_, place)| *place);
+        if let Some(chain) = self.tasks.get(head) {
+            for (place, step) in chain.added_steps.iter().enumerate() {
+                if self.added_step_task(head, place).is_none()
+                    && Some(place) != queued_place
+                    && !step.prompt.trim().is_empty()
+                {
+                    let label = if step.mode == SendMode::Spec { "Added spec" } else { "Added code" };
+                    rows.push(StepRow::Next(label, step.mode));
+                }
+            }
+        }
+        rows
+    }
+
+    /// For a chain that is over without sending every step it might have,
+    /// what was never sent, as its parent says it, muted.
+    fn never_sent(&self, members: &[usize]) -> Option<&'static str> {
+        let &last = members.last()?;
+        let task = self.tasks.get(last)?;
+        if task.status != TaskStatus::Done {
+            return None;
+        }
+        match chain_next(task)?.1 {
+            Sending::Now(SendMode::Code, ..) => Some("code step never sent"),
+            Sending::Now(SendMode::Spec, ..) => Some("spec follow-up never sent"),
+            _ => Some("next step never sent"),
+        }
     }
 
     /// The tab, as the TasksTabScope says: the timeline, or the task open in
@@ -394,6 +707,10 @@ impl PromptMode {
         self.tasks_tab.editor = None;
         self.tasks_tab.step_editor = None;
         self.tasks_tab.open = Some(open);
+        // Each opened afresh, its prompt clipped and not being edited.
+        self.tasks_tab.prompt_expanded = false;
+        self.tasks_tab.prompt_editing = false;
+        self.tasks_tab.prompt_height.set(px(0.));
         match open {
             Opened::Task(ix) => {
                 // A previous task opened from elsewhere shows in its group.
@@ -683,53 +1000,66 @@ impl PromptMode {
         // Collapsed, its heading alone.
         if count > 0 && self.tasks_tab.previous_expanded {
             let layout = chain_layout(&self.tasks);
-            let mut listed = 0;
+            // Each item shown, a chain by its first step, with how many
+            // tasks it shows.
+            let mut items: Vec<(TimelineRow, usize, usize)> = Vec::new();
             for place in 0..layout.order.len() {
                 let ix = layout.order[place];
                 match layout.steps[place] {
-                    // A chain: its row, then its steps while shown; one still
-                    // in progress is listed with what runs.
+                    // A chain: one row; its steps show once it is opened.
+                    // One running or queued is listed with those.
                     Some(step) if step.pos == 0 => {
                         let all = layout.members(step);
-                        if self.chain_in_progress(all) {
+                        if self.chain_state(all) != ChainState::Over {
                             continue;
                         }
-                        let shown_member = |member: usize| {
-                            !self.tasks[member].status.is_active() && visible(member)
-                        };
-                        if !all.iter().any(|&member| shown_member(member)) {
-                            continue;
-                        }
-                        listed += 1;
-                        rows.push(TimelineRow::Chain(ix, all.to_vec()));
-                        if self.tasks_tab.expanded_chains.contains(&ix) {
-                            for (pos, &member) in all.iter().enumerate() {
-                                if shown_member(member) {
-                                    let kind = layout.steps[step.start + pos].map(|step| step.kind);
-                                    rows.push(TimelineRow::Task(member, kind, true));
-                                }
-                            }
+                        let shown = all
+                            .iter()
+                            .filter(|&&member| !self.tasks[member].status.is_active() && visible(member))
+                            .count();
+                        if shown > 0 {
+                            items.push((TimelineRow::Chain(ix, all.to_vec()), ix, shown));
                         }
                     }
                     Some(_) => {}
                     None => {
                         if !self.tasks[ix].status.is_active() && visible(ix) {
-                            listed += 1;
-                            rows.push(TimelineRow::Task(ix, None, true));
+                            items.push((TimelineRow::Task(ix, None, true), ix, 1));
                         }
                     }
                 }
             }
-            if listed == 0 {
+            if items.is_empty() {
                 rows.push(TimelineRow::Empty(
                     "no-filtered-tasks",
                     "No previous tasks match these filters",
                 ));
             }
+            // Under the day each was sent, a chain its first step's, each
+            // day headed by its divider, counting what it shows.
+            let today = chrono::Local::now().date_naive();
+            let mut day: Option<(chrono::NaiveDate, usize, usize)> = None;
+            for (row, ix, shown) in items {
+                let date = self.sent_on(ix).unwrap_or(today);
+                match &mut day {
+                    Some((on, _, n)) if *on == date => *n += shown,
+                    _ => {
+                        if let Some((on, at, n)) = day.take() {
+                            rows[at] = TimelineRow::Day(day_label(on, today), n);
+                        }
+                        day = Some((date, rows.len(), shown));
+                        rows.push(TimelineRow::Day(String::new(), 0));
+                    }
+                }
+                rows.push(row);
+            }
+            if let Some((on, at, n)) = day {
+                rows[at] = TimelineRow::Day(day_label(on, today), n);
+            }
         }
         // Running, in either lane: every task under way, a chain still in
         // progress as one row, all its steps, done and to come, beneath it.
-        let chains = self.chains_in_progress();
+        let chains = self.chains_where(|this, members| this.chain_state(members) == ChainState::Running);
         let running: Vec<usize> = (0..self.tasks.len())
             .filter(|&ix| {
                 self.tasks[ix].status.is_active()
@@ -741,40 +1071,50 @@ impl PromptMode {
             Group::Running,
             format!("Running · {}", running.len() + chains.len()),
         ));
-        if running.is_empty() && chains.is_empty() {
+        let running_shown = self.tasks_tab.running_expanded;
+        if running_shown && running.is_empty() && chains.is_empty() {
             rows.push(TimelineRow::Empty("tasks-running-empty", "Nothing running"));
         }
         // In the order they were sent, a chain by its first step.
         let mut items: Vec<(usize, Option<Vec<usize>>)> = running.into_iter().map(|ix| (ix, None)).collect();
         items.extend(chains.into_iter().map(|(head, members)| (head, Some(members))));
         items.sort_by_key(|(ix, _)| *ix);
-        let layout = (!items.iter().all(|(_, members)| members.is_none())).then(|| chain_layout(&self.tasks));
+        // A running chain is expanded: its row, then each of its steps.
+        let mut held_in_chains = Vec::new();
         for (ix, members) in items {
-            match members {
-                None => rows.push(TimelineRow::Task(ix, None, false)),
-                Some(members) => {
-                    let expanded = self.tasks_tab.expanded_chains.contains(&ix);
-                    rows.push(TimelineRow::Chain(ix, members.clone()));
-                    if expanded && let Some(layout) = &layout {
-                        for member in members {
-                            let kind = layout.step_of(member).map(|step| step.kind);
-                            rows.push(TimelineRow::Task(member, kind, false));
-                        }
-                    }
+            let Some(members) = members else {
+                if running_shown {
+                    rows.push(TimelineRow::Task(ix, None, false));
                 }
+                continue;
+            };
+            let steps = self.chain_step_rows(ix, &members);
+            held_in_chains.extend(steps.iter().filter_map(|step| match step {
+                StepRow::Queued(at) => Some(*at),
+                _ => None,
+            }));
+            if running_shown {
+                rows.push(TimelineRow::Chain(ix, members));
+                rows.extend(steps.into_iter().map(|step| TimelineRow::Step(ix, step)));
             }
         }
         // Queued, in its order, reordered by dragging.
+        // Queued, in its order, reordered by dragging; a running chain's
+        // step is listed with its chain, though it keeps its place.
+        let listed: Vec<usize> = (0..self.queue.len()).filter(|at| !held_in_chains.contains(at)).collect();
         let queued_at = rows.len();
         rows.push(TimelineRow::Heading(
             Group::Queued,
-            format!("Queued · {}", self.queue.len()),
+            format!("Queued · {}", listed.len()),
         ));
-        if self.queue.is_empty() {
+        let queued_shown = self.tasks_tab.queued_expanded;
+        if queued_shown && listed.is_empty() {
             rows.push(TimelineRow::Empty("tasks-queued-empty", "No queued prompts"));
         }
         let first_queued = rows.len();
-        rows.extend((0..self.queue.len()).map(|_| TimelineRow::Queued));
+        if queued_shown {
+            rows.extend(listed.into_iter().map(TimelineRow::Queued));
+        }
         (rows, running_at, queued_at, first_queued)
     }
 
@@ -803,53 +1143,113 @@ impl PromptMode {
         };
         // Clamped to its ends, in whole device pixels, before anything is
         // drawn, so nothing is ever drawn past an end and put back after.
+        // Its rows and its bottom padding, in the area beneath the tab row
+        // it is drawn in.
+        let content = ROW_HEIGHT * rows.len() as f32 + BOTTOM_PADDING;
+        let laid_out_bottom = scroll.max_offset().y > px(0.)
+            && scroll.offset().y <= -scroll.max_offset().y + px(0.5);
         let top = clamped_top(
             scroll.offset().y,
-            ROW_HEIGHT * rows.len() as f32,
+            content,
             height,
             window.scale_factor(),
             self.tasks_tab.left_at.get(),
+            laid_out_bottom,
         );
         if scroll.offset().y != -top.0 {
             scroll.set_offset(point(scroll.offset().x, -top.0));
         }
+        // At its bottom, it is laid out at its bottom in this frame, however
+        // the tab was resized since the last, so its last row shows whole;
+        // enough rows drawn for whatever height it is given.
+        let at_bottom = top.1;
+        if at_bottom {
+            scroll.scroll_to_bottom();
+        }
         self.tasks_tab.left_at.set(Some((-top.0, top.1)));
         let at_end = top.2;
         let top = top.0;
-        let first = ((top / ROW_HEIGHT).floor() as usize).saturating_sub(OVERSCAN_ROWS);
+        let drawn_from = if at_bottom {
+            (content - height.max(window.viewport_size().height)).max(px(0.))
+        } else {
+            top
+        };
+        let first = ((drawn_from / ROW_HEIGHT).floor() as usize).saturating_sub(OVERSCAN_ROWS);
         let last = (((top + height) / ROW_HEIGHT).ceil() as usize + OVERSCAN_ROWS).min(rows.len());
         let first = first.min(last);
 
-        let queued = first.max(first_queued).saturating_sub(first_queued)
-            ..last.max(first_queued).saturating_sub(first_queued);
-        let mut queued_rows = self.render_queued_rows(queued.clone(), cx).into_iter();
+        // The heading of the section the top of the view is in, pinned at
+        // the top while its own row has scrolled past it, until the next
+        // heading pushes it up and out; drawn there in its row's place.
+        let top_row = (top / ROW_HEIGHT).floor() as usize;
+        let heading_at = |row: usize| matches!(rows.get(row), Some(TimelineRow::Heading(..)));
+        let pinned = (0..=top_row.min(rows.len().saturating_sub(1)))
+            .rev()
+            .find(|&row| heading_at(row))
+            .filter(|&row| ROW_HEIGHT * (row as f32) < top)
+            .map(|row| {
+                let next = (row + 1..rows.len()).find(|&next| heading_at(next));
+                let pushed = next.map_or(px(0.), |next| {
+                    (ROW_HEIGHT * next as f32 - top - ROW_HEIGHT).min(px(0.))
+                });
+                (row, pushed)
+            });
+        // The day of the Previous rows in view, pinned just below Previous's
+        // heading, until the next day's divider, or the next section's
+        // heading, pushes it out.
+        let boundary = |row: usize| {
+            matches!(rows.get(row), Some(TimelineRow::Heading(..) | TimelineRow::Day(..)))
+        };
+        let pinned_day = pinned
+            .filter(|(row, _)| matches!(rows.get(*row), Some(TimelineRow::Heading(Group::Previous, _))))
+            .and_then(|(heading, _)| {
+                (heading + 1..rows.len())
+                    .take_while(|&row| ROW_HEIGHT * (row as f32) < top + ROW_HEIGHT)
+                    .filter(|&row| matches!(rows.get(row), Some(TimelineRow::Day(..))))
+                    .last()
+            })
+            .map(|row| {
+                let next = (row + 1..rows.len()).find(|&next| boundary(next));
+                let pushed = next.map_or(px(0.), |next| {
+                    (ROW_HEIGHT * next as f32 - top - ROW_HEIGHT * 2.).min(px(0.))
+                });
+                (row, pushed)
+            });
+        self.follow_midnight(cx);
+        let queued: Vec<usize> = rows[first..last]
+            .iter()
+            .filter_map(|row| match row {
+                TimelineRow::Queued(at) => Some(*at),
+                _ => None,
+            })
+            .collect();
+        let mut queued_rows = self.render_queued_rows(&queued, cx).into_iter();
         let mut drawn: Vec<AnyElement> = Vec::with_capacity(last - first + 2);
         drawn.push(div().flex_none().h(ROW_HEIGHT * first as f32).into_any_element());
-        for row in &rows[first..last] {
+        let mut pinned_heading = None;
+        let mut pinned_divider = None;
+        for (at, row) in rows[first..last].iter().enumerate() {
             drawn.push(match row {
+                TimelineRow::Day(label, count) if pinned_day.is_some_and(|(row, _)| row == first + at) => {
+                    pinned_divider = Some(day_divider(label.clone(), *count, cx));
+                    div().flex_none().h(ROW_HEIGHT).into_any_element()
+                }
+                TimelineRow::Day(label, count) => day_divider(label.clone(), *count, cx),
+                // Pinned, it is drawn there alone, an empty row in its place.
+                TimelineRow::Heading(group, label) if pinned.is_some_and(|(row, _)| row == first + at) => {
+                    pinned_heading = Some(self.render_section_heading(*group, label.clone(), cx));
+                    div().flex_none().h(ROW_HEIGHT).into_any_element()
+                }
                 TimelineRow::Heading(group, label) => {
-                    let (id, actions) = match group {
-                        Group::Previous => {
-                            let mut actions = self.render_selection_actions(cx);
-                            // The filters' button, while there is a task to
-                            // filter, at the heading's right.
-                            if !self.previous_ixs().is_empty() {
-                                actions.push(self.render_filter_button(cx));
-                            }
-                            drawn.push(self.render_previous_heading(label.clone(), actions, cx));
-                            continue;
-                        }
-                        Group::Running => ("tasks-running", Vec::new()),
-                        Group::Queued => ("tasks-queued", self.queue_controls(cx)),
-                    };
-                    group_heading(id, label.clone(), actions, cx)
+                    self.render_section_heading(*group, label.clone(), cx)
                 }
                 TimelineRow::Empty(id, text) => group_empty(id, text, cx),
                 TimelineRow::Chain(head, all) => self.render_chain_row(*head, all, cx),
                 TimelineRow::Task(ix, kind, previous) => {
                     self.render_task_row(*ix, *kind, *previous, cx)
                 }
-                TimelineRow::Queued => match queued_rows.next() {
+                TimelineRow::Step(head, step) => self.render_step_row(*head, *step, cx),
+                TimelineRow::Queued(_) => match queued_rows.next() {
                     Some(row) => row,
                     None => div().into_any_element(),
                 },
@@ -858,10 +1258,18 @@ impl PromptMode {
         drawn.push(
             div()
                 .flex_none()
-                .h(ROW_HEIGHT * (rows.len() - last) as f32)
+                .h(ROW_HEIGHT * (rows.len() - last) as f32 + BOTTOM_PADDING)
                 .into_any_element(),
         );
-        let drag_scroll = self.queue_drag_driver(first_queued, cx);
+        let listed: Rc<Vec<usize>> = Rc::new(
+            rows.iter()
+                .filter_map(|row| match row {
+                    TimelineRow::Queued(at) => Some(*at),
+                    _ => None,
+                })
+                .collect(),
+        );
+        let drag_scroll = self.queue_drag_driver(first_queued, listed, cx);
         let rows = drawn;
         let (queue_gap, follow) = (self.queue_gap.clone(), self.queue_drag_scroll.clone());
         let list = v_flex()
@@ -892,7 +1300,25 @@ impl PromptMode {
                             cx.stop_propagation();
                         }
                     })
-                    .children(rows),
+                    .relative()
+                    .children(rows)
+                    // Over the rows scrolling beneath it, opaque, moving none.
+                    .children(pinned_day.zip(pinned_divider).map(|((_, pushed), divider)| {
+                        div()
+                            .absolute()
+                            .left_0()
+                            .right_0()
+                            .top(top + ROW_HEIGHT + pushed)
+                            .child(divider)
+                    }))
+                    .children(pinned.zip(pinned_heading).map(|((_, pushed), heading)| {
+                        div()
+                            .absolute()
+                            .left_0()
+                            .right_0()
+                            .top(top + pushed)
+                            .child(heading)
+                    })),
             );
         v_flex()
             .relative()
@@ -910,37 +1336,42 @@ impl PromptMode {
             .into_any_element()
     }
 
-    /// The Previous group's heading: a chevron, right while it is collapsed
-    /// and down while expanded, its label, and its batch actions and
-    /// filters. Clicking it anywhere but those expands or collapses it.
-    fn render_previous_heading(&self, label: String, actions: Vec<AnyElement>, cx: &mut Context<Self>) -> AnyElement {
-        let expanded = self.tasks_tab.previous_expanded;
-        let muted = cx.theme().muted_foreground;
-        // Clicks on the actions are theirs alone.
-        let actions = actions
-            .into_iter()
-            .enumerate()
-            .map(|(ix, action)| {
-                div()
-                    .id(("tasks-previous-action", ix))
-                    .on_click(|_, _, cx| cx.stop_propagation())
-                    .child(action)
-                    .into_any_element()
-            })
-            .collect();
-        let heading = h_flex()
-            .id("tasks-previous")
-            .cursor_pointer()
-            .child(
-                Icon::new(if expanded { IconName::ChevronDown } else { IconName::ChevronRight })
-                    .xsmall()
-                    .text_color(muted),
-            )
-            .on_click(cx.listener(|this, _, _, cx| {
-                this.tasks_tab.previous_expanded = !this.tasks_tab.previous_expanded;
-                cx.notify();
-            }));
-        group_heading_in(heading, label, actions, cx)
+    /// A section's heading, with its own controls: Previous's batch actions
+    /// and filters, Queued's "Send next" and auto-send switch. Clicking it
+    /// anywhere else expands or collapses that section alone.
+    fn render_section_heading(&self, group: Group, label: String, cx: &mut Context<Self>) -> AnyElement {
+        let (id, expanded, actions) = match group {
+            Group::Previous => {
+                let mut actions = self.render_selection_actions(cx);
+                // The filters' button, while there is a task to filter.
+                if !self.previous_ixs().is_empty() {
+                    actions.push(self.render_filter_button(cx));
+                }
+                ("tasks-previous", self.tasks_tab.previous_expanded, actions)
+            }
+            Group::Running => ("tasks-running", self.tasks_tab.running_expanded, Vec::new()),
+            Group::Queued => ("tasks-queued", self.tasks_tab.queued_expanded, self.queue_controls(cx)),
+        };
+        let this = cx.entity().downgrade();
+        section_heading(
+            id,
+            label,
+            expanded,
+            actions,
+            move |_, cx| {
+                this.update(cx, |this, cx| {
+                    let open = match group {
+                        Group::Previous => &mut this.tasks_tab.previous_expanded,
+                        Group::Running => &mut this.tasks_tab.running_expanded,
+                        Group::Queued => &mut this.tasks_tab.queued_expanded,
+                    };
+                    *open = !*open;
+                    cx.notify();
+                })
+                .ok();
+            },
+            cx,
+        )
     }
 
     /// Along the Queued heading: "Send next" while a lane is free, and the
@@ -1030,14 +1461,18 @@ impl PromptMode {
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.open_in_tab(Opened::Task(ix), window, cx)
             }))
-            .child(mode_bar(task.mode, cx).when(step.is_some(), |bar| bar.left(STEP_INDENT)))
-            .children(checkbox)
-            .child(div().flex_none().child(status_mark(task.status, cx)))
+            .child(row_bar(task.mode, cx).when(step.is_some(), |bar| bar.left(STEP_INDENT + ROW_BAR_LEFT)))
+            .child(column(LEAD_COLUMN, checkbox))
+            .child(column(STATUS_COLUMN, Some(status_mark(task.status, cx))))
             .children(label)
             .child(div().flex_1().min_w_0().truncate().child(first_line(&task.text)))
             .children(
                 task.took()
                     .map(|took| took_label(("tasks-tab-took", ix), took, cx)),
+            )
+            .children(
+                (previous && task.new_conversation)
+                    .then(|| new_conversation_mark(("tasks-tab-new-conversation", ix), cx)),
             );
         // Lets UI tests find the row; inert in normal builds.
         gpui_kit::TestSupportExt::test_support(row).into_any_element()
@@ -1049,7 +1484,8 @@ impl PromptMode {
     fn render_chain_row(&self, head: usize, members: &[usize], cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let steps: Vec<&PromptTask> = members.iter().filter_map(|&ix| self.tasks.get(ix)).collect();
-        let expanded = self.tasks_tab.expanded_chains.contains(&head);
+        let state = self.chain_state(members);
+        let never_sent = (state == ChainState::Over).then(|| self.never_sent(members)).flatten();
         let open = self.tasks_tab.open == Some(Opened::Task(head));
         let text = first_line(&self.tasks[head].text);
         let tip = queued_tooltip(&self.tasks[head].text);
@@ -1058,6 +1494,29 @@ impl PromptMode {
             .filter(|&place| self.added_step_task(head, place).is_none())
             .count();
         let count = steps.len() + unsent;
+        // Among the previous tasks, its checkbox selects its steps for the
+        // batch actions.
+        let checkbox = (state == ChainState::Over).then(|| {
+            let members: Vec<usize> = members.to_vec();
+            let selected = members.iter().all(|ix| self.task_history.selected.contains(ix));
+            let this = cx.entity().downgrade();
+            history_checkbox(head, selected, move |_, cx| {
+                let members = members.clone();
+                this.update(cx, |this, cx| {
+                    let history = &mut this.task_history;
+                    if selected {
+                        for ix in &members {
+                            history.selected.remove(ix);
+                        }
+                    } else {
+                        history.selected.extend(members.iter().copied());
+                    }
+                    history.last_selected = Some(head);
+                    cx.notify();
+                })
+                .ok();
+            })
+        });
         let row = h_flex()
             .id(("tasks-tab-chain", head))
             .relative()
@@ -1077,29 +1536,16 @@ impl PromptMode {
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.open_in_tab(Opened::Task(head), window, cx)
             }))
-            .child(mode_bar(Some(SendMode::Both), cx))
-            .child(
-                Button::new(("tasks-tab-chain-toggle", head))
-                    .ghost()
-                    .xsmall()
-                    .icon(if expanded {
-                        IconName::ChevronDown
-                    } else {
-                        IconName::ChevronRight
-                    })
-                    .tooltip(if expanded { "Hide its steps" } else { "Show its steps" })
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        if !this.tasks_tab.expanded_chains.remove(&head) {
-                            this.tasks_tab.expanded_chains.insert(head);
-                        }
-                        cx.notify();
-                    })),
-            )
-            .child(div().flex_none().child(status_mark(
-                chain_status(&steps, self.chain_in_progress(members)),
-                cx,
-            )))
+            .child(row_bar(Some(SendMode::Both), cx))
+            .child(column(LEAD_COLUMN, checkbox))
+            .child(column(
+                STATUS_COLUMN,
+                Some(match state {
+                    // Under way, though its step now is queued.
+                    ChainState::Running => status_mark(TaskStatus::Running, cx),
+                    ChainState::Over => status_mark(chain_status(&steps), cx),
+                }),
+            ))
             .child(div().flex_1().min_w_0().truncate().child(text))
             .child(
                 div()
@@ -1112,10 +1558,101 @@ impl PromptMode {
                         format!("{count} steps")
                     }),
             )
+            .children(never_sent.map(|what| {
+                div()
+                    .flex_none()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(what)
+            }))
             .children(
-                chain_took(&steps, self.chain_in_progress(members))
+                chain_took(&steps, state == ChainState::Running)
                     .map(|took| took_label(("tasks-tab-chain-took", head), took, cx)),
+            )
+            .children(
+                self.tasks[head]
+                    .new_conversation
+                    .then(|| new_conversation_mark(("tasks-tab-chain-new-conversation", head), cx)),
             );
+        gpui_kit::TestSupportExt::test_support(row).into_any_element()
+    }
+
+    /// A running chain's step's row, beneath the chain's: in the same
+    /// columns, its text set in further, labelled by what it does in that
+    /// step's colour, then its status, its own mark or spinner, "Queued"
+    /// with its place, or "Next", and its time. Clicking it opens the chain.
+    fn render_step_row(&self, head: usize, step: StepRow, cx: &mut Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let muted = theme.muted_foreground;
+        let (id, label, mode, status, text, note, took) = match step {
+            StepRow::Sent(ix, kind) => {
+                let task = &self.tasks[ix];
+                let (label, mode) = kind.label();
+                (
+                    ix,
+                    label,
+                    mode,
+                    Some(status_mark(task.status, cx)),
+                    first_line(&task.text),
+                    None,
+                    task.took().map(|took| took_label(("tasks-tab-step-took", ix), took, cx)),
+                )
+            }
+            StepRow::Queued(at) => {
+                let item = &self.queue[at];
+                let (label, mode) = self.queued_label(item).unwrap_or(("Step", SendMode::Code));
+                let place = div().text_xs().text_color(muted).child(format!("{}.", at + 1));
+                (
+                    self.tasks.len() + at,
+                    label,
+                    mode,
+                    Some(place.into_any_element()),
+                    first_line(&item.text),
+                    Some(format!("Queued, {} in its lane's queue", ordinal(at + 1))),
+                    None,
+                )
+            }
+            StepRow::Next(label, mode) => (
+                usize::MAX / 2 + head * 64 + label.len(),
+                label,
+                mode,
+                None,
+                first_line(&self.tasks[head].text),
+                Some("Next".to_string()),
+                None,
+            ),
+        };
+        let open = self.tasks_tab.open == Some(Opened::Task(head));
+        let row = h_flex()
+            .id(("tasks-tab-step", id))
+            .relative()
+            .flex_none()
+            .w_full()
+            .h(ROW_HEIGHT)
+            .gap_2()
+            .pl(STEP_INDENT + px(10.))
+            .pr_3()
+            .text_sm()
+            .cursor_pointer()
+            .hover(|row| row.bg(theme.list_hover))
+            .when(open, |row| row.bg(theme.list_active))
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.open_in_tab(Opened::Task(head), window, cx)
+            }))
+            .child(row_bar(Some(mode), cx).left(STEP_INDENT + ROW_BAR_LEFT))
+            .child(column(LEAD_COLUMN, None))
+            .child(column(STATUS_COLUMN, status))
+            .child(
+                div()
+                    .flex_none()
+                    .text_xs()
+                    .font_semibold()
+                    .text_color(chat_input::mode_color(mode, cx))
+                    .child(label),
+            )
+            .child(div().flex_1().min_w_0().truncate().child(text))
+            .children(note.map(|note| div().flex_none().text_xs().text_color(muted).child(note)))
+            .children(took);
         gpui_kit::TestSupportExt::test_support(row).into_any_element()
     }
 
@@ -1123,7 +1660,7 @@ impl PromptMode {
     /// it by, its place, its prompt's first line, whether it starts a new
     /// conversation, and buttons to edit it in the chat input or cancel it.
     /// Clicking one opens it here.
-    fn render_queued_rows(&self, shown: std::ops::Range<usize>, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    fn render_queued_rows(&self, shown: &[usize], cx: &mut Context<Self>) -> Vec<AnyElement> {
         let theme = cx.theme();
         let (border, muted) = (theme.border, theme.muted_foreground);
         let saved = self.queue_saved_marks();
@@ -1138,8 +1675,7 @@ impl PromptMode {
         self.queue
             .iter()
             .enumerate()
-            .skip(shown.start)
-            .take(shown.len())
+            .filter(|(ix, _)| shown.contains(ix))
             .map(|(ix, item)| {
                 let id = item.id;
                 let open = self.tasks_tab.open == Some(Opened::Queued(id));
@@ -1231,12 +1767,15 @@ impl PromptMode {
                     .when(ix + 1 == queue_len && gap == Some(queue_len), |row| {
                         row.child(drop_indicator(false, true, cx))
                     })
-                    .child(mode_bar(item.mode, cx))
+                    .child(row_bar(item.mode, cx))
                     // Dragged by its grip, which never opens it.
                     .child(
                         div()
                             .id(("queued-grip-box", ix))
                             .flex_none()
+                            .w(LEAD_COLUMN)
+                            .flex()
+                            .justify_center()
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                             .child(
                                 gpui_kit::TestSupportExt::test_support(div().id(("queued-grip", ix)))
@@ -1263,13 +1802,16 @@ impl PromptMode {
                             ),
                     )
                     // Its place in the queue, as its status.
-                    .child(
-                        div()
-                            .flex_none()
-                            .min_w_5()
-                            .text_color(muted)
-                            .child(format!("{}.", ix + 1)),
-                    )
+                    .child(column(
+                        STATUS_COLUMN,
+                        Some(
+                            div()
+                                .text_xs()
+                                .text_color(muted)
+                                .child(format!("{}.", ix + 1))
+                                .into_any_element(),
+                        ),
+                    ))
                     .children(self.queued_label(item).map(|(label, mode)| {
                         div()
                             .id(("queued-lane", ix))
@@ -1354,12 +1896,11 @@ impl PromptMode {
     /// Scrolls the tab near its edges while a queued prompt is dragged, the
     /// gap shown chosen anew each frame from the prompts now under the
     /// pointer, the first of them the column's `first` item.
-    fn queue_drag_driver(&self, first: usize, cx: &mut Context<Self>) -> Option<AnyElement> {
+    fn queue_drag_driver(&self, first: usize, listed: Rc<Vec<usize>>, cx: &mut Context<Self>) -> Option<AnyElement> {
         if self.queue.is_empty() {
             return None;
         }
         let (queue_gap, saved) = (self.queue_gap.clone(), self.queue_saved_marks());
-        let queue_len = self.queue.len();
         let scroll = self.tasks_tab.scroll.clone();
         Some(self.queue_drag_scroll.driver(
             &self.tasks_tab.scroll,
@@ -1381,7 +1922,8 @@ impl PromptMode {
                 let gap = area
                     .contains(&at)
                     .then(|| {
-                        (0..queue_len).find_map(|ix| drag_gap(ix, item(first + ix)?, at, true))
+                        (0..listed.len())
+                            .find_map(|pos| drag_gap(listed[pos], item(first + pos)?, at, true))
                     })
                     .flatten()
                     .filter(|&gap| {
@@ -1471,12 +2013,128 @@ impl PromptMode {
                             .id("tasks-tab-details")
                             .absolute()
                             .inset_0()
-                            .overflow_y_scroll(),
+                            .overflow_y_scroll()
+                            .track_scroll(&self.tasks_tab.details_scroll),
                     )
                     .children(body),
                 ),
             )
             .into_any_element()
+    }
+
+    /// The Prompt section holding `prompt`, where it was drawn kept, to
+    /// scroll back to it.
+    fn prompt_section(&self, prompt: AnyElement, cx: &mut Context<Self>) -> Div {
+        let top = self.tasks_tab.prompt_top.clone();
+        section("Prompt", cx).child(
+            div()
+                .w_full()
+                .on_prepaint(move |bounds, _, _| top.set(Some(bounds.origin.y)))
+                .child(prompt),
+        )
+    }
+
+    /// Whether the open task's prompt, laid out whole, runs past its 8
+    /// lines.
+    fn prompt_is_long(&self) -> bool {
+        self.tasks_tab.prompt_height.get() > PROMPT_LINE * CLIPPED_LINES + px(0.5)
+    }
+
+    /// An open task's prompt as typed: past 8 lines, as they wrap, its first
+    /// 8, the last fading out, with "Read more" beneath, which shows it
+    /// whole, then reads "Show less". For a queued task, `editing` it, a
+    /// click on the text shows it whole in its editor.
+    fn clipped_prompt(&self, text: SharedString, editing: Option<usize>, cx: &mut Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let (accent, background, border) = (theme.accent, theme.background, theme.border);
+        let long = self.prompt_is_long();
+        let expanded = self.tasks_tab.prompt_expanded;
+        let clipped = long && !expanded;
+        let height = self.tasks_tab.prompt_height.clone();
+        // Laid out whole, its height measured, then clipped to 8 lines.
+        let whole = div()
+            .w_full()
+            .line_height(PROMPT_LINE)
+            .whitespace_normal()
+            .on_prepaint(move |bounds, window, _| {
+                if height.get() != bounds.size.height {
+                    height.set(bounds.size.height);
+                    window.refresh();
+                }
+            })
+            .child(text);
+        let shown = gpui_kit::TestSupportExt::test_support(div().id("tasks-tab-prompt"))
+            .relative()
+            .w_full()
+            .p_2()
+            .rounded_md()
+            .border_1()
+            .border_color(border)
+            .bg(background)
+            .text_sm()
+            .child(
+                div()
+                    .w_full()
+                    .when(clipped, |text| text.max_h(PROMPT_LINE * CLIPPED_LINES).overflow_hidden())
+                    .child(whole),
+            )
+            // The last line shown fades into the background.
+            .when(clipped, |shown| {
+                shown.child(
+                    div()
+                        .absolute()
+                        .left_0()
+                        .right_0()
+                        .bottom(px(8.))
+                        .h(PROMPT_LINE)
+                        .bg(linear_gradient(
+                            180.,
+                            linear_color_stop(background.opacity(0.), 0.),
+                            linear_color_stop(background, 1.),
+                        )),
+                )
+            })
+            .when_some(editing, |shown, _| {
+                shown.cursor_text().on_click(cx.listener(|this, _, window, cx| {
+                    this.tasks_tab.prompt_editing = true;
+                    if let Some(editor) = &this.tasks_tab.editor {
+                        editor.input.update(cx, |input, cx| input.focus(window, cx));
+                    }
+                    cx.notify();
+                }))
+            });
+        let link = long.then(|| {
+            gpui_kit::TestSupportExt::test_support(h_flex().id("tasks-tab-read-more"))
+                .gap_1()
+                .text_xs()
+                .text_color(accent)
+                .cursor_pointer()
+                .child(if expanded { "Show less" } else { "Read more" })
+                .child(
+                    Icon::new(if expanded { IconName::ChevronUp } else { IconName::ChevronDown })
+                        .xsmall()
+                        .text_color(accent),
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_prompt_clip(cx)))
+        });
+        v_flex().w_full().gap_1().child(shown).children(link).into_any_element()
+    }
+
+    /// Shows the open task's prompt whole, or clips it again, scrolling the
+    /// details back to the Prompt section if they had scrolled past it.
+    fn toggle_prompt_clip(&mut self, cx: &mut Context<Self>) {
+        self.tasks_tab.prompt_expanded = !self.tasks_tab.prompt_expanded;
+        if !self.tasks_tab.prompt_expanded {
+            let scroll = &self.tasks_tab.details_scroll;
+            if let Some(top) = self.tasks_tab.prompt_top.get() {
+                let view_top = scroll.bounds().origin.y;
+                if top < view_top {
+                    let offset = scroll.offset();
+                    scroll.set_offset(point(offset.x, (offset.y + (view_top - top)).min(px(0.))));
+                }
+            }
+        }
+        cx.notify();
     }
 
     /// An open task that has run, or is running: as it was sent, its
@@ -1485,14 +2143,14 @@ impl PromptMode {
         let task = &self.tasks[ix];
         let theme = cx.theme();
         let muted = theme.muted_foreground;
-        let mut glance = section("At a glance", cx).child(figure(
-            "Status",
+        // Its status and how long it took, on one line, first.
+        let status = section("Status", cx).child(
             h_flex()
                 .gap_2()
                 .child(task.status.tag(cx))
                 .children(task.took().map(|took| took_label(("tasks-tab-status-took", ix), took, cx))),
-            cx,
-        ));
+        );
+        let mut glance = section("Details", cx);
         glance = glance.child(figure("Lane", lane_label(task.mode), cx));
         glance = glance.child(figure(
             "Conversation",
@@ -1546,18 +2204,8 @@ impl PromptMode {
             &task.sent.attached_images,
             &task.sent.attached_files,
         );
-        let prompt = section("Prompt", cx)
-            .child(
-                gpui_kit::TestSupportExt::test_support(div().id("tasks-tab-prompt"))
-                    .w_full()
-                    .p_2()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(theme.border)
-                    .text_sm()
-                    .whitespace_normal()
-                    .child(task.text.clone()),
-            )
+        let prompt = self
+            .prompt_section(self.clipped_prompt(task.text.clone(), None, cx), cx)
             .children(attached.map(|line| div().text_xs().text_color(muted).child(line)));
         // Its parameters, read as they were sent.
         let parameters = section("Parameters", cx)
@@ -1640,15 +2288,16 @@ impl PromptMode {
                         this.edit_and_resend(ix, window, cx)
                     })),
             );
-        let mut sections = vec![
-            glance.into_any_element(),
-            prompt.into_any_element(),
-            parameters.into_any_element(),
-            section("Actions", cx).child(actions).into_any_element(),
-        ];
+        // Status, its prompt, a chain's steps, then the rest.
+        let mut sections = vec![status.into_any_element(), prompt.into_any_element()];
         if task.sent.mode == Some(SendMode::Both) {
             sections.push(self.render_chain_steps(ix, cx));
         }
+        sections.extend([
+            glance.into_any_element(),
+            parameters.into_any_element(),
+            section("Actions", cx).child(actions).into_any_element(),
+        ]);
         sections
     }
 
@@ -1665,18 +2314,16 @@ impl PromptMode {
         let saving = fields.is_none();
         let mode = fields.as_ref().map(|fields| fields.mode).or(item.mode);
         let agent = crate::agent::of_project(self.project_dir.as_deref());
-        let mut glance = section("At a glance", cx)
-            .child(figure(
-                "Status",
-                if self.tasks_tab.drafts.contains(&id) {
-                    "Queued, waiting for Send"
-                } else if saving {
-                    "Saving…"
-                } else {
-                    "Queued, held while open"
-                },
-                cx,
-            ))
+        let status = section("Status", cx).child(
+            div().text_sm().child(if self.tasks_tab.drafts.contains(&id) {
+                "Queued, waiting for Send"
+            } else if saving {
+                "Saving…"
+            } else {
+                "Queued, held while open"
+            }),
+        );
+        let mut glance = section("Details", cx)
             .child(figure("Lane", lane_label(mode), cx))
             .child(figure("Place in queue", format!("{} of {}", place + 1, self.queue.len()), cx))
             .child(figure(
@@ -1711,7 +2358,17 @@ impl PromptMode {
                     .child(Textarea::new(&editor.input))
                     .into_any_element()
             });
-        let mut prompt = section("Prompt", cx).children(editor);
+        // Shown as text, clipped while long, until clicked into to be
+        // edited, shown whole in its editor.
+        let text = fields.as_ref().map(|fields| fields.text.clone()).unwrap_or_default();
+        let editor = match editor {
+            Some(editor) if !self.tasks_tab.prompt_editing => {
+                let _ = editor;
+                Some(self.clipped_prompt(text.into(), Some(id), cx))
+            }
+            editor => editor,
+        };
+        let mut prompt = self.prompt_section(div().w_full().children(editor).into_any_element(), cx);
         if let Some(fields) = &fields {
             for (ix, text) in fields.attached.text.iter().enumerate() {
                 prompt = prompt.child(attachment_row(
@@ -1918,15 +2575,16 @@ impl PromptMode {
                 })),
         );
         let _ = window;
-        let mut sections = vec![
-            glance.into_any_element(),
-            prompt.into_any_element(),
-            parameters.into_any_element(),
-            section("Actions", cx).child(actions).into_any_element(),
-        ];
+        // Status, its prompt, a chain's steps, then the rest.
+        let mut sections = vec![status.into_any_element(), prompt.into_any_element()];
         if mode == Some(SendMode::Both) {
             sections.push(self.render_queued_chain_note(cx));
         }
+        sections.extend([
+            glance.into_any_element(),
+            parameters.into_any_element(),
+            section("Actions", cx).child(actions).into_any_element(),
+        ]);
         sections
     }
 
@@ -2321,7 +2979,7 @@ impl PromptMode {
                 .py_1()
                 .pl(px(10.))
                 .relative()
-                .child(mode_bar(Some(step.mode), cx))
+                .child(row_bar(Some(step.mode), cx))
                 .child(
                     h_flex()
                         .w_full()
@@ -2488,24 +3146,38 @@ mod tests {
     /// The list is clamped to its ends in whole device pixels, scrolls only
     /// once it overflows by a whole pixel, and stays at its bottom as it
     /// grows once left there.
+    /// A day reads "Today", "Yesterday", its weekday within the past week,
+    /// else its date, with the year once it isn't this one.
+    #[test]
+    fn days_are_labelled_from_today() {
+        use super::day_label;
+        let day = |y, m, d| chrono::NaiveDate::from_ymd_opt(y, m, d).unwrap();
+        let today = day(2026, 10, 11);
+        assert_eq!(day_label(today, today), "Today");
+        assert_eq!(day_label(day(2026, 10, 10), today), "Yesterday");
+        assert_eq!(day_label(day(2026, 10, 6), today), "Tuesday");
+        assert_eq!(day_label(day(2026, 10, 3), today), "3 October");
+        assert_eq!(day_label(day(2025, 9, 28), today), "28 September 2025");
+    }
+
     #[test]
     fn the_list_stays_within_its_ends() {
         // Past the top, or past the bottom, it is at that end.
-        assert_eq!(clamped_top(px(40.), px(280.), px(100.), 2., None), (px(0.), false, (true, false)));
-        assert_eq!(clamped_top(px(-500.), px(280.), px(100.), 2., None), (px(180.), true, (false, true)));
+        assert_eq!(clamped_top(px(40.), px(280.), px(100.), 2., None, false), (px(0.), false, (true, false)));
+        assert_eq!(clamped_top(px(-500.), px(280.), px(100.), 2., None, false), (px(180.), true, (false, true)));
         // Whole device pixels: halves at a scale of 2, wholes at 1.
-        assert_eq!(clamped_top(px(-10.3), px(280.), px(100.), 2., None).0, px(10.5));
-        assert_eq!(clamped_top(px(-10.3), px(280.), px(100.), 1., None).0, px(10.));
+        assert_eq!(clamped_top(px(-10.3), px(280.), px(100.), 2., None, false).0, px(10.5));
+        assert_eq!(clamped_top(px(-10.3), px(280.), px(100.), 1., None, false).0, px(10.));
         // An end short of a whole device pixel stops at the pixel before.
-        assert_eq!(clamped_top(px(-500.), px(280.4), px(100.), 1., None).0, px(180.));
+        assert_eq!(clamped_top(px(-500.), px(280.4), px(100.), 1., None, false).0, px(180.));
         // Overflowing by less than a pixel, it doesn't scroll at all.
-        assert_eq!(clamped_top(px(-0.6), px(100.6), px(100.), 2., None), (px(0.), false, (true, true)));
+        assert_eq!(clamped_top(px(-0.6), px(100.6), px(100.), 2., None, false), (px(0.), false, (true, true)));
         // Left at its bottom, it stays there as rows are added; scrolled
         // since, it stays where it was scrolled to.
         let left = Some((px(-180.), true));
-        assert_eq!(clamped_top(px(-180.), px(336.), px(100.), 2., left).0, px(236.));
-        assert_eq!(clamped_top(px(-150.), px(336.), px(100.), 2., left).0, px(150.));
+        assert_eq!(clamped_top(px(-180.), px(336.), px(100.), 2., left, false).0, px(236.));
+        assert_eq!(clamped_top(px(-150.), px(336.), px(100.), 2., left, false).0, px(150.));
         // At its top, it stays at its top.
-        assert_eq!(clamped_top(px(0.), px(336.), px(100.), 2., Some((px(0.), false))).0, px(0.));
+        assert_eq!(clamped_top(px(0.), px(336.), px(100.), 2., Some((px(0.), false)), false).0, px(0.));
     }
 }

@@ -1,0 +1,4 @@
+- [An open task takes the Tasks tab's place, with a back arrow and its mode and name along its top](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [An open task shows its figures at a glance, its prompt, its parameters, and its actions](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [An open Chain task lists its steps beneath its parameters, with Add step](.claude/reference/ui/components/right-sidebar/tasks/index.md#chain-steps)
+- [An open task shows Status, then Prompt, then Steps, then Details, Parameters, and Actions](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)

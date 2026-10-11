@@ -1,0 +1,8 @@
+- [Past 8 lines, as they wrap at the tab's width, the Prompt section shows its first 8, the last fading into the section's background](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [A clipped prompt has a "Read more" link beneath, in the accent, with a down chevron](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [Clicking it shows the whole prompt, the link reading "Show less" with an up chevron, which clips it again](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [Clipping again scrolls the tab back to the Prompt section if it had scrolled past it](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [A prompt of 8 lines or fewer shows whole, with no link](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [It starts clipped each time a task is opened](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [Clicking into a queued task's prompt to edit it shows it whole, clipped again once the task is opened afresh](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [Attachments are listed beneath either way; copying or editing takes the whole prompt](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)

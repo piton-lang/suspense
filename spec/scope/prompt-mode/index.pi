@@ -96,7 +96,15 @@ shape PromptEditorShape:
         button with a filter icon at the right of the Previous group's
         heading in the Tasks tab, shown while the group holds a task, reading
         "Filter", or, while any filter is on, how many are, as "Filter · 2",
-        in the theme's accent. Clicking it opens a menu beneath it, one
+        in the theme's accent. Active, it stands out more than when no
+        filter is on, never less: its icon and label are the accent at full
+        strength, on a faint tint of the accent behind the button, about a
+        sixth of its strength, as a selected ghost button is, readable in
+        light and dark mode, never dimmed, faded, or drawn as disabled, and
+        never taking the muted colour of the heading it sits in. With no
+        filter on, it reads "Filter" in the theme's ordinary text colour,
+        as any ghost button does. Hovering it, filters on or off, shows the
+        usual hover over it. Clicking it opens a menu beneath it, one
         column, never wider than the sidebar, holding two sections, each
         headed by a small muted label, "Mode" and "Other mode", their
         options one per line, each with a checkbox, and the menu stays open
@@ -127,8 +135,8 @@ shape PromptEditorShape:
         Filtering only hides tasks from the list; it changes nothing about
         them. A chain whose steps are hidden in part keeps its parent row
         above the steps still shown, and is hidden with its parent only when
-        none of its steps shows. Session dividers show only above a session
-        with a task shown. The row's count still counts every previous task,
+        none of its steps shows. Day dividers show only above a day with a
+        task shown, as the @{TasksTabScope} says. The row's count still counts every previous task,
         and while any option is checked, the Previous group's heading, after
         its count, reads " · N shown", N counting the previous tasks the
         filters show. A hidden task
@@ -186,32 +194,49 @@ shape PromptEditorShape:
         @{PromptModesScope} colours it, a little more strongly than a single
         task's tint: a joined chain icon, the first line of the prompt, and at
         its right how many steps it has, "2 steps" or "3 steps". Its status is
-        the chain's as a whole, never only that of its latest step: a chain
-        is in progress from when it is sent until its last step is over, so
-        it reads Running, with its spinner and its time counting, while any
-        step is building, compiling, or running, while a step waits in its
-        lane's queue, and while a step has finished Done and the chain has a
-        step still to send, its code step, a spec follow-up it asks for, or a
-        step added to it, between the one finishing and the next being sent.
-        A step finishing Done never shows the chain as Done while another is
-        still to come. Only once no step is under way, queued, or still to be
-        sent is it over: Failed or Cancelled if a step was, and Done
-        otherwise. While it is in progress, it is listed with the running
-        tasks, in the Running group of the right sidebar's Tasks tab, with
-        all its steps, done and to come, beneath it, never among the
-        previous tasks, and it goes among them only once it is over. It has
+        the chain's as a whole, worked out only from its steps as they
+        actually are, never from what the chain might still do: Running,
+        with its spinner and its time counting, while one of its steps is
+        building, compiling, or running now, in this project's runs, and
+        while one of its steps waits in a lane's queue after an earlier step
+        of it has run, as its code step queued behind another task once its
+        spec step is done: the chain is under way, though that step is
+        queued. It reads Queued, in the theme's muted colour, only while it
+        hasn't started, its first step still waiting in the queue and none
+        of its steps run yet. Otherwise it is over, whether or
+        not it ever sent every step it might have: Failed or Cancelled if a
+        step was, and otherwise its last step's own status, Done, or Not
+        recorded for one with no record of its run. A chain whose later
+        step was never sent, as one from before chains sent them or one
+        whose application closed between its steps, is over, its parent
+        saying muted after its step count that its code step was never sent,
+        and never reads Running for it.
+
+        Each step's state is read from where it truly is: a step is running
+        only while the application has its run under way, which no step
+        from the history ever does after a restart, since every run ends
+        when the application quits; queued only while its prompt is in the
+        queue; and otherwise from its own history record, a step with no
+        record of its run reading Not recorded, never Running. Steps are
+        joined to their chain only by which step each was sent from, as
+        below, so a task never takes the state of a chain it doesn't belong
+        to, and a chain never counts a task that isn't one of its steps.
+
+        While a chain is Running, it is listed in the Running group of the
+        right sidebar's Tasks tab, expanded, as the @{TasksTabScope} says; while
+        Queued, in the Queued group; and once over, among the previous
+        tasks. It has
         no checkbox, Resend, or Send to the other mode of its own, and
         clicking it doesn't open anything.
 
-        Beneath it, each step stays an item of its own, exactly as any
-        previous task is, with its checkbox, status, Resend, and whatever
-        else a task offers, opening onto its own prompt, table, and changed
-        files. The steps are indented from the parent, joined to it by a
-        thin line in the Chain colour down their left, from the parent's
-        heading to the last step, and each is labelled by what it did,
+        In the right sidebar's Tasks tab, a chain is one row, as the
+        @{TasksTabScope} says, never expanded in the list. Its steps are
+        shown once it is opened, each as an item of its own, with its
+        status, Resend, and whatever else a task offers, opening onto its
+        own prompt, table, and changed files, labelled by what it did,
         "Spec", "Code", or "Spec follow-up", in that step's mode colour,
-        before its prompt, which leaves out the prompt's first line when it
-        is the parent's. They are listed in the order they ran.
+        listed in the order they ran. Selecting a chain's row selects its
+        steps for the batch actions.
 
         A chain is listed where its first step was sent, oldest first like
         every other item; tasks sent while it ran, such as questions or tasks
@@ -223,8 +248,8 @@ shape PromptEditorShape:
         a step still running shows as it would anywhere. When the latest
         task, heading the view, is a step of a chain, that chain's earlier
         steps are still grouped under its parent in the list, the parent
-        saying the rest is the latest task. A session divider never falls
-        between a chain's steps: it goes above the chain's parent. A step
+        saying the rest is the latest task. A chain is listed under the day its first
+        step was sent, whatever day its later steps ran. A step
         from the history whose chain can't be worked out, as when the step
         it was sent from is missing, is listed as a task of its own.
 

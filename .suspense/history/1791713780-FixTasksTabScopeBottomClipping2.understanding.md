@@ -1,0 +1,6 @@
+- [Scrolled to its bottom, the last row shows whole, its bottom edge at the bottom of the tab's visible area, never cut by a pixel](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Beneath the last row is only the list's own bottom padding of 8 pixels](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [The list's height is the sum of its rows, headings, and day dividers, plus that padding, in the device pixels the rows are drawn at](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Its scrollable height is that less the height of the area beneath the sidebar's tab row, never the sidebar's whole height](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [A sticky heading covers the list's top, never its bottom](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [However the tab is resized, the bottom is worked out anew in that frame](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)

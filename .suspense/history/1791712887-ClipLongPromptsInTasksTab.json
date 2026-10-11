@@ -1,0 +1,5282 @@
+{
+  "userPrompt": "I really long prompt in the [TasksTabScope](.claude/reference/ui/components/right-sidebar/tasks/index.md#tasks-tab-scope) details mode should be clipped at maybe like 5-10 lines with a \"Read More\" expander.",
+  "harness": "claude",
+  "systemPrompt": "We're working in a project whose spec is compiled to .claude/reference, which is where to read it. Each prompt starts with a <task-instructions> block saying what that prompt is for and what it may change. Follow the block at the top of the prompt you are answering; an earlier prompt's block no longer applies.\n\nIts spec's Piton source, in ./spec, is only where edits to the spec go.\n\nRead the spec from its compiled reference under .claude/reference, where inheritance, expressions, and links are already resolved, or, for one thing, from what `piton slice` prints for it with this harness's adapter.\n\nNever read the .pi source under ./spec to learn what the spec says; that is only where edits to the spec go.\n\nRead only what the change depends on, and start the work as soon as you have. Links to .claude/reference/... in the prompt are the spec for what they name: read those, and then only the pages they link to that the change actually depends on. Don't survey the spec, list its folders, or search it before you start. A page the prompt already gives you as a slice is already read: never read it again. Don't re-read anything you've already read.",
+  "instructions": "We're working on both the spec and the code, as a chain. This first step changes the spec only, located in ./spec; the code is changed in the next step.\n\nWrite the spec so it describes the application as it should be once the prompt is met, and constrains the code. Once you finish, the spec will be built and the same prompt sent to a coding agent, with your reply, to change the code to match it; so end your reply by saying what you changed in the spec and which anchors the code should follow.\n\nWhen the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.\n\nBefore creating or editing any .pi file, read .suspense/fluency.md once in this conversation, unless you already have: it is how Piton is written.\n\nOpen a .pi file only to change it. Once you have changed the spec, run `piton check` and fix every error it reports, then run `piton build` and check the result in the refreshed reference under .claude/reference, not by reading the source again. Never finish with a spec that `piton check` or `piton build` reports errors in.\n\nOnce you have read what the change depends on, and before your first change, write the constraints this task must meet to .suspense/history/1791712887-ClipLongPromptsInTasksTab.understanding.md, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.\n\nEnd with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.",
+  "resumed": true,
+  "resumedFrom": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+  "output": [
+    {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "/home/hyphyphyph/piton/repl",
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "tools": [
+        "Task",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "ListAgents",
+        "Monitor",
+        "NotebookEdit",
+        "PushNotification",
+        "Read",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write"
+      ],
+      "mcp_servers": [],
+      "model": "claude-opus-5-5",
+      "permissionMode": "auto",
+      "slash_commands": [
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "plugin-authoring",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "output-style",
+        "context",
+        "effort",
+        "fast",
+        "focus",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "skill-doctor",
+        "goal",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "terminal_slash_commands": [
+        "doctor",
+        "color",
+        "focus",
+        "reload-plugins"
+      ],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.296",
+      "output_style": "default",
+      "agents": [
+        "claude",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
+      "skills": [
+        "deep-research",
+        "design",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "plugin-authoring",
+        "anthropic-skills:built-in-browser",
+        "anthropic-skills:chrome-browser",
+        "anthropic-skills:computer-use",
+        "anthropic-skills:deep-research",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:google-workspace",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx"
+      ],
+      "plugins": [
+        {
+          "name": "cc-plugin-agents-md",
+          "path": "builtin",
+          "source": "cc-plugin-agents-md@builtin"
+        },
+        {
+          "name": "cc-plugin-telemetry",
+          "path": "builtin",
+          "source": "cc-plugin-telemetry@builtin"
+        },
+        {
+          "name": "cc-plugin-plugin-authoring",
+          "path": "builtin",
+          "source": "cc-plugin-plugin-authoring@builtin"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "interrupt_send_now_v1",
+        "msg_lifecycle_v1",
+        "request_marker_lists_v1",
+        "sdk_mcp_tools_list_changed",
+        "sdk_mcp_manifests",
+        "mcp_read_resource_v1",
+        "mcp_tool_ui_meta_v1",
+        "ui_surface_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "4dd9a099-694d-4833-a307-144183abf884",
+      "memory_paths": {
+        "auto": "/home/suspense/.claude/projects/-workspace/memory/"
+      },
+      "messaging_socket_path": "/tmp/cc-socks/1.sock",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "per_turn_effort_active": true,
+      "view_mode": "default"
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "uuid": "2e30bdda-1e50-496b-9ff9-1fbd2272be1c"
+    },
+    {
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<task-instructions>\nWe're working on both the spec and the code, as a chain. This first step changes the spec only, located in ./spec; the code is changed in the next step.\n\nWrite the spec so it describes the application as it should be once the prompt is met, and constrains the code. Once you finish, the spec will be built and the same prompt sent to a coding agent, with your reply, to change the code to match it; so end your reply by saying what you changed in the spec and which anchors the code should follow.\n\nWhen the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.\n\nBefore creating or editing any .pi file, read .suspense/fluency.md once in this conversation, unless you already have: it is how Piton is written.\n\nOpen a .pi file only to change it. Once you have changed the spec, run `piton check` and fix every error it reports, then run `piton build` and check the result in the refreshed reference under .claude/reference, not by reading the source again. Never finish with a spec that `piton check` or `piton build` reports errors in.\n\nOnce you have read what the change depends on, and before your first change, write the constraints this task must meet to .suspense/history/1791712887-ClipLongPromptsInTasksTab.understanding.md, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.\n\nEnd with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.\n</task-instructions>\n\nI really long prompt in the [TasksTabScope](.claude/reference/ui/components/right-sidebar/tasks/index.md#tasks-tab-scope) details mode should be clipped at maybe like 5-10 lines with a \"Read More\" expander."
+          }
+        ]
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "ff87d4c8-5563-45dd-bad9-096ef712c278",
+      "timestamp": "2026-10-11T10:01:57.962Z",
+      "isReplay": true
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011CfvFsr868KpfMkvreiyf1",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 1046,
+            "cache_read_input_tokens": 446254,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1046
+            },
+            "output_tokens": 16,
+            "service_tier": "standard",
+            "inference_geo": "global"
+          },
+          "input_transformations": [
+            {
+              "type": "thinking_dropped",
+              "path": "messages.2.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.5.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.11.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.14.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.20.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.29.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.35.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.44.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.47.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.56.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.59.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.65.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.80.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.86.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.89.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.92.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.98.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.101.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.110.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.119.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.125.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.131.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.140.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.146.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.149.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.152.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.155.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.164.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.167.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.173.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.176.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.182.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.185.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.188.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.200.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.206.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.209.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.215.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.221.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.233.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.236.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.242.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.257.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.263.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.266.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.269.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.275.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.278.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.290.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.296.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.323.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.329.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.335.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.338.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.344.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.347.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.359.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.374.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.380.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.389.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.398.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.404.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.407.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.410.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.413.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.425.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.434.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.440.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.449.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.455.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.458.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.467.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.470.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.476.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.488.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.494.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.506.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.518.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.533.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.536.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.542.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.548.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.557.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.578.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.581.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.590.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.602.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.611.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.614.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.620.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.626.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.644.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.662.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.677.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.725.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.788.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.794.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.800.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.809.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.812.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.815.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.818.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.821.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.824.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.830.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.833.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.836.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.842.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.845.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.851.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.860.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.863.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.890.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.893.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.899.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.902.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.914.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.923.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.938.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.962.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.971.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.977.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.995.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.1001.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.1010.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.1013.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.1019.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.1031.content.0",
+              "reason": "prefix_binding_mismatch"
+            },
+            {
+              "type": "thinking_dropped",
+              "path": "messages.1040.content.0",
+              "reason": "prefix_binding_mismatch"
+            }
+          ],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "fd4692c3-1fe7-4611-81db-38dcdaa2b5d8",
+      "ttft_ms": 2626,
+      "thinking_display": "updates",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "tool_use",
+          "id": "toolu_01AGFi2C9nNyXcPwkQPRSzDr",
+          "name": "Bash",
+          "input": {},
+          "caller": {
+            "type": "direct"
+          }
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "1fdf3b93-4be7-40c5-a7a8-1645915aae72",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ""
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "eaaaa417-64e6-4d14-9d1a-902081a94389",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "{\"command\": \"cd /worksp"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "1cd0e44a-f965-442e-82be-40cd180e83f0",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ace; cat > .susp"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "80cc2bf0-b51a-45e6-8a5f-c29ce4c6b4ef",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ense/history/1791712887"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "91d8f706-b110-4b55-a778-a7b873ade5e5",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "-ClipLongProm"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "d50b96a8-0d47-4542-aaf9-6870393df463",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ptsInTasksTab"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "9106294d-5c95-48a6-9f52-bfbdaea5122f",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ".understanding."
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "bf517878-56c1-4bef-aa9d-3628949c1179",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "md <<'EOF'"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "01de42f2-ead9-4a21-9a46-0dc9a2880357",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n- [An open task shows"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "42df18d8-4568-4c83-89de-298f0656cd9d",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " Status, then Prompt"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "4d317535-5ee6-47e7-8827-b244f8266a35",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ", then Steps,"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "d7052a58-f9d3-43b4-b42d-e5ab56c2ba67",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " Details, Parameters, and"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c26d1218-0f12-4565-8552-0c40582c4725",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " Actions](.claude/"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "aa74015b-97ff-4cf1-8aef-cc13987126de",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "reference/ui/components/"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c4775bfc-3015-4349-b566-a02fbca5534b",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "right-sidebar/t"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "32936d60-fa6d-42d0-843c-f55ab097318d",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "asks/index.md#details"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "7f3d8867-b59e-4f17-bd81-7b78faf01929",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ")\\n- [The Promp"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "d56cb8e0-b7f5-4888-8c0a-2341d2c5cac1",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "t section shows the"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "6db9a086-f3e7-4fdd-b011-f978ac7e285a",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " prompt as typed in"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "69b3c22d-e955-4c56-a057-d871008b531c",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " a GrowingTextIn"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "057a6dec-ecf7-4083-89b4-6b879fb51dd2",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "putScope, with its attach"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "ce71e94c-ebb9-4f3b-8231-36b29af93b9a",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ments beneath](.claude"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "328ad064-39eb-4ca1-b9e3-9b5ad706c5e9",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/reference/ui/components"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "00ec70b2-c540-4453-9f71-d68a420629d7",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/right-sidebar/"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "89590e6f-2883-4429-bd57-1de28d8e943b",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "tasks/index.md#"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "f40325ac-9822-4401-ad89-ce43ace22553",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "details)\\n- [A queued"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "4a6d5256-280c-4df0-a38e-09ec42af682b",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " task's prompt can be typ"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "a9016a46-7518-4e3a-9bd1-e6fa329585ff",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ed in right there;"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "8345feea-b55c-4c2a-84aa-39d895d8ea72",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " one that has run re"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "426dc47c-00e4-472b-a914-abcba33fa54d",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ads as it was s"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "2703b1cd-12e4-4de2-9a23-2c54e1135130",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ent](.claude/reference"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "43f69361-810f-481b-8440-f8d092bede55",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/ui/components/right-"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "15fd2438-ce9b-43ab-b71e-c782654f5fed",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "sidebar/tasks"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "3743e012-4012-45c8-9a3c-2113cdd689df",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/index.md#details)"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "fd7d5bbe-9bd5-4685-93c0-088038d699e3",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\nE"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "18aa5d03-aea9-4cad-a646-d84c6d8ef088",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "OF\\nf=spec/"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "5226af85-98c2-490c-9469-fee920760cd2",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ui/components/right-s"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "b88b54db-e697-465a-b6b5-22a61ee06ad7",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "idebar/tasks/"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "5502227f-8478-4871-8a5c-9ecef7d0b8a9",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "index.pi; grep -"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "db91d091-80b7-4a39-a89f-8c6f0698607b",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "n \\\"^"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "43305f07-16fa-490e-9b89-9c5501022c03",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "        A queued task is edited"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "8388c938-afe5-44c6-864b-cdd6b9e57f06",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " right there\\\" $f"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "7918a939-26db-41df-8156-0f1240db76e6",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\"}"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "2382efaa-0543-4f03-ac07-073c172b4fd8",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CfvFsr868KpfMkvreiyf1",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "toolu_01AGFi2C9nNyXcPwkQPRSzDr",
+            "name": "Bash",
+            "input": {
+              "command": "cd /home/hyphyphyph/piton/repl; cat > .suspense/history/1791712887-ClipLongPromptsInTasksTab.understanding.md <<'EOF'\n- [An open task shows Status, then Prompt, then Steps, Details, Parameters, and Actions](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)\n- [The Prompt section shows the prompt as typed in a GrowingTextInputScope, with its attachments beneath](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)\n- [A queued task's prompt can be typed in right there; one that has run reads as it was sent](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)\nEOF\nf=spec/ui/components/right-sidebar/tasks/index.pi; grep -n \"^        A queued task is edited right there\" $f"
+            },
+            "caller": {
+              "type": "direct"
+            }
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1046,
+          "cache_read_input_tokens": 446254,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 1046
+          },
+          "output_tokens": 16,
+          "service_tier": "standard",
+          "inference_geo": "global"
+        },
+        "input_transformations": [
+          {
+            "type": "thinking_dropped",
+            "path": "messages.2.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.5.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.11.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.14.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.20.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.29.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.35.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.44.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.47.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.56.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.59.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.65.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.80.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.86.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.89.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.92.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.98.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.101.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.110.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.119.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.125.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.131.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.140.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.146.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.149.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.152.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.155.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.164.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.167.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.173.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.176.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.182.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.185.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.188.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.200.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.206.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.209.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.215.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.221.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.233.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.236.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.242.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.257.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.263.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.266.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.269.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.275.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.278.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.290.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.296.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.323.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.329.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.335.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.338.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.344.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.347.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.359.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.374.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.380.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.389.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.398.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.404.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.407.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.410.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.413.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.425.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.434.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.440.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.449.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.455.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.458.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.467.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.470.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.476.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.488.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.494.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.506.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.518.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.533.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.536.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.542.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.548.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.557.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.578.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.581.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.590.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.602.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.611.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.614.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.620.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.626.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.644.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.662.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.677.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.725.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.788.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.794.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.800.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.809.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.812.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.815.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.818.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.821.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.824.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.830.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.833.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.836.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.842.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.845.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.851.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.860.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.863.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.890.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.893.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.899.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.902.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.914.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.923.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.938.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.962.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.971.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.977.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.995.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.1001.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.1010.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.1013.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.1019.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.1031.content.0",
+            "reason": "prefix_binding_mismatch"
+          },
+          {
+            "type": "thinking_dropped",
+            "path": "messages.1040.content.0",
+            "reason": "prefix_binding_mismatch"
+          }
+        ],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "uuid": "7b900df0-9105-42fe-8b9b-9f35f814ab5c",
+      "timestamp": "2026-10-11T10:02:02.940Z",
+      "request_id": "req_011CfvFsm9CWf854VzGxDyLm",
+      "wire_tool_inputs": {
+        "toolu_01AGFi2C9nNyXcPwkQPRSzDr": {
+          "command": "cd /home/hyphyphyph/piton/repl; cat > .suspense/history/1791712887-ClipLongPromptsInTasksTab.understanding.md <<'EOF'\n- [An open task shows Status, then Prompt, then Steps, Details, Parameters, and Actions](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)\n- [The Prompt section shows the prompt as typed in a GrowingTextInputScope, with its attachments beneath](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)\n- [A queued task's prompt can be typed in right there; one that has run reads as it was sent](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)\nEOF\nf=spec/ui/components/right-sidebar/tasks/index.pi; grep -n \"^        A queued task is edited right there\" $f"
+        }
+      }
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "322892ac-ee6b-4fa6-9acd-032a47a49ba4",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {
+                  "toolu_01AGFi2C9nNyXcPwkQPRSzDr": {
+                    "type": "evaluated",
+                    "outcome": "not_flagged"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 1046,
+          "cache_read_input_tokens": 446254,
+          "output_tokens": 339,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 339,
+              "cache_read_input_tokens": 446254,
+              "cache_creation_input_tokens": 1046,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 1046
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "e8abe698-6b0c-4739-b5a6-922e5ddfdc6c",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "9f2afc53-e681-4a60-8ed7-fd24f3affa85",
+      "api_message_id": "msg_011CfvFsr868KpfMkvreiyf1"
+    },
+    {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed_warning",
+        "resetsAt": 1791918000,
+        "rateLimitType": "seven_day",
+        "utilization": 0.85,
+        "overageStatus": "rejected",
+        "overageDisabledReason": "out_of_credits",
+        "isUsingOverage": false,
+        "surpassedThreshold": 0.75,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.17,
+            "resetsAt": 1791718800
+          },
+          "seven_day": {
+            "utilization": 0.85,
+            "resetsAt": 1791918000
+          }
+        },
+        "overageEnabled": true
+      },
+      "uuid": "988af5c2-faae-48f0-98cd-fdf7c7a7144d",
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f"
+    },
+    {
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "tool_use_id": "toolu_01AGFi2C9nNyXcPwkQPRSzDr",
+            "type": "tool_result",
+            "content": "169:        A queued task is edited right there: its prompt can be typed in, its",
+            "is_error": false
+          }
+        ]
+      },
+      "parent_tool_use_id": null,
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "uuid": "3e5c98d0-824a-4ec0-8ca6-98c9a09d4c5b",
+      "timestamp": "2026-10-11T10:02:03.658Z",
+      "tool_use_result": {
+        "stdout": "169:        A queued task is edited right there: its prompt can be typed in, its",
+        "stderr": "",
+        "interrupted": false,
+        "isImage": false,
+        "noOutputExpected": false
+      },
+      "tool_result_meta": [
+        {
+          "id": "toolu_01AGFi2C9nNyXcPwkQPRSzDr",
+          "permission_decision": {
+            "decision": "accept",
+            "source": "config",
+            "reason_type": "classifier"
+          }
+        }
+      ]
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "uuid": "44fc9438-b9e0-4905-b215-08736ea8f40a"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011CfvFt9358igMDCqqNEtJ9",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 392,
+            "cache_read_input_tokens": 447300,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 392
+            },
+            "output_tokens": 16,
+            "service_tier": "standard",
+            "inference_geo": "global"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "4d0cc0d4-4a43-4856-97b9-39a9de3d3472",
+      "ttft_ms": 890,
+      "thinking_display": "updates",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "tool_use",
+          "id": "toolu_01Gc6JddWd3cydHzSqSZDSDy",
+          "name": "Bash",
+          "input": {},
+          "caller": {
+            "type": "direct"
+          }
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "523c12b7-aa1a-4aa5-bc53-bd2bd56821d2",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ""
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "43a50827-0842-42d3-96e6-b9cb7f071bf9",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "{\"command\": \"cd /worksp"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "27633cfd-0a90-4c8a-bf0e-41e381c115cc",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ace; f=spec/"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "4dbc267d-d190-4b57-b426-eb6e1554c50f",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ui/components/right-sid"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "914e09ec-2d00-4749-a57d-b4bb72f6d12f",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ebar/tasks/index"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "721cb592-bc16-44bc-b958-c2f35eb52af5",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ".pi; head -168 "
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "28150e16-c420-4e8a-9faf-677a0e056d65",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "$f > /tmp/"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "113bd187-0aea-4447-b145-7d7830291c45",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "x; cat >> /t"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "707c4726-4ba2-454b-a6f3-53fe46cd7fd3",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "mp/x <<'E"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "45ac434d-8e5f-4b3c-83d4-d90b532c797f",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "OF'\\n        A long pr"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "db385c0f-7db4-4a0e-8765-b0b3784b75ac",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ompt is clipped:"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "d0da366a-df32-4375-9295-f1de63ce3707",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " past"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "844251ab-5f75-45fd-afc8-30b161ae0d35",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " 8 lines, as"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "8fc33479-7e52-48fb-8eca-73e03ecea4ba",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " they wrap at"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "9918bb8a-00b2-4839-ae7b-7e936e3a7e79",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " the t"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "21948925-16b6-4734-a9bd-ab1b7d5d760f",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ab's\\n        width, the"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "19f830bd-ab90-486d-a733-b7b7ec15d25f",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " Prompt section shows its"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "8185d12b-ed9e-4f01-9ade-dc6f909c347c",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " first 8 and"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "7ab4bdad-aa00-4549-8f89-d6a51171a67a",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " fades the last of"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "38ffbee9-a74e-4607-861d-b56bf18cc0a5",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n        them into the"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "65907963-b189-4c93-974b-ce1e2f17a707",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " section's background, with"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "ccc87b55-8052-49bb-abb5-9e46b2e121f9",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " a \\\"Read more"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "e71a8c44-9b8f-4702-9f1f-32a96ca5bd71",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\\" link be"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "b011f172-e771-4d80-8b19-b878336ed850",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "neath,"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "e7462f64-58b2-4c68-8a76-45530d44e072",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n        in the theme's acc"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "fd8215d8-bd9b-4bcf-aa33-7fdb56e3d6e5",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ent, with a down"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "3fa9b2c2-415c-4066-a8a4-8d27faf8400b",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " chevron. Clicking"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "5e903ea8-f5f4-46a0-9e56-271c09947dd7",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " it sh"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "dd203eab-a24b-4d3c-a294-f4f1e0ffe9ad",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ows the\\n        whole promp"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "ae58e947-2bf9-4735-a054-039d2343396c",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "t, the"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "dc5e8477-1008-4f21-bd9d-750b223251dc",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " link reading \\\"Show less\\\""
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "e839b369-b3c8-47a4-8b2d-57bb83c25aa8",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " with an up chevron, which"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "6b37c1d5-636c-4950-b675-a4641ec652cb",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n        cl"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "d7632d10-29ec-441f-b3a4-f1ed730fa935",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ips it again,"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "baa247d0-72a3-4b89-bce0-1a568e1004ac",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " scrolling the tab back"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "626dc010-3ab6-49d4-a462-099feb45866e",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " to"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "b01a57aa-fa66-4c01-9744-aaf45f0f0cd5",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " the Prompt section"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "99950c3c-f28e-4015-a960-c3281ea858fe",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " if it\\n        had"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c38168ae-19df-4e0d-9129-5f176526db2e",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " sc"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c4dea19a-0991-48e0-b15c-4aca2f7792ef",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "rolled past"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "9d14ad65-1de0-4eb6-bd75-418994828f29",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " it. A prompt of "
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "80469cd6-3f2a-4e6e-b193-a7d581876ae7",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "8 lines or fewer"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "8ec1cbb4-01c5-4d9d-91e9-88a81f6ddad5",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " shows wh"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "817c0cbc-c806-4b08-9c49-78937d2a8970",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ole,"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "47fb1bae-8f23-40f3-8d1a-e01e404c38e9",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " with\\n        no link. It star"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "70152f97-bfee-4dd3-b559-3937992d1306",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ts clipped each"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "bd17417c-79e3-42f3-bcde-ca3ab0dbb3db",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " time a task is opened."
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "42d4c74d-9d4a-450c-8c90-06e52e6ddcff",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " Clicking into"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "21c2d10c-babb-4b79-91b1-5c3081d609cc",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n        a"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "5657d4f6-6cf1-41c4-96c3-8fcd3008a0de",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " queued task's prompt to"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "895cbcaa-656b-4977-990f-94235c3fca47",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " edit it sh"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "bdc5259e-6522-4ceb-8644-b0204b9193a6",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ows it"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "9f24a4c2-7dad-4340-b238-9a366caef7e4",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " whole, as it is being"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "a8cc1312-5e78-4378-aee0-27591f479417",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n        typed in"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "93af8b31-0b1d-4b7b-b362-2407760e2954",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ","
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "d419015b-fc23-4e56-8f98-8f83e8444c34",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " and it"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "543cb864-b073-41fe-b898-e1b72c8c7a6a",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " is"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c9e27cdf-2671-4b6d-b1bf-ac2ed0f470c1",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " clipped again once the task"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "31f7998b-dba6-4bcf-be07-15c379e45fa1",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " is opened af"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "4a351a1d-3409-441e-9237-a4e6f068b14e",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "resh.\\n        Clip"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "5780b2b4-2291-4614-9d9a-e9ddb68e5776",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ping only"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "ceeea7cd-b707-4621-854a-940757fbdd80",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " changes what"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "6787bd39-323d-484a-b4a5-11d9e1b4e02b",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " sh"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "7d197582-2298-45b0-a93f-86d79b91611a",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ows:"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "d89162b1-5ee9-45a9-bd2a-5c8b6367e0f9",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " its att"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "52ef5628-7b8b-4db8-af62-15b4f53d90fd",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "achments are list"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "cbf4667e-bd5c-4228-9502-998b6cc2eb16",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ed be"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "b6b77f3f-c3fd-4915-99b7-62b9460ba3d7",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "neath\\n        either"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "b523ebf8-cf45-40b7-afbc-1dd005fe8d12",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " way, and cop"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "a2609934-7f7c-4db8-ae98-ae9945fb3b62",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ying or edit"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "22bc44d0-0dad-47d9-8a01-5b817e9b0480",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ing tak"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "24d475d5-e43c-4f24-829b-e4dde6564197",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "es the whole prompt."
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "24ed3a3b-af76-494f-b1a4-ae1340a68040",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\\n\\nEOF\\ntail -"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "72ce0a61-8a37-4cd9-b46e-ca53ab90f918",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "n +169 $f >>"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c5e4a2a0-7340-4dfc-8e25-dbf1e2ef7a48",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " /tmp/x; c"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "e147a78b-b851-4195-b46f-66a0e5920e9a",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "p /tmp/x $"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "252c042a-d994-42da-bfe2-d7dbc62c5277",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "f; piton check 2>"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "6dd45611-a88d-4267-942b-b537139d041c",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "&1|tail -1;"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "bf2c65df-9778-4ddd-a7a4-b08aef6305e7",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " piton build 2>&1"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c71ebbfc-b146-48c1-9eff-65286a64aa8a",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "|tail -1; grep"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "791dc0e0-5332-48e2-918c-9c6b74b55f55",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " -c \\\"Read more\\\" ."
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "409520dc-c2f8-4bd1-8ed9-80db21aa8d72",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "claude/reference/ui"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "a7f73ead-3c0e-4184-b3ad-d9fef8cc48af",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "/components/right-sideb"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "6bd27ca6-b016-49d3-a585-0b76db755b47",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ar/tasks/index."
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "f2d65e4c-f165-45ae-b80d-63780562cb5c",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "md\\necho '- ["
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c099fe34-3aad-4b5e-a71e-411026a4297f",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "Prompts past 8 l"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "dda47d3f-7152-4358-bb5b-3dcb0436c90e",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ines are"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "015a2d3e-291a-4c91-aba3-04fe31c07787",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " clipped with"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "24e13bde-ccb8-41c2-931f-040230abf34e",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " a fade and a Read more"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "b30cf9bb-d3f4-432c-b819-d0f7638668ba",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " / Show less link]("
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "1260ee7c-284b-49eb-a488-06cc750e73b9",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ".claude/reference/"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "311bf758-f2d7-4a8d-b8ce-06fd4adc6ff2",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ui/components/right-sid"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "7ebc96f7-f1a8-47f4-b3a7-f9ae3b557ec1",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ebar/tasks/index"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "1231cb48-30e1-4b4e-a6e2-027966406942",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": ".md#details)' >>"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "de629724-0ecb-460d-b867-0aeebd1e05e9",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": " .suspense/history/1"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "066b44ce-2887-4870-8e39-b8258ce23d99",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "791712887-ClipL"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "bd0cff93-38f0-4cb8-83ee-1ee6cfac6b68",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ongPromptsInTas"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "b250723e-8326-49f8-9b16-c8ec97fbc597",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "ksTab.understanding."
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "54626b45-080b-454b-b094-b536ce8af2ca",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "md"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "b12fa1ca-03c7-4926-926d-b6795fee4f4c",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": "\"}"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "971ec861-391a-44b9-a6da-d96ed0729501",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CfvFt9358igMDCqqNEtJ9",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "toolu_01Gc6JddWd3cydHzSqSZDSDy",
+            "name": "Bash",
+            "input": {
+              "command": "cd /home/hyphyphyph/piton/repl; f=spec/ui/components/right-sidebar/tasks/index.pi; head -168 $f > /tmp/x; cat >> /tmp/x <<'EOF'\n        A long prompt is clipped: past 8 lines, as they wrap at the tab's\n        width, the Prompt section shows its first 8 and fades the last of\n        them into the section's background, with a \"Read more\" link beneath,\n        in the theme's accent, with a down chevron. Clicking it shows the\n        whole prompt, the link reading \"Show less\" with an up chevron, which\n        clips it again, scrolling the tab back to the Prompt section if it\n        had scrolled past it. A prompt of 8 lines or fewer shows whole, with\n        no link. It starts clipped each time a task is opened. Clicking into\n        a queued task's prompt to edit it shows it whole, as it is being\n        typed in, and it is clipped again once the task is opened afresh.\n        Clipping only changes what shows: its attachments are listed beneath\n        either way, and copying or editing takes the whole prompt.\n\nEOF\ntail -n +169 $f >> /tmp/x; cp /tmp/x $f; piton check 2>&1|tail -1; piton build 2>&1|tail -1; grep -c \"Read more\" .claude/reference/ui/components/right-sidebar/tasks/index.md\necho '- [Prompts past 8 lines are clipped with a fade and a Read more / Show less link](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)' >> .suspense/history/1791712887-ClipLongPromptsInTasksTab.understanding.md"
+            },
+            "caller": {
+              "type": "direct"
+            }
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 392,
+          "cache_read_input_tokens": 447300,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 392
+          },
+          "output_tokens": 16,
+          "service_tier": "standard",
+          "inference_geo": "global"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "uuid": "37e10baf-47b0-4448-9cbb-91468f2efc12",
+      "timestamp": "2026-10-11T10:02:09.683Z",
+      "request_id": "req_011CfvFt8fFs4Fq5sD1cu2nM",
+      "wire_tool_inputs": {
+        "toolu_01Gc6JddWd3cydHzSqSZDSDy": {
+          "command": "cd /home/hyphyphyph/piton/repl; f=spec/ui/components/right-sidebar/tasks/index.pi; head -168 $f > /tmp/x; cat >> /tmp/x <<'EOF'\n        A long prompt is clipped: past 8 lines, as they wrap at the tab's\n        width, the Prompt section shows its first 8 and fades the last of\n        them into the section's background, with a \"Read more\" link beneath,\n        in the theme's accent, with a down chevron. Clicking it shows the\n        whole prompt, the link reading \"Show less\" with an up chevron, which\n        clips it again, scrolling the tab back to the Prompt section if it\n        had scrolled past it. A prompt of 8 lines or fewer shows whole, with\n        no link. It starts clipped each time a task is opened. Clicking into\n        a queued task's prompt to edit it shows it whole, as it is being\n        typed in, and it is clipped again once the task is opened afresh.\n        Clipping only changes what shows: its attachments are listed beneath\n        either way, and copying or editing takes the whole prompt.\n\nEOF\ntail -n +169 $f >> /tmp/x; cp /tmp/x $f; piton check 2>&1|tail -1; piton build 2>&1|tail -1; grep -c \"Read more\" .claude/reference/ui/components/right-sidebar/tasks/index.md\necho '- [Prompts past 8 lines are clipped with a fade and a Read more / Show less link](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)' >> .suspense/history/1791712887-ClipLongPromptsInTasksTab.understanding.md"
+        }
+      }
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "0e435ee6-eb5c-45b3-9fb1-34a281e51c95",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {
+                  "toolu_01Gc6JddWd3cydHzSqSZDSDy": {
+                    "type": "evaluated",
+                    "outcome": "not_flagged"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 392,
+          "cache_read_input_tokens": 447300,
+          "output_tokens": 598,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 598,
+              "cache_read_input_tokens": 447300,
+              "cache_creation_input_tokens": 392,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 392
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c8164fdf-4a71-47b6-9c2d-0826ed143db1",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "d434a42d-28c5-48cd-bdf5-b83bca32cec8",
+      "api_message_id": "msg_011CfvFt9358igMDCqqNEtJ9"
+    },
+    {
+      "type": "user",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "tool_use_id": "toolu_01Gc6JddWd3cydHzSqSZDSDy",
+            "type": "tool_result",
+            "content": "no problems found\n✓ wrote 82 files\n1",
+            "is_error": false
+          }
+        ]
+      },
+      "parent_tool_use_id": null,
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "uuid": "15ea216b-6db6-4c9d-a291-1180db473d85",
+      "timestamp": "2026-10-11T10:02:10.801Z",
+      "tool_use_result": {
+        "stdout": "no problems found\n✓ wrote 82 files\n1",
+        "stderr": "",
+        "interrupted": false,
+        "isImage": false,
+        "noOutputExpected": false
+      },
+      "tool_result_meta": [
+        {
+          "id": "toolu_01Gc6JddWd3cydHzSqSZDSDy",
+          "permission_decision": {
+            "decision": "accept",
+            "source": "config",
+            "reason_type": "classifier"
+          }
+        }
+      ]
+    },
+    {
+      "type": "system",
+      "subtype": "status",
+      "status": "requesting",
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "uuid": "97141829-d02d-4097-8395-3552359b63e6"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_start",
+        "message": {
+          "model": "claude-opus-5-5",
+          "id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1",
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "container": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "stop_details": null,
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 644,
+            "cache_read_input_tokens": 447692,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 644
+            },
+            "output_tokens": 314,
+            "service_tier": "standard",
+            "inference_geo": "global"
+          },
+          "input_transformations": [],
+          "diagnostics": null,
+          "context_management": null
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "d5f6f2f0-2967-49de-8084-ff19e0072196",
+      "ttft_ms": 3544,
+      "thinking_display": "updates",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "type": "text",
+          "text": ""
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "40cab68c-3146-4410-988f-52c3bc8cdaf2",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "Long prompts in an"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "82cd4962-7373-40e4-a5aa-9bfe20505906",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " open task's"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "5999f6bc-0852-4872-81e7-e1f365595ec2",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " Prompt section are now clip"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "09be145c-8037-4f84-bfb6-a5507d00aa65",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ped at 8 lines with"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "569d72a5-0e42-4f83-b9b6-26b04252563a",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " a \"Read more\" link."
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c3e7d857-8dce-4b09-a364-a6a1435b91d1",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " `piton check` re"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "7683db00-9981-43f7-9af5-0dcdb1ce990f",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ports no problems and `piton"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "424d34b7-d93d-42ab-b6d7-0477bafa7fd6",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " build` wrote 82 "
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "7b7ae83f-2538-48b2-a1d3-c6db81b768f0",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "files.\n\n- **Clip"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "8eecc911-4a5c-4ff9-984f-7d4a8aea68a2",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ping:** the "
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "2cd5ad9a-bd43-47e7-af51-302866f6642e",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "8 "
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c985f34f-2fd7-44fc-9beb-c94e5fcdebbe",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "lines are"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "908c03ec-42b2-4b95-b9d9-e0b31838e000",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " counted as the"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c5b6dfb0-947c-442d-b828-845ce6f54bae",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " pr"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "53586594-04af-463c-abc7-4a410dda6e9f",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ompt wraps at the t"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c84593e5-92d8-4b57-b43a-1751922bb047",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ab's width. The last vis"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "e5fe1287-4daa-4004-9201-6d2b2034a43b",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ible line fades out"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "d3362ee7-fe8c-46ad-aa15-a7e922ca03bf",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": ", and \""
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "22fc3a12-abef-4af4-9940-3dcdd7aafe41",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "Read more\" s"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "acb310fa-afce-45f6-96a0-0a1944ae3312",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "its beneath it in the acc"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "0f0332fd-2adb-42f6-adbb-0a88f9d17f47",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ent colour with a down chev"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "dd90e061-728f-46a6-8219-3d09aaff2c7b",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ron.\n- **Expan"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "1c2743c5-27ae-4985-ab53-b6da74530c49",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ding:** clicking shows"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "2d5469ab-b493-4fe0-a490-534fd3958b70",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " the whole prompt and the"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "fba85fdc-a47e-4851-a0d4-ecdce960bd82",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " link bec"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "6e811857-e255-449a-b163-2eab21e4dffd",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "omes \"Show less\"."
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "9ab25bfe-dc06-4e11-9403-69f66f59eece",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " Collapsing scrolls"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c7e5df53-1ca5-42e0-9244-3857103ab6ff",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " back to the pr"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "dbbaeb9d-a65b-42fc-8536-9fa7217b116f",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ompt if you'"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "d6cd1060-e4d3-4174-8af2-570fbc34ef20",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "d scrolled past it."
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "76ddb020-e76e-49b7-b958-0b9b81392fa3",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n- **When"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "848f8c5e-4d59-4ece-a3e9-3a5415e167a7",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " it appl"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "f3b96d68-6c82-4c55-88fc-92acb25628db",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ies:** prompts of "
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "ccc128b1-0429-41f8-aafa-902a2cd81c45",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "8 lines or fewer"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "96ebc337-1870-4089-a768-e5c1265ef087",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " show whole with"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "d80dffeb-5f74-4f0f-9aaa-ccf3128d6347",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " no link."
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "78078ab9-9896-4cc7-8ce7-75ae3b793127",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " Every task"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "d305635e-95a5-4da7-81b7-d86b76f55c70",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " op"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "fe0f6c6f-2481-44c8-9246-8db7bfb54f74",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ens clipped.\n- **"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "9a90971c-e89a-41b6-ba76-db729d46f18d",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "Editing:** clicking"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c1f9c444-fe83-4029-9163-ef9a6fc5f6ba",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " into a queued pr"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "3bf3c2ff-8850-40f6-b8c9-3c3048b51779",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ompt to edit it"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "59b24b13-4631-4505-994d-52116fec4ced",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " shows it whole.\n-"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "ebbabcda-44b3-40d8-a17d-1d5b8c12f01e",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " **Nothing l"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "cbe036e2-28f7-4958-924f-114278b67181",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ost:** attachments still"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "3c16d713-9262-4f0e-8980-ea3dcca9c9b4",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " show be"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "12ebae73-2408-4bef-8621-d2d193234a5a",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "neath, and copying or"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c0171418-629f-46f7-8541-44b0cfdb3437",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " editing always"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "cf3d8786-d25c-428e-89d3-7bd8a8a45a3b",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " u"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "65aa0287-5d83-4346-a832-34c62e75095e",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ses the whole prompt."
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "1a9e3ab8-5772-4af4-9541-870389495b07",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "\n\n**Anchors the code"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "ce007a78-6bfb-4fc0-a505-147fed6ec4b4",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": " should follow:** `Tas"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "75e18989-b766-487b-a5fd-6e39c8d6846e",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "ksTabScope` `#"
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c20d8f64-2495-4c8e-9879-422a1eb91927",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_delta",
+        "index": 0,
+        "delta": {
+          "type": "text_delta",
+          "text": "details`."
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "7fb236e3-1cb4-443e-bea6-58ebbdd0b9d6",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "assistant",
+      "message": {
+        "model": "claude-opus-5-5",
+        "id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Long prompts in an open task's Prompt section are now clipped at 8 lines with a \"Read more\" link. `piton check` reports no problems and `piton build` wrote 82 files.\n\n- **Clipping:** the 8 lines are counted as the prompt wraps at the tab's width. The last visible line fades out, and \"Read more\" sits beneath it in the accent colour with a down chevron.\n- **Expanding:** clicking shows the whole prompt and the link becomes \"Show less\". Collapsing scrolls back to the prompt if you'd scrolled past it.\n- **When it applies:** prompts of 8 lines or fewer show whole with no link. Every task opens clipped.\n- **Editing:** clicking into a queued prompt to edit it shows it whole.\n- **Nothing lost:** attachments still show beneath, and copying or editing always uses the whole prompt.\n\n**Anchors the code should follow:** `TasksTabScope` `#details`."
+          }
+        ],
+        "container": null,
+        "stop_reason": null,
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 644,
+          "cache_read_input_tokens": 447692,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 644
+          },
+          "output_tokens": 314,
+          "service_tier": "standard",
+          "inference_geo": "global"
+        },
+        "input_transformations": [],
+        "diagnostics": null,
+        "context_management": null
+      },
+      "parent_tool_use_id": null,
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "uuid": "67b4297c-286b-4443-a1f1-bf2e12aff463",
+      "timestamp": "2026-10-11T10:02:14.505Z",
+      "request_id": "req_011CfvFtfNwkRrfn6mTPbLNg"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "content_block_stop",
+        "index": 0
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "6a042827-3b3c-47d9-8870-4142f286cef7",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "stop_details": null,
+          "container": null,
+          "safeguard_results": [
+            {
+              "type": "dangerous_tool_use",
+              "status": {
+                "type": "available",
+                "tool_uses": {}
+              }
+            }
+          ]
+        },
+        "usage": {
+          "input_tokens": 2,
+          "cache_creation_input_tokens": 644,
+          "cache_read_input_tokens": 447692,
+          "output_tokens": 314,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "iterations": [
+            {
+              "input_tokens": 2,
+              "output_tokens": 314,
+              "cache_read_input_tokens": 447692,
+              "cache_creation_input_tokens": 644,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 644
+              },
+              "type": "message"
+            }
+          ]
+        },
+        "context_management": {
+          "applied_edits": []
+        }
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "e21d42f0-5fa0-4a31-acdc-111389371f00",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "type": "stream_event",
+      "event": {
+        "type": "message_stop"
+      },
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "parent_tool_use_id": null,
+      "uuid": "c1aeaebd-3567-4061-a4e3-0ce33f689c59",
+      "api_message_id": "msg_011CfvFtfiXtnGMLaNZ6cKQ1"
+    },
+    {
+      "duration_api_ms": 2889138,
+      "stop_reason": "end_turn",
+      "session_id": "0265e267-5ee9-4410-9d3c-716006b66c6f",
+      "total_cost_usd": 77.84688900000002,
+      "usage": {
+        "input_tokens": 6,
+        "cache_creation_input_tokens": 2082,
+        "cache_read_input_tokens": 1341246,
+        "output_tokens": 1251,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2082,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "global",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 314,
+            "cache_read_input_tokens": 447692,
+            "cache_creation_input_tokens": 644,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 644
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "modelUsage": {
+        "claude-opus-5-5[1m]": {
+          "inputTokens": 494,
+          "outputTokens": 131277,
+          "thinkingTokens": 20881,
+          "cacheReadInputTokens": 51215086,
+          "cacheCreationInputTokens": 3767318,
+          "webSearchRequests": 0,
+          "costUSD": 43.00907720000002,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000
+        },
+        "claude-sonnet-5": {
+          "inputTokens": 30,
+          "outputTokens": 6243,
+          "thinkingTokens": 2716,
+          "cacheReadInputTokens": 5077031,
+          "cacheCreationInputTokens": 346494,
+          "webSearchRequests": 0,
+          "costUSD": 2.4638722,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 64000
+        },
+        "claude-opus-5-5": {
+          "inputTokens": 232,
+          "outputTokens": 63900,
+          "thinkingTokens": 10066,
+          "cacheReadInputTokens": 44093498,
+          "cacheCreationInputTokens": 2784539,
+          "webSearchRequests": 0,
+          "costUSD": 32.3739396,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "canonicalModel": "claude-opus-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "safety_stops": 0,
+      "is_error": false,
+      "num_turns": 3,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "Long prompts in an open task's Prompt section are now clipped at 8 lines with a \"Read more\" link. `piton check` reports no problems and `piton build` wrote 82 files.\n\n- **Clipping:** the 8 lines are counted as the prompt wraps at the tab's width. The last visible line fades out, and \"Read more\" sits beneath it in the accent colour with a down chevron.\n- **Expanding:** clicking shows the whole prompt and the link becomes \"Show less\". Collapsing scrolls back to the prompt if you'd scrolled past it.\n- **When it applies:** prompts of 8 lines or fewer show whole with no link. Every task opens clipped.\n- **Editing:** clicking into a queued prompt to edit it shows it whole.\n- **Nothing lost:** attachments still show beneath, and copying or editing always uses the whole prompt.\n\n**Anchors the code should follow:** `TasksTabScope` `#details`.",
+      "ttft_ms": 5053,
+      "type": "result",
+      "duration_ms": 16715,
+      "uuid": "e48019a4-fde0-4b3d-b3e7-057aaa2c3009",
+      "ttft_stream_ms": 2850,
+      "time_to_request_ms": 232,
+      "first_content_frame_ms": 2851,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  ],
+  "startedAt": 1791712880094,
+  "endedAt": 1791712935428,
+  "phases": [
+    {
+      "name": "spec build",
+      "beganAt": 1791712880097,
+      "endedAt": 1791712880356
+    },
+    {
+      "name": "snapshot",
+      "beganAt": 1791712887371,
+      "endedAt": 1791712887472
+    },
+    {
+      "name": "harness",
+      "beganAt": 1791712887472,
+      "endedAt": 1791712935600
+    },
+    {
+      "name": "first event",
+      "beganAt": 1791712887472,
+      "endedAt": 1791712914238
+    },
+    {
+      "name": "tool Bash cd /home/hyphyphyph/piton/repl; cat > .suspense/history/1791712887-ClipLongPromptsInTasksTab.understanding.md <<'EOF'",
+      "beganAt": 1791712923015,
+      "endedAt": 1791712923684
+    },
+    {
+      "name": "tool Bash cd /home/hyphyphyph/piton/repl; f=spec/ui/components/right-sidebar/tasks/index.pi; head -168 $f > /tmp/x; cat >> /tmp/x <<'EOF'",
+      "beganAt": 1791712929758,
+      "endedAt": 1791712930843
+    },
+    {
+      "name": "closing snapshot",
+      "beganAt": 1791712935600,
+      "endedAt": 1791712935661
+    }
+  ],
+  "snapshotBefore": "4880e77fd278be951b91ddeec4f731fdc6ac119a",
+  "snapshotAfter": "9f53490baf8a1613b09ef36b92f57b073913eb92"
+}

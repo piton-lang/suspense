@@ -1,0 +1,6 @@
+- [An open task shows, top to bottom: Status, Prompt, Steps, Details, Parameters, Actions](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [Status is its status label and how long it took or has been running, on one line](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [Prompt is the prompt as typed, with what is attached beneath it](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [Steps holds a chain's steps with Add step; a task that isn't a chain has no Steps section](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [Details holds the rest at a glance: lane, queue place, conversation, model and effort, tool calls, errors, tokens and cost, files changed, those not applying left out](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [A chain's steps sit beneath its prompt and above its details](.claude/reference/ui/components/right-sidebar/tasks/index.md#chain-steps)

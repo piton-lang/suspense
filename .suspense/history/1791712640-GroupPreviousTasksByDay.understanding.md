@@ -1,0 +1,8 @@
+- [Previous is an accordion section of the Tasks tab, oldest at the top, newest nearest Running](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Section headings are sticky while their rows scroll](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Every row, headings included, is 28px, so positions come from row counts alone](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Rows share aligned columns, titles lining up with the rows' text](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [A chain is one row, listed where its first step was sent](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [Filtering hides tasks; dividers show only above a group with a task shown](.claude/reference/scope/prompt-mode/index.md#previous-task-filters)
+- [A task's record keeps when it was sent](.claude/reference/scope/project-data/index.md#contents)
+- [Previous groups tasks under sticky day dividers: Today, Yesterday, weekday, then date, with counts](.claude/reference/ui/components/right-sidebar/tasks/index.md#days)
